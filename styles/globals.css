@@ -1,0 +1,145 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --surface: #ffffff;
+  --on-surface: #1f2937;
+  --primary: #3b82f6;
+  --primary-hover: #2563eb;
+  --primary-rgb: 59, 130, 246;
+  --secondary: #6b7280;
+  --secondary-hover: #4b5563;
+  --subtle: #6b7280;
+  --background: #f9fafb;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Custom class for Header styling */
+.bg-background {
+  background-color: var(--background);
+}
+
+.bg-surface {
+  background-color: var(--surface);
+}
+
+.text-on-surface {
+  color: var(--on-surface);
+}
+
+.bg-primary {
+  background-color: var(--primary);
+}
+
+.text-primary {
+  color: var(--primary);
+}
+
+.hover\:text-primary:hover {
+  color: var(--primary);
+}
+
+.text-subtle {
+  color: var(--subtle);
+}
+
+.border-primary {
+  border-color: var(--primary);
+}
+
+.ring-primary {
+  --tw-ring-color: var(--primary);
+}
+
+.focus\:border-primary:focus {
+  border-color: var(--primary);
+}
+
+.focus\:ring-primary:focus {
+  --tw-ring-color: var(--primary);
+}
+
+/* Hover variants using same primary color */
+.hover\:bg-primary:hover {
+  background-color: var(--primary);
+}
+
+.hover\:bg-primary-hover:hover {
+  background-color: var(--primary);
+}
+
+.bg-primary-hover {
+  background-color: var(--primary);
+}
+
+.hover\:border-primary:hover {
+  border-color: var(--primary);
+}
+
+/* Additional primary color utilities */
+.fill-primary {
+  fill: var(--primary);
+}
+
+.stroke-primary {
+  stroke: var(--primary);
+}
+
+.hover\:fill-primary:hover {
+  fill: var(--primary-hover);
+}
+
+.hover\:stroke-primary:hover {
+  stroke: var(--primary-hover);
+}
+
+/* Secondary color utilities */
+.bg-secondary {
+  background-color: var(--secondary);
+}
+
+.text-secondary {
+  color: var(--secondary);
+}
+
+.hover\:bg-secondary:hover {
+  background-color: var(--secondary);
+}
+
+.bg-secondary-hover {
+  background-color: var(--secondary);
+}
+
+.border-secondary {
+  border-color: var(--secondary);
+}
+
+.hover\:border-secondary:hover {
+  border-color: var(--secondary);
+}
+
+.ring-secondary {
+  --tw-ring-color: var(--secondary);
+}
+
+.focus\:ring-secondary:focus {
+  --tw-ring-color: var(--secondary);
+}
+
+/* Opacity variants for primary colors */
+.bg-primary\/10 {
+  background-color: rgba(var(--primary-rgb), 0.1);
+}
+
+.ring-primary\/20 {
+  --tw-ring-color: rgba(var(--primary-rgb), 0.2);
+}

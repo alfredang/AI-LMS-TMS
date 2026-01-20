@@ -1,0 +1,2111 @@
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { LearnerProfile, TrainerProfile, DeveloperProfile, TrainingProviderProfile, Gender, EmploymentStatus, Nationality, Ethnicity, calculateAgeGroup, DeveloperType, WorkExperienceItem, TrainerQualification, TrainerEducation, DeveloperEducation } from '../types/profile';
+import { UserRole } from '@app-types';
+import { Card } from './ui/Card';
+import { Button } from './ui/Button';
+import { Icon, IconName } from './ui/Icon';
+import Spinner from './ui/Spinner';
+import { useLms } from '@contexts/LmsContext';
+import { TrainerProfileCard } from './TrainerProfileCard';
+import { TrainingProviderProfileCard } from './TrainingProviderProfileCard';
+import { useTrainerProfile } from '../hooks/useTrainerProfile';
+import { ensureAbsoluteImageUrl } from '@utils/imageUtils';
+import { generateAvatarImage } from '@lib/services/geminiService';
+import { SKILLS_FUTURE_INDUSTRIES } from '../types/profile';
+import { getApiUrl, getUploadUrl, getDeleteFileUrl, stripBaseUrl } from '@/lib/urlHelpers';
+
+
+// Constants
+const inputClasses = "block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent";
+
+// Profile data hook
+const useProfileData = () => {
+    const { currentUser, role } = useLms();
+    const [profile, setProfile] = useState<LearnerProfile | null>(null);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const fetchProfile = async () => {
+            if (!currentUser?.id) {
+                console.error('No authenticated user found');
+                setLoading(false);
+                return;
+            }
+
+            try {
+                const response = await fetch(getApiUrl(`/api/profile-new?userId=${currentUser.id}&role=${role.toLowerCase()}`));
+                const data = await response.json();
+                if (data.success) {
+                    setProfile(data.data.profile);
+                }
+            } catch (error) {
+                console.error('Error fetching profile:', error);
+            } finally {
+                setLoading(false);
+            }
+        };
+        
+        if (currentUser && role) {
+            fetchProfile();
+        }
+    }, [currentUser, role]);
+
+    const updateProfile = useCallback((updatedProfile: LearnerProfile) => {
+        setProfile(updatedProfile);
+    }, []);
+
+    const saveProfile = useCallback(async (profileData: LearnerProfile) => {
+        return Promise.resolve();
+    }, []);
+
+    return useMemo(() => ({
+        profile,
+        loading,
+        updateProfile,
+        saveProfile,
+        role
+    }), [profile, loading, updateProfile, saveProfile, role]);
+};
+
+// Simple ProfileView component
+const ProfileView: React.FC = () => {
+    const { currentUser, role } = useLms();
+    
+    // Handle trainer profile
+    if (role === UserRole.Trainer) {
+        return <TrainerProfileView />;
+    }
+
+    // Handle developer profile
+    if (role === UserRole.Developer) {
+        return <DeveloperProfileView />;
+    }
+
+    // Handle training provider profile
+    if (role === UserRole.TrainingProvider) {
+        return <TrainingProviderProfileView />;
+    }
+
+    // Handle learner profile (existing code)
+    return <LearnerProfileView />;
+};
+
+// Separate component for trainer profile to avoid hook rule violations
+const TrainerProfileView: React.FC = () => {
+    const { currentUser } = useLms();
+    const { profile: trainerProfile, loading: trainerLoading, updateProfile: updateTrainerProfile } = useTrainerProfile(currentUser?.id);
+    
+    if (trainerLoading) {
+        return (
+            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+                <div className="text-center">
+                    <Spinner size="lg" />
+                    <p className="mt-4 text-gray-600">Loading trainer profile...</p>
+                </div>
+            </div>
+        );
+    }
+
+    if (!trainerProfile) {
+        return (
+            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+                <div className="text-center text-subtle">
+                    <p>No trainer profile found</p>
+                    <p className="text-sm mt-2">Please contact support if this is an error.</p>
+                </div>
+            </div>
+        );
+    }
+
+    const handleTrainerUpdate = async (updatedData: Partial<TrainerProfile>) => {
+        if (!currentUser?.id) return;
+        await updateTrainerProfile(currentUser.id, updatedData);
+    };
+
+    return (
+        <div className="max-w-5xl mx-auto">
+            <TrainerProfileCard 
+                profile={trainerProfile} 
+                onUpdate={handleTrainerUpdate}
+            />
+        </div>
+    );
+};
+
+// Separate component for training provider profile
+const TrainingProviderProfileView: React.FC = () => {
+    const { currentUser } = useLms();
+    const [profile, setProfile] = useState<TrainingProviderProfile | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+
+    // Fetch training provider profile from backend
+    const fetchProfile = async () => {
+        if (!currentUser?.id) return;
+        
+        setLoading(true);
+        setError(null);
+        
+        try {
+            const response = await fetch(getApiUrl(`/api/profile-new?userId=${currentUser.id}&role=training_provider`));
+            
+            if (!response.ok) {
+                throw new Error(`Failed to fetch profile: ${response.status}`);
+            }
+            
+            const result = await response.json();
+            
+            if (!result.success || !result.data?.profile) {
+                throw new Error(result.error || 'Profile not found');
+            }
+            
+            setProfile(result.data.profile);
+        } catch (err) {
+            console.error('Error fetching training provider profile:', err);
+            setError(err instanceof Error ? err.message : 'Failed to load profile');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchProfile();
+    }, [currentUser?.id]);
+
+    const handleTrainingProviderUpdate = async (userId: string, updatedData: Partial<TrainingProviderProfile>) => {
+        console.log('Training Provider profile update:', { userId, updatedData });
+        
+        // The TrainingProviderProfileCard already handles the database update via its own API
+        // We just need to update the local state and optionally refetch from server
+        try {
+            // Update local state with the new data
+            setProfile(prev => prev ? { ...prev, ...updatedData } : null);
+            
+            // Optionally refetch from server to ensure data is fresh
+            // This ensures we get any server-side processed data (like file URLs)
+            await fetchProfile();
+            
+            console.log('✅ Training Provider profile state updated successfully');
+        } catch (error) {
+            console.error('❌ Failed to refresh profile data:', error);
+            // Continue silently as the database update already succeeded
+        }
+    };
+
+    if (loading) {
+        return (
+            <div className="max-w-5xl mx-auto flex justify-center items-center min-h-[400px]">
+                <div className="text-center">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+                    <p className="text-gray-600">Loading profile...</p>
+                </div>
+            </div>
+        );
+    }
+
+    if (error) {
+        return (
+            <div className="max-w-5xl mx-auto flex justify-center items-center min-h-[400px]">
+                <div className="text-center">
+                    <div className="text-red-500 mb-4">
+                        <Icon name={IconName.X} className="w-12 h-12 mx-auto mb-2" />
+                        <p className="text-lg font-semibold">Error Loading Profile</p>
+                    </div>
+                    <p className="text-gray-600 mb-4">{error}</p>
+                    <Button onClick={() => window.location.reload()}>
+                        Try Again
+                    </Button>
+                </div>
+            </div>
+        );
+    }
+
+    if (!profile) {
+        return (
+            <div className="max-w-5xl mx-auto flex justify-center items-center min-h-[400px]">
+                <div className="text-center">
+                    <p className="text-gray-600">No profile data found</p>
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="max-w-5xl mx-auto">
+            <TrainingProviderProfileCard 
+                profile={profile} 
+                onUpdate={handleTrainingProviderUpdate}
+            />
+        </div>
+    );
+};
+
+// Developer Profile Hook
+const useDeveloperProfile = (userId?: string) => {
+    const [profile, setProfile] = useState<DeveloperProfile | null>(null);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const fetchProfile = async () => {
+            if (!userId) {
+                setLoading(false);
+                return;
+            }
+
+            try {
+                const response = await fetch(getApiUrl(`/api/profile/developer?userId=${userId}`));
+                const data = await response.json();
+                if (data.success) {
+                    setProfile(data.data.profile);
+                } else {
+                    console.error('Error fetching developer profile:', data.message);
+                }
+            } catch (error) {
+                console.error('Error fetching developer profile:', error);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchProfile();
+    }, [userId]);
+
+    const updateProfile = useCallback(async (userId: string, updatedData: Partial<DeveloperProfile>) => {
+        try {
+            setProfile(prev => prev ? { ...prev, ...updatedData } : null);
+        } catch (error) {
+            console.error('Error updating developer profile:', error);
+        }
+    }, []);
+
+    return { profile, loading, updateProfile };
+};
+
+// Separate component for developer profile
+const DeveloperProfileView: React.FC = () => {
+    const { currentUser } = useLms();
+    const { profile: developerProfile, loading: developerLoading, updateProfile: updateDeveloperProfile } = useDeveloperProfile(currentUser?.id);
+    
+    if (developerLoading) {
+        return (
+            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+                <div className="text-center">
+                    <Spinner size="lg" />
+                    <p className="mt-4 text-gray-600">Loading developer profile...</p>
+                </div>
+            </div>
+        );
+    }
+
+    if (!developerProfile) {
+        return (
+            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+                <div className="text-center text-subtle">
+                    <p>No developer profile found</p>
+                    <p className="text-sm mt-2">Please contact support if this is an error.</p>
+                </div>
+            </div>
+        );
+    }
+
+    const handleDeveloperUpdate = async (updatedData: Partial<DeveloperProfile>) => {
+        if (!currentUser?.id) return;
+        await updateDeveloperProfile(currentUser.id, updatedData);
+    };
+
+    const handleProfileRefresh = () => {
+        // Force a page refresh to update header and other components
+        window.location.reload();
+    };
+
+    return (
+        <div className="max-w-5xl mx-auto">
+            <DeveloperProfileCard 
+                profile={developerProfile} 
+                onUpdate={handleDeveloperUpdate}
+                userId={currentUser?.id}
+                onProfileUpdate={handleProfileRefresh}
+            />
+        </div>
+    );
+};
+
+// Reusable components for profile rendering
+const ProfileBioItem: React.FC<{ label: string; value: React.ReactNode }> = ({ label, value }) => (
+    <div>
+        <p className="text-sm text-subtle">{label}</p>
+        <p className="font-semibold text-on-surface break-words">{value}</p>
+    </div>
+);
+
+const MultiSelectCheckboxes: React.FC<{
+    options: string[];
+    selected: string[];
+    onChange: (values: string[]) => void;
+    isEditing: boolean;
+    color: 'primary' | 'secondary';
+}> = ({ options, selected, onChange, isEditing, color }) => {
+
+    const colorClasses = {
+        primary: { ring: 'focus:ring-primary', text: 'text-primary' },
+        secondary: { ring: 'focus:ring-secondary', text: 'text-secondary' },
+    }
+    
+    if (isEditing) {
+        return (
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 max-h-60 overflow-y-auto p-4 border rounded-md">
+                {options.map(option => (
+                    <div key={option} className="flex items-center">
+                        <input
+                            type="checkbox"
+                            id={`option-${option}`}
+                            value={option}
+                            checked={selected.includes(option)}
+                            onChange={(e) => {
+                                if (e.target.checked) {
+                                    onChange([...selected, option]);
+                                } else {
+                                    onChange(selected.filter(item => item !== option));
+                                }
+                            }}
+                            className={`h-4 w-4 ${colorClasses[color].text} ${colorClasses[color].ring} border-gray-300 rounded`}
+                        />
+                        <label htmlFor={`option-${option}`} className="ml-2 text-sm text-gray-900">{option}</label>
+                    </div>
+                ))}
+            </div>
+        );
+    }
+
+    return (
+        <div className="flex flex-wrap gap-2">
+            {selected.map(item => (
+                <span key={item} className={`text-sm font-medium px-3 py-1.5 rounded-full ${color === 'primary' ? 'bg-indigo-100 text-indigo-800' : 'bg-green-100 text-green-800'}`}>
+                    {item}
+                </span>
+            ))}
+            {selected.length === 0 && <p className="text-subtle text-sm">Not specified.</p>}
+        </div>
+    );
+};
+
+// Single-Select Component for Education
+const SingleSelectEducation: React.FC<{
+    options: string[];
+    selected: string;
+    onChange: (value: string) => void;
+    isEditing: boolean;
+}> = ({ options, selected, onChange, isEditing }) => {
+    
+    if (isEditing) {
+        return (
+            <select 
+                value={selected || ''} 
+                onChange={(e) => onChange(e.target.value)} 
+                className={inputClasses}
+            >
+                <option value="">Select highest education</option>
+                {options.map(option => (
+                    <option key={option} value={option}>{option}</option>
+                ))}
+            </select>
+        );
+    }
+    
+    return (
+        <div>
+            {selected ? (
+                <span className="text-sm font-medium px-3 py-1.5 rounded-full bg-green-100 text-green-800">
+                    {selected}
+                </span>
+            ) : (
+                <p className="text-subtle text-sm">Not specified.</p>
+            )}
+        </div>
+    )
+}
+
+// Work Experience Section Component
+const WorkExperienceSection: React.FC<{ 
+    experience: WorkExperienceItem[]; 
+    isEditing: boolean; 
+    onUpdate: (newExp: WorkExperienceItem[]) => void 
+}> = ({ experience, isEditing, onUpdate }) => {
+    
+    // Date validation function
+    const validateDateFormat = (date: string): boolean => {
+        if (!date || date === 'Present') return true;
+        const dateRegex = /^\d{4}-\d{2}$/;
+        if (!dateRegex.test(date)) return false;
+        
+        const [year, month] = date.split('-').map(Number);
+        return year >= 1900 && year <= new Date().getFullYear() + 10 && month >= 1 && month <= 12;
+    };
+
+    const handleDateBlur = (index: number, field: 'startDate' | 'endDate', value: string) => {
+        // Validate on blur (when user finishes typing)
+        if (value !== '' && value !== 'Present') {
+            if (!validateDateFormat(value)) {
+                alert('Please enter date in YYYY-MM format (e.g., 2024-01)');
+                // Focus back to the input if validation fails
+                setTimeout(() => {
+                    const input = document.querySelector(`input[data-field="${field}-${index}"]`) as HTMLInputElement;
+                    if (input) input.focus();
+                }, 100);
+            }
+        }
+    };
+
+    const handleDateChange = (index: number, field: 'startDate' | 'endDate', value: string) => {
+        // Allow user to type freely, no immediate validation
+        const updated = [...experience];
+        updated[index] = { ...updated[index], [field]: value };
+        onUpdate(updated);
+    };
+
+    const togglePresent = (index: number) => {
+        const updated = [...experience];
+        const currentEndDate = updated[index].endDate;
+        // Toggle between Present and empty string (not null)
+        if (currentEndDate === 'Present') {
+            updated[index] = { ...updated[index], endDate: '' };
+        } else {
+            updated[index] = { ...updated[index], endDate: 'Present' };
+        }
+        onUpdate(updated);
+    };
+    
+    if (isEditing) {
+        return (
+            <div className="space-y-4">
+                {experience.map((item, index) => {
+                    // Only consider it "Present" if explicitly set to 'Present'
+                    const isPresent = item.endDate === 'Present';
+                    
+                    return (
+                        <div key={item.id || index} className="p-4 border rounded-md relative group">
+                            <div className="grid grid-cols-2 gap-4">
+                                <input 
+                                    type="text" 
+                                    placeholder="Job Title" 
+                                    value={item.jobTitle} 
+                                    onChange={e => {
+                                        const updated = [...experience];
+                                        updated[index] = { ...item, jobTitle: e.target.value };
+                                        onUpdate(updated);
+                                    }} 
+                                    className={`${inputClasses} col-span-2`} 
+                                />
+                                <input 
+                                    type="text" 
+                                    placeholder="Company" 
+                                    value={item.company} 
+                                    onChange={e => {
+                                        const updated = [...experience];
+                                        updated[index] = { ...item, company: e.target.value };
+                                        onUpdate(updated);
+                                    }} 
+                                    className={inputClasses} 
+                                />
+                                <input 
+                                    type="text" 
+                                    placeholder="Start Date (YYYY-MM)" 
+                                    value={item.startDate} 
+                                    onChange={e => handleDateChange(index, 'startDate', e.target.value)} 
+                                    onBlur={e => handleDateBlur(index, 'startDate', e.target.value)}
+                                    data-field={`startDate-${index}`}
+                                    className={inputClasses} 
+                                />
+                                <div className="flex items-center gap-2">
+                                    <input 
+                                        type="text" 
+                                        placeholder="End Date (YYYY-MM)" 
+                                        value={isPresent ? '' : (item.endDate || '')} 
+                                        onChange={e => handleDateChange(index, 'endDate', e.target.value)} 
+                                        onBlur={e => handleDateBlur(index, 'endDate', e.target.value)}
+                                        data-field={`endDate-${index}`}
+                                        className={`${inputClasses} flex-1`}
+                                        disabled={isPresent}
+                                    />
+                                    <label className="flex items-center gap-1 text-sm whitespace-nowrap">
+                                        <input 
+                                            type="checkbox" 
+                                            checked={isPresent}
+                                            onChange={() => togglePresent(index)}
+                                            className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
+                                        />
+                                        Present
+                                    </label>
+                                </div>
+                                <textarea 
+                                    placeholder="Description" 
+                                    value={item.description} 
+                                    onChange={e => {
+                                        const updated = [...experience];
+                                        updated[index] = { ...item, description: e.target.value };
+                                        onUpdate(updated);
+                                    }} 
+                                    className={`${inputClasses} col-span-2 h-20`}
+                                ></textarea>
+                            </div>
+                            <button 
+                                onClick={() => {
+                                    const updated = experience.filter((_, i) => i !== index);
+                                    onUpdate(updated);
+                                }} 
+                                className="absolute top-2 right-2 p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-100 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                            >
+                                <Icon name={IconName.Delete} className="w-4 h-4" />
+                            </button>
+                        </div>
+                    );
+                })}
+                <Button variant="ghost" size="sm" onClick={() => onUpdate([...experience, { 
+                    id: `we_${Date.now()}`, 
+                    jobTitle: '', 
+                    company: '', 
+                    startDate: '', 
+                    endDate: '', // Default to empty (unticked)
+                    description: '' 
+                }])}>
+                    + Add Experience
+                </Button>
+            </div>
+        );
+    }
+
+    return (
+        <div className="space-y-4">
+            {experience.map((item, index) => {
+                // Handle null/empty end dates from database as "Present"
+                const displayEndDate = item.endDate === null || item.endDate === '' ? 'Present' : item.endDate;
+                
+                return (
+                    <div key={item.id || index} className="p-4 border border-gray-200 rounded-md">
+                        <h4 className="font-bold">{item.jobTitle}</h4>
+                        <p className="text-subtle">{item.company} | {item.startDate} - {displayEndDate}</p>
+                        <p className="text-sm mt-1">{item.description}</p>
+                    </div>
+                );
+            })}
+            {experience.length === 0 && <p className="text-subtle">No work experience listed.</p>}
+        </div>
+    );
+};
+
+const DocumentSection: React.FC<{
+    title: string;
+    cvUrl?: string;
+    cvOriginalFilename?: string;
+    certifications: any[];
+    isEditing: boolean;
+    onUpdateCv: (file: File) => void;
+    onAddCertification: (name: string, file: File) => void;
+    onRemoveCertification: (id: string) => void;
+}> = ({ title, cvUrl, cvOriginalFilename, certifications, isEditing, onUpdateCv, onAddCertification, onRemoveCertification }) => {
+    const [newCertName, setNewCertName] = useState('');
+    const [selectedCertFile, setSelectedCertFile] = useState<File | null>(null);
+
+    const handleFileSelect = (file: File) => {
+        setSelectedCertFile(file);
+    };
+
+    const handleAddCert = () => {
+        if (selectedCertFile && newCertName) {
+            onAddCertification(newCertName, selectedCertFile);
+            setNewCertName('');
+            setSelectedCertFile(null);
+            (document.getElementById('cert-upload') as HTMLInputElement).value = ''; // Reset file input
+        } else {
+            alert("Please provide both a name and select a file for the certification.");
+        }
+    };
+    if (isEditing) {
+        return (
+            <section>
+                <h2 className="text-xl font-bold mb-4">{title}</h2>
+                <div className="space-y-4">
+                    {/* CV Section */}
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Curriculum Vitae (CV)</label>
+                        <div className="flex items-center gap-2 p-2 bg-gray-50 rounded-md border">
+                            <Icon name={IconName.FilePdf} className="w-5 h-5 text-gray-500" />
+                            <span className="text-sm text-subtle flex-grow">
+                                {cvUrl ? (
+                                    <span className="font-medium text-gray-700">
+                                        {cvOriginalFilename}
+                                    </span>
+                                ) : (
+                                    'No CV uploaded'
+                                )}
+                            </span>
+                            <Button variant="ghost" size="sm" onClick={() => document.getElementById('cv-upload')?.click()}>
+                                <Icon name={IconName.Upload} className="w-4 h-4 mr-1"/> {cvUrl ? 'Change' : 'Upload'}
+                            </Button>
+                            <input type="file" id="cv-upload" className="hidden" onChange={(e) => e.target.files && onUpdateCv(e.target.files[0])} accept=".pdf,.doc,.docx"/>
+                        </div>
+                    </div>
+
+                    {/* Certifications Section */}
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Certifications</label>
+                        <div className="space-y-2">
+                            {certifications?.map(cert => (
+                                <div key={cert.id || cert.name} className="flex items-center gap-2 p-2 bg-gray-50 rounded-md border">
+                                    <Icon name={IconName.FilePdf} className="w-5 h-5 text-gray-500" />
+                                    <span className="text-sm text-gray-600 flex-1">{cert.name}</span>
+                                    <button onClick={() => cert.id && onRemoveCertification(cert.id)} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-100 rounded-full">
+                                        <Icon name={IconName.Delete} className="w-4 h-4" />
+                                    </button>
+                                </div>
+                            ))}
+                            <div className="flex items-center gap-2 p-2 bg-gray-100 rounded-md border border-dashed">
+                                <input 
+                                    type="text" 
+                                    placeholder="New Certification Name" 
+                                    value={newCertName} 
+                                    onChange={e => setNewCertName(e.target.value)} 
+                                    className={`${inputClasses} !py-1.5 !text-sm flex-1`} 
+                                />
+                                <div className="flex flex-col gap-1">
+                                    <Button variant="ghost" size="sm" onClick={() => document.getElementById('cert-upload')?.click()}>
+                                        <Icon name={IconName.Upload} className="w-4 h-4 mr-1"/> Select File
+                                    </Button>
+                                    {selectedCertFile && (
+                                        <span className="text-xs text-gray-600 truncate max-w-32" title={selectedCertFile.name}>
+                                            {selectedCertFile.name}
+                                        </span>
+                                    )}
+                                </div>
+                                <Button 
+                                    variant="ghost" 
+                                    size="sm" 
+                                    onClick={handleAddCert}
+                                    disabled={!newCertName || !selectedCertFile}
+                                    className="bg-green-100 hover:bg-green-200 text-green-700"
+                                >
+                                    Add
+                                </Button>
+                                <input 
+                                    type="file" 
+                                    id="cert-upload" 
+                                    className="hidden" 
+                                    onChange={(e) => e.target.files && handleFileSelect(e.target.files[0])} 
+                                    accept=".pdf,.jpg,.png,.doc,.docx"
+                                />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        );
+    }
+
+    return (
+        <section>
+            <h2 className="text-xl font-bold mb-4">{title}</h2>
+            <div className="space-y-4">
+                {/* CV Section */}
+                {cvUrl && (
+                    <div className="flex items-center justify-between p-3 bg-gray-50 rounded-md border">
+                        <div className="flex items-center gap-3">
+                            <Icon name={IconName.FilePdf} className="w-6 h-6 text-red-600 flex-shrink-0" />
+                            <div>
+                                <p className="text-sm font-medium text-gray-900">Curriculum Vitae</p>
+                            </div>
+                        </div>
+                        <a 
+                            href={getApiUrl(`/api/download${stripBaseUrl(cvUrl) || cvUrl || ''}`)} 
+                            download={cvOriginalFilename || 'CV.pdf'}
+                            className="inline-flex items-center gap-1.5 px-2 py-1 text-xs font-semibold text-blue-600 bg-blue-50 rounded-md hover:bg-blue-100 transition-colors"
+                        >
+                            <Icon name={IconName.Download} className="w-3 h-3" /> 
+                            Download
+                        </a>
+                    </div>
+                )}
+
+                {/* Certifications Section */}
+                {(certifications && certifications.length > 0) && (
+                    <div className="space-y-2">
+                        {certifications.map(cert => (
+                            <div key={cert.id || cert.name} className="flex items-center justify-between p-3 bg-gray-50 rounded-md border">
+                                <div className="flex items-center gap-3">
+                                    <Icon name={IconName.FilePdf} className="w-6 h-6 text-red-600 flex-shrink-0" />
+                                    <div>
+                                        <p className="text-sm font-medium text-gray-900">{cert.name}</p>
+                                    </div>
+                                </div>
+                                <a 
+                                    href={getApiUrl(`/api/download${stripBaseUrl(cert.fileUrl) || cert.fileUrl || ''}`)} 
+                                    download={cert.originalFilename || cert.name}
+                                    className="inline-flex items-center gap-1.5 px-2 py-1 text-xs font-semibold text-blue-600 bg-blue-50 rounded-md hover:bg-blue-100 transition-colors"
+                                >
+                                    <Icon name={IconName.Download} className="w-3 h-3" /> 
+                                    Download
+                                </a>
+                            </div>
+                        ))}
+                    </div>
+                )}
+                {!cvUrl && (!certifications || certifications.length === 0) && (
+                    <p className="text-subtle text-sm">No CV or certifications uploaded.</p>
+                )}
+            </div>
+        </section>
+    );
+};
+
+const LoginDetailsCard: React.FC<{ loginId: string; password: string; userId?: string; onPasswordUpdate?: (newPassword: string) => void; }> = ({ loginId, password, userId, onPasswordUpdate }) => {
+    const { currentUser } = useLms();
+    const [isPasswordVisible, setIsPasswordVisible] = useState(false);
+    const [isResetting, setIsResetting] = useState(false);
+    const [newPassword, setNewPassword] = useState('');
+    const [isUpdating, setIsUpdating] = useState(false);
+
+    const handleResetPassword = async () => {
+        if (!newPassword.trim()) {
+            alert('Please enter a new password');
+            return;
+        }
+
+        if (newPassword.length < 6) {
+            alert('Password must be at least 6 characters long');
+            return;
+        }
+
+        try {
+            setIsUpdating(true);
+            
+            if (!currentUser?.id) {
+                throw new Error('No authenticated user found');
+            }
+
+            // Use the new bcrypt-enabled password update API
+            const response = await fetch(getApiUrl('/api/auth/update-password'), {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    userId: currentUser.id,
+                    newPassword: newPassword
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`Password update failed: ${response.status}`);
+            }
+
+            const result = await response.json();
+            if (!result.success) {
+                throw new Error(result.message || 'Password update failed');
+            }
+            
+            console.log('✅ Password updated successfully with bcrypt hashing');
+            alert('Password reset successfully!');
+            setIsResetting(false);
+            setNewPassword('');
+            
+            // Call the callback to update the parent component
+            if (onPasswordUpdate) {
+                onPasswordUpdate(newPassword);
+            }
+            
+        } catch (error) {
+            console.error('❌ Failed to reset password:', error);
+            alert(`Failed to reset password: ${error instanceof Error ? error.message : 'Please try again.'}`);
+        } finally {
+            setIsUpdating(false);
+        }
+    };
+
+    return (
+        <Card className="p-8 mt-8">
+            <h2 className="text-xl font-bold mb-4">Login Details</h2>
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4 flex-grow">
+                    <div>
+                        <p className="text-sm text-subtle">Login ID</p>
+                        <p className="font-semibold text-on-surface break-words">{loginId}</p>
+                    </div>
+                    <div>
+                        <p className="text-sm text-subtle">Password</p>
+                        <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 flex-grow">
+                                {isResetting ? (
+                                    <input
+                                        type={isPasswordVisible ? "text" : "password"}
+                                        value={newPassword}
+                                        onChange={(e) => setNewPassword(e.target.value)}
+                                        className={`${inputClasses} tracking-wider`}
+                                        placeholder="Enter new password"
+                                    />
+                                ) : (
+                                    <p className="font-semibold text-on-surface tracking-wider">
+                                        {isPasswordVisible ? password : "••••••••••••••••"}
+                                    </p>
+                                )}
+                                <button
+                                    type="button"
+                                    onClick={() => setIsPasswordVisible(!isPasswordVisible)}
+                                    className="text-subtle hover:text-primary p-1 rounded-full"
+                                >
+                                    <Icon
+                                        name={isPasswordVisible ? IconName.EyeOff : IconName.Eye}
+                                        className="w-5 h-5"
+                                    />
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {isResetting ? (
+                    <div className="flex items-end gap-2 flex-shrink-0">
+                        <Button
+                            variant="ghost"
+                            onClick={() => {
+                                setIsResetting(false);
+                                setNewPassword("");
+                            }}
+                            disabled={isUpdating}
+                        >
+                            Cancel
+                        </Button>
+                        <Button onClick={handleResetPassword} disabled={isUpdating}>
+                            {isUpdating ? <Spinner size="sm" /> : 'Save'}
+                        </Button>
+                    </div>
+                ) : (
+                    <Button
+                        variant="ghost"
+                        className="border border-gray-300 flex-shrink-0"
+                        onClick={() => setIsResetting(true)}
+                    >
+                        Reset Password
+                    </Button>
+                )}
+            </div>
+        </Card>
+    );
+};
+
+// Developer Profile Card Component
+const DeveloperProfileCard: React.FC<{
+    profile: DeveloperProfile;
+    onUpdate: (updatedData: Partial<DeveloperProfile>) => void;
+    userId?: string;
+    onProfileUpdate?: () => void;
+}> = ({ profile, onUpdate, userId, onProfileUpdate }) => {
+    const { currentUser } = useLms();
+    const [isEditing, setIsEditing] = useState(false);
+    const [formData, setFormData] = useState(profile);
+    const [isGeneratingAvatar, setIsGeneratingAvatar] = useState(false);
+    // Pending changes state - only applied when Save is clicked
+    const [pendingCvFile, setPendingCvFile] = useState<File | null>(null);
+    const [pendingCertificationsToAdd, setPendingCertificationsToAdd] = useState<Array<{name: string, file: File, tempId: string}>>([]);
+    const [pendingCertificationsToDelete, setPendingCertificationsToDelete] = useState<string[]>([]);
+    const [certificationFilesToDelete, setCertificationFilesToDelete] = useState<Array<{id: string, fileUrl: string, name: string}>>([]);
+    const [selectedProfilePictureFile, setSelectedProfilePictureFile] = useState<File | null>(null);
+    const [profilePicturePreviewUrl, setProfilePicturePreviewUrl] = useState<string | null>(null);
+    const [uploadedProfilePicturePath, setUploadedProfilePicturePath] = useState<string | null>(null);
+
+    useEffect(() => {
+        setFormData(profile);
+    }, [profile]);
+
+    // Handle password update from LoginDetailsCard
+    const handlePasswordUpdate = (newPassword: string) => {
+        setFormData(prev => ({ ...prev, password: newPassword }));
+    };
+
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+        setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
+    };
+
+    const handleMultiSelectChange = (field: 'qualifications' | 'areasOfSpecialty') => 
+        (values: string[]) => {
+            setFormData(prev => ({ ...prev, [field]: values }));
+        };
+
+    const handleEducationChange = (value: string) => {
+        setFormData(prev => ({ ...prev, education: value }));
+    };
+
+    const handleWorkExperienceUpdate = (workExperience: WorkExperienceItem[]) => {
+        setFormData(prev => ({ ...prev, workExperience }));
+    };
+
+    const handleCvUpdate = (file: File) => {
+        // Just store the file locally - upload will happen on save
+        setPendingCvFile(file);
+        
+        // Update the display immediately to show the new filename
+        setFormData(prev => ({
+            ...prev, 
+            cvOriginalFilename: file.name
+        }));
+        
+        console.log('📁 Developer CV file selected for upload on save:', file.name);
+    };
+
+    const handleAddCertification = (name: string, file: File) => {
+        // Create a temporary ID for the new certification
+        const tempId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        
+        // Add to pending certifications to add
+        setPendingCertificationsToAdd(prev => [...prev, { name, file, tempId }]);
+        
+        // Update the UI immediately to show the new certification
+        const tempCert = {
+            id: tempId,
+            name: name,
+            fileUrl: '', // Will be set after upload
+            originalFilename: file.name
+        };
+        
+        setFormData(prev => ({ 
+            ...prev, 
+            certifications: [...(prev.certifications || []), tempCert]
+        }));
+        
+        console.log('📁 Developer certification queued for upload on save:', name, file.name);
+    };
+
+    const handleRemoveCertification = (id: string) => {
+        // If it's a temporary cert (pending addition), remove from pending and UI
+        if (id.startsWith('temp_')) {
+            setPendingCertificationsToAdd(prev => prev.filter(cert => cert.tempId !== id));
+            setFormData(prev => ({ 
+                ...prev, 
+                certifications: (prev.certifications || []).filter(c => c.id !== id) 
+            }));
+            console.log('🗑️ Temporary developer certification removed from pending list:', id);
+            return;
+        }
+
+        // For existing certifications, capture file info BEFORE removing from UI
+        const certToDelete = formData.certifications?.find(cert => cert.id === id);
+        if (certToDelete?.fileUrl) {
+            setCertificationFilesToDelete(prev => [...prev, {
+                id: id,
+                fileUrl: certToDelete.fileUrl,
+                name: certToDelete.name
+            }]);
+            console.log('📁 Captured developer certification file for deletion:', certToDelete.name, certToDelete.fileUrl);
+        }
+
+        // Add to pending deletion list
+        setPendingCertificationsToDelete(prev => [...prev, id]);
+        
+        // Remove from UI immediately
+        setFormData(prev => ({ 
+            ...prev, 
+            certifications: (prev.certifications || []).filter(c => c.id !== id) 
+        }));
+        
+        console.log('🗑️ Developer certification marked for deletion on save:', id);
+    };
+
+    const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files[0]) {
+            const file = e.target.files[0];
+            
+            // Validate file type and size
+            if (!file.type.startsWith('image/')) {
+                alert('Please select a valid image file.');
+                return;
+            }
+            
+            if (file.size > 5 * 1024 * 1024) { // 5MB limit
+                alert('File size must be less than 5MB.');
+                return;
+            }
+            
+            // Store the file for later upload and create a preview
+            setSelectedProfilePictureFile(file);
+            
+            // Clear any previous uploaded path since we have a new file
+            setUploadedProfilePicturePath(null);
+            
+            // Create preview URL for immediate display
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                const previewUrl = reader.result as string;
+                setProfilePicturePreviewUrl(previewUrl);
+                setFormData(prev => ({ 
+                    ...prev, 
+                    profilePictureUrl: previewUrl
+                }));
+            };
+            reader.readAsDataURL(file);
+        }
+    };
+
+    const handleGenerateAvatar = async () => {
+        setIsGeneratingAvatar(true);
+        try {
+            // Delete old profile picture if it exists and is a file
+            const oldFileUrl = formData.profilePictureUrl;
+            if (oldFileUrl && (oldFileUrl.startsWith('/uploads/') || oldFileUrl.includes('uploads/'))) {
+                try {
+                    // Extract just the path part if it's a full URL
+                    const filePath = oldFileUrl.startsWith('http')
+                        ? stripBaseUrl(oldFileUrl) || oldFileUrl
+                        : oldFileUrl;
+                    await fetch(getDeleteFileUrl(filePath), {
+                        method: 'DELETE'
+                    });
+                    console.log('✅ Old profile picture deleted before generating new avatar');
+                } catch (error) {
+                    console.warn('⚠️ Failed to delete old profile picture:', error);
+                }
+            }
+
+            // Generate new avatar using external service (stores as external URL, not file path)
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            const newAvatarUrl = `https://i.pravatar.cc/150?img=${Math.floor(Math.random() * 50)}`;
+            setFormData(prev => ({ ...prev, profilePictureUrl: newAvatarUrl }));
+            
+            // Clear any selected file since we're using AI generated image
+            setSelectedProfilePictureFile(null);
+            setProfilePicturePreviewUrl(null);
+            
+        } catch (error) {
+            console.error('Avatar generation failed:', error);
+            alert('An error occurred while generating the avatar.');
+        } finally {
+            setIsGeneratingAvatar(false);
+        }
+    };
+
+    const handleSave = async () => {
+        try {
+            console.log('💾 Saving developer profile with batched changes:', formData);
+            
+            const CURRENT_USER_ID = currentUser?.id; 
+            if (!CURRENT_USER_ID) {
+                console.error('❌ No authenticated user found');
+                alert('Error: No authenticated user found. Please log in again.');
+                return;
+            }
+
+            // Prepare data for batch update
+            const updateData: any = {
+                userId: CURRENT_USER_ID,
+                profileData: {}
+            };
+
+            // 1. Upload CV file if pending
+            if (pendingCvFile) {
+                try {
+                    console.log('📁 Uploading developer CV file:', pendingCvFile.name);
+                    
+                    // Delete old CV file if it exists
+                    const oldCvUrl = profile.cvUrl;
+                    if (oldCvUrl && (oldCvUrl.startsWith('/uploads/') || oldCvUrl.includes('uploads/'))) {
+                        try {
+                            const filePath = oldCvUrl.startsWith('http')
+                                ? stripBaseUrl(oldCvUrl) || oldCvUrl
+                                : oldCvUrl;
+                            await fetch(getDeleteFileUrl(filePath), {
+                                method: 'DELETE'
+                            });
+                            console.log('✅ Old developer CV file deleted');
+                        } catch (error) {
+                            console.warn('⚠️ Failed to delete old CV file:', error);
+                        }
+                    }
+
+                    const uploadFormData = new FormData();
+                    uploadFormData.append('file', pendingCvFile);
+                    uploadFormData.append('originalFilename', pendingCvFile.name);
+
+                    const response = await fetch(getUploadUrl('developer', 'cv'), {
+                        method: 'POST',
+                        body: uploadFormData
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`CV upload failed: ${response.statusText}`);
+                    }
+
+                    const result = await response.json();
+                    if (!result.success) {
+                        throw new Error(result.error || 'CV upload failed');
+                    }
+
+                    // Add CV data to profile update
+                    updateData.profileData.cvUrl = result.data.fileUrl;
+                    updateData.profileData.cvOriginalFilename = pendingCvFile.name;
+                    console.log('✅ Developer CV uploaded successfully:', result.data.fileUrl);
+
+                } catch (error) {
+                    console.error('❌ Failed to upload developer CV:', error);
+                    alert(`Failed to upload CV: ${error instanceof Error ? error.message : 'Please try again.'}`);
+                    return;
+                }
+            }
+
+            // 2. Upload new certification files if any
+            if (pendingCertificationsToAdd.length > 0) {
+                try {
+                    const uploadedCertifications: any[] = [];
+                    
+                    for (const cert of pendingCertificationsToAdd) {
+                        if (cert.file) {
+                            console.log('📁 Uploading developer certification file:', cert.file.name);
+                            
+                            const uploadFormData = new FormData();
+                            uploadFormData.append('file', cert.file);
+                            uploadFormData.append('originalFilename', cert.file.name);
+
+                            const response = await fetch(getUploadUrl('developer', 'certification'), {
+                                method: 'POST',
+                                body: uploadFormData
+                            });
+
+                            if (!response.ok) {
+                                throw new Error(`Certification upload failed: ${response.statusText}`);
+                            }
+
+                            const result = await response.json();
+                            if (!result.success) {
+                                throw new Error(result.error || 'Certification upload failed');
+                            }
+
+                            uploadedCertifications.push({
+                                name: cert.name,
+                                fileUrl: result.data.fileUrl,
+                                originalFilename: cert.file.name
+                            });
+                            console.log('✅ Developer certification uploaded successfully:', result.data.fileUrl);
+                        }
+                    }
+
+                    if (uploadedCertifications.length > 0) {
+                        updateData.profileData.newCertifications = uploadedCertifications;
+                    }
+
+                } catch (error) {
+                    console.error('❌ Failed to upload developer certifications:', error);
+                    alert(`Failed to upload certifications: ${error instanceof Error ? error.message : 'Please try again.'}`);
+                    return;
+                }
+            }
+
+            // 3. Add certifications to delete if any
+            if (pendingCertificationsToDelete.length > 0) {
+                updateData.profileData.certificationsToDelete = pendingCertificationsToDelete;
+                console.log('🗑️ Marking developer certifications for deletion:', pendingCertificationsToDelete);
+            }
+
+            // 4. Upload profile picture if pending
+            if (selectedProfilePictureFile) {
+                try {
+                    console.log('� Uploading developer profile picture:', selectedProfilePictureFile.name);
+                    
+                    // Delete old profile picture if it exists
+                    const oldProfilePictureUrl = profile.profilePictureUrl;
+                    if (oldProfilePictureUrl && (oldProfilePictureUrl.startsWith('/uploads/') || oldProfilePictureUrl.includes('uploads/'))) {
+                        try {
+                            const filePath = oldProfilePictureUrl.startsWith('http')
+                                ? stripBaseUrl(oldProfilePictureUrl) || oldProfilePictureUrl
+                                : oldProfilePictureUrl;
+                            await fetch(getDeleteFileUrl(filePath), {
+                                method: 'DELETE'
+                            });
+                            console.log('✅ Old developer profile picture deleted');
+                        } catch (error) {
+                            console.warn('⚠️ Failed to delete old profile picture:', error);
+                        }
+                    }
+                    
+                    const uploadFormData = new FormData();
+                    uploadFormData.append('file', selectedProfilePictureFile);
+                    
+                    const response = await fetch(getUploadUrl('developer', 'profilePicture'), {
+                        method: 'POST',
+                        body: uploadFormData
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error(`Profile picture upload failed: ${response.statusText}`);
+                    }
+                    
+                    const result = await response.json();
+                    if (!result.success) {
+                        throw new Error(result.error || 'Profile picture upload failed');
+                    }
+                    
+                    updateData.profileData.profilePictureUrl = result.data.fileUrl;
+                    console.log('✅ Developer profile picture uploaded successfully:', result.data.fileUrl);
+                    
+                } catch (error) {
+                    console.error('❌ Failed to upload developer profile picture:', error);
+                    alert(`Failed to upload profile picture: ${error instanceof Error ? error.message : 'Please try again.'}`);
+                    return;
+                }
+            }
+
+            // 5. Add other profile field changes
+            const changedFields: any = {};
+            if (formData.name !== profile.name) changedFields.name = formData.name;
+            if (formData.email !== profile.email) changedFields.email = formData.email;
+            if (formData.tel !== profile.tel) changedFields.tel = formData.tel;
+            if (formData.gender !== profile.gender) changedFields.gender = formData.gender;
+            if (formData.developerType !== profile.developerType) changedFields.developerType = formData.developerType;
+            if (formData.linkedinUrl !== profile.linkedinUrl) changedFields.linkedinUrl = formData.linkedinUrl;
+            if (formData.bio !== profile.bio) changedFields.bio = formData.bio;
+            if (formData.dob !== profile.dob) changedFields.dob = formData.dob;
+            if (JSON.stringify(formData.areasOfSpecialty) !== JSON.stringify(profile.areasOfSpecialty)) changedFields.areasOfSpecialty = formData.areasOfSpecialty;
+            if (JSON.stringify(formData.workExperience) !== JSON.stringify(profile.workExperience)) changedFields.workExperience = formData.workExperience;
+            if (JSON.stringify(formData.qualifications) !== JSON.stringify(profile.qualifications)) changedFields.qualifications = formData.qualifications;
+            if (JSON.stringify(formData.education) !== JSON.stringify(profile.education)) changedFields.education = formData.education;
+
+            // Merge changed fields into the update data
+            Object.assign(updateData.profileData, changedFields);
+
+            // 6. Only make API call if there are changes
+            if (Object.keys(updateData.profileData).length === 0) {
+                console.log('📝 No changes detected, skipping save');
+                setIsEditing(false);
+                return;
+            }
+
+            console.log('📝 Batch update data:', updateData);
+
+            // 7. Make the batch update API call
+            const response = await fetch(getApiUrl('/api/profile/update-developer'), {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(updateData)
+            });
+
+            if (!response.ok) {
+                throw new Error(`Update failed: ${response.status}`);
+            }
+
+            const result = await response.json();
+            if (!result.success) {
+                throw new Error(result.message || 'Update failed');
+            }
+
+            console.log('✅ Developer profile batch update successful:', result.data.profile);
+
+            // 8. Delete certification files that were marked for deletion
+            if (certificationFilesToDelete.length > 0) {
+                for (const certFile of certificationFilesToDelete) {
+                    try {
+                        const filePath = certFile.fileUrl.startsWith('http')
+                            ? stripBaseUrl(certFile.fileUrl) || certFile.fileUrl
+                            : certFile.fileUrl;
+
+                        await fetch(getDeleteFileUrl(filePath), {
+                            method: 'DELETE'
+                        });
+                        console.log('✅ Developer certification file deleted from storage:', certFile.name);
+                    } catch (error) {
+                        console.warn('⚠️ Failed to delete certification file from storage:', certFile.name, error);
+                    }
+                }
+            }
+
+            // 9. Clear all pending states and exit edit mode
+            setPendingCvFile(null);
+            setPendingCertificationsToAdd([]);
+            setPendingCertificationsToDelete([]);
+            setCertificationFilesToDelete([]);
+            setSelectedProfilePictureFile(null);
+            setProfilePicturePreviewUrl(null);
+            setIsEditing(false);
+
+            // 10. Update local state with server response
+            const updatedProfile = result.data.profile;
+            Object.assign(profile, updatedProfile);
+            setFormData(prev => ({
+                ...prev,
+                ...updatedProfile,
+                loginId: updatedProfile.email || prev.loginId
+            }));
+
+            alert('Developer profile saved successfully!');
+            onUpdate(formData);
+            
+            if (onProfileUpdate) {
+                onProfileUpdate();
+            }
+
+        } catch (error) {
+            console.error('❌ Failed to save developer profile:', error);
+            alert(`Failed to save profile: ${error instanceof Error ? error.message : 'Please try again.'}`);
+        }
+    };
+
+    const handleCancel = () => {
+        // Reset form data to original profile values
+        setFormData({
+            ...profile,
+            loginId: profile.email,
+            certifications: profile.certifications || [],
+            workExperience: profile.workExperience || [],
+            qualifications: profile.qualifications || [],
+            areasOfSpecialty: profile.areasOfSpecialty || []
+        });
+
+        // Clear all pending changes
+        setPendingCvFile(null);
+        setPendingCertificationsToAdd([]);
+        setPendingCertificationsToDelete([]);
+        setCertificationFilesToDelete([]);
+        setSelectedProfilePictureFile(null);
+        setProfilePicturePreviewUrl(null);
+        
+        // Exit edit mode
+        setIsEditing(false);
+        
+        console.log('📝 Developer profile changes cancelled, reverted to original data');
+    };
+
+    return (
+        <>
+            <Card className="p-8">
+                <div className="flex flex-col sm:flex-row items-center gap-6">
+                    <div className="flex-shrink-0 text-center">
+                        <div className="relative group w-24 h-24">
+                            <img
+                                src={ensureAbsoluteImageUrl(formData.profilePictureUrl)}
+                                alt={formData.name}
+                                className="w-24 h-24 rounded-full object-cover ring-4 ring-green-500/20"
+                            />
+                            {isGeneratingAvatar && (
+                                <div className="absolute inset-0 bg-black/70 flex items-center justify-center rounded-full">
+                                    <Spinner />
+                                </div>
+                            )}
+                            {isEditing && !isGeneratingAvatar && (
+                                <>
+                                    <input
+                                        type="file"
+                                        id="photo-upload-developer"
+                                        className="hidden"
+                                        accept="image/*"
+                                        onChange={handlePhotoChange}
+                                    />
+                                    <label
+                                        htmlFor="photo-upload-developer"
+                                        className="absolute inset-0 bg-black/50 flex items-center justify-center text-white rounded-full cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity"
+                                    >
+                                        <Icon name={IconName.Upload} className="w-8 h-8" />
+                                    </label>
+                                </>
+                            )}
+                        </div>
+                        {isEditing && (
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                className="mt-2"
+                                onClick={handleGenerateAvatar}
+                                disabled={isGeneratingAvatar}
+                            >
+                                {isGeneratingAvatar ? <Spinner size="sm" /> : 'Generate Avatar'}
+                            </Button>
+                        )}
+                    </div>
+                    <div className="text-center sm:text-left flex-grow">
+                        <h1 className="text-2xl font-bold">{isEditing ? 'Editing Profile' : formData.name}</h1>
+                        <p className="text-subtle">Developer Profile</p>
+                    </div>
+                    {isEditing ? (
+                        <div className="flex items-center gap-2">
+                            <Button variant="ghost" onClick={handleCancel}>
+                                Cancel
+                            </Button>
+                            <Button onClick={handleSave}>Save Changes</Button>
+                        </div>
+                    ) : (
+                        <Button onClick={() => setIsEditing(true)}>Edit Profile</Button>
+                    )}
+                </div>
+                <div className="border-t my-6"></div>
+                
+                <div className="space-y-6">
+                    <section>
+                        <h2 className="text-xl font-bold mb-4">Bio Data</h2>
+                        {isEditing ? (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
+                                <div>
+                                    <label className="text-sm font-medium">Name</label>
+                                    <input
+                                        type="text"
+                                        name="name"
+                                        value={formData.name}
+                                        onChange={handleChange}
+                                        className={inputClasses}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-sm font-medium">Telephone</label>
+                                    <input
+                                        type="tel"
+                                        name="tel"
+                                        value={formData.tel}
+                                        onChange={handleChange}
+                                        className={inputClasses}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-sm font-medium">Email</label>
+                                    <input
+                                        type="email"
+                                        name="email"
+                                        value={formData.email}
+                                        onChange={handleChange}
+                                        className={inputClasses}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-sm font-medium">Developer Type</label>
+                                    <select
+                                        name="developerType"
+                                        value={formData.developerType}
+                                        onChange={handleChange}
+                                        className={inputClasses}
+                                    >
+                                        {Object.values(DeveloperType).map(t => (
+                                            <option key={t} value={t}>{t}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="text-sm font-medium">Gender</label>
+                                    <select
+                                        name="gender"
+                                        value={formData.gender}
+                                        onChange={handleChange}
+                                        className={inputClasses}
+                                    >
+                                        {Object.values(Gender).map(g => (
+                                            <option key={g} value={g}>{g}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="text-sm font-medium">LinkedIn Profile</label>
+                                    <input
+                                        type="url"
+                                        name="linkedinUrl"
+                                        value={formData.linkedinUrl || ''}
+                                        onChange={handleChange}
+                                        className={inputClasses}
+                                        placeholder="https://linkedin.com/in/..."
+                                    />
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
+                                <ProfileBioItem label="Name" value={formData.name} />
+                                <ProfileBioItem label="Telephone" value={formData.tel} />
+                                <ProfileBioItem label="Email" value={formData.email} />
+                                <ProfileBioItem label="Developer Type" value={formData.developerType} />
+                                <ProfileBioItem label="Gender" value={formData.gender} />
+                                {formData.linkedinUrl && (
+                                    <ProfileBioItem
+                                        label="LinkedIn Profile"
+                                        value={
+                                            <a
+                                                href={formData.linkedinUrl.startsWith('http') ? formData.linkedinUrl : `https://${formData.linkedinUrl}`}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="text-primary hover:underline flex items-center gap-1.5"
+                                            >
+                                                <Icon name={IconName.Linkedin} className="w-4 h-4" />
+                                                View Profile
+                                            </a>
+                                        }
+                                    />
+                                )}
+                            </div>
+                        )}
+                    </section>
+
+                    <DocumentSection
+                        title="CV & Certifications"
+                        cvUrl={formData.cvUrl}
+                        cvOriginalFilename={formData.cvOriginalFilename}
+                        certifications={formData.certifications || []}
+                        isEditing={isEditing}
+                        onUpdateCv={handleCvUpdate}
+                        onAddCertification={handleAddCertification}
+                        onRemoveCertification={handleRemoveCertification}
+                    />
+
+                    <section>
+                        <h2 className="text-xl font-bold mb-4">Qualifications</h2>
+                        <MultiSelectCheckboxes
+                            options={Object.values(TrainerQualification)}
+                            selected={formData.qualifications || []}
+                            onChange={handleMultiSelectChange('qualifications')}
+                            isEditing={isEditing}
+                            color="secondary" 
+                        />
+                    </section>
+
+                    <section>
+                        <h2 className="text-xl font-bold mb-4">Highest Education</h2>
+                        <SingleSelectEducation
+                            options={Object.values(DeveloperEducation)}
+                            selected={formData.education || ''}
+                            onChange={handleEducationChange}
+                            isEditing={isEditing}
+                        />
+                    </section>
+
+                    <section>
+                        <h2 className="text-xl font-bold mb-4">Area of Specialty</h2>
+                        <MultiSelectCheckboxes
+                            options={SKILLS_FUTURE_INDUSTRIES}
+                            selected={formData.areasOfSpecialty || []}
+                            onChange={handleMultiSelectChange('areasOfSpecialty')}
+                            isEditing={isEditing}
+                            color="secondary" 
+                        />
+                    </section>
+
+                    <section>
+                        <h2 className="text-xl font-bold mb-4">Work Experience</h2>
+                        <WorkExperienceSection
+                            experience={formData.workExperience || []}
+                            isEditing={isEditing}
+                            onUpdate={handleWorkExperienceUpdate}
+                        />
+                    </section>
+                </div>
+            </Card>
+            
+            <LoginDetailsCard 
+                loginId={formData.loginId || formData.email} 
+                password={formData.password || '••••••••'} 
+                userId={userId}
+                onPasswordUpdate={handlePasswordUpdate}
+            />
+        </>
+    );
+};
+
+// Separate component for learner profile
+const LearnerProfileView: React.FC = () => {
+    const { role } = useLms();
+    const { profile, loading, updateProfile, saveProfile } = useProfileData();
+    const [isEditing, setIsEditing] = useState(false);
+    const [formData, setFormData] = useState<LearnerProfile | null>(null);
+    const [showNric, setShowNric] = useState(false);
+    const [showDob, setShowDob] = useState(false);
+    const [isGeneratingAvatar, setIsGeneratingAvatar] = useState(false);
+    const [isPasswordVisible, setIsPasswordVisible] = useState(false);
+    const [selectedProfilePictureFile, setSelectedProfilePictureFile] = useState<File | null>(null);
+    const [profilePicturePreviewUrl, setProfilePicturePreviewUrl] = useState<string | null>(null);
+
+    const isAdmin = role === UserRole.Admin;
+
+    useEffect(() => {
+        if (profile) {
+            setFormData(profile);
+        }
+    }, [profile]);
+
+    const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+        if (!formData) return;
+        setFormData(prev => prev ? { ...prev, [e.target.name]: e.target.value } : null);
+    }, [formData]);
+
+    const handlePhotoChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files[0] && formData) {
+            const file = e.target.files[0];
+            
+            // Validate file type and size
+            if (!file.type.startsWith('image/')) {
+                alert('Please select a valid image file.');
+                return;
+            }
+            
+            if (file.size > 5 * 1024 * 1024) { // 5MB limit
+                alert('File size must be less than 5MB.');
+                return;
+            }
+            
+            // Store the file for later upload and create a preview
+            setSelectedProfilePictureFile(file);
+            
+            // Create preview URL for immediate display
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                const previewUrl = reader.result as string;
+                setProfilePicturePreviewUrl(previewUrl);
+                setFormData(prev => prev ? { 
+                    ...prev, 
+                    profilePictureUrl: previewUrl
+                } : null);
+            };
+            reader.readAsDataURL(file);
+        }
+    }, [formData]);
+
+    const handleGenerateAvatar = useCallback(async () => {
+        if (!formData) return;
+        setIsGeneratingAvatar(true);
+        try {
+            // Delete old profile picture if it exists and is a file
+            const oldFileUrl = formData.profilePictureUrl;
+            if (oldFileUrl && (oldFileUrl.startsWith('/uploads/') || oldFileUrl.includes('uploads/'))) {
+                try {
+                    // Extract just the path part if it's a full URL
+                    const filePath = oldFileUrl.startsWith('http')
+                        ? stripBaseUrl(oldFileUrl) || oldFileUrl
+                        : oldFileUrl;
+                    await fetch(getDeleteFileUrl(filePath), {
+                        method: 'DELETE'
+                    });
+                    console.log('✅ Old learner profile picture deleted before generating new avatar');
+                } catch (error) {
+                    console.warn('⚠️ Failed to delete old learner profile picture:', error);
+                }
+            }
+
+            const newAvatarUrl = await generateAvatarImage();
+            if (newAvatarUrl) {
+                setFormData(prev => prev ? { ...prev, profilePictureUrl: newAvatarUrl } : null);
+            } else {
+                alert("Failed to generate avatar. Please try again.");
+            }
+            
+            // Clear any selected file since we're using AI generated image
+            setSelectedProfilePictureFile(null);
+            setProfilePicturePreviewUrl(null);
+            
+        } catch (error) {
+            console.error("Avatar generation failed:", error);
+            alert("An error occurred while generating the avatar.");
+        } finally {
+            setIsGeneratingAvatar(false);
+        }
+    }, [formData]);
+
+    const handleSave = useCallback(async () => {
+        if (!formData) return;
+        try {
+            // Upload profile picture if a new one was selected
+            if (selectedProfilePictureFile) {
+                try {
+                    console.log('📁 Uploading profile picture:', selectedProfilePictureFile.name);
+                    
+                    // Delete old profile picture if it exists and is a local file
+                    const oldFileUrl = profile?.profilePictureUrl;
+                    if (oldFileUrl && (oldFileUrl.startsWith('/uploads/') || oldFileUrl.includes('uploads/'))) {
+                        try {
+                            // Extract just the path part if it's a full URL
+                            const filePath = oldFileUrl.startsWith('http')
+                                ? stripBaseUrl(oldFileUrl) || oldFileUrl
+                                : oldFileUrl;
+                            await fetch(getDeleteFileUrl(filePath), {
+                                method: 'DELETE'
+                            });
+                            console.log('✅ Old learner profile picture deleted before upload');
+                        } catch (error) {
+                            console.warn('⚠️ Failed to delete old learner profile picture:', error);
+                        }
+                    }
+                    
+                    const uploadFormData = new FormData();
+                    uploadFormData.append('file', selectedProfilePictureFile);
+                    
+                    const uploadUrl = getUploadUrl('learner', 'profilePicture');
+                    
+                    const response = await fetch(uploadUrl, {
+                        method: 'POST',
+                        body: uploadFormData
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error(`Upload failed: ${response.statusText}`);
+                    }
+                    
+                    const result = await response.json();
+                    if (!result.success) {
+                        throw new Error(result.error || 'Upload failed');
+                    }
+                    
+                    console.log('✅ Profile picture uploaded successfully:', result.data);
+
+                    // Store relative path in database (e.g., /uploads/learner/profilePicture/1758875494904_profile_pic_1.png)
+                    const relativePath = result.data.fileUrl.startsWith('http')
+                        ? stripBaseUrl(result.data.fileUrl) || result.data.fileUrl
+                        : result.data.fileUrl;
+
+                    // Update form data with the relative path
+                    setFormData(prev => prev ? { 
+                        ...prev, 
+                        profilePictureUrl: relativePath
+                    } : null);
+                    
+                    // Clear the preview URL since we now have the real URL
+                    setProfilePicturePreviewUrl(null);
+                    
+                } catch (error) {
+                    console.error('❌ Failed to upload profile picture:', error);
+                    alert(`Failed to upload profile picture: ${error instanceof Error ? error.message : 'Please try again.'}`);
+                    return;
+                }
+            }
+            
+            await saveProfile(formData);
+            updateProfile(formData);
+            setIsEditing(false);
+            
+            // Clear tracking state
+            setSelectedProfilePictureFile(null);
+            setProfilePicturePreviewUrl(null);
+            
+        } catch (error) {
+            console.error('Failed to save profile:', error);
+            alert('Failed to save profile. Please try again.');
+        }
+    }, [formData, saveProfile, updateProfile, selectedProfilePictureFile, profile]);
+
+    const handleCancel = useCallback(() => {
+        if (profile) {
+            setFormData(profile);
+            setIsEditing(false);
+            // Clear preview state when canceling
+            setSelectedProfilePictureFile(null);
+            setProfilePicturePreviewUrl(null);
+        }
+    }, [profile]);
+
+    if (loading) {
+        return (
+            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+                <div className="text-center">
+                    <Spinner size="lg" />
+                    <p className="mt-4 text-gray-600">Loading profile...</p>
+                </div>
+            </div>
+        );
+    }
+
+    if (!formData) {
+        return (
+            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+                <div className="text-center text-subtle">No profile data available</div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="max-w-5xl mx-auto">
+            <Card className="p-8">
+                <div className="flex flex-col sm:flex-row items-center gap-6">
+                    <div className="flex-shrink-0 text-center">
+                        <div className="relative group w-24 h-24">
+                            <img 
+                                src={ensureAbsoluteImageUrl(formData.profilePictureUrl)} 
+                                alt={formData.name} 
+                                className="w-24 h-24 rounded-full object-cover ring-4 ring-primary/20" 
+                            />
+                            {isGeneratingAvatar && (
+                                <div className="absolute inset-0 bg-black bg-opacity-50 rounded-full flex items-center justify-center">
+                                    <Spinner size="sm" />
+                                </div>
+                            )}
+                            {isEditing && !isGeneratingAvatar && (
+                                <button 
+                                    onClick={() => document.getElementById('photo-upload')?.click()} 
+                                    className="absolute inset-0 bg-black bg-opacity-50 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                                >
+                                    <Icon name={IconName.Upload} className="w-6 h-6 text-white" />
+                                </button>
+                            )}
+                        </div>
+                        {isEditing && (
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                className="mt-2"
+                                onClick={handleGenerateAvatar}
+                                disabled={isGeneratingAvatar}
+                            >
+                                {isGeneratingAvatar ? <Spinner size="sm" /> : 'Generate Avatar'}
+                            </Button>
+                        )}
+                        <input 
+                            type="file" 
+                            id="photo-upload" 
+                            className="hidden" 
+                            onChange={handlePhotoChange} 
+                            accept="image/*"
+                        />
+                    </div>
+                    <div className="text-center sm:text-left flex-grow">
+                        <h1 className="text-2xl font-bold">{isEditing ? 'Editing Profile' : formData.name}</h1>
+                        <p className="text-subtle">Learner Profile</p>
+                    </div>
+                    {isEditing ? (
+                        <div className="flex items-center gap-2">
+                            <Button variant="ghost" onClick={handleCancel}>Cancel</Button>
+                            <Button onClick={handleSave}>Save Changes</Button>
+                        </div>
+                    ) : (
+                        <Button onClick={() => setIsEditing(true)}>Edit Profile</Button>
+                    )}
+                </div>
+
+                <div className="border-t my-6"></div>
+                <h2 className="text-xl font-bold mb-4">Bio Data</h2>
+
+                {isEditing ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                        <div>
+                            <label className="text-sm font-medium">Name</label>
+                            <input 
+                                type="text" 
+                                name="name" 
+                                value={formData.name} 
+                                onChange={handleInputChange} 
+                                className={inputClasses} 
+                            />
+                        </div>
+                        <div>
+                            <label className="text-sm font-medium">Telephone</label>
+                            <input 
+                                type="tel" 
+                                name="tel" 
+                                value={formData.tel || ''} 
+                                onChange={handleInputChange} 
+                                className={inputClasses} 
+                            />
+                        </div>
+                        <div>
+                            <label className="text-sm font-medium">Email</label>
+                            <input 
+                                type="email" 
+                                name="email" 
+                                value={formData.email} 
+                                onChange={handleInputChange} 
+                                className={inputClasses} 
+                            />
+                        </div>
+                        <div>
+                            <label className="text-sm font-medium">Date of Birth</label>
+                            <input 
+                                type="date" 
+                                name="dob" 
+                                value={formData.dob || ''} 
+                                onChange={handleInputChange} 
+                                className={inputClasses} 
+                            />
+                        </div>
+                        <div>
+                            <label className="text-sm font-medium">NRIC</label>
+                            <input 
+                                type="text" 
+                                name="nric" 
+                                value={formData.nric || ''} 
+                                onChange={handleInputChange} 
+                                className={inputClasses} 
+                            />
+                        </div>
+                        <div>
+                            <label className="text-sm font-medium">Race</label>
+                            <select 
+                                name="ethnicity" 
+                                value={formData.ethnicity || ''} 
+                                onChange={handleInputChange} 
+                                className={inputClasses}
+                            >
+                                <option value="">Select Race</option>
+                                {Object.values(Ethnicity).map(ethnicity => (
+                                    <option key={ethnicity} value={ethnicity}>{ethnicity}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="text-sm font-medium">Gender</label>
+                            <select 
+                                name="gender" 
+                                value={formData.gender || ''} 
+                                onChange={handleInputChange} 
+                                className={inputClasses}
+                            >
+                                <option value="">Select Gender</option>
+                                {Object.values(Gender).map(gender => (
+                                    <option key={gender} value={gender}>{gender}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="text-sm font-medium">Company</label>
+                            <input 
+                                type="text" 
+                                name="company" 
+                                value={formData.company || ''} 
+                                onChange={handleInputChange} 
+                                className={inputClasses} 
+                            />
+                        </div>
+                        <div>
+                            <label className="text-sm font-medium">Employment Status</label>
+                            <select 
+                                name="employmentStatus" 
+                                value={formData.employmentStatus || ''} 
+                                onChange={handleInputChange} 
+                                className={inputClasses}
+                            >
+                                <option value="">Select Status</option>
+                                {Object.values(EmploymentStatus).map(status => (
+                                    <option key={status} value={status}>{status}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="text-sm font-medium">Nationality</label>
+                            <select 
+                                name="nationality" 
+                                value={formData.nationality || ''} 
+                                onChange={handleInputChange} 
+                                className={inputClasses}
+                            >
+                                <option value="">Select Nationality</option>
+                                {Object.values(Nationality).map(nationality => (
+                                    <option key={nationality} value={nationality}>{nationality}</option>
+                                ))}
+                            </select>
+                        </div>
+                    </div>
+                ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                        <div>
+                            <p className="text-sm text-subtle">Name</p>
+                            <p className="font-semibold text-on-surface break-words">{formData.name}</p>
+                        </div>
+                        <div>
+                            <p className="text-sm text-subtle">Telephone</p>
+                            <p className="font-semibold text-on-surface break-words">{formData.tel || 'Not provided'}</p>
+                        </div>
+                        <div>
+                            <p className="text-sm text-subtle">Email</p>
+                            <p className="font-semibold text-on-surface break-words">{formData.email}</p>
+                        </div>
+                        <div>
+                            <p className="text-sm text-subtle">Date of Birth</p>
+                            <div className="flex items-center gap-2">
+                                <p className="font-semibold text-on-surface break-words">
+                                    {isAdmin && showDob 
+                                        ? (formData.dob ? new Date(formData.dob).toLocaleDateString('en-GB') : 'Not specified')
+                                        : 'XX/XX/XXXX'
+                                    }
+                                </p>
+                                {isAdmin && (
+                                    <button onClick={() => setShowDob(!showDob)} className="text-subtle hover:text-primary">
+                                        <Icon name={showDob ? IconName.EyeOff : IconName.Eye} className="w-5 h-5" />
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                        <div>
+                            <p className="text-sm text-subtle">NRIC</p>
+                            <div className="flex items-center gap-2">
+                                <p className="font-semibold text-on-surface break-words">
+                                    {isAdmin && showNric 
+                                        ? (formData.nric || 'N/A')
+                                        : (formData.nric && formData.nric !== 'N/A' ? `${formData.nric.slice(0, 1)}****${formData.nric.slice(-4)}` : 'N/A')
+                                    }
+                                </p>
+                                {isAdmin && (
+                                    <button onClick={() => setShowNric(!showNric)} className="text-subtle hover:text-primary">
+                                        <Icon name={showNric ? IconName.EyeOff : IconName.Eye} className="w-5 h-5" />
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                        <div>
+                            <p className="text-sm text-subtle">Race</p>
+                            <p className="font-semibold text-on-surface break-words">{formData.ethnicity || 'Not specified'}</p>
+                        </div>
+                        <div>
+                            <p className="text-sm text-subtle">Age Group</p>
+                            <p className="font-semibold text-on-surface break-words">{formData.dob ? calculateAgeGroup(formData.dob) : 'Unknown'}</p>
+                        </div>
+                        <div>
+                            <p className="text-sm text-subtle">Gender</p>
+                            <p className="font-semibold text-on-surface break-words">{formData.gender || 'Not specified'}</p>
+                        </div>
+                        <div>
+                            <p className="text-sm text-subtle">Company</p>
+                            <p className="font-semibold text-on-surface break-words">{formData.company || 'Not specified'}</p>
+                        </div>
+                        <div>
+                            <p className="text-sm text-subtle">Employment Status</p>
+                            <p className="font-semibold text-on-surface break-words">{formData.employmentStatus || 'Not specified'}</p>
+                        </div>
+                        <div>
+                            <p className="text-sm text-subtle">Nationality</p>
+                            <p className="font-semibold text-on-surface break-words">{formData.nationality || 'Not specified'}</p>
+                        </div>
+                    </div>
+                )}
+
+                {!isEditing && (
+                    <>
+                        <div className="border-t my-6"></div>
+                        <h2 className="text-xl font-bold mb-4">Billing Documents</h2>
+                        <div className="space-y-4">
+                            <div className="flex justify-between items-center p-3 bg-gray-50 rounded-md border">
+                                <span className="font-semibold">Invoice Template</span>
+                                <Button variant="ghost" size="sm">Download</Button>
+                            </div>
+                            <div className="flex justify-between items-center p-3 bg-gray-50 rounded-md border">
+                                <span className="font-semibold">Receipt Template</span>
+                                <Button variant="ghost" size="sm">Download</Button>
+                            </div>
+                        </div>
+                    </>
+                )}
+            </Card>
+
+            {/* Login Details Card */}
+            <Card className="p-8 mt-8">
+                <h2 className="text-xl font-bold mb-4">Login Details</h2>
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4 flex-grow">
+                        <div>
+                            <p className="text-sm text-subtle">Login ID</p>
+                            <p className="font-semibold text-on-surface break-words">{formData.loginId}</p>
+                        </div>
+                        <div>
+                            <p className="text-sm text-subtle">Password</p>
+                            <div className="flex items-center gap-2">
+                                <p className="font-semibold text-on-surface font-mono tracking-wider">
+                                    {isPasswordVisible ? 'Str0ngP@ssw0rd!23' : '••••••••••••••••'}
+                                </p>
+                                <button 
+                                    onClick={() => setIsPasswordVisible(!isPasswordVisible)} 
+                                    className="text-subtle hover:text-primary p-1 rounded-full"
+                                >
+                                    <Icon name={isPasswordVisible ? IconName.EyeOff : IconName.Eye} className="w-5 h-5" />
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <Button variant="ghost" className="border border-gray-300 mt-4 sm:mt-0 flex-shrink-0">
+                        Reset Password
+                    </Button>
+                </div>
+            </Card>
+        </div>
+    );
+};
+
+export default ProfileView;

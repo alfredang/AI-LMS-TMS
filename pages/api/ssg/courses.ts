@@ -1,0 +1,212 @@
+/**
+ * Next.js API routes for SSG course operations
+ * GET /api/ssg/courses/[runId] - View course run by ID
+ * POST /api/ssg/courses - Add new course run
+ * PUT /api/ssg/courses - Edit existing course run
+ * DELETE /api/ssg/courses - Delete course run
+ */
+
+import { NextApiRequest, NextApiResponse } from 'next';
+import { 
+  AddRunInfo, 
+  EditRunInfo, 
+  DeleteRunInfo, 
+  OptionalSelector 
+} from '../../../lib/ssg/models/course-runs';
+import { createSSGCourseAPI } from '../../../lib/ssg/api/course-api';
+import { getSSGCredentialsService } from '../../../lib/ssg/services/credentials-service';
+
+// Environment variables validation
+const validateEnvironment = () => {
+  const baseUrl = process.env.SSG_API_BASE_URL;
+  
+  if (!baseUrl) {
+    throw new Error(`Missing required environment variable: SSG_API_BASE_URL. Please add it to your .env.local file. Example: SSG_API_BASE_URL=https://api.ssg-wsg.sg`);
+  }
+  
+  return { baseUrl };
+};
+
+// Helper function to get optional selector from query
+const getOptionalSelector = (value: string | string[] | undefined): OptionalSelector => {
+  if (typeof value === 'string') {
+    return value.toLowerCase() === 'true' ? OptionalSelector.YES : OptionalSelector.NO;
+  }
+  return OptionalSelector.NO;
+};
+
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  try {
+    const { baseUrl } = validateEnvironment();
+
+    // Get training provider ID from request (optional, defaults to first available)
+    const trainingProviderId = req.query.trainingProviderId as string;
+    
+    // Parse training provider ID, handling empty string case
+    let trainingProviderIdNum: number | undefined;
+    if (trainingProviderId && trainingProviderId.trim() !== '') {
+      trainingProviderIdNum = parseInt(trainingProviderId, 10);
+      if (isNaN(trainingProviderIdNum)) {
+        return res.status(400).json({ 
+          error: 'Invalid trainingProviderId',
+          message: 'trainingProviderId must be a valid number'
+        });
+      }
+    }
+    
+    // Retrieve SSG credentials from database
+    const credentialsService = getSSGCredentialsService();
+    const credentials = await credentialsService.getSSGCredentials(trainingProviderIdNum);
+
+    if (!credentials) {
+      return res.status(400).json({ 
+        error: 'No SSG credentials found in database',
+        message: 'Please ensure your training provider has SSG credentials configured in the database'
+      });
+    }
+
+    // Validate credentials
+    const validationErrors = credentialsService.validateCredentials(credentials);
+    if (validationErrors.length > 0) {
+      return res.status(400).json({
+        error: 'Invalid SSG credentials',
+        message: `Credential validation failed: ${validationErrors.join(', ')}`
+      });
+    }
+
+    // Create SSG API client with database credentials
+    const ssgAPI = createSSGCourseAPI(baseUrl, credentials);
+
+    switch (req.method) {
+      case 'GET':
+        await handleGetCourseRun(req, res, ssgAPI);
+        break;
+      case 'POST':
+        await handleAddCourseRun(req, res, ssgAPI);
+        break;
+      case 'PUT':
+        await handleEditCourseRun(req, res, ssgAPI);
+        break;
+      case 'DELETE':
+        await handleDeleteCourseRun(req, res, ssgAPI);
+        break;
+      default:
+        res.setHeader('Allow', ['GET', 'POST', 'PUT', 'DELETE']);
+        res.status(405).json({ error: 'Method not allowed' });
+    }
+  } catch (error) {
+    console.error('SSG API Error:', error);
+    res.status(500).json({ 
+      error: 'Internal server error',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+}
+
+async function handleGetCourseRun(
+  req: NextApiRequest, 
+  res: NextApiResponse, 
+  ssgAPI: any
+) {
+  const { runId, includeExpired } = req.query;
+
+  if (!runId || typeof runId !== 'string') {
+    return res.status(400).json({ error: 'runId is required' });
+  }
+
+  const includeExpiredOption = getOptionalSelector(includeExpired);
+  const result = await ssgAPI.viewCourseRun(runId, includeExpiredOption);
+
+  if (result.error) {
+    return res.status(result.status || 400).json(result);
+  }
+
+  res.status(200).json(result);
+}
+
+async function handleAddCourseRun(
+  req: NextApiRequest, 
+  res: NextApiResponse, 
+  ssgAPI: any
+) {
+  const { includeExpired } = req.query;
+  const runInfo: AddRunInfo = req.body;
+
+  if (!runInfo) {
+    return res.status(400).json({ error: 'Course run information is required' });
+  }
+
+  // Basic validation
+  if (!runInfo.course?.courseReferenceNumber || !runInfo.course?.trainingProvider?.uen) {
+    return res.status(400).json({ 
+      error: 'Course reference number and training provider UEN are required' 
+    });
+  }
+
+  const includeExpiredOption = getOptionalSelector(includeExpired);
+  const result = await ssgAPI.addCourseRun(runInfo, includeExpiredOption);
+
+  if (result.error) {
+    return res.status(result.status || 400).json(result);
+  }
+
+  res.status(201).json(result);
+}
+
+async function handleEditCourseRun(
+  req: NextApiRequest, 
+  res: NextApiResponse, 
+  ssgAPI: any
+) {
+  const { includeExpired } = req.query;
+  const runInfo: EditRunInfo = req.body;
+
+  if (!runInfo) {
+    return res.status(400).json({ error: 'Course run information is required' });
+  }
+
+  // Basic validation
+  if (!runInfo.course?.courseReferenceNumber || !runInfo.run?.id) {
+    return res.status(400).json({ 
+      error: 'Course reference number and run ID are required' 
+    });
+  }
+
+  const includeExpiredOption = getOptionalSelector(includeExpired);
+  const result = await ssgAPI.editCourseRun(runInfo, includeExpiredOption);
+
+  if (result.error) {
+    return res.status(result.status || 400).json(result);
+  }
+
+  res.status(200).json(result);
+}
+
+async function handleDeleteCourseRun(
+  req: NextApiRequest, 
+  res: NextApiResponse, 
+  ssgAPI: any
+) {
+  const { includeExpired } = req.query;
+  const runInfo: DeleteRunInfo = req.body;
+
+  if (!runInfo) {
+    return res.status(400).json({ error: 'Course run information is required' });
+  }
+
+  // Basic validation
+  if (!runInfo.course?.courseReferenceNumber || !runInfo.run?.id) {
+    return res.status(400).json({ 
+      error: 'Course reference number and run ID are required' 
+    });
+  }
+
+  const includeExpiredOption = getOptionalSelector(includeExpired);
+  const result = await ssgAPI.deleteCourseRun(runInfo, includeExpiredOption);
+
+  if (result.error) {
+    return res.status(result.status || 400).json(result);
+  }
+
+  res.status(200).json(result);
+}

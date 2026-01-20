@@ -1,0 +1,240 @@
+import { NextApiRequest, NextApiResponse } from 'next';
+import { Pool } from 'pg';
+import { cors } from '../../../lib/cors';
+
+const pool = new Pool({
+  user: process.env.DB_USER || 'postgres',
+  host: process.env.DB_HOST || 'localhost',
+  database: process.env.DB_NAME || 'tertiarydb',
+  password: process.env.DB_PASSWORD || 'shuo1314520.',
+  port: parseInt(process.env.DB_PORT || '5432'),
+});
+
+interface ClassDetailsResponse {
+  success: boolean;
+  data?: {
+    courseTitle: string;
+    operationalSummary: {
+      trainer: string;
+      startDate: string;
+      mode: string;
+      overallAssessment: string;
+      tgsRef: string;
+      courseRunId: string;
+      overallGrantStatus: string;
+      overallClaimStatus: string;
+    };
+    enrolledLearners: Array<{
+      learnerName: string;
+      learnerEmail: string;
+      learnerTel: string;
+      company: string;
+      sponsorship: string;
+      nationality: string;
+      dob: string;
+      paymentDetails: string;
+      assessment: string;
+      grantId: string;
+      claimId: string;
+    }>;
+  };
+  error?: string;
+}
+
+async function handler(req: NextApiRequest, res: NextApiResponse<ClassDetailsResponse>) {
+  // Handle CORS
+  if (cors(req, res)) {
+    return;
+  }
+
+  if (req.method !== 'GET') {
+    return res.status(405).json({ success: false, error: 'Method not allowed' });
+  }
+
+  try {
+    const { courseRunId } = req.query;
+
+    if (!courseRunId || typeof courseRunId !== 'string') {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Course run ID is required' 
+      });
+    }
+
+    console.log('🔍 Fetching class details for course run:', courseRunId);
+
+    // 1. Get course title and operational summary basic data
+    const basicDataQuery = `
+      SELECT 
+          c.title AS course_title,
+          au.full_name AS trainer,
+          cr.start_date AS start_date,
+          cr.mode_of_learning AS mode,
+          c.course_code AS tgs_ref,
+          cr.course_run_id AS course_run_id,
+          cr.id AS course_run_uuid
+      FROM course_run cr
+      LEFT JOIN trainer_profile tp 
+          ON cr.assigned_trainer_id = tp.user_id
+      LEFT JOIN app_user au 
+          ON tp.user_id = au.id
+      LEFT JOIN course c 
+          ON cr.course_id = c.id
+      WHERE cr.course_run_id = $1
+    `;
+
+    const basicDataResult = await pool.query(basicDataQuery, [courseRunId]);
+
+    if (basicDataResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Course run not found'
+      });
+    }
+
+    const basicData = basicDataResult.rows[0];
+    console.log('📊 Basic data found:', {
+      courseRunId: basicData.course_run_id,
+      courseRunUuid: basicData.course_run_uuid,
+      courseTitle: basicData.course_title
+    });
+
+    // 2. Get overall assessment - using your exact working SQL pattern
+    console.log('🔍 Executing assessment query with UUID:', basicData.course_run_uuid);
+    const assessmentQuery = `
+      SELECT 
+        CONCAT(
+          COUNT(*) FILTER (WHERE assessment_status = 'Competent'),
+          ' / ',
+          COUNT(*)
+        ) AS overall_assessment
+      FROM enrollment
+      WHERE course_run_id = $1
+    `;
+
+    const assessmentResult = await pool.query(assessmentQuery, [basicData.course_run_uuid]);
+    const overallAssessment = assessmentResult.rows[0]?.overall_assessment || '0 / 0';
+    console.log('✅ Assessment query completed:', overallAssessment);
+
+    // 3. Get overall grant status - using your exact working SQL pattern
+    console.log('🔍 Executing grant status query with string courseRunId:', basicData.course_run_id);
+    const grantStatusQuery = `
+      SELECT 
+        cr.course_run_id,
+        CONCAT(
+          COUNT(*) FILTER (WHERE LOWER(sg.status) = 'approved'),
+          ' / ',
+          COUNT(*)
+        ) AS overall_grant_status
+      FROM ssg_grants sg
+      JOIN ssg_enrolments se 
+        ON sg.enrollment_id = se.enrolment_id
+      JOIN course_run cr 
+        ON se.course_run_id = cr.course_run_id
+      WHERE cr.course_run_id = $1
+      GROUP BY cr.course_run_id
+    `;
+
+    const grantStatusResult = await pool.query(grantStatusQuery, [basicData.course_run_id]);
+    const overallGrantStatus = grantStatusResult.rows[0]?.overall_grant_status || '0 / 0';
+    console.log('✅ Grant status query completed:', overallGrantStatus);
+
+    // 4. Get overall claim status - using your exact working SQL pattern
+    console.log('🔍 Executing claim status query with string courseRunId:', basicData.course_run_id);
+    const claimStatusQuery = `
+      SELECT 
+        cr.course_run_id,
+        CONCAT(
+          COUNT(*) FILTER (WHERE LOWER(sc.claim_status) = 'approved'),
+          ' / ',
+          COUNT(*)
+        ) AS overall_claim_status
+      FROM ssg_claims sc
+      JOIN ssg_enrolments se 
+        ON sc.enrollment_id = se.enrolment_id
+      JOIN course_run cr 
+        ON se.course_run_id = cr.course_run_id
+      WHERE cr.course_run_id = $1
+      GROUP BY cr.course_run_id
+    `;
+
+    const claimStatusResult = await pool.query(claimStatusQuery, [basicData.course_run_id]);
+    const overallClaimStatus = claimStatusResult.rows[0]?.overall_claim_status || '0 / 0';
+    console.log('✅ Claim status query completed:', overallClaimStatus);
+
+    // 5. Get enrolled learners data - using your exact working SQL pattern
+    console.log('🔍 Executing learners query with UUID:', basicData.course_run_uuid);
+    const learnersQuery = `
+      SELECT
+        au.full_name AS learner_name,
+        au.email AS learner_email,
+        lp.tel AS learner_tel,
+        lp.company AS company,
+        e.course_sponsorship AS sponsorship,
+        lp.nationality AS nationality,
+        lp.dob AS dob,
+        e.payment_status AS payment_details,
+        e.assessment_status AS assessment,
+        sg.grant_id AS grant_id,
+        sc.claim_id AS claim_id
+      FROM enrollment e
+      JOIN app_user au 
+        ON e.user_id = au.id
+      JOIN learner_profile lp 
+        ON e.user_id = lp.user_id
+      LEFT JOIN ssg_enrolments se 
+        ON se.trainee_name = au.full_name
+      LEFT JOIN ssg_grants sg 
+        ON sg.enrollment_id = se.enrolment_id
+      LEFT JOIN ssg_claims sc 
+        ON sc.enrollment_id = se.enrolment_id
+      WHERE e.course_run_id = $1
+      ORDER BY au.full_name
+    `;
+
+    const learnersResult = await pool.query(learnersQuery, [basicData.course_run_uuid]);
+    console.log('✅ Learners query completed, found:', learnersResult.rows.length, 'learners');
+
+    const response = {
+      success: true,
+      data: {
+        courseTitle: basicData.course_title,
+        operationalSummary: {
+          trainer: basicData.trainer || 'Not Assigned',
+          startDate: basicData.start_date,
+          mode: basicData.mode,
+          overallAssessment,
+          tgsRef: basicData.tgs_ref,
+          courseRunId: basicData.course_run_id,
+          overallGrantStatus,
+          overallClaimStatus
+        },
+        enrolledLearners: learnersResult.rows.map(row => ({
+          learnerName: row.learner_name,
+          learnerEmail: row.learner_email,
+          learnerTel: row.learner_tel,
+          company: row.company,
+          sponsorship: row.sponsorship,
+          nationality: row.nationality,
+          dob: row.dob,
+          paymentDetails: row.payment_details,
+          assessment: row.assessment,
+          grantId: row.grant_id || '',
+          claimId: row.claim_id || ''
+        }))
+      }
+    };
+
+    console.log('✅ Class details fetched successfully');
+    return res.status(200).json(response);
+
+  } catch (error) {
+    console.error('❌ Error fetching class details:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Internal server error'
+    });
+  }
+}
+
+export default handler;

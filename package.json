@@ -1,0 +1,48 @@
+{
+  "name": "lms-tms-system",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "type-check": "tsc --noEmit",
+    "db:migrate": "node scripts/migrate.js",
+    "db:seed": "node scripts/seed.js"
+  },
+  "dependencies": {
+    "@google/generative-ai": "^0.24.1",
+    "bcrypt": "^6.0.0",
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "form-data": "^4.0.4",
+    "formidable": "^3.5.4",
+    "jsonwebtoken": "^9.0.2",
+    "lucide-react": "^0.545.0",
+    "multer": "^2.0.2",
+    "next": "^14.2.32",
+    "pg": "^8.11.3",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "@types/bcrypt": "^6.0.0",
+    "@types/bcryptjs": "^2.4.2",
+    "@types/cors": "^2.8.13",
+    "@types/formidable": "^3.4.5",
+    "@types/jsonwebtoken": "^9.0.2",
+    "@types/multer": "^2.0.0",
+    "@types/node": "^20",
+    "@types/pg": "^8.10.2",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "autoprefixer": "^10.4.14",
+    "eslint": "^8",
+    "eslint-config-next": "14.2.5",
+    "postcss": "^8.4.23",
+    "tailwindcss": "^3.4.1",
+    "typescript": "^5"
+  }
+}
