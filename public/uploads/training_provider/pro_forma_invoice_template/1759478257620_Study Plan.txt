@@ -1,0 +1,117 @@
+Term 6
+50.007 Machine Learning
+***40.015 Simulation Modelling and Analysis
+50.039 Theory and Practice of Deep Learning
+50.038 Computational Data Science
+
+
+Term 7
+HASS
+HASS
+50.040 Natural Language Processing
+
+Term 8
+HASS
+50.035 Computer Vision
+50.021 Artificial Intelligence
+
+
+Liu Zhen
+
+M: 87180288 | ✉ E: lz624827316@gmail.com | 🔗 LinkedIn: www.linkedin.com/in/liu-zhen-lz
+
+EDUCATION
+
+Singapore University of Technology and Design                                                                                            Sep 2023 to Present
+
+Bachelor of Engineering (Computer Science and Design), Term 5                                     
+
+GPA 3.9/5.0
+
+Relevant Coursework: Probability and Statistics, Multivariable Calculus, Linear Algebra, Data Structures and Algorithms, Information Systems and Programming, Software Construction, Computer System Engineering, Database Systems
+
+
+
+Singapore Polytechnic                                                                                                                                       Apr 2020 to Apr 2023
+
+Diploma in Applied AI and Analytics
+
+GPA: 3.54/4.0
+
+Relevant Coursework: Data Visualisation, Data Engineering, Full-Stack Web Development, Machine Learning & Deep Learning
+
+
+
+WORK EXPERIENCE
+
+Wistech Consulting Pte Ltd                                                                                                                             Sep 2022 to Feb 2023
+
+Data Analyst Intern                                                                                
+
+Engineered scalable ETL workflows and cleaned complex datasets using Python, enabling robust analytics including Market Basket Analysis, RFM Segmentation, Cohort Analysis, and Customer Churn Analysis.
+
+Improved data accessibility by automating reporting processes and designing a daily Excel-based interface used by Operations staff for real-time inventory updates.Enhanced decision-making across departments by delivering actionable recommendations backed by data-driven insights.
+
+
+
+ACADEMIC PROJECTS
+
+Singapore University of Technology and Design                                                                                           Jan 2024 to Apr 2024
+
+LuminaTrail                                                                                                           
+
+Co-developed an interactive floor panel system using high-sensitivity sensors and dynamic lighting to detect and highlight nearby objects in real-time.
+
+
+
+Singapore Polytechnic                                                                                                                                      Apr 2022 to Aug 2022
+
+The 3RD Eye
+
+Co-developed a web-based tool using computer vision and pose estimation to help bowling coaches analyze training videos and improve athletes’ posture and technique.
+
+Built a functional prototype with video upload, automated posture analysis, and error tagging features, based on user requirements gathered from close collaboration with Strike Academy.
+
+
+
+CO-CURRICULAR ACTIVITIES
+
+Chinese Culture Club                                                                                                                                        Jan 2024 to Jan 2025
+
+Vice President                                                                                                                                      
+
+Provided strategic leadership to shape and achieve club objectives and initiatives.
+Coordinated, organized, and promoted engaging cultural events for the student body.
+Acted as an official club representative, fostering collaboration with external organizations and university management.
+ 
+Wing Chun                                                                                                                                                         Apr 2021 to Apr 2022
+
+Secretary
+
+Managed attendance and membership records while maintaining organized documentation for smooth club operations.
+Planned and executed engaging activities and events that enhanced member participation and club engagement.
+ 
+ADDITIONAL INFORMATION
+
+Technical Skills: Python, HTML, CSS, SQL, Java, JavaScript, React, Node.js, Tableau, Rhinoceros 3D, Microsoft Office
+
+Fluent in English and Mandarin (spoken & written)
+
+
+Take advantage of recreation opportunities including an outdoor pool and a 24-hour fitness center. Additional amenities at this aparthotel include complimentary wireless internet access, concierge services, and a communal living room.
+
+Business Amenities
+Featured amenities include dry cleaning/laundry services, a 24-hour front desk, and luggage storage. Free self parking is available onsite.
+
+Rooms
+Make yourself at home in one of the 38 individually furnished guestrooms, featuring kitchenettes with refrigerators and microwaves. 40-inch LED televisions with cable programming provide entertainment, while complimentary wireless internet access keeps you connected. Conveniences include safes and desks, and housekeeping is provided weekly.
+
+Attractions
+Distances are displayed to the nearest 0.1 mile and kilometer. <br /> <p>Mount Elizabeth Novena Hospital - 0.7 km / 0.4 mi <br /> City Square Mall - 1.5 km / 0.9 mi <br /> Mustafa Centre - 1.6 km / 1 mi <br /> The Paragon - 2.5 km / 1.6 mi <br /> Bugis Street Shopping District - 2.6 km / 1.6 mi <br /> Mount Elizabeth Medical Center - 2.6 km / 1.6 mi <br /> Orchard Road - 2.6 km / 1.6 mi <br /> Takashimaya Shopping Centre - 2.7 km / 1.7 mi <br /> Orchard Central - 2.8 km / 1.7 mi <br /> Haji Lane - 2.8 km / 1.8 mi <br /> Sultan Mosque - 2.8 km / 1.8 mi <br /> Lucky Plaza - 2.9 km / 1.8 mi <br /> Bugis+ Shopping Center - 2.9 km / 1.8 mi <br /> Orchard Tower - 3 km / 1.8 mi <br /> Bugis Junction Shopping Center - 3 km / 1.8 mi <br /> </p><p>The nearest airports are:<br />Seletar Airport (XSP) - 13.7 km / 8.5 mi<br /> Singapore Changi Airport (SIN) - 21.4 km / 13.3 mi<br /> Senai International Airport (JHB) - 71 km / 44.1 mi<br /> </p><p></p>
+
+Location
+With a stay at ST Residences Novena, you'll be centrally located in Singapore, within a 5-minute drive of Orchard Road and Mustafa Centre.  This boutique aparthotel is 3.3 mi (5.3 km) from Marina Bay Sands Skypark and 3.6 mi (5.8 km) from Marina Bay Sands Casino.
+
+Headline
+In Singapore (Novena)
+

@@ -9,7 +9,8 @@
       "Bash(do if grep -q \"localhost:3001\" \"$file\")",
       "Bash(then echo \"Updating $file...\")",
       "Bash(fi)",
-      "Bash(done)"
+      "Bash(done)",
+      "Bash(where npm)"
     ],
     "additionalDirectories": [
       "c:\\Users\\PC\\Downloads\\LmsTmsSystem"

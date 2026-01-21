@@ -107,9 +107,13 @@ temp/
 tmp/
 
 # Upload directories (large files)
-public/uploads/
-server/public/uploads/
-client/public/uploads/
+# These Two Files Size Is Too Big, So I Will Not Upload Them To Github
+public/uploads/slides/*
+public/uploads/guides/*
+public/uploads/training_provider/private_key/*
+public/uploads/training_provider/self_signing_cert/*
+# server/public/uploads/
+# client/public/uploads/
 
 # Old structure (keep until migration verified)
 # Uncomment these after verifying migration success:

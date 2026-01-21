@@ -1,0 +1,385 @@
+// Learning Management System Database Schema - DBML
+// Use this code at https://dbdiagram.io/
+
+Table training_providers {
+  id integer [primary key, increment]
+  user_id integer [unique, ref: - users.id]
+  company_name varchar(255) [not null]
+  company_shortname varchar(100)
+  uen varchar(20) [unique, not null]
+  address text
+  
+  // Contact person
+  contact_person_name varchar(255)
+  contact_person_email varchar(255)
+  contact_person_telephone varchar(20)
+  
+  // Document paths
+  proforma_invoice_template varchar(500)
+  invoice_template varchar(500)
+  receipt_template varchar(500)
+  certificate_template varchar(500)
+  self_signing_cert_file varchar(500)
+  private_key_file varchar(500)
+  encryption_key varchar(500)
+  
+  // Integration settings
+  sync_google_calendar boolean [default: false]
+  sync_microsoft_calendar boolean [default: false]
+  google_drive_enabled boolean [default: false]
+  microsoft_onedrive_enabled boolean [default: false]
+  
+  // Auto send settings
+  auto_send_pfi boolean [default: false]
+  auto_send_ce boolean [default: false]
+  auto_send_invoice boolean [default: false]
+  auto_send_receipt boolean [default: false]
+  auto_send_certificate boolean [default: false]
+  auto_send_thank_you boolean [default: false]
+  
+  // Security settings
+  auto_mask_sensitive_data boolean [default: false]
+  auto_delete_after_6_months boolean [default: false]
+  enable_otp_login boolean [default: false]
+  
+  // Game settings
+  enable_leaderboard boolean [default: false]
+  enable_point_system boolean [default: false]
+  
+  // Tax settings
+  normal_funding_rate decimal(5,2)
+  enhanced_funding_rate decimal(5,2)
+  gst_rate decimal(5,2)
+  gst_registered boolean [default: false]
+  
+  // UI customization
+  primary_color varchar(7)
+}
+
+Table api_keys {
+  id integer [primary key, increment]
+  training_provider_id integer [ref: > training_providers.id]
+  key_name varchar(255) [not null]
+  key_value varchar(500) [not null]
+  created_at timestamp [default: `now()`]
+  is_active boolean [default: true]
+}
+
+Table users {
+  id integer [primary key, increment]
+  email varchar(255) [unique, not null]
+  password_hash varchar(255)
+  role varchar(20) [not null, note: 'learner, trainer, developer, admin, training_provider']
+}
+
+Table learner_profiles {
+  id integer [primary key, increment]
+  user_id integer [unique, ref: - users.id]
+  full_name varchar(255) [not null]
+  profile_image varchar(500)
+  telephone varchar(20)
+  date_of_birth date
+  nric varchar(20)
+  race varchar(20) [note: 'chinese, malay, indian, others']
+  gender varchar(20) [note: 'male, female, prefer_not_to_say']
+  company varchar(255)
+  employment_status varchar(30) [note: 'employed, unemployed, looking_for_job']
+  nationality varchar(30) [note: 'singaporean, singapore_pr, non_citizen']
+  sponsorship varchar(255)
+}
+
+Table trainer_profiles {
+  id integer [primary key, increment]
+  user_id integer [unique, ref: - users.id]
+  full_name varchar(255) [not null]
+  telephone varchar(20)
+  gender varchar(20) [note: 'male, female, prefer_not_to_say']
+  trainer_type varchar(20) [note: 'ACLP, DACE, Non-ACLP']
+  linkedin_profile varchar(500)
+  education varchar(20) [note: 'diploma, degree, master, phd']
+  cv_file_path varchar(500)
+  is_active boolean [default: true]
+}
+
+Table developer_profiles {
+  id integer [primary key, increment]
+  user_id integer [unique, ref: - users.id]
+  full_name varchar(255) [not null]
+  telephone varchar(20)
+  gender varchar(20) [note: 'male, female, prefer_not_to_say']
+  trainer_type varchar(20) [note: 'ACLP, DACE, Non-ACLP']
+  linkedin_profile varchar(500)
+  education varchar(20) [note: 'diploma, degree, master, phd']
+  cv_file_path varchar(500)
+}
+
+Table admin_profiles {
+  id integer [primary key, increment]
+  user_id integer [unique, ref: - users.id]
+  full_name varchar(255) [not null]
+  telephone varchar(20)
+}
+
+Table assigned_certification {
+  id integer [primary key, increment]
+  user_id integer [ref: > users.id]
+  certification_name varchar(255)
+  file_path varchar(500)
+}
+
+Table qualifications {
+  id integer [primary key, increment]
+  user_id integer [ref: > users.id]
+  qualification varchar(50) [note: 'ACLP, DACE, etc.']
+}
+
+Table expertise_options {
+  id integer [primary key, increment]
+  expertise_name varchar(255) [not null, unique]
+}
+
+Table user_expertise {
+  id integer [primary key, increment]
+  user_id integer [ref: > users.id]
+  expertise_id integer [ref: > expertise_options.id]
+}
+
+Table work_experiences {
+  id integer [primary key, increment]
+  user_id integer [ref: > users.id]
+  job_title varchar(255)
+  company varchar(255)
+  start_date date
+  end_date date [note: 'NULL for Present']
+  description text
+  is_current boolean [default: false]
+}
+
+Table courses {
+  id integer [primary key, increment]
+  course_title varchar(255) [not null]
+  course_code varchar(50) [unique, note: 'Format: CRS-XXX-XXXXX-X']
+  tsc_title varchar(255)
+  tsc_code varchar(50)
+  training_hours integer
+  assessment_hours integer
+  total_duration integer [note: 'training_hours + assessment_hours']
+  mode_of_learning varchar(20) [note: 'physical, virtual, hybrid']
+  course_type varchar(20) [note: 'WSQ, IBF, non-WSQ']
+  learning_outcome text
+  course_image varchar(500)
+  
+  // Document paths
+  lesson_plan_path varchar(500)
+  learner_guide_path varchar(500)
+  facilitator_guide_path varchar(500)
+  assessment_plan_path varchar(500)
+  learner_slide_path varchar(500)
+  trainer_slide_path varchar(500)
+  trainer_slide_is_link boolean [default: false]
+  
+  // Course settings
+  enable_gaming_leaderboard boolean [default: false]
+  course_fee decimal(10,2)
+  tax_amount decimal(10,2)
+  
+  created_by integer [ref: > users.id]
+}
+
+Table learning_units {
+  id integer [primary key, increment]
+  course_id integer [ref: > courses.id]
+  title varchar(255) [not null]
+  unit_order integer
+}
+
+Table topics {
+  id integer [primary key, increment]
+  learning_unit_id integer [ref: > learning_units.id]
+  title varchar(255) [not null]
+  topic_order integer
+}
+
+Table course_runs {
+  id integer [primary key, increment]
+  course_id integer [ref: > courses.id]
+  course_run_id varchar(100) [unique, not null]
+  tgs_ref varchar(50) [note: 'Example: TGS-2025053174']
+  digital_attendance_id varchar(50) [note: 'Example: RA415175']
+  class_status varchar(20) [note: 'upcoming, ongoing, completed, cancelled']
+  start_date date
+  end_date date
+  assigned_trainer_id integer [ref: > users.id]
+}
+
+Table course_enrollments {
+  id integer [primary key, increment]
+  learner_id integer [ref: > users.id]
+  course_run_id integer [ref: > course_runs.id]
+  enrollment_date date [default: `now()`]
+  payment_mode varchar(100)
+  payment_status varchar(20) [note: 'pending, paid, overdue, refunded']
+  assessment_status varchar(20) [note: 'not_started, in_progress, submitted, passed, failed']
+  grant_id varchar(100)
+  claim_id varchar(100)
+  sponsorship varchar(255)
+  is_completed boolean [default: false]
+  completion_date date
+  
+  indexes {
+    (learner_id, course_run_id) [unique]
+  }
+}
+
+Table assessments {
+  id integer [primary key, increment]
+  course_id integer [ref: > courses.id]
+  title varchar(255) [not null]
+  assessment_type varchar(30) [note: 'practical_exam, online_exam, project, assignments, oral_interview, demonstration, written_exam, role_play, oral_questioning']
+  file_path varchar(500)
+  deadline date
+  created_by integer [ref: > users.id]
+}
+
+Table assessment_submissions {
+  id integer [primary key, increment]
+  assessment_id integer [ref: > assessments.id]
+  learner_id integer [ref: > users.id]
+  course_run_id integer [ref: > course_runs.id]
+  submission_file_path varchar(500)
+  submission_date timestamp [default: `now()`]
+  status varchar(20) [note: 'submitted, passed, failed, resubmitted']
+  grade varchar(10) [note: 'Pass/Fail or percentage']
+  feedback text
+  graded_by integer [ref: > users.id]
+  graded_at timestamp
+  attempt_number integer [default: 1]
+}
+
+Table certificates {
+  id integer [primary key, increment]
+  learner_id integer [ref: > users.id]
+  course_run_id integer [ref: > course_runs.id]
+  certificate_file_path varchar(500)
+  issued_date date [default: `now()`]
+  issued_by integer [ref: > users.id]
+}
+
+Table grants {
+  id integer [primary key, increment]
+  course_run_id integer [ref: > course_runs.id]
+  learner_id integer [ref: > users.id]
+  
+  // Learner grant information
+  learner_full_name varchar(255)
+  learner_id_number varchar(50)
+  id_type varchar(50)
+  learner_dob date
+  learner_email varchar(255)
+  contact_no varchar(20)
+  enrolment_date date
+  sponsorship varchar(255)
+  assessment_status varchar(20)
+  grant_status varchar(20) [note: 'pending, approved, rejected, processing']
+  grant_id varchar(100)
+  claim_status varchar(20) [note: 'pending, submitted, approved, rejected']
+  
+  // Employer information
+  employer_uen varchar(20)
+  employer_contact_name varchar(255)
+  employer_contact_email varchar(255)
+  employer_contact_number varchar(20)
+  
+  // Fee information
+  fee_discount decimal(10,2)
+  fee_status varchar(100)
+  bundle_code varchar(100)
+  cpf_category varchar(100)
+  cpf_los_date date
+  cpf_contribution decimal(10,2)
+  cpf_employed boolean
+  
+  // Training partner information
+  training_partner_uen varchar(20)
+  training_partner_code varchar(100)
+  
+  applied_by integer [ref: > users.id]
+}
+
+Table invoices {
+  id integer [primary key, increment]
+  learner_id integer [ref: > users.id]
+  course_run_id integer [ref: > course_runs.id]
+  invoice_number varchar(100) [unique]
+  amount decimal(10,2)
+  tax_amount decimal(10,2)
+  total_amount decimal(10,2)
+  invoice_date date [default: `now()`]
+  due_date date
+  payment_status varchar(20) [note: 'pending, paid, overdue, refunded']
+  file_path varchar(500)
+}
+
+Table payment_receipts {
+  id integer [primary key, increment]
+  invoice_id integer [ref: > invoices.id]
+  learner_id integer [ref: > users.id]
+  receipt_number varchar(100) [unique]
+  payment_amount decimal(10,2)
+  payment_date date [default: `now()`]
+  payment_method varchar(100)
+  file_path varchar(500)
+}
+
+Table ssg_upload_temp {
+  id integer [primary key, increment]
+  course_run_id integer [ref: > course_runs.id]
+  document_type varchar(100)
+  file_path varchar(500)
+  upload_status varchar(50) [default: 'pending']
+  api_response text
+}
+
+// Table Groups for better visualization
+TableGroup "User Management" {
+  users
+  learner_profiles
+  trainer_profiles
+  developer_profiles
+  admin_profiles
+}
+
+TableGroup "Training Provider" {
+  training_providers
+  api_keys
+}
+
+TableGroup "Course Management" {
+  courses
+  learning_units
+  topics
+  course_runs
+  course_enrollments
+}
+
+TableGroup "Assessment System" {
+  assessments
+  assessment_submissions
+  certificates
+}
+
+TableGroup "Financial" {
+  invoices
+  payment_receipts
+  grants
+}
+
+TableGroup "System" {
+  ssg_upload_temp
+}
+
+TableGroup "User Qualifications" {
+  assigned_certification
+  qualifications
+  work_experiences
+}
