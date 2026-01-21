@@ -13,7 +13,7 @@ interface LoginScreenProps {
 
 const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
   const { login, courses } = useLms();
-  
+
   const [step, setStep] = useState<'email' | 'otp' | 'password'>('email');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState(''); // Pre-fill for testing
@@ -38,7 +38,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
         console.log('🔍 LoginScreen: result.success:', result.success);
         console.log('🔍 LoginScreen: result.data:', result.data);
         console.log('🔍 LoginScreen: result.error:', result.error);
-        
+
         if (result.success && result.data) {
           console.log('✅ LoginScreen: Training provider data loaded:', result.data);
           console.log('🔍 LoginScreen: Company name from API:', result.data.companyName);
@@ -90,7 +90,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
       setError('Please enter a valid email and password.');
       return;
     }
-    
+
     setIsLoading(true);
     setError(null);
 
@@ -102,7 +102,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
       };
 
       const result = await authService.login(credentials);
-      
+
       if (result.success && result.data) {
         console.log('Login successful:', result.data.user);
         login(result.data.role, result.data.user);
@@ -120,7 +120,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
 
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     setIsLoading(true);
     setError(null);
 
@@ -132,7 +132,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
       };
 
       const result = await authService.login(credentials);
-      
+
       if (result.success && result.data) {
         console.log('OTP login successful:', result.data.user);
         login(result.data.role, result.data.user);
@@ -182,7 +182,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
           autoComplete="email"
           required
           value={email}
-          onChange={(e) => setEmail(e.target.value)}
+          onChange={(e) => setEmail(e.target.value.toLowerCase())}
           className={inputClasses}
         />
       </div>
@@ -235,16 +235,16 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
         </Button>
       </form>
       <div className="mt-4 text-center text-sm">
-        <button 
-          onClick={() => { setStep('email'); setError(null); setOtp(''); }} 
+        <button
+          onClick={() => { setStep('email'); setError(null); setOtp(''); }}
           className="font-medium text-blue-600 hover:text-blue-800"
         >
           Change Email
         </button>
         <span className="mx-2 text-gray-500">|</span>
-        <button 
-          onClick={handleResendOtp} 
-          disabled={isResending} 
+        <button
+          onClick={handleResendOtp}
+          disabled={isResending}
           className="font-medium text-blue-600 hover:text-blue-800 disabled:text-gray-400 disabled:cursor-not-allowed"
         >
           {isResending ? 'Resending...' : 'Resend OTP'}
@@ -264,28 +264,28 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
     <form onSubmit={handlePasswordLogin} className="space-y-6">
       <div>
         <label htmlFor="email-pw" className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-        <input 
-          id="email-pw" 
-          name="email" 
-          type="email" 
-          autoComplete="email" 
-          required 
-          value={email} 
-          onChange={(e) => setEmail(e.target.value)} 
-          className={inputClasses} 
+        <input
+          id="email-pw"
+          name="email"
+          type="email"
+          autoComplete="email"
+          required
+          value={email}
+          onChange={(e) => setEmail(e.target.value.toLowerCase())}
+          className={inputClasses}
         />
       </div>
       <div>
         <label htmlFor="password-login" className="block text-sm font-medium text-gray-700 mb-1">Password</label>
         <div className="relative">
-          <input 
-            id="password-login" 
-            name="password" 
-            type={showPassword ? "text" : "password"} 
+          <input
+            id="password-login"
+            name="password"
+            type={showPassword ? "text" : "password"}
             autoComplete="current-password"
-            required 
-            value={password} 
-            onChange={(e) => setPassword(e.target.value)} 
+            required
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
             className={inputClasses}
           />
           <button
@@ -348,10 +348,10 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
             {isLoadingProviderData ? (
               <div className="w-20 h-20 bg-gray-200 rounded-md mb-4 animate-pulse"></div>
             ) : (
-              <img 
-                src={trainingProviderData?.companyLogoUrl} 
-                alt="Company Logo" 
-                className="w-20 h-20 rounded-md mb-4" 
+              <img
+                src={trainingProviderData?.companyLogoUrl}
+                alt="Company Logo"
+                className="w-20 h-20 rounded-md mb-4"
                 onError={(e) => {
                   console.error('❌ LoginScreen: Failed to load company logo:', trainingProviderData?.companyLogoUrl);
                 }}
@@ -362,9 +362,9 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
             </h1>
             <p className="text-gray-600 mt-2">LMS cum TMS for WSQ Courses</p>
           </div>
-          
+
           {renderCurrentStep()}
-          
+
           <div className="mt-8 text-center text-xs text-gray-500">
             <div className="flex justify-center space-x-4">
               <a href="#privacy" className="hover:underline">Privacy Policy</a>

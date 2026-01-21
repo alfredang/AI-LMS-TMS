@@ -48,23 +48,23 @@ async function handler(req: NextApiRequest, res: NextApiResponse<LoginResponse>)
   const { email, password, otp, loginType }: LoginRequest = req.body;
 
   if (!email || !loginType) {
-    return res.status(400).json({ 
-      success: false, 
-      error: 'Missing required fields: email and loginType' 
+    return res.status(400).json({
+      success: false,
+      error: 'Missing required fields: email and loginType'
     });
   }
 
   if (loginType === 'password' && !password) {
-    return res.status(400).json({ 
-      success: false, 
-      error: 'Password is required for password login' 
+    return res.status(400).json({
+      success: false,
+      error: 'Password is required for password login'
     });
   }
 
   if (loginType === 'otp' && !otp) {
-    return res.status(400).json({ 
-      success: false, 
-      error: 'OTP is required for OTP login' 
+    return res.status(400).json({
+      success: false,
+      error: 'OTP is required for OTP login'
     });
   }
 
@@ -75,16 +75,16 @@ async function handler(req: NextApiRequest, res: NextApiResponse<LoginResponse>)
     const userQuery = `
       SELECT id, email, password_hash as password, full_name, profile_picture_url
       FROM public.app_user
-      WHERE email = $1
+      WHERE LOWER(email) = LOWER($1)
     `;
-    
+
     const userResult = await pool.query(userQuery, [email]);
-    
+
     if (userResult.rows.length === 0) {
       console.log(`❌ User not found: ${email}`);
-      return res.status(401).json({ 
-        success: false, 
-        error: 'Invalid email or user does not exist' 
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid email or user does not exist'
       });
     }
 
@@ -95,24 +95,24 @@ async function handler(req: NextApiRequest, res: NextApiResponse<LoginResponse>)
     if (loginType === 'password') {
       // Verify password using bcrypt
       if (!password) {
-        return res.status(400).json({ 
-          success: false, 
-          error: 'Password is required for password login' 
+        return res.status(400).json({
+          success: false,
+          error: 'Password is required for password login'
         });
       }
-      
+
       console.log(`🔍 Debug: Stored password hash: ${user.password}`);
       console.log(`🔍 Debug: Input password: ${password}`);
       console.log(`🔍 Debug: Password hash starts with $2b$: ${user.password?.startsWith('$2b$')}`);
-      
+
       const isPasswordValid = await bcrypt.compare(password, user.password);
       console.log(`🔍 Debug: bcrypt.compare result: ${isPasswordValid}`);
-      
+
       if (!isPasswordValid) {
         console.log(`❌ Invalid password for user: ${email}`);
-        return res.status(401).json({ 
-          success: false, 
-          error: 'Invalid password' 
+        return res.status(401).json({
+          success: false,
+          error: 'Invalid password'
         });
       }
       console.log(`✅ Password verified for user: ${email}`);
@@ -124,34 +124,34 @@ async function handler(req: NextApiRequest, res: NextApiResponse<LoginResponse>)
       FROM training_provider
       LIMIT 1
       `;
-      
+
       const otpResult = await pool.query(otpQuery);
-      
+
       if (otpResult.rows.length === 0) {
         console.log(`❌ No OTP settings found for training provider`);
-        return res.status(401).json({ 
-          success: false, 
-          error: 'OTP login not available' 
+        return res.status(401).json({
+          success: false,
+          error: 'OTP login not available'
         });
       }
-      
+
       const otpSettings = otpResult.rows[0];
-      
+
       // Check if OTP login is enabled
       if (!otpSettings.enable_otp_login || !otpSettings.enable_default_otp) {
         console.log(`❌ OTP login is disabled for training provider`);
-        return res.status(401).json({ 
-          success: false, 
-          error: 'OTP login is not enabled' 
+        return res.status(401).json({
+          success: false,
+          error: 'OTP login is not enabled'
         });
       }
-      
+
       // Verify OTP against the training provider's default OTP
       if (otp !== otpSettings.default_otp) {
         console.log(`❌ Invalid OTP for user: ${email}, expected: ${otpSettings.default_otp}, received: ${otp}`);
-        return res.status(401).json({ 
-          success: false, 
-          error: 'Invalid OTP' 
+        return res.status(401).json({
+          success: false,
+          error: 'Invalid OTP'
         });
       }
       console.log(`✅ OTP verified for user: ${email}`);
@@ -159,7 +159,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse<LoginResponse>)
 
     // Determine user role based on database structure
     let userRole = 'learner'; // Default role
-    
+
     // Check if user is admin
     const adminCheck = await pool.query(
       'SELECT user_id FROM public.admin_profile WHERE user_id = $1',
@@ -201,9 +201,9 @@ async function handler(req: NextApiRequest, res: NextApiResponse<LoginResponse>)
 
   } catch (error) {
     console.error('❌ Login error:', error);
-    return res.status(500).json({ 
-      success: false, 
-      error: 'Internal server error' 
+    return res.status(500).json({
+      success: false,
+      error: 'Internal server error'
     });
   }
 }
