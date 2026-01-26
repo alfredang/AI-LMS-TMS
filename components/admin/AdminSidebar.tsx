@@ -37,18 +37,16 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate }) => {
                     onNavigate();
                 }
             }}
-            className={`flex items-center rounded-md px-3 py-2 text-sm font-medium transition-colors ${
-                isSubItem ? 'pl-8' : ''
-            } ${
-                adminPage === page
-                ? 'bg-blue-50 text-blue-600 border-r-2 border-blue-600'
-                : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'
-            }`}
+            className={`flex items-center rounded-md px-3 py-2 text-sm font-medium transition-colors ${isSubItem ? 'pl-8' : ''
+                } ${adminPage === page
+                    ? 'bg-blue-50 text-blue-600 border-r-2 border-blue-600'
+                    : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'
+                }`}
         >
             {label || page}
         </a>
     );
-    
+
     return (
         <nav className="space-y-6 p-4">
             <NavItem page={AdminPage.Dashboard} label="Admin Dashboard" />
@@ -63,9 +61,10 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate }) => {
                 <NavItem page={AdminPage.EnrollLearners} label="Enroll Learners" isSubItem />
                 <NavItem page={AdminPage.AssignTrainer} label="Assign Trainer" isSubItem />
             </NavSection>
-            
+
             <NavSection title="TPG Management">
                 <NavItem page={AdminPage.ApplyNewGrant} label="Apply New Grant" isSubItem />
+                <NavItem page={AdminPage.SearchGrant} label="Search Grant" isSubItem />
                 <NavItem page={AdminPage.ViewGrantStatus} label="View Grant Status" isSubItem />
                 <NavItem page={AdminPage.SubmitAssessment} label="Submit Assessment" isSubItem />
                 <NavItem page={AdminPage.ViewAssessments} label="View Assessments" isSubItem />

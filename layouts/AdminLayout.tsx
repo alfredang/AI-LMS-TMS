@@ -24,59 +24,61 @@ import { UpcomingClassesTable } from '../components/UpcomingClassesTable';
 import { ClassManagerView, AssignTrainerView } from '../components/admin/ClassManagementViews';
 import { CreateNewClassView } from '../components/admin/CreateNewClassView';
 import EnrollLearners from '../components/admin/EnrollLearners';
-import { 
-  ApplyNewGrantView, 
-  ViewGrantStatusView, 
-  SubmitAssessmentView, 
-  ViewAssessmentsView, 
-  ApplyNewClaimView, 
-  ViewClaimStatusView, 
-  UploadCourseRunsView 
+import {
+  ApplyNewGrantView,
+  ViewGrantStatusView,
+  SubmitAssessmentView,
+  ViewAssessmentsView,
+  ApplyNewClaimView,
+  ViewClaimStatusView,
+  UploadCourseRunsView,
+  SearchGrantView
 } from '../components/admin/GrantManagementViews';
 
 // Management Dashboard Component
 interface ManagementDashboardProps {
-    type: 'class' | 'tpg';
+  type: 'class' | 'tpg';
 }
 
 const ManagementDashboard: React.FC<ManagementDashboardProps> = ({ type }) => {
-    const { setAdminPage } = useLms();
+  const { setAdminPage } = useLms();
 
-    const classManagementLinks: NavBoxProps[] = [
-        { title: "View Courses", description: "Browse and manage all course templates.", icon: IconName.BookOpen, onClick: () => setAdminPage(AdminPage.ViewCourses) },
-        { title: "View Trainers", description: "View details and assignments for all trainers.", icon: IconName.User, onClick: () => setAdminPage(AdminPage.ViewTrainers) },
-        { title: "Upcoming Classes", description: "See all scheduled upcoming classes.", icon: IconName.Calendar, onClick: () => setAdminPage(AdminPage.UpcomingClasses) },
-        { title: "Ongoing Classes", description: "Monitor classes that are currently in session.", icon: IconName.Clock, onClick: () => setAdminPage(AdminPage.OngoingClasses) },
-        { title: "Completed Classes", description: "Review past classes and their records.", icon: IconName.ClipboardCheck, onClick: () => setAdminPage(AdminPage.CompletedClasses) },
-        { title: "Create New Class", description: "Schedule a new class run from a course template.", icon: IconName.Add, onClick: () => setAdminPage(AdminPage.CreateNewClass) },
-        { title: "Enroll Learners", description: "Add or remove learners from a specific class.", icon: IconName.MyAccount, onClick: () => setAdminPage(AdminPage.EnrollLearners) },
-        { title: "Assign Trainer", description: "Assign or change the trainer for a class.", icon: IconName.SwitchProfile, onClick: () => setAdminPage(AdminPage.AssignTrainer) },
-    ];
+  const classManagementLinks: NavBoxProps[] = [
+    { title: "View Courses", description: "Browse and manage all course templates.", icon: IconName.BookOpen, onClick: () => setAdminPage(AdminPage.ViewCourses) },
+    { title: "View Trainers", description: "View details and assignments for all trainers.", icon: IconName.User, onClick: () => setAdminPage(AdminPage.ViewTrainers) },
+    { title: "Upcoming Classes", description: "See all scheduled upcoming classes.", icon: IconName.Calendar, onClick: () => setAdminPage(AdminPage.UpcomingClasses) },
+    { title: "Ongoing Classes", description: "Monitor classes that are currently in session.", icon: IconName.Clock, onClick: () => setAdminPage(AdminPage.OngoingClasses) },
+    { title: "Completed Classes", description: "Review past classes and their records.", icon: IconName.ClipboardCheck, onClick: () => setAdminPage(AdminPage.CompletedClasses) },
+    { title: "Create New Class", description: "Schedule a new class run from a course template.", icon: IconName.Add, onClick: () => setAdminPage(AdminPage.CreateNewClass) },
+    { title: "Enroll Learners", description: "Add or remove learners from a specific class.", icon: IconName.MyAccount, onClick: () => setAdminPage(AdminPage.EnrollLearners) },
+    { title: "Assign Trainer", description: "Assign or change the trainer for a class.", icon: IconName.SwitchProfile, onClick: () => setAdminPage(AdminPage.AssignTrainer) },
+  ];
 
-    const tpgManagementLinks: NavBoxProps[] = [
-        { title: "Apply New Grant", description: "Submit new grant applications to SSG for learners.", icon: IconName.Send, onClick: () => setAdminPage(AdminPage.ApplyNewGrant) },
-        { title: "View Grant Status", description: "Check the status of submitted grant applications.", icon: IconName.Eye, onClick: () => setAdminPage(AdminPage.ViewGrantStatus) },
-        { title: "Submit Assessment", description: "Submit learner assessment results to TPG.", icon: IconName.Upload, onClick: () => setAdminPage(AdminPage.SubmitAssessment) },
-        { title: "View Assessments", description: "View official assessment results from TPG.", icon: IconName.ClipboardCheck, onClick: () => setAdminPage(AdminPage.ViewAssessments) },
-        { title: "Apply New Claim", description: "Submit new claims to SSG for learners.", icon: IconName.DollarSign, onClick: () => setAdminPage(AdminPage.ApplyNewClaim) },
-        { title: "View Claim Status", description: "Check the status of submitted claims.", icon: IconName.InfoCircle, onClick: () => setAdminPage(AdminPage.ViewClaimStatus) },
-        { title: "Upload Course Runs", description: "Bulk upload new course runs via Excel to SSG.", icon: IconName.FileText, onClick: () => setAdminPage(AdminPage.UploadCourseRuns) },
-    ];
+  const tpgManagementLinks: NavBoxProps[] = [
+    { title: "Apply New Grant", description: "Submit new grant applications to SSG for learners.", icon: IconName.Send, onClick: () => setAdminPage(AdminPage.ApplyNewGrant) },
+    { title: "Search Grant", description: "Search for grant details using Reference ID.", icon: IconName.Search, onClick: () => setAdminPage(AdminPage.SearchGrant) },
+    { title: "View Grant Status", description: "Check the status of submitted grant applications.", icon: IconName.Eye, onClick: () => setAdminPage(AdminPage.ViewGrantStatus) },
+    { title: "Submit Assessment", description: "Submit learner assessment results to TPG.", icon: IconName.Upload, onClick: () => setAdminPage(AdminPage.SubmitAssessment) },
+    { title: "View Assessments", description: "View official assessment results from TPG.", icon: IconName.ClipboardCheck, onClick: () => setAdminPage(AdminPage.ViewAssessments) },
+    { title: "Apply New Claim", description: "Submit new claims to SSG for learners.", icon: IconName.DollarSign, onClick: () => setAdminPage(AdminPage.ApplyNewClaim) },
+    { title: "View Claim Status", description: "Check the status of submitted claims.", icon: IconName.InfoCircle, onClick: () => setAdminPage(AdminPage.ViewClaimStatus) },
+    { title: "Upload Course Runs", description: "Bulk upload new course runs via Excel to SSG.", icon: IconName.FileText, onClick: () => setAdminPage(AdminPage.UploadCourseRuns) },
+  ];
 
-    const isClass = type === 'class';
-    const title = isClass ? 'Class Management' : 'TPG Management';
-    const links = isClass ? classManagementLinks : tpgManagementLinks;
-    
-    return (
-        <div>
-            <h2 className="text-3xl font-bold mb-6">{title}</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                {links.map((link, index) => (
-                    <NavBox key={index} {...link} />
-                ))}
-            </div>
-        </div>
-    );
+  const isClass = type === 'class';
+  const title = isClass ? 'Class Management' : 'TPG Management';
+  const links = isClass ? classManagementLinks : tpgManagementLinks;
+
+  return (
+    <div>
+      <h2 className="text-3xl font-bold mb-6">{title}</h2>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        {links.map((link, index) => (
+          <NavBox key={index} {...link} />
+        ))}
+      </div>
+    </div>
+  );
 };
 
 const AdminLayout: React.FC = () => {
@@ -98,13 +100,13 @@ const AdminLayout: React.FC = () => {
       try {
         setLoading(true);
         const response = await fetch(getApiUrl(`/api/profile-new?userId=${currentUser.id}&role=admin`));
-        
+
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
 
         const result = await response.json();
-        
+
         if (result.success && result.data?.profile) {
           setAdminProfile(result.data.profile);
           setError(null);
@@ -143,8 +145,8 @@ const AdminLayout: React.FC = () => {
               <div className="text-center">
                 <h2 className="text-xl font-bold text-red-600 mb-2">Error Loading Profile</h2>
                 <p className="text-gray-600 mb-4">{error}</p>
-                <button 
-                  onClick={() => window.location.reload()} 
+                <button
+                  onClick={() => window.location.reload()}
                   className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
                 >
                   Retry
@@ -167,11 +169,11 @@ const AdminLayout: React.FC = () => {
 
         return <AdminProfileCard profile={adminProfile} />;
       }
-      
+
       if (currentView === View.HelpAndSupport) {
         return <HelpAndSupportView />;
       }
-      
+
       return null;
     };
 
@@ -193,12 +195,12 @@ const AdminLayout: React.FC = () => {
     if (editingCourse) {
       return <CourseEditor />;
     }
-    
+
     // Handle course detail view (similar to DeveloperLayout)
     if (selectedCourse && (adminPage === AdminPage.ViewCourses)) {
       return <CourseDetail />;
     }
-    
+
     // Handle admin page routing
     switch (adminPage) {
       case AdminPage.Dashboard:
@@ -232,6 +234,8 @@ const AdminLayout: React.FC = () => {
         return <AssignTrainerView />;
       case AdminPage.ApplyNewGrant:
         return <ApplyNewGrantView />;
+      case AdminPage.SearchGrant:
+        return <SearchGrantView />;
       case AdminPage.ViewGrantStatus:
         return <ViewGrantStatusView />;
       case AdminPage.SubmitAssessment:
@@ -254,7 +258,7 @@ const AdminLayout: React.FC = () => {
   return (
     <div className="min-h-screen bg-background font-sans text-on-surface">
       <Header />
-      
+
       {/* Mobile header and sidebar toggle */}
       <div className="lg:hidden flex items-center gap-4 px-4 sm:px-6 py-3 border-b border-gray-200">
         <button onClick={() => setIsSidebarOpen(true)} className="p-2 -ml-2 text-gray-600 hover:text-gray-900">
@@ -265,15 +269,15 @@ const AdminLayout: React.FC = () => {
 
       {/* Mobile Sidebar Overlay */}
       {isSidebarOpen && (
-        <div 
-          className="fixed inset-0 z-40 lg:hidden" 
+        <div
+          className="fixed inset-0 z-40 lg:hidden"
           role="dialog"
           aria-modal="true"
         >
           {/* Backdrop */}
-          <div 
-            className="absolute inset-0 bg-black/50" 
-            aria-hidden="true" 
+          <div
+            className="absolute inset-0 bg-black/50"
+            aria-hidden="true"
             onClick={() => setIsSidebarOpen(false)}
           />
 
@@ -281,8 +285,8 @@ const AdminLayout: React.FC = () => {
           <div className="relative flex flex-col w-72 max-w-[calc(100%-3rem)] h-full bg-surface shadow-xl">
             <div className="p-4 flex justify-between items-center border-b">
               <h3 className="font-bold">Admin Menu</h3>
-              <button 
-                onClick={() => setIsSidebarOpen(false)} 
+              <button
+                onClick={() => setIsSidebarOpen(false)}
                 className="p-2 -mr-2 text-gray-600 hover:text-gray-900"
               >
                 <Icon name={IconName.Close} className="w-6 h-6" />
@@ -307,7 +311,7 @@ const AdminLayout: React.FC = () => {
           </main>
         </div>
       </div>
-      
+
       <AiChatbot />
     </div>
   );

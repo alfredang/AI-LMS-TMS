@@ -1213,3 +1213,326 @@ export const UploadCourseRunsView: React.FC = () => {
         </div>
     );
 };
+
+export const SearchGrantView: React.FC = () => {
+    // Search functionality state
+    const [courseRunId, setCourseRunId] = useState<string>('');
+    const [page, setPage] = useState<number>(0);
+    const [pageSize, setPageSize] = useState<number>(30);
+    const [isSearching, setIsSearching] = useState(false);
+    const [webhookResponse, setWebhookResponse] = useState<any>(null);
+    const [parsedData, setParsedData] = useState<any>(null);
+    const [searchError, setSearchError] = useState<string | null>(null);
+
+    // Webhook URL
+    const WEBHOOK_URL = 'https://n8n.srv923061.hstgr.cloud/webhook/372841ba-3d7a-4b04-a249-76545524fcf9';
+
+    // Helper functions for consistent styling
+    const getStatusColor = (status: string) => {
+        switch (status) {
+            case 'Paid':
+            case 'Claimed':
+            case 'Approved':
+            case 'C':
+            case 'Competent':
+            case 'Pass':
+            case 'Success':
+            case 'Successful':
+            case 'Full Payment':
+                return 'bg-green-100 text-green-800 border-green-200';
+            case 'Processing':
+                return 'bg-blue-100 text-blue-800 border-blue-200';
+            case 'Pending':
+            case 'In Progress':
+            case 'Pending Assessment':
+                return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+            case 'Overdue':
+            case 'Rejected':
+            case 'Unpaid':
+            case 'NYC':
+            case 'Not Yet Competent':
+            case 'Fail':
+            case 'Failed':
+                return 'bg-red-100 text-red-800 border-red-200';
+            default:
+                return 'bg-gray-100 text-gray-800 border-gray-200';
+        }
+    };
+
+    // Reuse input classes if defined in scope, or redefine here if needed. 
+    // Assuming inputClasses is defined at module level from previous read.
+    const inputClasses = "block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent";
+
+
+    const handleSearch = async () => {
+        if (!courseRunId.trim()) {
+            setSearchError('Please enter Course Run ID');
+            return;
+        }
+
+        setIsSearching(true);
+        setSearchError(null);
+        setWebhookResponse(null);
+
+        try {
+            console.log('🔍 Sending request to n8n webhook:', WEBHOOK_URL);
+
+            const payload = {
+                courseRunId,
+                page: page,
+                pageSize,
+                timestamp: new Date().toISOString(),
+                source: 'admin-search-grant'
+            };
+
+            console.log('📤 Search payload:', payload);
+
+            const response = await fetch(WEBHOOK_URL, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const data = await response.json();
+            console.log('✅ Webhook response:', data);
+            setWebhookResponse(data);
+
+            // Parse nested JSON in result property if exists
+            if (data.result) {
+                try {
+                    // Start parsing nested string response
+                    const nested = typeof data.result === 'string' ? JSON.parse(data.result) : data.result;
+                    console.log('✅ Parsed nested result:', nested);
+                    setParsedData(nested);
+                } catch (e) {
+                    console.error('❌ Error parsing nested result JSON:', e);
+                    setParsedData(null);
+                }
+            } else {
+                setParsedData(null);
+            }
+        } catch (error) {
+            console.error('❌ Error calling webhook:', error);
+            setSearchError(error instanceof Error ? error.message : 'Failed to fetch grant status');
+        } finally {
+            setIsSearching(false);
+        }
+    };
+
+    return (
+        <div>
+            <h2 className="text-3xl font-bold mb-6">Search Grant</h2>
+
+            {/* Search Bar Card */}
+            <Card className="p-6 mb-6">
+                <div>
+                    <h3 className="text-lg font-bold text-gray-700 mb-4">Grant Search Parameters</h3>
+
+                    <div className="mb-4">
+                        <label htmlFor="course-run-id" className="block text-sm font-bold text-gray-700 mb-1">
+                            Course Run ID
+                        </label>
+                        <input
+                            id="course-run-id"
+                            type="text"
+                            value={courseRunId}
+                            onChange={(e) => setCourseRunId(e.target.value)}
+                            placeholder="e.g. 1234567"
+                            className={inputClasses}
+                            disabled={isSearching}
+                        />
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                        <div>
+                            <label htmlFor="page-number" className="block text-sm font-bold text-gray-700 mb-1">
+                                Page Number
+                            </label>
+                            <input
+                                id="page-number"
+                                type="number"
+                                min="0"
+                                max="100"
+                                value={page}
+                                onChange={(e) => {
+                                    const val = parseInt(e.target.value) || 0;
+                                    setPage(Math.min(val, 100));
+                                }}
+                                className={inputClasses}
+                                disabled={isSearching}
+                            />
+                        </div>
+                        <div>
+                            <label htmlFor="page-size" className="block text-sm font-bold text-gray-700 mb-1">
+                                Page Size
+                            </label>
+                            <input
+                                id="page-size"
+                                type="number"
+                                min="1"
+                                max="100"
+                                value={pageSize}
+                                onChange={(e) => {
+                                    const val = parseInt(e.target.value) || 10;
+                                    setPageSize(Math.min(val, 100));
+                                }}
+                                className={inputClasses}
+                                disabled={isSearching}
+                            />
+                        </div>
+                    </div>
+
+                    <div className="flex justify-end">
+                        <Button
+                            onClick={handleSearch}
+                            disabled={isSearching || !courseRunId.trim()}
+                            className="whitespace-nowrap"
+                        >
+                            {isSearching ? (
+                                <div className="flex items-center">
+                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                                    Searching...
+                                </div>
+                            ) : (
+                                <>
+                                    <Icon name={IconName.Search} className="w-4 h-4 mr-2" />
+                                    Search Grant
+                                </>
+                            )}
+                        </Button>
+                    </div>
+
+                    {searchError && (
+                        <p className="text-red-500 text-sm mt-3">{searchError}</p>
+                    )}
+                </div>
+            </Card>
+
+            {/* Loading State */}
+            {isSearching && (
+                <div className="flex justify-center py-10">
+                    <div className="text-center">
+                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
+                        <p className="mt-4 text-gray-600">Fetching grant details from n8n...</p>
+                    </div>
+                </div>
+            )}
+
+            {/* Webhook Response Display */}
+            {webhookResponse && !isSearching && (
+                <Card className="p-0">
+                    <div className="p-6 border-b">
+                        <h3 className="text-xl font-bold">Grant Status Results</h3>
+                        <p className="text-gray-500 mt-1">
+                            Run: {courseRunId}
+                        </p>
+                    </div>
+                    <div className="p-6">
+                        {parsedData && parsedData.data && Array.isArray(parsedData.data) && parsedData.data.length > 0 ? (
+                            <div className="space-y-6">
+                                <div className="flex justify-between items-center bg-blue-50 p-4 rounded-lg border border-blue-100">
+                                    <div>
+                                        <h4 className="font-bold text-blue-900">Total Records Found: {parsedData.meta?.totalRecords ?? 0}</h4>
+                                        <p className="text-sm text-blue-700">Course Run ID: {courseRunId}</p>
+                                    </div>
+                                </div>
+
+                                <div className="overflow-x-auto border border-gray-200 rounded-lg shadow-sm">
+                                    <table className="min-w-full divide-y divide-gray-200">
+                                        <thead className="bg-gray-50">
+                                            <tr>
+                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Course Run ID</th>
+                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Enrolment ID</th>
+                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Grant Ref No</th>
+                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estimated</th>
+                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Paid</th>
+                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Recovery</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="bg-white divide-y divide-gray-200">
+                                            {parsedData.data.map((item: any, index: number) => (
+                                                <tr key={index} className="hover:bg-gray-50">
+                                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                                        {courseRunId}
+                                                    </td>
+                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                                        {item.enrolment?.referenceNumber || 'N/A'}
+                                                    </td>
+                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                                        {item.referenceNumber || 'N/A'}
+                                                    </td>
+                                                    <td className="px-6 py-4 whitespace-nowrap">
+                                                        <span className={`inline-flex px-2 text-xs leading-5 font-semibold rounded-full border ${getStatusColor(item.status || 'Pending')}`}>
+                                                            {item.status || 'Pending'}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                                        ${item.grantAmount?.estimated?.toFixed(2) || '0.00'}
+                                                    </td>
+                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-green-600 font-medium">
+                                                        ${item.grantAmount?.paid?.toFixed(2) || '0.00'}
+                                                    </td>
+                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-red-600">
+                                                        ${item.grantAmount?.recovery?.toFixed(2) || '0.00'}
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-8 text-center">
+                                <Icon name={IconName.InfoCircle} className="w-12 h-12 mx-auto text-yellow-500 mb-3" />
+                                <h4 className="text-lg font-bold text-yellow-800 mb-2">No Records Found</h4>
+                                <p className="text-yellow-700">
+                                    No grant records were returned for this Course Run ID.
+                                </p>
+                            </div>
+                        )}
+
+                        <details className="mt-6 bg-gray-50 border border-gray-200 rounded-lg p-4">
+                            <summary className="font-semibold text-gray-800 cursor-pointer hover:text-gray-600">
+                                View Raw JSON Response
+                            </summary>
+                            <pre className="mt-3 text-sm text-gray-700 whitespace-pre-wrap overflow-x-auto max-h-96 bg-white p-3 rounded border">
+                                {JSON.stringify(webhookResponse, null, 2)}
+                            </pre>
+                        </details>
+
+                        <div className="mt-6 flex justify-end">
+                            <Button
+                                variant="outline"
+                                onClick={() => {
+                                    setWebhookResponse(null);
+                                    setParsedData(null);
+                                    setCourseRunId('');
+                                }}
+                            >
+                                Clear Results
+                            </Button>
+                        </div>
+                    </div>
+                </Card>
+            )}
+
+            {/* Empty State */}
+            {!webhookResponse && !isSearching && (
+                <Card className="p-12">
+                    <div className="text-center text-gray-500">
+                        <Icon name={IconName.Search} className="w-16 h-16 mx-auto mb-4 text-gray-400" />
+                        <p className="text-lg font-medium">Enter details to search</p>
+                        <p className="text-sm mt-2">Provide Course Run ID to fetch grant details</p>
+                    </div>
+                </Card>
+            )}
+        </div>
+    );
+};

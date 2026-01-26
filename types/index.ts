@@ -38,7 +38,8 @@ export enum AdminPage {
   ViewAssessments = 'viewAssessments',
   ApplyNewClaim = 'applyNewClaim',
   ViewClaimStatus = 'viewClaimStatus',
-  UploadCourseRuns = 'uploadCourseRuns'
+  UploadCourseRuns = 'uploadCourseRuns',
+  SearchGrant = 'searchGrant'
 }
 
 // Course related interfaces
@@ -197,15 +198,15 @@ export interface Assessment {
 }
 
 export enum AssessmentCategory {
-    WrittenExam = 'Written Exam',
-    OnlineExam = 'Online Exam',
-    Project = 'Project',
-    Assignments = 'Assignments',
-    OralInterview = 'Oral Interview',
-    Demonstration = 'Demonstration',
-    PracticalExam = 'Practical Exam',
-    RolePlay = 'Role Play',
-    OralQuestioning = 'Oral Questioning',
+  WrittenExam = 'Written Exam',
+  OnlineExam = 'Online Exam',
+  Project = 'Project',
+  Assignments = 'Assignments',
+  OralInterview = 'Oral Interview',
+  Demonstration = 'Demonstration',
+  PracticalExam = 'Practical Exam',
+  RolePlay = 'Role Play',
+  OralQuestioning = 'Oral Questioning',
 }
 
 
