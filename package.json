@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
+    "@supabase/supabase-js": "^2.91.0",
     "bcrypt": "^6.0.0",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
@@ -39,8 +40,8 @@
     "@types/react": "^18",
     "@types/react-dom": "^18",
     "autoprefixer": "^10.4.14",
-    "eslint": "^8",
-    "eslint-config-next": "14.2.5",
+    "eslint": "^9.39.2",
+    "eslint-config-next": "^16.1.4",
     "postcss": "^8.4.23",
     "tailwindcss": "^3.4.1",
     "typescript": "^5"

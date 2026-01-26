@@ -1,15 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { Pool } from 'pg';
 import { cors } from '../../../lib/cors';
 import bcrypt from 'bcrypt';
-
-const pool = new Pool({
-  user: process.env.DB_USER || 'postgres',
-  host: process.env.DB_HOST || 'localhost',
-  database: process.env.DB_NAME || 'tertiarydb',
-  password: process.env.DB_PASSWORD || 'shuo1314520.',
-  port: parseInt(process.env.DB_PORT || '5432'),
-});
+import pool from '../../../lib/db';
 
 interface LoginRequest {
   email: string;
