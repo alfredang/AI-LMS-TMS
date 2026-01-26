@@ -1,16 +1,8 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { Pool } from 'pg';
+import pool from '../../../lib/db';
 import fs from 'fs';
 import path from 'path';
 import { cors } from '../../../lib/cors';
-
-const pool = new Pool({
-  user: process.env.DB_USER || 'postgres',
-  host: process.env.DB_HOST || 'localhost',
-  database: process.env.DB_NAME || 'tertiarydb',
-  password: process.env.DB_PASSWORD || 'shuo1314520.',
-  port: parseInt(process.env.DB_PORT || '5432'),
-});
 
 async function handler(req: NextApiRequest, res: NextApiResponse) {
   // Handle CORS

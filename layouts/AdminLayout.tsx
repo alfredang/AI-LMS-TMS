@@ -295,15 +295,17 @@ const AdminLayout: React.FC = () => {
         </div>
       )}
 
-      <div className="container mx-auto flex flex-col lg:flex-row gap-8 px-4 sm:px-6 lg:px-8 py-8">
-        <aside className="hidden lg:block w-64 lg:flex-shrink-0">
-          <Card className="sticky top-24">
-            <AdminSidebar />
-          </Card>
-        </aside>
-        <main className="flex-1 min-w-0">
-          {renderContent()}
-        </main>
+      <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="flex flex-row gap-8">
+          <aside className="hidden lg:block w-64 flex-shrink-0">
+            <Card className="sticky top-24">
+              <AdminSidebar />
+            </Card>
+          </aside>
+          <main className="flex-1 min-w-0">
+            {renderContent()}
+          </main>
+        </div>
       </div>
       
       <AiChatbot />
