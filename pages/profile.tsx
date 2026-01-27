@@ -1,6 +1,6 @@
 import type { NextPage } from 'next'
 import Head from 'next/head'
-import { ProfilePage } from '../src/pages/ProfilePage'
+import { ProfilePage } from '@components/ProfilePage'
 
 const Profile: NextPage = () => {
   return (

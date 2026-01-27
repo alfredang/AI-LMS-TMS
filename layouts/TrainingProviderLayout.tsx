@@ -2,7 +2,7 @@ import React from 'react';
 import Header from '../components/Header';
 import AiChatbot from '../components/AiChatbot';
 import { useLms } from '../contexts/LmsContext';
-import { View } from '../types';
+import { View } from '@app-types';
 import TrainingProviderDashboard from '../components/TrainingProviderDashboard';
 import CourseList from '../components/CourseList';
 import ProfileView from '../components/ProfileView';

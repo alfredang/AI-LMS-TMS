@@ -3,7 +3,7 @@ import { Card } from './ui/Card';
 import { Button } from './ui/Button';
 import { Icon, IconName } from './ui/Icon';
 import { Spinner } from './ui';
-import { TrainingProviderProfile } from '../types/profile';
+import { TrainingProviderProfile } from '@app-types/profile';
 import { generateCompanyLogo } from '@lib/services/geminiService';
 import { useLms } from '@contexts/LmsContext';
 import { applyPrimaryColor, useColorScheme } from '@utils/colorUtils';

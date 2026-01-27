@@ -1,7 +1,7 @@
 ﻿import { GoogleGenerativeAI } from '@google/generative-ai';
 // Note: Image generation with Imagen requires proper Google AI SDK setup
 // For now, image generation will fall back to placeholder images
-import { Quiz } from '../types';
+import { Quiz } from '@app-types';
 import { CourseDetails } from './courseApiService';
 
 // Initialize Gemini AI with API key for text generation

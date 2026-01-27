@@ -1,5 +1,5 @@
 import { apiClient } from './apiClient';
-import { Course } from '../types';
+import { Course } from '@app-types';
 
 export interface EnrolledCoursesResponse {
   success: boolean;

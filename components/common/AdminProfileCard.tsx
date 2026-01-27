@@ -161,7 +161,7 @@ export const AdminProfileCard: React.FC<{ profile: AdminProfile }> = ({ profile 
         
         // If it's a relative path to uploads, prepend server URL
         if (url.startsWith('/uploads/') || url.startsWith('uploads/')) {
-            return getFileUrl(url);
+            return getFileUrl(url) || url;
         }
         
         // Fallback for any other case

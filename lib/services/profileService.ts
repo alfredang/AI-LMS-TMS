@@ -1,5 +1,5 @@
 import { apiClient } from './apiClient';
-import { LearnerProfile, AdminProfile, UserProfile, TrainerProfile } from '../types/profile';
+import { LearnerProfile, AdminProfile, UserProfile, TrainerProfile } from '@app-types/profile';
 import { getApiBaseUrl } from '../config';
 
 export interface ProfileApiResponse {

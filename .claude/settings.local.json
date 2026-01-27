@@ -10,7 +10,8 @@
       "Bash(then echo \"Updating $file...\")",
       "Bash(fi)",
       "Bash(done)",
-      "Bash(where npm)"
+      "Bash(where npm)",
+      "Bash(npm run build:*)"
     ],
     "additionalDirectories": [
       "c:\\Users\\PC\\Downloads\\LmsTmsSystem"

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { LearnerProfile, TrainerProfile, DeveloperProfile, TrainingProviderProfile, Gender, EmploymentStatus, Nationality, Ethnicity, calculateAgeGroup, DeveloperType, WorkExperienceItem, TrainerQualification, TrainerEducation, DeveloperEducation } from '../types/profile';
+import { LearnerProfile, TrainerProfile, DeveloperProfile, TrainingProviderProfile, Gender, EmploymentStatus, Nationality, Ethnicity, calculateAgeGroup, DeveloperType, WorkExperienceItem, TrainerQualification, TrainerEducation, DeveloperEducation } from '@app-types/profile';
 import { UserRole } from '@app-types';
 import { Card } from './ui/Card';
 import { Button } from './ui/Button';
@@ -11,7 +11,7 @@ import { TrainingProviderProfileCard } from './TrainingProviderProfileCard';
 import { useTrainerProfile } from '../hooks/useTrainerProfile';
 import { ensureAbsoluteImageUrl } from '@utils/imageUtils';
 import { generateAvatarImage } from '@lib/services/geminiService';
-import { SKILLS_FUTURE_INDUSTRIES } from '../types/profile';
+import { SKILLS_FUTURE_INDUSTRIES } from '@app-types/profile';
 import { getApiUrl, getUploadUrl, getDeleteFileUrl, stripBaseUrl } from '@/lib/urlHelpers';
 
 

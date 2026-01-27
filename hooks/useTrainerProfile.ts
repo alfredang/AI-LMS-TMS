@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { TrainerProfile } from '../types/profile';
+import { TrainerProfile } from '@app-types/profile';
 import { ProfileService } from '@lib/services/profileService';
 
 export const useTrainerProfile = (userId?: string) => {

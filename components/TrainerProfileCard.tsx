@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { TrainerProfile, WorkExperienceItem, Certification, TrainerType, Gender, SKILLS_FUTURE_INDUSTRIES, TrainerQualification, TrainerEducation } from '../types/profile';
+import { TrainerProfile, WorkExperienceItem, Certification, TrainerType, Gender, SKILLS_FUTURE_INDUSTRIES, TrainerQualification, TrainerEducation } from '@app-types/profile';
 import { Card } from './ui/Card';
 import { Button } from './ui/Button';
 import { Icon, IconName } from './ui/Icon';

@@ -21,6 +21,7 @@
       "@lib/*": ["./lib/*"],
       "@hooks/*": ["./hooks/*"],
       "@contexts/*": ["./contexts/*"],
+      "@app-types": ["./types/index.ts"],
       "@app-types/*": ["./types/*"],
       "@styles/*": ["./styles/*"],
       "@utils/*": ["./utils/*"]

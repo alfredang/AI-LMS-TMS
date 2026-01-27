@@ -69,15 +69,15 @@ export const ApplyNewGrantView: React.FC = () => {
 
     const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.checked && selectedCourse?.learners) {
-            const allLearnerEmails = new Set(selectedCourse.learners.map((l: any) => l.email as string));
+            const allLearnerEmails = new Set<string>(selectedCourse.learners.map((l: any) => l.email as string));
             setSelectedLearners(allLearnerEmails);
         } else {
-            setSelectedLearners(new Set());
+            setSelectedLearners(new Set<string>());
         }
     };
 
     const handleSelectLearner = (email: string) => {
-        const newSelection = new Set(selectedLearners);
+        const newSelection = new Set<string>(selectedLearners);
         if (newSelection.has(email)) {
             newSelection.delete(email);
         } else {
@@ -98,7 +98,7 @@ export const ApplyNewGrantView: React.FC = () => {
         setTimeout(() => {
             setIsSubmitting(false);
             setSubmissionStatus(`Successfully submitted grant application for ${selectedLearners.size} learner(s).`);
-            setSelectedLearners(new Set());
+            setSelectedLearners(new Set<string>());
         }, 2000);
     };
 
@@ -116,7 +116,7 @@ export const ApplyNewGrantView: React.FC = () => {
                             value={selectedCourseId}
                             onChange={e => {
                                 setSelectedCourseId(e.target.value);
-                                setSelectedLearners(new Set());
+                                setSelectedLearners(new Set<string>());
                                 setSubmissionStatus(null);
                             }}
                             className={inputClasses}
@@ -774,15 +774,15 @@ export const ApplyNewClaimView: React.FC = () => {
 
     const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.checked) {
-            const allEligibleLearnerEmails = new Set(eligibleLearners.map((l: any) => l.email as string));
+            const allEligibleLearnerEmails = new Set<string>(eligibleLearners.map((l: any) => l.email as string));
             setSelectedLearners(allEligibleLearnerEmails);
         } else {
-            setSelectedLearners(new Set());
+            setSelectedLearners(new Set<string>());
         }
     };
 
     const handleSelectLearner = (email: string) => {
-        const newSelection = new Set(selectedLearners);
+        const newSelection = new Set<string>(selectedLearners);
         if (newSelection.has(email)) {
             newSelection.delete(email);
         } else {
@@ -803,7 +803,7 @@ export const ApplyNewClaimView: React.FC = () => {
         setTimeout(() => {
             setIsSubmitting(false);
             setSubmissionStatus(`Successfully submitted claim application for ${selectedLearners.size} learner(s).`);
-            setSelectedLearners(new Set());
+            setSelectedLearners(new Set<string>());
         }, 2000);
     };
 
@@ -821,7 +821,7 @@ export const ApplyNewClaimView: React.FC = () => {
                             value={selectedCourseId}
                             onChange={e => {
                                 setSelectedCourseId(e.target.value);
-                                setSelectedLearners(new Set());
+                                setSelectedLearners(new Set<string>());
                                 setSubmissionStatus(null);
                             }}
                             className={inputClasses}
