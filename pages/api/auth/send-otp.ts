@@ -90,9 +90,14 @@ async function handler(req: NextApiRequest, res: NextApiResponse<SendOtpResponse
 
     console.log(`✅ OTP process completed for ${email}`);
 
+    // In development, include the OTP in response for testing
+    // Remove this in production!
+    const isDevelopment = process.env.NODE_ENV !== 'production';
+
     return res.status(200).json({
       success: true,
-      message: 'OTP has been sent to your email address'
+      message: 'OTP has been sent to your email address',
+      ...(isDevelopment && { otp }) // Only include OTP in development mode
     });
 
   } catch (error: any) {
