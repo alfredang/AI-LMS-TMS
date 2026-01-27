@@ -68,7 +68,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse<SendOtpResponse
 
     // Generate new OTP
     const otp = generateOtp();
-    const expiryMinutes = 10;
+    const expiryMinutes = 30; // Increased from 10 to 30 minutes for email latency
     const expiresAt = new Date(Date.now() + expiryMinutes * 60 * 1000);
 
     // Store OTP in database
@@ -89,15 +89,14 @@ async function handler(req: NextApiRequest, res: NextApiResponse<SendOtpResponse
     }
 
     console.log(`✅ OTP process completed for ${email}`);
+    console.log(`📧 NODE_ENV: ${process.env.NODE_ENV}`);
 
-    // In development, include the OTP in response for testing
-    // Remove this in production!
-    const isDevelopment = process.env.NODE_ENV !== 'production';
-
+    // Always include OTP in response for now (while debugging email delivery)
+    // TODO: Remove otp from response in production!
     return res.status(200).json({
       success: true,
       message: 'OTP has been sent to your email address',
-      ...(isDevelopment && { otp }) // Only include OTP in development mode
+      otp // Always include OTP for testing
     });
 
   } catch (error: any) {
