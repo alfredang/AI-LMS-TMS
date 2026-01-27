@@ -347,7 +347,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
             setFormData(prev => ({
                 ...prev,
                 apiKeys: {
-                    ...prev.apiKeys,
+                    ...(prev.apiKeys || {}),
                     [newApiKey.name]: newApiKey.value
                 }
             }));
@@ -357,7 +357,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
 
     const handleRemoveApiKey = (keyName: string) => {
         setFormData(prev => {
-            const newApiKeys = { ...prev.apiKeys };
+            const newApiKeys = { ...(prev.apiKeys || {}) };
             delete newApiKeys[keyName];
             return {
                 ...prev,
@@ -698,7 +698,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                 <div className="border-t my-6"></div>
                 <h2 className="text-xl font-bold mb-4">API Keys</h2>
                 <div className="space-y-3 mb-4">
-                {Object.entries(formData.apiKeys).map(([keyName, keyValue]) => (
+                {Object.entries(formData.apiKeys || {}).map(([keyName, keyValue]) => (
                     <div
                     key={keyName}
                     className="flex justify-between items-center p-2 border-b border-gray-200"
@@ -751,7 +751,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                         >
                             <option value="">Select API Key</option>
                             {FIXED_API_KEY_NAMES
-                                .filter(keyName => !formData.apiKeys[keyName]) // Only show keys not already added
+                                .filter(keyName => !(formData.apiKeys || {})[keyName]) // Only show keys not already added
                                 .map(keyName => (
                                     <option key={keyName} value={keyName}>{keyName}</option>
                                 ))
