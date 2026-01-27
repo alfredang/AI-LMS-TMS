@@ -36,6 +36,7 @@ import {
   SearchEnrolmentView,
   ViewEnrolmentView
 } from '../components/admin/GrantManagementViews';
+import { CourseRunView } from '../components/admin/CourseRunView';
 
 // Management Dashboard Component
 interface ManagementDashboardProps {
@@ -256,6 +257,8 @@ const AdminLayout: React.FC = () => {
         return <UploadCourseRunsView />;
       case AdminPage.ClassDetail:
         return <ClassDetailView courseRunId={selectedCourseRunId || undefined} />;
+      case AdminPage.CourseRun:
+        return <CourseRunView />;
       default:
         return <AdminDashboard />;
     }
