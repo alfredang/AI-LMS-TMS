@@ -72,6 +72,20 @@ Comprehensive role-based access control:
 
 ---
 
+## User Guides
+
+Comprehensive guides for each user role:
+
+| Role | Guide |
+|------|-------|
+| **Learner** | [Learner User Guide](./user-guide-learner) - Enroll in courses, track progress, submit assessments |
+| **Trainer** | [Trainer User Guide](./user-guide-trainer) - Manage classes, grade submissions, use GenAI tools |
+| **Developer** | [Developer User Guide](./user-guide-developer) - Create courses, design content, use AI authoring |
+| **Admin** | [Admin User Guide](./user-guide-admin) - Manage system, users, classes, and SSG integration |
+| **Training Provider** | [Training Provider Guide](./user-guide-training-provider) - Analytics, branding, organizational settings |
+
+---
+
 ## Support
 
 For support and questions, please [open an issue](https://github.com/alfredang/AI-LMS-TMS/issues) on GitHub.
