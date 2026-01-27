@@ -13,6 +13,10 @@
   <img src="https://img.shields.io/badge/Google_AI-Gemini-4285F4?logo=google" alt="Google AI" />
 </p>
 
+<p align="center">
+  <a href="https://ai-lms-tms.vercel.app/"><img src="https://img.shields.io/badge/Demo-Live%20Site-success?style=for-the-badge&logo=vercel" alt="Live Demo" /></a>
+</p>
+
 ---
 
 ## Overview
