@@ -218,9 +218,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    // Ensure temp directory exists
-    const tempDir = path.join(process.cwd(), 'temp');
-    ensureDirectoryExists(tempDir);
+    // Use /tmp for Vercel serverless environment (only writable directory)
+    const tempDir = '/tmp';
     
     // Parse the multipart form data with improved formidable configuration
     const form = new IncomingForm({
