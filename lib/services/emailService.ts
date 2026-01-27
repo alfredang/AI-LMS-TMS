@@ -91,7 +91,7 @@ class EmailService {
     }
   }
 
-  async sendOtpEmail(email: string, otp: string, expiryMinutes: number = 10): Promise<{ success: boolean; error?: string }> {
+  async sendOtpEmail(email: string, otp: string, expiryMinutes: number = 10): Promise<{ success: boolean; error?: string; messageId?: string }> {
     const subject = 'Your Login OTP Code';
     const text = `Your OTP code is: ${otp}\n\nThis code will expire in ${expiryMinutes} minutes.\n\nIf you did not request this code, please ignore this email.`;
     const html = `

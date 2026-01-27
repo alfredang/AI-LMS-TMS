@@ -80,24 +80,33 @@ async function handler(req: NextApiRequest, res: NextApiResponse<SendOtpResponse
     console.log(`✅ OTP generated and stored for ${email}, expires at ${expiresAt.toISOString()}`);
 
     // Send OTP via email
+    console.log(`📧 About to send OTP email...`);
+    console.log(`📧 SMTP_USER env var: ${process.env.SMTP_USER ? process.env.SMTP_USER.substring(0, 10) + '***' : 'NOT SET'}`);
+    console.log(`📧 SMTP_PASS env var: ${process.env.SMTP_PASS ? 'SET (hidden)' : 'NOT SET'}`);
+
     const emailResult = await emailService.sendOtpEmail(email, otp, expiryMinutes);
+
+    console.log(`📧 Email result:`, JSON.stringify(emailResult));
 
     if (!emailResult.success) {
       console.error(`❌ Failed to send OTP email to ${email}:`, emailResult.error);
       // Still return success since OTP is stored - email delivery issues shouldn't block the flow
       // In production, you might want to handle this differently
+    } else {
+      console.log(`✅ Email sent successfully with messageId: ${emailResult.messageId}`);
     }
 
     console.log(`✅ OTP process completed for ${email}`);
     console.log(`📧 NODE_ENV: ${process.env.NODE_ENV}`);
 
     // Always include OTP in response for now (while debugging email delivery)
-    // TODO: Remove otp from response in production!
+    // TODO: Remove otp, emailMessageId from response in production!
     return res.status(200).json({
       success: true,
       message: 'OTP has been sent to your email address',
-      otp // Always include OTP for testing
-    });
+      otp, // Always include OTP for testing
+      emailMessageId: emailResult.messageId // For debugging - if starts with "simulated-" email was NOT sent
+    } as any);
 
   } catch (error: any) {
     console.error('❌ Send OTP error:', error);
