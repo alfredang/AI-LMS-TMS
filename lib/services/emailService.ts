@@ -22,8 +22,6 @@ interface SendEmailOptions {
 }
 
 class EmailService {
-  private transporter: nodemailer.Transporter | null = null;
-
   private getConfig(): EmailConfig {
     return {
       host: process.env.SMTP_HOST || 'smtp.gmail.com',
@@ -36,25 +34,24 @@ class EmailService {
     };
   }
 
-  private getTransporter(): nodemailer.Transporter {
-    if (!this.transporter) {
-      const config = this.getConfig();
+  private createTransporter(): nodemailer.Transporter {
+    const config = this.getConfig();
 
-      // Check if SMTP is configured
-      if (!config.auth.user || !config.auth.pass) {
-        console.warn('⚠️ SMTP not configured. Email sending will be simulated.');
-        // Create a test account transporter that won't actually send
-        this.transporter = nodemailer.createTransport({
-          host: 'localhost',
-          port: 1025,
-          secure: false,
-          ignoreTLS: true,
-        });
-      } else {
-        this.transporter = nodemailer.createTransport(config);
-      }
+    console.log(`📧 SMTP Config: host=${config.host}, port=${config.port}, user=${config.auth.user ? config.auth.user.substring(0, 5) + '***' : 'NOT SET'}`);
+
+    // Check if SMTP is configured
+    if (!config.auth.user || !config.auth.pass) {
+      console.warn('⚠️ SMTP not configured. Email sending will be simulated.');
+      // Create a test account transporter that won't actually send
+      return nodemailer.createTransport({
+        host: 'localhost',
+        port: 1025,
+        secure: false,
+        ignoreTLS: true,
+      });
     }
-    return this.transporter;
+
+    return nodemailer.createTransport(config);
   }
 
   async sendEmail(options: SendEmailOptions): Promise<{ success: boolean; error?: string; messageId?: string }> {
@@ -73,7 +70,7 @@ class EmailService {
         return { success: true, messageId: 'simulated-' + Date.now() };
       }
 
-      const transporter = this.getTransporter();
+      const transporter = this.createTransporter();
 
       const info = await transporter.sendMail({
         from: fromAddress,
