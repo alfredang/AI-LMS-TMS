@@ -6,11 +6,11 @@ import { Spinner } from './ui';
 import { TrainingProviderProfile } from '@app-types/profile';
 import { generateCompanyLogo } from '@lib/services/geminiService';
 import { useLms } from '@contexts/LmsContext';
-import { applyPrimaryColor, useColorScheme } from '@utils/colorUtils';
+import { applyPrimaryColor, useColorScheme, ThemeMode, getCurrentTheme, applyTheme } from '@utils/colorUtils';
 import { getApiUrl, getFileUrl } from '@/lib/urlHelpers';
 
 // Constants for styling consistency
-const inputClasses = "block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent";
+const inputClasses = "block w-full px-3 py-2 text-on-surface bg-surface border border-default rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent";
 
 // Fixed API Key names - these are the only allowed API key names
 const FIXED_API_KEY_NAMES = [
@@ -60,9 +60,9 @@ const ToggleSwitch: React.FC<{
 }> = ({ checked, onChange, label, isEditing }) => {
     if (!isEditing) {
         return (
-            <div className="flex justify-between items-center p-3 bg-gray-50 rounded-md border">
-                <span className="text-sm text-gray-700">{label}</span>
-                <span className={`text-sm font-medium ${checked ? 'text-green-600' : 'text-gray-400'}`}>
+            <div className="flex justify-between items-center p-3 bg-surface-elevated rounded-md border border-default">
+                <span className="text-sm text-on-surface">{label}</span>
+                <span className={`text-sm font-medium ${checked ? 'text-green-500' : 'text-gray-400'}`}>
                     {checked ? 'Enabled' : 'Disabled'}
                 </span>
             </div>
@@ -70,15 +70,15 @@ const ToggleSwitch: React.FC<{
     }
 
     return (
-        <div className="flex justify-between items-center p-3 bg-gray-50 rounded-md border">
-            <label className="text-sm text-gray-700 flex-grow cursor-pointer" onClick={() => onChange(!checked)}>
+        <div className="flex justify-between items-center p-3 bg-surface-elevated rounded-md border border-default">
+            <label className="text-sm text-on-surface flex-grow cursor-pointer" onClick={() => onChange(!checked)}>
                 {label}
             </label>
             <button
                 type="button"
                 onClick={() => onChange(!checked)}
                 className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                    checked ? 'bg-primary' : 'bg-gray-200'
+                    checked ? 'bg-primary' : 'bg-gray-300 dark:bg-gray-600'
                 }`}
             >
                 <span
@@ -257,7 +257,8 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
     const [isGeneratingLogo, setIsGeneratingLogo] = useState(false);
     const [visibleApiKeys, setVisibleApiKeys] = useState<{ [key: string]: boolean }>({});
     const [isEncryptionKeyVisible, setIsEncryptionKeyVisible] = useState(false);
-    
+    const [themeMode, setThemeMode] = useState<ThemeMode>(() => getCurrentTheme());
+
     // Get the updateTrainingProviderProfile function from the LMS context
     const { updateTrainingProviderProfile, updateCurrentUserProfile } = useLms();
     
@@ -370,17 +371,24 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
     
     const handleColorChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const newColor = e.target.value;
-        
+
         setFormData(prev => ({
             ...prev,
             colorScheme: newColor
         }));
-        
+
         // Apply the color change immediately for real-time preview
         if (isEditing) {
             applyPrimaryColor(newColor);
             console.log(`🎨 Real-time color preview applied: ${newColor}`);
         }
+    };
+
+    const handleThemeToggle = () => {
+        const newTheme: ThemeMode = themeMode === 'dark' ? 'light' : 'dark';
+        setThemeMode(newTheme);
+        applyTheme(newTheme);
+        console.log(`🌓 Theme toggled to: ${newTheme}`);
     };
 
     const handleTemplateUpload = (e: React.ChangeEvent<HTMLInputElement>, field: 'invoiceTemplateUrl' | 'receiptTemplateUrl' | 'certificateTemplateUrl' | 'proFormaInvoiceTemplateUrl' | 'ssgCertFile' | 'ssgPrivateKeyFile') => {
@@ -671,19 +679,19 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                 {isEditing ? (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Company Name</label>
+                            <label className="block text-sm font-medium text-on-surface-secondary mb-1">Company Name</label>
                             <input type="text" name="companyName" value={formData.companyName} onChange={handleInputChange} placeholder="Company Name" className={inputClasses} />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Company Short Name</label>
+                            <label className="block text-sm font-medium text-on-surface-secondary mb-1">Company Short Name</label>
                             <input type="text" name="companyShortname" value={formData.companyShortname} onChange={handleInputChange} placeholder="Company Short Name" className={inputClasses} />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">UEN</label>
+                            <label className="block text-sm font-medium text-on-surface-secondary mb-1">UEN</label>
                             <input type="text" name="uen" value={formData.uen} onChange={handleInputChange} placeholder="UEN" className={inputClasses} />
                         </div>
                         <div className="sm:col-span-2">
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Company Address</label>
+                            <label className="block text-sm font-medium text-on-surface-secondary mb-1">Company Address</label>
                             <input type="text" name="companyAddress" value={formData.companyAddress} onChange={handleInputChange} placeholder="Company Address" className={inputClasses} />
                         </div>
                     </div>
@@ -703,15 +711,15 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                 {isEditing ? (
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+                            <label className="block text-sm font-medium text-on-surface-secondary mb-1">Name</label>
                             <input type="text" name="name" value={formData.contactPerson.name} onChange={handleContactChange} placeholder="Name" className={inputClasses} />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                            <label className="block text-sm font-medium text-on-surface-secondary mb-1">Email</label>
                             <input type="email" name="email" value={formData.contactPerson.email} onChange={handleContactChange} placeholder="Email" className={inputClasses} />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Telephone</label>
+                            <label className="block text-sm font-medium text-on-surface-secondary mb-1">Telephone</label>
                             <input type="tel" name="tel" value={formData.contactPerson.tel} onChange={handleContactChange} placeholder="Telephone" className={inputClasses} />
                         </div>
                     </div>
@@ -807,7 +815,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                 <h2 className="text-xl font-bold mb-4">Document Templates</h2>
                 <div className="space-y-4">
                     {/* Invoice Template */}
-                    <div className="flex justify-between items-center p-3 bg-gray-50 rounded-md border">
+                    <div className="flex justify-between items-center p-3 bg-surface-elevated rounded-md border border-default">
                         <div>
                         <p className="font-semibold">Invoice Template</p>
                         <p className="text-xs text-subtle">
@@ -851,7 +859,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                     </div>
 
                     {/* Receipt Template */}
-                    <div className="flex justify-between items-center p-3 bg-gray-50 rounded-md border">
+                    <div className="flex justify-between items-center p-3 bg-surface-elevated rounded-md border border-default">
                         <div>
                         <p className="font-semibold">Receipt Template</p>
                         <p className="text-xs text-subtle">
@@ -884,7 +892,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                     </div>
 
                     {/* Certificate Template */}
-                    <div className="flex justify-between items-center p-3 bg-gray-50 rounded-md border">
+                    <div className="flex justify-between items-center p-3 bg-surface-elevated rounded-md border border-default">
                         <div>
                         <p className="font-semibold">Certificate Template</p>
                         <p className="text-xs text-subtle">
@@ -917,7 +925,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                     </div>
 
                     {/* Pro Forma Invoice Template */}
-                    <div className="flex justify-between items-center p-3 bg-gray-50 rounded-md border">
+                    <div className="flex justify-between items-center p-3 bg-surface-elevated rounded-md border border-default">
                         <div>
                         <p className="font-semibold">Pro Forma Invoice Template</p>
                         <p className="text-xs text-subtle">
@@ -961,12 +969,12 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                 <div className="space-y-4">
                     {/* Cert File */}
                     <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1 font-semibold">
+                    <label className="block text-sm font-medium text-on-surface-secondary mb-1 font-semibold">
                         Self Signing Cert File
                     </label>
-                    <div className="flex items-center gap-2 p-2 bg-gray-50 rounded-md border">
-                        <span className="text-sm text-gray-600 flex-grow">
-                        {ssgCertFile 
+                    <div className="flex items-center gap-2 p-2 bg-surface-elevated rounded-md border border-default">
+                        <span className="text-sm text-on-surface-secondary flex-grow">
+                        {ssgCertFile
                             ? getCleanDisplayName(ssgCertFile.name)
                             : formData.ssgCertFile?.split('/').pop() ? getCleanDisplayName(formData.ssgCertFile.split('/').pop() || '') : 'No file uploaded'}
                         </span>
@@ -990,12 +998,12 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
 
                     {/* Private Key File */}
                     <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1 font-semibold">
+                    <label className="block text-sm font-medium text-on-surface-secondary mb-1 font-semibold">
                         Private Key File
                     </label>
-                    <div className="flex items-center gap-2 p-2 bg-gray-50 rounded-md border">
-                        <span className="text-sm text-gray-600 flex-grow">
-                        {ssgPrivateKeyFile 
+                    <div className="flex items-center gap-2 p-2 bg-surface-elevated rounded-md border border-default">
+                        <span className="text-sm text-on-surface-secondary flex-grow">
+                        {ssgPrivateKeyFile
                             ? getCleanDisplayName(ssgPrivateKeyFile.name)
                             : formData.ssgPrivateKeyFile?.split('/').pop() ? getCleanDisplayName(formData.ssgPrivateKeyFile.split('/').pop() || '') : 'No file uploaded'}
                         </span>
@@ -1023,7 +1031,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                     <div>
                     <label
                         htmlFor="ssgEncryptionKey"
-                        className="block text-sm font-medium text-gray-700 mb-1 font-semibold"
+                        className="block text-sm font-medium text-on-surface-secondary mb-1 font-semibold"
                     >
                         Encryption Key
                     </label>
@@ -1137,8 +1145,8 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                 <h2 className="text-xl font-bold mb-4">Security</h2>
                 <div className="space-y-4">
                 {/* Auto Mask Sensitive Data */}
-                <div className="flex justify-between items-center p-3 bg-gray-50 rounded-md border">
-                    <p className="font-semibold text-sm">Auto Mask Sensitive Data</p>
+                <div className="flex justify-between items-center p-3 bg-surface-elevated rounded-md border border-default">
+                    <p className="font-semibold text-sm text-on-surface">Auto Mask Sensitive Data</p>
                     {isEditing ? (
                     <button
                         type="button"
@@ -1165,8 +1173,8 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                 </div>
 
                 {/* Auto Delete After 6 Months */}
-                <div className="flex justify-between items-center p-3 bg-gray-50 rounded-md border">
-                    <p className="font-semibold text-sm">Auto Delete After 6 Months</p>
+                <div className="flex justify-between items-center p-3 bg-surface-elevated rounded-md border border-default">
+                    <p className="font-semibold text-sm text-on-surface">Auto Delete After 6 Months</p>
                     {isEditing ? (
                     <button
                         type="button"
@@ -1193,8 +1201,8 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                 </div>
 
                 {/* Enable OTP Login */}
-                <div className="flex justify-between items-center p-3 bg-gray-50 rounded-md border">
-                    <p className="font-semibold text-sm">Enable OTP Login</p>
+                <div className="flex justify-between items-center p-3 bg-surface-elevated rounded-md border border-default">
+                    <p className="font-semibold text-sm text-on-surface">Enable OTP Login</p>
                     {isEditing ? (
                     <button
                         type="button"
@@ -1223,8 +1231,8 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                 {/* Enable Default OTP (only if OTP login enabled) */}
                 {formData.securitySettings.enableOtpLogin && (
                     <>
-                    <div className="flex justify-between items-center p-3 bg-gray-50 rounded-md border">
-                        <p className="font-semibold text-sm">Enable Default OTP</p>
+                    <div className="flex justify-between items-center p-3 bg-surface-elevated rounded-md border border-default">
+                        <p className="font-semibold text-sm text-on-surface">Enable Default OTP</p>
                         {isEditing ? (
                         <button
                             type="button"
@@ -1252,8 +1260,8 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
 
                     {/* Default OTP Value (only if both OTP and default OTP enabled) */}
                     {formData.securitySettings.enableDefaultOtp && (
-                        <div className="p-3 bg-gray-50 rounded-md border">
-                        <label className="block text-sm font-medium text-gray-700 mb-1 font-semibold">
+                        <div className="p-3 bg-surface-elevated rounded-md border border-default">
+                        <label className="block text-sm font-medium text-on-surface-secondary mb-1 font-semibold">
                             Default OTP Value
                         </label>
                         {isEditing ? (
@@ -1307,7 +1315,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                     {/* Normal Funding Rate */}
                     <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block text-sm font-medium text-on-surface-secondary mb-1">
                         Normal Funding Rate
                     </label>
                     <select
@@ -1323,7 +1331,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
 
                     {/* Enhanced Funding Rate */}
                     <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block text-sm font-medium text-on-surface-secondary mb-1">
                         Enhanced Funding Rate (%)
                     </label>
                     <input
@@ -1338,7 +1346,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
 
                     {/* GST Rate */}
                     <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block text-sm font-medium text-on-surface-secondary mb-1">
                         GST Rate (%)
                     </label>
                     <input
@@ -1353,8 +1361,8 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                     </div>
 
                     {/* GST Registered Toggle */}
-                    <div className="flex justify-between items-center p-3 bg-gray-50 rounded-md border">
-                    <label className="text-sm text-gray-700">GST Registered</label>
+                    <div className="flex justify-between items-center p-3 bg-surface-elevated rounded-md border border-default">
+                    <label className="text-sm text-on-surface">GST Registered</label>
                     <button
                         type="button"
                         onClick={() => {
@@ -1402,32 +1410,77 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
 
                 
                 <div className="border-t my-6"></div>
-                <h2 className="text-xl font-bold mb-4">Color Scheme</h2>
-                <div className="flex justify-between items-center p-3 bg-gray-50 rounded-md border">
-                    <div>
-                        <p className="font-semibold text-sm">Primary Color</p>
-                        {isEditing && (
-                            <p className="text-xs text-gray-600 mt-1">
-                                Changes apply immediately for preview
-                            </p>
-                        )}
+                <h2 className="text-xl font-bold mb-4">Appearance</h2>
+
+                {/* Theme Mode Toggle */}
+                <div className="space-y-4">
+                    <div className="flex justify-between items-center p-4 bg-surface-elevated rounded-lg border border-default">
+                        <div className="flex items-center gap-3">
+                            <div className={`p-2 rounded-lg ${themeMode === 'dark' ? 'bg-gray-700' : 'bg-blue-100'}`}>
+                                {themeMode === 'dark' ? (
+                                    <svg className="w-5 h-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
+                                        <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z" />
+                                    </svg>
+                                ) : (
+                                    <svg className="w-5 h-5 text-yellow-500" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fillRule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" clipRule="evenodd" />
+                                    </svg>
+                                )}
+                            </div>
+                            <div>
+                                <p className="font-semibold text-on-surface">Theme Mode</p>
+                                <p className="text-sm text-on-surface-secondary">
+                                    {themeMode === 'dark' ? 'Dark theme active' : 'Light theme active'}
+                                </p>
+                            </div>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={handleThemeToggle}
+                            className={`relative inline-flex h-7 w-14 items-center rounded-full transition-colors duration-300 ${
+                                themeMode === 'dark' ? 'bg-primary' : 'bg-gray-300'
+                            }`}
+                        >
+                            <span
+                                className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-md transition-transform duration-300 ${
+                                    themeMode === 'dark' ? 'translate-x-8' : 'translate-x-1'
+                                }`}
+                            />
+                        </button>
                     </div>
-                    <div className="flex items-center gap-2">
-                        {isEditing ? (
-                        <input
-                            type="color"
-                            name="primary"
-                            value={formData.colorScheme || '#3B82F6'}
-                            onChange={handleColorChange}
-                            className="w-10 h-10 rounded-md border border-gray-300 cursor-pointer"
-                        />
-                        ) : (
-                        <div
-                            className="w-8 h-8 rounded-md border border-gray-300"
-                            style={{ backgroundColor: formData.colorScheme || '#3B82F6' }}
-                        />
-                        )}
-                        <span className="font-mono text-sm">{formData.colorScheme || '#3B82F6'}</span>
+
+                    {/* Primary Color */}
+                    <div className="flex justify-between items-center p-4 bg-surface-elevated rounded-lg border border-default">
+                        <div className="flex items-center gap-3">
+                            <div
+                                className="w-9 h-9 rounded-lg border-2 border-white shadow-md"
+                                style={{ backgroundColor: formData.colorScheme || '#3B82F6' }}
+                            />
+                            <div>
+                                <p className="font-semibold text-on-surface">Primary Color</p>
+                                <p className="text-sm text-on-surface-secondary">
+                                    {isEditing ? 'Click color to change' : (formData.colorScheme || '#3B82F6').toUpperCase()}
+                                </p>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            {isEditing ? (
+                                <>
+                                    <input
+                                        type="color"
+                                        name="primary"
+                                        value={formData.colorScheme || '#3B82F6'}
+                                        onChange={handleColorChange}
+                                        className="w-10 h-10 rounded-md border-2 border-gray-300 cursor-pointer hover:border-primary transition-colors"
+                                    />
+                                    <span className="font-mono text-sm text-on-surface-secondary">{formData.colorScheme || '#3B82F6'}</span>
+                                </>
+                            ) : (
+                                <span className="font-mono text-sm text-on-surface bg-surface px-3 py-1 rounded-md border border-default">
+                                    {formData.colorScheme || '#3B82F6'}
+                                </span>
+                            )}
+                        </div>
                     </div>
                 </div>
 

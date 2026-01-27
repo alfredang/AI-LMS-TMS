@@ -2,16 +2,140 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --surface: #ffffff;
-  --on-surface: #1f2937;
+/* Light Theme (default) */
+:root, [data-theme="light"] {
+  /* Primary colors - dynamic, set via JavaScript */
   --primary: #3b82f6;
   --primary-hover: #2563eb;
   --primary-rgb: 59, 130, 246;
+
+  /* Surface colors - Light theme */
+  --surface: #ffffff;
+  --surface-elevated: #ffffff;
+  --surface-hover: #f3f4f6;
+  --on-surface: #1f2937;
+  --on-surface-secondary: #4b5563;
+
+  /* Background */
+  --background: #f9fafb;
+  --background-secondary: #f3f4f6;
+
+  /* Text colors */
+  --text-primary: #111827;
+  --text-secondary: #4b5563;
+  --text-muted: #9ca3af;
+
+  /* Border colors */
+  --border: #e5e7eb;
+  --border-focus: #3b82f6;
+
+  /* Secondary/subtle */
   --secondary: #6b7280;
   --secondary-hover: #4b5563;
   --subtle: #6b7280;
-  --background: #f9fafb;
+
+  /* Input fields */
+  --input-bg: #ffffff;
+  --input-border: #d1d5db;
+  --input-text: #1f2937;
+  --input-placeholder: #9ca3af;
+
+  /* Cards */
+  --card-bg: #ffffff;
+  --card-border: #e5e7eb;
+
+  /* Sidebar/Navigation */
+  --sidebar-bg: #ffffff;
+  --sidebar-hover: #f3f4f6;
+  --sidebar-active: rgba(59, 130, 246, 0.1);
+
+  /* Header */
+  --header-bg: #ffffff;
+  --header-border: #e5e7eb;
+
+  /* Status colors */
+  --success: #10b981;
+  --success-bg: #ecfdf5;
+  --warning: #f59e0b;
+  --warning-bg: #fffbeb;
+  --error: #ef4444;
+  --error-bg: #fef2f2;
+  --info: #3b82f6;
+  --info-bg: #eff6ff;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+}
+
+/* Dark Theme */
+[data-theme="dark"] {
+  /* Primary colors - dynamic, set via JavaScript */
+  --primary: #60a5fa;
+  --primary-hover: #3b82f6;
+  --primary-rgb: 96, 165, 250;
+
+  /* Surface colors - Dark theme */
+  --surface: #1f2937;
+  --surface-elevated: #374151;
+  --surface-hover: #374151;
+  --on-surface: #f9fafb;
+  --on-surface-secondary: #d1d5db;
+
+  /* Background */
+  --background: #111827;
+  --background-secondary: #1f2937;
+
+  /* Text colors */
+  --text-primary: #f9fafb;
+  --text-secondary: #d1d5db;
+  --text-muted: #6b7280;
+
+  /* Border colors */
+  --border: #374151;
+  --border-focus: #60a5fa;
+
+  /* Secondary/subtle */
+  --secondary: #9ca3af;
+  --secondary-hover: #d1d5db;
+  --subtle: #9ca3af;
+
+  /* Input fields */
+  --input-bg: #1f2937;
+  --input-border: #4b5563;
+  --input-text: #f9fafb;
+  --input-placeholder: #6b7280;
+
+  /* Cards */
+  --card-bg: #1f2937;
+  --card-border: #374151;
+
+  /* Sidebar/Navigation */
+  --sidebar-bg: #1f2937;
+  --sidebar-hover: #374151;
+  --sidebar-active: rgba(96, 165, 250, 0.15);
+
+  /* Header */
+  --header-bg: #1f2937;
+  --header-border: #374151;
+
+  /* Status colors - adjusted for dark theme */
+  --success: #34d399;
+  --success-bg: rgba(16, 185, 129, 0.15);
+  --warning: #fbbf24;
+  --warning-bg: rgba(245, 158, 11, 0.15);
+  --error: #f87171;
+  --error-bg: rgba(239, 68, 68, 0.15);
+  --info: #60a5fa;
+  --info-bg: rgba(59, 130, 246, 0.15);
+
+  /* Shadows - more subtle for dark theme */
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.3);
+  --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.4), 0 1px 2px -1px rgb(0 0 0 / 0.4);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.4), 0 2px 4px -2px rgb(0 0 0 / 0.4);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.4), 0 4px 6px -4px rgb(0 0 0 / 0.4);
 }
 
 body {
@@ -21,6 +145,9 @@ body {
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  background-color: var(--background);
+  color: var(--text-primary);
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 /* Custom class for Header styling */
@@ -28,12 +155,28 @@ body {
   background-color: var(--background);
 }
 
+.bg-background-secondary {
+  background-color: var(--background-secondary);
+}
+
 .bg-surface {
   background-color: var(--surface);
 }
 
+.bg-surface-elevated {
+  background-color: var(--surface-elevated);
+}
+
+.bg-surface-hover:hover {
+  background-color: var(--surface-hover);
+}
+
 .text-on-surface {
   color: var(--on-surface);
+}
+
+.text-on-surface-secondary {
+  color: var(--on-surface-secondary);
 }
 
 .bg-primary {
@@ -52,8 +195,16 @@ body {
   color: var(--subtle);
 }
 
+.text-muted {
+  color: var(--text-muted);
+}
+
 .border-primary {
   border-color: var(--primary);
+}
+
+.border-default {
+  border-color: var(--border);
 }
 
 .ring-primary {
@@ -140,6 +291,84 @@ body {
   background-color: rgba(var(--primary-rgb), 0.1);
 }
 
+.bg-primary\/20 {
+  background-color: rgba(var(--primary-rgb), 0.2);
+}
+
 .ring-primary\/20 {
   --tw-ring-color: rgba(var(--primary-rgb), 0.2);
+}
+
+/* Card styles */
+.card {
+  background-color: var(--card-bg);
+  border-color: var(--card-border);
+  box-shadow: var(--shadow);
+}
+
+/* Input styles */
+.input-themed {
+  background-color: var(--input-bg);
+  border-color: var(--input-border);
+  color: var(--input-text);
+}
+
+.input-themed::placeholder {
+  color: var(--input-placeholder);
+}
+
+.input-themed:focus {
+  border-color: var(--border-focus);
+}
+
+/* Sidebar styles */
+.sidebar-themed {
+  background-color: var(--sidebar-bg);
+}
+
+.sidebar-item:hover {
+  background-color: var(--sidebar-hover);
+}
+
+.sidebar-item-active {
+  background-color: var(--sidebar-active);
+}
+
+/* Header styles */
+.header-themed {
+  background-color: var(--header-bg);
+  border-color: var(--header-border);
+}
+
+/* Status badges */
+.status-success {
+  background-color: var(--success-bg);
+  color: var(--success);
+}
+
+.status-warning {
+  background-color: var(--warning-bg);
+  color: var(--warning);
+}
+
+.status-error {
+  background-color: var(--error-bg);
+  color: var(--error);
+}
+
+.status-info {
+  background-color: var(--info-bg);
+  color: var(--info);
+}
+
+/* Smooth transitions for theme changes */
+* {
+  transition-property: background-color, border-color, color, fill, stroke;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 150ms;
+}
+
+/* Disable transitions on page load */
+.no-transitions * {
+  transition: none !important;
 }
