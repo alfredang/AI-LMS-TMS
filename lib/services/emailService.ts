@@ -92,18 +92,19 @@ class EmailService {
   }
 
   async sendOtpEmail(email: string, otp: string, expiryMinutes: number = 10): Promise<{ success: boolean; error?: string; messageId?: string }> {
-    const subject = 'Your Login OTP Code';
-    const text = `Your OTP code is: ${otp}\n\nThis code will expire in ${expiryMinutes} minutes.\n\nIf you did not request this code, please ignore this email.`;
+    const subject = 'Tertiary Infotech LMS - Verification Code';
+    const text = `Your verification code for Tertiary Infotech LMS is: ${otp}\n\nThis code will expire in ${expiryMinutes} minutes.\n\nIf you did not request this code, please ignore this email.\n\nTertiary Infotech Pte Ltd`;
     const html = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-        <h2 style="color: #1a3a69;">Your Login OTP Code</h2>
-        <p>Use the following code to complete your login:</p>
+        <h2 style="color: #1a3a69;">Tertiary Infotech LMS</h2>
+        <p>Your verification code is:</p>
         <div style="background-color: #f5f5f5; padding: 20px; text-align: center; margin: 20px 0; border-radius: 8px;">
           <span style="font-size: 32px; font-weight: bold; letter-spacing: 8px; color: #1a3a69;">${otp}</span>
         </div>
         <p style="color: #666;">This code will expire in <strong>${expiryMinutes} minutes</strong>.</p>
         <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
         <p style="color: #999; font-size: 12px;">If you did not request this code, please ignore this email.</p>
+        <p style="color: #999; font-size: 12px;">Tertiary Infotech Pte Ltd</p>
       </div>
     `;
 
