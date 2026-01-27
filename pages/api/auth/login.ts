@@ -1,6 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { cors } from '../../../lib/cors';
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 import pool from '../../../lib/db';
 
 interface LoginRequest {
@@ -62,6 +62,15 @@ async function handler(req: NextApiRequest, res: NextApiResponse<LoginResponse>)
 
   try {
     console.log(`🔐 Login attempt for email: ${email}, type: ${loginType}`);
+
+    // Check if DATABASE_URL is configured
+    if (!process.env.DATABASE_URL) {
+      console.error('❌ DATABASE_URL environment variable is not set');
+      return res.status(500).json({
+        success: false,
+        error: 'Database configuration error. Please check environment variables.'
+      });
+    }
 
     // Check if user exists in database
     const userQuery = `
@@ -191,8 +200,24 @@ async function handler(req: NextApiRequest, res: NextApiResponse<LoginResponse>)
     console.log(`✅ Login successful for user: ${email}, role: ${userRole}`);
     return res.status(200).json(loginResponse);
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Login error:', error);
+
+    // Check for specific database connection errors
+    if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND') {
+      return res.status(500).json({
+        success: false,
+        error: 'Unable to connect to database. Please try again later.'
+      });
+    }
+
+    if (error.code === 'ETIMEDOUT') {
+      return res.status(500).json({
+        success: false,
+        error: 'Database connection timed out. Please try again.'
+      });
+    }
+
     return res.status(500).json({
       success: false,
       error: 'Internal server error'
