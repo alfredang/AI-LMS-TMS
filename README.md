@@ -15,7 +15,7 @@
 
 <p align="center">
   <a href="https://ai-lms-tms.vercel.app/"><img src="https://img.shields.io/badge/Demo-Live%20Site-success?style=for-the-badge&logo=vercel" alt="Live Demo" /></a>
-  <a href="https://alfredang.github.io/AI-LMS-TMS/"><img src="https://img.shields.io/badge/Docs-GitHub%20Pages-blue?style=for-the-badge&logo=github" alt="Documentation" /></a>
+  <a href="./docs/"><img src="https://img.shields.io/badge/Docs-View%20Documentation-blue?style=for-the-badge&logo=readthedocs" alt="Documentation" /></a>
 </p>
 
 ---
@@ -100,24 +100,24 @@ AI-LMS-TMS is a **full-stack, enterprise-grade web application** that manages th
 
 ## Documentation
 
-Full documentation is available at **[https://alfredang.github.io/AI-LMS-TMS/](https://alfredang.github.io/AI-LMS-TMS/)**
+Full documentation is available in the [docs folder](./docs/).
 
 ### User Guides
 
 | Role | Guide |
 |------|-------|
-| **Learner** | [Learner User Guide](https://alfredang.github.io/AI-LMS-TMS/user-guide-learner) |
-| **Trainer** | [Trainer User Guide](https://alfredang.github.io/AI-LMS-TMS/user-guide-trainer) |
-| **Developer** | [Developer User Guide](https://alfredang.github.io/AI-LMS-TMS/user-guide-developer) |
-| **Admin** | [Admin User Guide](https://alfredang.github.io/AI-LMS-TMS/user-guide-admin) |
-| **Training Provider** | [Training Provider Guide](https://alfredang.github.io/AI-LMS-TMS/user-guide-training-provider) |
+| **Learner** | [Learner User Guide](./docs/user-guide-learner.md) |
+| **Trainer** | [Trainer User Guide](./docs/user-guide-trainer.md) |
+| **Developer** | [Developer User Guide](./docs/user-guide-developer.md) |
+| **Admin** | [Admin User Guide](./docs/user-guide-admin.md) |
+| **Training Provider** | [Training Provider Guide](./docs/user-guide-training-provider.md) |
 
 ### Additional Documentation
 
-- [Getting Started Guide](https://alfredang.github.io/AI-LMS-TMS/getting-started)
-- [Features Overview](https://alfredang.github.io/AI-LMS-TMS/features)
-- [API Reference](https://alfredang.github.io/AI-LMS-TMS/api-reference)
-- [Deployment Guide](https://alfredang.github.io/AI-LMS-TMS/deployment)
+- [Getting Started Guide](./docs/getting-started.md)
+- [Features Overview](./docs/features.md)
+- [API Reference](./docs/api-reference.md)
+- [Deployment Guide](./docs/deployment.md)
 
 ## Project Structure
 
