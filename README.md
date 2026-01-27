@@ -38,6 +38,7 @@ AI-LMS-TMS is a **full-stack, enterprise-grade web application** that manages th
 
 - [Features](#features)
 - [Technology Stack](#technology-stack)
+- [Documentation](#documentation)
 - [Project Structure](#project-structure)
 - [Database Schema](#database-schema)
 - [Getting Started](#getting-started)
@@ -96,6 +97,27 @@ AI-LMS-TMS is a **full-stack, enterprise-grade web application** that manages th
 | **File Uploads** | Multer |
 | **Icons** | Lucide React |
 | **Database Client** | pg (node-postgres) |
+
+## Documentation
+
+Full documentation is available at **[https://alfredang.github.io/AI-LMS-TMS/](https://alfredang.github.io/AI-LMS-TMS/)**
+
+### User Guides
+
+| Role | Guide |
+|------|-------|
+| **Learner** | [Learner User Guide](https://alfredang.github.io/AI-LMS-TMS/user-guide-learner) |
+| **Trainer** | [Trainer User Guide](https://alfredang.github.io/AI-LMS-TMS/user-guide-trainer) |
+| **Developer** | [Developer User Guide](https://alfredang.github.io/AI-LMS-TMS/user-guide-developer) |
+| **Admin** | [Admin User Guide](https://alfredang.github.io/AI-LMS-TMS/user-guide-admin) |
+| **Training Provider** | [Training Provider Guide](https://alfredang.github.io/AI-LMS-TMS/user-guide-training-provider) |
+
+### Additional Documentation
+
+- [Getting Started Guide](https://alfredang.github.io/AI-LMS-TMS/getting-started)
+- [Features Overview](https://alfredang.github.io/AI-LMS-TMS/features)
+- [API Reference](https://alfredang.github.io/AI-LMS-TMS/api-reference)
+- [Deployment Guide](https://alfredang.github.io/AI-LMS-TMS/deployment)
 
 ## Project Structure
 
