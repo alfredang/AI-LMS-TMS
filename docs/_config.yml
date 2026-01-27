@@ -1,0 +1,23 @@
+title: AI-LMS-TMS Documentation
+description: Comprehensive Learning & Training Management System for Singapore's SkillsFuture Ecosystem
+theme: jekyll-theme-cayman
+baseurl: "/AI-LMS-TMS"
+url: "https://alfredang.github.io"
+
+# Navigation
+nav:
+  - title: Home
+    url: /
+  - title: Getting Started
+    url: /getting-started
+  - title: Features
+    url: /features
+  - title: API Reference
+    url: /api-reference
+  - title: Deployment
+    url: /deployment
+
+# Footer
+footer:
+  company: Tertiary Infotech Pte Ltd
+  year: 2024-2026

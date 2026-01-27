@@ -15,6 +15,7 @@
 
 <p align="center">
   <a href="https://ai-lms-tms.vercel.app/"><img src="https://img.shields.io/badge/Demo-Live%20Site-success?style=for-the-badge&logo=vercel" alt="Live Demo" /></a>
+  <a href="https://alfredang.github.io/AI-LMS-TMS/"><img src="https://img.shields.io/badge/Docs-GitHub%20Pages-blue?style=for-the-badge&logo=github" alt="Documentation" /></a>
 </p>
 
 ---
