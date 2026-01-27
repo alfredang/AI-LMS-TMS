@@ -45,6 +45,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
   const [error, setError] = useState<string | null>(null);
   const [isResending, setIsResending] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [loginType, setLoginType] = useState<'password' | 'otp'>('password');
   const [showPassword, setShowPassword] = useState(false);
   const [trainingProviderData, setTrainingProviderData] = useState<TrainingProviderData | null>(null);
@@ -106,10 +107,30 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
       return;
     }
     setError(null);
+    setIsLoading(true);
     setLoginType('otp');
-    console.log(`Sending OTP to ${email}`);
-    const otpToUse = securitySettings.defaultOtp || 'Please check your email';
-    setStep('otp');
+
+    try {
+      console.log(`Sending OTP to ${email}`);
+      const response = await fetch('/api/auth/send-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        setStep('otp');
+      } else {
+        setError(result.error || 'Failed to send OTP. Please try again.');
+      }
+    } catch (error) {
+      console.error('Error sending OTP:', error);
+      setError('Failed to send OTP. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   // Complete login with selected role
@@ -212,23 +233,46 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
     }
   };
 
-  const handleResendOtp = () => {
+  const handleResendOtp = async () => {
     setIsResending(true);
-    const otpToUse = securitySettings.defaultOtp || 'Please check your email';
-    alert(`A new OTP has been sent to your email. Use: ${otpToUse}`);
-    setTimeout(() => setIsResending(false), 5000);
+    setError(null);
+    setSuccessMessage(null);
+
+    try {
+      const response = await fetch('/api/auth/send-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        setSuccessMessage('A new OTP has been sent to your email.');
+        setTimeout(() => setSuccessMessage(null), 5000);
+      } else {
+        setError(result.error || 'Failed to resend OTP. Please try again.');
+      }
+    } catch (error) {
+      console.error('Error resending OTP:', error);
+      setError('Failed to resend OTP. Please try again.');
+    } finally {
+      setTimeout(() => setIsResending(false), 5000);
+    }
   };
 
   const handleSwitchToPassword = () => {
     setStep('password');
     setLoginType('password');
     setError(null);
+    setSuccessMessage(null);
   };
 
   const handleSwitchToOtp = () => {
     setStep('email');
     setLoginType('otp');
     setError(null);
+    setSuccessMessage(null);
   };
 
   const inputClasses = "block w-full px-4 py-3 text-gray-900 bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent";
@@ -294,13 +338,14 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
           />
         </div>
         {error && <p className="text-red-500 text-sm text-center">{error}</p>}
+        {successMessage && <p className="text-green-600 text-sm text-center">{successMessage}</p>}
         <Button type="submit" className="w-full !py-3" size="lg" disabled={isLoading}>
           {isLoading ? 'Verifying...' : 'Verify & Log In'}
         </Button>
       </form>
       <div className="mt-4 text-center text-sm">
         <button
-          onClick={() => { setStep('email'); setError(null); setOtp(''); }}
+          onClick={() => { setStep('email'); setError(null); setSuccessMessage(null); setOtp(''); }}
           className="font-medium text-blue-600 hover:text-blue-800"
         >
           Change Email

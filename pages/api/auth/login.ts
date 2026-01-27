@@ -120,28 +120,16 @@ async function handler(req: NextApiRequest, res: NextApiResponse<LoginResponse>)
       }
       console.log(`✅ Password verified for user: ${email}`);
     } else if (loginType === 'otp') {
-      // For OTP login, verify against training provider's default OTP
-      // First get the training provider's default OTP
-      const otpQuery = `
-      SELECT default_otp, enable_otp_login, enable_default_otp
-      FROM training_provider
-      LIMIT 1
+      // For OTP login, verify against stored OTP in otp_codes table
+      // First check if OTP login is enabled for the training provider
+      const settingsQuery = `
+        SELECT enable_otp_login
+        FROM training_provider
+        LIMIT 1
       `;
+      const settingsResult = await pool.query(settingsQuery);
 
-      const otpResult = await pool.query(otpQuery);
-
-      if (otpResult.rows.length === 0) {
-        console.log(`❌ No OTP settings found for training provider`);
-        return res.status(401).json({
-          success: false,
-          error: 'OTP login not available'
-        });
-      }
-
-      const otpSettings = otpResult.rows[0];
-
-      // Check if OTP login is enabled
-      if (!otpSettings.enable_otp_login || !otpSettings.enable_default_otp) {
+      if (settingsResult.rows.length > 0 && !settingsResult.rows[0].enable_otp_login) {
         console.log(`❌ OTP login is disabled for training provider`);
         return res.status(401).json({
           success: false,
@@ -149,15 +137,44 @@ async function handler(req: NextApiRequest, res: NextApiResponse<LoginResponse>)
         });
       }
 
-      // Verify OTP against the training provider's default OTP
-      if (otp !== otpSettings.default_otp) {
-        console.log(`❌ Invalid OTP for user: ${email}, expected: ${otpSettings.default_otp}, received: ${otp}`);
+      // Verify OTP against the stored OTP in otp_codes table
+      const otpQuery = `
+        SELECT id, otp_code, expires_at, used
+        FROM public.otp_codes
+        WHERE LOWER(email) = LOWER($1)
+          AND used = FALSE
+          AND expires_at > NOW()
+        ORDER BY created_at DESC
+        LIMIT 1
+      `;
+      const otpResult = await pool.query(otpQuery, [email]);
+
+      if (otpResult.rows.length === 0) {
+        console.log(`❌ No valid OTP found for user: ${email}`);
+        return res.status(401).json({
+          success: false,
+          error: 'OTP has expired or is invalid. Please request a new one.'
+        });
+      }
+
+      const storedOtp = otpResult.rows[0];
+
+      if (otp !== storedOtp.otp_code) {
+        console.log(`❌ Invalid OTP for user: ${email}, expected: ${storedOtp.otp_code}, received: ${otp}`);
         return res.status(401).json({
           success: false,
           error: 'Invalid OTP'
         });
       }
-      console.log(`✅ OTP verified for user: ${email}`);
+
+      // Mark OTP as used
+      await pool.query(`
+        UPDATE public.otp_codes
+        SET used = TRUE
+        WHERE id = $1
+      `, [storedOtp.id]);
+
+      console.log(`✅ OTP verified and marked as used for user: ${email}`);
     }
 
     // Get ALL user roles from user_role_map table
