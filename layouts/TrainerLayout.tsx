@@ -1,5 +1,6 @@
 import React from 'react';
 import Header from '../components/Header';
+import Footer from '../components/Footer';
 import AiChatbot from '../components/AiChatbot';
 import { useLms } from '../contexts/LmsContext';
 import { View } from '@app-types';
@@ -51,7 +52,7 @@ const TrainerLayout: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background font-sans text-on-surface">
+    <div className="min-h-screen flex flex-col bg-background font-sans text-on-surface">
       <Header />
       {selectedCourse && (
         <div className="lg:hidden flex items-center gap-4 px-4 sm:px-6 py-3 border-b border-gray-200 bg-surface">
@@ -61,9 +62,10 @@ const TrainerLayout: React.FC = () => {
             <h2 className="text-lg font-bold truncate">{selectedCourse.title}</h2>
         </div>
       )}
-      <main className="container mx-auto p-4 sm:p-6 lg:p-8">
+      <main className="container mx-auto p-4 sm:p-6 lg:p-8 flex-grow">
         {renderContent()}
       </main>
+      <Footer />
       <AiChatbot />
     </div>
   );

@@ -1,5 +1,6 @@
 import React from 'react';
 import Header from '../components/Header';
+import Footer from '../components/Footer';
 import AiChatbot from '../components/AiChatbot';
 import { useLms } from '../contexts/LmsContext';
 import { View } from '@app-types';
@@ -39,14 +40,15 @@ const DeveloperLayout: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background font-sans text-on-surface">
+    <div className="min-h-screen flex flex-col bg-background font-sans text-on-surface">
       <Header />
-      <div className="flex">
+      <div className="flex flex-grow">
         {/* Main content area */}
         <div className="container mx-auto p-4 sm:p-6 lg:p-8">
           {renderContent()}
         </div>
       </div>
+      <Footer />
       <AiChatbot />
     </div>
   );

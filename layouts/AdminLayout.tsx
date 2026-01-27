@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Header from '../components/Header';
+import Footer from '../components/Footer';
 import AiChatbot from '../components/AiChatbot';
 import { useLms } from '../contexts/LmsContext';
 import { View, AdminPage } from '@app-types';
@@ -181,11 +182,12 @@ const AdminLayout: React.FC = () => {
     };
 
     return (
-      <div className="min-h-screen bg-background font-sans text-on-surface">
+      <div className="min-h-screen flex flex-col bg-background font-sans text-on-surface">
         <Header />
-        <main className="container mx-auto p-4 sm:p-6 lg:p-8">
+        <main className="container mx-auto p-4 sm:p-6 lg:p-8 flex-grow">
           <FullWidthContent />
         </main>
+        <Footer />
         <AiChatbot />
       </div>
     );
@@ -265,7 +267,7 @@ const AdminLayout: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background font-sans text-on-surface">
+    <div className="min-h-screen flex flex-col bg-background font-sans text-on-surface">
       <Header />
 
       {/* Mobile header and sidebar toggle */}
@@ -308,7 +310,7 @@ const AdminLayout: React.FC = () => {
         </div>
       )}
 
-      <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-grow">
         <div className="flex flex-row gap-8">
           <aside className="hidden lg:block w-64 flex-shrink-0">
             <Card className="sticky top-24">
@@ -321,6 +323,7 @@ const AdminLayout: React.FC = () => {
         </div>
       </div>
 
+      <Footer />
       <AiChatbot />
     </div>
   );
