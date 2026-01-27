@@ -41,7 +41,8 @@ export enum AdminPage {
   UploadCourseRuns = 'uploadCourseRuns',
   SearchGrant = 'searchGrant',
   SearchEnrolment = 'searchEnrolment',
-  ViewEnrolment = 'viewEnrolment'
+  ViewEnrolment = 'viewEnrolment',
+  CourseRun = 'courseRun'
 }
 
 // Course related interfaces
