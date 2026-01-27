@@ -189,7 +189,7 @@ const Header: React.FC = () => {
         <div className="flex items-center justify-between h-16">
           <div className="flex items-center space-x-4">
             <div className="flex items-center space-x-2">
-              <img src={ensureAbsoluteImageUrl(trainingProviderProfile?.companyLogoUrl || '/images/default-company-logo.png')} alt="Company Logo" className="w-8 h-8 rounded-md" />
+              <img src={ensureAbsoluteImageUrl(trainingProviderProfile?.companyLogoUrl || '/images/default-company-logo.png')} alt="Company Logo" className="w-8 h-8 rounded-lg object-cover ring-2 ring-primary ring-offset-2 ring-offset-surface" />
               <span className="text-xl font-bold text-on-surface">{trainingProviderProfile?.companyShortname || 'Training Provider'}</span>
             </div>
             <nav className="hidden md:flex items-center space-x-6">
