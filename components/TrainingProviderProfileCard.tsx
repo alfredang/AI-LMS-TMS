@@ -471,10 +471,21 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
         try {
             // Create FormData for multipart upload
             const formDataToSend = new FormData();
-            
+
+            // Filter out empty API key values before sending
+            const filteredApiKeys = Object.fromEntries(
+                Object.entries(formData.apiKeys || {}).filter(([_, value]) => value && value.trim() !== '')
+            );
+
+            // Prepare profile data with filtered API keys
+            const profileDataToSend = {
+                ...formData,
+                apiKeys: filteredApiKeys
+            };
+
             // Add user ID and profile data as JSON string
             formDataToSend.append('userId', profile.id);
-            formDataToSend.append('profileData', JSON.stringify(formData));
+            formDataToSend.append('profileData', JSON.stringify(profileDataToSend));
             
             // Add file uploads if they exist
             if (logoFile) {
