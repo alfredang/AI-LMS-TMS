@@ -14,11 +14,13 @@ const inputClasses = "block w-full px-3 py-2 text-on-surface bg-white border bor
 
 // Fixed API Key names - these are the only allowed API key names
 const FIXED_API_KEY_NAMES = [
-    'GEMINI_API_KEY',
+    'OPENROUTER_API_KEY',
     'OPENAI_API_KEY',
-    'SSG_AUTH_TOKEN',
-    'SMTP_API_KEY',
-    'GOOGLE_MAPS_API_KEY',
+    'ANTHROPIC_API_KEY',
+    'GEMINI_API_KEY',
+    'GROQ_API_KEY',
+    'GROK_API_KEY',
+    'DEEPSEEK_API_KEY',
 ] as const;
 
 // Helper function to clean filename for display
@@ -697,78 +699,82 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
 
                 <div className="border-t my-6"></div>
                 <h2 className="text-xl font-bold mb-4">API Keys</h2>
-                <div className="space-y-3 mb-4">
-                {Object.entries(formData.apiKeys || {}).map(([keyName, keyValue]) => (
-                    <div
-                    key={keyName}
-                    className="flex justify-between items-center p-2 border-b border-gray-200"
-                    >
-                    {/* Left side: Key Name + Masked/Visible Key stacked */}
-                    <div className="flex flex-col flex-grow">
-                        <span className="text-sm font-medium text-gray-900">{keyName}</span>
-                        <span className="text-xs text-gray-500 font-mono">
-                        {isEditing || visibleApiKeys[keyName] 
-                            ? keyValue 
-                            : `${keyValue.substring(0, 8)}...${keyValue.substring(keyValue.length - 4)}`}
-                        </span>
-                    </div>
+                <div className="space-y-4">
+                {FIXED_API_KEY_NAMES.map((keyName) => {
+                    const keyValue = (formData.apiKeys || {})[keyName] || '';
+                    const isVisible = visibleApiKeys[keyName];
 
-                    {/* Right side: Eye icon and Delete button */}
-                    <div className="flex items-center gap-2">
-                        {!isEditing && (
-                            <button
-                                type="button"
-                                onClick={() => setVisibleApiKeys(prev => ({ ...prev, [keyName]: !prev[keyName] }))}
-                                className="text-gray-500 hover:text-gray-700 p-1"
-                            >
-                                <Icon 
-                                    name={visibleApiKeys[keyName] ? IconName.EyeOff : IconName.Eye} 
-                                    className="w-4 h-4" 
-                                />
-                            </button>
-                        )}
-                        {isEditing && (
-                            <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleRemoveApiKey(keyName)}
-                            className="text-red-600 hover:text-red-700"
-                            >
-                            <Icon name={IconName.Delete} className="w-4 h-4" />
-                            </Button>
-                        )}
-                    </div>
-                    </div>
-                ))}
-                </div>
-
-                {isEditing && (
-                    <div className="flex flex-col sm:flex-row items-center gap-2 p-3 bg-gray-50 rounded-md border">
-                        <select
-                            value={newApiKey.name}
-                            onChange={(e) => setNewApiKey(prev => ({ ...prev, name: e.target.value }))}
-                            className="block w-full px-3 py-2 text-gray-900 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent flex-1"
+                    return (
+                        <div
+                            key={keyName}
+                            className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4"
                         >
-                            <option value="" className="text-gray-500">Select API Key</option>
-                            {FIXED_API_KEY_NAMES
-                                .filter(keyName => !(formData.apiKeys || {})[keyName]) // Only show keys not already added
-                                .map(keyName => (
-                                    <option key={keyName} value={keyName} className="text-gray-900">{keyName}</option>
-                                ))
-                            }
-                        </select>
-                        <input
-                            type="text"
-                            placeholder="API Key Value"
-                            value={newApiKey.value}
-                            onChange={(e) => setNewApiKey(prev => ({ ...prev, value: e.target.value }))}
-                            className={`${inputClasses} flex-1`}
-                        />
-                        <Button onClick={handleAddApiKey} size="sm" disabled={!newApiKey.name}>
-                            <Icon name={IconName.Add} className="w-4 h-4" />
-                        </Button>
-                    </div>
-                )}
+                            {/* API Key Name */}
+                            <div className="w-full sm:w-48 flex-shrink-0">
+                                <span className="text-sm font-semibold text-on-surface">{keyName}</span>
+                            </div>
+
+                            {/* API Key Value Input/Display */}
+                            <div className="flex-grow flex items-center gap-2">
+                                {isEditing ? (
+                                    <div className="relative flex-grow">
+                                        <input
+                                            type={isVisible ? "text" : "password"}
+                                            value={keyValue}
+                                            onChange={(e) => {
+                                                const newValue = e.target.value;
+                                                setFormData(prev => ({
+                                                    ...prev,
+                                                    apiKeys: {
+                                                        ...(prev.apiKeys || {}),
+                                                        [keyName]: newValue
+                                                    }
+                                                }));
+                                            }}
+                                            placeholder="Enter API key..."
+                                            className="w-full px-3 py-2 text-on-surface bg-surface border border-gray-600 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent pr-20"
+                                        />
+                                        <div className="absolute right-2 top-1/2 transform -translate-y-1/2 flex items-center gap-1">
+                                            <button
+                                                type="button"
+                                                onClick={() => setVisibleApiKeys(prev => ({ ...prev, [keyName]: !prev[keyName] }))}
+                                                className="text-gray-400 hover:text-gray-300 p-1"
+                                            >
+                                                <Icon
+                                                    name={isVisible ? IconName.EyeOff : IconName.Eye}
+                                                    className="w-4 h-4"
+                                                />
+                                            </button>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="flex-grow flex items-center gap-2 px-3 py-2 bg-surface border border-gray-600 rounded-md">
+                                        <span className="flex-grow text-on-surface font-mono text-sm">
+                                            {keyValue ? (
+                                                isVisible ? keyValue : '••••••••••••••••••••••••••••••••'
+                                            ) : (
+                                                <span className="text-gray-500 italic">Not set</span>
+                                            )}
+                                        </span>
+                                        {keyValue && (
+                                            <button
+                                                type="button"
+                                                onClick={() => setVisibleApiKeys(prev => ({ ...prev, [keyName]: !prev[keyName] }))}
+                                                className="text-gray-400 hover:text-gray-300 p-1"
+                                            >
+                                                <Icon
+                                                    name={isVisible ? IconName.EyeOff : IconName.Eye}
+                                                    className="w-4 h-4"
+                                                />
+                                            </button>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    );
+                })}
+                </div>
 
                 <div className="border-t my-6"></div>
 
