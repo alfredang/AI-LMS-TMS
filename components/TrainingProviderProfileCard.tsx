@@ -751,7 +751,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                     <div className="flex-grow flex items-center gap-2 px-3 py-2 bg-surface border border-gray-600 rounded-md">
                                         <span className="flex-grow text-on-surface font-mono text-sm">
                                             {keyValue ? (
-                                                isVisible ? keyValue : '••••••••••••••••••••••••••••••••'
+                                                isVisible ? keyValue : `••••••••••••••••••••${keyValue.slice(-4)}`
                                             ) : (
                                                 <span className="text-gray-500 italic">Not set</span>
                                             )}
