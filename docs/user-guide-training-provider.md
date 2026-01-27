@@ -1,13 +1,13 @@
 ---
 layout: default
-title: Training Provider User Guide
+title: Training Provider
+parent: User Guides
+nav_order: 5
 ---
 
 # Training Provider User Guide
 
 Complete guide for training provider administrators using AI-LMS-TMS.
-
-[Back to Home](./)
 
 ---
 

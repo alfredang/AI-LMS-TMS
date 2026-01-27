@@ -1,13 +1,12 @@
 ---
 layout: default
 title: Features
+nav_order: 3
 ---
 
 # Features
 
 Comprehensive documentation of all AI-LMS-TMS features.
-
-[Back to Home](./)
 
 ---
 

@@ -1,13 +1,13 @@
 ---
 layout: default
-title: Learner User Guide
+title: Learner
+parent: User Guides
+nav_order: 1
 ---
 
 # Learner User Guide
 
 Complete guide for learners using AI-LMS-TMS.
-
-[Back to Home](./)
 
 ---
 

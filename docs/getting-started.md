@@ -1,13 +1,12 @@
 ---
 layout: default
 title: Getting Started
+nav_order: 2
 ---
 
 # Getting Started
 
 This guide will help you set up AI-LMS-TMS on your local machine for development.
-
-[Back to Home](./)
 
 ---
 

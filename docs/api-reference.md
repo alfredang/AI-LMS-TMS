@@ -1,13 +1,12 @@
 ---
 layout: default
 title: API Reference
+nav_order: 4
 ---
 
 # API Reference
 
 Complete REST API documentation for AI-LMS-TMS.
-
-[Back to Home](./)
 
 ---
 

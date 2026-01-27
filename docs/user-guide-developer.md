@@ -1,13 +1,13 @@
 ---
 layout: default
-title: Developer User Guide
+title: Developer
+parent: User Guides
+nav_order: 3
 ---
 
 # Developer User Guide
 
 Complete guide for course developers using AI-LMS-TMS.
-
-[Back to Home](./)
 
 ---
 

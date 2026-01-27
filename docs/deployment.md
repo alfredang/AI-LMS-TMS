@@ -1,13 +1,12 @@
 ---
 layout: default
 title: Deployment
+nav_order: 5
 ---
 
 # Deployment Guide
 
 Deploy AI-LMS-TMS to production environments.
-
-[Back to Home](./)
 
 ---
 

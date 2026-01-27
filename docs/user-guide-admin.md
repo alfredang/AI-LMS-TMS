@@ -1,13 +1,13 @@
 ---
 layout: default
-title: Admin User Guide
+title: Admin
+parent: User Guides
+nav_order: 4
 ---
 
 # Admin User Guide
 
 Complete guide for administrators using AI-LMS-TMS.
-
-[Back to Home](./)
 
 ---
 

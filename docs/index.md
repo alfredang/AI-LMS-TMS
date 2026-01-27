@@ -1,14 +1,17 @@
 ---
 layout: default
-title: AI-LMS-TMS Documentation
+title: Home
+nav_order: 1
+description: "AI-LMS-TMS - Comprehensive Learning & Training Management System for Singapore's SkillsFuture Ecosystem"
+permalink: /
 ---
 
-# AI-LMS-TMS
+# AI-LMS-TMS Documentation
 
 **A comprehensive Learning Management System (LMS) and Training Management System (TMS) with AI capabilities, designed for Singapore's SkillsFuture training ecosystem.**
 
-[Live Demo](https://ai-lms-tms.vercel.app/){: .btn .btn-primary }
-[GitHub Repository](https://github.com/alfredang/AI-LMS-TMS){: .btn }
+[Live Demo](https://ai-lms-tms.vercel.app/){: .btn .btn-primary .fs-5 .mb-4 .mb-md-0 .mr-2 }
+[View on GitHub](https://github.com/alfredang/AI-LMS-TMS){: .btn .fs-5 .mb-4 .mb-md-0 }
 
 ---
 
@@ -63,26 +66,21 @@ Comprehensive role-based access control:
 
 ---
 
-## Quick Links
+## Quick Start
 
-- [Getting Started](./getting-started) - Installation and setup guide
-- [Features](./features) - Detailed feature documentation
-- [API Reference](./api-reference) - REST API documentation
-- [Deployment](./deployment) - Deploy to Vercel or other platforms
+```bash
+# Clone repository
+git clone https://github.com/alfredang/AI-LMS-TMS.git
 
----
+# Install dependencies
+npm install
 
-## User Guides
+# Configure environment
+cp .env.example .env.local
 
-Comprehensive guides for each user role:
-
-| Role | Guide |
-|------|-------|
-| **Learner** | [Learner User Guide](./user-guide-learner) - Enroll in courses, track progress, submit assessments |
-| **Trainer** | [Trainer User Guide](./user-guide-trainer) - Manage classes, grade submissions, use GenAI tools |
-| **Developer** | [Developer User Guide](./user-guide-developer) - Create courses, design content, use AI authoring |
-| **Admin** | [Admin User Guide](./user-guide-admin) - Manage system, users, classes, and SSG integration |
-| **Training Provider** | [Training Provider Guide](./user-guide-training-provider) - Analytics, branding, organizational settings |
+# Start development server
+npm run dev
+```
 
 ---
 
@@ -92,5 +90,4 @@ For support and questions, please [open an issue](https://github.com/alfredang/A
 
 ---
 
-**Developed by Tertiary Infotech Pte Ltd**
-*Empowering Training Excellence in Singapore*
+**Developed by Tertiary Infotech Pte Ltd** | *Empowering Training Excellence in Singapore*

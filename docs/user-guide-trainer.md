@@ -1,13 +1,13 @@
 ---
 layout: default
-title: Trainer User Guide
+title: Trainer
+parent: User Guides
+nav_order: 2
 ---
 
 # Trainer User Guide
 
 Complete guide for trainers using AI-LMS-TMS.
-
-[Back to Home](./)
 
 ---
 
