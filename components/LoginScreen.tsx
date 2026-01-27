@@ -122,6 +122,10 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
 
       if (result.success) {
         setStep('otp');
+        // In development, show the OTP for testing (remove in production)
+        if (result.otp) {
+          setSuccessMessage(`Development mode - Your OTP is: ${result.otp}`);
+        }
       } else {
         setError(result.error || 'Failed to send OTP. Please try again.');
       }
@@ -248,8 +252,13 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
       const result = await response.json();
 
       if (result.success) {
-        setSuccessMessage('A new OTP has been sent to your email.');
-        setTimeout(() => setSuccessMessage(null), 5000);
+        // In development, show the OTP for testing (remove in production)
+        if (result.otp) {
+          setSuccessMessage(`Development mode - Your OTP is: ${result.otp}`);
+        } else {
+          setSuccessMessage('A new OTP has been sent to your email.');
+        }
+        setTimeout(() => setSuccessMessage(null), 10000);
       } else {
         setError(result.error || 'Failed to resend OTP. Please try again.');
       }
