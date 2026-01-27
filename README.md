@@ -1,6 +1,33 @@
 # AI-LMS-TMS
 
-A comprehensive Learning Management System (LMS) and Training Management System (TMS) with AI capabilities, built for training providers in Singapore. Features integration with SkillsFuture Singapore (SSG) APIs for course management, grants, and enrolments.
+<p align="center">
+  <strong>A comprehensive Learning Management System (LMS) and Training Management System (TMS) with AI capabilities, designed for Singapore's SkillsFuture training ecosystem.</strong>
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Next.js-14-black?logo=next.js" alt="Next.js" />
+  <img src="https://img.shields.io/badge/TypeScript-5-blue?logo=typescript" alt="TypeScript" />
+  <img src="https://img.shields.io/badge/React-18-61DAFB?logo=react" alt="React" />
+  <img src="https://img.shields.io/badge/PostgreSQL-17-336791?logo=postgresql" alt="PostgreSQL" />
+  <img src="https://img.shields.io/badge/Tailwind_CSS-3.4-38B2AC?logo=tailwind-css" alt="Tailwind CSS" />
+  <img src="https://img.shields.io/badge/Google_AI-Gemini-4285F4?logo=google" alt="Google AI" />
+</p>
+
+---
+
+## Overview
+
+AI-LMS-TMS is a **full-stack, enterprise-grade web application** that manages the complete training lifecycle - from course creation and scheduling to learner enrollment, progress tracking, assessments, and certification. Built with modern technologies and deep integration with Singapore's SkillsFuture ecosystem, it provides a seamless experience for training providers, trainers, and learners.
+
+### Why AI-LMS-TMS?
+
+- **AI-Powered Learning**: Google Gemini chatbot for personalized learner assistance
+- **SSG Integration**: Full SkillsFuture Singapore API support for course runs, grants, and claims
+- **Multi-Role System**: Comprehensive role-based access for learners, trainers, admins, developers, and training providers
+- **Singapore-Ready**: NRIC/FIN validation, UEN verification, WSQ/IBF course support
+- **Modern Stack**: Next.js 14, TypeScript, Tailwind CSS, PostgreSQL
+
+---
 
 ## Table of Contents
 
@@ -407,10 +434,33 @@ npm run db:migrate   # Run database migrations
 npm run db:seed      # Seed database with initial data
 ```
 
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
 ## License
 
-This project is proprietary software. All rights reserved.
+This project is proprietary software developed by Tertiary Infotech Pte Ltd. All rights reserved.
 
 ## Support
 
 For support and questions, please open an issue on GitHub.
+
+## Acknowledgments
+
+- [Next.js](https://nextjs.org/) - The React Framework
+- [Supabase](https://supabase.com/) - Open Source Firebase Alternative
+- [Google Generative AI](https://ai.google.dev/) - AI/ML Platform
+- [Tailwind CSS](https://tailwindcss.com/) - Utility-First CSS Framework
+- [SkillsFuture Singapore](https://www.skillsfuture.gov.sg/) - National Skills Development
+
+---
+
+<p align="center">
+  <strong>Developed by Tertiary Infotech Pte Ltd</strong><br>
+  <em>Empowering Training Excellence in Singapore</em>
+</p>
