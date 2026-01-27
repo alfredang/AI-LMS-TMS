@@ -4,8 +4,8 @@ remote_theme: just-the-docs/just-the-docs
 baseurl: "/AI-LMS-TMS"
 url: "https://alfredang.github.io"
 
-# Color scheme (light/dark)
-color_scheme: light
+# Color scheme (custom dark blue theme)
+color_scheme: dark_blue
 
 # Logo
 logo: "/assets/images/logo.png"
