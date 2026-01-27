@@ -44,9 +44,9 @@ const RoleSwitcher: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   };
 
   return (
-    <div className="absolute top-full right-0 mt-2 w-56 bg-surface rounded-lg shadow-2xl z-50 border border-gray-200 overflow-hidden">
-      <div className="px-3 py-2 bg-gray-50 border-b border-gray-200">
-        <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Switch Role</p>
+    <div className="absolute top-full right-0 mt-2 w-56 bg-surface rounded-lg shadow-2xl z-50 border border-default overflow-hidden">
+      <div className="px-3 py-2 bg-surface-elevated border-b border-default">
+        <p className="text-xs font-medium text-on-surface-secondary uppercase tracking-wider">Switch Role</p>
       </div>
       <div className="p-2">
         {userRoles.map((r) => (
@@ -56,7 +56,7 @@ const RoleSwitcher: React.FC<{ onClose: () => void }> = ({ onClose }) => {
             className={`w-full flex items-center space-x-3 px-3 py-2.5 text-sm rounded-md transition-colors ${
               r === role
                 ? 'bg-primary/10 text-primary font-semibold'
-                : 'text-gray-700 hover:bg-gray-100'
+                : 'text-on-surface hover:bg-surface-elevated'
             }`}
           >
             <span className="text-lg">{getRoleIcon(r)}</span>
@@ -82,11 +82,11 @@ const ProfileDropdown: React.FC<{onClose: () => void}> = ({onClose}) => {
     ];
 
     return (
-        <div className="absolute top-full right-0 mt-2 w-72 bg-surface rounded-lg shadow-2xl z-50 border border-gray-200 overflow-hidden">
-            <div className="p-4 bg-gray-50">
+        <div className="absolute top-full right-0 mt-2 w-72 bg-surface rounded-lg shadow-2xl z-50 border border-default overflow-hidden">
+            <div className="p-4 bg-surface-elevated">
                  {menuItems.map(item => (
-                    <a 
-                        href="#" 
+                    <a
+                        href="#"
                         key={item.label}
                         onClick={(e) => {
                             e.preventDefault();
@@ -97,13 +97,13 @@ const ProfileDropdown: React.FC<{onClose: () => void}> = ({onClose}) => {
                             }
                             onClose();
                         }}
-                        className="flex items-center space-x-3 px-3 py-2.5 text-sm font-semibold rounded-md text-gray-700 hover:bg-gray-100">
+                        className="flex items-center space-x-3 px-3 py-2.5 text-sm font-semibold rounded-md text-on-surface hover:bg-surface">
                         <Icon name={item.icon} className="w-5 h-5" />
                         <span>{item.label}</span>
                     </a>
                  ))}
-                 <div className="border-t border-gray-200 my-1"></div>
-                 <button onClick={logout} className="w-full flex items-center space-x-3 px-3 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-100 rounded-md">
+                 <div className="border-t border-default my-1"></div>
+                 <button onClick={logout} className="w-full flex items-center space-x-3 px-3 py-2.5 text-sm font-semibold text-on-surface hover:bg-surface rounded-md">
                     <Icon name={IconName.Logout} className="w-5 h-5"/>
                     <span>Logout</span>
                 </button>
@@ -215,8 +215,8 @@ const Header: React.FC = () => {
                 }}
                 className={`flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
                     (role === UserRole.Admin && isAdminPageActive(item)) || (role !== UserRole.Admin && currentView === item.view)
-                    ? 'bg-primary text-white' 
-                    : 'text-on-surface hover:bg-gray-100 hover:text-primary'
+                    ? 'bg-primary text-white'
+                    : 'text-on-surface hover:bg-surface-elevated hover:text-primary'
                 }`}
                 >
                 <Icon name={item.icon} className="w-5 h-5" />
@@ -232,7 +232,7 @@ const Header: React.FC = () => {
               <div className="relative" ref={roleSwitcherRef}>
                 <button
                   onClick={() => setIsRoleSwitcherOpen(prev => !prev)}
-                  className="flex items-center space-x-2 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-full text-sm font-medium text-gray-700 transition-colors"
+                  className="flex items-center space-x-2 px-3 py-1.5 bg-surface-elevated hover:bg-surface rounded-full text-sm font-medium text-on-surface transition-colors border border-default"
                   title="Switch Role"
                 >
                   <span>{getRoleIcon(role)}</span>
