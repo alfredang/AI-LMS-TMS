@@ -12,6 +12,15 @@ import { getApiUrl, getFileUrl } from '@/lib/urlHelpers';
 // Constants for styling consistency
 const inputClasses = "block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent";
 
+// Fixed API Key names - these are the only allowed API key names
+const FIXED_API_KEY_NAMES = [
+    'GEMINI_API_KEY',
+    'OPENAI_API_KEY',
+    'SSG_AUTH_TOKEN',
+    'SMTP_API_KEY',
+    'GOOGLE_MAPS_API_KEY',
+] as const;
+
 // Helper function to clean filename for display
 const getCleanDisplayName = (filename: string): string => {
     if (!filename) return '';
@@ -735,13 +744,19 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
 
                 {isEditing && (
                     <div className="flex flex-col sm:flex-row items-center gap-2 p-3 bg-gray-50 rounded-md border">
-                        <input
-                            type="text"
-                            placeholder="API Key Name"
+                        <select
                             value={newApiKey.name}
                             onChange={(e) => setNewApiKey(prev => ({ ...prev, name: e.target.value }))}
                             className={`${inputClasses} flex-1`}
-                        />
+                        >
+                            <option value="">Select API Key</option>
+                            {FIXED_API_KEY_NAMES
+                                .filter(keyName => !formData.apiKeys[keyName]) // Only show keys not already added
+                                .map(keyName => (
+                                    <option key={keyName} value={keyName}>{keyName}</option>
+                                ))
+                            }
+                        </select>
                         <input
                             type="text"
                             placeholder="API Key Value"
@@ -749,7 +764,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                             onChange={(e) => setNewApiKey(prev => ({ ...prev, value: e.target.value }))}
                             className={`${inputClasses} flex-1`}
                         />
-                        <Button onClick={handleAddApiKey} size="sm">
+                        <Button onClick={handleAddApiKey} size="sm" disabled={!newApiKey.name}>
                             <Icon name={IconName.Add} className="w-4 h-4" />
                         </Button>
                     </div>
