@@ -556,14 +556,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const deleteResult = await pool.query('DELETE FROM training_provider_api WHERE training_provider_id = $1', [userId]);
       console.log('🗑️ Deleted existing API keys, rows affected:', deleteResult.rowCount);
       
-      if (profileData.apiKeys && Object.keys(profileData.apiKeys).length > 0) {
+      if (profileData.apiKeys && typeof profileData.apiKeys === 'object' && Object.keys(profileData.apiKeys).length > 0) {
         console.log('➕ Adding new API keys:', Object.keys(profileData.apiKeys));
         for (const [keyName, keyValue] of Object.entries(profileData.apiKeys)) {
-          const insertResult = await pool.query(`
-            INSERT INTO training_provider_api (training_provider_id, key_name, key_value)
-            VALUES ($1, $2, $3)
-          `, [userId, keyName, keyValue]);
-          console.log(`✅ Added API key "${keyName}", rows affected:`, insertResult.rowCount);
+          // Ensure keyValue is a non-empty string
+          const strValue = typeof keyValue === 'string' ? keyValue.trim() : String(keyValue || '').trim();
+          if (strValue !== '') {
+            const insertResult = await pool.query(`
+              INSERT INTO training_provider_api (training_provider_id, key_name, key_value)
+              VALUES ($1, $2, $3)
+            `, [userId, keyName, strValue]);
+            console.log(`✅ Added API key "${keyName}", rows affected:`, insertResult.rowCount);
+          } else {
+            console.log(`⚠️ Skipping empty API key "${keyName}"`);
+          }
         }
       } else {
         console.log('ℹ️ No API keys to add');
