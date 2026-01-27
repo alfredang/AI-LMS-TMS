@@ -63,12 +63,12 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate }) => {
             </NavSection>
 
             <NavSection title="TPG Management">
-                <NavItem page={AdminPage.ApplyNewGrant} label="Apply New Grant" isSubItem />
+                <NavItem page={AdminPage.SearchEnrolment} label="Search Enrolment" isSubItem />
+                <NavItem page={AdminPage.ViewEnrolment} label="View Enrolment" isSubItem />
                 <NavItem page={AdminPage.SearchGrant} label="Search Grant" isSubItem />
                 <NavItem page={AdminPage.ViewGrantStatus} label="View Grant Status" isSubItem />
                 <NavItem page={AdminPage.SubmitAssessment} label="Submit Assessment" isSubItem />
                 <NavItem page={AdminPage.ViewAssessments} label="View Assessments" isSubItem />
-                <NavItem page={AdminPage.ApplyNewClaim} label="Apply New Claim" isSubItem />
                 <NavItem page={AdminPage.ViewClaimStatus} label="View Claim Status" isSubItem />
                 <NavItem page={AdminPage.UploadCourseRuns} label="Upload Course Runs" isSubItem />
             </NavSection>

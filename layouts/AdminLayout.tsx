@@ -32,7 +32,9 @@ import {
   ApplyNewClaimView,
   ViewClaimStatusView,
   UploadCourseRunsView,
-  SearchGrantView
+  SearchGrantView,
+  SearchEnrolmentView,
+  ViewEnrolmentView
 } from '../components/admin/GrantManagementViews';
 
 // Management Dashboard Component
@@ -236,6 +238,10 @@ const AdminLayout: React.FC = () => {
         return <ApplyNewGrantView />;
       case AdminPage.SearchGrant:
         return <SearchGrantView />;
+      case AdminPage.SearchEnrolment:
+        return <SearchEnrolmentView />;
+      case AdminPage.ViewEnrolment:
+        return <ViewEnrolmentView />;
       case AdminPage.ViewGrantStatus:
         return <ViewGrantStatusView />;
       case AdminPage.SubmitAssessment:

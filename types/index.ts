@@ -39,7 +39,9 @@ export enum AdminPage {
   ApplyNewClaim = 'applyNewClaim',
   ViewClaimStatus = 'viewClaimStatus',
   UploadCourseRuns = 'uploadCourseRuns',
-  SearchGrant = 'searchGrant'
+  SearchGrant = 'searchGrant',
+  SearchEnrolment = 'searchEnrolment',
+  ViewEnrolment = 'viewEnrolment'
 }
 
 // Course related interfaces

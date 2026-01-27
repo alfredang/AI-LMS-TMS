@@ -1536,3 +1536,678 @@ export const SearchGrantView: React.FC = () => {
         </div>
     );
 };
+
+export const SearchEnrolmentView: React.FC = () => {
+    const [courseRunId, setCourseRunId] = useState<string>('');
+    const [isSearching, setIsSearching] = useState(false);
+    const [webhookResponse, setWebhookResponse] = useState<any>(null);
+    const [parsedData, setParsedData] = useState<any>(null);
+    const [searchError, setSearchError] = useState<string | null>(null);
+
+    // Webhook URL for enrolment search
+    const WEBHOOK_URL = 'https://n8n.srv923061.hstgr.cloud/webhook/9c8454da-9643-44d9-81bb-e2010d7827ff';
+
+    const inputClasses = "block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent";
+
+    const getEnrolmentStatusColor = (status: string) => {
+        switch (status) {
+            case 'Confirmed':
+            case 'Completed':
+                return 'bg-green-100 text-green-800 border-green-200';
+            case 'Pending':
+            case 'Pending Payment':
+                return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+            case 'Cancelled':
+            case 'Rejected':
+                return 'bg-red-100 text-red-800 border-red-200';
+            default:
+                return 'bg-gray-100 text-gray-800 border-gray-200';
+        }
+    };
+
+    const handleSearch = async () => {
+        if (!courseRunId.trim()) {
+            setSearchError('Please enter Course Run ID');
+            return;
+        }
+
+        setIsSearching(true);
+        setSearchError(null);
+        setWebhookResponse(null);
+        setParsedData(null);
+
+        try {
+            console.log('🔍 Sending enrolment search request to n8n webhook:', WEBHOOK_URL);
+
+            const payload = {
+                courseRunId: courseRunId.trim(),
+                timestamp: new Date().toISOString(),
+                source: 'admin-search-enrolment'
+            };
+
+            console.log('📤 Search payload:', payload);
+
+            const response = await fetch(WEBHOOK_URL, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const data = await response.json();
+            console.log('✅ Webhook response:', data);
+            setWebhookResponse(data);
+
+            // Parse nested JSON in result property
+            // Response format: { "result": "{\"status\":\"200\",\"data\":[...],\"meta\":{...}}" }
+            try {
+                let resultData = null;
+
+                // Handle direct result property (string that needs parsing)
+                if (data?.result) {
+                    resultData = typeof data.result === 'string' ? JSON.parse(data.result) : data.result;
+                }
+                // Handle array response format [{ "result": "..." }]
+                else if (Array.isArray(data) && data[0]?.result) {
+                    resultData = typeof data[0].result === 'string' ? JSON.parse(data[0].result) : data[0].result;
+                }
+
+                if (resultData) {
+                    console.log('✅ Parsed enrolment data:', resultData);
+                    console.log('✅ Total records:', resultData.meta?.totalRecords);
+                    console.log('✅ Data array length:', resultData.data?.length);
+                    setParsedData(resultData);
+                }
+            } catch (e) {
+                console.error('❌ Error parsing result JSON:', e);
+                setParsedData(null);
+            }
+        } catch (error) {
+            console.error('❌ Error calling webhook:', error);
+            setSearchError(error instanceof Error ? error.message : 'Failed to fetch enrolment data');
+        } finally {
+            setIsSearching(false);
+        }
+    };
+
+    return (
+        <div>
+            <h2 className="text-3xl font-bold mb-6">Search Enrolment</h2>
+
+            {/* Search Bar Card */}
+            <Card className="p-6 mb-6">
+                <div>
+                    <h3 className="text-lg font-bold text-gray-700 mb-4">Enrolment Search Parameters</h3>
+
+                    <div className="mb-4">
+                        <label htmlFor="enrolment-course-run-id" className="block text-sm font-bold text-gray-700 mb-1">
+                            Course Run ID
+                        </label>
+                        <input
+                            id="enrolment-course-run-id"
+                            type="text"
+                            value={courseRunId}
+                            onChange={(e) => setCourseRunId(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && !isSearching && courseRunId.trim() && handleSearch()}
+                            placeholder="e.g. 1068286"
+                            className={inputClasses}
+                            disabled={isSearching}
+                        />
+                    </div>
+
+                    <div className="flex justify-end">
+                        <Button
+                            onClick={handleSearch}
+                            disabled={isSearching || !courseRunId.trim()}
+                            className="whitespace-nowrap"
+                        >
+                            {isSearching ? (
+                                <div className="flex items-center">
+                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                                    Searching...
+                                </div>
+                            ) : (
+                                <>
+                                    <Icon name={IconName.Search} className="w-4 h-4 mr-2" />
+                                    Search Enrolment
+                                </>
+                            )}
+                        </Button>
+                    </div>
+
+                    {searchError && (
+                        <p className="text-red-500 text-sm mt-3">{searchError}</p>
+                    )}
+                </div>
+            </Card>
+
+            {/* Loading State */}
+            {isSearching && (
+                <div className="flex justify-center py-10">
+                    <div className="text-center">
+                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
+                        <p className="mt-4 text-gray-600">Fetching enrolment details from SSG...</p>
+                    </div>
+                </div>
+            )}
+
+            {/* Webhook Response Display */}
+            {webhookResponse && !isSearching && (
+                <Card className="p-0">
+                    <div className="p-6 border-b">
+                        <h3 className="text-xl font-bold">Enrolment Search Results</h3>
+                        <p className="text-gray-500 mt-1">
+                            Course Run ID: {courseRunId}
+                        </p>
+                    </div>
+                    <div className="p-6">
+                        {parsedData && parsedData.data && Array.isArray(parsedData.data) && parsedData.data.length > 0 ? (
+                            <div className="space-y-6">
+                                <div className="flex justify-between items-center bg-blue-50 p-4 rounded-lg border border-blue-100">
+                                    <div>
+                                        <h4 className="font-bold text-blue-900">Total Records Found: {parsedData.meta?.totalRecords ?? parsedData.data.length}</h4>
+                                        <p className="text-sm text-blue-700">Course: {parsedData.data[0]?.enrolment?.course?.title || 'N/A'}</p>
+                                    </div>
+                                </div>
+
+                                <div className="overflow-x-auto border border-gray-200 rounded-lg shadow-sm">
+                                    <table className="min-w-full divide-y divide-gray-200">
+                                        <thead className="bg-gray-50">
+                                            <tr>
+                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Course Run ID</th>
+                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Start Date</th>
+                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">End Date</th>
+                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Enrolment Ref</th>
+                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Trainee Name</th>
+                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">NRIC</th>
+                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
+                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sponsorship</th>
+                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Employer</th>
+                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Payment</th>
+                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Enrolment Date</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="bg-white divide-y divide-gray-200">
+                                            {parsedData.data.map((item: any, index: number) => {
+                                                const enrolment = item.enrolment || {};
+                                                const course = enrolment.course || {};
+                                                const courseRun = course.run || {};
+                                                const trainee = enrolment.trainee || {};
+                                                const employer = trainee.employer || {};
+                                                return (
+                                                    <tr key={index} className="hover:bg-gray-50">
+                                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600">
+                                                            {courseRun.id || 'N/A'}
+                                                        </td>
+                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                                            {courseRun.startDate || 'N/A'}
+                                                        </td>
+                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                                            {courseRun.endDate || 'N/A'}
+                                                        </td>
+                                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                                            {enrolment.referenceNumber || 'N/A'}
+                                                        </td>
+                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                                            {trainee.fullName || 'N/A'}
+                                                        </td>
+                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                                            {trainee.id || 'N/A'}
+                                                        </td>
+                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                                            {trainee.email?.full || 'N/A'}
+                                                        </td>
+                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                                            {trainee.sponsorshipType || 'N/A'}
+                                                        </td>
+                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                                            {employer.name || '-'}
+                                                        </td>
+                                                        <td className="px-6 py-4 whitespace-nowrap">
+                                                            <span className={`inline-flex px-2 text-xs leading-5 font-semibold rounded-full border ${getEnrolmentStatusColor(enrolment.status || 'Pending')}`}>
+                                                                {enrolment.status || 'Pending'}
+                                                            </span>
+                                                        </td>
+                                                        <td className="px-6 py-4 whitespace-nowrap">
+                                                            <span className={`inline-flex px-2 text-xs leading-5 font-semibold rounded-full border ${getEnrolmentStatusColor(trainee.fees?.collectionStatus || 'Pending')}`}>
+                                                                {trainee.fees?.collectionStatus || 'N/A'}
+                                                            </span>
+                                                        </td>
+                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                                            {trainee.enrolmentDate || 'N/A'}
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-8 text-center">
+                                <Icon name={IconName.InfoCircle} className="w-12 h-12 mx-auto text-yellow-500 mb-3" />
+                                <h4 className="text-lg font-bold text-yellow-800 mb-2">No Records Found</h4>
+                                <p className="text-yellow-700">
+                                    No enrolment records were returned for this Course Run ID.
+                                </p>
+                            </div>
+                        )}
+
+                        <details className="mt-6 bg-gray-50 border border-gray-200 rounded-lg p-4">
+                            <summary className="font-semibold text-gray-800 cursor-pointer hover:text-gray-600">
+                                View Raw JSON Response
+                            </summary>
+                            <pre className="mt-3 text-sm text-gray-700 whitespace-pre-wrap overflow-x-auto max-h-96 bg-white p-3 rounded border">
+                                {JSON.stringify(webhookResponse, null, 2)}
+                            </pre>
+                        </details>
+
+                        <div className="mt-6 flex justify-end">
+                            <Button
+                                variant="outline"
+                                onClick={() => {
+                                    setWebhookResponse(null);
+                                    setParsedData(null);
+                                    setCourseRunId('');
+                                }}
+                            >
+                                Clear Results
+                            </Button>
+                        </div>
+                    </div>
+                </Card>
+            )}
+
+            {/* Empty State */}
+            {!webhookResponse && !isSearching && (
+                <Card className="p-12">
+                    <div className="text-center text-gray-500">
+                        <Icon name={IconName.Search} className="w-16 h-16 mx-auto mb-4 text-gray-400" />
+                        <p className="text-lg font-medium">Enter Course Run ID to search</p>
+                        <p className="text-sm mt-2">Provide a Course Run ID to fetch enrolment details from SSG</p>
+                    </div>
+                </Card>
+            )}
+        </div>
+    );
+};
+
+export const ViewEnrolmentView: React.FC = () => {
+    const [enrolmentId, setEnrolmentId] = useState<string>('');
+    const [isSearching, setIsSearching] = useState(false);
+    const [webhookResponse, setWebhookResponse] = useState<any>(null);
+    const [parsedData, setParsedData] = useState<any>(null);
+    const [searchError, setSearchError] = useState<string | null>(null);
+
+    // Webhook URL for view enrolment
+    const WEBHOOK_URL = 'https://n8n.srv923061.hstgr.cloud/webhook/a5b2130d-04a0-4288-9dc7-b46c2c2c2f89';
+
+    const inputClasses = "block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent";
+
+    const getEnrolmentStatusColor = (status: string) => {
+        switch (status) {
+            case 'Confirmed':
+            case 'Completed':
+                return 'bg-green-100 text-green-800 border-green-200';
+            case 'Pending':
+            case 'Pending Payment':
+                return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+            case 'Cancelled':
+            case 'Rejected':
+                return 'bg-red-100 text-red-800 border-red-200';
+            default:
+                return 'bg-gray-100 text-gray-800 border-gray-200';
+        }
+    };
+
+    const handleSearch = async () => {
+        if (!enrolmentId.trim()) {
+            setSearchError('Please enter Enrolment ID');
+            return;
+        }
+
+        setIsSearching(true);
+        setSearchError(null);
+        setWebhookResponse(null);
+        setParsedData(null);
+
+        try {
+            console.log('🔍 Sending view enrolment request to n8n webhook:', WEBHOOK_URL);
+
+            const payload = {
+                enrolmentId: enrolmentId.trim(),
+                timestamp: new Date().toISOString(),
+                source: 'admin-view-enrolment'
+            };
+
+            console.log('📤 View enrolment payload:', payload);
+
+            const response = await fetch(WEBHOOK_URL, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const data = await response.json();
+            console.log('✅ Webhook response:', data);
+            setWebhookResponse(data);
+
+            // Parse nested JSON in result property
+            try {
+                let resultData = null;
+
+                if (data?.result) {
+                    resultData = typeof data.result === 'string' ? JSON.parse(data.result) : data.result;
+                } else if (Array.isArray(data) && data[0]?.result) {
+                    resultData = typeof data[0].result === 'string' ? JSON.parse(data[0].result) : data[0].result;
+                }
+
+                if (resultData) {
+                    console.log('✅ Parsed enrolment data:', resultData);
+                    setParsedData(resultData);
+                }
+            } catch (e) {
+                console.error('❌ Error parsing result JSON:', e);
+                setParsedData(null);
+            }
+        } catch (error) {
+            console.error('❌ Error calling webhook:', error);
+            setSearchError(error instanceof Error ? error.message : 'Failed to fetch enrolment data');
+        } finally {
+            setIsSearching(false);
+        }
+    };
+
+    // Helper to render enrolment details
+    const renderEnrolmentDetails = () => {
+        if (!parsedData) return null;
+
+        // Handle single enrolment response (data is the enrolment object directly)
+        const enrolmentData = parsedData.data?.enrolment || parsedData.enrolment || parsedData.data;
+        if (!enrolmentData) return null;
+
+        const enrolment = enrolmentData.enrolment || enrolmentData;
+        const course = enrolment.course || {};
+        const courseRun = course.run || {};
+        const trainee = enrolment.trainee || {};
+        const employer = trainee.employer || {};
+        const trainingPartner = enrolment.trainingPartner || {};
+
+        return (
+            <div className="space-y-6">
+                {/* Enrolment Summary */}
+                <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
+                    <h4 className="font-bold text-blue-900 text-lg">Enrolment: {enrolment.referenceNumber || enrolmentId}</h4>
+                    <p className="text-sm text-blue-700 mt-1">
+                        Status: <span className={`inline-flex px-2 py-0.5 text-xs font-semibold rounded-full border ${getEnrolmentStatusColor(enrolment.status || 'Pending')}`}>
+                            {enrolment.status || 'Pending'}
+                        </span>
+                    </p>
+                </div>
+
+                {/* Course Information */}
+                <Card className="p-4">
+                    <h5 className="font-bold text-gray-800 mb-3">Course Information</h5>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                        <div>
+                            <span className="text-gray-500">Course Title:</span>
+                            <p className="font-medium text-gray-900">{course.title || 'N/A'}</p>
+                        </div>
+                        <div>
+                            <span className="text-gray-500">Course Reference:</span>
+                            <p className="font-medium text-gray-900">{course.referenceNumber || 'N/A'}</p>
+                        </div>
+                        <div>
+                            <span className="text-gray-500">Course Run ID:</span>
+                            <p className="font-medium text-blue-600">{courseRun.id || 'N/A'}</p>
+                        </div>
+                        <div>
+                            <span className="text-gray-500">Start Date:</span>
+                            <p className="font-medium text-gray-900">{courseRun.startDate || 'N/A'}</p>
+                        </div>
+                        <div>
+                            <span className="text-gray-500">End Date:</span>
+                            <p className="font-medium text-gray-900">{courseRun.endDate || 'N/A'}</p>
+                        </div>
+                    </div>
+                </Card>
+
+                {/* Trainee Information */}
+                <Card className="p-4">
+                    <h5 className="font-bold text-gray-800 mb-3">Trainee Information</h5>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                        <div>
+                            <span className="text-gray-500">Full Name:</span>
+                            <p className="font-medium text-gray-900">{trainee.fullName || 'N/A'}</p>
+                        </div>
+                        <div>
+                            <span className="text-gray-500">NRIC:</span>
+                            <p className="font-medium text-gray-900">{trainee.id || 'N/A'}</p>
+                        </div>
+                        <div>
+                            <span className="text-gray-500">Date of Birth:</span>
+                            <p className="font-medium text-gray-900">{trainee.dateOfBirth || 'N/A'}</p>
+                        </div>
+                        <div>
+                            <span className="text-gray-500">Email:</span>
+                            <p className="font-medium text-gray-900">{trainee.email?.full || 'N/A'}</p>
+                        </div>
+                        <div>
+                            <span className="text-gray-500">Contact Number:</span>
+                            <p className="font-medium text-gray-900">
+                                {trainee.contactNumber ? `${trainee.contactNumber.countryCode || ''} ${trainee.contactNumber.phoneNumber || ''}`.trim() || 'N/A' : 'N/A'}
+                            </p>
+                        </div>
+                        <div>
+                            <span className="text-gray-500">Sponsorship Type:</span>
+                            <p className="font-medium text-gray-900">{trainee.sponsorshipType || 'N/A'}</p>
+                        </div>
+                        <div>
+                            <span className="text-gray-500">Enrolment Date:</span>
+                            <p className="font-medium text-gray-900">{trainee.enrolmentDate || 'N/A'}</p>
+                        </div>
+                        <div>
+                            <span className="text-gray-500">Payment Status:</span>
+                            <p className="font-medium">
+                                <span className={`inline-flex px-2 py-0.5 text-xs font-semibold rounded-full border ${getEnrolmentStatusColor(trainee.fees?.collectionStatus || 'Pending')}`}>
+                                    {trainee.fees?.collectionStatus || 'N/A'}
+                                </span>
+                            </p>
+                        </div>
+                    </div>
+                </Card>
+
+                {/* Employer Information (if applicable) */}
+                {employer.name && (
+                    <Card className="p-4">
+                        <h5 className="font-bold text-gray-800 mb-3">Employer Information</h5>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                            <div>
+                                <span className="text-gray-500">Company Name:</span>
+                                <p className="font-medium text-gray-900">{employer.name || 'N/A'}</p>
+                            </div>
+                            <div>
+                                <span className="text-gray-500">UEN:</span>
+                                <p className="font-medium text-gray-900">{employer.uen || 'N/A'}</p>
+                            </div>
+                            {employer.contact && (
+                                <>
+                                    <div>
+                                        <span className="text-gray-500">Contact Person:</span>
+                                        <p className="font-medium text-gray-900">{employer.contact.fullName || 'N/A'}</p>
+                                    </div>
+                                    <div>
+                                        <span className="text-gray-500">Contact Email:</span>
+                                        <p className="font-medium text-gray-900">{employer.contact.email?.full || 'N/A'}</p>
+                                    </div>
+                                    <div>
+                                        <span className="text-gray-500">Contact Phone:</span>
+                                        <p className="font-medium text-gray-900">
+                                            {employer.contact.contactNumber ? `${employer.contact.contactNumber.countryCode || ''} ${employer.contact.contactNumber.phoneNumber || ''}`.trim() || 'N/A' : 'N/A'}
+                                        </p>
+                                    </div>
+                                </>
+                            )}
+                        </div>
+                    </Card>
+                )}
+
+                {/* Training Partner Information */}
+                {trainingPartner.name && (
+                    <Card className="p-4">
+                        <h5 className="font-bold text-gray-800 mb-3">Training Partner</h5>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                            <div>
+                                <span className="text-gray-500">Name:</span>
+                                <p className="font-medium text-gray-900">{trainingPartner.name || 'N/A'}</p>
+                            </div>
+                            <div>
+                                <span className="text-gray-500">UEN:</span>
+                                <p className="font-medium text-gray-900">{trainingPartner.uen || 'N/A'}</p>
+                            </div>
+                            <div>
+                                <span className="text-gray-500">Code:</span>
+                                <p className="font-medium text-gray-900">{trainingPartner.code || 'N/A'}</p>
+                            </div>
+                        </div>
+                    </Card>
+                )}
+            </div>
+        );
+    };
+
+    return (
+        <div>
+            <h2 className="text-3xl font-bold mb-6">View Enrolment</h2>
+
+            {/* Search Bar Card */}
+            <Card className="p-6 mb-6">
+                <div>
+                    <h3 className="text-lg font-bold text-gray-700 mb-4">Enrolment Lookup</h3>
+
+                    <div className="mb-4">
+                        <label htmlFor="view-enrolment-id" className="block text-sm font-bold text-gray-700 mb-1">
+                            Enrolment ID
+                        </label>
+                        <input
+                            id="view-enrolment-id"
+                            type="text"
+                            value={enrolmentId}
+                            onChange={(e) => setEnrolmentId(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && !isSearching && enrolmentId.trim() && handleSearch()}
+                            placeholder="e.g. ENR-2601-094504"
+                            className={inputClasses}
+                            disabled={isSearching}
+                        />
+                    </div>
+
+                    <div className="flex justify-end">
+                        <Button
+                            onClick={handleSearch}
+                            disabled={isSearching || !enrolmentId.trim()}
+                            className="whitespace-nowrap"
+                        >
+                            {isSearching ? (
+                                <div className="flex items-center">
+                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                                    Searching...
+                                </div>
+                            ) : (
+                                <>
+                                    <Icon name={IconName.Search} className="w-4 h-4 mr-2" />
+                                    View Enrolment
+                                </>
+                            )}
+                        </Button>
+                    </div>
+
+                    {searchError && (
+                        <p className="text-red-500 text-sm mt-3">{searchError}</p>
+                    )}
+                </div>
+            </Card>
+
+            {/* Loading State */}
+            {isSearching && (
+                <div className="flex justify-center py-10">
+                    <div className="text-center">
+                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
+                        <p className="mt-4 text-gray-600">Fetching enrolment details from SSG...</p>
+                    </div>
+                </div>
+            )}
+
+            {/* Webhook Response Display */}
+            {webhookResponse && !isSearching && (
+                <Card className="p-0">
+                    <div className="p-6 border-b">
+                        <h3 className="text-xl font-bold">Enrolment Details</h3>
+                        <p className="text-gray-500 mt-1">
+                            Enrolment ID: {enrolmentId}
+                        </p>
+                    </div>
+                    <div className="p-6">
+                        {parsedData ? (
+                            <>
+                                {renderEnrolmentDetails()}
+
+                                <details className="mt-6 bg-gray-50 border border-gray-200 rounded-lg p-4">
+                                    <summary className="font-semibold text-gray-800 cursor-pointer hover:text-gray-600">
+                                        View Raw JSON Response
+                                    </summary>
+                                    <pre className="mt-3 text-sm text-gray-700 whitespace-pre-wrap overflow-x-auto max-h-96 bg-white p-3 rounded border">
+                                        {JSON.stringify(webhookResponse, null, 2)}
+                                    </pre>
+                                </details>
+
+                                <div className="mt-6 flex justify-end">
+                                    <Button
+                                        variant="outline"
+                                        onClick={() => {
+                                            setWebhookResponse(null);
+                                            setParsedData(null);
+                                            setEnrolmentId('');
+                                        }}
+                                    >
+                                        Clear Results
+                                    </Button>
+                                </div>
+                            </>
+                        ) : (
+                            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-8 text-center">
+                                <Icon name={IconName.InfoCircle} className="w-12 h-12 mx-auto text-yellow-500 mb-3" />
+                                <h4 className="text-lg font-bold text-yellow-800 mb-2">No Data Found</h4>
+                                <p className="text-yellow-700">
+                                    No enrolment record was found for this Enrolment ID.
+                                </p>
+                            </div>
+                        )}
+                    </div>
+                </Card>
+            )}
+
+            {/* Empty State */}
+            {!webhookResponse && !isSearching && (
+                <Card className="p-12">
+                    <div className="text-center text-gray-500">
+                        <Icon name={IconName.Search} className="w-16 h-16 mx-auto mb-4 text-gray-400" />
+                        <p className="text-lg font-medium">Enter Enrolment ID to view details</p>
+                        <p className="text-sm mt-2">Provide an Enrolment ID (e.g. ENR-2601-094504) to fetch details from SSG</p>
+                    </div>
+                </Card>
+            )}
+        </div>
+    );
+};
