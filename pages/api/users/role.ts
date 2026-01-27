@@ -7,6 +7,7 @@ interface UserRoleResponse {
   data?: {
     userId: string;
     role: string;
+    roles: string[]; // All roles the user has
   };
   error?: string;
 }
@@ -31,33 +32,53 @@ async function handler(req: NextApiRequest, res: NextApiResponse<UserRoleRespons
   }
 
   try {
-    console.log(`🔍 UserRole API: Fetching role for userId: ${userId}`);
+    console.log(`🔍 UserRole API: Fetching roles for userId: ${userId}`);
 
-    // Get user role from user_role_map table
+    // Get ALL user roles from user_role_map table
     const roleQuery = `
-      SELECT user_id, role 
+      SELECT user_id, role
       FROM public.user_role_map
       WHERE user_id = $1
+      ORDER BY
+        CASE role
+          WHEN 'Admin' THEN 1
+          WHEN 'Training Provider' THEN 2
+          WHEN 'Developer' THEN 3
+          WHEN 'Trainer' THEN 4
+          WHEN 'Learner' THEN 5
+          ELSE 6
+        END
     `;
-    
+
     const roleResult = await pool.query(roleQuery, [userId]);
-    
+
     if (roleResult.rows.length === 0) {
-      console.log(`❌ UserRole API: No role found for userId: ${userId}`);
-      return res.status(404).json({ 
-        success: false, 
-        error: 'User role not found' 
+      console.log(`❌ UserRole API: No roles found for userId: ${userId}`);
+      return res.status(404).json({
+        success: false,
+        error: 'User role not found'
       });
     }
 
-    const userRole = roleResult.rows[0];
-    console.log(`✅ UserRole API: Found role for userId: ${userId}, role: ${userRole.role}`);
+    // Convert database roles to lowercase for consistency
+    const roles: string[] = roleResult.rows.map((row: { role: string }) => {
+      const dbRole = row.role;
+      // Convert "Training Provider" to "trainingProvider" for frontend compatibility
+      if (dbRole === 'Training Provider') return 'trainingProvider';
+      return dbRole.toLowerCase();
+    });
+
+    // Primary role is the first one (highest priority based on ORDER BY)
+    const primaryRole = roles[0];
+
+    console.log(`✅ UserRole API: Found roles for userId: ${userId}, roles: ${roles.join(', ')}`);
 
     return res.status(200).json({
       success: true,
       data: {
-        userId: userRole.user_id,
-        role: userRole.role
+        userId: userId,
+        role: primaryRole,
+        roles: roles
       }
     });
 

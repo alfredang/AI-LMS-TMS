@@ -6,6 +6,7 @@ export interface User {
   fullName: string;
   profilePictureUrl?: string;
   role: UserRole;
+  roles: UserRole[]; // All roles the user has
 }
 
 export interface LoginCredentials {
@@ -20,7 +21,8 @@ export interface AuthResponse {
   success: boolean;
   data?: {
     user: User;
-    role: UserRole; // Add role to the response data
+    role: UserRole; // Primary/selected role
+    roles: UserRole[]; // All available roles
     token?: string;
   };
   error?: string;
@@ -191,16 +193,33 @@ class AuthService {
     }
   }
 
-  // Check if user has a specific role
+  // Check if user has a specific role (checks all roles)
   hasRole(role: UserRole): boolean {
     const userData = this.getUserData();
-    return userData?.role === role;
+    if (!userData) return false;
+    // Check if role exists in the roles array, or matches the primary role
+    return userData.roles?.includes(role) || userData.role === role;
   }
 
-  // Get current user's role
+  // Get current user's primary role
   getCurrentRole(): UserRole | null {
     const userData = this.getUserData();
     return userData?.role || null;
+  }
+
+  // Get all roles the user has
+  getAllRoles(): UserRole[] {
+    const userData = this.getUserData();
+    return userData?.roles || (userData?.role ? [userData.role] : []);
+  }
+
+  // Update the current selected role (for role switching)
+  setCurrentRole(role: UserRole): void {
+    const userData = this.getUserData();
+    if (userData && this.hasRole(role)) {
+      userData.role = role;
+      localStorage.setItem(AuthService.USER_DATA_KEY, JSON.stringify(userData));
+    }
   }
 }
 

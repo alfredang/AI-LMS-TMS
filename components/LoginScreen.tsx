@@ -2,10 +2,34 @@ import React, { useState, useEffect } from 'react';
 import { UserRole } from '@app-types';
 import { Button } from './ui/Button';
 import { Card } from './ui/Card';
-import { authService, LoginCredentials } from '@lib/services/authService';
+import { authService, LoginCredentials, User } from '@lib/services/authService';
 import { useLms } from '@contexts/LmsContext';
 import HomePageChatbot from './HomePageChatbot';
 import { trainingProviderService, TrainingProviderData } from '@lib/services/trainingProviderService';
+
+// Helper to get display name for a role
+const getRoleDisplayName = (role: UserRole): string => {
+  switch (role) {
+    case UserRole.Learner: return 'Learner';
+    case UserRole.Trainer: return 'Trainer';
+    case UserRole.Developer: return 'Developer';
+    case UserRole.Admin: return 'Admin';
+    case UserRole.TrainingProvider: return 'Training Provider';
+    default: return role;
+  }
+};
+
+// Helper to get role icon
+const getRoleIcon = (role: UserRole): string => {
+  switch (role) {
+    case UserRole.Learner: return '📚';
+    case UserRole.Trainer: return '👨‍🏫';
+    case UserRole.Developer: return '💻';
+    case UserRole.Admin: return '⚙️';
+    case UserRole.TrainingProvider: return '🏢';
+    default: return '👤';
+  }
+};
 
 interface LoginScreenProps {
   onLoginSuccess?: (role: UserRole) => void;
@@ -14,7 +38,7 @@ interface LoginScreenProps {
 const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
   const { login, courses } = useLms();
 
-  const [step, setStep] = useState<'email' | 'otp' | 'password'>('email');
+  const [step, setStep] = useState<'email' | 'otp' | 'password' | 'roleSelect'>('email');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState(''); // Pre-fill for testing
   const [otp, setOtp] = useState('');
@@ -25,6 +49,10 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [trainingProviderData, setTrainingProviderData] = useState<TrainingProviderData | null>(null);
   const [isLoadingProviderData, setIsLoadingProviderData] = useState(true);
+
+  // Multi-role state
+  const [pendingUser, setPendingUser] = useState<User | null>(null);
+  const [availableRoles, setAvailableRoles] = useState<UserRole[]>([]);
 
   // Load training provider data on component mount
   useEffect(() => {
@@ -84,6 +112,15 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
     setStep('otp');
   };
 
+  // Complete login with selected role
+  const completeLogin = (user: User, selectedRole: UserRole) => {
+    // Update user's current role
+    const updatedUser = { ...user, role: selectedRole };
+    authService.setCurrentRole(selectedRole);
+    login(selectedRole, updatedUser);
+    onLoginSuccess?.(selectedRole);
+  };
+
   const handlePasswordLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email.includes('@') || password.length < 6) {
@@ -105,8 +142,18 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
 
       if (result.success && result.data) {
         console.log('Login successful:', result.data.user);
-        login(result.data.role, result.data.user);
-        onLoginSuccess?.(result.data.role);
+        const roles = result.data.roles || [result.data.role];
+
+        // If user has multiple roles, show role selector
+        if (roles.length > 1) {
+          console.log('User has multiple roles:', roles);
+          setPendingUser(result.data.user);
+          setAvailableRoles(roles);
+          setStep('roleSelect');
+        } else {
+          // Single role - proceed directly
+          completeLogin(result.data.user, result.data.role);
+        }
       } else {
         setError(result.error || 'Login failed');
       }
@@ -135,8 +182,18 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
 
       if (result.success && result.data) {
         console.log('OTP login successful:', result.data.user);
-        login(result.data.role, result.data.user);
-        onLoginSuccess?.(result.data.role);
+        const roles = result.data.roles || [result.data.role];
+
+        // If user has multiple roles, show role selector
+        if (roles.length > 1) {
+          console.log('User has multiple roles:', roles);
+          setPendingUser(result.data.user);
+          setAvailableRoles(roles);
+          setStep('roleSelect');
+        } else {
+          // Single role - proceed directly
+          completeLogin(result.data.user, result.data.role);
+        }
       } else {
         setError(result.error || 'Invalid OTP. Please try again.');
       }
@@ -145,6 +202,13 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
       setError('An unexpected error occurred');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Handle role selection
+  const handleRoleSelect = (selectedRole: UserRole) => {
+    if (pendingUser) {
+      completeLogin(pendingUser, selectedRole);
     }
   };
 
@@ -326,8 +390,63 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
     </form>
   );
 
+  const renderRoleSelectStep = () => (
+    <div className="space-y-6">
+      <div className="text-center mb-6">
+        <p className="font-semibold text-lg text-gray-900">Welcome back, {pendingUser?.fullName}!</p>
+        <p className="text-sm text-gray-600 mt-2">
+          You have access to multiple roles. Please select one to continue:
+        </p>
+      </div>
+
+      <div className="space-y-3">
+        {availableRoles.map((role) => (
+          <button
+            key={role}
+            onClick={() => handleRoleSelect(role)}
+            className="w-full flex items-center justify-between p-4 border-2 border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-all duration-200 group"
+          >
+            <div className="flex items-center space-x-3">
+              <span className="text-2xl">{getRoleIcon(role)}</span>
+              <div className="text-left">
+                <p className="font-medium text-gray-900 group-hover:text-blue-700">
+                  {getRoleDisplayName(role)}
+                </p>
+                <p className="text-xs text-gray-500">
+                  {role === UserRole.Learner && 'Access courses and track your learning progress'}
+                  {role === UserRole.Trainer && 'Manage classes and grade assessments'}
+                  {role === UserRole.Developer && 'Create and edit course content'}
+                  {role === UserRole.Admin && 'Manage users, classes, and system settings'}
+                  {role === UserRole.TrainingProvider && 'Manage organization and SSG integration'}
+                </p>
+              </div>
+            </div>
+            <svg className="w-5 h-5 text-gray-400 group-hover:text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
+        ))}
+      </div>
+
+      <div className="text-center mt-6">
+        <button
+          onClick={() => {
+            setStep('password');
+            setPendingUser(null);
+            setAvailableRoles([]);
+          }}
+          className="text-sm text-gray-500 hover:text-gray-700 underline"
+        >
+          Sign in with a different account
+        </button>
+      </div>
+    </div>
+  );
+
   const renderCurrentStep = () => {
-    if (securitySettings.enableOtpLogin && step === 'otp') {
+    if (step === 'roleSelect') {
+      return renderRoleSelectStep();
+    } else if (securitySettings.enableOtpLogin && step === 'otp') {
       return renderOtpStep();
     } else if (step === 'password') {
       return renderPasswordStep();

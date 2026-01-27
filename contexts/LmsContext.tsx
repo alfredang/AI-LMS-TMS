@@ -51,41 +51,54 @@ const getCurrentUserId = (): string => {
   return userData.id;
 };
 
-// Function to fetch user's role from database
-const fetchUserRole = async (userId: string): Promise<UserRole> => {
+// Helper to convert role string to UserRole enum
+const convertToUserRole = (roleString: string): UserRole => {
+  const normalized = roleString.toLowerCase().replace(/\s+/g, '_');
+  switch (normalized) {
+    case 'learner':
+      return UserRole.Learner;
+    case 'trainer':
+      return UserRole.Trainer;
+    case 'admin':
+      return UserRole.Admin;
+    case 'developer':
+      return UserRole.Developer;
+    case 'training_provider':
+    case 'trainingprovider':
+      return UserRole.TrainingProvider;
+    default:
+      console.warn(`Unknown role: ${roleString}, defaulting to Learner`);
+      return UserRole.Learner;
+  }
+};
+
+// Function to fetch user's roles from database (returns all roles)
+const fetchUserRoles = async (userId: string): Promise<{ primaryRole: UserRole; allRoles: UserRole[] }> => {
   try {
-    // Use server app URL since role API is in the server app
     const response = await fetch(`/api/users/role?userId=${userId}`);
     if (!response.ok) {
-      throw new Error('Failed to fetch user role');
+      throw new Error('Failed to fetch user roles');
     }
     const result = await response.json();
-    
+
     if (!result.success || !result.data?.role) {
-      throw new Error(result.error || 'Role not found');
+      throw new Error(result.error || 'Roles not found');
     }
 
-    // Convert string role to UserRole enum
-    const roleString = result.data.role.toLowerCase().replace(/\s+/g, '_');
-    switch (roleString) {
-      case 'learner':
-        return UserRole.Learner;
-      case 'trainer':
-        return UserRole.Trainer;
-      case 'admin':
-        return UserRole.Admin;
-      case 'developer':
-        return UserRole.Developer;
-      case 'training_provider':
-        return UserRole.TrainingProvider;
-      default:
-        console.warn(`Unknown role: ${roleString}, defaulting to Learner`);
-        return UserRole.Learner;
-    }
+    const primaryRole = convertToUserRole(result.data.role);
+    const allRoles = (result.data.roles || [result.data.role]).map(convertToUserRole);
+
+    return { primaryRole, allRoles };
   } catch (error) {
-    console.error('Error fetching user role:', error);
+    console.error('Error fetching user roles:', error);
     throw error;
   }
+};
+
+// Legacy function for backwards compatibility
+const fetchUserRole = async (userId: string): Promise<UserRole> => {
+  const { primaryRole } = await fetchUserRoles(userId);
+  return primaryRole;
 };
 
 // Function to fetch user profile based on role
@@ -175,14 +188,16 @@ const fetchCalendarEvents = async (userRole: UserRole): Promise<CalendarEvent[]>
 interface LmsContextType {
   // Core State
   role: UserRole;
+  userRoles: UserRole[]; // All roles the user has
   setRole: (role: UserRole) => void;
+  switchRole: (role: UserRole) => Promise<void>; // Switch to a different role
   currentView: View;
   setCurrentView: (view: View) => void;
   adminPage: AdminPage;
   setAdminPage: (page: AdminPage) => void;
   selectedCourseRunId: string | null;
   setSelectedCourseRunId: (courseRunId: string | null) => void;
-  
+
   // Authentication
   isAuthenticated: boolean;
   isLoading: boolean;
@@ -242,10 +257,11 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   
   // Core state
   const [role, setRole] = useState<UserRole>(UserRole.Learner);
+  const [userRoles, setUserRoles] = useState<UserRole[]>([]); // All roles the user has
   const [currentView, setCurrentView] = useState<View>(View.Dashboard);
   const [adminPage, setAdminPage] = useState<AdminPage>(AdminPage.Dashboard);
   const [selectedCourseRunId, setSelectedCourseRunId] = useState<string | null>(null);
-  
+
   // Authentication state
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -347,34 +363,52 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             console.error('❌ LmsContext: Failed to load training provider info:', error);
           }
           
-          // Fetch user's role from database
+          // Fetch user's roles from database
           try {
-            const userRole = await fetchUserRole(verificationResult.user.id);
-            setRole(userRole);
-            
+            // First check if user object has roles (from localStorage)
+            const cachedRoles = verificationResult.user.roles;
+            let primaryRole: UserRole;
+            let allRoles: UserRole[];
+
+            if (cachedRoles && cachedRoles.length > 0) {
+              // Use cached roles from localStorage
+              allRoles = cachedRoles;
+              primaryRole = verificationResult.user.role;
+              console.log('✅ LmsContext: Using cached roles:', allRoles);
+            } else {
+              // Fetch roles from database
+              const rolesData = await fetchUserRoles(verificationResult.user.id);
+              primaryRole = rolesData.primaryRole;
+              allRoles = rolesData.allRoles;
+              console.log('✅ LmsContext: Fetched roles from database:', allRoles);
+            }
+
+            setRole(primaryRole);
+            setUserRoles(allRoles);
+
             // Load user profile based on fetched role
             try {
-              const profile = await fetchUserProfileByRole(userRole);
+              const profile = await fetchUserProfileByRole(primaryRole);
               setCurrentUserProfile(profile);
             } catch (error) {
               console.error('❌ LmsContext: Failed to load profile:', error);
             }
-            
+
             // Training provider info is already loaded for all users above
-            
+
             // Load calendar events
             try {
-              const events = await fetchCalendarEvents(userRole);
+              const events = await fetchCalendarEvents(primaryRole);
               setCalendarEvents(events);
             } catch (error) {
               console.error('❌ LmsContext: Failed to load calendar events:', error);
             }
-            
+
             // Restore state from URL parameters
             await restoreStateFromURL();
-            
+
           } catch (error) {
-            console.error('❌ LmsContext: Failed to fetch user role:', error);
+            console.error('❌ LmsContext: Failed to fetch user roles:', error);
             // If role fetch fails, logout the user
             await logout();
           }
@@ -459,25 +493,27 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     console.log('🔐 LmsContext: Login called with user:', user);
     setIsAuthenticated(true);
     setCurrentUser(user);
-    
-    // Fetch the actual user role from database
-    try {
-      console.log('🔍 LmsContext: Fetching user role from database...');
-      const actualRole = await fetchUserRole(user.id);
-      console.log('✅ LmsContext: Actual user role:', actualRole);
-      setRole(actualRole);
-      
-      // Fetch user profile and other data based on actual role
+
+    // Use roles from user object if available, otherwise fetch from database
+    const userRolesFromLogin = user.roles || [];
+    const selectedRole = userRole;
+
+    if (userRolesFromLogin.length > 0) {
+      // Roles provided from login - use them directly
+      console.log('✅ LmsContext: Using roles from login:', userRolesFromLogin);
+      setUserRoles(userRolesFromLogin);
+      setRole(selectedRole);
+
+      // Load user data based on selected role
       const loadUserData = async () => {
         try {
-          const profile = await fetchUserProfileByRole(actualRole);
+          const profile = await fetchUserProfileByRole(selectedRole);
           setCurrentUserProfile(profile);
           console.log('✅ LmsContext: Profile loaded after login');
         } catch (error) {
           console.error('❌ LmsContext: Failed to load profile after login:', error);
         }
-        
-        // Load training provider info for all users (since there's only one training provider)
+
         try {
           const providerInfo = await fetchTrainingProviderInfo();
           setTrainingProviderProfile({
@@ -488,9 +524,9 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         } catch (error) {
           console.error('❌ LmsContext: Failed to load training provider info after login:', error);
         }
-        
+
         try {
-          const events = await fetchCalendarEvents(actualRole);
+          const events = await fetchCalendarEvents(selectedRole);
           setCalendarEvents(events);
           console.log('✅ LmsContext: Calendar events loaded after login');
         } catch (error) {
@@ -499,10 +535,50 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       };
 
       loadUserData();
-    } catch (error) {
-      console.error('❌ LmsContext: Failed to fetch user role after login:', error);
-      // Fallback to provided role if database fetch fails
-      setRole(userRole);
+    } else {
+      // Fallback: fetch roles from database
+      try {
+        console.log('🔍 LmsContext: Fetching user roles from database...');
+        const { primaryRole, allRoles } = await fetchUserRoles(user.id);
+        console.log('✅ LmsContext: User roles:', allRoles);
+        setUserRoles(allRoles);
+        setRole(primaryRole);
+
+        const loadUserData = async () => {
+          try {
+            const profile = await fetchUserProfileByRole(primaryRole);
+            setCurrentUserProfile(profile);
+            console.log('✅ LmsContext: Profile loaded after login');
+          } catch (error) {
+            console.error('❌ LmsContext: Failed to load profile after login:', error);
+          }
+
+          try {
+            const providerInfo = await fetchTrainingProviderInfo();
+            setTrainingProviderProfile({
+              companyLogoUrl: providerInfo.companyLogoUrl,
+              companyShortname: providerInfo.companyShortname
+            } as TrainingProviderProfile);
+            console.log('✅ LmsContext: Training provider info loaded after login');
+          } catch (error) {
+            console.error('❌ LmsContext: Failed to load training provider info after login:', error);
+          }
+
+          try {
+            const events = await fetchCalendarEvents(primaryRole);
+            setCalendarEvents(events);
+            console.log('✅ LmsContext: Calendar events loaded after login');
+          } catch (error) {
+            console.error('❌ LmsContext: Failed to load calendar events after login:', error);
+          }
+        };
+
+        loadUserData();
+      } catch (error) {
+        console.error('❌ LmsContext: Failed to fetch user roles after login:', error);
+        setUserRoles([userRole]);
+        setRole(userRole);
+      }
     }
   }, []);
 
@@ -521,6 +597,7 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setCurrentUser(null);
     setCurrentUserProfile(null);
     setRole(UserRole.Learner);
+    setUserRoles([]); // Clear all roles on logout
     setCurrentView(View.Dashboard);
     setSelectedCourse(null);
     setCourseDetail(null);
@@ -560,24 +637,44 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     console.log(`✅ LmsContext: Navigation completed to ${view}`);
   }, [currentView, selectedCourse, editingCourse, updateURL]);
 
-  const handleRoleChange = useCallback(async (newRole: UserRole) => {
-    console.log(`👤 LmsContext: Role change requested to ${newRole}`);
+  // Switch to a different role (must be one the user has)
+  const switchRole = useCallback(async (newRole: UserRole) => {
+    console.log(`👤 LmsContext: Role switch requested to ${newRole}`);
+
+    // Validate that user has this role
+    if (!userRoles.includes(newRole)) {
+      console.error(`❌ LmsContext: User does not have role ${newRole}. Available roles:`, userRoles);
+      throw new Error(`You do not have access to the ${newRole} role`);
+    }
+
     setRole(newRole);
-    
+
+    // Update authService with new role
+    authService.setCurrentRole(newRole);
+
+    // Reset view to dashboard when switching roles
+    setCurrentView(View.Dashboard);
+    setSelectedCourse(null);
+
     // Trigger profile refresh after role change
     try {
       const profile = await fetchUserProfileByRole(newRole);
       setCurrentUserProfile(profile);
-      
-      // Training provider info is already loaded globally and doesn't change based on role
-      
+
       // Refresh calendar events for new role
       const events = await fetchCalendarEvents(newRole);
       setCalendarEvents(events);
+
+      console.log(`✅ LmsContext: Successfully switched to ${newRole} role`);
     } catch (error) {
       console.error('❌ LmsContext: Failed to refresh data after role change:', error);
     }
-  }, []);
+  }, [userRoles]);
+
+  // Legacy handler for setRole (used internally)
+  const handleRoleChange = useCallback(async (newRole: UserRole) => {
+    await switchRole(newRole);
+  }, [switchRole]);
 
   const resetCreateView = useCallback(() => {
     console.log('🔄 LmsContext: Resetting create view');
@@ -1202,7 +1299,9 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const value: LmsContextType = {
     role,
+    userRoles,
     setRole: handleRoleChange,
+    switchRole,
     currentView,
     setCurrentView,
     adminPage,

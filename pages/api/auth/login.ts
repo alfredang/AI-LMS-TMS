@@ -20,8 +20,10 @@ interface LoginResponse {
       fullName: string;
       profilePictureUrl?: string;
       role: string;
+      roles: string[]; // All roles the user has
     };
-    role: string; // Add role to response data
+    role: string; // Primary/selected role
+    roles: string[]; // All available roles for role selection
     token?: string;
   };
   error?: string;
@@ -158,28 +160,40 @@ async function handler(req: NextApiRequest, res: NextApiResponse<LoginResponse>)
       console.log(`✅ OTP verified for user: ${email}`);
     }
 
-    // Determine user role based on database structure
-    let userRole = 'learner'; // Default role
+    // Get ALL user roles from user_role_map table
+    const rolesQuery = `
+      SELECT role FROM public.user_role_map
+      WHERE user_id = $1
+      ORDER BY
+        CASE role
+          WHEN 'Admin' THEN 1
+          WHEN 'Training Provider' THEN 2
+          WHEN 'Developer' THEN 3
+          WHEN 'Trainer' THEN 4
+          WHEN 'Learner' THEN 5
+          ELSE 6
+        END
+    `;
 
-    // Check if user is admin
-    const adminCheck = await pool.query(
-      'SELECT user_id FROM public.admin_profile WHERE user_id = $1',
-      [user.id]
-    );
-    if (adminCheck.rows.length > 0) {
-      userRole = 'admin';
-    } else {
-      // Check if user is trainer
-      const trainerCheck = await pool.query(
-        'SELECT user_id FROM public.trainer_profile WHERE user_id = $1',
-        [user.id]
-      );
-      if (trainerCheck.rows.length > 0) {
-        userRole = 'trainer';
-      }
+    const rolesResult = await pool.query(rolesQuery, [user.id]);
+
+    // Convert database roles to lowercase for consistency
+    const userRoles: string[] = rolesResult.rows.map((row: { role: string }) => {
+      const dbRole = row.role;
+      // Convert "Training Provider" to "trainingProvider" for frontend compatibility
+      if (dbRole === 'Training Provider') return 'trainingProvider';
+      return dbRole.toLowerCase();
+    });
+
+    // If no roles found in user_role_map, default to learner
+    if (userRoles.length === 0) {
+      userRoles.push('learner');
     }
 
-    console.log(`✅ User role determined: ${userRole}`);
+    // Primary role is the first one (highest priority based on ORDER BY)
+    const primaryRole = userRoles[0];
+
+    console.log(`✅ User roles determined: ${userRoles.join(', ')}, primary: ${primaryRole}`);
 
     // Successful login response
     const loginResponse = {
@@ -190,14 +204,16 @@ async function handler(req: NextApiRequest, res: NextApiResponse<LoginResponse>)
           email: user.email,
           fullName: user.full_name || 'Unknown User',
           profilePictureUrl: user.profile_picture_url,
-          role: userRole
+          role: primaryRole,
+          roles: userRoles
         },
-        role: userRole,
+        role: primaryRole,
+        roles: userRoles,
         token: `mock-jwt-token-${user.id}` // In production, generate a real JWT
       }
     };
 
-    console.log(`✅ Login successful for user: ${email}, role: ${userRole}`);
+    console.log(`✅ Login successful for user: ${email}, roles: ${userRoles.join(', ')}`);
     return res.status(200).json(loginResponse);
 
   } catch (error: any) {
