@@ -473,15 +473,27 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
             const formDataToSend = new FormData();
 
             // Filter out empty API key values before sending
-            const filteredApiKeys = Object.fromEntries(
-                Object.entries(formData.apiKeys || {}).filter(([_, value]) => value && value.trim() !== '')
-            );
+            const filteredApiKeys: Record<string, string> = {};
+            if (formData.apiKeys) {
+                for (const [key, value] of Object.entries(formData.apiKeys)) {
+                    const strValue = typeof value === 'string' ? value.trim() : '';
+                    if (strValue !== '') {
+                        filteredApiKeys[key] = strValue;
+                    }
+                }
+            }
 
             // Prepare profile data with filtered API keys
             const profileDataToSend = {
                 ...formData,
                 apiKeys: filteredApiKeys
             };
+
+            console.log('📤 Sending profile data:', {
+                userId: profile.id,
+                apiKeysCount: Object.keys(filteredApiKeys).length,
+                apiKeyNames: Object.keys(filteredApiKeys)
+            });
 
             // Add user ID and profile data as JSON string
             formDataToSend.append('userId', profile.id);
@@ -519,7 +531,10 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
             const result = await response.json();
 
             if (!response.ok || !result.success) {
-                throw new Error(result.error || 'Failed to update profile');
+                const errorMsg = result.details
+                    ? `${result.error}: ${result.details}`
+                    : result.error || 'Failed to update profile';
+                throw new Error(errorMsg);
             }
 
             console.log('✅ Profile updated successfully:', result);
