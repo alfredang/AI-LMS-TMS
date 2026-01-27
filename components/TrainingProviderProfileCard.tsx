@@ -217,7 +217,7 @@ const LoginDetailsCard: React.FC<{
                             ) : (
                                 <Button
                                     variant="ghost"
-                                    className="border border-gray-300 flex-shrink-0"
+                                    className="border border-primary text-primary hover:bg-primary hover:text-white flex-shrink-0"
                                     onClick={() => setIsResetting(true)}
                                 >
                                     Reset Password
