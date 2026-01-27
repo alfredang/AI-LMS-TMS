@@ -747,13 +747,13 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                         <select
                             value={newApiKey.name}
                             onChange={(e) => setNewApiKey(prev => ({ ...prev, name: e.target.value }))}
-                            className={`${inputClasses} flex-1`}
+                            className="block w-full px-3 py-2 text-gray-900 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent flex-1"
                         >
-                            <option value="">Select API Key</option>
+                            <option value="" className="text-gray-500">Select API Key</option>
                             {FIXED_API_KEY_NAMES
                                 .filter(keyName => !(formData.apiKeys || {})[keyName]) // Only show keys not already added
                                 .map(keyName => (
-                                    <option key={keyName} value={keyName}>{keyName}</option>
+                                    <option key={keyName} value={keyName} className="text-gray-900">{keyName}</option>
                                 ))
                             }
                         </select>
