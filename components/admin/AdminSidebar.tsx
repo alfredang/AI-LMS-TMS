@@ -62,6 +62,11 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate }) => {
                 <NavItem page={AdminPage.AssignTrainer} label="Assign Trainer" isSubItem />
             </NavSection>
 
+            <NavSection title="Direct Application">
+                <NavItem page={AdminPage.UploadDirectApplication} label="Upload Direct Application" isSubItem />
+                <NavItem page={AdminPage.ViewDirectApplication} label="View Direct Application" isSubItem />
+            </NavSection>
+
             <NavSection title="TPG Management">
                 <NavItem page={AdminPage.SearchEnrolment} label="Search Enrolment" isSubItem />
                 <NavItem page={AdminPage.ViewEnrolment} label="View Enrolment" isSubItem />
@@ -73,10 +78,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate }) => {
                 <NavItem page={AdminPage.UploadCourseRuns} label="Upload Course Runs" isSubItem />
             </NavSection>
 
-            <NavSection title="Direct Application">
-                <NavItem page={AdminPage.UploadDirectApplication} label="Upload Direct Application" isSubItem />
-                <NavItem page={AdminPage.ViewDirectApplication} label="View Direct Application" isSubItem />
-            </NavSection>
+
         </nav>
     );
 };

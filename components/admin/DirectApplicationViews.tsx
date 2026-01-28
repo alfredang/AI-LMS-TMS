@@ -26,9 +26,6 @@ const getStatusColor = (status: string) => {
     }
 };
 
-// Webhook URL for DA Application
-const WEBHOOK_URL = 'https://n8n.srv923061.hstgr.cloud/webhook/ee651990-29fd-4a1b-a28b-1ca8a674007f';
-
 export const UploadDirectApplicationView: React.FC = () => {
     const [file, setFile] = useState<File | null>(null);
     const [isUploading, setIsUploading] = useState(false);
@@ -68,13 +65,45 @@ export const UploadDirectApplicationView: React.FC = () => {
     const parseExcelFile = async (file: File): Promise<any[]> => {
         const XLSX = await import('xlsx');
 
+        // Check file size first - very small files are likely problematic
+        if (file.size < 100) {
+            throw new Error(
+                `File appears to be empty or corrupted (size: ${file.size} bytes).\n\n` +
+                'If you just downloaded this file, please:\n' +
+                '1. Open the file in Excel\n' +
+                '2. Click "Enable Editing" if prompted\n' +
+                '3. Save the file (Ctrl+S)\n' +
+                '4. Upload the saved file'
+            );
+        }
+
+        console.log('📁 File info:', { name: file.name, size: file.size, type: file.type });
+
         return new Promise((resolve, reject) => {
             const reader = new FileReader();
 
             reader.onload = (e) => {
                 try {
                     const data = new Uint8Array(e.target?.result as ArrayBuffer);
+                    console.log('📦 Read buffer size:', data.length);
+
+                    // Check if the data starts with HTML (common error when downloading fails)
+                    const firstBytes = new TextDecoder().decode(data.slice(0, 100));
+                    if (firstBytes.includes('<!DOCTYPE') || firstBytes.includes('<html')) {
+                        throw new Error(
+                            'The uploaded file appears to be an HTML page, not an Excel file.\n\n' +
+                            'This usually happens when the download requires authentication.\n' +
+                            'Please download the file properly and try again.'
+                        );
+                    }
+
                     const workbook = XLSX.read(data, { type: 'array' });
+
+                    console.log('📚 Workbook sheets:', workbook.SheetNames);
+
+                    if (!workbook.SheetNames.length) {
+                        throw new Error('Excel file has no sheets.');
+                    }
 
                     const sheetName = workbook.SheetNames[0];
                     const worksheet = workbook.Sheets[sheetName];
@@ -85,21 +114,28 @@ export const UploadDirectApplicationView: React.FC = () => {
                         blankrows: false,
                     });
 
-                    console.log('🧪 Raw Excel rows:', rawRows);
+                    console.log('🧪 Raw Excel rows count:', rawRows.length);
+                    console.log('🧪 First 3 rows:', rawRows.slice(0, 3));
 
                     // ❌ No rows at all
                     if (!rawRows.length) {
-                        throw new Error('Excel file is empty.');
-                    }
-
-                    // ❌ Header only → very likely Excel Protected View
-                    if (rawRows.length === 1) {
                         throw new Error(
-                            'This Excel file is opened in Protected View or read-only mode.\n\n' +
-                            'Please open the file, click "Enable Editing", save it, and upload again.'
+                            'Excel file is empty.\n\n' +
+                            'The first sheet contains no data. Please check if the correct sheet is selected.'
                         );
                     }
 
+                    // ❌ Header only - could be Protected View or incomplete download
+                    if (rawRows.length === 1) {
+                        throw new Error(
+                            'Only headers found, no data rows.\n\n' +
+                            'This can happen if:\n' +
+                            '• The file is a template with no data\n' +
+                            '• The download was incomplete\n' +
+                            '• Excel Protected View blocked the data (unlikely but possible)\n\n' +
+                            'Solution: Open the file in Excel, ensure data is visible, save it, and upload again.'
+                        );
+                    }
 
                     // ✅ Convert to JSON using headers
                     const jsonData = XLSX.utils.sheet_to_json(worksheet, {
@@ -107,13 +143,22 @@ export const UploadDirectApplicationView: React.FC = () => {
                         raw: false,
                     });
 
+                    console.log('✅ Parsed', jsonData.length, 'data rows');
+                    if (jsonData.length > 0) {
+                        console.log('🔑 Column headers:', Object.keys(jsonData[0] as object));
+                    }
+
                     resolve(jsonData);
                 } catch (err) {
+                    console.error('❌ Parse error:', err);
                     reject(err);
                 }
             };
 
-            reader.onerror = reject;
+            reader.onerror = (err) => {
+                console.error('❌ FileReader error:', err);
+                reject(new Error('Failed to read the file. Please try again.'));
+            };
 
             // ✅ IMPORTANT: safer than readAsBinaryString
             reader.readAsArrayBuffer(file);
@@ -134,24 +179,21 @@ export const UploadDirectApplicationView: React.FC = () => {
             const excelData = await parseExcelFile(file);
             console.log('✅ Parsed Excel data:', excelData.length, 'rows');
 
-            // Send data to n8n webhook
-            console.log('🔄 Sending data to n8n webhook:', WEBHOOK_URL);
-            const response = await fetch(WEBHOOK_URL, {
+            // Send data to database API
+            console.log('🔄 Sending data to database API...');
+            const response = await fetch('/api/admin/upload-da-applications', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    action: 'upload',
-                    excelData: excelData,
-                    fileName: file.name,
-                    timestamp: new Date().toISOString(),
-                    source: 'admin-upload-direct-application'
+                    data: excelData
                 })
             });
 
             if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
             }
 
             const result = await response.json();
@@ -174,6 +216,18 @@ export const UploadDirectApplicationView: React.FC = () => {
 
     const UploadStep = () => (
         <Card className="p-6">
+            {/* Protected View Note - at top for visibility */}
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4">
+                <h4 className="font-semibold text-amber-800 mb-2">⚠️ Important: Downloaded Files</h4>
+                <p className="text-sm text-amber-700">
+                    If you just downloaded this Excel file, please do the following before uploading:
+                </p>
+                <ul className="text-sm text-amber-700 mt-2 list-disc list-inside space-y-1">
+                    <li><strong>Windows:</strong> Open the file in Excel → Click "Enable Editing" → Save the file</li>
+                    <li><strong>Mac:</strong> Open the file in Excel → Save the file (⌘+S)</li>
+                </ul>
+            </div>
+
             <div className="text-center mb-4">
                 <h3 className="text-xl font-bold">Upload Direct Application</h3>
                 <p className="text-gray-500 mt-1">Submit DA application data in bulk by uploading an Excel file.</p>
@@ -204,29 +258,6 @@ export const UploadDirectApplicationView: React.FC = () => {
             </div>
             {error && <p className="text-red-500 text-sm mt-2 text-center">{error}</p>}
 
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-4">
-                <h4 className="font-semibold text-blue-800 mb-2">Expected Excel Columns:</h4>
-                <div className="text-sm text-blue-700 grid grid-cols-2 gap-1">
-                    <span>• Trainee ID Type</span>
-                    <span>• Trainee ID</span>
-                    <span>• Date of Birth</span>
-                    <span>• Trainee Name</span>
-                    <span>• Course Run ID</span>
-                    <span>• Trainee Email</span>
-                    <span>• Phone Country Code</span>
-                    <span>• Trainee Phone</span>
-                    <span>• Sponsorship Type</span>
-                    <span>• Application ID</span>
-                    <span>• Payable Fee</span>
-                    <span>• Application Status</span>
-                    <span>• Course Title</span>
-                    <span>• Course Reference Number</span>
-                    <span>• Course Start Date</span>
-                    <span>• Course End Date</span>
-                    <span>• Enrolment/Grant</span>
-                </div>
-            </div>
-
             <div className="flex justify-between items-center mt-6">
                 <Button
                     variant="ghost"
@@ -255,61 +286,68 @@ export const UploadDirectApplicationView: React.FC = () => {
                 <p className="text-gray-500 mt-1">The following results were returned from processing.</p>
             </div>
             <div className="p-6">
-                {uploadResult?.newRecords && uploadResult.newRecords.length > 0 ? (
+                {uploadResult?.success && uploadResult?.inserted > 0 ? (
                     <div className="space-y-4">
                         <div className="bg-green-50 border border-green-200 rounded-lg p-4">
                             <h4 className="font-bold text-green-800">
-                                {uploadResult.newRecords.length} New Record(s) Inserted
+                                {uploadResult.inserted} New Record(s) Inserted
                             </h4>
                             <p className="text-sm text-green-700">
-                                {uploadResult.duplicates?.length || 0} duplicate(s) were skipped
+                                {uploadResult.duplicates || 0} duplicate(s) were skipped
                             </p>
-                        </div>
-
-                        <div className="overflow-x-auto">
-                            <table className="min-w-full divide-y divide-gray-200">
-                                <thead className="bg-gray-50">
-                                    <tr>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Application ID</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Trainee Name</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Course Title</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="bg-white divide-y divide-gray-200">
-                                    {uploadResult.newRecords.slice(0, 10).map((record: any, index: number) => (
-                                        <tr key={index} className="hover:bg-gray-50">
-                                            <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
-                                                {record.application_id || record['Application ID'] || 'N/A'}
-                                            </td>
-                                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                                                {record.trainee_name || record['Trainee Name'] || 'N/A'}
-                                            </td>
-                                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                                                {record.course_title || record['Course Title'] || 'N/A'}
-                                            </td>
-                                            <td className="px-4 py-3 whitespace-nowrap">
-                                                <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full border ${getStatusColor(record.application_status || record['Application Status'] || 'Pending')}`}>
-                                                    {record.application_status || record['Application Status'] || 'Inserted'}
-                                                </span>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                            {uploadResult.newRecords.length > 10 && (
-                                <p className="text-sm text-gray-500 p-4">
-                                    Showing first 10 of {uploadResult.newRecords.length} records...
+                            {uploadResult.errors?.length > 0 && (
+                                <p className="text-sm text-amber-700 mt-1">
+                                    {uploadResult.errors.length} row(s) had errors
                                 </p>
                             )}
                         </div>
+
+                        {uploadResult.newRecords && uploadResult.newRecords.length > 0 && (
+                            <div className="overflow-x-auto">
+                                <table className="min-w-full divide-y divide-gray-200">
+                                    <thead className="bg-gray-50">
+                                        <tr>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Application ID</th>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Trainee Name</th>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Course Title</th>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="bg-white divide-y divide-gray-200">
+                                        {uploadResult.newRecords.map((record: any, index: number) => (
+                                            <tr key={index} className="hover:bg-gray-50">
+                                                <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
+                                                    {record.application_id || 'N/A'}
+                                                </td>
+                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                                                    {record.trainee_name || 'N/A'}
+                                                </td>
+                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                                                    {record.course_title || 'N/A'}
+                                                </td>
+                                                <td className="px-4 py-3 whitespace-nowrap">
+                                                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full border ${getStatusColor(record.application_status || 'Inserted')}`}>
+                                                        {record.application_status || 'Inserted'}
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                                {uploadResult.inserted > 10 && (
+                                    <p className="text-sm text-gray-500 p-4">
+                                        Showing first 10 of {uploadResult.inserted} records...
+                                    </p>
+                                )}
+                            </div>
+                        )}
                     </div>
                 ) : (
                     <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-8 text-center">
                         <Icon name={IconName.InfoCircle} className="w-12 h-12 mx-auto text-yellow-500 mb-3" />
                         <h4 className="text-lg font-bold text-yellow-800 mb-2">No New Records</h4>
                         <p className="text-yellow-700">
-                            All records in the uploaded file already exist in the database.
+                            All {uploadResult?.duplicates || 0} record(s) in the uploaded file already exist in the database.
                         </p>
                     </div>
                 )}
@@ -336,7 +374,7 @@ export const UploadDirectApplicationView: React.FC = () => {
                 <div className="flex justify-center py-20">
                     <div className="text-center">
                         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
-                        <p className="mt-4 text-gray-600">Processing your file with n8n...</p>
+                        <p className="mt-4 text-gray-600">Uploading to database...</p>
                     </div>
                 </div>
             ) : uploadResult ? (
@@ -353,25 +391,17 @@ export const ViewDirectApplicationView: React.FC = () => {
     const [applications, setApplications] = useState<any[]>([]);
     const [error, setError] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
-    const [hasFetched, setHasFetched] = useState(false);
+    const [currentPage, setCurrentPage] = useState(1);
+    const itemsPerPage = 10;
 
+    // Fetch applications from database API
     const fetchApplications = async () => {
         setIsLoading(true);
         setError(null);
 
         try {
-            console.log('🔍 Fetching DA applications from n8n...');
-            const response = await fetch(WEBHOOK_URL, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    action: 'fetch',
-                    timestamp: new Date().toISOString(),
-                    source: 'admin-view-direct-application'
-                })
-            });
+            console.log('🔍 Fetching DA applications from database...');
+            const response = await fetch('/api/admin/fetch-all-da-applications');
 
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
@@ -380,10 +410,11 @@ export const ViewDirectApplicationView: React.FC = () => {
             const result = await response.json();
             console.log('✅ Fetched applications:', result);
 
-            // Handle different response structures
-            const data = result.data || result.applications || result || [];
-            setApplications(Array.isArray(data) ? data : []);
-            setHasFetched(true);
+            if (result.success && result.data) {
+                setApplications(result.data);
+            } else {
+                throw new Error(result.error || 'Failed to fetch applications');
+            }
 
         } catch (err) {
             console.error('❌ Fetch error:', err);
@@ -393,22 +424,79 @@ export const ViewDirectApplicationView: React.FC = () => {
         }
     };
 
+    // Auto-fetch on component mount
+    React.useEffect(() => {
+        fetchApplications();
+    }, []);
+
+    // Filter applications based on search query
     const filteredApplications = applications.filter(app => {
         if (!searchQuery.trim()) return true;
         const query = searchQuery.toLowerCase();
         return (
-            (app.trainee_name || app['Trainee Name'] || '').toLowerCase().includes(query) ||
-            (app.application_id || app['Application ID'] || '').toLowerCase().includes(query) ||
-            (app.course_title || app['Course Title'] || '').toLowerCase().includes(query) ||
-            (app.trainee_email || app['Trainee Email'] || '').toLowerCase().includes(query)
+            (app.trainee_name || '').toLowerCase().includes(query) ||
+            (app.application_id || '').toLowerCase().includes(query) ||
+            (app.course_title || '').toLowerCase().includes(query) ||
+            (app.trainee_email || '').toLowerCase().includes(query) ||
+            (app.trainee_id || '').toLowerCase().includes(query) ||
+            (app.course_run_id || '').toLowerCase().includes(query)
         );
     });
+
+    // Pagination calculations
+    const totalPages = Math.ceil(filteredApplications.length / itemsPerPage);
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    const paginatedApplications = filteredApplications.slice(startIndex, endIndex);
+
+    // Reset to page 1 when search changes
+    React.useEffect(() => {
+        setCurrentPage(1);
+    }, [searchQuery]);
+
+    // Pagination controls
+    const goToPage = (page: number) => {
+        if (page >= 1 && page <= totalPages) {
+            setCurrentPage(page);
+        }
+    };
+
+    // Generate page numbers to display
+    const getPageNumbers = () => {
+        const pages: (number | string)[] = [];
+        const maxVisible = 5;
+
+        if (totalPages <= maxVisible) {
+            for (let i = 1; i <= totalPages; i++) {
+                pages.push(i);
+            }
+        } else {
+            if (currentPage <= 3) {
+                for (let i = 1; i <= 4; i++) pages.push(i);
+                pages.push('...');
+                pages.push(totalPages);
+            } else if (currentPage >= totalPages - 2) {
+                pages.push(1);
+                pages.push('...');
+                for (let i = totalPages - 3; i <= totalPages; i++) pages.push(i);
+            } else {
+                pages.push(1);
+                pages.push('...');
+                pages.push(currentPage - 1);
+                pages.push(currentPage);
+                pages.push(currentPage + 1);
+                pages.push('...');
+                pages.push(totalPages);
+            }
+        }
+        return pages;
+    };
 
     return (
         <div>
             <h2 className="text-3xl font-bold mb-6">View Direct Applications</h2>
 
-            {/* Search and Fetch Controls */}
+            {/* Search and Refresh Controls */}
             <Card className="p-6 mb-6">
                 <div className="flex flex-col md:flex-row gap-4 items-end">
                     <div className="flex-1">
@@ -433,7 +521,7 @@ export const ViewDirectApplicationView: React.FC = () => {
                         ) : (
                             <>
                                 <Icon name={IconName.Download} className="w-4 h-4 mr-2" />
-                                Fetch Applications
+                                Refresh
                             </>
                         )}
                     </Button>
@@ -446,89 +534,122 @@ export const ViewDirectApplicationView: React.FC = () => {
                 <div className="flex justify-center py-10">
                     <div className="text-center">
                         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
-                        <p className="mt-4 text-gray-600">Fetching DA applications from n8n...</p>
+                        <p className="mt-4 text-gray-600">Fetching DA applications from database...</p>
                     </div>
                 </div>
             )}
 
             {/* Results Table */}
-            {!isLoading && hasFetched && (
+            {!isLoading && (
                 <Card className="p-0">
                     <div className="p-6 border-b">
                         <h3 className="text-xl font-bold">DA Applications</h3>
                         <p className="text-gray-500 mt-1">
-                            Showing {filteredApplications.length} of {applications.length} applications
+                            Showing {startIndex + 1}-{Math.min(endIndex, filteredApplications.length)} of {filteredApplications.length} applications
+                            {searchQuery && ` (filtered from ${applications.length} total)`}
                         </p>
                     </div>
-                    {filteredApplications.length > 0 ? (
-                        <div className="overflow-x-auto">
-                            <table className="min-w-full divide-y divide-gray-200">
-                                <thead className="bg-gray-50">
-                                    <tr>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Application ID</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Trainee Name</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Trainee ID</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Course Title</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Course Run ID</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Payable Fee</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Sponsorship</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="bg-white divide-y divide-gray-200">
-                                    {filteredApplications.map((app, index) => (
-                                        <tr key={index} className="hover:bg-gray-50">
-                                            <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
-                                                {app.application_id || app['Application ID'] || 'N/A'}
-                                            </td>
-                                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                                                {app.trainee_name || app['Trainee Name'] || 'N/A'}
-                                            </td>
-                                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                                                {app.trainee_id || app['Trainee ID'] || 'N/A'}
-                                            </td>
-                                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                                                {app.course_title || app['Course Title'] || 'N/A'}
-                                            </td>
-                                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                                                {app.course_run_id || app['Course Run ID'] || 'N/A'}
-                                            </td>
-                                            <td className="px-4 py-3 whitespace-nowrap">
-                                                <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full border ${getStatusColor(app.application_status || app['Application Status'] || 'Pending')}`}>
-                                                    {app.application_status || app['Application Status'] || 'Pending'}
-                                                </span>
-                                            </td>
-                                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                                                ${parseFloat(app.payable_fee || app['Payable Fee'] || 0).toFixed(2)}
-                                            </td>
-                                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                                                {app.sponsorship_type || app['Sponsorship Type'] || 'N/A'}
-                                            </td>
+                    {paginatedApplications.length > 0 ? (
+                        <>
+                            <div className="overflow-x-auto">
+                                <table className="min-w-full divide-y divide-gray-200">
+                                    <thead className="bg-gray-50">
+                                        <tr>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Application ID</th>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Trainee Name</th>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Trainee ID</th>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Course Title</th>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Course Run ID</th>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Payable Fee</th>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Sponsorship</th>
                                         </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
+                                    </thead>
+                                    <tbody className="bg-white divide-y divide-gray-200">
+                                        {paginatedApplications.map((app, index) => (
+                                            <tr key={app.id || index} className="hover:bg-gray-50">
+                                                <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
+                                                    {app.application_id || 'N/A'}
+                                                </td>
+                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                                                    {app.trainee_name || 'N/A'}
+                                                </td>
+                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                                                    {app.trainee_id || 'N/A'}
+                                                </td>
+                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                                                    {app.course_title || 'N/A'}
+                                                </td>
+                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                                                    {app.course_run_id || 'N/A'}
+                                                </td>
+                                                <td className="px-4 py-3 whitespace-nowrap">
+                                                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full border ${getStatusColor(app.application_status || 'Pending')}`}>
+                                                        {app.application_status || 'Pending'}
+                                                    </span>
+                                                </td>
+                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                                                    ${parseFloat(app.payable_fee || 0).toFixed(2)}
+                                                </td>
+                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                                                    {app.sponsorship_type || 'N/A'}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            {/* Pagination Controls */}
+                            {totalPages > 1 && (
+                                <div className="p-4 border-t flex items-center justify-between">
+                                    <div className="text-sm text-gray-500">
+                                        Page {currentPage} of {totalPages}
+                                    </div>
+                                    <div className="flex items-center gap-1">
+                                        <button
+                                            onClick={() => goToPage(currentPage - 1)}
+                                            disabled={currentPage === 1}
+                                            className="px-3 py-1 text-sm border rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                                        >
+                                            Previous
+                                        </button>
+                                        {getPageNumbers().map((page, idx) => (
+                                            typeof page === 'number' ? (
+                                                <button
+                                                    key={idx}
+                                                    onClick={() => goToPage(page)}
+                                                    className={`px-3 py-1 text-sm border rounded ${currentPage === page
+                                                        ? 'bg-blue-500 text-white border-blue-500'
+                                                        : 'hover:bg-gray-100'
+                                                        }`}
+                                                >
+                                                    {page}
+                                                </button>
+                                            ) : (
+                                                <span key={idx} className="px-2 text-gray-400">...</span>
+                                            )
+                                        ))}
+                                        <button
+                                            onClick={() => goToPage(currentPage + 1)}
+                                            disabled={currentPage === totalPages}
+                                            className="px-3 py-1 text-sm border rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                                        >
+                                            Next
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </>
                     ) : (
                         <div className="p-12 text-center text-gray-500">
                             <Icon name={IconName.FileText} className="w-16 h-16 mx-auto mb-4 text-gray-400" />
                             <p className="text-lg font-medium">No applications found</p>
                             <p className="text-sm mt-2">
-                                {searchQuery ? 'Try adjusting your search query' : 'Click "Fetch Applications" to load data'}
+                                {searchQuery ? 'Try adjusting your search query' : 'No DA applications in the database yet'}
                             </p>
                         </div>
                     )}
-                </Card>
-            )}
-
-            {/* Empty State - Before First Fetch */}
-            {!isLoading && !hasFetched && (
-                <Card className="p-12">
-                    <div className="text-center text-gray-500">
-                        <Icon name={IconName.FileText} className="w-16 h-16 mx-auto mb-4 text-gray-400" />
-                        <p className="text-lg font-medium">View DA Application Records</p>
-                        <p className="text-sm mt-2">Click the "Fetch Applications" button to load data from the database</p>
-                    </div>
                 </Card>
             )}
         </div>
