@@ -103,10 +103,8 @@ async function handler(req: NextApiRequest, res: NextApiResponse<SendOtpResponse
     // TODO: Remove otp, emailMessageId from response in production!
     return res.status(200).json({
       success: true,
-      message: 'OTP has been sent to your email address',
-      otp, // Always include OTP for testing
-      emailMessageId: emailResult.messageId // For debugging - if starts with "simulated-" email was NOT sent
-    } as any);
+      message: 'OTP has been sent to your email address'
+    });
 
   } catch (error: any) {
     console.error('❌ Send OTP error:', error);

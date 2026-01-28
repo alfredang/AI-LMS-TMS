@@ -58,7 +58,7 @@ const CompletedClasses: React.FC = () => {
   });
   const [trainers, setTrainers] = useState<Trainer[]>([]);
   const [loading, setLoading] = useState(true);
-  
+
   // Search and filter states
   const [searchQuery, setSearchQuery] = useState('');
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
@@ -68,11 +68,11 @@ const CompletedClasses: React.FC = () => {
   const [selectedTrainer, setSelectedTrainer] = useState('');
   const [startDateFrom, setStartDateFrom] = useState('');
   const [endDateUntil, setEndDateUntil] = useState('');
-  
+
   const [currentPage, setCurrentPage] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
-  
+
   const ITEMS_PER_PAGE = 20;
 
   // Fetch trainers from API
@@ -81,9 +81,9 @@ const CompletedClasses: React.FC = () => {
       console.log('🔄 Fetching trainers...');
       const response = await fetch(getApiUrl('/api/admin/trainers'));
       const result = await response.json();
-      
+
       console.log('📊 Trainers API response:', result);
-      
+
       if (result.success) {
         console.log('✅ Trainers loaded:', result.data.trainers.length);
         setTrainers(result.data.trainers);
@@ -130,7 +130,7 @@ const CompletedClasses: React.FC = () => {
       }
 
       const data: ApiResponse = await response.json();
-      
+
       if (data.success) {
         console.log('✅ Completed classes loaded:', data.data.classes.length);
         setCompletedClasses(data.data.classes);
@@ -217,8 +217,8 @@ const CompletedClasses: React.FC = () => {
 
   return (
     <div>
-      <h2 className="text-3xl font-bold mb-6">Completed Classes</h2>
-      
+      <h2 className="text-3xl font-bold mb-6 dark:text-white">Completed Classes</h2>
+
       {/* Statistics Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
         <StatCard
@@ -235,8 +235,8 @@ const CompletedClasses: React.FC = () => {
         />
       </div>
 
-      <Card className="p-6">
-        <p className="text-sm mb-1">General Search</p>
+      <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
+        <p className="text-sm mb-1 dark:text-gray-300">General Search</p>
         {/* Search and Filters */}
         <div className="mb-6">
           <div className="flex flex-col sm:flex-row gap-4 mb-4">
@@ -251,7 +251,7 @@ const CompletedClasses: React.FC = () => {
                 placeholder="Search title..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400"
               />
             </div>
             <div className="flex gap-2">
@@ -274,7 +274,7 @@ const CompletedClasses: React.FC = () => {
 
           {/* Advanced Filters */}
           {showAdvancedFilters && (
-            <div className="bg-gray-50 p-4 rounded-lg space-y-4">
+            <div className="bg-gray-50 p-4 rounded-lg space-y-4 dark:bg-gray-700/30">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Course Title</label>
@@ -286,7 +286,7 @@ const CompletedClasses: React.FC = () => {
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                   />
                 </div>
-                
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Course Code</label>
                   <input
@@ -297,7 +297,7 @@ const CompletedClasses: React.FC = () => {
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                   />
                 </div>
-                
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Course Run ID</label>
                   <input
@@ -308,13 +308,13 @@ const CompletedClasses: React.FC = () => {
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                   />
                 </div>
-                
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Trainer</label>
                   <select
                     value={selectedTrainer}
                     onChange={(e) => setSelectedTrainer(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                   >
                     <option value="">All Trainers</option>
                     {trainers.map((trainer) => (
@@ -324,7 +324,7 @@ const CompletedClasses: React.FC = () => {
                     ))}
                   </select>
                 </div>
-                
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Start Date (From)</label>
                   <input
@@ -335,7 +335,7 @@ const CompletedClasses: React.FC = () => {
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                   />
                 </div>
-                
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">End Date (Until)</label>
                   <input
@@ -360,8 +360,8 @@ const CompletedClasses: React.FC = () => {
         ) : completedClasses.length === 0 ? (
           <div className="text-center py-8">
             <Icon name={IconName.CheckCircle} className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No completed classes found</h3>
-            <p className="text-gray-500 mb-6">
+            <h3 className="text-lg font-medium text-gray-900 mb-2 dark:text-white">No completed classes found</h3>
+            <p className="text-gray-500 mb-6 dark:text-gray-400">
               {searchQuery || courseTitle || courseCode || courseRunId || selectedTrainer || startDateFrom || endDateUntil
                 ? "No classes match your current search criteria."
                 : "There are no completed classes in the system yet."}
@@ -370,29 +370,29 @@ const CompletedClasses: React.FC = () => {
         ) : (
           <>
             <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
+              <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                <thead className="bg-gray-50 dark:bg-gray-700/50">
                   <tr className="border-b">
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Course Title</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">TGS Ref</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Course Run ID</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Start Date</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">End Date</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Trainer</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"># of Trainee</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Course Title</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">TGS Ref</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Course Run ID</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Start Date</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">End Date</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Trainer</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"># of Trainee</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
+                <tbody className="bg-white divide-y divide-gray-200 dark:bg-gray-800 dark:divide-gray-700">
                   {completedClasses.map((classItem, index) => (
-                    <tr key={classItem.courseRunId || index} className="hover:bg-gray-50">
-                      <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{classItem.courseTitle}</td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">{classItem.courseCode}</td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">{classItem.courseRunId}</td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">{formatDate(classItem.startDate)}</td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">{formatDate(classItem.endDate)}</td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">{classItem.trainerName}</td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 text-center">{classItem.numOfTrainee}</td>
+                    <tr key={classItem.courseRunId || index} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                      <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">{classItem.courseTitle}</td>
+                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{classItem.courseCode}</td>
+                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{classItem.courseRunId}</td>
+                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{formatDate(classItem.startDate)}</td>
+                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{formatDate(classItem.endDate)}</td>
+                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{classItem.trainerName}</td>
+                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 text-center dark:text-gray-400">{classItem.numOfTrainee}</td>
                       <td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
                         <div className="flex items-center space-x-2">
                           <Button size="sm" variant="ghost" onClick={() => handleViewDetails(classItem.courseRunId)}>

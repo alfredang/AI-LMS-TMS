@@ -9,20 +9,20 @@ import { ensureAbsoluteImageUrl } from '@utils/imageUtils';
 import { getApiUrl, getUploadUrl, getDeleteFileUrl, stripBaseUrl } from '@/lib/urlHelpers';
 
 // Constants for styling consistency
-const inputClasses = "block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent";
+const inputClasses = "block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-500";
 
 // Reusable Profile Bio Item Component
 const ProfileBioItem: React.FC<{ label: string; value: React.ReactNode }> = ({ label, value }) => (
     <div>
-        <p className="text-sm text-subtle">{label}</p>
-        <p className="font-semibold text-on-surface break-words">{value}</p>
+        <p className="text-sm text-subtle dark:text-gray-400">{label}</p>
+        <p className="font-semibold text-on-surface break-words dark:text-gray-200">{value}</p>
     </div>
 );
 
 // Login Details Card Component
-const LoginDetailsCard: React.FC<{ 
-    loginId: string; 
-    password: string; 
+const LoginDetailsCard: React.FC<{
+    loginId: string;
+    password: string;
     userId?: string;
     onPasswordUpdate?: (newPassword: string) => void;
 }> = ({ loginId, password, userId, onPasswordUpdate }) => {
@@ -45,7 +45,7 @@ const LoginDetailsCard: React.FC<{
 
         try {
             setIsUpdating(true);
-            
+
             if (!currentUser?.id) {
                 throw new Error('No authenticated user found');
             }
@@ -70,17 +70,17 @@ const LoginDetailsCard: React.FC<{
             if (!result.success) {
                 throw new Error(result.message || 'Password update failed');
             }
-            
+
             console.log('✅ Trainer password updated successfully with bcrypt hashing');
             alert('Password reset successfully!');
             setIsResetting(false);
             setNewPassword('');
-            
+
             // Call the callback to update the parent component
             if (onPasswordUpdate) {
                 onPasswordUpdate(newPassword);
             }
-            
+
         } catch (error) {
             console.error('❌ Failed to reset trainer password:', error);
             alert(`Failed to reset password: ${error instanceof Error ? error.message : 'Please try again.'}`);
@@ -90,7 +90,7 @@ const LoginDetailsCard: React.FC<{
     };
 
     return (
-        <Card className="p-8 mt-8">
+        <Card className="p-8 mt-8 dark:bg-gray-800 dark:border-gray-700">
             <h2 className="text-xl font-bold mb-4">Login Details</h2>
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4 flex-grow">
@@ -160,18 +160,18 @@ const LoginDetailsCard: React.FC<{
 };
 
 // Work Experience Section Component
-const WorkExperienceSection: React.FC<{ 
-    experience: WorkExperienceItem[]; 
-    isEditing: boolean; 
-    onUpdate: (newExp: WorkExperienceItem[]) => void 
+const WorkExperienceSection: React.FC<{
+    experience: WorkExperienceItem[];
+    isEditing: boolean;
+    onUpdate: (newExp: WorkExperienceItem[]) => void
 }> = ({ experience, isEditing, onUpdate }) => {
-    
+
     // Date validation function
     const validateDateFormat = (date: string): boolean => {
         if (!date || date === 'Present') return true;
         const dateRegex = /^\d{4}-\d{2}$/;
         if (!dateRegex.test(date)) return false;
-        
+
         const [year, month] = date.split('-').map(Number);
         return year >= 1900 && year <= new Date().getFullYear() + 10 && month >= 1 && month <= 12;
     };
@@ -208,62 +208,62 @@ const WorkExperienceSection: React.FC<{
         }
         onUpdate(updated);
     };
-    
+
     if (isEditing) {
         return (
             <div className="space-y-4">
                 {experience.map((item, index) => {
                     // Only consider it "Present" if explicitly set to 'Present'
                     const isPresent = item.endDate === 'Present';
-                    
+
                     return (
-                        <div key={item.id || index} className="p-4 border rounded-md relative group">
+                        <div key={item.id || index} className="p-4 border rounded-md relative group dark:border-gray-700">
                             <div className="grid grid-cols-2 gap-4">
-                                <input 
-                                    type="text" 
-                                    placeholder="Job Title" 
-                                    value={item.jobTitle} 
+                                <input
+                                    type="text"
+                                    placeholder="Job Title"
+                                    value={item.jobTitle}
                                     onChange={e => {
                                         const updated = [...experience];
                                         updated[index] = { ...item, jobTitle: e.target.value };
                                         onUpdate(updated);
-                                    }} 
-                                    className={`${inputClasses} col-span-2`} 
+                                    }}
+                                    className={`${inputClasses} col-span-2`}
                                 />
-                                <input 
-                                    type="text" 
-                                    placeholder="Company" 
-                                    value={item.company} 
+                                <input
+                                    type="text"
+                                    placeholder="Company"
+                                    value={item.company}
                                     onChange={e => {
                                         const updated = [...experience];
                                         updated[index] = { ...item, company: e.target.value };
                                         onUpdate(updated);
-                                    }} 
-                                    className={inputClasses} 
+                                    }}
+                                    className={inputClasses}
                                 />
-                                <input 
-                                    type="text" 
-                                    placeholder="Start Date (YYYY-MM)" 
-                                    value={item.startDate} 
-                                    onChange={e => handleDateChange(index, 'startDate', e.target.value)} 
+                                <input
+                                    type="text"
+                                    placeholder="Start Date (YYYY-MM)"
+                                    value={item.startDate}
+                                    onChange={e => handleDateChange(index, 'startDate', e.target.value)}
                                     onBlur={e => handleDateBlur(index, 'startDate', e.target.value)}
                                     data-field={`startDate-${index}`}
-                                    className={inputClasses} 
+                                    className={inputClasses}
                                 />
                                 <div className="flex items-center gap-2">
-                                    <input 
-                                        type="text" 
-                                        placeholder="End Date (YYYY-MM)" 
-                                        value={isPresent ? '' : (item.endDate || '')} 
-                                        onChange={e => handleDateChange(index, 'endDate', e.target.value)} 
+                                    <input
+                                        type="text"
+                                        placeholder="End Date (YYYY-MM)"
+                                        value={isPresent ? '' : (item.endDate || '')}
+                                        onChange={e => handleDateChange(index, 'endDate', e.target.value)}
                                         onBlur={e => handleDateBlur(index, 'endDate', e.target.value)}
                                         data-field={`endDate-${index}`}
                                         className={`${inputClasses} flex-1`}
                                         disabled={isPresent}
                                     />
                                     <label className="flex items-center gap-1 text-sm whitespace-nowrap">
-                                        <input 
-                                            type="checkbox" 
+                                        <input
+                                            type="checkbox"
                                             checked={isPresent}
                                             onChange={() => togglePresent(index)}
                                             className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
@@ -271,22 +271,22 @@ const WorkExperienceSection: React.FC<{
                                         Present
                                     </label>
                                 </div>
-                                <textarea 
-                                    placeholder="Description" 
-                                    value={item.description} 
+                                <textarea
+                                    placeholder="Description"
+                                    value={item.description}
                                     onChange={e => {
                                         const updated = [...experience];
                                         updated[index] = { ...item, description: e.target.value };
                                         onUpdate(updated);
-                                    }} 
+                                    }}
                                     className={`${inputClasses} col-span-2 h-20`}
                                 ></textarea>
                             </div>
-                            <button 
+                            <button
                                 onClick={() => {
                                     const updated = experience.filter((_, i) => i !== index);
                                     onUpdate(updated);
-                                }} 
+                                }}
                                 className="absolute top-2 right-2 p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-100 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
                             >
                                 <Icon name={IconName.Delete} className="w-4 h-4" />
@@ -294,13 +294,13 @@ const WorkExperienceSection: React.FC<{
                         </div>
                     );
                 })}
-                <Button variant="ghost" size="sm" onClick={() => onUpdate([...experience, { 
-                    id: `we_${Date.now()}`, 
-                    jobTitle: '', 
-                    company: '', 
-                    startDate: '', 
+                <Button variant="ghost" size="sm" onClick={() => onUpdate([...experience, {
+                    id: `we_${Date.now()}`,
+                    jobTitle: '',
+                    company: '',
+                    startDate: '',
                     endDate: '', // Default to empty (unticked)
-                    description: '' 
+                    description: ''
                 }])}>
                     + Add Experience
                 </Button>
@@ -313,9 +313,9 @@ const WorkExperienceSection: React.FC<{
             {experience.map((item, index) => {
                 // Handle null/empty end dates from database as "Present"
                 const displayEndDate = item.endDate === null || item.endDate === '' ? 'Present' : item.endDate;
-                
+
                 return (
-                    <div key={item.id || index} className="p-4 border border-gray-200 rounded-md">
+                    <div key={item.id || index} className="p-4 border border-gray-200 rounded-md dark:border-gray-700">
                         <h4 className="font-bold">{item.jobTitle}</h4>
                         <p className="text-subtle">{item.company} | {item.startDate} - {displayEndDate}</p>
                         <p className="text-sm mt-1">{item.description}</p>
@@ -335,7 +335,7 @@ const MultiSelectCheckboxes: React.FC<{
     isEditing: boolean;
     color: 'primary' | 'secondary'
 }> = ({ options, selected, onChange, isEditing, color }) => {
-    
+
     const colorClasses = {
         primary: { ring: 'focus:ring-primary', text: 'text-primary' },
         secondary: { ring: 'focus:ring-secondary', text: 'text-secondary' },
@@ -343,7 +343,7 @@ const MultiSelectCheckboxes: React.FC<{
 
     if (isEditing) {
         return (
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 max-h-60 overflow-y-auto p-4 border rounded-md">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 max-h-60 overflow-y-auto p-4 border rounded-md dark:border-gray-700">
                 {options.map(option => (
                     <div key={option} className="flex items-center">
                         <input
@@ -354,13 +354,13 @@ const MultiSelectCheckboxes: React.FC<{
                             onChange={onChange}
                             className={`h-4 w-4 ${colorClasses[color].text} ${colorClasses[color].ring} border-gray-300 rounded`}
                         />
-                        <label htmlFor={`option-${option}`} className="ml-2 text-sm text-gray-900">{option}</label>
+                        <label htmlFor={`option-${option}`} className="ml-2 text-sm text-gray-900 dark:text-gray-200">{option}</label>
                     </div>
                 ))}
             </div>
         );
     }
-    
+
     return (
         <div className="flex flex-wrap gap-2">
             {selected.map(item => (
@@ -380,12 +380,12 @@ const SingleSelectEducation: React.FC<{
     onChange: (value: string) => void;
     isEditing: boolean;
 }> = ({ options, selected, onChange, isEditing }) => {
-    
+
     if (isEditing) {
         return (
-            <select 
-                value={selected || ''} 
-                onChange={(e) => onChange(e.target.value)} 
+            <select
+                value={selected || ''}
+                onChange={(e) => onChange(e.target.value)}
                 className={inputClasses}
             >
                 <option value="">Select highest education</option>
@@ -395,7 +395,7 @@ const SingleSelectEducation: React.FC<{
             </select>
         );
     }
-    
+
     return (
         <div>
             {selected ? (
@@ -420,7 +420,7 @@ const DocumentSection: React.FC<{
     onAddCertification: (name: string, file: File) => void;
     onRemoveCertification: (id: string) => void;
 }> = ({ title, cvUrl, cvOriginalFilename, certifications, isEditing, onUpdateCv, onAddCertification, onRemoveCertification }) => {
-    
+
     const [newCertName, setNewCertName] = useState('');
     const [selectedCertFile, setSelectedCertFile] = useState<File | null>(null);
 
@@ -446,12 +446,12 @@ const DocumentSection: React.FC<{
                 <div className="space-y-4">
                     {/* CV Upload */}
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Curriculum Vitae (CV)</label>
-                        <div className="flex items-center gap-2 p-2 bg-gray-50 rounded-md border">
+                        <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-gray-300">Curriculum Vitae (CV)</label>
+                        <div className="flex items-center gap-2 p-2 bg-gray-50 rounded-md border dark:bg-gray-700 dark:border-gray-600">
                             <Icon name={IconName.FilePdf} className="w-5 h-5 text-gray-500" />
                             <span className="text-sm text-subtle flex-grow">
                                 {cvUrl ? (
-                                    <span className="font-medium text-gray-700">
+                                    <span className="font-medium text-gray-700 dark:text-gray-300">
                                         {cvOriginalFilename}
                                     </span>
                                 ) : (
@@ -459,9 +459,9 @@ const DocumentSection: React.FC<{
                                 )}
                             </span>
                             <Button variant="ghost" size="sm" onClick={() => document.getElementById('cv-upload')?.click()}>
-                                <Icon name={IconName.Upload} className="w-4 h-4 mr-1"/> {cvUrl ? 'Change' : 'Upload'}
+                                <Icon name={IconName.Upload} className="w-4 h-4 mr-1" /> {cvUrl ? 'Change' : 'Upload'}
                             </Button>
-                            <input type="file" id="cv-upload" className="hidden" onChange={(e) => e.target.files && onUpdateCv(e.target.files[0])} accept=".pdf,.doc,.docx"/>
+                            <input type="file" id="cv-upload" className="hidden" onChange={(e) => e.target.files && onUpdateCv(e.target.files[0])} accept=".pdf,.doc,.docx" />
                         </div>
                     </div>
                     {/* Certifications List (Editable) */}
@@ -469,7 +469,7 @@ const DocumentSection: React.FC<{
                         <label className="block text-sm font-medium text-gray-700 mb-1">Certifications</label>
                         <div className="space-y-2">
                             {certifications?.map(cert => (
-                                <div key={cert.id || cert.name} className="flex items-center gap-2 p-2 bg-gray-50 rounded-md border">
+                                <div key={cert.id || cert.name} className="flex items-center gap-2 p-2 bg-gray-50 rounded-md border dark:bg-gray-700 dark:border-gray-600">
                                     <Icon name={IconName.FilePdf} className="w-5 h-5 text-gray-500" />
                                     <span className="text-sm text-gray-600 flex-1">{cert.name}</span>
                                     <button onClick={() => cert.id && onRemoveCertification(cert.id)} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-100 rounded-full">
@@ -477,17 +477,17 @@ const DocumentSection: React.FC<{
                                     </button>
                                 </div>
                             ))}
-                             <div className="flex items-center gap-2 p-2 bg-gray-100 rounded-md border border-dashed">
-                                <input 
-                                    type="text" 
-                                    placeholder="New Certification Name" 
-                                    value={newCertName} 
-                                    onChange={e => setNewCertName(e.target.value)} 
-                                    className={`${inputClasses} !py-1.5 !text-sm flex-1`} 
+                            <div className="flex items-center gap-2 p-2 bg-gray-100 rounded-md border border-dashed dark:bg-gray-700/50 dark:border-gray-600">
+                                <input
+                                    type="text"
+                                    placeholder="New Certification Name"
+                                    value={newCertName}
+                                    onChange={e => setNewCertName(e.target.value)}
+                                    className={`${inputClasses} !py-1.5 !text-sm flex-1`}
                                 />
                                 <div className="flex flex-col gap-1">
                                     <Button variant="ghost" size="sm" onClick={() => document.getElementById('cert-upload')?.click()}>
-                                        <Icon name={IconName.Upload} className="w-4 h-4 mr-1"/> Select File
+                                        <Icon name={IconName.Upload} className="w-4 h-4 mr-1" /> Select File
                                     </Button>
                                     {selectedCertFile && (
                                         <span className="text-xs text-gray-600 truncate max-w-32" title={selectedCertFile.name}>
@@ -495,20 +495,20 @@ const DocumentSection: React.FC<{
                                         </span>
                                     )}
                                 </div>
-                                <Button 
-                                    variant="ghost" 
-                                    size="sm" 
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
                                     onClick={handleAddCert}
                                     disabled={!newCertName || !selectedCertFile}
-                                    className="bg-green-100 hover:bg-green-200 text-green-700"
+                                    className="bg-green-100 hover:bg-green-200 text-green-700 dark:bg-green-900/50 dark:text-green-300"
                                 >
                                     Add
                                 </Button>
-                                <input 
-                                    type="file" 
-                                    id="cert-upload" 
-                                    className="hidden" 
-                                    onChange={(e) => e.target.files && handleFileSelect(e.target.files[0])} 
+                                <input
+                                    type="file"
+                                    id="cert-upload"
+                                    className="hidden"
+                                    onChange={(e) => e.target.files && handleFileSelect(e.target.files[0])}
                                     accept=".pdf,.jpg,.png,.doc,.docx"
                                 />
                             </div>
@@ -524,11 +524,11 @@ const DocumentSection: React.FC<{
             <h2 className="text-xl font-bold mb-4">{title}</h2>
             <div className="space-y-4">
                 {cvUrl && (
-                    <div className="flex items-center justify-between p-3 bg-gray-50 rounded-md border">
+                    <div className="flex items-center justify-between p-3 bg-gray-50 rounded-md border dark:bg-gray-700/50 dark:border-gray-600">
                         <div className="flex items-center gap-3">
                             <Icon name={IconName.FilePdf} className="w-6 h-6 text-red-600 flex-shrink-0" />
                             <div>
-                                <p className="text-sm font-medium text-gray-900">Curriculum Vitae</p>
+                                <p className="text-sm font-medium text-gray-900 dark:text-gray-200">Curriculum Vitae</p>
                             </div>
                         </div>
                         <a
@@ -544,11 +544,11 @@ const DocumentSection: React.FC<{
                 {(certifications && certifications.length > 0) && (
                     <div className="space-y-2">
                         {certifications.map(cert => (
-                            <div key={cert.id || cert.name} className="flex items-center justify-between p-3 bg-gray-50 rounded-md border">
+                            <div key={cert.id || cert.name} className="flex items-center justify-between p-3 bg-gray-50 rounded-md border dark:bg-gray-700/50 dark:border-gray-600">
                                 <div className="flex items-center gap-3">
                                     <Icon name={IconName.FilePdf} className="w-6 h-6 text-red-600 flex-shrink-0" />
                                     <div>
-                                        <p className="text-sm font-medium text-gray-900">{cert.name}</p>
+                                        <p className="text-sm font-medium text-gray-900 dark:text-gray-200">{cert.name}</p>
                                     </div>
                                 </div>
                                 <a
@@ -556,7 +556,7 @@ const DocumentSection: React.FC<{
                                     download={cert.originalFilename || cert.name}
                                     className="inline-flex items-center gap-1.5 px-2 py-1 text-xs font-semibold text-blue-600 bg-blue-50 rounded-md hover:bg-blue-100 transition-colors"
                                 >
-                                    <Icon name={IconName.Download} className="w-3 h-3" /> 
+                                    <Icon name={IconName.Download} className="w-3 h-3" />
                                     Download
                                 </a>
                             </div>
@@ -570,8 +570,8 @@ const DocumentSection: React.FC<{
 };
 
 // Main Trainer Profile Card Component
-export const TrainerProfileCard: React.FC<{ 
-    profile: TrainerProfile; 
+export const TrainerProfileCard: React.FC<{
+    profile: TrainerProfile;
     onUpdate: (updatedData: Partial<TrainerProfile>) => void;
     userId?: string;
     onProfileUpdate?: () => void;
@@ -582,9 +582,9 @@ export const TrainerProfileCard: React.FC<{
     const [isGeneratingAvatar, setIsGeneratingAvatar] = useState(false);
     // Pending changes state - only applied when Save is clicked
     const [pendingCvFile, setPendingCvFile] = useState<File | null>(null);
-    const [pendingCertificationsToAdd, setPendingCertificationsToAdd] = useState<Array<{name: string, file: File, tempId: string}>>([]);
+    const [pendingCertificationsToAdd, setPendingCertificationsToAdd] = useState<Array<{ name: string, file: File, tempId: string }>>([]);
     const [pendingCertificationsToDelete, setPendingCertificationsToDelete] = useState<string[]>([]);
-    const [certificationFilesToDelete, setCertificationFilesToDelete] = useState<Array<{id: string, fileUrl: string, name: string}>>([]);
+    const [certificationFilesToDelete, setCertificationFilesToDelete] = useState<Array<{ id: string, fileUrl: string, name: string }>>([]);
     const [selectedProfilePictureFile, setSelectedProfilePictureFile] = useState<File | null>(null);
     const [profilePicturePreviewUrl, setProfilePicturePreviewUrl] = useState<string | null>(null);
     const [uploadedProfilePicturePath, setUploadedProfilePicturePath] = useState<string | null>(null);
@@ -617,32 +617,32 @@ export const TrainerProfileCard: React.FC<{
     const handleEducationChange = (value: string) => {
         setFormData(prev => ({ ...prev, education: value }));
     };
-    
+
     const handleWorkExperienceUpdate = (newExp: WorkExperienceItem[]) => {
-        setFormData(prev => ({...prev, workExperience: newExp}));
+        setFormData(prev => ({ ...prev, workExperience: newExp }));
     }
 
     const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
             const file = e.target.files[0];
-            
+
             // Validate file type and size
             if (!file.type.startsWith('image/')) {
                 alert('Please select a valid image file.');
                 return;
             }
-            
+
             if (file.size > 5 * 1024 * 1024) { // 5MB limit
                 alert('File size must be less than 5MB.');
                 return;
             }
-            
+
             // Store the file for later upload and create a preview
             setSelectedProfilePictureFile(file);
-            
+
             // Clear any previous uploaded path since we have a new file
             setUploadedProfilePicturePath(null);
-            
+
             // Create preview URL for immediate display only - don't update formData
             const reader = new FileReader();
             reader.onloadend = () => {
@@ -705,23 +705,23 @@ export const TrainerProfileCard: React.FC<{
     const handleCvUpdate = async (file: File) => {
         // Just store the file locally - upload will happen on save
         setPendingCvFile(file);
-        
+
         // Update the display immediately to show the new filename
         setFormData(prev => ({
-            ...prev, 
+            ...prev,
             cvOriginalFilename: file.name
         }));
-        
+
         console.log('📁 CV file selected for upload on save:', file.name);
     };
 
     const handleAddCertification = (name: string, file: File) => {
         // Create a temporary ID for the new certification
         const tempId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-        
+
         // Add to pending certifications to add
         setPendingCertificationsToAdd(prev => [...prev, { name, file, tempId }]);
-        
+
         // Update the UI immediately to show the new certification
         const tempCert = {
             id: tempId,
@@ -729,12 +729,12 @@ export const TrainerProfileCard: React.FC<{
             fileUrl: '', // Will be set after upload
             originalFilename: file.name
         };
-        
-        setFormData(prev => ({ 
-            ...prev, 
+
+        setFormData(prev => ({
+            ...prev,
             certifications: [...(prev.certifications || []), tempCert]
         }));
-        
+
         console.log('📁 Certification queued for upload on save:', name, file.name);
     };
 
@@ -742,9 +742,9 @@ export const TrainerProfileCard: React.FC<{
         // If it's a temporary cert (pending addition), remove from pending and UI
         if (id.startsWith('temp_')) {
             setPendingCertificationsToAdd(prev => prev.filter(cert => cert.tempId !== id));
-            setFormData(prev => ({ 
-                ...prev, 
-                certifications: (prev.certifications || []).filter(c => c.id !== id) 
+            setFormData(prev => ({
+                ...prev,
+                certifications: (prev.certifications || []).filter(c => c.id !== id)
             }));
             console.log('🗑️ Temporary certification removed from pending list:', id);
             return;
@@ -763,13 +763,13 @@ export const TrainerProfileCard: React.FC<{
 
         // Add to pending deletion list
         setPendingCertificationsToDelete(prev => [...prev, id]);
-        
+
         // Remove from UI immediately
-        setFormData(prev => ({ 
-            ...prev, 
-            certifications: (prev.certifications || []).filter(c => c.id !== id) 
+        setFormData(prev => ({
+            ...prev,
+            certifications: (prev.certifications || []).filter(c => c.id !== id)
         }));
-        
+
         console.log('🗑️ Certification marked for deletion on save:', id);
     };
 
@@ -777,7 +777,7 @@ export const TrainerProfileCard: React.FC<{
     const handleCancel = () => {
         // Reset form data to original profile
         setFormData(profile);
-        
+
         // Clear all pending changes
         setPendingCvFile(null);
         setPendingCertificationsToAdd([]);
@@ -786,33 +786,33 @@ export const TrainerProfileCard: React.FC<{
         setSelectedProfilePictureFile(null);
         setProfilePicturePreviewUrl(null);
         setUploadedProfilePicturePath(null);
-        
+
         // Exit edit mode
         setIsEditing(false);
-        
+
         console.log('✅ All pending changes reverted');
     };
 
     const handleSave = async () => {
         try {
             console.log('💾 Saving trainer profile with all pending changes:', formData);
-            
-            const CURRENT_USER_ID = currentUser?.id; 
-            
+
+            const CURRENT_USER_ID = currentUser?.id;
+
             if (!CURRENT_USER_ID) {
                 console.error('❌ No authenticated user found');
                 alert('Error: No authenticated user found. Please log in again.');
                 return;
             }
-            
+
             // Step 1: Handle CV upload if pending
             let newCvUrl = formData.cvUrl;
             let newCvOriginalFilename = formData.cvOriginalFilename;
-            
+
             if (pendingCvFile) {
                 try {
                     console.log('📁 Uploading pending CV file:', pendingCvFile.name);
-                    
+
                     // Delete old CV file first if it exists
                     const oldFileUrl = profile.cvUrl;
                     if (oldFileUrl && (oldFileUrl.includes('uploads/') || oldFileUrl.startsWith('/uploads/'))) {
@@ -830,95 +830,95 @@ export const TrainerProfileCard: React.FC<{
                             console.warn('⚠️ Failed to delete old CV file:', error);
                         }
                     }
-                    
+
                     const uploadFormData = new FormData();
                     uploadFormData.append('file', pendingCvFile);
-                    
+
                     const response = await fetch(getUploadUrl('trainer', 'cv'), {
                         method: 'POST',
                         body: uploadFormData
                     });
-                    
+
                     if (!response.ok) {
                         throw new Error(`CV upload failed: ${response.status}`);
                     }
-                    
+
                     const result = await response.json();
                     if (!result.success) {
                         throw new Error(result.error || 'CV upload failed');
                     }
-                    
+
                     console.log('✅ CV uploaded successfully:', result.data);
                     console.log('📁 Uploaded CV file URL:', result.data.fileUrl);
                     console.log('📁 Uploaded CV original filename:', result.data.originalFilename);
-                    
+
                     // Store the new CV info in local variables to ensure consistency
                     newCvUrl = result.data.fileUrl;
                     newCvOriginalFilename = result.data.originalFilename;
-                    
+
                     console.log('📝 Storing CV info in local variables:', {
                         newCvUrl,
                         newCvOriginalFilename
                     });
-                    
+
                     // Update formData with new CV info
                     setFormData(prev => ({
-                        ...prev, 
+                        ...prev,
                         cvUrl: newCvUrl,
                         cvOriginalFilename: newCvOriginalFilename
                     }));
-                    
+
                 } catch (error) {
                     console.error('❌ Failed to upload CV:', error);
                     alert(`Failed to upload CV: ${error instanceof Error ? error.message : 'Please try again.'}`);
                     return;
                 }
             }
-            
+
             // Step 2: Handle certification uploads if pending
             const uploadedCertifications = [];
             for (const pendingCert of pendingCertificationsToAdd) {
                 try {
                     console.log('� Uploading pending certification:', pendingCert.name);
-                    
+
                     const uploadFormData = new FormData();
                     uploadFormData.append('file', pendingCert.file);
-                    
+
                     const response = await fetch(getUploadUrl('trainer', 'certification'), {
                         method: 'POST',
                         body: uploadFormData
                     });
-                    
+
                     if (!response.ok) {
                         throw new Error(`Certification upload failed: ${response.status}`);
                     }
-                    
+
                     const result = await response.json();
                     if (!result.success) {
                         throw new Error(result.error || 'Certification upload failed');
                     }
-                    
+
                     console.log('✅ Certification uploaded successfully:', result.data);
-                    
+
                     uploadedCertifications.push({
                         name: pendingCert.name,
                         fileUrl: result.data.fileUrl,
                         originalFilename: result.data.originalFilename
                     });
-                    
+
                 } catch (error) {
                     console.error('❌ Failed to upload certification:', error);
                     alert(`Failed to upload certification "${pendingCert.name}": ${error instanceof Error ? error.message : 'Please try again.'}`);
                     return;
                 }
             }
-            
+
             // Step 3: Handle profile picture upload if pending
             let currentUploadedPath: string | null = null;
             if (selectedProfilePictureFile) {
                 try {
                     console.log('� Uploading profile picture:', selectedProfilePictureFile.name);
-                    
+
                     // Delete old profile picture if it exists and is a local file
                     const oldFileUrl = profile.profilePictureUrl;
                     if (oldFileUrl && (oldFileUrl.startsWith('/uploads/') || oldFileUrl.includes('uploads/'))) {
@@ -934,24 +934,24 @@ export const TrainerProfileCard: React.FC<{
                             console.warn('⚠️ Failed to delete old profile picture:', error);
                         }
                     }
-                    
+
                     const uploadFormData = new FormData();
                     uploadFormData.append('file', selectedProfilePictureFile);
-                    
+
                     const response = await fetch(getUploadUrl('trainer', 'profilePicture'), {
                         method: 'POST',
                         body: uploadFormData
                     });
-                    
+
                     if (!response.ok) {
                         throw new Error(`Profile picture upload failed: ${response.statusText}`);
                     }
-                    
+
                     const result = await response.json();
                     if (!result.success) {
                         throw new Error(result.error || 'Profile picture upload failed');
                     }
-                    
+
                     console.log('✅ Profile picture uploaded successfully:', result.data);
 
                     currentUploadedPath = result.data.fileUrl.startsWith('http')
@@ -959,17 +959,17 @@ export const TrainerProfileCard: React.FC<{
                         : result.data.fileUrl;
 
                     console.log('📝 Profile picture path for database:', currentUploadedPath);
-                    
+
                 } catch (error) {
                     console.error('❌ Failed to upload profile picture:', error);
                     alert(`Failed to upload profile picture: ${error instanceof Error ? error.message : 'Please try again.'}`);
                     return;
                 }
             }
-            
+
             // Step 4: Prepare all changes for database update
             const changedFields: any = {};
-            
+
             // Basic profile fields
             if (formData.name !== profile.name) changedFields.name = formData.name;
             if (formData.email !== profile.email) changedFields.email = formData.email;
@@ -981,7 +981,7 @@ export const TrainerProfileCard: React.FC<{
             if (JSON.stringify(formData.workExperience) !== JSON.stringify(profile.workExperience)) changedFields.workExperience = formData.workExperience;
             if (JSON.stringify(formData.qualifications) !== JSON.stringify(profile.qualifications)) changedFields.qualifications = formData.qualifications;
             if (formData.education !== profile.education) changedFields.education = formData.education;
-            
+
             // CV changes - use the local variables to ensure we have the most up-to-date values
             if (pendingCvFile) {
                 changedFields.cvUrl = newCvUrl;
@@ -991,18 +991,18 @@ export const TrainerProfileCard: React.FC<{
                     cvOriginalFilename: newCvOriginalFilename
                 });
             }
-            
+
             // Profile picture changes
             if (currentUploadedPath) {
                 changedFields.profilePictureUrl = currentUploadedPath;
             } else if (uploadedProfilePicturePath) {
                 changedFields.profilePictureUrl = uploadedProfilePicturePath;
-            } else if (formData.profilePictureUrl && 
-                       formData.profilePictureUrl !== profile.profilePictureUrl && 
-                       !formData.profilePictureUrl.startsWith('data:')) {
+            } else if (formData.profilePictureUrl &&
+                formData.profilePictureUrl !== profile.profilePictureUrl &&
+                !formData.profilePictureUrl.startsWith('data:')) {
                 changedFields.profilePictureUrl = formData.profilePictureUrl;
             }
-            
+
             // Certification changes
             if (uploadedCertifications.length > 0) {
                 changedFields.newCertifications = uploadedCertifications;
@@ -1010,16 +1010,16 @@ export const TrainerProfileCard: React.FC<{
             if (pendingCertificationsToDelete.length > 0) {
                 changedFields.certificationsToDelete = pendingCertificationsToDelete;
             }
-            
+
             // Step 5: Collect file URLs for certifications that will be deleted (before database update)
             // Use the pre-captured file URLs from when certifications were marked for deletion
             console.log('📁 Certification files to delete:', certificationFilesToDelete);
-            
+
             // Step 6: Update database with all changes
             // Step 6: Update database with all changes
             if (Object.keys(changedFields).length > 0) {
                 console.log('📝 Updating database with all changes:', changedFields);
-                
+
                 const updateData = {
                     userId: CURRENT_USER_ID,
                     profileData: changedFields
@@ -1041,12 +1041,12 @@ export const TrainerProfileCard: React.FC<{
                 if (!result.success) {
                     throw new Error(result.message || 'Database update failed');
                 }
-                
+
                 console.log('✅ All changes saved to database successfully');
-                
+
                 // Update the original profile state with all changes
                 Object.assign(profile, changedFields);
-                
+
                 // If certifications were updated, use the server response
                 if (result.data?.profile?.certifications) {
                     profile.certifications = result.data.profile.certifications;
@@ -1055,7 +1055,7 @@ export const TrainerProfileCard: React.FC<{
             } else {
                 console.log('📝 No changes detected, skipping database update');
             }
-            
+
             // Step 7: Delete old certification files that were marked for deletion
             for (const certFile of certificationFilesToDelete) {
                 try {
@@ -1077,7 +1077,7 @@ export const TrainerProfileCard: React.FC<{
                     console.warn('⚠️ Failed to delete certification file:', certFile.name, error);
                 }
             }
-            
+
             // Step 8: Clean up pending changes and update final state
             setPendingCvFile(null);
             setPendingCertificationsToAdd([]);
@@ -1086,16 +1086,16 @@ export const TrainerProfileCard: React.FC<{
             setSelectedProfilePictureFile(null);
             setProfilePicturePreviewUrl(null);
             setUploadedProfilePicturePath(null);
-            
+
             setIsEditing(false);
             alert('Profile saved successfully!');
-            
+
             // Call callbacks to refresh parent components
             onUpdate(formData);
             if (onProfileUpdate) {
                 onProfileUpdate();
             }
-            
+
         } catch (error) {
             console.error('❌ Failed to save trainer profile:', error);
             alert(`Failed to save profile: ${error instanceof Error ? error.message : 'Please try again.'}`);
@@ -1145,7 +1145,7 @@ export const TrainerProfileCard: React.FC<{
                     )}
                 </div>
                 <div className="border-t my-6"></div>
-                
+
                 <div className="space-y-6">
                     <section>
                         <h2 className="text-xl font-bold mb-4">Bio Data</h2>
@@ -1165,21 +1165,21 @@ export const TrainerProfileCard: React.FC<{
                                 <ProfileBioItem label="Email" value={formData.email} />
                                 <ProfileBioItem label="Gender" value={formData.gender} />
                                 <ProfileBioItem label="Trainer Type" value={formData.trainerType} />
-                            {formData.linkedinUrl && (
-                                <ProfileBioItem 
-                                    label="LinkedIn Profile" 
-                                    value={
-                                        <a href={formData.linkedinUrl.startsWith('http') ? formData.linkedinUrl : `https://${formData.linkedinUrl}`} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline flex items-center gap-1.5">
-                                            <Icon name={IconName.Linkedin} className="w-4 h-4" />
-                                            View Profile
-                                        </a>
-                                    } 
-                                />
-                            )}
+                                {formData.linkedinUrl && (
+                                    <ProfileBioItem
+                                        label="LinkedIn Profile"
+                                        value={
+                                            <a href={formData.linkedinUrl.startsWith('http') ? formData.linkedinUrl : `https://${formData.linkedinUrl}`} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline flex items-center gap-1.5">
+                                                <Icon name={IconName.Linkedin} className="w-4 h-4" />
+                                                View Profile
+                                            </a>
+                                        }
+                                    />
+                                )}
                             </div>
                         )}
                     </section>
-                    
+
                     <DocumentSection
                         title="CV & Certifications"
                         cvUrl={formData.cvUrl}
@@ -1193,49 +1193,49 @@ export const TrainerProfileCard: React.FC<{
 
                     <section>
                         <h2 className="text-xl font-bold mb-4">Qualifications</h2>
-                        <MultiSelectCheckboxes 
-                            options={Object.values(TrainerQualification)} 
-                            selected={formData.qualifications || []} 
-                            onChange={handleMultiSelectChange('qualifications')} 
-                            isEditing={isEditing} 
-                            color="secondary" 
+                        <MultiSelectCheckboxes
+                            options={Object.values(TrainerQualification)}
+                            selected={formData.qualifications || []}
+                            onChange={handleMultiSelectChange('qualifications')}
+                            isEditing={isEditing}
+                            color="secondary"
                         />
                     </section>
-                    
+
                     <section>
                         <h2 className="text-xl font-bold mb-4">Highest Education</h2>
-                        <SingleSelectEducation 
-                            options={Object.values(TrainerEducation)} 
-                            selected={formData.education || ''} 
-                            onChange={handleEducationChange} 
-                            isEditing={isEditing} 
+                        <SingleSelectEducation
+                            options={Object.values(TrainerEducation)}
+                            selected={formData.education || ''}
+                            onChange={handleEducationChange}
+                            isEditing={isEditing}
                         />
                     </section>
-                    
+
                     <section>
                         <h2 className="text-xl font-bold mb-4">Area of Expertise</h2>
-                        <MultiSelectCheckboxes 
-                            options={SKILLS_FUTURE_INDUSTRIES} 
-                            selected={formData.areasOfExpertise || []} 
-                            onChange={handleMultiSelectChange('areasOfExpertise')} 
-                            isEditing={isEditing} 
-                            color="secondary" 
+                        <MultiSelectCheckboxes
+                            options={SKILLS_FUTURE_INDUSTRIES}
+                            selected={formData.areasOfExpertise || []}
+                            onChange={handleMultiSelectChange('areasOfExpertise')}
+                            isEditing={isEditing}
+                            color="secondary"
                         />
                     </section>
-                    
+
                     <section>
                         <h2 className="text-xl font-bold mb-4">Work Experience</h2>
-                        <WorkExperienceSection 
-                            experience={formData.workExperience || []} 
-                            isEditing={isEditing} 
-                            onUpdate={handleWorkExperienceUpdate} 
+                        <WorkExperienceSection
+                            experience={formData.workExperience || []}
+                            isEditing={isEditing}
+                            onUpdate={handleWorkExperienceUpdate}
                         />
                     </section>
                 </div>
             </Card>
-            <LoginDetailsCard 
-                loginId={formData.loginId || formData.email} 
-                password={formData.password || '••••••••'} 
+            <LoginDetailsCard
+                loginId={formData.loginId || formData.email}
+                password={formData.password || '••••••••'}
                 userId={userId}
                 onPasswordUpdate={handlePasswordUpdate}
             />

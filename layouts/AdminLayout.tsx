@@ -75,7 +75,7 @@ const ManagementDashboard: React.FC<ManagementDashboardProps> = ({ type }) => {
 
   return (
     <div>
-      <h2 className="text-3xl font-bold mb-6">{title}</h2>
+      <h2 className="text-3xl font-bold mb-6 dark:text-white">{title}</h2>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {links.map((link, index) => (
           <NavBox key={index} {...link} />
@@ -221,7 +221,7 @@ const AdminLayout: React.FC = () => {
       case AdminPage.UpcomingClasses:
         return (
           <div>
-            <h2 className="text-3xl font-bold mb-6">Upcoming Classes</h2>
+            <h2 className="text-3xl font-bold mb-6 dark:text-white">Upcoming Classes</h2>
             <UpcomingClassesTable showTitle={false} showFilters={true} />
           </div>
         );

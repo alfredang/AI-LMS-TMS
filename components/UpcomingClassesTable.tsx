@@ -21,7 +21,7 @@ const getStatusColor = (status: string) => {
             return 'bg-green-100 text-green-800';
         case 'Processing':
         case 'Reschedule':
-             return 'bg-blue-100 text-blue-800';
+            return 'bg-blue-100 text-blue-800';
         case 'Pending':
         case 'In Progress':
             return 'bg-yellow-100 text-yellow-800';
@@ -32,9 +32,9 @@ const getStatusColor = (status: string) => {
         case 'Fail':
         case 'Failed':
         case 'Cancelled':
-            return 'bg-red-100 text-red-800';
+            return 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-200';
         default:
-            return 'bg-gray-100 text-gray-800';
+            return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
     }
 };
 
@@ -62,15 +62,15 @@ interface UpcomingClassesTableProps {
     showFilters?: boolean;
 }
 
-export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({ 
-    showTitle = true, 
-    showFilters = true 
+export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
+    showTitle = true,
+    showFilters = true
 }) => {
     const { setAdminPage, setSelectedCourseRunId, setEditingCourseRun } = useLms();
     const [currentPage, setCurrentPage] = useState(0);
     const [searchQuery, setSearchQuery] = useState('');
     const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
-    
+
     // Advanced filter states
     const [courseTitle, setCourseTitle] = useState('');
     const [courseCode, setCourseCode] = useState('');
@@ -78,14 +78,14 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
     const [selectedTrainer, setSelectedTrainer] = useState('');
     const [startDateFrom, setStartDateFrom] = useState('');
     const [endDateUntil, setEndDateUntil] = useState('');
-    
+
     // Data states
     const [upcomingClasses, setUpcomingClasses] = useState<UpcomingClass[]>([]);
     const [trainers, setTrainers] = useState<Trainer[]>([]);
     const [loading, setLoading] = useState(true);
     const [totalCount, setTotalCount] = useState(0);
     const [totalPages, setTotalPages] = useState(0);
-    
+
     const ITEMS_PER_PAGE = 20;
 
     // Fetch trainers from API
@@ -94,9 +94,9 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
             console.log('🔄 Fetching trainers...');
             const response = await fetch(getApiUrl('/api/admin/trainers'));
             const result = await response.json();
-            
+
             console.log('📊 Trainers API response:', result);
-            
+
             if (result.success) {
                 console.log('✅ Trainers loaded:', result.data.trainers.length);
                 setTrainers(result.data.trainers);
@@ -131,9 +131,9 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
 
             const response = await fetch(getApiUrl(`/api/admin/upcoming-classes?${params}`));
             const result = await response.json();
-            
+
             console.log('📊 Upcoming classes API response:', result);
-            
+
             if (result.success) {
                 console.log('✅ Upcoming classes loaded:', result.data.classes.length);
                 setUpcomingClasses(result.data.classes);
@@ -219,15 +219,15 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
         <div>
             {showTitle && (
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-                    <h3 className="text-2xl font-semibold">Upcoming Classes</h3>
+                    <h3 className="text-2xl font-semibold dark:text-white">Upcoming Classes</h3>
                 </div>
             )}
 
             {/* Upcoming Classes Section */}
-            <Card className="p-6">
+            <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
                 {showFilters && (
                     <>
-                        <p className="text-sm mb-1">General Search</p>
+                        <p className="text-sm mb-1 dark:text-gray-300">General Search</p>
                         {/* Search and Filters */}
                         <div className="mb-6">
                             <div className="flex flex-col sm:flex-row gap-4 mb-4">
@@ -242,7 +242,7 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                         placeholder="Search title..."
                                         value={searchQuery}
                                         onChange={(e) => setSearchQuery(e.target.value)}
-                                        className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                        className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400"
                                     />
                                 </div>
                                 <div className="flex gap-2">
@@ -265,8 +265,8 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
 
                             {/* Advanced Filters */}
                             {showAdvancedFilters && (
-                                <div className="bg-gray-50 p-4 rounded-lg space-y-4">
-                                    
+                                <div className="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-lg space-y-4">
+
                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                                         {/* Course Title */}
                                         <div>
@@ -276,10 +276,10 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                                 placeholder="Enter course title..."
                                                 value={courseTitle}
                                                 onChange={(e) => setCourseTitle(e.target.value)}
-                                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                                             />
                                         </div>
-                                        
+
                                         {/* Course Code */}
                                         <div>
                                             <label className="block text-sm font-medium text-gray-700 mb-1">Course Code</label>
@@ -288,10 +288,10 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                                 placeholder="Enter course code..."
                                                 value={courseCode}
                                                 onChange={(e) => setCourseCode(e.target.value)}
-                                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                                             />
                                         </div>
-                                        
+
                                         {/* Course Run ID */}
                                         <div>
                                             <label className="block text-sm font-medium text-gray-700 mb-1">Course Run ID</label>
@@ -300,17 +300,17 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                                 placeholder="Enter run ID..."
                                                 value={courseRunId}
                                                 onChange={(e) => setCourseRunId(e.target.value)}
-                                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                                             />
                                         </div>
-                                        
+
                                         {/* Trainer Dropdown */}
                                         <div>
                                             <label className="block text-sm font-medium text-gray-700 mb-1">Trainer</label>
                                             <select
                                                 value={selectedTrainer}
                                                 onChange={(e) => setSelectedTrainer(e.target.value)}
-                                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                                             >
                                                 <option value="">Select a trainer...</option>
                                                 {trainers.map((trainer, index) => (
@@ -320,7 +320,7 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                                 ))}
                                             </select>
                                         </div>
-                                        
+
                                         {/* Start Date From */}
                                         <div>
                                             <label className="block text-sm font-medium text-gray-700 mb-1">Start Date (From)</label>
@@ -330,10 +330,10 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                                 value={startDateFrom}
                                                 onChange={handleStartDateChange}
                                                 maxLength={10}
-                                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                                             />
                                         </div>
-                                        
+
                                         {/* End Date Until */}
                                         <div>
                                             <label className="block text-sm font-medium text-gray-700 mb-1">End Date (Until)</label>
@@ -343,7 +343,7 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                                 value={endDateUntil}
                                                 onChange={handleEndDateChange}
                                                 maxLength={10}
-                                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                                             />
                                         </div>
                                     </div>
@@ -372,10 +372,10 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                 ) : (
                     <>
                         <div className="overflow-x-auto">
-                            <table className="min-w-full divide-y divide-gray-200">
-                                <thead className="bg-gray-50">
-                                    <tr className="border-b">
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">COURSE RUN ID</th>
+                            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                                <thead className="bg-gray-50 dark:bg-gray-700/50">
+                                    <tr className="border-b dark:border-gray-700">
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">COURSE RUN ID</th>
                                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">COURSE TITLE</th>
                                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">TGS REF</th>
                                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">CLASS STATUS</th>
@@ -387,11 +387,11 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ACTIONS</th>
                                     </tr>
                                 </thead>
-                                <tbody className="bg-white divide-y divide-gray-200">
+                                <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                                     {upcomingClasses.map((classItem, index) => (
-                                        <tr key={index} className="border-b hover:bg-gray-50">
-                                            <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">{classItem.courseRunId}</td>
-                                            <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{classItem.courseTitle}</td>
+                                        <tr key={index} className="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                                            <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{classItem.courseRunId}</td>
+                                            <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">{classItem.courseTitle}</td>
                                             <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">{classItem.courseCode}</td>
                                             <td className="px-4 py-4 whitespace-nowrap text-sm">
                                                 <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(classItem.classStatus || 'Unknown')}`}>
@@ -405,8 +405,8 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                             <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 text-center">{classItem.numOfTrainee}</td>
                                             <td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
                                                 <div className="flex items-center space-x-2">
-                                                    <Button 
-                                                        size="sm" 
+                                                    <Button
+                                                        size="sm"
                                                         variant="ghost"
                                                         onClick={() => handleViewDetails(classItem.courseRunId)}
                                                     >
@@ -418,7 +418,7 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                                         onClick={() => handleEditClass(classItem)}
                                                         className="!text-blue-600 hover:!bg-blue-50"
                                                     >
-                                                        <Icon name={IconName.Edit} className="w-4 h-4 mr-1"/>
+                                                        <Icon name={IconName.Edit} className="w-4 h-4 mr-1" />
                                                         Edit
                                                     </Button>
                                                     <Button
@@ -427,7 +427,7 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                                         onClick={() => handleDelete(classItem.courseRunId, classItem.courseTitle)}
                                                         className="!text-red-600 hover:!bg-red-50"
                                                     >
-                                                        <Icon name={IconName.Delete} className="w-4 h-4 mr-1"/>
+                                                        <Icon name={IconName.Delete} className="w-4 h-4 mr-1" />
                                                         Delete
                                                     </Button>
                                                 </div>

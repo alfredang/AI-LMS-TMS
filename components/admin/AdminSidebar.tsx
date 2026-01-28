@@ -9,7 +9,7 @@ interface NavSectionProps {
 
 const NavSection: React.FC<NavSectionProps> = ({ title, children }) => (
     <div>
-        <h3 className="px-3 text-xs font-semibold uppercase text-gray-500 tracking-wider">{title}</h3>
+        <h3 className="px-3 text-xs font-semibold uppercase text-gray-500 tracking-wider dark:text-gray-400">{title}</h3>
         <div className="mt-2 space-y-1" role="group" aria-labelledby={`${title}-heading`}>
             {children}
         </div>
@@ -39,8 +39,8 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate }) => {
             }}
             className={`flex items-center rounded-md px-3 py-2 text-sm font-medium transition-colors ${isSubItem ? 'pl-8' : ''
                 } ${adminPage === page
-                    ? 'bg-blue-50 text-blue-600 border-r-2 border-blue-600'
-                    : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'
+                    ? 'bg-blue-50 text-blue-600 border-r-2 border-blue-600 dark:bg-blue-900/50 dark:text-blue-300 dark:border-blue-400'
+                    : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-white'
                 }`}
         >
             {label || page}

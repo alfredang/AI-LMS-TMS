@@ -6,7 +6,7 @@ import { Button } from '../ui/Button';
 // Enums based on the Python constants
 enum IdTypeSummary {
   NRIC = "NRIC",
-  FIN = "FIN", 
+  FIN = "FIN",
   OTHERS = "OTHERS"
 }
 
@@ -49,11 +49,11 @@ interface EnrolmentFormData {
   // Course Info
   courseReferenceNumber: string;
   courseRunId: string;
-  
+
   // Payment Info
   traineeFeesDiscountAmount?: number;
   traineeFeesCollectionStatus: CollectionStatus;
-  
+
   // Trainee Info
   traineeIdType: IdTypeSummary;
   traineeId: string;
@@ -65,7 +65,7 @@ interface EnrolmentFormData {
   traineeContactNumberPhoneNumber: string;
   traineeEnrolmentDate?: string;
   traineeSponsorshipType: SponsorshipType;
-  
+
   // Employer Info (conditional based on sponsorship)
   employerUen?: string;
   employerFullName?: string;
@@ -73,7 +73,7 @@ interface EnrolmentFormData {
   employerAreaCode?: string;
   employerCountryCode?: string;
   employerPhoneNumber?: string;
-  
+
   // Training Partner Info
   trainingPartnerUen: string;
   trainingPartnerCode: string;
@@ -131,7 +131,7 @@ const EnrollLearners: React.FC = () => {
   const [warnings, setWarnings] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const inputClasses = "block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent";
+  const inputClasses = "block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-500";
 
   // Helper function to calculate age group from date of birth (from ClassDetailView)
   const getAgeGroup = (dob: string): 'Above 40' | 'Below 40' | 'N/A' => {
@@ -174,7 +174,7 @@ const EnrollLearners: React.FC = () => {
       case 'Cancelled':
         return 'bg-red-100 text-red-800';
       default:
-        return 'bg-gray-100 text-gray-800';
+        return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
     }
   };
 
@@ -387,7 +387,7 @@ const EnrollLearners: React.FC = () => {
         throw new Error('Failed to fetch UEN from database');
       }
       const uenData = await uenResponse.json();
-      
+
       if (!uenData.uen) {
         throw new Error('UEN not found in database');
       }
@@ -421,7 +421,7 @@ const EnrollLearners: React.FC = () => {
       const ssgResponse = result.data;
       console.log('✅ Enrolment search results:', ssgResponse);
       setEnrolmentData(ssgResponse);
-      
+
     } catch (err) {
       console.error('❌ Error searching enrolment records:', err);
       setEnrolmentError(err instanceof Error ? err.message : 'Failed to search enrolment records');
@@ -432,12 +432,12 @@ const EnrollLearners: React.FC = () => {
 
   const handleInputChange = (field: keyof EnrolmentFormData, value: string | number) => {
     setFormData(prev => ({ ...prev, [field]: value }));
-    
+
     // Clear course run ID when course reference number changes
     if (field === 'courseReferenceNumber') {
       setFormData(prev => ({ ...prev, courseRunId: '' }));
     }
-    
+
     // Clear errors when user types
     if (errors.length > 0) {
       setErrors([]);
@@ -613,18 +613,18 @@ const EnrollLearners: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!validateForm()) {
       return;
     }
 
     setIsSubmitting(true);
-    
+
     try {
       const payload = buildPayload();
-      
+
       console.log('Submitting enrolment payload:', JSON.stringify(payload, null, 2));
-      
+
       const response = await fetch('/api/enrolment/create', {
         method: 'POST',
         headers: {
@@ -634,7 +634,7 @@ const EnrollLearners: React.FC = () => {
       });
 
       const result = await response.json();
-      
+
       if (result.success) {
         alert('Enrolment created successfully!');
         // Reset form or redirect
@@ -667,9 +667,9 @@ const EnrollLearners: React.FC = () => {
   const isEmployerSponsored = formData.traineeSponsorshipType === SponsorshipType.EMPLOYER;
 
   return (
-    <div className="bg-white rounded-lg shadow-md">
+    <div className="bg-white rounded-lg shadow-md dark:bg-gray-800 dark:border-gray-700">
       <div className="max-w-4xl mx-auto">
-        <h1 className="text-2xl font-bold text-gray-900 mb-6 pt-4">Enroll Learners</h1>
+        <h1 className="text-2xl font-bold text-gray-900 mb-6 pt-4 dark:text-white">Enroll Learners</h1>
 
         {/* Errors and Warnings */}
         {errors.length > 0 && (
@@ -696,11 +696,11 @@ const EnrollLearners: React.FC = () => {
 
         <form onSubmit={handleSubmit} className="space-y-8">
           {/* Course Info Section */}
-          <div className="bg-gray-50 p-6 rounded-lg">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Course Information</h2>
+          <div className="bg-gray-50 p-6 rounded-lg dark:bg-gray-700/30">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4 dark:text-white">Course Information</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-700 mb-2 dark:text-gray-300">
                   Course Reference Number <span className="text-red-500">*</span>
                 </label>
                 {loadingCourses ? (
@@ -728,9 +728,9 @@ const EnrollLearners: React.FC = () => {
                   </p>
                 )}
               </div>
-              
+
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-700 mb-2 dark:text-gray-300">
                   Course Run ID <span className="text-red-500">*</span>
                 </label>
                 {loadingCourseRuns ? (
@@ -754,7 +754,7 @@ const EnrollLearners: React.FC = () => {
                   </select>
                 )}
                 {!formData.courseReferenceNumber && (
-                  <p className="text-xs text-gray-500 mt-1">
+                  <p className="text-xs text-gray-500 mt-1 dark:text-gray-400">
                     Please select a course first.
                   </p>
                 )}
@@ -770,27 +770,27 @@ const EnrollLearners: React.FC = () => {
           {/* Add Learners to Class Section - Only show when not adding a new learner */}
           {!isAddingLearner && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <Card className="p-6">
-                <h3 className="text-xl font-bold mb-4">Add Learners to Class</h3>
+              <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
+                <h3 className="text-xl font-bold mb-4 dark:text-white">Add Learners to Class</h3>
                 <div className="relative">
                   <svg className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                   </svg>
-                  <input 
-                    type="text" 
-                    placeholder="Search existing learners by name or email..." 
+                  <input
+                    type="text"
+                    placeholder="Search existing learners by name or email..."
                     value={searchQuery}
                     onChange={e => setSearchQuery(e.target.value)}
-                    className={`${inputClasses} pl-9`} 
+                    className={`${inputClasses} pl-9`}
                     disabled={!selectedCourseId}
                   />
                 </div>
                 <div className="mt-4 max-h-60 overflow-y-auto space-y-2">
                   {searchResults.map(learner => (
-                    <div key={learner.email} className="p-2 flex justify-between items-center bg-gray-50 rounded-md">
+                    <div key={learner.email} className="p-2 flex justify-between items-center bg-gray-50 rounded-md dark:bg-gray-700/50">
                       <div>
-                        <p className="font-semibold text-sm">{learner.name}</p>
-                        <p className="text-xs text-gray-600">{learner.email}</p>
+                        <p className="font-semibold text-sm dark:text-white">{learner.name}</p>
+                        <p className="text-xs text-gray-600 dark:text-gray-400">{learner.email}</p>
                       </div>
                       <Button size="sm" variant="ghost" onClick={() => handleLearnerSelection(learner)}>
                         Select
@@ -806,8 +806,8 @@ const EnrollLearners: React.FC = () => {
                 </div>
               </Card>
 
-              <Card className="p-6">
-                <h3 className="text-xl font-bold mb-4">Currently Enrolled ({enrolmentData && enrolmentData.data ? enrolmentData.data.length : 0})</h3>
+              <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
+                <h3 className="text-xl font-bold mb-4 dark:text-white">Currently Enrolled ({enrolmentData && enrolmentData.data ? enrolmentData.data.length : 0})</h3>
                 <div className="max-h-[22rem] overflow-y-auto space-y-2">
                   {enrolmentLoading ? (
                     <div className="text-center py-8">
@@ -843,275 +843,124 @@ const EnrollLearners: React.FC = () => {
 
           {/* Selected Learner Section - Show when a learner is selected but not adding new */}
           {selectedLearner && !isAddingLearner && (
-            <div className="bg-blue-50 p-6 rounded-lg border border-blue-200">
+            <div className="bg-blue-50 p-6 rounded-lg border border-blue-200 dark:bg-blue-900/20 dark:border-blue-800">
               <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-semibold text-blue-900">Selected Learner</h3>
-                <Button size="sm" variant="ghost" onClick={() => setSelectedLearner(null)}>
+                <h3 className="text-lg font-semibold text-blue-900 dark:text-blue-300">Selected Learner</h3>
+                <Button size="sm" variant="ghost" onClick={() => setSelectedLearner(null)} className="dark:text-blue-300 dark:hover:text-blue-200">
                   × Clear Selection
                 </Button>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <p className="text-sm text-blue-700">Name</p>
-                  <p className="font-semibold text-blue-900">{selectedLearner.name}</p>
+                  <p className="text-sm text-blue-700 dark:text-blue-400">Name</p>
+                  <p className="font-semibold text-blue-900 dark:text-blue-200">{selectedLearner.name}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-blue-700">Email</p>
-                  <p className="font-semibold text-blue-900">{selectedLearner.email}</p>
+                  <p className="text-sm text-blue-700 dark:text-blue-400">Email</p>
+                  <p className="font-semibold text-blue-900 dark:text-blue-200">{selectedLearner.email}</p>
                 </div>
               </div>
               <div className="mt-4">
-                <p className="text-sm text-blue-600">Please fill in the sponsorship and employer information below to complete the enrollment.</p>
+                <p className="text-sm text-blue-600 dark:text-blue-400">Please fill in the sponsorship and employer information below to complete the enrollment.</p>
               </div>
             </div>
           )}
 
           {/* Trainee Info Section - Only show when adding a new learner */}
           {isAddingLearner && (
-            <div className="bg-gray-50 p-6 rounded-lg">
+            <div className="bg-gray-50 p-6 rounded-lg dark:bg-gray-700/30">
               <div className="flex justify-between items-center mb-4">
-                <h2 className="text-lg font-semibold text-gray-900">Trainee Information</h2>
-                <Button size="sm" variant="ghost" onClick={handleBackToSearch}>
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Trainee Information</h2>
+                <Button size="sm" variant="ghost" onClick={handleBackToSearch} className="dark:text-gray-300 dark:hover:text-white">
                   ← Back to Search
                 </Button>
               </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Trainee ID Type <span className="text-red-500">*</span>
-                </label>
-                <select
-                  value={formData.traineeIdType}
-                  onChange={(e) => handleInputChange('traineeIdType', e.target.value as IdTypeSummary)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  {Object.values(IdTypeSummary).map(type => (
-                    <option key={type} value={type}>{type}</option>
-                  ))}
-                </select>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Trainee ID <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={formData.traineeId}
-                  onChange={(e) => handleInputChange('traineeId', e.target.value)}
-                  placeholder="e.g., S7020587D"
-                  maxLength={20}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-            </div>
 
-            <h3 className="text-md font-semibold text-gray-800 mb-4">Trainee Particulars</h3>
-            
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Trainee Full Name <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={formData.traineeFullName}
-                  onChange={(e) => handleInputChange('traineeFullName', e.target.value)}
-                  placeholder="e.g., Aileen Chong"
-                  maxLength={200}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Trainee Date of Birth <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="date"
-                  value={formData.traineeDateOfBirth}
-                  onChange={(e) => handleInputChange('traineeDateOfBirth', e.target.value)}
-                  min="1900-01-01"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Trainee Email Address <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="email"
-                  value={formData.traineeEmailAddress}
-                  onChange={(e) => handleInputChange('traineeEmailAddress', e.target.value)}
-                  placeholder="e.g., test@test.com"
-                  maxLength={100}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
-              {/* Contact Number Section */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Country Code <span className="text-red-500">*</span>
+                    Trainee ID Type <span className="text-red-500">*</span>
                   </label>
-                  <input
-                    type="text"
-                    value={formData.traineeContactNumberCountryCode}
-                    onChange={(e) => handleInputChange('traineeContactNumberCountryCode', e.target.value)}
-                    placeholder="+65"
-                    maxLength={5}
+                  <select
+                    value={formData.traineeIdType}
+                    onChange={(e) => handleInputChange('traineeIdType', e.target.value as IdTypeSummary)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
+                  >
+                    {Object.values(IdTypeSummary).map(type => (
+                      <option key={type} value={type}>{type}</option>
+                    ))}
+                  </select>
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Phone Number <span className="text-red-500">*</span>
+                    Trainee ID <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
-                    value={formData.traineeContactNumberPhoneNumber}
-                    onChange={(e) => handleInputChange('traineeContactNumberPhoneNumber', e.target.value)}
-                    placeholder="98765432"
+                    value={formData.traineeId}
+                    onChange={(e) => handleInputChange('traineeId', e.target.value)}
+                    placeholder="e.g., S7020587D"
                     maxLength={20}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
               </div>
-            </div>
-          </div>
-          )}
 
-          {/* Employer Info Section - Only show when a learner is selected */}
-          {(selectedLearner || isAddingLearner) && (
-            <div className="bg-gray-50 p-6 rounded-lg">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Sponsorship and Employer Information</h2>
+              <h3 className="text-md font-semibold text-gray-800 mb-4 dark:text-gray-200">Trainee Particulars</h3>
 
-            <div>
-                <label className="flex items-center space-x-2">
-                  <input
-                    type="checkbox"
-                    checked={showOptionalFields.enrolmentDate}
-                    onChange={() => toggleOptionalField('enrolmentDate')}
-                    className="rounded border-gray-300"
-                  />
-                  <span className="text-sm font-medium text-gray-700">Specify Trainee Date of Enrolment?</span>
-                </label>
-                
-                {showOptionalFields.enrolmentDate && (
-                  <div className="mt-2">
-                    <input
-                      type="date"
-                      value={formData.traineeEnrolmentDate || ''}
-                      onChange={(e) => handleInputChange('traineeEnrolmentDate', e.target.value)}
-                      min="1900-01-01"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                )}
-            </div>
-            
-            <div className="mb-6">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Trainee Sponsorship Type <span className="text-red-500">*</span>
-              </label>
-              <select
-                value={formData.traineeSponsorshipType}
-                onChange={(e) => handleInputChange('traineeSponsorshipType', e.target.value as SponsorshipType)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                {Object.values(SponsorshipType).map(type => (
-                  <option key={type} value={type}>{type}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* Conditional Employer Fields */}
-            {isEmployerSponsored && (
               <div className="space-y-4">
-                <h3 className="text-md font-semibold text-gray-800">Employer Details</h3>
-                
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Employer UEN <span className="text-red-500">*</span>
+                    Trainee Full Name <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
-                    value={formData.employerUen || ''}
-                    onChange={(e) => handleInputChange('employerUen', e.target.value)}
-                    placeholder="e.g., 201000372W"
-                    maxLength={50}
+                    value={formData.traineeFullName}
+                    onChange={(e) => handleInputChange('traineeFullName', e.target.value)}
+                    placeholder="e.g., Aileen Chong"
+                    maxLength={200}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
-                  <p className="text-xs text-gray-500 mt-1">Employer organisation's UEN</p>
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Employer Full Name <span className="text-red-500">*</span>
+                    Trainee Date of Birth <span className="text-red-500">*</span>
                   </label>
                   <input
-                    type="text"
-                    value={formData.employerFullName || ''}
-                    onChange={(e) => handleInputChange('employerFullName', e.target.value)}
-                    placeholder="e.g., Stephen Chua"
-                    maxLength={50}
+                    type="date"
+                    value={formData.traineeDateOfBirth}
+                    onChange={(e) => handleInputChange('traineeDateOfBirth', e.target.value)}
+                    min="1900-01-01"
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
-                  <p className="text-xs text-gray-500 mt-1">The employer contact's person name</p>
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Employer Email Address <span className="text-red-500">*</span>
+                    Trainee Email Address <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="email"
-                    value={formData.employerEmailAddress || ''}
-                    onChange={(e) => handleInputChange('employerEmailAddress', e.target.value)}
-                    placeholder="test@test.com"
+                    value={formData.traineeEmailAddress}
+                    onChange={(e) => handleInputChange('traineeEmailAddress', e.target.value)}
+                    placeholder="e.g., test@test.com"
                     maxLength={100}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
-                  <p className="text-xs text-gray-500 mt-1">The employer contact's email address</p>
                 </div>
 
-                {/* Employer Contact Number */}
+                {/* Contact Number Section */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div>
-                    <label className="flex items-center space-x-2 mb-2">
-                      <input
-                        type="checkbox"
-                        checked={showOptionalFields.employerAreaCode}
-                        onChange={() => toggleOptionalField('employerAreaCode')}
-                        className="rounded border-gray-300"
-                      />
-                      <span className="text-sm text-gray-700">Specify Area Code</span>
-                    </label>
-                    
-                    {showOptionalFields.employerAreaCode && (
-                      <input
-                        type="text"
-                        value={formData.employerAreaCode || ''}
-                        onChange={(e) => handleInputChange('employerAreaCode', e.target.value)}
-                        placeholder="Area Code"
-                        maxLength={10}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                    )}
-                  </div>
-
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Country Code <span className="text-red-500">*</span>
                     </label>
                     <input
                       type="text"
-                      value={formData.employerCountryCode || '+65'}
-                      onChange={(e) => handleInputChange('employerCountryCode', e.target.value)}
+                      value={formData.traineeContactNumberCountryCode}
+                      onChange={(e) => handleInputChange('traineeContactNumberCountryCode', e.target.value)}
                       placeholder="+65"
                       maxLength={5}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -1124,8 +973,8 @@ const EnrollLearners: React.FC = () => {
                     </label>
                     <input
                       type="text"
-                      value={formData.employerPhoneNumber || ''}
-                      onChange={(e) => handleInputChange('employerPhoneNumber', e.target.value)}
+                      value={formData.traineeContactNumberPhoneNumber}
+                      onChange={(e) => handleInputChange('traineeContactNumberPhoneNumber', e.target.value)}
                       placeholder="98765432"
                       maxLength={20}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -1133,94 +982,245 @@ const EnrollLearners: React.FC = () => {
                   </div>
                 </div>
               </div>
-            )}
+            </div>
+          )}
 
-            {/* Optional Employer Fields for Individual Sponsorship */}
-            {!isEmployerSponsored && (
-              <div className="space-y-4">
-                <div>
-                  <label className="flex items-center space-x-2">
-                    <input
-                      type="checkbox"
-                      checked={showOptionalFields.employerUen}
-                      onChange={() => toggleOptionalField('employerUen')}
-                      className="rounded border-gray-300"
-                    />
-                    <span className="text-sm font-medium text-gray-700">Specify Employer UEN?</span>
-                  </label>
-                  
-                  {showOptionalFields.employerUen && (
-                    <div className="mt-2">
-                      <input
-                        type="text"
-                        value={formData.employerUen || ''}
-                        onChange={(e) => handleInputChange('employerUen', e.target.value)}
-                        placeholder="e.g., 201000372W"
-                        maxLength={50}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                    </div>
-                  )}
-                </div>
+          {/* Employer Info Section - Only show when a learner is selected */}
+          {(selectedLearner || isAddingLearner) && (
+            <div className="bg-gray-50 p-6 rounded-lg dark:bg-gray-700/30">
+              <h2 className="text-lg font-semibold text-gray-900 mb-4 dark:text-white">Sponsorship and Employer Information</h2>
 
-                <div>
-                  <label className="flex items-center space-x-2">
-                    <input
-                      type="checkbox"
-                      checked={showOptionalFields.employerFullName}
-                      onChange={() => toggleOptionalField('employerFullName')}
-                      className="rounded border-gray-300"
-                    />
-                    <span className="text-sm font-medium text-gray-700">Specify Employer Full Name?</span>
-                  </label>
-                  
-                  {showOptionalFields.employerFullName && (
-                    <div className="mt-2">
-                      <input
-                        type="text"
-                        value={formData.employerFullName || ''}
-                        onChange={(e) => handleInputChange('employerFullName', e.target.value)}
-                        placeholder="e.g., Stephen Chua"
-                        maxLength={50}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                    </div>
-                  )}
-                </div>
+              <div>
+                <label className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    checked={showOptionalFields.enrolmentDate}
+                    onChange={() => toggleOptionalField('enrolmentDate')}
+                    className="rounded border-gray-300 dark:border-gray-600"
+                  />
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Specify Trainee Date of Enrolment?</span>
+                </label>
 
-                <div>
-                  <label className="flex items-center space-x-2">
+                {showOptionalFields.enrolmentDate && (
+                  <div className="mt-2">
                     <input
-                      type="checkbox"
-                      checked={showOptionalFields.employerEmail}
-                      onChange={() => toggleOptionalField('employerEmail')}
-                      className="rounded border-gray-300"
+                      type="date"
+                      value={formData.traineeEnrolmentDate || ''}
+                      onChange={(e) => handleInputChange('traineeEnrolmentDate', e.target.value)}
+                      min="1900-01-01"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
-                    <span className="text-sm font-medium text-gray-700">Specify Employer Email Address?</span>
-                  </label>
-                  
-                  {showOptionalFields.employerEmail && (
-                    <div className="mt-2">
-                      <input
-                        type="email"
-                        value={formData.employerEmailAddress || ''}
-                        onChange={(e) => handleInputChange('employerEmailAddress', e.target.value)}
-                        placeholder="test@test.com"
-                        maxLength={100}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                    </div>
-                  )}
-                </div>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
+
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Trainee Sponsorship Type <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={formData.traineeSponsorshipType}
+                  onChange={(e) => handleInputChange('traineeSponsorshipType', e.target.value as SponsorshipType)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  {Object.values(SponsorshipType).map(type => (
+                    <option key={type} value={type}>{type}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Conditional Employer Fields */}
+              {isEmployerSponsored && (
+                <div className="space-y-4">
+                  <h3 className="text-md font-semibold text-gray-800 dark:text-white">Employer Details</h3>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Employer UEN <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.employerUen || ''}
+                      onChange={(e) => handleInputChange('employerUen', e.target.value)}
+                      placeholder="e.g., 201000372W"
+                      maxLength={50}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">Employer organisation's UEN</p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Employer Full Name <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.employerFullName || ''}
+                      onChange={(e) => handleInputChange('employerFullName', e.target.value)}
+                      placeholder="e.g., Stephen Chua"
+                      maxLength={50}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">The employer contact's person name</p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Employer Email Address <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="email"
+                      value={formData.employerEmailAddress || ''}
+                      onChange={(e) => handleInputChange('employerEmailAddress', e.target.value)}
+                      placeholder="test@test.com"
+                      maxLength={100}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">The employer contact's email address</p>
+                  </div>
+
+                  {/* Employer Contact Number */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <label className="flex items-center space-x-2 mb-2">
+                        <input
+                          type="checkbox"
+                          checked={showOptionalFields.employerAreaCode}
+                          onChange={() => toggleOptionalField('employerAreaCode')}
+                          className="rounded border-gray-300"
+                        />
+                        <span className="text-sm text-gray-700">Specify Area Code</span>
+                      </label>
+
+                      {showOptionalFields.employerAreaCode && (
+                        <input
+                          type="text"
+                          value={formData.employerAreaCode || ''}
+                          onChange={(e) => handleInputChange('employerAreaCode', e.target.value)}
+                          placeholder="Area Code"
+                          maxLength={10}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      )}
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Country Code <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.employerCountryCode || '+65'}
+                        onChange={(e) => handleInputChange('employerCountryCode', e.target.value)}
+                        placeholder="+65"
+                        maxLength={5}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Phone Number <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.employerPhoneNumber || ''}
+                        onChange={(e) => handleInputChange('employerPhoneNumber', e.target.value)}
+                        placeholder="98765432"
+                        maxLength={20}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Optional Employer Fields for Individual Sponsorship */}
+              {!isEmployerSponsored && (
+                <div className="space-y-4">
+                  <div>
+                    <label className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        checked={showOptionalFields.employerUen}
+                        onChange={() => toggleOptionalField('employerUen')}
+                        className="rounded border-gray-300"
+                      />
+                      <span className="text-sm font-medium text-gray-700">Specify Employer UEN?</span>
+                    </label>
+
+                    {showOptionalFields.employerUen && (
+                      <div className="mt-2">
+                        <input
+                          type="text"
+                          value={formData.employerUen || ''}
+                          onChange={(e) => handleInputChange('employerUen', e.target.value)}
+                          placeholder="e.g., 201000372W"
+                          maxLength={50}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        checked={showOptionalFields.employerFullName}
+                        onChange={() => toggleOptionalField('employerFullName')}
+                        className="rounded border-gray-300"
+                      />
+                      <span className="text-sm font-medium text-gray-700">Specify Employer Full Name?</span>
+                    </label>
+
+                    {showOptionalFields.employerFullName && (
+                      <div className="mt-2">
+                        <input
+                          type="text"
+                          value={formData.employerFullName || ''}
+                          onChange={(e) => handleInputChange('employerFullName', e.target.value)}
+                          placeholder="e.g., Stephen Chua"
+                          maxLength={50}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        checked={showOptionalFields.employerEmail}
+                        onChange={() => toggleOptionalField('employerEmail')}
+                        className="rounded border-gray-300"
+                      />
+                      <span className="text-sm font-medium text-gray-700">Specify Employer Email Address?</span>
+                    </label>
+
+                    {showOptionalFields.employerEmail && (
+                      <div className="mt-2">
+                        <input
+                          type="email"
+                          value={formData.employerEmailAddress || ''}
+                          onChange={(e) => handleInputChange('employerEmailAddress', e.target.value)}
+                          placeholder="test@test.com"
+                          maxLength={100}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
           )}
 
           {/* Training Partner Info Section */}
-          <div className="bg-gray-50 p-6 rounded-lg">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Training Partner Information</h2>
-            
+          <div className="bg-gray-50 p-6 rounded-lg dark:bg-gray-700/30">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4 dark:text-white">Training Partner Information</h2>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -1235,7 +1235,7 @@ const EnrollLearners: React.FC = () => {
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
-              
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Training Partner Code <span className="text-red-500">*</span>
@@ -1254,10 +1254,10 @@ const EnrollLearners: React.FC = () => {
           </div>
 
           {/* Preview Request Body */}
-          <div className="bg-gray-50 p-6 rounded-lg">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Preview Request Body</h2>
-            <div className="bg-white p-4 rounded border">
-              <pre className="text-sm text-gray-700 whitespace-pre-wrap overflow-x-auto">
+          <div className="bg-gray-50 p-6 rounded-lg dark:bg-gray-700/30">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4 dark:text-white">Preview Request Body</h2>
+            <div className="bg-white p-4 rounded border dark:bg-gray-800 dark:border-gray-700">
+              <pre className="text-sm text-gray-700 whitespace-pre-wrap overflow-x-auto dark:text-gray-300">
                 {JSON.stringify(buildPayload(), null, 2)}
               </pre>
             </div>
@@ -1303,7 +1303,7 @@ const EnrollLearners: React.FC = () => {
             >
               Clear Form
             </button>
-            
+
             <button
               type="submit"
               disabled={isSubmitting}

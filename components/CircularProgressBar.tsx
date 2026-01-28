@@ -6,10 +6,10 @@ interface CircularProgressBarProps {
   strokeWidth?: number;
 }
 
-const CircularProgressBar: React.FC<CircularProgressBarProps> = ({ 
-  percentage, 
-  size = 48, 
-  strokeWidth = 4 
+const CircularProgressBar: React.FC<CircularProgressBarProps> = ({
+  percentage,
+  size = 48,
+  strokeWidth = 4
 }) => {
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
@@ -17,9 +17,9 @@ const CircularProgressBar: React.FC<CircularProgressBarProps> = ({
 
   return (
     <div className="relative" style={{ width: size, height: size }}>
-      <svg 
-        className="transform -rotate-90" 
-        width={size} 
+      <svg
+        className="transform -rotate-90"
+        width={size}
         height={size}
         viewBox={`0 0 ${size} ${size}`}
       >
@@ -52,7 +52,7 @@ const CircularProgressBar: React.FC<CircularProgressBarProps> = ({
       </svg>
       {/* Percentage text in center */}
       <div className="absolute inset-0 flex items-center justify-center">
-        <span className="text-xs font-semibold text-gray-700">
+        <span className="text-xs font-semibold text-gray-700 dark:text-white">
           {Math.round(percentage)}%
         </span>
       </div>

@@ -37,7 +37,7 @@ const SuccessPopup: React.FC<{
                         <h3 className="text-lg font-medium text-gray-900">Success!</h3>
                     </div>
                 </div>
-                
+
                 <div className="mb-4">
                     <p className="text-sm text-gray-700 mb-3">{message}</p>
                     <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
@@ -45,7 +45,7 @@ const SuccessPopup: React.FC<{
                         <p className="text-lg font-mono text-blue-600 mt-1">{courseRunId}</p>
                     </div>
                 </div>
-                
+
                 <div className="flex justify-end">
                     <Button onClick={onClose} className="bg-green-600 hover:bg-green-700 text-white">
                         Got it!
@@ -105,27 +105,27 @@ const salutationOptions = [
 
 export const CreateNewClassView: React.FC = () => {
     const { setAdminPage, currentUser } = useLms();
-    
+
     // Course Run Form State
     const [courseReferenceNumber, setCourseReferenceNumber] = useState('');
-    const [availableCourses, setAvailableCourses] = useState<{id: string, title: string, courseCode: string, tscTitle: string, tscCode: string}[]>([]);
+    const [availableCourses, setAvailableCourses] = useState<{ id: string, title: string, courseCode: string, tscTitle: string, tscCode: string }[]>([]);
     const [loadingCourses, setLoadingCourses] = useState(false);
     const [includeExpired, setIncludeExpired] = useState(false);
     const [sequenceNumber, setSequenceNumber] = useState(0);
-    
+
     // Registration Dates
     const [openingRegistrationDate, setOpeningRegistrationDate] = useState('');
     const [closingRegistrationDate, setClosingRegistrationDate] = useState('');
-    
+
     // Course Dates
     const [courseStartDate, setCourseStartDate] = useState('');
     const [courseEndDate, setCourseEndDate] = useState('');
-    
+
     // Schedule Info - Default values (not user-editable)
     const [scheduleCode] = useState('01');
     const [scheduleDescription] = useState('Description');
     // scheduleInfo will be dynamically generated from course dates
-    
+
     // Venue Info
     const [block, setBlock] = useState('');
     const [street, setStreet] = useState('');
@@ -135,19 +135,19 @@ export const CreateNewClassView: React.FC = () => {
     const [unit, setUnit] = useState('');
     const [postalCode, setPostalCode] = useState('');
     const [room, setRoom] = useState('');
-    
+
     // Intake Details
     const [intakeSize, setIntakeSize] = useState(0);
     const [threshold, setThreshold] = useState(0);
     const [registeredUserCount, setRegisteredUserCount] = useState(0);
-    
+
     // Course Admin Details
     const [modeOfTraining, setModeOfTraining] = useState('1');
     const [courseAdminEmail, setCourseAdminEmail] = useState(currentUser?.email || '');
-    
+
     // Course Vacancy
     const [courseVacancy, setCourseVacancy] = useState('A');
-    
+
     // Sessions Form State
     const [sessionCount, setSessionCount] = useState(1);
     const [sessions, setSessions] = useState([{
@@ -167,27 +167,27 @@ export const CreateNewClassView: React.FC = () => {
         postalCode: '',
         room: ''
     }]);
-    
+
     // Trainer Form State - Single existing trainer only
     const [trainers, setTrainers] = useState([{
         id: 0,
         trainerType: '1', // Always existing trainer
         trainerIdNumber: ''
     }]);
-    
+
     // API submission state
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [apiResponse, setApiResponse] = useState<any>(null);
     const [requestBody, setRequestBody] = useState<any>(null);
-    
+
     // Success popup state
     const [showSuccessPopup, setShowSuccessPopup] = useState(false);
-    const [successData, setSuccessData] = useState<{courseRunId: string, message: string} | null>(null);
-    
+    const [successData, setSuccessData] = useState<{ courseRunId: string, message: string } | null>(null);
+
     // Optional sections visibility state
     const [showSessions, setShowSessions] = useState(false);
     const [showTrainer, setShowTrainer] = useState(false);
-    
+
     // Optional field visibility states (only needed for intake details now)
     const [showOptionalFields, setShowOptionalFields] = useState({
         intakeSize: false,
@@ -196,9 +196,9 @@ export const CreateNewClassView: React.FC = () => {
         fileName: false,
         fileContent: false
     });
-    
+
     const inputClasses = "block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent";
-    
+
     // Fetch available courses on component mount
     const fetchAvailableCourses = async () => {
         setLoadingCourses(true);
@@ -216,12 +216,12 @@ export const CreateNewClassView: React.FC = () => {
             setLoadingCourses(false);
         }
     };
-    
+
     // Fetch courses when component mounts
     React.useEffect(() => {
         fetchAvailableCourses();
     }, []);
-    
+
     // Helper functions
     const updateSessionCount = (count: number) => {
         const newSessions = [...sessions];
@@ -253,11 +253,11 @@ export const CreateNewClassView: React.FC = () => {
         setSessions(newSessions);
         setSessionCount(count);
     };
-    
+
     const updateSessionField = (sessionIndex: number, field: string, value: any) => {
         const newSessions = [...sessions];
         newSessions[sessionIndex] = { ...newSessions[sessionIndex], [field]: value };
-        
+
         // Handle automatic time setting for mode of training 2 and 4
         if (field === 'modeOfTraining') {
             if (value === '2' || value === '4') {
@@ -272,7 +272,7 @@ export const CreateNewClassView: React.FC = () => {
                 newSessions[sessionIndex].endTime = '';
             }
         }
-        
+
         // When start date changes for non-2/4 modes, update end date to match
         if (field === 'startDate' && value !== '2' && value !== '4') {
             const currentMode = newSessions[sessionIndex].modeOfTraining;
@@ -280,23 +280,23 @@ export const CreateNewClassView: React.FC = () => {
                 newSessions[sessionIndex].endDate = value;
             }
         }
-        
+
         setSessions(newSessions);
     };
-    
 
-    
+
+
     const updateTrainerField = (trainerIndex: number, field: string, value: any) => {
         const newTrainers = [...trainers];
         newTrainers[trainerIndex] = { ...newTrainers[trainerIndex], [field]: value };
         setTrainers(newTrainers);
     };
-    
+
     // Function to fetch course run details from SSG API and save to database
     const fetchAndSaveCourseRunData = async (courseRunId: string) => {
         try {
             console.log('🔍 Fetching course run details for ID:', courseRunId);
-            
+
             // Fetch detailed course run data from SSG API
             const params = new URLSearchParams({
                 runId: courseRunId,
@@ -325,7 +325,7 @@ export const CreateNewClassView: React.FC = () => {
             while (retryCount < maxRetries) {
                 try {
                     console.log(`💾 Attempting to save to database (attempt ${retryCount + 1}/${maxRetries})...`);
-                    
+
                     saveResponse = await fetch(getApiUrl('/api/admin/save-course-run'), {
                         method: 'POST',
                         headers: {
@@ -347,11 +347,11 @@ export const CreateNewClassView: React.FC = () => {
                 } catch (fetchError) {
                     retryCount++;
                     console.warn(`⚠️ Save attempt ${retryCount} failed:`, fetchError);
-                    
+
                     if (retryCount >= maxRetries) {
                         throw fetchError; // Final attempt failed
                     }
-                    
+
                     // Wait before retry (exponential backoff)
                     await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
                 }
@@ -365,7 +365,7 @@ export const CreateNewClassView: React.FC = () => {
 
             const saveResult = await saveResponse.json();
             console.log('💾 Course run saved to database:', saveResult);
-            
+
             if (saveResult.success) {
                 const status = saveResult.data?.status || 'unknown';
                 console.log(`✅ Database save successful - Status: ${status}`);
@@ -373,18 +373,18 @@ export const CreateNewClassView: React.FC = () => {
             } else {
                 throw new Error(saveResult.message || 'Failed to save to database');
             }
-            
+
         } catch (error) {
             console.error('❌ Error fetching/saving course run data:', error);
             const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
             alert(`Error saving course run to database: ${errorMessage}`);
         }
     };
-    
+
     const handleSubmit = async () => {
         // Field validation before submission
         const missingFields: string[] = [];
-        
+
         // 1. Course Run section validation (always required)
         if (!courseReferenceNumber.trim()) missingFields.push('Course Reference Number');
         if (!openingRegistrationDate) missingFields.push('Opening Registration Date');
@@ -398,7 +398,7 @@ export const CreateNewClassView: React.FC = () => {
         if (!modeOfTraining) missingFields.push('Mode of Training');
         if (!courseAdminEmail.trim()) missingFields.push('Course Admin Email');
         if (!courseVacancy) missingFields.push('Course Vacancy');
-        
+
         // 2. Sessions section validation (if enabled)
         if (showSessions) {
             if (sessions.length === 0) {
@@ -418,23 +418,23 @@ export const CreateNewClassView: React.FC = () => {
                 });
             }
         }
-        
+
         // 3. Trainer section validation (if enabled)
         if (showTrainer) {
             if (!trainers[0]?.trainerIdNumber?.trim()) {
                 missingFields.push('Trainer ID Number (since Assign Trainer is selected)');
             }
         }
-        
+
         // If there are missing fields, show error and stop submission
         if (missingFields.length > 0) {
             const errorMessage = `Please fill in the following required fields:\n\n${missingFields.map(field => `• ${field}`).join('\n')}`;
             alert(errorMessage);
             return;
         }
-        
+
         // Date validation checks (only if all required fields are filled)
-        
+
         // 1. Check Registration Dates
         if (openingRegistrationDate && closingRegistrationDate) {
             const openingDate = new Date(openingRegistrationDate);
@@ -444,7 +444,7 @@ export const CreateNewClassView: React.FC = () => {
                 return;
             }
         }
-        
+
         // 2. Check Course Dates
         if (courseStartDate && courseEndDate) {
             const startDate = new Date(courseStartDate);
@@ -454,7 +454,7 @@ export const CreateNewClassView: React.FC = () => {
                 return;
             }
         }
-        
+
         // 3. Check Sessions Date validation (only if sessions are enabled)
         if (showSessions) {
             for (let i = 0; i < sessions.length; i++) {
@@ -469,19 +469,19 @@ export const CreateNewClassView: React.FC = () => {
                 }
             }
         }
-        
+
         // If all validations pass, proceed with submission
         try {
             setIsSubmitting(true);
             setApiResponse(null);
             setRequestBody(null);
-            
+
             // Transform form data to API payload structure
             const formatDateForAPI = (dateStr: string) => {
                 if (!dateStr) return '';
                 return parseInt(dateStr.replace(/-/g, '')); // Convert YYYY-MM-DD to YYYYMMDD integer
             };
-            
+
             // Generate schedule info from course dates
             const generateScheduleInfo = (startDate: string, endDate: string) => {
                 if (!startDate || !endDate) return 'Course dates not specified';
@@ -491,9 +491,9 @@ export const CreateNewClassView: React.FC = () => {
                     return `${startDate} - ${endDate}`; // Multi-day course
                 }
             };
-            
+
             const scheduleInfo = generateScheduleInfo(courseStartDate, courseEndDate);
-            
+
             // Build request body in the complex nested structure as specified
             const requestBody = {
                 course: {
@@ -571,7 +571,7 @@ export const CreateNewClassView: React.FC = () => {
                     ]
                 }
             };
-            
+
             // Fetch UEN from database before sending request
             try {
                 const uenResponse = await fetch('/api/training-provider/uen');
@@ -585,12 +585,12 @@ export const CreateNewClassView: React.FC = () => {
                 alert('Error fetching company UEN from database. Please try again.');
                 return;
             }
-            
+
             // Store request body for display
             setRequestBody(requestBody);
-            
+
             console.log('Submitting course run data:', requestBody);
-            
+
             // Call the API
             const response = await fetch('/api/ssg/courses/courseRuns/create-new?includeExpiredCourses=false', {
                 method: 'POST',
@@ -599,28 +599,28 @@ export const CreateNewClassView: React.FC = () => {
                 },
                 body: JSON.stringify(requestBody)
             });
-            
+
             const responseData = await response.json();
             setApiResponse(responseData);
-            
+
             // Fixed response handling - properly check for success with status 200
             const isSuccess = response.ok && responseData.status === 200 && !responseData.error?.message;
-            
+
             if (isSuccess) {
                 console.log('✅ SSG API success:', responseData);
-                
+
                 // Extract course run ID from response
                 const courseRunId = responseData.data?.runs?.[0]?.id;
                 if (courseRunId) {
                     console.log('📝 Course Run ID from response:', courseRunId);
-                    
+
                     // Show success popup with course run ID
                     setSuccessData({
                         courseRunId: courseRunId.toString(),
                         message: 'Course run created successfully! The data has been saved to the database.'
                     });
                     setShowSuccessPopup(true);
-                    
+
                     // Fetch detailed course run data and save to database
                     await fetchAndSaveCourseRunData(courseRunId);
                 } else {
@@ -636,7 +636,7 @@ export const CreateNewClassView: React.FC = () => {
                 alert(`Error creating course run: ${errorMessage}`);
                 console.error('❌ API Error:', responseData);
             }
-            
+
         } catch (error) {
             console.error('Error submitting course run:', error);
             const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
@@ -646,11 +646,11 @@ export const CreateNewClassView: React.FC = () => {
             setIsSubmitting(false);
         }
     };
-    
+
     return (
         <div className="max-w-6xl mx-auto p-6">
             <div className="flex justify-between items-center mb-6">
-                <h2 className="text-3xl font-bold">Create New Class</h2>
+                <h2 className="text-3xl font-bold dark:text-white">Create New Class</h2>
                 <div>
                     <Button variant="ghost" onClick={() => setAdminPage(AdminPage.Dashboard)} className="mr-2">
                         Cancel
@@ -660,19 +660,19 @@ export const CreateNewClassView: React.FC = () => {
                     </Button>
                 </div>
             </div>
-            
+
             {/* Course Run Section */}
             <div className="mb-12">
                 <div className="flex items-center mb-6">
-                    <h3 className="text-2xl font-bold text-gray-800">Course Run</h3>
+                    <h3 className="text-2xl font-bold text-gray-800 dark:text-white">Course Run</h3>
                 </div>
                 <div className="space-y-6">
-                    
+
                     {/* Basic Information */}
                     <FormSection title="Basic Information">
                         <div className="grid grid-cols-1 md:grid-cols-1 gap-4">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-gray-300">
                                     * Select the Course
                                 </label>
                                 {loadingCourses ? (
@@ -702,7 +702,7 @@ export const CreateNewClassView: React.FC = () => {
                             </div>
                         </div>
                     </FormSection>
-                    
+
                     {/* Registration Dates */}
                     <FormSection title="Registration Dates">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -717,7 +717,7 @@ export const CreateNewClassView: React.FC = () => {
                                     className={inputClasses}
                                 />
                             </div>
-                            
+
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">
                                     * Closing Registration Date
@@ -731,7 +731,7 @@ export const CreateNewClassView: React.FC = () => {
                             </div>
                         </div>
                     </FormSection>
-                    
+
                     {/* Course Dates */}
                     <FormSection title="Course Dates">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -746,7 +746,7 @@ export const CreateNewClassView: React.FC = () => {
                                     className={inputClasses}
                                 />
                             </div>
-                            
+
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">
                                     * Course End Date
@@ -760,7 +760,7 @@ export const CreateNewClassView: React.FC = () => {
                             </div>
                         </div>
                     </FormSection>
-                    
+
                     {/* Venue Information */}
                     <FormSection title="Venue Information">
                         <div className="space-y-4">
@@ -778,7 +778,7 @@ export const CreateNewClassView: React.FC = () => {
                                         maxLength={10}
                                     />
                                 </div>
-                                
+
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">
                                         Venue Street
@@ -792,7 +792,7 @@ export const CreateNewClassView: React.FC = () => {
                                         maxLength={32}
                                     />
                                 </div>
-                                
+
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">
                                         Venue Building
@@ -807,7 +807,7 @@ export const CreateNewClassView: React.FC = () => {
                                     />
                                 </div>
                             </div>
-                            
+
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">
                                     Wheelchair Accessible
@@ -824,7 +824,7 @@ export const CreateNewClassView: React.FC = () => {
                                     ))}
                                 </select>
                             </div>
-                            
+
                             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -839,7 +839,7 @@ export const CreateNewClassView: React.FC = () => {
                                         maxLength={3}
                                     />
                                 </div>
-                                
+
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">
                                         * Unit
@@ -853,7 +853,7 @@ export const CreateNewClassView: React.FC = () => {
                                         maxLength={5}
                                     />
                                 </div>
-                                
+
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">
                                         * Postal Code
@@ -867,7 +867,7 @@ export const CreateNewClassView: React.FC = () => {
                                         maxLength={6}
                                     />
                                 </div>
-                                
+
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">
                                         * Room
@@ -884,7 +884,7 @@ export const CreateNewClassView: React.FC = () => {
                             </div>
                         </div>
                     </FormSection>
-                    
+
                     {/* Course Admin Details */}
                     <FormSection title="Course Admin Details">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -904,7 +904,7 @@ export const CreateNewClassView: React.FC = () => {
                                     ))}
                                 </select>
                             </div>
-                            
+
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">
                                     * Course Admin Email
@@ -923,7 +923,7 @@ export const CreateNewClassView: React.FC = () => {
                             </div>
                         </div>
                     </FormSection>
-                    
+
                     {/* Course Vacancy Details */}
                     <FormSection title="Course Vacancy Details">
                         <div>
@@ -945,7 +945,7 @@ export const CreateNewClassView: React.FC = () => {
                     </FormSection>
                 </div>
             </div>
-            
+
             {/* Optional Sections Checkboxes */}
             <div className="mb-12 border-t border-gray-200 pt-8">
                 <div className="space-y-4">
@@ -966,7 +966,7 @@ export const CreateNewClassView: React.FC = () => {
                                     (Add specific session details with dates, times, and venues)
                                 </span>
                             </div>
-                            
+
                             <div className="flex items-center space-x-3">
                                 <input
                                     type="checkbox"
@@ -986,238 +986,238 @@ export const CreateNewClassView: React.FC = () => {
                     </FormSection>
                 </div>
             </div>
-            
+
             {/* Sessions Section */}
             {showSessions && (
-            <div className="mb-12 border-t border-gray-200 pt-8">
-                <div className="flex items-center justify-between mb-6">
-                    <h3 className="text-2xl font-bold text-gray-800">Sessions</h3>
-                    <Button 
-                        variant="outline" 
-                        onClick={() => updateSessionCount(sessions.length + 1)}
-                        className="flex items-center space-x-2"
-                    >
-                        <span>Add New Session</span>
-                    </Button>
-                </div>
-                <div className="space-y-6">
-                    
-                    {sessions.map((session, index) => (
-                        <FormSection key={session.id} title={
-                            <div className="flex items-center justify-between">
-                                <span>Session {index + 1}</span>
-                                {sessions.length > 1 && (
-                                    <Button 
-                                        variant="ghost" 
-                                        onClick={() => {
-                                            const newSessions = sessions.filter((_, i) => i !== index);
-                                            setSessions(newSessions);
-                                            setSessionCount(newSessions.length);
-                                        }}
-                                        className="text-red-500 hover:text-red-700 px-2 py-1 text-sm"
-                                    >
-                                        Remove
-                                    </Button>
-                                )}
-                            </div>
-                        }>
-                            <div className="space-y-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        * Mode of Training
-                                    </label>
-                                    <select
-                                        value={session.modeOfTraining}
-                                        onChange={(e) => updateSessionField(index, 'modeOfTraining', e.target.value)}
-                                        className={inputClasses}
-                                    >
-                                        {modeOfTrainingOptions.map(option => (
-                                            <option key={option.value} value={option.value}>
-                                                {option.label}
-                                            </option>
-                                        ))}
-                                    </select>
+                <div className="mb-12 border-t border-gray-200 pt-8">
+                    <div className="flex items-center justify-between mb-6">
+                        <h3 className="text-2xl font-bold text-gray-800">Sessions</h3>
+                        <Button
+                            variant="outline"
+                            onClick={() => updateSessionCount(sessions.length + 1)}
+                            className="flex items-center space-x-2"
+                        >
+                            <span>Add New Session</span>
+                        </Button>
+                    </div>
+                    <div className="space-y-6">
+
+                        {sessions.map((session, index) => (
+                            <FormSection key={session.id} title={
+                                <div className="flex items-center justify-between">
+                                    <span>Session {index + 1}</span>
+                                    {sessions.length > 1 && (
+                                        <Button
+                                            variant="ghost"
+                                            onClick={() => {
+                                                const newSessions = sessions.filter((_, i) => i !== index);
+                                                setSessions(newSessions);
+                                                setSessionCount(newSessions.length);
+                                            }}
+                                            className="text-red-500 hover:text-red-700 px-2 py-1 text-sm"
+                                        >
+                                            Remove
+                                        </Button>
+                                    )}
                                 </div>
-                                
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            }>
+                                <div className="space-y-4">
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-1">
-                                            * Start Date
+                                            * Mode of Training
                                         </label>
-                                        <input
-                                            type="date"
-                                            value={session.startDate}
-                                            onChange={(e) => updateSessionField(index, 'startDate', e.target.value)}
+                                        <select
+                                            value={session.modeOfTraining}
+                                            onChange={(e) => updateSessionField(index, 'modeOfTraining', e.target.value)}
                                             className={inputClasses}
-                                        />
+                                        >
+                                            {modeOfTrainingOptions.map(option => (
+                                                <option key={option.value} value={option.value}>
+                                                    {option.label}
+                                                </option>
+                                            ))}
+                                        </select>
                                     </div>
-                                    
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                                            * End Date
-                                        </label>
-                                        <input
-                                            type="date"
-                                            value={session.modeOfTraining === '2' || session.modeOfTraining === '4' ? session.endDate : session.startDate}
-                                            onChange={(e) => updateSessionField(index, 'endDate', e.target.value)}
-                                            className={`${inputClasses} ${session.modeOfTraining !== '2' && session.modeOfTraining !== '4' ? 'bg-gray-100 cursor-not-allowed' : ''}`}
-                                            disabled={session.modeOfTraining !== '2' && session.modeOfTraining !== '4'}
-                                        />
+
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                * Start Date
+                                            </label>
+                                            <input
+                                                type="date"
+                                                value={session.startDate}
+                                                onChange={(e) => updateSessionField(index, 'startDate', e.target.value)}
+                                                className={inputClasses}
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                * End Date
+                                            </label>
+                                            <input
+                                                type="date"
+                                                value={session.modeOfTraining === '2' || session.modeOfTraining === '4' ? session.endDate : session.startDate}
+                                                onChange={(e) => updateSessionField(index, 'endDate', e.target.value)}
+                                                className={`${inputClasses} ${session.modeOfTraining !== '2' && session.modeOfTraining !== '4' ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                                                disabled={session.modeOfTraining !== '2' && session.modeOfTraining !== '4'}
+                                            />
+                                        </div>
                                     </div>
-                                </div>
-                                
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                                            * Start Time
-                                        </label>
-                                        <input
-                                            type="time"
-                                            value={session.modeOfTraining === '2' || session.modeOfTraining === '4' ? '00:00' : session.startTime}
-                                            onChange={(e) => updateSessionField(index, 'startTime', e.target.value)}
-                                            className={`${inputClasses} ${session.modeOfTraining === '2' || session.modeOfTraining === '4' ? 'bg-gray-100 cursor-not-allowed' : ''}`}
-                                            disabled={session.modeOfTraining === '2' || session.modeOfTraining === '4'}
-                                        />
+
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                * Start Time
+                                            </label>
+                                            <input
+                                                type="time"
+                                                value={session.modeOfTraining === '2' || session.modeOfTraining === '4' ? '00:00' : session.startTime}
+                                                onChange={(e) => updateSessionField(index, 'startTime', e.target.value)}
+                                                className={`${inputClasses} ${session.modeOfTraining === '2' || session.modeOfTraining === '4' ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                                                disabled={session.modeOfTraining === '2' || session.modeOfTraining === '4'}
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                * End Time
+                                            </label>
+                                            <input
+                                                type="time"
+                                                value={session.modeOfTraining === '2' || session.modeOfTraining === '4' ? '23:59' : session.endTime}
+                                                onChange={(e) => updateSessionField(index, 'endTime', e.target.value)}
+                                                className={`${inputClasses} ${session.modeOfTraining === '2' || session.modeOfTraining === '4' ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                                                disabled={session.modeOfTraining === '2' || session.modeOfTraining === '4'}
+                                            />
+                                        </div>
                                     </div>
-                                    
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                                            * End Time
-                                        </label>
-                                        <input
-                                            type="time"
-                                            value={session.modeOfTraining === '2' || session.modeOfTraining === '4' ? '23:59' : session.endTime}
-                                            onChange={(e) => updateSessionField(index, 'endTime', e.target.value)}
-                                            className={`${inputClasses} ${session.modeOfTraining === '2' || session.modeOfTraining === '4' ? 'bg-gray-100 cursor-not-allowed' : ''}`}
-                                            disabled={session.modeOfTraining === '2' || session.modeOfTraining === '4'}
-                                        />
-                                    </div>
-                                </div>
-                                
-                                {(session.modeOfTraining === '2' || session.modeOfTraining === '4') ? (
-                                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                                        <p className="text-blue-700 text-sm">
-                                            Start and end time are set to 12:00 AM to 11:59 PM respectively for this mode of training.
-                                        </p>
-                                    </div>
-                                ) : (
-                                    session.startDate && (
+
+                                    {(session.modeOfTraining === '2' || session.modeOfTraining === '4') ? (
                                         <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
                                             <p className="text-blue-700 text-sm">
-                                                End date of course session is automatically set to {session.startDate}
+                                                Start and end time are set to 12:00 AM to 11:59 PM respectively for this mode of training.
                                             </p>
                                         </div>
-                                    )
-                                )}
-                                
-                                {/* Session Venue */}
-                                <div className="border-t pt-4">
-                                    <h5 className="font-medium text-gray-700 mb-3">Venue Information</h5>
-                                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-1">
-                                                * Floor
-                                            </label>
-                                            <input
-                                                type="text"
-                                                value={session.floor}
-                                                onChange={(e) => updateSessionField(index, 'floor', e.target.value)}
-                                                className={inputClasses}
-                                                placeholder="12"
-                                                maxLength={3}
-                                            />
-                                        </div>
-                                        
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-1">
-                                                * Unit
-                                            </label>
-                                            <input
-                                                type="text"
-                                                value={session.unit}
-                                                onChange={(e) => updateSessionField(index, 'unit', e.target.value)}
-                                                className={inputClasses}
-                                                placeholder="123"
-                                                maxLength={5}
-                                            />
-                                        </div>
-                                        
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-1">
-                                                * Postal Code
-                                            </label>
-                                            <input
-                                                type="text"
-                                                value={session.postalCode}
-                                                onChange={(e) => updateSessionField(index, 'postalCode', e.target.value)}
-                                                className={inputClasses}
-                                                placeholder="123456"
-                                                maxLength={6}
-                                            />
-                                        </div>
-                                        
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-1">
-                                                * Room
-                                            </label>
-                                            <input
-                                                type="text"
-                                                value={session.room}
-                                                onChange={(e) => updateSessionField(index, 'room', e.target.value)}
-                                                className={inputClasses}
-                                                placeholder="12A"
-                                                maxLength={255}
-                                            />
+                                    ) : (
+                                        session.startDate && (
+                                            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                                                <p className="text-blue-700 text-sm">
+                                                    End date of course session is automatically set to {session.startDate}
+                                                </p>
+                                            </div>
+                                        )
+                                    )}
+
+                                    {/* Session Venue */}
+                                    <div className="border-t pt-4">
+                                        <h5 className="font-medium text-gray-700 mb-3">Venue Information</h5>
+                                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                    * Floor
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    value={session.floor}
+                                                    onChange={(e) => updateSessionField(index, 'floor', e.target.value)}
+                                                    className={inputClasses}
+                                                    placeholder="12"
+                                                    maxLength={3}
+                                                />
+                                            </div>
+
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                    * Unit
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    value={session.unit}
+                                                    onChange={(e) => updateSessionField(index, 'unit', e.target.value)}
+                                                    className={inputClasses}
+                                                    placeholder="123"
+                                                    maxLength={5}
+                                                />
+                                            </div>
+
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                    * Postal Code
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    value={session.postalCode}
+                                                    onChange={(e) => updateSessionField(index, 'postalCode', e.target.value)}
+                                                    className={inputClasses}
+                                                    placeholder="123456"
+                                                    maxLength={6}
+                                                />
+                                            </div>
+
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                    * Room
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    value={session.room}
+                                                    onChange={(e) => updateSessionField(index, 'room', e.target.value)}
+                                                    className={inputClasses}
+                                                    placeholder="12A"
+                                                    maxLength={255}
+                                                />
+                                            </div>
                                         </div>
                                     </div>
+                                </div>
+                            </FormSection>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {/* Trainer Section */}
+            {showTrainer && (
+                <div className="mb-12 border-t border-gray-200 pt-8">
+                    <div className="flex items-center mb-6">
+                        <h3 className="text-2xl font-bold text-gray-800">Trainer</h3>
+                    </div>
+                    <div className="space-y-6">
+
+                        <FormSection title="Assign Existing Trainer">
+                            <div className="space-y-4">
+                                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                                    <h4 className="font-semibold text-blue-800 mb-2">Existing Trainer Assignment</h4>
+                                    <p className="text-blue-700 text-sm">
+                                        Enter the Trainer ID Number to assign an existing trainer to this course.
+                                        The system will automatically retrieve trainer details from the existing trainer database.
+                                    </p>
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        * Trainer ID Number
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={trainers[0]?.trainerIdNumber || ''}
+                                        onChange={(e) => updateTrainerField(0, 'trainerIdNumber', e.target.value)}
+                                        className={inputClasses}
+                                        placeholder="S1234567A"
+                                        maxLength={50}
+                                    />
+                                    <p className="text-xs text-gray-500 mt-1">
+                                        This refers to the NRIC number of the existing trainer.
+                                    </p>
                                 </div>
                             </div>
                         </FormSection>
-                    ))}
+                    </div>
                 </div>
-            </div>
             )}
-            
-            {/* Trainer Section */}
-            {showTrainer && (
-            <div className="mb-12 border-t border-gray-200 pt-8">
-                <div className="flex items-center mb-6">
-                    <h3 className="text-2xl font-bold text-gray-800">Trainer</h3>
-                </div>
-                <div className="space-y-6">
-                    
-                    <FormSection title="Assign Existing Trainer">
-                        <div className="space-y-4">
-                            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                                <h4 className="font-semibold text-blue-800 mb-2">Existing Trainer Assignment</h4>
-                                <p className="text-blue-700 text-sm">
-                                    Enter the Trainer ID Number to assign an existing trainer to this course. 
-                                    The system will automatically retrieve trainer details from the existing trainer database.
-                                </p>
-                            </div>
-                            
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                    * Trainer ID Number
-                                </label>
-                                <input
-                                    type="text"
-                                    value={trainers[0]?.trainerIdNumber || ''}
-                                    onChange={(e) => updateTrainerField(0, 'trainerIdNumber', e.target.value)}
-                                    className={inputClasses}
-                                    placeholder="S1234567A"
-                                    maxLength={50}
-                                />
-                                <p className="text-xs text-gray-500 mt-1">
-                                    This refers to the NRIC number of the existing trainer.
-                                </p>
-                            </div>
-                        </div>
-                    </FormSection>
-                </div>
-            </div>
-            )}
-            
+
             {/* API Debug Section */}
             {(requestBody || apiResponse) && (
                 <div className="mb-12 border-t border-gray-200 pt-8">
@@ -1225,7 +1225,7 @@ export const CreateNewClassView: React.FC = () => {
                         <h3 className="text-2xl font-bold text-gray-800">API Debug Information</h3>
                     </div>
                     <div className="space-y-6">
-                        
+
                         {/* Request Body Display */}
                         {requestBody && (
                             <FormSection title="Request Body Sent to API">
@@ -1236,17 +1236,15 @@ export const CreateNewClassView: React.FC = () => {
                                 </div>
                             </FormSection>
                         )}
-                        
+
                         {/* API Response Display */}
                         {apiResponse && (
                             <FormSection title="API Response">
-                                <div className={`border rounded-lg p-4 ${
-                                    (apiResponse.status === 200 && !apiResponse.error?.message) ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'
-                                }`}>
+                                <div className={`border rounded-lg p-4 ${(apiResponse.status === 200 && !apiResponse.error?.message) ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'
+                                    }`}>
                                     <div className="mb-2">
-                                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                            (apiResponse.status === 200 && !apiResponse.error?.message) ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                                        }`}>
+                                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${(apiResponse.status === 200 && !apiResponse.error?.message) ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                                            }`}>
                                             {(apiResponse.status === 200 && !apiResponse.error?.message) ? 'Success' : 'Error'}
                                         </span>
                                     </div>
@@ -1259,7 +1257,7 @@ export const CreateNewClassView: React.FC = () => {
                     </div>
                 </div>
             )}
-            
+
             {/* Success Popup */}
             <SuccessPopup
                 isOpen={showSuccessPopup}

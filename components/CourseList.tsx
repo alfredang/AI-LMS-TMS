@@ -12,7 +12,7 @@ import { CourseDetail } from './CourseDetail';
 import { getCourseImageUrl } from '@utils/imageUtils';
 
 const getTypeColor = (courseType: string) => {
-    switch(courseType) {
+    switch (courseType) {
         case 'WSQ': return 'bg-blue-100 text-blue-800';
         case 'IBF': return 'bg-purple-100 text-purple-800';
         default: return 'bg-gray-100 text-gray-800';
@@ -21,14 +21,14 @@ const getTypeColor = (courseType: string) => {
 
 const DetailRow: React.FC<{ label: string; value: React.ReactNode }> = ({ label, value }) => (
     <div className="flex justify-between items-start gap-2">
-        <p className="font-semibold text-gray-600 flex-shrink-0">{label}:</p>
-        <div className="text-right text-gray-800">{value}</div>
+        <p className="font-semibold text-gray-600 flex-shrink-0 dark:text-gray-400">{label}:</p>
+        <div className="text-right text-gray-800 dark:text-gray-200">{value}</div>
     </div>
 );
 
 const ManagementCourseList: React.FC = () => {
     const { role, currentUser, setSelectedCourse: setContextSelectedCourse, setEditingCourse, setCourseEditMode, loadCourseData } = useLms();
-    
+
     // Hooks for different user roles
     const { courses: learnerCourses, loading: learnerLoading, error: learnerError } = useCourses(
         role === UserRole.Learner && currentUser?.id ? currentUser.id : undefined
@@ -37,7 +37,7 @@ const ManagementCourseList: React.FC = () => {
         role === UserRole.Trainer && currentUser?.id ? currentUser.id : undefined
     );
     const { courses: developerCourses, loading: developerLoading, error: developerError } = useDeveloperCourses();
-    
+
     // Search and filter state
     const [searchQuery, setSearchQuery] = useState('');
     const [filterCourseType, setFilterCourseType] = useState<'WSQ' | 'IBF' | 'Non-WSQ' | 'All'>('All');
@@ -49,7 +49,7 @@ const ManagementCourseList: React.FC = () => {
 
     // Determine which courses to use based on role
     let relevantCourses, currentLoading, currentError;
-    
+
     switch (role) {
         case UserRole.Trainer:
             relevantCourses = trainerCourses;
@@ -72,22 +72,22 @@ const ManagementCourseList: React.FC = () => {
     // Helper function to check if a date falls within the selected range
     const isDateInRange = (dateString: string | undefined, range: string): boolean => {
         if (!dateString) return range === 'All';
-        
+
         const courseDate = new Date(dateString);
         const now = new Date();
         const currentYear = now.getFullYear();
         const currentMonth = now.getMonth();
-        
+
         // Create date ranges
         const thisMonthStart = new Date(currentYear, currentMonth, 1);
         const thisMonthEnd = new Date(currentYear, currentMonth + 1, 0);
-        
+
         const nextMonthStart = new Date(currentYear, currentMonth + 1, 1);
         const nextMonthEnd = new Date(currentYear, currentMonth + 2, 0);
-        
+
         const lastMonthStart = new Date(currentYear, currentMonth - 1, 1);
         const lastMonthEnd = new Date(currentYear, currentMonth, 0);
-        
+
         switch (range) {
             case 'All':
                 return true;
@@ -109,7 +109,7 @@ const ManagementCourseList: React.FC = () => {
     // Client-side filtering for developers/admins (similar to reference implementation)
     const filteredCourses = useMemo(() => {
         if (!relevantCourses) return [];
-        
+
         return relevantCourses.filter(course => {
             const searchLower = searchQuery.toLowerCase();
             const matchesSearch = searchQuery === '' ||
@@ -120,7 +120,7 @@ const ManagementCourseList: React.FC = () => {
 
             const matchesType = filterCourseType === 'All' || course.courseType === filterCourseType;
             const matchesMode = filterMode === 'All' || (course.modeOfLearning && course.modeOfLearning.includes(filterMode));
-            
+
             // Apply date filtering only for trainers (not for developers)
             const matchesStartDate = (role !== UserRole.Trainer) || isDateInRange(course.startDate, filterStartDate);
 
@@ -139,12 +139,12 @@ const ManagementCourseList: React.FC = () => {
     // Handle edit course
     const handleEditCourse = async (course: any) => {
         if (!course?.id) return;
-        
+
         try {
             console.log('🔄 Loading complete course data for editing...');
             const response = await fetch(`/api/courses/edit-data?courseId=${course.id}`);
             const result = await response.json();
-            
+
             if (result.success && result.data) {
                 console.log('✅ Complete course data loaded for editing:', result.data);
                 setEditingCourse(result.data);
@@ -160,7 +160,7 @@ const ManagementCourseList: React.FC = () => {
         }
     };
 
-    const inputClasses = "block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent";
+    const inputClasses = "block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-500";
 
     // Use effect to set course in context when selectedCourse changes
     React.useEffect(() => {
@@ -173,7 +173,7 @@ const ManagementCourseList: React.FC = () => {
     if (selectedCourse) {
         console.log('Selected course for detail view:', selectedCourse);
         console.log('Course run ID:', selectedCourse.courseRunId);
-        
+
         return (
             <div>
                 <div className="mb-4">
@@ -196,85 +196,85 @@ const ManagementCourseList: React.FC = () => {
                 const totalHours = Number(course.trainingHours) + Number(course.assessmentHours);
                 console.log('course run info,', course);
                 return (
-                  <Card key={course.id} className="flex flex-col">
-                    <img 
-                      src={getCourseImageUrl(course.imageUrl, course.id)} 
-                      alt={course.title} 
-                      className="w-full h-40 object-cover"
-                      onError={(e) => {
-                        const target = e.target as HTMLImageElement;
-                        target.src = `https://picsum.photos/seed/${course.id}/400/200`;
-                      }}
-                    />
-                    <div className="p-6 flex flex-col flex-grow">
-                      <h3 className="text-xl font-bold mb-4">{course.title}</h3>
-                      
-                      {/* New Details Section */}
-                      <div className="text-xs space-y-2 mb-4 flex-grow">
-                          <DetailRow label="TGS Ref" value={course.courseCode} />
-                          <DetailRow label="TSC Title" value={course.tscTitle || 'N/A'} />
-                          <DetailRow label="TSC Code" value={course.tscCode || 'N/A'} />
-                          <DetailRow label="Course Type" value={
-                              <span className={`font-semibold px-2 py-0.5 rounded-full ${getTypeColor(course.courseType)}`}>
-                                  {course.courseType}
-                              </span>
-                          } />
-                          <DetailRow label="Mode of Training" value={course.modeOfLearning.join(', ')} />
-                          <DetailRow label="Course Duration" value={
-                              <div className="flex flex-col items-end">
-                                  <span>{totalHours} Hours Total</span>
-                                  <span className="text-gray-400 font-normal">
-                                      ({course.trainingHours}T + {course.assessmentHours}A)
-                                  </span>
-                              </div>
-                          } />
-                          {role === UserRole.Trainer && course.courseRunId && (
-                              <DetailRow label="Course Run ID" value={course.courseRunCode} />
-                          )}
-                          {course.startDate && role !== UserRole.Developer && (
-                              <DetailRow label="Start Date" value={
-                                  new Date(course.startDate).toLocaleDateString('en-SG', {
-                                      year: 'numeric',
-                                      month: 'short',
-                                      day: 'numeric'
-                                  })
-                              } />
-                          )}
-                      </div>
-                      
-                      <div className="flex justify-between items-center mt-auto pt-4 border-t">
-                        <Button onClick={() => {
-                          console.log('🔍 CourseList: View Course clicked for:', {
-                            id: course.id,
-                            title: course.title,
-                            courseCode: course.courseCode,
-                            tscTitle: course.tscTitle,
-                            tscCode: course.tscCode,
-                            courseRunId: course.courseRunId
-                          });
-                          setSelectedCourse(course);
-                          loadCourseData(course);
-                        }}>
-                          {role === UserRole.Trainer ? 'View Course' : 'View Course'}
-                        </Button>
-                        {(role === UserRole.Developer || role === UserRole.Admin) && (
-                            <button onClick={() => handleEditCourse(course)} className="flex items-center text-subtle font-semibold hover:text-primary transition-colors">
-                                <Icon name={IconName.Edit} className="w-4 h-4 mr-1"/>
-                                <span>Edit</span>
-                            </button>
-                        )}
-                      </div>
-                    </div>
-                  </Card>
+                    <Card key={course.id} className="flex flex-col dark:bg-gray-800 dark:border-gray-700">
+                        <img
+                            src={getCourseImageUrl(course.imageUrl, course.id)}
+                            alt={course.title}
+                            className="w-full h-40 object-cover"
+                            onError={(e) => {
+                                const target = e.target as HTMLImageElement;
+                                target.src = `https://picsum.photos/seed/${course.id}/400/200`;
+                            }}
+                        />
+                        <div className="p-6 flex flex-col flex-grow">
+                            <h3 className="text-xl font-bold mb-4">{course.title}</h3>
+
+                            {/* New Details Section */}
+                            <div className="text-xs space-y-2 mb-4 flex-grow">
+                                <DetailRow label="TGS Ref" value={course.courseCode} />
+                                <DetailRow label="TSC Title" value={course.tscTitle || 'N/A'} />
+                                <DetailRow label="TSC Code" value={course.tscCode || 'N/A'} />
+                                <DetailRow label="Course Type" value={
+                                    <span className={`font-semibold px-2 py-0.5 rounded-full ${getTypeColor(course.courseType)}`}>
+                                        {course.courseType}
+                                    </span>
+                                } />
+                                <DetailRow label="Mode of Training" value={course.modeOfLearning.join(', ')} />
+                                <DetailRow label="Course Duration" value={
+                                    <div className="flex flex-col items-end">
+                                        <span>{totalHours} Hours Total</span>
+                                        <span className="text-gray-400 font-normal">
+                                            ({course.trainingHours}T + {course.assessmentHours}A)
+                                        </span>
+                                    </div>
+                                } />
+                                {role === UserRole.Trainer && course.courseRunId && (
+                                    <DetailRow label="Course Run ID" value={course.courseRunCode} />
+                                )}
+                                {course.startDate && role !== UserRole.Developer && (
+                                    <DetailRow label="Start Date" value={
+                                        new Date(course.startDate).toLocaleDateString('en-SG', {
+                                            year: 'numeric',
+                                            month: 'short',
+                                            day: 'numeric'
+                                        })
+                                    } />
+                                )}
+                            </div>
+
+                            <div className="flex justify-between items-center mt-auto pt-4 border-t">
+                                <Button onClick={() => {
+                                    console.log('🔍 CourseList: View Course clicked for:', {
+                                        id: course.id,
+                                        title: course.title,
+                                        courseCode: course.courseCode,
+                                        tscTitle: course.tscTitle,
+                                        tscCode: course.tscCode,
+                                        courseRunId: course.courseRunId
+                                    });
+                                    setSelectedCourse(course);
+                                    loadCourseData(course);
+                                }}>
+                                    {role === UserRole.Trainer ? 'View Course' : 'View Course'}
+                                </Button>
+                                {(role === UserRole.Developer || role === UserRole.Admin) && (
+                                    <button onClick={() => handleEditCourse(course)} className="flex items-center text-subtle font-semibold hover:text-primary transition-colors">
+                                        <Icon name={IconName.Edit} className="w-4 h-4 mr-1" />
+                                        <span>Edit</span>
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    </Card>
                 );
             })}
         </div>
     );
-    
+
     const CourseTableView = () => (
-        <Card className="p-0 overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
+        <Card className="p-0 overflow-x-auto dark:bg-gray-800 dark:border-gray-700">
+            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                <thead className="bg-gray-50 dark:bg-gray-700/50">
                     <tr>
                         <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Course</th>
                         <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Details</th>
@@ -285,30 +285,30 @@ const ManagementCourseList: React.FC = () => {
                         {(role !== UserRole.Developer && role !== UserRole.Admin && role !== UserRole.TrainingProvider) && (
                             <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Start Date</th>
                         )}
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Actions</th>
                     </tr>
                 </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
+                <tbody className="bg-white divide-y divide-gray-200 dark:bg-gray-800 dark:divide-gray-700">
                     {filteredCourses.map(course => {
                         const totalHours = Number(course.trainingHours) + Number(course.assessmentHours);
                         return (
-                            <tr key={course.id} className="hover:bg-gray-50">
+                            <tr key={course.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
                                 <td className="px-6 py-4 whitespace-nowrap">
                                     <div className="flex items-center">
                                         <div className="flex-shrink-0 h-10 w-10">
-                                            <img 
-                                              className="h-10 w-10 rounded-md object-cover" 
-                                              src={getCourseImageUrl(course.imageUrl, course.id)} 
-                                              alt={course.title}
-                                              onError={(e) => {
-                                                const target = e.target as HTMLImageElement;
-                                                target.src = `https://picsum.photos/seed/${course.id}/100/100`;
-                                              }}
+                                            <img
+                                                className="h-10 w-10 rounded-md object-cover"
+                                                src={getCourseImageUrl(course.imageUrl, course.id)}
+                                                alt={course.title}
+                                                onError={(e) => {
+                                                    const target = e.target as HTMLImageElement;
+                                                    target.src = `https://picsum.photos/seed/${course.id}/100/100`;
+                                                }}
                                             />
                                         </div>
                                         <div className="ml-4">
-                                            <div className="text-sm font-medium text-gray-900">{course.title}</div>
-                                            <div className="text-sm text-gray-500">{course.courseCode}</div>
+                                            <div className="text-sm font-medium text-gray-900 dark:text-white">{course.title}</div>
+                                            <div className="text-sm text-gray-500 dark:text-gray-400">{course.courseCode}</div>
                                         </div>
                                     </div>
                                 </td>
@@ -327,36 +327,36 @@ const ManagementCourseList: React.FC = () => {
                                 )}
                                 {(role !== UserRole.Developer && role !== UserRole.Admin && role !== UserRole.TrainingProvider) && (
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                            {course.startDate ? (
-                                                new Date(course.startDate).toLocaleDateString('en-SG', {
-                                                    year: 'numeric',
-                                                    month: 'short',
-                                                    day: 'numeric'
-                                                })
-                                            ) : (
-                                                'Not scheduled'
-                                            )}
+                                        {course.startDate ? (
+                                            new Date(course.startDate).toLocaleDateString('en-SG', {
+                                                year: 'numeric',
+                                                month: 'short',
+                                                day: 'numeric'
+                                            })
+                                        ) : (
+                                            'Not scheduled'
+                                        )}
                                     </td>
                                 )}
                                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                                     <div className="flex items-center space-x-2">
                                         <Button size="sm" onClick={() => {
-                                          console.log('🔍 CourseList: View Course clicked for:', {
-                                            id: course.id,
-                                            title: course.title,
-                                            courseCode: course.courseCode,
-                                            tscTitle: course.tscTitle,
-                                            tscCode: course.tscCode,
-                                            courseRunId: course.courseRunId
-                                          });
-                                          setSelectedCourse(course);
-                                          loadCourseData(course);
+                                            console.log('🔍 CourseList: View Course clicked for:', {
+                                                id: course.id,
+                                                title: course.title,
+                                                courseCode: course.courseCode,
+                                                tscTitle: course.tscTitle,
+                                                tscCode: course.tscCode,
+                                                courseRunId: course.courseRunId
+                                            });
+                                            setSelectedCourse(course);
+                                            loadCourseData(course);
                                         }}>
                                             {role === UserRole.Trainer ? 'View Course' : 'View Course'}
                                         </Button>
                                         {(role === UserRole.Developer || role === UserRole.Admin) && (
                                             <Button size="sm" variant="ghost" onClick={() => handleEditCourse(course)} className="!text-blue-600 hover:!bg-blue-50">
-                                                <Icon name={IconName.Edit} className="w-4 h-4 mr-1"/>
+                                                <Icon name={IconName.Edit} className="w-4 h-4 mr-1" />
                                                 Edit
                                             </Button>
                                         )}
@@ -385,8 +385,8 @@ const ManagementCourseList: React.FC = () => {
         return (
             <div className="text-center py-8">
                 <p className="text-red-600 mb-4">Error loading courses: {currentError}</p>
-                <button 
-                    onClick={() => window.location.reload()} 
+                <button
+                    onClick={() => window.location.reload()}
                     className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
                 >
                     Retry
@@ -398,21 +398,21 @@ const ManagementCourseList: React.FC = () => {
     return (
         <div>
             {/* Search and Filter Controls Card */}
-            <Card className="p-6 mb-8">
+            <Card className="p-6 mb-8 dark:bg-gray-800 dark:border-gray-700">
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
                     <div className="md:col-span-2">
-                        <label htmlFor="general-search-courses" className="block text-sm font-medium text-gray-700">General Search</label>
+                        <label htmlFor="general-search-courses" className="block text-sm font-medium text-gray-700 dark:text-gray-300">General Search</label>
                         <div className="relative mt-1">
-                             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                                 <Icon name={IconName.Eye} className="w-5 h-5 text-gray-400" />
                             </div>
-                            <input 
-                                type="text" 
-                                id="general-search-courses" 
-                                placeholder="Search title, code, TSC..." 
-                                value={searchQuery} 
-                                onChange={e => setSearchQuery(e.target.value)} 
-                                className={`${inputClasses} pl-10`} 
+                            <input
+                                type="text"
+                                id="general-search-courses"
+                                placeholder="Search title, code, TSC..."
+                                value={searchQuery}
+                                onChange={e => setSearchQuery(e.target.value)}
+                                className={`${inputClasses} pl-10`}
                             />
                         </div>
                     </div>
@@ -422,7 +422,7 @@ const ManagementCourseList: React.FC = () => {
                             <div className="flex items-center rounded-md bg-gray-100 p-0.5 border">
                                 <button
                                     onClick={() => setViewMode('block')}
-                                    className={`p-1.5 rounded-md transition-colors ${viewMode === 'block' ? 'bg-white shadow text-primary' : 'text-gray-500 hover:text-gray-800'}`}
+                                    className={`p-1.5 rounded-md transition-colors ${viewMode === 'block' ? 'bg-white shadow text-primary dark:bg-gray-700 dark:text-blue-400' : 'text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200'}`}
                                     aria-label="Block view"
                                     aria-pressed={viewMode === 'block'}
                                 >
@@ -430,7 +430,7 @@ const ManagementCourseList: React.FC = () => {
                                 </button>
                                 <button
                                     onClick={() => setViewMode('table')}
-                                    className={`p-1.5 rounded-md transition-colors ${viewMode === 'table' ? 'bg-white shadow text-primary' : 'text-gray-500 hover:text-gray-800'}`}
+                                    className={`p-1.5 rounded-md transition-colors ${viewMode === 'table' ? 'bg-white shadow text-primary dark:bg-gray-700 dark:text-blue-400' : 'text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200'}`}
                                     aria-label="Table view"
                                     aria-pressed={viewMode === 'table'}
                                 >
@@ -444,11 +444,11 @@ const ManagementCourseList: React.FC = () => {
                         </Button>
                     </div>
                 </div>
-                
+
                 {showAdvancedFilters && (
-                    <div className="mt-4 pt-4 border-t grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                    <div className="mt-4 pt-4 border-t grid grid-cols-1 md:grid-cols-3 gap-4 items-end dark:border-gray-700">
                         <div>
-                            <label className="block text-sm font-medium text-gray-700">Course Type</label>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Course Type</label>
                             <select value={filterCourseType} onChange={e => setFilterCourseType(e.target.value as 'WSQ' | 'IBF' | 'Non-WSQ' | 'All')} className={`${inputClasses} mt-1`}>
                                 <option value="All">All Types</option>
                                 <option value="WSQ">WSQ</option>
@@ -456,8 +456,8 @@ const ManagementCourseList: React.FC = () => {
                                 <option value="Non-WSQ">Non-WSQ</option>
                             </select>
                         </div>
-                         <div>
-                            <label className="block text-sm font-medium text-gray-700">Mode of Training</label>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Mode of Training</label>
                             <select value={filterMode} onChange={e => setFilterMode(e.target.value)} className={`${inputClasses} mt-1`}>
                                 <option value="All">All Modes</option>
                                 <option value="Hybrid">Hybrid</option>
@@ -467,7 +467,7 @@ const ManagementCourseList: React.FC = () => {
                         </div>
                         {role === UserRole.Trainer && (
                             <div>
-                                <label className="block text-sm font-medium text-gray-700">Start Date</label>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Start Date</label>
                                 <select value={filterStartDate} onChange={e => setFilterStartDate(e.target.value as 'All' | 'This Month' | 'Next Month' | 'Last Month' | 'Earlier' | 'Later')} className={`${inputClasses} mt-1`}>
                                     <option value="All">All Dates</option>
                                     <option value="This Month">This Month</option>
@@ -489,7 +489,7 @@ const ManagementCourseList: React.FC = () => {
                 ) : (
                     <Card className="p-12 text-center text-subtle">
                         {(searchQuery !== '' || filterCourseType !== 'All' || filterMode !== 'All' || (role === UserRole.Trainer && filterStartDate !== 'All'))
-                            ? 'No courses match your search criteria.' 
+                            ? 'No courses match your search criteria.'
                             : 'No courses found.'
                         }
                     </Card>
@@ -533,7 +533,7 @@ const ManagementCourseList: React.FC = () => {
 const LearnerCourseList: React.FC = () => {
     const { currentUser } = useLms();
     const { courses, loading, error } = useCourses(currentUser?.id);
-    
+
     // Search state
     const [searchQuery, setSearchQuery] = useState('');
     const [filterCourseType, setFilterCourseType] = useState<'WSQ' | 'IBF' | 'Non-WSQ' | 'All'>('All');
@@ -543,19 +543,19 @@ const LearnerCourseList: React.FC = () => {
     // Client-side filtering based on search query and filters
     const filteredCourses = useMemo(() => {
         if (!courses) return [];
-        
+
         return courses.filter(course => {
             // Search by course title (case-insensitive)
-            const matchesSearch = searchQuery === '' || 
+            const matchesSearch = searchQuery === '' ||
                 course.title.toLowerCase().includes(searchQuery.toLowerCase());
-            
+
             // Filter by course type
             const matchesType = filterCourseType === 'All' || course.courseType === filterCourseType;
-            
+
             // Filter by mode of learning
-            const matchesMode = filterMode === 'All' || 
+            const matchesMode = filterMode === 'All' ||
                 (course.modeOfLearning && course.modeOfLearning.includes(filterMode));
-            
+
             return matchesSearch && matchesType && matchesMode;
         });
     }, [courses, searchQuery, filterCourseType, filterMode]);
@@ -567,7 +567,7 @@ const LearnerCourseList: React.FC = () => {
         setFilterMode('All');
     };
 
-    const inputClasses = "w-full pl-10 pr-4 py-2 text-on-surface bg-surface border border-gray-300 rounded-md placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent";
+    const inputClasses = "w-full pl-10 pr-4 py-2 text-on-surface bg-surface border border-gray-300 rounded-md placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400";
 
     // Check if any filters are active
     const hasActiveFilters = searchQuery !== '' || filterCourseType !== 'All' || filterMode !== 'All';
@@ -587,8 +587,8 @@ const LearnerCourseList: React.FC = () => {
         return (
             <div className="text-center py-8">
                 <p className="text-red-600 mb-4">Error loading courses: {error}</p>
-                <button 
-                    onClick={() => window.location.reload()} 
+                <button
+                    onClick={() => window.location.reload()}
                     className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
                 >
                     Retry
@@ -628,14 +628,14 @@ const LearnerCourseList: React.FC = () => {
 
             {/* Advanced Filters */}
             {showAdvancedFilters && (
-                <Card className="p-4 mb-6">
+                <Card className="p-4 mb-6 dark:bg-gray-800 dark:border-gray-700">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Course Type</label>
-                            <select 
-                                value={filterCourseType} 
-                                onChange={e => setFilterCourseType(e.target.value as 'WSQ' | 'IBF' | 'Non-WSQ' | 'All')} 
-                                className="w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                            <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-gray-300">Course Type</label>
+                            <select
+                                value={filterCourseType}
+                                onChange={e => setFilterCourseType(e.target.value as 'WSQ' | 'IBF' | 'Non-WSQ' | 'All')}
+                                className="w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                             >
                                 <option value="All">All Types</option>
                                 <option value="WSQ">WSQ</option>
@@ -644,11 +644,11 @@ const LearnerCourseList: React.FC = () => {
                             </select>
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Mode of Training</label>
-                            <select 
-                                value={filterMode} 
-                                onChange={e => setFilterMode(e.target.value)} 
-                                className="w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                            <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-gray-300">Mode of Training</label>
+                            <select
+                                value={filterMode}
+                                onChange={e => setFilterMode(e.target.value)}
+                                className="w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                             >
                                 <option value="All">All Modes</option>
                                 <option value="Hybrid">Hybrid</option>
@@ -686,20 +686,20 @@ const LearnerCourseList: React.FC = () => {
 }
 
 const CourseList: React.FC = () => {
-  const { role } = useLms();
+    const { role } = useLms();
 
-  if (role === UserRole.Learner) {
-    return <LearnerCourseList />;
-  }
-  
-  // Trainer, Developer, Admin, and TrainingProvider view
-  const title = role === UserRole.Trainer ? "My Assigned Classes" : "Course Management";
-  return (
-    <div>
-      <h2 className="text-3xl font-bold mb-6">{title}</h2>
-      <ManagementCourseList />
-    </div>
-  );
+    if (role === UserRole.Learner) {
+        return <LearnerCourseList />;
+    }
+
+    // Trainer, Developer, Admin, and TrainingProvider view
+    const title = role === UserRole.Trainer ? "My Assigned Classes" : "Course Management";
+    return (
+        <div>
+            <h2 className="text-3xl font-bold mb-6">{title}</h2>
+            <ManagementCourseList />
+        </div>
+    );
 };
 
 export default CourseList;

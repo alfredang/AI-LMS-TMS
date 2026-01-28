@@ -1,5 +1,5 @@
 import { getApiUrl, getFileUrl } from '@/lib/urlHelpers';
-﻿import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { useLms } from '@contexts/LmsContext';
@@ -7,66 +7,66 @@ import { AdminPage } from '@app-types';
 
 // Import SSG constants for ViewCourseSessions
 enum Month {
-  JANUARY = 1,
-  FEBRUARY = 2,
-  MARCH = 3,
-  APRIL = 4,
-  MAY = 5,
-  JUNE = 6,
-  JULY = 7,
-  AUGUST = 8,
-  SEPTEMBER = 9,
-  OCTOBER = 10,
-  NOVEMBER = 11,
-  DECEMBER = 12
+    JANUARY = 1,
+    FEBRUARY = 2,
+    MARCH = 3,
+    APRIL = 4,
+    MAY = 5,
+    JUNE = 6,
+    JULY = 7,
+    AUGUST = 8,
+    SEPTEMBER = 9,
+    OCTOBER = 10,
+    NOVEMBER = 11,
+    DECEMBER = 12
 }
 
 const MonthNames = {
-  [Month.JANUARY]: 'January',
-  [Month.FEBRUARY]: 'February',
-  [Month.MARCH]: 'March',
-  [Month.APRIL]: 'April',
-  [Month.MAY]: 'May',
-  [Month.JUNE]: 'June',
-  [Month.JULY]: 'July',
-  [Month.AUGUST]: 'August',
-  [Month.SEPTEMBER]: 'September',
-  [Month.OCTOBER]: 'October',
-  [Month.NOVEMBER]: 'November',
-  [Month.DECEMBER]: 'December'
+    [Month.JANUARY]: 'January',
+    [Month.FEBRUARY]: 'February',
+    [Month.MARCH]: 'March',
+    [Month.APRIL]: 'April',
+    [Month.MAY]: 'May',
+    [Month.JUNE]: 'June',
+    [Month.JULY]: 'July',
+    [Month.AUGUST]: 'August',
+    [Month.SEPTEMBER]: 'September',
+    [Month.OCTOBER]: 'October',
+    [Month.NOVEMBER]: 'November',
+    [Month.DECEMBER]: 'December'
 };
 
 // Types and enums for form data
 export enum OptionalSelector {
-  YES = 'true',
-  NO = 'false'
+    YES = 'true',
+    NO = 'false'
 }
 
 interface EditRunInfo {
-  courseReferenceNumber: string;
-  sequenceNumber?: number;
-  openingRegistrationDate?: string;
-  closingRegistrationDate?: string;
-  courseStartDate?: string;
-  courseEndDate?: string;
-  scheduleInfo?: string;
-  block?: string;
-  street?: string;
-  floor?: string;
-  unit?: string;
-  building?: string;
-  postalCode?: string;
-  room?: string;
-  wheelChairAccess?: OptionalSelector;
-  intakeSize?: number;
-  threshold?: number;
-  registeredUserCount?: number;
-  modeOfTraining?: string;
-  courseAdminEmail?: string;
-  courseVacancy?: {
-    code: string;
-    description?: string;
-  };
+    courseReferenceNumber: string;
+    sequenceNumber?: number;
+    openingRegistrationDate?: string;
+    closingRegistrationDate?: string;
+    courseStartDate?: string;
+    courseEndDate?: string;
+    scheduleInfo?: string;
+    block?: string;
+    street?: string;
+    floor?: string;
+    unit?: string;
+    building?: string;
+    postalCode?: string;
+    room?: string;
+    wheelChairAccess?: OptionalSelector;
+    intakeSize?: number;
+    threshold?: number;
+    registeredUserCount?: number;
+    modeOfTraining?: string;
+    courseAdminEmail?: string;
+    courseVacancy?: {
+        code: string;
+        description?: string;
+    };
 }
 
 interface ClassManagerViewProps {
@@ -75,8 +75,8 @@ interface ClassManagerViewProps {
 
 // FormSection component definition moved outside to prevent re-creation on re-renders
 const FormSection: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
-    <Card className="p-6">
-        <h3 className="text-xl font-bold mb-4">{title}</h3>
+    <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
+        <h3 className="text-xl font-bold mb-4 dark:text-white">{title}</h3>
         <div className="space-y-4">{children}</div>
     </Card>
 );
@@ -122,7 +122,7 @@ export const ClassManagerView: React.FC<ClassManagerViewProps> = ({ courseToEdit
     const [sessionsLoading, setSessionsLoading] = useState(false);
     const [hasExistingSessions, setHasExistingSessions] = useState(false);
     const [editingSessionIndex, setEditingSessionIndex] = useState<number | null>(null);
-    
+
     // Multiple new sessions state instead of single
     const [showNewSessionForm, setShowNewSessionForm] = useState(false);
     const [newSessions, setNewSessions] = useState([{
@@ -177,7 +177,7 @@ export const ClassManagerView: React.FC<ClassManagerViewProps> = ({ courseToEdit
     });
 
     // Constants for form options
-    const inputClasses = "block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent";
+    const inputClasses = "block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-500";
 
     const modeOfTrainingOptions = [
         { value: '1', label: '1 - Classroom' },
@@ -225,7 +225,7 @@ export const ClassManagerView: React.FC<ClassManagerViewProps> = ({ courseToEdit
         if (!venue || typeof venue === 'string') {
             return venue || '';
         }
-        
+
         console.log('🏢 Formatting venue object:', venue);
         const parts = [];
         if (venue.room) parts.push(venue.room);
@@ -235,7 +235,7 @@ export const ClassManagerView: React.FC<ClassManagerViewProps> = ({ courseToEdit
         if (venue.unit) parts.push(`Unit ${venue.unit}`);
         if (venue.block) parts.push(`Block ${venue.block}`);
         if (venue.postalCode) parts.push(venue.postalCode);
-        
+
         const formatted = parts.length > 0 ? parts.join(', ') : '';
         console.log('🏢 Formatted venue string:', formatted);
         return formatted;
@@ -366,8 +366,8 @@ export const ClassManagerView: React.FC<ClassManagerViewProps> = ({ courseToEdit
     };
 
     const showConfirmPopup = (
-        message: string, 
-        onConfirm: () => void, 
+        message: string,
+        onConfirm: () => void,
         title: string = 'Confirm Action',
         confirmText: string = 'Confirm',
         cancelText: string = 'Cancel'
@@ -426,7 +426,7 @@ export const ClassManagerView: React.FC<ClassManagerViewProps> = ({ courseToEdit
             const data = await response.json();
             setSsgApiResponse(data);
             setShowSsgResponse(true);
-            
+
             // Automatically populate form with SSG data
             populateFormFromSsgData(data);
         } catch (error) {
@@ -441,7 +441,7 @@ export const ClassManagerView: React.FC<ClassManagerViewProps> = ({ courseToEdit
     const fetchCourseSessions = async (runId?: string, refNumber?: string) => {
         const runIdToUse = runId || courseRunId;
         const refNumberToUse = refNumber || courseReferenceNumber;
-        
+
         if (!runIdToUse.trim()) {
             showErrorPopup('No Course Run ID available');
             return;
@@ -539,7 +539,7 @@ export const ClassManagerView: React.FC<ClassManagerViewProps> = ({ courseToEdit
             });
 
             const data = await response.json();
-            
+
             if (response.status === 200 && data.data?.data?.sessions) {
                 // Existing sessions found - process venue data
                 const processedSessions = data.data.data.sessions.map((session: any) => ({
@@ -632,7 +632,7 @@ export const ClassManagerView: React.FC<ClassManagerViewProps> = ({ courseToEdit
     // Helper function to handle session field updates with mode of training logic
     const handleSessionFieldUpdate = (sessionData: any, field: string, value: any) => {
         const updatedSession = { ...sessionData, [field]: value };
-        
+
         // Handle automatic time setting for mode of training 2 and 4
         if (field === 'modeOfTraining') {
             if (value === '2' || value === '4') {
@@ -647,7 +647,7 @@ export const ClassManagerView: React.FC<ClassManagerViewProps> = ({ courseToEdit
                 updatedSession.endTime = '';
             }
         }
-        
+
         // When start date changes for non-2/4 modes, update end date to match
         if (field === 'startDate' && value !== '2' && value !== '4') {
             const currentMode = updatedSession.modeOfTraining;
@@ -655,7 +655,7 @@ export const ClassManagerView: React.FC<ClassManagerViewProps> = ({ courseToEdit
                 updatedSession.endDate = value;
             }
         }
-        
+
         return updatedSession;
     };
 
@@ -724,18 +724,18 @@ export const ClassManagerView: React.FC<ClassManagerViewProps> = ({ courseToEdit
         const requestBody = {
             // Required field at root level (as expected by backend)
             courseReferenceNumber: courseReferenceNumber,
-            
+
             // Course run dates (required for proper SSG API payload) - convert YYYYMMDD to YYYY-MM-DD format
             openingRegistrationDate: runData.registrationOpeningDate ? convertSsgDateToHtml(runData.registrationOpeningDate) : (editFormData.openingRegistrationDate || ''),
             closingRegistrationDate: runData.registrationClosingDate ? convertSsgDateToHtml(runData.registrationClosingDate) : (editFormData.closingRegistrationDate || ''),
             courseStartDate: runData.courseStartDate ? convertSsgDateToHtml(runData.courseStartDate) : (editFormData.courseStartDate || ''),
             courseEndDate: runData.courseEndDate ? convertSsgDateToHtml(runData.courseEndDate) : (editFormData.courseEndDate || ''),
-            
+
             // Schedule info (required by backend)
             scheduleInfoTypeCode: "01",
             scheduleInfoTypeDescription: "New Info Type Description",
             scheduleInfo: scheduleInfo,
-            
+
             // Venue information (required for proper SSG API payload)
             block: editFormData.block || runData.venue?.block || "",
             street: editFormData.street || runData.venue?.street || "",
@@ -745,15 +745,15 @@ export const ClassManagerView: React.FC<ClassManagerViewProps> = ({ courseToEdit
             postalCode: editFormData.postalCode || runData.venue?.postalCode || "",
             room: editFormData.room || runData.venue?.room || "",
             wheelChairAccess: editFormData.wheelChairAccess || (runData.venue?.wheelChairAccess ? OptionalSelector.YES : OptionalSelector.NO),
-            
+
             // Course admin and vacancy (required for proper SSG API payload)
             courseAdminEmail: currentUserEmail,
             courseVacancy: editFormData.courseVacancy || runData.courseVacancy || { code: "A", description: "Available" },
-            
+
             // File information (required by API)
             fileName: "",
             fileContent: "",
-            
+
             // Sessions array at root level (as expected by backend)
             sessions: newSessions.map((session) => ({
                 action: "add", // Action for each session is "add"
@@ -864,10 +864,10 @@ export const ClassManagerView: React.FC<ClassManagerViewProps> = ({ courseToEdit
 
                     if (response.status === 200) {
                         showSuccessPopup('Sessions added successfully!');
-                        
+
                         // Reset the form
                         resetNewSessionForm();
-                        
+
                         // Refresh the sessions data to show the newly added sessions
                         fetchExistingSessions();
                     } else {
@@ -922,18 +922,18 @@ export const ClassManagerView: React.FC<ClassManagerViewProps> = ({ courseToEdit
         const requestBody = {
             // Required field at root level (as expected by backend)
             courseReferenceNumber: courseReferenceNumber,
-            
+
             // Course run dates (required for proper SSG API payload) - convert YYYYMMDD to YYYY-MM-DD format
             openingRegistrationDate: runData.registrationOpeningDate ? convertSsgDateToHtml(runData.registrationOpeningDate) : (editFormData.openingRegistrationDate || ''),
             closingRegistrationDate: runData.registrationClosingDate ? convertSsgDateToHtml(runData.registrationClosingDate) : (editFormData.closingRegistrationDate || ''),
             courseStartDate: runData.courseStartDate ? convertSsgDateToHtml(runData.courseStartDate) : (editFormData.courseStartDate || ''),
             courseEndDate: runData.courseEndDate ? convertSsgDateToHtml(runData.courseEndDate) : (editFormData.courseEndDate || ''),
-            
+
             // Schedule info (required by backend)
             scheduleInfoTypeCode: "01",
             scheduleInfoTypeDescription: "Description",
             scheduleInfo: scheduleInfo,
-            
+
             // Venue information (required for proper SSG API payload)
             block: editFormData.block || runData.venue?.block || "",
             street: editFormData.street || runData.venue?.street || "",
@@ -943,15 +943,15 @@ export const ClassManagerView: React.FC<ClassManagerViewProps> = ({ courseToEdit
             postalCode: editFormData.postalCode || runData.venue?.postalCode || "",
             room: editFormData.room || runData.venue?.room || "",
             wheelChairAccess: editFormData.wheelChairAccess || (runData.venue?.wheelChairAccess ? OptionalSelector.YES : OptionalSelector.NO),
-            
+
             // Course admin and vacancy (required for proper SSG API payload)
             courseAdminEmail: currentUserEmail,
             courseVacancy: editFormData.courseVacancy || runData.courseVacancy || { code: "A", description: "Available" },
-            
+
             // File information (required by API)
             fileName: "",
             fileContent: "",
-            
+
             // ONLY include the session we want to delete
             sessions: [
                 {
@@ -999,47 +999,47 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=delete-sessions
                     console.log('=== SENDING REQUEST BODY ===');
                     console.log(JSON.stringify(requestBody, null, 2));
 
-            const response = await fetch(`/api/ssg/courses/courseRuns/${courseRunId}?includeExpiredCourses=false&action=delete-sessions`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(requestBody)
-            });
+                    const response = await fetch(`/api/ssg/courses/courseRuns/${courseRunId}?includeExpiredCourses=false&action=delete-sessions`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(requestBody)
+                    });
 
-            console.log('=== DELETE SESSION API RESPONSE ===');
-            console.log('Response Status:', response.status);
-            console.log('Response OK:', response.ok);
+                    console.log('=== DELETE SESSION API RESPONSE ===');
+                    console.log('Response Status:', response.status);
+                    console.log('Response OK:', response.ok);
 
-            if (!response.ok) {
-                const errorText = await response.text();
-                console.error('Delete Session API Error:', errorText);
-                throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
-            }
+                    if (!response.ok) {
+                        const errorText = await response.text();
+                        console.error('Delete Session API Error:', errorText);
+                        throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
+                    }
 
-            const data = await response.json();
-            console.log('Delete Session Success Response:', JSON.stringify(data, null, 2));
+                    const data = await response.json();
+                    console.log('Delete Session Success Response:', JSON.stringify(data, null, 2));
 
-            if (response.status === 200) {
-                // Remove from local state only after successful API call
-                setExistingSessions(prev => prev.filter((_, index) => index !== sessionIndex));
-                showSuccessPopup('Session deleted successfully!');
-                
-                // Optionally refresh the sessions data
-                fetchExistingSessions();
-            } else {
-                throw new Error('Failed to delete session: Unexpected response status');
-            }
+                    if (response.status === 200) {
+                        // Remove from local state only after successful API call
+                        setExistingSessions(prev => prev.filter((_, index) => index !== sessionIndex));
+                        showSuccessPopup('Session deleted successfully!');
 
-        } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : 'An error occurred during session deletion';
-            console.error('=== DELETE SESSION ERROR ===');
-            console.error('Error Details:', error);
-            console.error('Error Message:', errorMessage);
-            showErrorPopup('Failed to delete session: ' + errorMessage);
-        } finally {
-            setLoading(false);
-        }
+                        // Optionally refresh the sessions data
+                        fetchExistingSessions();
+                    } else {
+                        throw new Error('Failed to delete session: Unexpected response status');
+                    }
+
+                } catch (error) {
+                    const errorMessage = error instanceof Error ? error.message : 'An error occurred during session deletion';
+                    console.error('=== DELETE SESSION ERROR ===');
+                    console.error('Error Details:', error);
+                    console.error('Error Message:', errorMessage);
+                    showErrorPopup('Failed to delete session: ' + errorMessage);
+                } finally {
+                    setLoading(false);
+                }
             },
             'Delete Session',
             'Delete',
@@ -1079,17 +1079,17 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=delete-sessions
         const requestBody = {
             // Required field at root level (as expected by backend)
             courseReferenceNumber: courseReferenceNumber,
-            
+
             // Course run dates (required for proper SSG API payload) - convert YYYYMMDD to YYYY-MM-DD format
             openingRegistrationDate: runData.registrationOpeningDate ? convertSsgDateToHtml(runData.registrationOpeningDate) : (editFormData.openingRegistrationDate || ''),
             closingRegistrationDate: runData.registrationClosingDate ? convertSsgDateToHtml(runData.registrationClosingDate) : (editFormData.closingRegistrationDate || ''),
             courseStartDate: runData.courseStartDate ? convertSsgDateToHtml(runData.courseStartDate) : (editFormData.courseStartDate || ''),
             courseEndDate: runData.courseEndDate ? convertSsgDateToHtml(runData.courseEndDate) : (editFormData.courseEndDate || ''),
-            
+
             // Schedule info (required by backend)
             scheduleInfoTypeCode: "01",
             scheduleInfoTypeDescription: "Description",
-            
+
             // Venue information (required for proper SSG API payload)
             block: editFormData.block || runData.venue?.block || "",
             street: editFormData.street || runData.venue?.street || "",
@@ -1099,15 +1099,15 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=delete-sessions
             postalCode: editFormData.postalCode || runData.venue?.postalCode || "",
             room: editFormData.room || runData.venue?.room || "",
             wheelChairAccess: editFormData.wheelChairAccess || (runData.venue?.wheelChairAccess ? OptionalSelector.YES : OptionalSelector.NO),
-            
+
             // Course admin and vacancy (required for proper SSG API payload)
             courseAdminEmail: currentUserEmail,
             courseVacancy: editFormData.courseVacancy || runData.courseVacancy || { code: "A", description: "Available" },
-            
+
             // File information (required by API)
             fileName: "",
             fileContent: "",
-            
+
             // Sessions array at root level (flat structure for backend)
             sessions: [
                 {
@@ -1217,52 +1217,52 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=update-sessions
                     console.log('=== SENDING REQUEST BODY (flat structure) ===');
                     console.log(JSON.stringify(requestBody, null, 2));
 
-            const response = await fetch(`/api/ssg/courses/courseRuns/${courseRunId}?includeExpiredCourses=false&action=update-sessions`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(requestBody)
-            });
+                    const response = await fetch(`/api/ssg/courses/courseRuns/${courseRunId}?includeExpiredCourses=false&action=update-sessions`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(requestBody)
+                    });
 
-            console.log('=== UPDATE SESSION API RESPONSE ===');
-            console.log('Response Status:', response.status);
-            console.log('Response OK:', response.ok);
+                    console.log('=== UPDATE SESSION API RESPONSE ===');
+                    console.log('Response Status:', response.status);
+                    console.log('Response OK:', response.ok);
 
-            if (!response.ok) {
-                const errorText = await response.text();
-                console.error('Update Session API Error:', errorText);
-                throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
-            }
+                    if (!response.ok) {
+                        const errorText = await response.text();
+                        console.error('Update Session API Error:', errorText);
+                        throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
+                    }
 
-            const data = await response.json();
-            console.log('Update Session Success Response:', JSON.stringify(data, null, 2));
+                    const data = await response.json();
+                    console.log('Update Session Success Response:', JSON.stringify(data, null, 2));
 
-            if (response.status === 200) {
-                // Update local state with the updated session
-                setExistingSessions(prev => prev.map((session, index) => 
-                    index === sessionIndex ? sessionToUpdate : session
-                ));
-                showSuccessPopup('Session updated successfully!');
-                
-                // Cancel editing mode
-                cancelEditingSession();
-                
-                // Optionally refresh the sessions data
-                fetchExistingSessions();
-            } else {
-                throw new Error('Failed to update session: Unexpected response status');
-            }
+                    if (response.status === 200) {
+                        // Update local state with the updated session
+                        setExistingSessions(prev => prev.map((session, index) =>
+                            index === sessionIndex ? sessionToUpdate : session
+                        ));
+                        showSuccessPopup('Session updated successfully!');
 
-        } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : 'An error occurred during session update';
-            console.error('=== UPDATE SESSION ERROR ===');
-            console.error('Error Details:', error);
-            console.error('Error Message:', errorMessage);
-            showErrorPopup('Failed to update session: ' + errorMessage);
-        } finally {
-            setLoading(false);
-        }
+                        // Cancel editing mode
+                        cancelEditingSession();
+
+                        // Optionally refresh the sessions data
+                        fetchExistingSessions();
+                    } else {
+                        throw new Error('Failed to update session: Unexpected response status');
+                    }
+
+                } catch (error) {
+                    const errorMessage = error instanceof Error ? error.message : 'An error occurred during session update';
+                    console.error('=== UPDATE SESSION ERROR ===');
+                    console.error('Error Details:', error);
+                    console.error('Error Message:', errorMessage);
+                    showErrorPopup('Failed to update session: ' + errorMessage);
+                } finally {
+                    setLoading(false);
+                }
             },
             'Update Session',
             'Update',
@@ -1273,7 +1273,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=update-sessions
     // Function to start editing an existing session
     const startEditingSession = (sessionIndex: number) => {
         setEditingSessionIndex(sessionIndex);
-        
+
         // Populate session data for editing
         const session = existingSessions[sessionIndex];
         setSessionData({
@@ -1308,7 +1308,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=update-sessions
     const populateFormFromSsgData = (ssgResponse: any) => {
         console.log('=== SSG API Response Analysis ===');
         console.log('Full SSG Response:', JSON.stringify(ssgResponse, null, 2));
-        
+
         if (!ssgResponse) {
             console.log('❌ No SSG response provided');
             return;
@@ -1316,7 +1316,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=update-sessions
 
         console.log('SSG Response keys:', Object.keys(ssgResponse));
         console.log('SSG Response data:', ssgResponse.data);
-        
+
         if (!ssgResponse?.data?.data?.course?.run) {
             console.log('❌ No course run data found in response');
             console.log('Available path:', ssgResponse?.data?.data?.course);
@@ -1327,23 +1327,23 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=update-sessions
         const run = ssgResponse.data.data.course.run;
         console.log('Course run data:', JSON.stringify(run, null, 2));
         console.log('Run keys:', Object.keys(run));
-        
+
         // Update form data with the actual SSG response structure
         const updatedFormData = {
             // Registration dates - using actual field names from response
             openingRegistrationDate: run.registrationOpeningDate ? convertSsgDateToHtml(run.registrationOpeningDate) : undefined,
             closingRegistrationDate: run.registrationClosingDate ? convertSsgDateToHtml(run.registrationClosingDate) : undefined,
-            
+
             // Course dates - using actual field names from response  
             courseStartDate: run.courseStartDate ? convertSsgDateToHtml(run.courseStartDate) : undefined,
             courseEndDate: run.courseEndDate ? convertSsgDateToHtml(run.courseEndDate) : undefined,
-            
+
             // Course vacancy
             courseVacancy: run.courseVacancy ? {
                 code: run.courseVacancy.code,
                 description: run.courseVacancy.description
             } : undefined,
-            
+
             // Venue information
             block: run.venue?.block || undefined,
             street: run.venue?.street || undefined,
@@ -1352,10 +1352,10 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=update-sessions
             unit: run.venue?.unit || undefined,
             postalCode: run.venue?.postalCode || undefined,
             room: run.venue?.room || undefined,
-            wheelChairAccess: run.venue?.wheelChairAccess !== undefined ? 
-                (run.venue.wheelChairAccess ? OptionalSelector.YES : OptionalSelector.NO) : 
+            wheelChairAccess: run.venue?.wheelChairAccess !== undefined ?
+                (run.venue.wheelChairAccess ? OptionalSelector.YES : OptionalSelector.NO) :
                 undefined,
-            
+
             // Course admin email - use current user's email instead of SSG data
             courseAdminEmail: currentUserEmail
         };
@@ -1364,7 +1364,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=update-sessions
 
         setEditFormData(prev => {
             const newFormData = { ...prev };
-            
+
             // Manually assign each field to avoid TypeScript indexing issues
             if (updatedFormData.openingRegistrationDate !== undefined) {
                 newFormData.openingRegistrationDate = updatedFormData.openingRegistrationDate;
@@ -1422,7 +1422,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=update-sessions
                 newFormData.courseAdminEmail = updatedFormData.courseAdminEmail;
                 console.log('✅ Set course admin email (using current user email):', updatedFormData.courseAdminEmail);
             }
-            
+
             console.log('Final form data to set:', newFormData);
             return newFormData;
         });
@@ -1438,7 +1438,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=update-sessions
             console.log('Setting end date:', endDateHtml);
             setEndDate(endDateHtml);
         }
-        
+
         console.log('✅ Form population completed successfully!');
     };
 
@@ -1519,7 +1519,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=update-sessions
 
             const data = await response.json();
             console.log('Update response:', data);
-            
+
             if (response.status === 200) {
                 showSuccessPopup('Course run updated successfully!');
                 // Re-fetch the updated data
@@ -1552,18 +1552,18 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=update-sessions
             const requestBody = {
                 // Required field
                 courseReferenceNumber: courseReferenceNumber,
-                
+
                 // Optional fields - dates
                 openingRegistrationDate: editFormData.openingRegistrationDate || undefined,
                 closingRegistrationDate: editFormData.closingRegistrationDate || undefined,
                 courseStartDate: editFormData.courseStartDate || undefined,
                 courseEndDate: editFormData.courseEndDate || undefined,
-                
+
                 // Schedule information
                 scheduleInfoTypeCode: "01",
                 scheduleInfoTypeDescription: "Description",
                 scheduleInfo: scheduleInfo,
-                
+
                 // Venue information (all fields)
                 block: editFormData.block || undefined,
                 street: editFormData.street || undefined,
@@ -1573,17 +1573,17 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=update-sessions
                 postalCode: editFormData.postalCode || undefined,
                 room: editFormData.room || undefined,
                 wheelChairAccess: editFormData.wheelChairAccess || undefined,
-                
+
                 // Course admin email - use current user's email
                 courseAdminEmail: currentUserEmail,
-                
+
                 // Course vacancy
                 courseVacancy: editFormData.courseVacancy || undefined,
-                
+
                 // File information (required by API)
                 fileName: "",
                 fileContent: ""
-                
+
                 // TODO: Re-implement linkCourseRunTrainer in a better way in the future
                 // Include trainer information if it exists in the SSG response (flat structure for backend)
                 // Only include if we have complete trainer data with required fields
@@ -1641,7 +1641,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=edit
 
             const confirmed = await showConfirmPopup(
                 confirmMessage,
-                () => {}, // Will be handled by the promise resolution
+                () => { }, // Will be handled by the promise resolution
                 'Update Course Run',
                 'Update',
                 'Cancel'
@@ -1673,7 +1673,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=edit
 
             const data = await response.json();
             console.log('Success Response:', JSON.stringify(data, null, 2));
-            
+
             if (response.status === 200) {
                 showSuccessPopup('Course run updated successfully!');
                 fetchCourseRunData(courseRunId);
@@ -1713,7 +1713,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=edit
 
         // Get trainer data (we're only using the first trainer since trainerCount is 1)
         const trainerInfo = getTrainerData(0);
-        
+
         // Validate that trainer ID is provided
         if (!trainerInfo.trainerIdNumber || trainerInfo.trainerIdNumber.trim() === '') {
             showErrorPopup('Trainer ID Number is required');
@@ -1836,7 +1836,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
 
                     if (response.status === 200) {
                         showSuccessPopup(`Trainer ${trainerInfo.trainerIdNumber} assigned successfully to course run!`);
-                        
+
                         // After successful trainer assignment, fetch course run data again to get trainer name
                         console.log('🔄 Fetching updated course run data to get trainer name...');
                         try {
@@ -1876,7 +1876,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                         console.log('💾 Updating database with trainer information...');
                                         console.log('🔍 Using course UUID:', courseToEdit.id);
                                         console.log('🔍 Using courseRunId string:', courseToEdit.courseRunId);
-                                        
+
                                         const updateResponse = await fetch(getApiUrl('/api/admin/update-trainer-info'), {
                                             method: 'POST',
                                             headers: {
@@ -1891,7 +1891,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                         });
 
                                         console.log('🔍 Update response status:', updateResponse.status);
-                                        
+
                                         if (updateResponse.ok) {
                                             const updateResult = await updateResponse.json();
                                             console.log('✅ Database updated successfully:', updateResult);
@@ -1918,7 +1918,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                         } catch (fetchError) {
                             console.error('❌ Error fetching updated course run data:', fetchError);
                         }
-                        
+
                         // Optionally clear the trainer field after successful assignment
                         updateTrainerField(0, 'trainerIdNumber', '');
                     } else {
@@ -1946,7 +1946,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
         if (courseToEdit && isEditMode) {
             const runId = courseToEdit.courseRunId || courseToEdit.id || '';
             const refNumber = courseToEdit.courseCode || courseToEdit.referenceNumber || ''; // Use courseCode (TGS REF)
-            
+
             setCourseRunId(runId);
             setCourseReferenceNumber(refNumber);
             setStartDate(courseToEdit.startDate || '');
@@ -1957,7 +1957,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                 courseStartDate: courseToEdit.startDate || '',
                 courseEndDate: courseToEdit.endDate || ''
             }));
-            
+
             // Automatically fetch course run data and course sessions, then switch to Course Run tab
             if (runId && refNumber) {
                 fetchCourseRunData(runId);
@@ -1994,37 +1994,34 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                     )}
                 </div>
             </div>
-            
+
             {isEditMode && (
                 <div className="border-b border-gray-200 mb-6">
                     <nav className="-mb-px flex space-x-8">
                         <button
                             onClick={() => setActiveTab('courseRun')}
-                            className={`whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm ${
-                                activeTab === 'courseRun'
+                            className={`whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm ${activeTab === 'courseRun'
                                     ? 'border-blue-500 text-blue-600'
                                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                            }`}
+                                }`}
                         >
                             Course Run
                         </button>
                         <button
                             onClick={() => setActiveTab('sessions')}
-                            className={`whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm ${
-                                activeTab === 'sessions'
+                            className={`whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm ${activeTab === 'sessions'
                                     ? 'border-blue-500 text-blue-600'
                                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                            }`}
+                                }`}
                         >
                             Sessions
                         </button>
                         <button
                             onClick={() => setActiveTab('trainer')}
-                            className={`whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm ${
-                                activeTab === 'trainer'
+                            className={`whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm ${activeTab === 'trainer'
                                     ? 'border-blue-500 text-blue-600'
                                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                            }`}
+                                }`}
                         >
                             Trainer
                         </button>
@@ -2054,17 +2051,17 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                 </div>
                             </div>
                         )}
-                        
+
                         <FormSection title="Basic Class Information">
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-sm font-bold text-gray-700 mb-1">
                                         Course Run ID *
                                     </label>
-                                    <input 
-                                        type="text" 
-                                        value={courseRunId} 
-                                        onChange={e => setCourseRunId(e.target.value)} 
+                                    <input
+                                        type="text"
+                                        value={courseRunId}
+                                        onChange={e => setCourseRunId(e.target.value)}
                                         className={`${inputClasses} ${isEditMode ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                                         placeholder="Enter course run ID"
                                         readOnly={isEditMode}
@@ -2076,10 +2073,10 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                         <label className="block text-sm font-bold text-gray-700 mb-1">
                                             Course Reference Number *
                                         </label>
-                                        <input 
-                                            type="text" 
-                                            value={courseReferenceNumber} 
-                                            onChange={e => setCourseReferenceNumber(e.target.value)} 
+                                        <input
+                                            type="text"
+                                            value={courseReferenceNumber}
+                                            onChange={e => setCourseReferenceNumber(e.target.value)}
                                             className={`${inputClasses} bg-gray-100 cursor-not-allowed`}
                                             placeholder="Enter course reference number"
                                             readOnly={isEditMode}
@@ -2097,9 +2094,9 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                     <label className="block text-sm font-bold text-gray-700 mb-1">Course Vacancy *</label>
                                     <select
                                         value={editFormData.courseVacancy?.code || ''}
-                                        onChange={(e) => handleInputChange('courseVacancy', { 
-                                            code: e.target.value, 
-                                            description: vacancyOptions.find(opt => opt.value === e.target.value)?.label 
+                                        onChange={(e) => handleInputChange('courseVacancy', {
+                                            code: e.target.value,
+                                            description: vacancyOptions.find(opt => opt.value === e.target.value)?.label
                                         })}
                                         className={inputClasses}
                                     >
@@ -2291,9 +2288,9 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                         </p>
                                     )}
                                 </div>
-                                
+
                                 <div className="flex justify-end mt-6">
-                                    <Button 
+                                    <Button
                                         onClick={handleUpdateCourseRunOnly}
                                         disabled={loading}
                                         className="bg-blue-600 hover:bg-blue-700 text-white"
@@ -2318,7 +2315,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                             {sessionsLoading && (
                                 <div className="text-blue-600 mb-4">Loading existing sessions...</div>
                             )}
-                            
+
                             {!sessionsLoading && (
                                 <>
                                     {hasExistingSessions ? (
@@ -2383,7 +2380,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                                         value={session.endDate ? convertSsgDateToHtml(session.endDate) : ''}
                                                                         onChange={(e) => {
                                                                             const updatedSessions = [...existingSessions];
-                                                                            updatedSessions[index] = {...updatedSessions[index], endDate: e.target.value};
+                                                                            updatedSessions[index] = { ...updatedSessions[index], endDate: e.target.value };
                                                                             setExistingSessions(updatedSessions);
                                                                         }}
                                                                         className="w-full px-3 py-2 border border-gray-300 rounded-md"
@@ -2400,7 +2397,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                                         value={session.startTime || ''}
                                                                         onChange={(e) => {
                                                                             const updatedSessions = [...existingSessions];
-                                                                            updatedSessions[index] = {...updatedSessions[index], startTime: e.target.value};
+                                                                            updatedSessions[index] = { ...updatedSessions[index], startTime: e.target.value };
                                                                             setExistingSessions(updatedSessions);
                                                                         }}
                                                                         className="w-full px-3 py-2 border border-gray-300 rounded-md"
@@ -2417,7 +2414,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                                         value={session.endTime || ''}
                                                                         onChange={(e) => {
                                                                             const updatedSessions = [...existingSessions];
-                                                                            updatedSessions[index] = {...updatedSessions[index], endTime: e.target.value};
+                                                                            updatedSessions[index] = { ...updatedSessions[index], endTime: e.target.value };
                                                                             setExistingSessions(updatedSessions);
                                                                         }}
                                                                         className="w-full px-3 py-2 border border-gray-300 rounded-md"
@@ -2428,7 +2425,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                                     )}
                                                                 </div>
                                                             </div>
-                                                            
+
                                                             {/* Session Venue Fields */}
                                                             <div className="border-t pt-4">
                                                                 <h5 className="text-md font-medium text-gray-700 mb-3">Session Venue</h5>
@@ -2441,7 +2438,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                                             onChange={(e) => {
                                                                                 const updatedSessions = [...existingSessions];
                                                                                 updatedSessions[index] = {
-                                                                                    ...updatedSessions[index], 
+                                                                                    ...updatedSessions[index],
                                                                                     venue: { ...updatedSessions[index].venue, block: e.target.value }
                                                                                 };
                                                                                 setExistingSessions(updatedSessions);
@@ -2458,7 +2455,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                                             onChange={(e) => {
                                                                                 const updatedSessions = [...existingSessions];
                                                                                 updatedSessions[index] = {
-                                                                                    ...updatedSessions[index], 
+                                                                                    ...updatedSessions[index],
                                                                                     venue: { ...updatedSessions[index].venue, street: e.target.value }
                                                                                 };
                                                                                 setExistingSessions(updatedSessions);
@@ -2475,7 +2472,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                                             onChange={(e) => {
                                                                                 const updatedSessions = [...existingSessions];
                                                                                 updatedSessions[index] = {
-                                                                                    ...updatedSessions[index], 
+                                                                                    ...updatedSessions[index],
                                                                                     venue: { ...updatedSessions[index].venue, building: e.target.value }
                                                                                 };
                                                                                 setExistingSessions(updatedSessions);
@@ -2492,7 +2489,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                                             onChange={(e) => {
                                                                                 const updatedSessions = [...existingSessions];
                                                                                 updatedSessions[index] = {
-                                                                                    ...updatedSessions[index], 
+                                                                                    ...updatedSessions[index],
                                                                                     venue: { ...updatedSessions[index].venue, floor: e.target.value }
                                                                                 };
                                                                                 setExistingSessions(updatedSessions);
@@ -2509,7 +2506,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                                             onChange={(e) => {
                                                                                 const updatedSessions = [...existingSessions];
                                                                                 updatedSessions[index] = {
-                                                                                    ...updatedSessions[index], 
+                                                                                    ...updatedSessions[index],
                                                                                     venue: { ...updatedSessions[index].venue, unit: e.target.value }
                                                                                 };
                                                                                 setExistingSessions(updatedSessions);
@@ -2526,7 +2523,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                                             onChange={(e) => {
                                                                                 const updatedSessions = [...existingSessions];
                                                                                 updatedSessions[index] = {
-                                                                                    ...updatedSessions[index], 
+                                                                                    ...updatedSessions[index],
                                                                                     venue: { ...updatedSessions[index].venue, postalCode: e.target.value }
                                                                                 };
                                                                                 setExistingSessions(updatedSessions);
@@ -2543,7 +2540,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                                             onChange={(e) => {
                                                                                 const updatedSessions = [...existingSessions];
                                                                                 updatedSessions[index] = {
-                                                                                    ...updatedSessions[index], 
+                                                                                    ...updatedSessions[index],
                                                                                     venue: { ...updatedSessions[index].venue, room: e.target.value }
                                                                                 };
                                                                                 setExistingSessions(updatedSessions);
@@ -2559,7 +2556,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                                             onChange={(e) => {
                                                                                 const updatedSessions = [...existingSessions];
                                                                                 updatedSessions[index] = {
-                                                                                    ...updatedSessions[index], 
+                                                                                    ...updatedSessions[index],
                                                                                     venue: { ...updatedSessions[index].venue, wheelChairAccess: e.target.value === 'true' }
                                                                                 };
                                                                                 setExistingSessions(updatedSessions);
@@ -2573,7 +2570,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                                     </div>
                                                                 </div>
                                                             </div>
-                                                            
+
                                                             <div className="flex justify-end space-x-2 mt-4">
                                                                 <button
                                                                     type="button"
@@ -2628,7 +2625,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                     )}
                                                 </Card>
                                             ))}
-                                            
+
                                             <Button
                                                 type="button"
                                                 variant="primary"
@@ -2651,7 +2648,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                             </button>
                                         </div>
                                     )}
-                                    
+
                                     {/* Multiple New Session Forms */}
                                     {showNewSessionForm && (
                                         <div className="space-y-4">
@@ -2687,7 +2684,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                             ))}
                                                         </select>
                                                     </div>
-                                                    
+
                                                     {/* Date and Time Fields in Grid */}
                                                     <div className="grid grid-cols-2 gap-4">
                                                         <div>
@@ -2738,7 +2735,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                             )}
                                                         </div>
                                                     </div>
-                                                    
+
                                                     {/* Session Venue Fields */}
                                                     <div className="border-t pt-4">
                                                         <h5 className="text-md font-medium text-gray-700 mb-3">Session Venue</h5>
@@ -2791,7 +2788,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                     </div>
                                                 </Card>
                                             ))}
-                                            
+
                                             {/* Action Buttons */}
                                             <div className="space-y-3">
                                                 {/* Add Session Button - Centered */}
@@ -2805,7 +2802,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                         Add Session
                                                     </Button>
                                                 </div>
-                                                
+
                                                 {/* Submit and Cancel Buttons */}
                                                 <div className="flex justify-end space-x-3">
                                                     <button
@@ -2847,8 +2844,8 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                             {ssgApiResponse?.data?.data?.course?.run ? (
                                 <div>
                                     <h4 className="text-lg font-medium text-gray-900 mb-4">Currently Assigned Trainer</h4>
-                                    {ssgApiResponse.data.data.course.run.linkCourseRunTrainer && 
-                                     ssgApiResponse.data.data.course.run.linkCourseRunTrainer.length > 0 ? (
+                                    {ssgApiResponse.data.data.course.run.linkCourseRunTrainer &&
+                                        ssgApiResponse.data.data.course.run.linkCourseRunTrainer.length > 0 ? (
                                         <div className="space-y-4">
                                             {ssgApiResponse.data.data.course.run.linkCourseRunTrainer.map((trainerLink: any, index: number) => {
                                                 const trainer = trainerLink.trainer;
@@ -2916,17 +2913,17 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                             {/* Assign New Trainer Form */}
                             <div className="border-t pt-6">
                                 <h4 className="text-lg font-medium text-gray-900 mb-4">Assign New Trainer</h4>
-                                
+
                                 {Array.from({ length: trainerCount }, (_, index) => {
                                     const trainerInfo = getTrainerData(index);
                                     // Set default trainer type to "1" (Existing) if not already set
                                     const trainerType = trainerInfo.trainerTypeCode || '1';
-                                    
+
                                     // Ensure the default value is set in the data
                                     if (!trainerInfo.trainerTypeCode) {
                                         updateTrainerField(index, 'trainerTypeCode', '1');
                                     }
-                                    
+
                                     return (
                                         <Card key={index} className="p-4 bg-gray-50">
                                             <div className="space-y-4">
@@ -2956,9 +2953,9 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                         </Card>
                                     );
                                 })}
-                                
+
                                 <div className="flex justify-end mt-6">
-                                    <Button 
+                                    <Button
                                         onClick={handleUpdateTrainer}
                                         disabled={loading}
                                         className="bg-purple-600 hover:bg-purple-700 text-white"
@@ -3007,9 +3004,9 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                 </div>
                                 <h3 className="text-lg font-semibold text-gray-900">{popupConfig.title}</h3>
                             </div>
-                            
+
                             <p className="text-gray-600 mb-6">{popupConfig.message}</p>
-                            
+
                             <div className="flex justify-end space-x-3">
                                 {popupConfig.type === 'confirm' ? (
                                     <>
@@ -3041,12 +3038,11 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                     <Button
                                         variant="primary"
                                         onClick={closePopup}
-                                        className={`${
-                                            popupConfig.type === 'success' ? 'bg-green-600 hover:bg-green-700' :
-                                            popupConfig.type === 'error' ? 'bg-red-600 hover:bg-red-700' :
-                                            popupConfig.type === 'warning' ? 'bg-yellow-600 hover:bg-yellow-700' :
-                                            'bg-blue-600 hover:bg-blue-700'
-                                        } text-white`}
+                                        className={`${popupConfig.type === 'success' ? 'bg-green-600 hover:bg-green-700' :
+                                                popupConfig.type === 'error' ? 'bg-red-600 hover:bg-red-700' :
+                                                    popupConfig.type === 'warning' ? 'bg-yellow-600 hover:bg-yellow-700' :
+                                                        'bg-blue-600 hover:bg-blue-700'
+                                            } text-white`}
                                     >
                                         {popupConfig.confirmText || 'OK'}
                                     </Button>
@@ -3062,7 +3058,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
 
 export const EnrollLearnersView: React.FC = () => {
     const { setAdminPage, currentUser } = useLms();
-    
+
     return (
         <div>
             <div className="flex justify-between items-center mb-6">
@@ -3071,7 +3067,7 @@ export const EnrollLearnersView: React.FC = () => {
                     Back to Dashboard
                 </Button>
             </div>
-            
+
             <Card className="p-6">
                 <div className="text-center py-8">
                     <h3 className="text-xl font-semibold text-gray-700 mb-2">Enroll Learners Feature</h3>
@@ -3085,7 +3081,7 @@ export const EnrollLearnersView: React.FC = () => {
 
 export const AssignTrainerView: React.FC = () => {
     const { setAdminPage, currentUser } = useLms();
-    
+
     return (
         <div>
             <div className="flex justify-between items-center mb-6">
@@ -3094,7 +3090,7 @@ export const AssignTrainerView: React.FC = () => {
                     Back to Dashboard
                 </Button>
             </div>
-            
+
             <Card className="p-6">
                 <div className="text-center py-8">
                     <h3 className="text-xl font-semibold text-gray-700 mb-2">Assign Trainer Feature</h3>

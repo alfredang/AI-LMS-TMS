@@ -35,13 +35,13 @@ const getStatusColor = (status: string) => {
     }
 };
 
-const inputClasses = "block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent";
+const inputClasses = "block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-500";
 
 const PlaceholderView: React.FC<{ title: string }> = ({ title }) => (
     <div>
-        <h2 className="text-3xl font-bold mb-6">{title}</h2>
-        <Card className="p-6">
-            <p className="text-gray-500 text-center py-12">
+        <h2 className="text-3xl font-bold mb-6 dark:text-white">{title}</h2>
+        <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
+            <p className="text-gray-500 text-center py-12 dark:text-gray-400">
                 Functionality for '{title}' will be available here.
             </p>
         </Card>
@@ -104,11 +104,11 @@ export const ApplyNewGrantView: React.FC = () => {
 
     return (
         <div>
-            <h2 className="text-3xl font-bold mb-6">Apply New Grant</h2>
-            <Card className="p-6 mb-6">
+            <h2 className="text-3xl font-bold mb-6 dark:text-white">Apply New Grant</h2>
+            <Card className="p-6 mb-6 dark:bg-gray-800 dark:border-gray-700">
                 <div className="space-y-4">
                     <div>
-                        <label htmlFor="class-select-grant" className="block text-sm font-bold text-gray-700 mb-1">
+                        <label htmlFor="class-select-grant" className="block text-sm font-bold text-gray-700 mb-1 dark:text-gray-300">
                             1. Select an Upcoming Class
                         </label>
                         <select
@@ -142,8 +142,8 @@ export const ApplyNewGrantView: React.FC = () => {
 
                     {selectedCourse && (
                         <div>
-                            <h3 className="text-lg font-bold text-gray-800 mb-2">2. Select Learners for Submission</h3>
-                            <p className="text-sm text-gray-500 mb-4">
+                            <h3 className="text-lg font-bold text-gray-800 mb-2 dark:text-white">2. Select Learners for Submission</h3>
+                            <p className="text-sm text-gray-500 mb-4 dark:text-gray-400">
                                 Select one or more learners from the list below to include in the grant application to SSG.
                             </p>
                         </div>
@@ -152,10 +152,10 @@ export const ApplyNewGrantView: React.FC = () => {
             </Card>
 
             {selectedCourse && (
-                <Card className="p-0">
+                <Card className="p-0 dark:bg-gray-800 dark:border-gray-700">
                     <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-200">
-                            <thead className="bg-gray-50">
+                        <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                            <thead className="bg-gray-50 dark:bg-gray-700/50">
                                 <tr>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                         <input
@@ -164,16 +164,16 @@ export const ApplyNewGrantView: React.FC = () => {
                                             checked={selectedCourse?.learners?.length > 0 && selectedLearners.size === selectedCourse.learners.length}
                                         />
                                     </th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Learner</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Grant Status</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sponsorship</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Learner</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Email</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Grant Status</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Sponsorship</th>
                                 </tr>
                             </thead>
-                            <tbody className="bg-white divide-y divide-gray-200">
+                            <tbody className="bg-white divide-y divide-gray-200 dark:bg-gray-800 dark:divide-gray-700">
                                 {selectedCourse.learners && selectedCourse.learners.length > 0 ? (
                                     selectedCourse.learners.map((learner: any) => (
-                                        <tr key={learner.email} className="hover:bg-gray-50">
+                                        <tr key={learner.email} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <input
                                                     type="checkbox"
@@ -182,17 +182,17 @@ export const ApplyNewGrantView: React.FC = () => {
                                                 />
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
-                                                <div className="font-medium text-gray-900">{learner.name || 'N/A'}</div>
+                                                <div className="font-medium text-gray-900 dark:text-white">{learner.name || 'N/A'}</div>
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
-                                                <div className="text-sm text-gray-900">{learner.email || 'N/A'}</div>
+                                                <div className="text-sm text-gray-900 dark:text-white">{learner.email || 'N/A'}</div>
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full border ${getStatusColor(learner.grantStatus || 'Pending')}`}>
                                                     {learner.grantStatus || 'Pending'}
                                                 </span>
                                             </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
                                                 {learner.courseSponsorship || 'N/A'}
                                             </td>
                                         </tr>
@@ -286,15 +286,15 @@ export const ViewGrantStatusView: React.FC = () => {
 
     return (
         <div>
-            <h2 className="text-3xl font-bold mb-6">View Grant Status</h2>
+            <h2 className="text-3xl font-bold mb-6 dark:text-white">View Grant Status</h2>
 
             {/* Search Bar Card */}
-            <Card className="p-6 mb-6">
+            <Card className="p-6 mb-6 dark:bg-gray-800 dark:border-gray-700">
                 <div>
-                    <label htmlFor="grant-search" className="block text-sm font-bold text-gray-700 mb-1">
+                    <label htmlFor="grant-search" className="block text-sm font-bold text-gray-700 mb-1 dark:text-gray-300">
                         Search Grant Status
                     </label>
-                    <p className="text-sm text-gray-500 mb-3">
+                    <p className="text-sm text-gray-500 mb-3 dark:text-gray-400">
                         Enter Grant ID - e.g. GRN-2512-016146
                     </p>
                     <div className="flex gap-3">
@@ -344,10 +344,10 @@ export const ViewGrantStatusView: React.FC = () => {
 
             {/* Webhook Response Display */}
             {webhookResponse && !isSearching && (
-                <Card className="p-0">
-                    <div className="p-6 border-b">
-                        <h3 className="text-xl font-bold">Grant Status Results</h3>
-                        <p className="text-gray-500 mt-1">Search query: "{searchInput}"</p>
+                <Card className="p-0 dark:bg-gray-800 dark:border-gray-700">
+                    <div className="p-6 border-b dark:border-gray-700">
+                        <h3 className="text-xl font-bold dark:text-white">Grant Status Results</h3>
+                        <p className="text-gray-500 mt-1 dark:text-gray-400">Search query: "{searchInput}"</p>
                     </div>
                     <div className="p-6">
                         {/* Check if response has the expected structure */}
@@ -355,14 +355,14 @@ export const ViewGrantStatusView: React.FC = () => {
                             <div className="space-y-6">
                                 {/* Grant Summary Card */}
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div className="bg-white border border-gray-200 rounded-lg p-4">
-                                        <h4 className="text-sm font-medium text-gray-500 mb-2">Grant Reference Number</h4>
-                                        <p className="text-lg font-semibold text-gray-900">
+                                    <div className="bg-white border border-gray-200 rounded-lg p-4 dark:bg-gray-700 dark:border-gray-600">
+                                        <h4 className="text-sm font-medium text-gray-500 mb-2 dark:text-gray-300">Grant Reference Number</h4>
+                                        <p className="text-lg font-semibold text-gray-900 dark:text-white">
                                             {webhookResponse.result.data.referenceNumber || 'N/A'}
                                         </p>
                                     </div>
-                                    <div className="bg-white border border-gray-200 rounded-lg p-4">
-                                        <h4 className="text-sm font-medium text-gray-500 mb-2">Status</h4>
+                                    <div className="bg-white border border-gray-200 rounded-lg p-4 dark:bg-gray-700 dark:border-gray-600">
+                                        <h4 className="text-sm font-medium text-gray-500 mb-2 dark:text-gray-300">Status</h4>
                                         <span className={`inline-flex px-3 py-1 text-sm font-semibold rounded-full border ${getStatusColor(webhookResponse.result.data.status || 'Pending')}`}>
                                             {webhookResponse.result.data.status || 'Pending'}
                                         </span>
@@ -371,19 +371,19 @@ export const ViewGrantStatusView: React.FC = () => {
 
                                 {/* Funding Information */}
                                 {webhookResponse.result.data.fundingScheme && (
-                                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                                        <h4 className="font-semibold text-blue-900 mb-3">Funding Information</h4>
+                                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 dark:bg-blue-900/20 dark:border-blue-800">
+                                        <h4 className="font-semibold text-blue-900 mb-3 dark:text-blue-300">Funding Information</h4>
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                             <div>
-                                                <p className="text-sm text-blue-700 font-medium">Funding Scheme</p>
-                                                <p className="text-blue-900">
+                                                <p className="text-sm text-blue-700 font-medium dark:text-blue-400">Funding Scheme</p>
+                                                <p className="text-blue-900 dark:text-blue-200">
                                                     {webhookResponse.result.data.fundingScheme.code} - {webhookResponse.result.data.fundingScheme.description}
                                                 </p>
                                             </div>
                                             {webhookResponse.result.data.fundingComponent && (
                                                 <div>
-                                                    <p className="text-sm text-blue-700 font-medium">Funding Component</p>
-                                                    <p className="text-blue-900">
+                                                    <p className="text-sm text-blue-700 font-medium dark:text-blue-400">Funding Component</p>
+                                                    <p className="text-blue-900 dark:text-blue-200">
                                                         {webhookResponse.result.data.fundingComponent.code} - {webhookResponse.result.data.fundingComponent.description}
                                                     </p>
                                                 </div>
@@ -394,24 +394,24 @@ export const ViewGrantStatusView: React.FC = () => {
 
                                 {/* Grant Amount Details */}
                                 {webhookResponse.result.data.grantAmount && (
-                                    <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                                        <h4 className="font-semibold text-green-900 mb-3">Grant Amount</h4>
+                                    <div className="bg-green-50 border border-green-200 rounded-lg p-4 dark:bg-green-900/20 dark:border-green-800">
+                                        <h4 className="font-semibold text-green-900 mb-3 dark:text-green-300">Grant Amount</h4>
                                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                             <div>
-                                                <p className="text-sm text-green-700 font-medium">Estimated</p>
-                                                <p className="text-xl font-bold text-green-900">
+                                                <p className="text-sm text-green-700 font-medium dark:text-green-400">Estimated</p>
+                                                <p className="text-xl font-bold text-green-900 dark:text-green-200">
                                                     ${webhookResponse.result.data.grantAmount.estimated?.toFixed(2) || '0.00'}
                                                 </p>
                                             </div>
                                             <div>
-                                                <p className="text-sm text-green-700 font-medium">Paid</p>
-                                                <p className="text-xl font-bold text-green-900">
+                                                <p className="text-sm text-green-700 font-medium dark:text-green-400">Paid</p>
+                                                <p className="text-xl font-bold text-green-900 dark:text-green-200">
                                                     ${webhookResponse.result.data.grantAmount.paid?.toFixed(2) || '0.00'}
                                                 </p>
                                             </div>
                                             <div>
-                                                <p className="text-sm text-green-700 font-medium">Recovery</p>
-                                                <p className="text-xl font-bold text-green-900">
+                                                <p className="text-sm text-green-700 font-medium dark:text-green-400">Recovery</p>
+                                                <p className="text-xl font-bold text-green-900 dark:text-green-200">
                                                     ${webhookResponse.result.data.grantAmount.recovery?.toFixed(2) || '0.00'}
                                                 </p>
                                             </div>
@@ -421,9 +421,9 @@ export const ViewGrantStatusView: React.FC = () => {
 
                                 {/* Enrolment Information */}
                                 {webhookResponse.result.data.enrolment && (
-                                    <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                                        <h4 className="font-semibold text-gray-900 mb-2">Enrolment Reference</h4>
-                                        <p className="text-gray-700">
+                                    <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 dark:bg-gray-700/30 dark:border-gray-600">
+                                        <h4 className="font-semibold text-gray-900 mb-2 dark:text-white">Enrolment Reference</h4>
+                                        <p className="text-gray-700 dark:text-gray-300">
                                             {webhookResponse.result.data.enrolment.referenceNumber || 'N/A'}
                                         </p>
                                     </div>
@@ -431,27 +431,27 @@ export const ViewGrantStatusView: React.FC = () => {
 
                                 {/* Meta Information */}
                                 {webhookResponse.result.meta && (
-                                    <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                                        <h4 className="font-semibold text-gray-900 mb-3">Timestamps</h4>
+                                    <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 dark:bg-gray-700/30 dark:border-gray-600">
+                                        <h4 className="font-semibold text-gray-900 mb-3 dark:text-white">Timestamps</h4>
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                             <div>
-                                                <p className="text-sm text-gray-600 font-medium">Created On</p>
-                                                <p className="text-gray-900">{webhookResponse.result.meta.createdOn || 'N/A'}</p>
+                                                <p className="text-sm text-gray-600 font-medium dark:text-gray-400">Created On</p>
+                                                <p className="text-gray-900 dark:text-white">{webhookResponse.result.meta.createdOn || 'N/A'}</p>
                                             </div>
                                             <div>
-                                                <p className="text-sm text-gray-600 font-medium">Last Updated</p>
-                                                <p className="text-gray-900">{webhookResponse.result.meta.updatedOn || 'N/A'}</p>
+                                                <p className="text-sm text-gray-600 font-medium dark:text-gray-400">Last Updated</p>
+                                                <p className="text-gray-900 dark:text-white">{webhookResponse.result.meta.updatedOn || 'N/A'}</p>
                                             </div>
                                         </div>
                                     </div>
                                 )}
 
                                 {/* Raw JSON Response (Collapsible) */}
-                                <details className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                                    <summary className="font-semibold text-gray-800 cursor-pointer hover:text-gray-600">
+                                <details className="bg-gray-50 border border-gray-200 rounded-lg p-4 dark:bg-gray-700/30 dark:border-gray-600">
+                                    <summary className="font-semibold text-gray-800 cursor-pointer hover:text-gray-600 dark:text-white dark:hover:text-gray-300">
                                         View Raw JSON Response
                                     </summary>
-                                    <pre className="mt-3 text-sm text-gray-700 whitespace-pre-wrap overflow-x-auto max-h-96 bg-white p-3 rounded border">
+                                    <pre className="mt-3 text-sm text-gray-700 whitespace-pre-wrap overflow-x-auto max-h-96 bg-white p-3 rounded border dark:bg-gray-900 dark:text-gray-300 dark:border-gray-700">
                                         {JSON.stringify(webhookResponse, null, 2)}
                                     </pre>
                                 </details>
@@ -531,11 +531,11 @@ export const SubmitAssessmentView: React.FC = () => {
 
     return (
         <div>
-            <h2 className="text-3xl font-bold mb-6">Submit Assessment Results</h2>
-            <Card className="p-6 mb-6">
+            <h2 className="text-3xl font-bold mb-6 dark:text-white">Submit Assessment Results</h2>
+            <Card className="p-6 mb-6 dark:bg-gray-800 dark:border-gray-700">
                 <div className="grid grid-cols-1">
                     <div>
-                        <label htmlFor="class-select-assessment" className="block text-sm font-bold text-gray-700 mb-1">
+                        <label htmlFor="class-select-assessment" className="block text-sm font-bold text-gray-700 mb-1 dark:text-gray-300">
                             1. Select a Class
                         </label>
                         <select
@@ -566,28 +566,28 @@ export const SubmitAssessmentView: React.FC = () => {
             </Card>
 
             {selectedCourse && (
-                <Card className="p-0 overflow-x-auto">
-                    <div className="p-6 border-b">
-                        <h3 className="text-xl font-bold">Assessment Roster for "{selectedCourse.title}"</h3>
-                        <p className="text-gray-500 mt-1">Update each learner's overall assessment status below. Changes are saved automatically.</p>
+                <Card className="p-0 overflow-x-auto dark:bg-gray-800 dark:border-gray-700">
+                    <div className="p-6 border-b dark:border-gray-700">
+                        <h3 className="text-xl font-bold dark:text-white">Assessment Roster for "{selectedCourse.title}"</h3>
+                        <p className="text-gray-500 mt-1 dark:text-gray-400">Update each learner's overall assessment status below. Changes are saved automatically.</p>
                     </div>
-                    <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-50">
+                    <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                        <thead className="bg-gray-50 dark:bg-gray-700/50">
                             <tr>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Learner Name</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Assessment Status</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Learner Name</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Email</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Assessment Status</th>
                             </tr>
                         </thead>
-                        <tbody className="bg-white divide-y divide-gray-200">
+                        <tbody className="bg-white divide-y divide-gray-200 dark:bg-gray-800 dark:divide-gray-700">
                             {selectedCourse.learners && selectedCourse.learners.length > 0 ? (
                                 selectedCourse.learners.map((learner: any) => (
-                                    <tr key={learner.email} className="hover:bg-gray-50">
+                                    <tr key={learner.email} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
                                         <td className="px-6 py-4 whitespace-nowrap">
-                                            <div className="font-medium text-gray-900">{learner.name || 'N/A'}</div>
+                                            <div className="font-medium text-gray-900 dark:text-white">{learner.name || 'N/A'}</div>
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap">
-                                            <div className="text-sm text-gray-900">{learner.email || 'N/A'}</div>
+                                            <div className="text-sm text-gray-900 dark:text-white">{learner.email || 'N/A'}</div>
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap">
                                             <select

@@ -78,6 +78,13 @@ export const applyTheme = (theme: ThemeMode): void => {
     document.documentElement.classList.add('no-transitions');
     document.documentElement.setAttribute('data-theme', theme);
 
+    // Update the 'dark' class for Tailwind CSS
+    if (theme === 'dark') {
+        document.documentElement.classList.add('dark');
+    } else {
+        document.documentElement.classList.remove('dark');
+    }
+
     // Re-enable transitions after a brief delay
     setTimeout(() => {
         document.documentElement.classList.remove('no-transitions');
