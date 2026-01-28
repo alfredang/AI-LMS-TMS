@@ -725,7 +725,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                             variant="ghost"
                                             onClick={() => {
                                                 setIsEditing(false);
-                                                setFormData(profile);
+                                                setFormData(getInitialFormData(profile));
                                             }}
                                         >
                                             Cancel
