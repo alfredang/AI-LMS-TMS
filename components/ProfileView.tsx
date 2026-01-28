@@ -44,7 +44,7 @@ const useProfileData = () => {
                 setLoading(false);
             }
         };
-        
+
         if (currentUser && role) {
             fetchProfile();
         }
@@ -70,7 +70,7 @@ const useProfileData = () => {
 // Simple ProfileView component
 const ProfileView: React.FC = () => {
     const { currentUser, role } = useLms();
-    
+
     // Handle trainer profile
     if (role === UserRole.Trainer) {
         return <TrainerProfileView />;
@@ -94,7 +94,7 @@ const ProfileView: React.FC = () => {
 const TrainerProfileView: React.FC = () => {
     const { currentUser } = useLms();
     const { profile: trainerProfile, loading: trainerLoading, updateProfile: updateTrainerProfile } = useTrainerProfile(currentUser?.id);
-    
+
     if (trainerLoading) {
         return (
             <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -124,8 +124,8 @@ const TrainerProfileView: React.FC = () => {
 
     return (
         <div className="max-w-5xl mx-auto">
-            <TrainerProfileCard 
-                profile={trainerProfile} 
+            <TrainerProfileCard
+                profile={trainerProfile}
                 onUpdate={handleTrainerUpdate}
             />
         </div>
@@ -142,23 +142,23 @@ const TrainingProviderProfileView: React.FC = () => {
     // Fetch training provider profile from backend
     const fetchProfile = async () => {
         if (!currentUser?.id) return;
-        
+
         setLoading(true);
         setError(null);
-        
+
         try {
             const response = await fetch(getApiUrl(`/api/profile-new?userId=${currentUser.id}&role=training_provider`));
-            
+
             if (!response.ok) {
                 throw new Error(`Failed to fetch profile: ${response.status}`);
             }
-            
+
             const result = await response.json();
-            
+
             if (!result.success || !result.data?.profile) {
                 throw new Error(result.error || 'Profile not found');
             }
-            
+
             setProfile(result.data.profile);
         } catch (err) {
             console.error('Error fetching training provider profile:', err);
@@ -174,17 +174,17 @@ const TrainingProviderProfileView: React.FC = () => {
 
     const handleTrainingProviderUpdate = async (userId: string, updatedData: Partial<TrainingProviderProfile>) => {
         console.log('Training Provider profile update:', { userId, updatedData });
-        
+
         // The TrainingProviderProfileCard already handles the database update via its own API
         // We just need to update the local state and optionally refetch from server
         try {
             // Update local state with the new data
             setProfile(prev => prev ? { ...prev, ...updatedData } : null);
-            
+
             // Optionally refetch from server to ensure data is fresh
             // This ensures we get any server-side processed data (like file URLs)
             await fetchProfile();
-            
+
             console.log('✅ Training Provider profile state updated successfully');
         } catch (error) {
             console.error('❌ Failed to refresh profile data:', error);
@@ -232,8 +232,8 @@ const TrainingProviderProfileView: React.FC = () => {
 
     return (
         <div className="max-w-5xl mx-auto">
-            <TrainingProviderProfileCard 
-                profile={profile} 
+            <TrainingProviderProfileCard
+                profile={profile}
                 onUpdate={handleTrainingProviderUpdate}
             />
         </div>
@@ -285,7 +285,7 @@ const useDeveloperProfile = (userId?: string) => {
 const DeveloperProfileView: React.FC = () => {
     const { currentUser } = useLms();
     const { profile: developerProfile, loading: developerLoading, updateProfile: updateDeveloperProfile } = useDeveloperProfile(currentUser?.id);
-    
+
     if (developerLoading) {
         return (
             <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -320,8 +320,8 @@ const DeveloperProfileView: React.FC = () => {
 
     return (
         <div className="max-w-5xl mx-auto">
-            <DeveloperProfileCard 
-                profile={developerProfile} 
+            <DeveloperProfileCard
+                profile={developerProfile}
                 onUpdate={handleDeveloperUpdate}
                 userId={currentUser?.id}
                 onProfileUpdate={handleProfileRefresh}
@@ -350,7 +350,7 @@ const MultiSelectCheckboxes: React.FC<{
         primary: { ring: 'focus:ring-primary', text: 'text-primary' },
         secondary: { ring: 'focus:ring-secondary', text: 'text-secondary' },
     }
-    
+
     if (isEditing) {
         return (
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 max-h-60 overflow-y-auto p-4 border rounded-md">
@@ -396,12 +396,12 @@ const SingleSelectEducation: React.FC<{
     onChange: (value: string) => void;
     isEditing: boolean;
 }> = ({ options, selected, onChange, isEditing }) => {
-    
+
     if (isEditing) {
         return (
-            <select 
-                value={selected || ''} 
-                onChange={(e) => onChange(e.target.value)} 
+            <select
+                value={selected || ''}
+                onChange={(e) => onChange(e.target.value)}
                 className={inputClasses}
             >
                 <option value="">Select highest education</option>
@@ -411,7 +411,7 @@ const SingleSelectEducation: React.FC<{
             </select>
         );
     }
-    
+
     return (
         <div>
             {selected ? (
@@ -426,18 +426,18 @@ const SingleSelectEducation: React.FC<{
 }
 
 // Work Experience Section Component
-const WorkExperienceSection: React.FC<{ 
-    experience: WorkExperienceItem[]; 
-    isEditing: boolean; 
-    onUpdate: (newExp: WorkExperienceItem[]) => void 
+const WorkExperienceSection: React.FC<{
+    experience: WorkExperienceItem[];
+    isEditing: boolean;
+    onUpdate: (newExp: WorkExperienceItem[]) => void
 }> = ({ experience, isEditing, onUpdate }) => {
-    
+
     // Date validation function
     const validateDateFormat = (date: string): boolean => {
         if (!date || date === 'Present') return true;
         const dateRegex = /^\d{4}-\d{2}$/;
         if (!dateRegex.test(date)) return false;
-        
+
         const [year, month] = date.split('-').map(Number);
         return year >= 1900 && year <= new Date().getFullYear() + 10 && month >= 1 && month <= 12;
     };
@@ -474,62 +474,62 @@ const WorkExperienceSection: React.FC<{
         }
         onUpdate(updated);
     };
-    
+
     if (isEditing) {
         return (
             <div className="space-y-4">
                 {experience.map((item, index) => {
                     // Only consider it "Present" if explicitly set to 'Present'
                     const isPresent = item.endDate === 'Present';
-                    
+
                     return (
                         <div key={item.id || index} className="p-4 border rounded-md relative group">
                             <div className="grid grid-cols-2 gap-4">
-                                <input 
-                                    type="text" 
-                                    placeholder="Job Title" 
-                                    value={item.jobTitle} 
+                                <input
+                                    type="text"
+                                    placeholder="Job Title"
+                                    value={item.jobTitle}
                                     onChange={e => {
                                         const updated = [...experience];
                                         updated[index] = { ...item, jobTitle: e.target.value };
                                         onUpdate(updated);
-                                    }} 
-                                    className={`${inputClasses} col-span-2`} 
+                                    }}
+                                    className={`${inputClasses} col-span-2`}
                                 />
-                                <input 
-                                    type="text" 
-                                    placeholder="Company" 
-                                    value={item.company} 
+                                <input
+                                    type="text"
+                                    placeholder="Company"
+                                    value={item.company}
                                     onChange={e => {
                                         const updated = [...experience];
                                         updated[index] = { ...item, company: e.target.value };
                                         onUpdate(updated);
-                                    }} 
-                                    className={inputClasses} 
+                                    }}
+                                    className={inputClasses}
                                 />
-                                <input 
-                                    type="text" 
-                                    placeholder="Start Date (YYYY-MM)" 
-                                    value={item.startDate} 
-                                    onChange={e => handleDateChange(index, 'startDate', e.target.value)} 
+                                <input
+                                    type="text"
+                                    placeholder="Start Date (YYYY-MM)"
+                                    value={item.startDate}
+                                    onChange={e => handleDateChange(index, 'startDate', e.target.value)}
                                     onBlur={e => handleDateBlur(index, 'startDate', e.target.value)}
                                     data-field={`startDate-${index}`}
-                                    className={inputClasses} 
+                                    className={inputClasses}
                                 />
                                 <div className="flex items-center gap-2">
-                                    <input 
-                                        type="text" 
-                                        placeholder="End Date (YYYY-MM)" 
-                                        value={isPresent ? '' : (item.endDate || '')} 
-                                        onChange={e => handleDateChange(index, 'endDate', e.target.value)} 
+                                    <input
+                                        type="text"
+                                        placeholder="End Date (YYYY-MM)"
+                                        value={isPresent ? '' : (item.endDate || '')}
+                                        onChange={e => handleDateChange(index, 'endDate', e.target.value)}
                                         onBlur={e => handleDateBlur(index, 'endDate', e.target.value)}
                                         data-field={`endDate-${index}`}
                                         className={`${inputClasses} flex-1`}
                                         disabled={isPresent}
                                     />
                                     <label className="flex items-center gap-1 text-sm whitespace-nowrap">
-                                        <input 
-                                            type="checkbox" 
+                                        <input
+                                            type="checkbox"
                                             checked={isPresent}
                                             onChange={() => togglePresent(index)}
                                             className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
@@ -537,22 +537,22 @@ const WorkExperienceSection: React.FC<{
                                         Present
                                     </label>
                                 </div>
-                                <textarea 
-                                    placeholder="Description" 
-                                    value={item.description} 
+                                <textarea
+                                    placeholder="Description"
+                                    value={item.description}
                                     onChange={e => {
                                         const updated = [...experience];
                                         updated[index] = { ...item, description: e.target.value };
                                         onUpdate(updated);
-                                    }} 
+                                    }}
                                     className={`${inputClasses} col-span-2 h-20`}
                                 ></textarea>
                             </div>
-                            <button 
+                            <button
                                 onClick={() => {
                                     const updated = experience.filter((_, i) => i !== index);
                                     onUpdate(updated);
-                                }} 
+                                }}
                                 className="absolute top-2 right-2 p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-100 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
                             >
                                 <Icon name={IconName.Delete} className="w-4 h-4" />
@@ -560,13 +560,13 @@ const WorkExperienceSection: React.FC<{
                         </div>
                     );
                 })}
-                <Button variant="ghost" size="sm" onClick={() => onUpdate([...experience, { 
-                    id: `we_${Date.now()}`, 
-                    jobTitle: '', 
-                    company: '', 
-                    startDate: '', 
+                <Button variant="ghost" size="sm" onClick={() => onUpdate([...experience, {
+                    id: `we_${Date.now()}`,
+                    jobTitle: '',
+                    company: '',
+                    startDate: '',
                     endDate: '', // Default to empty (unticked)
-                    description: '' 
+                    description: ''
                 }])}>
                     + Add Experience
                 </Button>
@@ -579,7 +579,7 @@ const WorkExperienceSection: React.FC<{
             {experience.map((item, index) => {
                 // Handle null/empty end dates from database as "Present"
                 const displayEndDate = item.endDate === null || item.endDate === '' ? 'Present' : item.endDate;
-                
+
                 return (
                     <div key={item.id || index} className="p-4 border border-gray-200 rounded-md">
                         <h4 className="font-bold">{item.jobTitle}</h4>
@@ -640,9 +640,9 @@ const DocumentSection: React.FC<{
                                 )}
                             </span>
                             <Button variant="ghost" size="sm" onClick={() => document.getElementById('cv-upload')?.click()}>
-                                <Icon name={IconName.Upload} className="w-4 h-4 mr-1"/> {cvUrl ? 'Change' : 'Upload'}
+                                <Icon name={IconName.Upload} className="w-4 h-4 mr-1" /> {cvUrl ? 'Change' : 'Upload'}
                             </Button>
-                            <input type="file" id="cv-upload" className="hidden" onChange={(e) => e.target.files && onUpdateCv(e.target.files[0])} accept=".pdf,.doc,.docx"/>
+                            <input type="file" id="cv-upload" className="hidden" onChange={(e) => e.target.files && onUpdateCv(e.target.files[0])} accept=".pdf,.doc,.docx" />
                         </div>
                     </div>
 
@@ -660,16 +660,16 @@ const DocumentSection: React.FC<{
                                 </div>
                             ))}
                             <div className="flex items-center gap-2 p-2 bg-gray-100 rounded-md border border-dashed">
-                                <input 
-                                    type="text" 
-                                    placeholder="New Certification Name" 
-                                    value={newCertName} 
-                                    onChange={e => setNewCertName(e.target.value)} 
-                                    className={`${inputClasses} !py-1.5 !text-sm flex-1`} 
+                                <input
+                                    type="text"
+                                    placeholder="New Certification Name"
+                                    value={newCertName}
+                                    onChange={e => setNewCertName(e.target.value)}
+                                    className={`${inputClasses} !py-1.5 !text-sm flex-1`}
                                 />
                                 <div className="flex flex-col gap-1">
                                     <Button variant="ghost" size="sm" onClick={() => document.getElementById('cert-upload')?.click()}>
-                                        <Icon name={IconName.Upload} className="w-4 h-4 mr-1"/> Select File
+                                        <Icon name={IconName.Upload} className="w-4 h-4 mr-1" /> Select File
                                     </Button>
                                     {selectedCertFile && (
                                         <span className="text-xs text-gray-600 truncate max-w-32" title={selectedCertFile.name}>
@@ -677,20 +677,20 @@ const DocumentSection: React.FC<{
                                         </span>
                                     )}
                                 </div>
-                                <Button 
-                                    variant="ghost" 
-                                    size="sm" 
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
                                     onClick={handleAddCert}
                                     disabled={!newCertName || !selectedCertFile}
                                     className="bg-green-100 hover:bg-green-200 text-green-700"
                                 >
                                     Add
                                 </Button>
-                                <input 
-                                    type="file" 
-                                    id="cert-upload" 
-                                    className="hidden" 
-                                    onChange={(e) => e.target.files && handleFileSelect(e.target.files[0])} 
+                                <input
+                                    type="file"
+                                    id="cert-upload"
+                                    className="hidden"
+                                    onChange={(e) => e.target.files && handleFileSelect(e.target.files[0])}
                                     accept=".pdf,.jpg,.png,.doc,.docx"
                                 />
                             </div>
@@ -714,12 +714,12 @@ const DocumentSection: React.FC<{
                                 <p className="text-sm font-medium text-gray-900">Curriculum Vitae</p>
                             </div>
                         </div>
-                        <a 
-                            href={getApiUrl(`/api/download${stripBaseUrl(cvUrl) || cvUrl || ''}`)} 
+                        <a
+                            href={getApiUrl(`/api/download${stripBaseUrl(cvUrl) || cvUrl || ''}`)}
                             download={cvOriginalFilename || 'CV.pdf'}
                             className="inline-flex items-center gap-1.5 px-2 py-1 text-xs font-semibold text-blue-600 bg-blue-50 rounded-md hover:bg-blue-100 transition-colors"
                         >
-                            <Icon name={IconName.Download} className="w-3 h-3" /> 
+                            <Icon name={IconName.Download} className="w-3 h-3" />
                             Download
                         </a>
                     </div>
@@ -736,12 +736,12 @@ const DocumentSection: React.FC<{
                                         <p className="text-sm font-medium text-gray-900">{cert.name}</p>
                                     </div>
                                 </div>
-                                <a 
-                                    href={getApiUrl(`/api/download${stripBaseUrl(cert.fileUrl) || cert.fileUrl || ''}`)} 
+                                <a
+                                    href={getApiUrl(`/api/download${stripBaseUrl(cert.fileUrl) || cert.fileUrl || ''}`)}
                                     download={cert.originalFilename || cert.name}
                                     className="inline-flex items-center gap-1.5 px-2 py-1 text-xs font-semibold text-blue-600 bg-blue-50 rounded-md hover:bg-blue-100 transition-colors"
                                 >
-                                    <Icon name={IconName.Download} className="w-3 h-3" /> 
+                                    <Icon name={IconName.Download} className="w-3 h-3" />
                                     Download
                                 </a>
                             </div>
@@ -776,7 +776,7 @@ const LoginDetailsCard: React.FC<{ loginId: string; password: string; userId?: s
 
         try {
             setIsUpdating(true);
-            
+
             if (!currentUser?.id) {
                 throw new Error('No authenticated user found');
             }
@@ -801,17 +801,17 @@ const LoginDetailsCard: React.FC<{ loginId: string; password: string; userId?: s
             if (!result.success) {
                 throw new Error(result.message || 'Password update failed');
             }
-            
+
             console.log('✅ Password updated successfully with bcrypt hashing');
             alert('Password reset successfully!');
             setIsResetting(false);
             setNewPassword('');
-            
+
             // Call the callback to update the parent component
             if (onPasswordUpdate) {
                 onPasswordUpdate(newPassword);
             }
-            
+
         } catch (error) {
             console.error('❌ Failed to reset password:', error);
             alert(`Failed to reset password: ${error instanceof Error ? error.message : 'Please try again.'}`);
@@ -903,9 +903,9 @@ const DeveloperProfileCard: React.FC<{
     const [isGeneratingAvatar, setIsGeneratingAvatar] = useState(false);
     // Pending changes state - only applied when Save is clicked
     const [pendingCvFile, setPendingCvFile] = useState<File | null>(null);
-    const [pendingCertificationsToAdd, setPendingCertificationsToAdd] = useState<Array<{name: string, file: File, tempId: string}>>([]);
+    const [pendingCertificationsToAdd, setPendingCertificationsToAdd] = useState<Array<{ name: string, file: File, tempId: string }>>([]);
     const [pendingCertificationsToDelete, setPendingCertificationsToDelete] = useState<string[]>([]);
-    const [certificationFilesToDelete, setCertificationFilesToDelete] = useState<Array<{id: string, fileUrl: string, name: string}>>([]);
+    const [certificationFilesToDelete, setCertificationFilesToDelete] = useState<Array<{ id: string, fileUrl: string, name: string }>>([]);
     const [selectedProfilePictureFile, setSelectedProfilePictureFile] = useState<File | null>(null);
     const [profilePicturePreviewUrl, setProfilePicturePreviewUrl] = useState<string | null>(null);
     const [uploadedProfilePicturePath, setUploadedProfilePicturePath] = useState<string | null>(null);
@@ -923,7 +923,7 @@ const DeveloperProfileCard: React.FC<{
         setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
     };
 
-    const handleMultiSelectChange = (field: 'qualifications' | 'areasOfSpecialty') => 
+    const handleMultiSelectChange = (field: 'qualifications' | 'areasOfSpecialty') =>
         (values: string[]) => {
             setFormData(prev => ({ ...prev, [field]: values }));
         };
@@ -939,23 +939,23 @@ const DeveloperProfileCard: React.FC<{
     const handleCvUpdate = (file: File) => {
         // Just store the file locally - upload will happen on save
         setPendingCvFile(file);
-        
+
         // Update the display immediately to show the new filename
         setFormData(prev => ({
-            ...prev, 
+            ...prev,
             cvOriginalFilename: file.name
         }));
-        
+
         console.log('📁 Developer CV file selected for upload on save:', file.name);
     };
 
     const handleAddCertification = (name: string, file: File) => {
         // Create a temporary ID for the new certification
         const tempId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-        
+
         // Add to pending certifications to add
         setPendingCertificationsToAdd(prev => [...prev, { name, file, tempId }]);
-        
+
         // Update the UI immediately to show the new certification
         const tempCert = {
             id: tempId,
@@ -963,12 +963,12 @@ const DeveloperProfileCard: React.FC<{
             fileUrl: '', // Will be set after upload
             originalFilename: file.name
         };
-        
-        setFormData(prev => ({ 
-            ...prev, 
+
+        setFormData(prev => ({
+            ...prev,
             certifications: [...(prev.certifications || []), tempCert]
         }));
-        
+
         console.log('📁 Developer certification queued for upload on save:', name, file.name);
     };
 
@@ -976,9 +976,9 @@ const DeveloperProfileCard: React.FC<{
         // If it's a temporary cert (pending addition), remove from pending and UI
         if (id.startsWith('temp_')) {
             setPendingCertificationsToAdd(prev => prev.filter(cert => cert.tempId !== id));
-            setFormData(prev => ({ 
-                ...prev, 
-                certifications: (prev.certifications || []).filter(c => c.id !== id) 
+            setFormData(prev => ({
+                ...prev,
+                certifications: (prev.certifications || []).filter(c => c.id !== id)
             }));
             console.log('🗑️ Temporary developer certification removed from pending list:', id);
             return;
@@ -997,44 +997,44 @@ const DeveloperProfileCard: React.FC<{
 
         // Add to pending deletion list
         setPendingCertificationsToDelete(prev => [...prev, id]);
-        
+
         // Remove from UI immediately
-        setFormData(prev => ({ 
-            ...prev, 
-            certifications: (prev.certifications || []).filter(c => c.id !== id) 
+        setFormData(prev => ({
+            ...prev,
+            certifications: (prev.certifications || []).filter(c => c.id !== id)
         }));
-        
+
         console.log('🗑️ Developer certification marked for deletion on save:', id);
     };
 
     const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
             const file = e.target.files[0];
-            
+
             // Validate file type and size
             if (!file.type.startsWith('image/')) {
                 alert('Please select a valid image file.');
                 return;
             }
-            
+
             if (file.size > 5 * 1024 * 1024) { // 5MB limit
                 alert('File size must be less than 5MB.');
                 return;
             }
-            
+
             // Store the file for later upload and create a preview
             setSelectedProfilePictureFile(file);
-            
+
             // Clear any previous uploaded path since we have a new file
             setUploadedProfilePicturePath(null);
-            
+
             // Create preview URL for immediate display
             const reader = new FileReader();
             reader.onloadend = () => {
                 const previewUrl = reader.result as string;
                 setProfilePicturePreviewUrl(previewUrl);
-                setFormData(prev => ({ 
-                    ...prev, 
+                setFormData(prev => ({
+                    ...prev,
                     profilePictureUrl: previewUrl
                 }));
             };
@@ -1066,11 +1066,11 @@ const DeveloperProfileCard: React.FC<{
             await new Promise(resolve => setTimeout(resolve, 2000));
             const newAvatarUrl = `https://i.pravatar.cc/150?img=${Math.floor(Math.random() * 50)}`;
             setFormData(prev => ({ ...prev, profilePictureUrl: newAvatarUrl }));
-            
+
             // Clear any selected file since we're using AI generated image
             setSelectedProfilePictureFile(null);
             setProfilePicturePreviewUrl(null);
-            
+
         } catch (error) {
             console.error('Avatar generation failed:', error);
             alert('An error occurred while generating the avatar.');
@@ -1082,8 +1082,8 @@ const DeveloperProfileCard: React.FC<{
     const handleSave = async () => {
         try {
             console.log('💾 Saving developer profile with batched changes:', formData);
-            
-            const CURRENT_USER_ID = currentUser?.id; 
+
+            const CURRENT_USER_ID = currentUser?.id;
             if (!CURRENT_USER_ID) {
                 console.error('❌ No authenticated user found');
                 alert('Error: No authenticated user found. Please log in again.');
@@ -1100,7 +1100,7 @@ const DeveloperProfileCard: React.FC<{
             if (pendingCvFile) {
                 try {
                     console.log('📁 Uploading developer CV file:', pendingCvFile.name);
-                    
+
                     // Delete old CV file if it exists
                     const oldCvUrl = profile.cvUrl;
                     if (oldCvUrl && (oldCvUrl.startsWith('/uploads/') || oldCvUrl.includes('uploads/'))) {
@@ -1151,11 +1151,11 @@ const DeveloperProfileCard: React.FC<{
             if (pendingCertificationsToAdd.length > 0) {
                 try {
                     const uploadedCertifications: any[] = [];
-                    
+
                     for (const cert of pendingCertificationsToAdd) {
                         if (cert.file) {
                             console.log('📁 Uploading developer certification file:', cert.file.name);
-                            
+
                             const uploadFormData = new FormData();
                             uploadFormData.append('file', cert.file);
                             uploadFormData.append('originalFilename', cert.file.name);
@@ -1204,7 +1204,7 @@ const DeveloperProfileCard: React.FC<{
             if (selectedProfilePictureFile) {
                 try {
                     console.log('� Uploading developer profile picture:', selectedProfilePictureFile.name);
-                    
+
                     // Delete old profile picture if it exists
                     const oldProfilePictureUrl = profile.profilePictureUrl;
                     if (oldProfilePictureUrl && (oldProfilePictureUrl.startsWith('/uploads/') || oldProfilePictureUrl.includes('uploads/'))) {
@@ -1220,27 +1220,27 @@ const DeveloperProfileCard: React.FC<{
                             console.warn('⚠️ Failed to delete old profile picture:', error);
                         }
                     }
-                    
+
                     const uploadFormData = new FormData();
                     uploadFormData.append('file', selectedProfilePictureFile);
-                    
+
                     const response = await fetch(getUploadUrl('developer', 'profilePicture'), {
                         method: 'POST',
                         body: uploadFormData
                     });
-                    
+
                     if (!response.ok) {
                         throw new Error(`Profile picture upload failed: ${response.statusText}`);
                     }
-                    
+
                     const result = await response.json();
                     if (!result.success) {
                         throw new Error(result.error || 'Profile picture upload failed');
                     }
-                    
+
                     updateData.profileData.profilePictureUrl = result.data.fileUrl;
                     console.log('✅ Developer profile picture uploaded successfully:', result.data.fileUrl);
-                    
+
                 } catch (error) {
                     console.error('❌ Failed to upload developer profile picture:', error);
                     alert(`Failed to upload profile picture: ${error instanceof Error ? error.message : 'Please try again.'}`);
@@ -1333,7 +1333,7 @@ const DeveloperProfileCard: React.FC<{
 
             alert('Developer profile saved successfully!');
             onUpdate(formData);
-            
+
             if (onProfileUpdate) {
                 onProfileUpdate();
             }
@@ -1362,10 +1362,10 @@ const DeveloperProfileCard: React.FC<{
         setCertificationFilesToDelete([]);
         setSelectedProfilePictureFile(null);
         setProfilePicturePreviewUrl(null);
-        
+
         // Exit edit mode
         setIsEditing(false);
-        
+
         console.log('📝 Developer profile changes cancelled, reverted to original data');
     };
 
@@ -1431,7 +1431,7 @@ const DeveloperProfileCard: React.FC<{
                     )}
                 </div>
                 <div className="border-t my-6"></div>
-                
+
                 <div className="space-y-6">
                     <section>
                         <h2 className="text-xl font-bold mb-4">Bio Data</h2>
@@ -1550,7 +1550,7 @@ const DeveloperProfileCard: React.FC<{
                             selected={formData.qualifications || []}
                             onChange={handleMultiSelectChange('qualifications')}
                             isEditing={isEditing}
-                            color="secondary" 
+                            color="secondary"
                         />
                     </section>
 
@@ -1571,7 +1571,7 @@ const DeveloperProfileCard: React.FC<{
                             selected={formData.areasOfSpecialty || []}
                             onChange={handleMultiSelectChange('areasOfSpecialty')}
                             isEditing={isEditing}
-                            color="secondary" 
+                            color="secondary"
                         />
                     </section>
 
@@ -1585,10 +1585,10 @@ const DeveloperProfileCard: React.FC<{
                     </section>
                 </div>
             </Card>
-            
-            <LoginDetailsCard 
-                loginId={formData.loginId || formData.email} 
-                password={formData.password || '••••••••'} 
+
+            <LoginDetailsCard
+                loginId={formData.loginId || formData.email}
+                password={formData.password || '••••••••'}
                 userId={userId}
                 onPasswordUpdate={handlePasswordUpdate}
             />
@@ -1625,28 +1625,28 @@ const LearnerProfileView: React.FC = () => {
     const handlePhotoChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0] && formData) {
             const file = e.target.files[0];
-            
+
             // Validate file type and size
             if (!file.type.startsWith('image/')) {
                 alert('Please select a valid image file.');
                 return;
             }
-            
+
             if (file.size > 5 * 1024 * 1024) { // 5MB limit
                 alert('File size must be less than 5MB.');
                 return;
             }
-            
+
             // Store the file for later upload and create a preview
             setSelectedProfilePictureFile(file);
-            
+
             // Create preview URL for immediate display
             const reader = new FileReader();
             reader.onloadend = () => {
                 const previewUrl = reader.result as string;
                 setProfilePicturePreviewUrl(previewUrl);
-                setFormData(prev => prev ? { 
-                    ...prev, 
+                setFormData(prev => prev ? {
+                    ...prev,
                     profilePictureUrl: previewUrl
                 } : null);
             };
@@ -1681,11 +1681,11 @@ const LearnerProfileView: React.FC = () => {
             } else {
                 alert("Failed to generate avatar. Please try again.");
             }
-            
+
             // Clear any selected file since we're using AI generated image
             setSelectedProfilePictureFile(null);
             setProfilePicturePreviewUrl(null);
-            
+
         } catch (error) {
             console.error("Avatar generation failed:", error);
             alert("An error occurred while generating the avatar.");
@@ -1701,7 +1701,7 @@ const LearnerProfileView: React.FC = () => {
             if (selectedProfilePictureFile) {
                 try {
                     console.log('📁 Uploading profile picture:', selectedProfilePictureFile.name);
-                    
+
                     // Delete old profile picture if it exists and is a local file
                     const oldFileUrl = profile?.profilePictureUrl;
                     if (oldFileUrl && (oldFileUrl.startsWith('/uploads/') || oldFileUrl.includes('uploads/'))) {
@@ -1718,26 +1718,26 @@ const LearnerProfileView: React.FC = () => {
                             console.warn('⚠️ Failed to delete old learner profile picture:', error);
                         }
                     }
-                    
+
                     const uploadFormData = new FormData();
                     uploadFormData.append('file', selectedProfilePictureFile);
-                    
+
                     const uploadUrl = getUploadUrl('learner', 'profilePicture');
-                    
+
                     const response = await fetch(uploadUrl, {
                         method: 'POST',
                         body: uploadFormData
                     });
-                    
+
                     if (!response.ok) {
                         throw new Error(`Upload failed: ${response.statusText}`);
                     }
-                    
+
                     const result = await response.json();
                     if (!result.success) {
                         throw new Error(result.error || 'Upload failed');
                     }
-                    
+
                     console.log('✅ Profile picture uploaded successfully:', result.data);
 
                     // Store relative path in database (e.g., /uploads/learner/profilePicture/1758875494904_profile_pic_1.png)
@@ -1746,29 +1746,29 @@ const LearnerProfileView: React.FC = () => {
                         : result.data.fileUrl;
 
                     // Update form data with the relative path
-                    setFormData(prev => prev ? { 
-                        ...prev, 
+                    setFormData(prev => prev ? {
+                        ...prev,
                         profilePictureUrl: relativePath
                     } : null);
-                    
+
                     // Clear the preview URL since we now have the real URL
                     setProfilePicturePreviewUrl(null);
-                    
+
                 } catch (error) {
                     console.error('❌ Failed to upload profile picture:', error);
                     alert(`Failed to upload profile picture: ${error instanceof Error ? error.message : 'Please try again.'}`);
                     return;
                 }
             }
-            
+
             await saveProfile(formData);
             updateProfile(formData);
             setIsEditing(false);
-            
+
             // Clear tracking state
             setSelectedProfilePictureFile(null);
             setProfilePicturePreviewUrl(null);
-            
+
         } catch (error) {
             console.error('Failed to save profile:', error);
             alert('Failed to save profile. Please try again.');
@@ -1810,10 +1810,10 @@ const LearnerProfileView: React.FC = () => {
                 <div className="flex flex-col sm:flex-row items-center gap-6">
                     <div className="flex-shrink-0 text-center">
                         <div className="relative group w-24 h-24">
-                            <img 
-                                src={ensureAbsoluteImageUrl(formData.profilePictureUrl)} 
-                                alt={formData.name} 
-                                className="w-24 h-24 rounded-full object-cover ring-4 ring-primary/20" 
+                            <img
+                                src={ensureAbsoluteImageUrl(formData.profilePictureUrl)}
+                                alt={formData.name}
+                                className="w-24 h-24 rounded-full object-cover ring-4 ring-primary/20"
                             />
                             {isGeneratingAvatar && (
                                 <div className="absolute inset-0 bg-black bg-opacity-50 rounded-full flex items-center justify-center">
@@ -1821,8 +1821,8 @@ const LearnerProfileView: React.FC = () => {
                                 </div>
                             )}
                             {isEditing && !isGeneratingAvatar && (
-                                <button 
-                                    onClick={() => document.getElementById('photo-upload')?.click()} 
+                                <button
+                                    onClick={() => document.getElementById('photo-upload')?.click()}
                                     className="absolute inset-0 bg-black bg-opacity-50 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
                                 >
                                     <Icon name={IconName.Upload} className="w-6 h-6 text-white" />
@@ -1840,11 +1840,11 @@ const LearnerProfileView: React.FC = () => {
                                 {isGeneratingAvatar ? <Spinner size="sm" /> : 'Generate Avatar'}
                             </Button>
                         )}
-                        <input 
-                            type="file" 
-                            id="photo-upload" 
-                            className="hidden" 
-                            onChange={handlePhotoChange} 
+                        <input
+                            type="file"
+                            id="photo-upload"
+                            className="hidden"
+                            onChange={handlePhotoChange}
                             accept="image/*"
                         />
                     </div>
@@ -1869,60 +1869,60 @@ const LearnerProfileView: React.FC = () => {
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                         <div>
                             <label className="text-sm font-medium">Name</label>
-                            <input 
-                                type="text" 
-                                name="name" 
-                                value={formData.name} 
-                                onChange={handleInputChange} 
-                                className={inputClasses} 
+                            <input
+                                type="text"
+                                name="name"
+                                value={formData.name}
+                                onChange={handleInputChange}
+                                className={inputClasses}
                             />
                         </div>
                         <div>
                             <label className="text-sm font-medium">Telephone</label>
-                            <input 
-                                type="tel" 
-                                name="tel" 
-                                value={formData.tel || ''} 
-                                onChange={handleInputChange} 
-                                className={inputClasses} 
+                            <input
+                                type="tel"
+                                name="tel"
+                                value={formData.tel || ''}
+                                onChange={handleInputChange}
+                                className={inputClasses}
                             />
                         </div>
                         <div>
                             <label className="text-sm font-medium">Email</label>
-                            <input 
-                                type="email" 
-                                name="email" 
-                                value={formData.email} 
-                                onChange={handleInputChange} 
-                                className={inputClasses} 
+                            <input
+                                type="email"
+                                name="email"
+                                value={formData.email}
+                                onChange={handleInputChange}
+                                className={inputClasses}
                             />
                         </div>
                         <div>
                             <label className="text-sm font-medium">Date of Birth</label>
-                            <input 
-                                type="date" 
-                                name="dob" 
-                                value={formData.dob || ''} 
-                                onChange={handleInputChange} 
-                                className={inputClasses} 
+                            <input
+                                type="date"
+                                name="dob"
+                                value={formData.dob || ''}
+                                onChange={handleInputChange}
+                                className={inputClasses}
                             />
                         </div>
                         <div>
                             <label className="text-sm font-medium">NRIC</label>
-                            <input 
-                                type="text" 
-                                name="nric" 
-                                value={formData.nric || ''} 
-                                onChange={handleInputChange} 
-                                className={inputClasses} 
+                            <input
+                                type="text"
+                                name="nric"
+                                value={formData.nric || ''}
+                                onChange={handleInputChange}
+                                className={inputClasses}
                             />
                         </div>
                         <div>
                             <label className="text-sm font-medium">Race</label>
-                            <select 
-                                name="ethnicity" 
-                                value={formData.ethnicity || ''} 
-                                onChange={handleInputChange} 
+                            <select
+                                name="ethnicity"
+                                value={formData.ethnicity || ''}
+                                onChange={handleInputChange}
                                 className={inputClasses}
                             >
                                 <option value="">Select Race</option>
@@ -1933,10 +1933,10 @@ const LearnerProfileView: React.FC = () => {
                         </div>
                         <div>
                             <label className="text-sm font-medium">Gender</label>
-                            <select 
-                                name="gender" 
-                                value={formData.gender || ''} 
-                                onChange={handleInputChange} 
+                            <select
+                                name="gender"
+                                value={formData.gender || ''}
+                                onChange={handleInputChange}
                                 className={inputClasses}
                             >
                                 <option value="">Select Gender</option>
@@ -1947,20 +1947,20 @@ const LearnerProfileView: React.FC = () => {
                         </div>
                         <div>
                             <label className="text-sm font-medium">Company</label>
-                            <input 
-                                type="text" 
-                                name="company" 
-                                value={formData.company || ''} 
-                                onChange={handleInputChange} 
-                                className={inputClasses} 
+                            <input
+                                type="text"
+                                name="company"
+                                value={formData.company || ''}
+                                onChange={handleInputChange}
+                                className={inputClasses}
                             />
                         </div>
                         <div>
                             <label className="text-sm font-medium">Employment Status</label>
-                            <select 
-                                name="employmentStatus" 
-                                value={formData.employmentStatus || ''} 
-                                onChange={handleInputChange} 
+                            <select
+                                name="employmentStatus"
+                                value={formData.employmentStatus || ''}
+                                onChange={handleInputChange}
                                 className={inputClasses}
                             >
                                 <option value="">Select Status</option>
@@ -1971,10 +1971,10 @@ const LearnerProfileView: React.FC = () => {
                         </div>
                         <div>
                             <label className="text-sm font-medium">Nationality</label>
-                            <select 
-                                name="nationality" 
-                                value={formData.nationality || ''} 
-                                onChange={handleInputChange} 
+                            <select
+                                name="nationality"
+                                value={formData.nationality || ''}
+                                onChange={handleInputChange}
                                 className={inputClasses}
                             >
                                 <option value="">Select Nationality</option>
@@ -2002,7 +2002,7 @@ const LearnerProfileView: React.FC = () => {
                             <p className="text-sm text-subtle">Date of Birth</p>
                             <div className="flex items-center gap-2">
                                 <p className="font-semibold text-on-surface break-words">
-                                    {isAdmin && showDob 
+                                    {isAdmin && showDob
                                         ? (formData.dob ? new Date(formData.dob).toLocaleDateString('en-GB') : 'Not specified')
                                         : 'XX/XX/XXXX'
                                     }
@@ -2018,7 +2018,7 @@ const LearnerProfileView: React.FC = () => {
                             <p className="text-sm text-subtle">NRIC</p>
                             <div className="flex items-center gap-2">
                                 <p className="font-semibold text-on-surface break-words">
-                                    {isAdmin && showNric 
+                                    {isAdmin && showNric
                                         ? (formData.nric || 'N/A')
                                         : (formData.nric && formData.nric !== 'N/A' ? `${formData.nric.slice(0, 1)}****${formData.nric.slice(-4)}` : 'N/A')
                                     }
@@ -2059,16 +2059,16 @@ const LearnerProfileView: React.FC = () => {
 
                 {!isEditing && (
                     <>
-                        <div className="border-t my-6"></div>
-                        <h2 className="text-xl font-bold mb-4">Billing Documents</h2>
+                        <div className="border-t my-6 dark:border-gray-700"></div>
+                        <h2 className="text-xl font-bold mb-4 dark:text-white">Billing Documents</h2>
                         <div className="space-y-4">
-                            <div className="flex justify-between items-center p-3 bg-gray-50 rounded-md border">
-                                <span className="font-semibold">Invoice Template</span>
-                                <Button variant="ghost" size="sm">Download</Button>
+                            <div className="flex justify-between items-center p-3 bg-gray-50 rounded-md border dark:bg-gray-700 dark:border-gray-600">
+                                <span className="font-semibold dark:text-white">Invoice Template</span>
+                                <Button size="sm" className="!text-white">Download</Button>
                             </div>
-                            <div className="flex justify-between items-center p-3 bg-gray-50 rounded-md border">
-                                <span className="font-semibold">Receipt Template</span>
-                                <Button variant="ghost" size="sm">Download</Button>
+                            <div className="flex justify-between items-center p-3 bg-gray-50 rounded-md border dark:bg-gray-700 dark:border-gray-600">
+                                <span className="font-semibold dark:text-white">Receipt Template</span>
+                                <Button size="sm" className="!text-white">Download</Button>
                             </div>
                         </div>
                     </>
@@ -2090,8 +2090,8 @@ const LearnerProfileView: React.FC = () => {
                                 <p className="font-semibold text-on-surface font-mono tracking-wider">
                                     {isPasswordVisible ? 'Str0ngP@ssw0rd!23' : '••••••••••••••••'}
                                 </p>
-                                <button 
-                                    onClick={() => setIsPasswordVisible(!isPasswordVisible)} 
+                                <button
+                                    onClick={() => setIsPasswordVisible(!isPasswordVisible)}
                                     className="text-subtle hover:text-primary p-1 rounded-full"
                                 >
                                     <Icon name={isPasswordVisible ? IconName.EyeOff : IconName.Eye} className="w-5 h-5" />

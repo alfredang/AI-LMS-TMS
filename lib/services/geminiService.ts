@@ -4,13 +4,34 @@
 import { Quiz } from '@app-types';
 import { CourseDetails } from './courseApiService';
 
-// Initialize Gemini AI with API key for text generation
-const getGeminiAI = () => {
-  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_GEMINI_API_KEY;
-  if (!apiKey) {
-    throw new Error('NEXT_PUBLIC_GOOGLE_GEMINI_API_KEY is not set');
+// Cache the API key in memory
+let cachedApiKey: string | null = null;
+
+// Function to fetch API key from database (via internal API)
+const getDynamicApiKey = async (): Promise<string> => {
+  // If we have a cached key, use it
+  if (cachedApiKey) return cachedApiKey;
+
+  // Check environment variable first as fallback/override
+  if (process.env.NEXT_PUBLIC_GOOGLE_GEMINI_API_KEY) {
+    cachedApiKey = process.env.NEXT_PUBLIC_GOOGLE_GEMINI_API_KEY;
+    return cachedApiKey;
   }
-  return new GoogleGenerativeAI(apiKey);
+
+  try {
+    const response = await fetch('/api/config/gemini-key');
+    const data = await response.json();
+
+    if (data.success && data.apiKey) {
+      cachedApiKey = data.apiKey;
+      return cachedApiKey as string;
+    } else {
+      throw new Error(data.error || 'Failed to fetch Gemini API key');
+    }
+  } catch (error) {
+    console.error('Failed to retrieve Gemini API key:', error);
+    throw new Error('Gemini API key is missing. Please configuration it in your profile.');
+  }
 };
 
 // TODO: Implement proper image generation with Google AI Imagen API
@@ -29,7 +50,7 @@ const cleanMarkdownCodeBlocks = (content: string): string => {
 // Helper function to generate course context
 const generateCourseContext = (courseDetails?: CourseDetails | null): string => {
   if (!courseDetails) return '';
-  
+
   return `
 
 Course Context:
@@ -50,8 +71,10 @@ interface GenerateContentOptions {
 
 const callGeminiAPI = async (prompt: string, modelName = 'gemini-2.5-flash', options: GenerateContentOptions = {}): Promise<string> => {
   try {
-    const genAI = getGeminiAI();
-    const model = genAI.getGenerativeModel({ 
+    const apiKey = await getDynamicApiKey();
+    const genAI = new GoogleGenerativeAI(apiKey);
+
+    const model = genAI.getGenerativeModel({
       model: modelName,
       generationConfig: {
         temperature: 0.7,
@@ -62,22 +85,22 @@ const callGeminiAPI = async (prompt: string, modelName = 'gemini-2.5-flash', opt
         responseMimeType: options.responseFormat === 'json' ? 'application/json' : undefined,
       }
     });
-    
+
     // Generate content using the prompt
     const result = await model.generateContent(prompt);
     const response = await result.response;
     const text = response.text();
-    
+
     // Only clean markdown if it's NOT a JSON response
     let cleanedText = text;
     if (options.responseFormat !== 'json') {
-        cleanedText = cleanMarkdownCodeBlocks(text);
+      cleanedText = cleanMarkdownCodeBlocks(text);
     }
-    
+
     return cleanedText;
   } catch (error: any) {
     console.error('Error calling Gemini API:', error);
-    
+
     // Provide more helpful error messages
     if (error.message?.includes('quota')) {
       throw new Error('API quota exceeded. Please wait a moment and try again, or check your billing settings.');
@@ -86,7 +109,7 @@ const callGeminiAPI = async (prompt: string, modelName = 'gemini-2.5-flash', opt
     } else if (error.message?.includes('API key')) {
       throw new Error('Invalid API key. Please check your Google AI API key configuration.');
     }
-    
+
     throw error;
   }
 };
@@ -189,13 +212,13 @@ Return the response in the following JSON format:
   ]
 }`;
 
-    const response = await callGeminiAPI(prompt, 'gemini-2.5-pro', {
+    const response = await callGeminiAPI(prompt, 'gemini-2.5-flash', {
       responseFormat: 'json'
     });
 
     // Additional JSON cleaning in case of any remaining issues
     let cleanJsonResponse = response.trim();
-    
+
     // Remove any potential JSON code block markers that might have been missed
     if (cleanJsonResponse.startsWith('```json')) {
       cleanJsonResponse = cleanJsonResponse.replace(/^```json\s*/, '').replace(/\s*```$/, '');
@@ -203,7 +226,7 @@ Return the response in the following JSON format:
     if (cleanJsonResponse.startsWith('json')) {
       cleanJsonResponse = cleanJsonResponse.replace(/^json\s*/, '');
     }
-    
+
     const quizData = JSON.parse(cleanJsonResponse);
     return quizData as Quiz;
   } catch (error) {
@@ -230,7 +253,7 @@ Please ensure the content aligns with these course requirements and learning out
     }
 
     const prompt = `Generate a concise and informative educational text for a subtopic titled "${topic}". The content should be suitable for an online course. Explain the concept clearly. Use paragraphs for readability. Format the output as clean, semantic HTML using tags like <p>, <strong>, and <ul> for key points. Do not include <html> or <body> tags. ${instruction || ''}${courseContext}`;
-    
+
     return await callGeminiAPI(prompt);
   } catch (error) {
     console.error("Error generating course content:", error);
@@ -253,7 +276,7 @@ export interface LessonPlanOptions {
 
 export const generateLessonPlan = async (options: LessonPlanOptions): Promise<string> => {
   const { keyTopics, trainingHours, assessmentHours, startTime, endTime, includeMorningBreak, includeLunchBreak, includeAfternoonBreak, instruction, courseDetails } = options;
-  
+
   const totalDuration = trainingHours + assessmentHours;
 
   let breakInstructions = 'The schedule should include';
@@ -344,7 +367,7 @@ export const generateCaseStudy = async (topic: string, instruction?: string, cou
     5. Learning objectives
     
     Format the output as clean HTML using appropriate tags like <h3>, <p>, <ul>, <li>, <strong>. Do not include <html> or <body> tags. ${instruction || ''}${courseContext}`;
-    
+
     return await callGeminiAPI(prompt);
   } catch (error) {
     console.error("Error generating case study:", error);
@@ -364,7 +387,7 @@ export const generateRolePlayScenario = async (topic: string, instruction?: stri
     5. Debrief questions
     
     Format the output as clean HTML using appropriate tags. Do not include <html> or <body> tags. ${instruction || ''}${courseContext}`;
-    
+
     return await callGeminiAPI(prompt);
   } catch (error) {
     console.error("Error generating role play scenario:", error);
@@ -383,7 +406,7 @@ export const generateWrittenAssessment = async (topic: string, instruction?: str
     4. Time allocation guidelines
     
     Format the output as clean HTML. Do not include <html> or <body> tags. ${instruction || ''}${courseContext}`;
-    
+
     return await callGeminiAPI(prompt);
   } catch (error) {
     console.error("Error generating written assessment:", error);
@@ -402,7 +425,7 @@ export const generateOralQuestioning = async (topic: string, instruction?: strin
     4. Tips for conducting the oral assessment
     
     Format the output as clean HTML. Do not include <html> or <body> tags. ${instruction || ''}${courseContext}`;
-    
+
     return await callGeminiAPI(prompt);
   } catch (error) {
     console.error("Error generating oral questioning:", error);
@@ -421,7 +444,7 @@ export const generateInteractivePollSurvey = async (topic: string, instruction?:
     4. Discussion points based on results
     
     Format the output as clean HTML. Do not include <html> or <body> tags. ${instruction || ''}${courseContext}`;
-    
+
     return await callGeminiAPI(prompt);
   } catch (error) {
     console.error("Error generating interactive poll survey:", error);
@@ -440,7 +463,7 @@ export const generateEscapeRoomGame = async (topic: string, instruction?: string
     4. Learning objectives achieved through gameplay
     
     Format the output as clean HTML. Do not include <html> or <body> tags. ${instruction || ''}${courseContext}`;
-    
+
     return await callGeminiAPI(prompt);
   } catch (error) {
     console.error("Error generating escape room game:", error);
@@ -459,7 +482,7 @@ export const generateLearningOutcomes = async (topic: string, instruction?: stri
     4. Assessment criteria for each outcome
     
     Format the output as clean HTML. Do not include <html> or <body> tags. ${instruction || ''}${courseContext}`;
-    
+
     return await callGeminiAPI(prompt);
   } catch (error) {
     console.error("Error generating learning outcomes:", error);
@@ -477,7 +500,7 @@ export const generateRationaleOfSequencing = async (topic: string, instruction?:
     4. Student engagement considerations
     
     Format the output as clean HTML. Do not include <html> or <body> tags. ${instruction || ''}`;
-    
+
     return await callGeminiAPI(prompt);
   } catch (error) {
     console.error("Error generating rationale of sequencing:", error);
@@ -495,7 +518,7 @@ export const generateBackgroundResearch = async (topic: string, instruction?: st
     4. Implications for learning and practice
     
     Format the output as clean HTML. Do not include <html> or <body> tags. ${instruction || ''}`;
-    
+
     return await callGeminiAPI(prompt);
   } catch (error) {
     console.error("Error generating background research:", error);
@@ -513,7 +536,7 @@ export const generatePerformanceGapAnalysis = async (topic: string, instruction?
     4. Recommended interventions
     
     Format the output as clean HTML. Do not include <html> or <body> tags. ${instruction || ''}`;
-    
+
     return await callGeminiAPI(prompt);
   } catch (error) {
     console.error("Error generating performance gap analysis:", error);
@@ -531,7 +554,7 @@ export const generateInstructionMethods = async (topic: string, instruction?: st
     4. Effectiveness considerations
     
     Format the output as clean HTML. Do not include <html> or <body> tags. ${instruction || ''}`;
-    
+
     return await callGeminiAPI(prompt);
   } catch (error) {
     console.error("Error generating instruction methods:", error);
@@ -549,7 +572,7 @@ export const generateAssessmentMethods = async (topic: string, instruction?: str
     4. Implementation guidelines
     
     Format the output as clean HTML. Do not include <html> or <body> tags. ${instruction || ''}`;
-    
+
     return await callGeminiAPI(prompt);
   } catch (error) {
     console.error("Error generating assessment methods:", error);
@@ -568,7 +591,7 @@ export const generatePracticalLab = async (topic: string, instruction?: string, 
     4. Expected outcomes and verification
     
     Format the output as clean HTML. Do not include <html> or <body> tags. ${instruction || ''}${courseContext}`;
-    
+
     return await callGeminiAPI(prompt);
   } catch (error) {
     console.error("Error generating practical lab:", error);
@@ -586,7 +609,7 @@ export const generateMindMap = async (topic: string, instruction?: string): Prom
     4. Text-based visual representation
     
     Format the output as clean HTML with nested lists. Do not include <html> or <body> tags. ${instruction || ''}`;
-    
+
     return await callGeminiAPI(prompt);
   } catch (error) {
     console.error("Error generating mind map:", error);
@@ -597,7 +620,7 @@ export const generateMindMap = async (topic: string, instruction?: string): Prom
 // --- Chatbot Functions ---
 
 interface ChatSession {
-  messages: Array<{role: 'user' | 'model'; content: string}>;
+  messages: Array<{ role: 'user' | 'model'; content: string }>;
 }
 
 let tutorChatSession: ChatSession | null = null;
@@ -624,27 +647,27 @@ Provide helpful, educational responses that support their learning journey.`;
 };
 
 export const getTutorResponseStream = async function* (
-  message: string, 
-  courses: any[], 
+  message: string,
+  courses: any[],
   calendarEvents: any[]
-): AsyncGenerator<{text: string}, void, unknown> {
+): AsyncGenerator<{ text: string }, void, unknown> {
   try {
     const systemPrompt = createTutorSystemPrompt(courses, calendarEvents);
-    
+
     // Initialize session if not exists
     if (!tutorChatSession) {
       tutorChatSession = { messages: [] };
     }
-    
+
     // Add user message to session
     tutorChatSession.messages.push({ role: 'user', content: message });
-    
+
     // Create the full prompt with context and conversation history
     const conversationHistory = tutorChatSession.messages
       .slice(-10) // Keep last 10 messages for context
       .map(msg => `${msg.role === 'user' ? 'User' : 'Assistant'}: ${msg.content}`)
       .join('\n');
-    
+
     const fullPrompt = `${systemPrompt}
 
 Conversation History:
@@ -653,13 +676,13 @@ ${conversationHistory}
 Please respond to the latest user message:`;
 
     const response = await callGeminiAPI(fullPrompt);
-    
+
     // Add AI response to session
     tutorChatSession.messages.push({ role: 'model', content: response });
-    
+
     // Simulate streaming by yielding the response
     yield { text: response };
-    
+
   } catch (error) {
     console.error('Error in getTutorResponseStream:', error);
     yield { text: 'Sorry, I encountered an error. Please try again.' };
@@ -673,7 +696,7 @@ export const resetTutorChat = () => {
 // Public Course Advisor for Homepage
 const createAdvisorSystemPrompt = (courses: any[]): string => {
   const courseList = courses.map(c => `- ${c.title} (Fee: $${c.courseFee || 'TBA'})`).join('\n');
-  
+
   return `You are a helpful AI Course Advisor for an online learning platform.
 You can help prospective students learn about our available courses:
 
@@ -685,26 +708,26 @@ Be encouraging and informative. If asked about courses not in the list, politely
 };
 
 export const getAdvisorResponseStream = async function* (
-  message: string, 
+  message: string,
   courses: any[]
-): AsyncGenerator<{text: string}, void, unknown> {
+): AsyncGenerator<{ text: string }, void, unknown> {
   try {
     const systemPrompt = createAdvisorSystemPrompt(courses);
-    
+
     // Initialize session if not exists
     if (!advisorChatSession) {
       advisorChatSession = { messages: [] };
     }
-    
+
     // Add user message to session
     advisorChatSession.messages.push({ role: 'user', content: message });
-    
+
     // Create the full prompt with context and conversation history
     const conversationHistory = advisorChatSession.messages
       .slice(-10) // Keep last 10 messages for context
       .map(msg => `${msg.role === 'user' ? 'User' : 'Assistant'}: ${msg.content}`)
       .join('\n');
-    
+
     const fullPrompt = `${systemPrompt}
 
 Conversation History:
@@ -713,13 +736,13 @@ ${conversationHistory}
 Please respond to the latest user message:`;
 
     const response = await callGeminiAPI(fullPrompt);
-    
+
     // Add AI response to session
     advisorChatSession.messages.push({ role: 'model', content: response });
-    
+
     // Simulate streaming by yielding the response
     yield { text: response };
-    
+
   } catch (error) {
     console.error('Error in getAdvisorResponseStream:', error);
     yield { text: 'Sorry, I encountered an error. Please try again.' };

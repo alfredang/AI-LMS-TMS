@@ -54,19 +54,19 @@ const saveUploadedFile = async (file: File, userId: string, fieldName: string): 
     mimetype: file.mimetype,
     size: file.size
   });
-  
+
   // Use the module-level folder mapping
   const folderName = FOLDER_MAPPING[fieldName] || 'misc';
   const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'training_provider', folderName);
   console.log('📁 Upload directory:', uploadDir);
   console.log('📁 Current working directory:', process.cwd());
-  
+
   ensureDirectoryExists(uploadDir);
   console.log('✅ Directory ensured, checking existence...');
   console.log('📁 Target directory exists:', fs.existsSync(uploadDir));
   console.log('📁 Target directory path:', uploadDir);
   console.log('📁 Parent directory exists:', fs.existsSync(path.dirname(uploadDir)));
-  
+
   if (!fs.existsSync(uploadDir)) {
     console.error('❌ Directory creation failed, attempting manual creation...');
     try {
@@ -79,25 +79,25 @@ const saveUploadedFile = async (file: File, userId: string, fieldName: string): 
   }
 
   const timestamp = Date.now();
-  
+
   // Clean the original filename to remove any potential UUID prefixes or unwanted characters
   let cleanFilename = file.originalFilename || 'file';
-  
+
   console.log('🧹 Cleaning filename:', {
     original: file.originalFilename,
     beforeCleaning: cleanFilename
   });
-  
+
   // Remove any UUID-like patterns from the beginning of the filename (with or without underscore)
   cleanFilename = cleanFilename.replace(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}_?/i, '');
-  
+
   // Remove any timestamp patterns from the beginning (digits followed by underscore)
   cleanFilename = cleanFilename.replace(/^\d+_/, '');
-  
+
   // Fix double extensions (e.g., "test.txt.txt" -> "test.txt")
   let fileExtension = path.extname(cleanFilename);
   const nameWithoutExt = path.basename(cleanFilename, fileExtension);
-  
+
   // Check if the name without extension also ends with the same extension
   if (fileExtension && nameWithoutExt.toLowerCase().endsWith(fileExtension.toLowerCase())) {
     const correctedName = nameWithoutExt.slice(0, -fileExtension.length);
@@ -108,19 +108,19 @@ const saveUploadedFile = async (file: File, userId: string, fieldName: string): 
       extension: fileExtension
     });
   }
-  
+
   // If filename is now empty or just an extension, use a default name
   if (!cleanFilename || cleanFilename === fileExtension) {
     cleanFilename = `file${fileExtension}`;
   }
-  
+
   // Get just the base name without extension  
   const baseName = path.basename(cleanFilename, fileExtension);
-  
+
   // Create clean filename with timestamp
   const fileName = `${timestamp}_${baseName}${fileExtension}`;
   const filePath = path.join(uploadDir, fileName);
-  
+
   console.log('📄 Filename generation details:', {
     originalFilename: file.originalFilename,
     afterUuidRemoval: cleanFilename,
@@ -130,16 +130,16 @@ const saveUploadedFile = async (file: File, userId: string, fieldName: string): 
     finalFilePath: filePath,
     targetFolder: folderName
   });
-  
+
   try {
     // Copy file from temp location to final location
     console.log('📋 Reading temp file from:', file.filepath);
     console.log('🔍 Temp file exists before read:', fs.existsSync(file.filepath));
-    
+
     if (!fs.existsSync(file.filepath)) {
       throw new Error(`Temp file does not exist: ${file.filepath}`);
     }
-    
+
     // Get temp file stats first
     const tempStats = fs.statSync(file.filepath);
     console.log('📊 Temp file stats:', {
@@ -147,19 +147,19 @@ const saveUploadedFile = async (file: File, userId: string, fieldName: string): 
       created: tempStats.birthtime,
       modified: tempStats.mtime
     });
-    
+
     const fileData = fs.readFileSync(file.filepath);
     console.log('📊 File data size after read:', fileData.length);
-    
+
     // Allow empty files but log a warning
     if (fileData.length === 0) {
       console.log('⚠️ Warning: File is empty (0 bytes), but proceeding with upload');
     }
-    
+
     console.log('💾 Writing file to:', filePath);
     console.log('📁 Target directory exists:', fs.existsSync(uploadDir));
     console.log('📁 Target directory permissions test...');
-    
+
     // Test write permissions first
     const testFile = path.join(uploadDir, 'test_write.tmp');
     try {
@@ -170,21 +170,21 @@ const saveUploadedFile = async (file: File, userId: string, fieldName: string): 
       console.error('❌ Directory write permission error:', permError);
       throw permError;
     }
-    
+
     // Now write the actual file
     fs.writeFileSync(filePath, fileData);
     console.log('✅ File written successfully');
-    
+
     // Verify file was written correctly
     const finalExists = fs.existsSync(filePath);
     console.log('🔍 Final file exists:', finalExists);
-    
+
     if (finalExists) {
       const finalStats = fs.statSync(filePath);
       console.log('📈 Final file size:', finalStats.size);
       console.log('📅 Final file created:', finalStats.birthtime);
       console.log('🎯 Final file location:', filePath);
-      
+
       // Additional verification: check if file is in the expected folder
       const expectedDir = path.join(process.cwd(), 'public', 'uploads', 'training_provider', folderName);
       const isInCorrectDir = filePath.startsWith(expectedDir);
@@ -202,7 +202,7 @@ const saveUploadedFile = async (file: File, userId: string, fieldName: string): 
     });
     throw error;
   }
-  
+
   // Return the URL path (relative to public folder)
   return `/uploads/training_provider/${folderName}/${fileName}`;
 };
@@ -220,7 +220,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     // Use /tmp for Vercel serverless environment (only writable directory)
     const tempDir = '/tmp';
-    
+
     // Parse the multipart form data with improved formidable configuration
     const form = new IncomingForm({
       allowEmptyFiles: true,  // Allow empty files to prevent FormidableError
@@ -242,10 +242,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }
       });
     });
-    
+
     // Extract userId from fields
     const userId = Array.isArray(fields.userId) ? fields.userId[0] : fields.userId;
-    
+
     if (!userId) {
       return res.status(400).json({ success: false, error: 'User ID is required' });
     }
@@ -255,7 +255,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Parse the JSON data from fields
     const profileDataStr = Array.isArray(fields.profileData) ? fields.profileData[0] : fields.profileData;
     const profileData = JSON.parse(profileDataStr || '{}');
-    
+
     console.log('📋 Profile data received:', JSON.stringify(profileData, null, 2));
     console.log('📁 Files received:', Object.keys(files));
     console.log('🔍 Detailed file info:');
@@ -266,7 +266,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         console.log(`  - ${key}: ${fileInfo.originalFilename} (${fileInfo.size} bytes, type: ${fileInfo.mimetype})`);
       }
     });
-    
+
     console.log('🎯 Template field mapping check:');
     Object.keys(files).forEach(fileKey => {
       if (FOLDER_MAPPING[fileKey]) {
@@ -276,15 +276,40 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     });
 
+    // Resolve the correct training_provider_id
+    // If the user is a direct training provider, userId is the training_provider_id
+    // If the user is an admin, we need to find the linked training_provider_id
+    let trainingProviderId = userId;
+
+    // Check if userId exists directly in training_provider
+    const directTpCheck = await pool.query('SELECT id FROM training_provider WHERE id = $1', [userId]);
+
+    if (directTpCheck.rows.length === 0) {
+      // Not a direct TP, check if it's an admin
+      console.log('🔍 User is not a direct training provider, checking admin linkage...');
+      const adminCheck = await pool.query('SELECT provider_id FROM provider_admin_user WHERE user_id = $1', [userId]);
+
+      if (adminCheck.rows.length > 0) {
+        trainingProviderId = adminCheck.rows[0].provider_id;
+        console.log('✅ Resolved Training Provider ID via Admin Linkage:', trainingProviderId);
+      } else {
+        console.warn('⚠️ User is neither a direct TP nor a linked Admin. Assuming new TP or legacy (using userId).');
+      }
+    } else {
+      console.log('✅ User is a direct Training Provider.');
+    }
+
+    console.log('🎯 Target Training Provider ID for updates:', trainingProviderId);
+
     // Get current profile to check for old files
     const currentProfile = await pool.query(`
       SELECT tp.invoice_template_url, tp.receipt_template_url, tp.certificate_template_url,
              tp.pro_forma_template_url, tp.ssg_self_sign_cert_file, tp.ssg_private_key_file,
              au.profile_picture_url
       FROM app_user au
-      LEFT JOIN training_provider tp ON au.id = tp.id
+      LEFT JOIN training_provider tp ON tp.id = $2
       WHERE au.id = $1
-    `, [userId]);
+    `, [userId, trainingProviderId]);
 
     const oldFiles = currentProfile.rows[0] || {};
 
@@ -303,17 +328,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         mimetype: logoFile.mimetype,
         filepath: logoFile.filepath
       });
-      
+
       // Check if temp file exists
       console.log('🔍 Temp file exists:', fs.existsSync(logoFile.filepath));
-      
+
       // Only process if file has content
       if (logoFile && logoFile.size > 0) {
         if (oldFiles.profile_picture_url) {
           console.log('🗑️ Deleting old logo file:', oldFiles.profile_picture_url);
           deleteOldFile(oldFiles.profile_picture_url);
         }
-        
+
         console.log('🚀 About to call saveUploadedFile...');
         try {
           filePaths.companyLogoUrl = await saveUploadedFile(logoFile, userId, 'logo');
@@ -344,7 +369,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         console.log(`📄 Processing ${template.fileKey} upload...`);
         const templateFileRaw = files[template.fileKey];
         const templateFile = Array.isArray(templateFileRaw) ? templateFileRaw[0] : templateFileRaw;
-        
+
         console.log(`🔍 ${template.fileKey} file details:`, {
           originalFilename: templateFile?.originalFilename,
           size: templateFile?.size,
@@ -352,14 +377,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           filepath: templateFile?.filepath,
           expectedFolder: FOLDER_MAPPING[template.fileKey] || 'unknown'
         });
-        
+
         // Only process if file has content
         if (templateFile && templateFile.size > 0) {
           if (template.oldFile) {
             console.log(`🗑️ Deleting old ${template.fileKey}:`, template.oldFile);
             deleteOldFile(template.oldFile);
           }
-          
+
           try {
             console.log(`🚀 About to save ${template.fileKey} with folder mapping: ${template.fileKey} -> ${FOLDER_MAPPING[template.fileKey]}`);
             filePaths[template.dbField] = await saveUploadedFile(templateFile, userId, template.fileKey);
@@ -370,7 +395,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           }
         } else {
           console.log(`⚠️ ${template.fileKey} is empty or invalid (size: ${templateFile?.size}), checking temp file...`);
-          
+
           // Additional debugging for empty files
           if (templateFile) {
             console.log('🔍 Empty file debugging:', {
@@ -379,7 +404,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               originalName: templateFile.originalFilename,
               mimetype: templateFile.mimetype
             });
-            
+
             // Try to read temp file directly to see if it has content
             if (fs.existsSync(templateFile.filepath)) {
               try {
@@ -389,15 +414,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                   created: tempFileStats.birthtime,
                   modified: tempFileStats.mtime
                 });
-                
+
                 if (tempFileStats.size > 0) {
                   console.log('🔧 File has content in temp location, proceeding with upload despite size=0 report...');
-                  
+
                   if (template.oldFile) {
                     console.log(`🗑️ Deleting old ${template.fileKey}:`, template.oldFile);
                     deleteOldFile(template.oldFile);
                   }
-                  
+
                   try {
                     console.log(`🚀 About to save ${template.fileKey} with folder mapping: ${template.fileKey} -> ${FOLDER_MAPPING[template.fileKey]}`);
                     filePaths[template.dbField] = await saveUploadedFile(templateFile, userId, template.fileKey);
@@ -429,7 +454,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     try {
       console.log('💾 Starting database transaction...');
-      
+
       // Update app_user table
       const userUpdateResult = await pool.query(`
         UPDATE app_user 
@@ -447,7 +472,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         profileData.password,
         userId
       ]);
-      
+
       console.log('🔍 Company name sync debug:', {
         'profileData.name': profileData.name,
         'profileData.companyName': profileData.companyName,
@@ -536,18 +561,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         profileData.colorScheme || '#3B82F6',
         userId
       ];
-      
+
       console.log('🔍 File upload parameters being sent to database:', {
         'invoice_template_url': queryParams[6],
-        'receipt_template_url': queryParams[7], 
+        'receipt_template_url': queryParams[7],
         'certificate_template_url': queryParams[8],
         'pro_forma_template_url': queryParams[9],
         'ssg_self_sign_cert_file': queryParams[10],
         'ssg_private_key_file': queryParams[11]
       });
-      
+
       const providerUpdateResult = await pool.query(updateQuery, queryParams);
-      
+
       console.log('✅ training_provider updated, rows affected:', providerUpdateResult.rowCount);
 
       // Handle API keys - delete existing and insert new ones (with selected model)
@@ -561,8 +586,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           // Ensure keyValue is a non-empty string
           const strValue = typeof keyValue === 'string' ? keyValue.trim() : String(keyValue || '').trim();
           if (strValue !== '') {
-            // Get selected model for this API key (if any)
-            const selectedModel = profileData.apiKeyModels?.[keyName] || null;
+            // Get selected model for this API key (if any), preserving empty string for "None"
+            const selectedModel = profileData.apiKeyModels?.[keyName] ?? null;
             const insertResult = await pool.query(`
               INSERT INTO training_provider_api (training_provider_id, key_name, key_value, selected_model)
               VALUES ($1, $2, $3, $4)

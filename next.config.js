@@ -3,6 +3,10 @@ const nextConfig = {
   reactStrictMode: true,
   swcMinify: true,
 
+  // Silence conflict warning between Turbopack and Webpack
+  // by explicitly acknowledging we have no specific Turbopack config yet
+  turbopack: {},
+
   // Image optimization
   images: {
     domains: ['i.pravatar.cc', 'avatars.githubusercontent.com'],

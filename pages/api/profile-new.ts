@@ -55,7 +55,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (!profileData) {
       console.log('❌ No profile found in database for:', { userId, role });
       return res.status(404).json(
-        createApiResponse(false, 'Profile not found', null, 
+        createApiResponse(false, 'Profile not found', null,
           `No ${role} profile found for user ID: ${userId}`)
       );
     }
@@ -70,7 +70,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   } catch (error) {
     console.error('❌ Database error:', error);
     return res.status(500).json(
-      createApiResponse(false, 'Failed to fetch profile', null, 
+      createApiResponse(false, 'Failed to fetch profile', null,
         error instanceof Error ? error.message : 'Unknown error')
     );
   }
@@ -184,7 +184,7 @@ async function getAdminProfile(userId: string) {
 
 async function getTrainerProfile(userId: string) {
   console.log('👨‍🏫 Fetching trainer profile for userId:', userId);
-  
+
   const result = await pool.query(`
     SELECT 
       u.id,
@@ -210,7 +210,7 @@ async function getTrainerProfile(userId: string) {
   `, [userId]);
 
   console.log('📊 Trainer query result:', result.rows.length, 'rows found');
-  
+
   if (result.rows.length === 0) {
     console.log('❌ No trainer found with ID:', userId);
     return null;
@@ -243,7 +243,7 @@ async function getTrainerProfile(userId: string) {
 
 async function getTrainingProviderProfile(userId: string) {
   console.log('📋 Fetching training provider profile for userId:', userId);
-  
+
   // First, check if userId is a training provider directly
   let result = await pool.query(`
     SELECT 
@@ -373,7 +373,8 @@ async function getTrainingProviderProfile(userId: string) {
   const apiKeyModels: { [key: string]: string } = {};
   apiKeyResult.rows.forEach(row => {
     apiKeys[row.key_name] = row.key_value;
-    if (row.selected_model) {
+    // Allow empty string (None) to be included
+    if (row.selected_model !== null && row.selected_model !== undefined) {
       apiKeyModels[row.key_name] = row.selected_model;
     }
   });

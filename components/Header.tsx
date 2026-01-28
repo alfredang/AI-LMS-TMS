@@ -53,11 +53,10 @@ const RoleSwitcher: React.FC<{ onClose: () => void }> = ({ onClose }) => {
           <button
             key={r}
             onClick={() => handleRoleSwitch(r)}
-            className={`w-full flex items-center space-x-3 px-3 py-2.5 text-sm rounded-md transition-colors ${
-              r === role
-                ? 'bg-primary/10 text-primary font-semibold'
-                : 'text-on-surface hover:bg-surface-elevated'
-            }`}
+            className={`w-full flex items-center space-x-3 px-3 py-2.5 text-sm rounded-md transition-colors ${r === role
+              ? 'bg-primary/10 text-primary font-semibold'
+              : 'text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700'
+              }`}
           >
             <span className="text-lg">{getRoleIcon(r)}</span>
             <span>{getRoleDisplayName(r)}</span>
@@ -73,43 +72,43 @@ const RoleSwitcher: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   );
 };
 
-const ProfileDropdown: React.FC<{onClose: () => void}> = ({onClose}) => {
-    const { logout, handleNavigation } = useLms();
-      
-    const menuItems = [
-        { label: 'My Profile', icon: IconName.MyAccount, view: View.Profile },
-        { label: 'Help and Support', icon: IconName.Help, view: View.HelpAndSupport },
-    ];
+const ProfileDropdown: React.FC<{ onClose: () => void }> = ({ onClose }) => {
+  const { logout, handleNavigation } = useLms();
 
-    return (
-        <div className="absolute top-full right-0 mt-2 w-72 bg-surface rounded-lg shadow-2xl z-50 border border-default overflow-hidden">
-            <div className="p-4 bg-surface-elevated">
-                 {menuItems.map(item => (
-                    <a
-                        href="#"
-                        key={item.label}
-                        onClick={(e) => {
-                            e.preventDefault();
-                            if (item.view) {
-                                handleNavigation(item.view);
-                            } else {
-                                alert(`${item.label} clicked`);
-                            }
-                            onClose();
-                        }}
-                        className="flex items-center space-x-3 px-3 py-2.5 text-sm font-semibold rounded-md text-on-surface hover:bg-surface">
-                        <Icon name={item.icon} className="w-5 h-5" />
-                        <span>{item.label}</span>
-                    </a>
-                 ))}
-                 <div className="border-t border-default my-1"></div>
-                 <button onClick={logout} className="w-full flex items-center space-x-3 px-3 py-2.5 text-sm font-semibold text-on-surface hover:bg-surface rounded-md">
-                    <Icon name={IconName.Logout} className="w-5 h-5"/>
-                    <span>Logout</span>
-                </button>
-            </div>
-        </div>
-    );
+  const menuItems = [
+    { label: 'My Profile', icon: IconName.MyAccount, view: View.Profile },
+    { label: 'Help and Support', icon: IconName.Help, view: View.HelpAndSupport },
+  ];
+
+  return (
+    <div className="absolute top-full right-0 mt-2 w-72 bg-surface rounded-lg shadow-2xl z-50 border border-default overflow-hidden">
+      <div className="p-4 bg-surface-elevated">
+        {menuItems.map(item => (
+          <a
+            href="#"
+            key={item.label}
+            onClick={(e) => {
+              e.preventDefault();
+              if (item.view) {
+                handleNavigation(item.view);
+              } else {
+                alert(`${item.label} clicked`);
+              }
+              onClose();
+            }}
+            className="flex items-center space-x-3 px-3 py-2.5 text-sm font-semibold rounded-md text-on-surface hover:bg-surface">
+            <Icon name={item.icon} className="w-5 h-5" />
+            <span>{item.label}</span>
+          </a>
+        ))}
+        <div className="border-t border-default my-1"></div>
+        <button onClick={logout} className="w-full flex items-center space-x-3 px-3 py-2.5 text-sm font-semibold text-on-surface hover:bg-surface rounded-md">
+          <Icon name={IconName.Logout} className="w-5 h-5" />
+          <span>Logout</span>
+        </button>
+      </div>
+    </div>
+  );
 };
 
 const Header: React.FC = () => {
@@ -154,30 +153,30 @@ const Header: React.FC = () => {
 
   const navConfig = {
     [UserRole.Learner]: [
-        { view: View.Dashboard, label: 'Home', icon: IconName.Dashboard },
-        { view: View.Courses, label: 'Courses', icon: IconName.Courses },
-        { view: View.Calendar, label: 'Task List', icon: IconName.Calendar },
-        // { view: View.JobSearch, label: 'Job Search', icon: IconName.Jobs },
+      { view: View.Dashboard, label: 'Home', icon: IconName.Dashboard },
+      { view: View.Courses, label: 'Courses', icon: IconName.Courses },
+      { view: View.Calendar, label: 'Task List', icon: IconName.Calendar },
+      // { view: View.JobSearch, label: 'Job Search', icon: IconName.Jobs },
     ],
     [UserRole.Trainer]: [
-        { view: View.Dashboard, label: 'Home', icon: IconName.Dashboard },
-        { view: View.Courses, label: 'My Classes', icon: IconName.Courses },
-        { view: View.Calendar, label: 'Task List', icon: IconName.Calendar },
-        { view: View.Create, label: 'Trainer GenAI Authoring', icon: IconName.Create },
+      { view: View.Dashboard, label: 'Home', icon: IconName.Dashboard },
+      { view: View.Courses, label: 'My Classes', icon: IconName.Courses },
+      { view: View.Calendar, label: 'Task List', icon: IconName.Calendar },
+      { view: View.Create, label: 'Trainer GenAI Authoring', icon: IconName.Create },
     ],
     [UserRole.Developer]: [
-        { view: View.Dashboard, label: 'Home', icon: IconName.Dashboard },
-        { view: View.Courses, label: 'Courses', icon: IconName.Courses },
-        { view: View.Create, label: 'Developer GenAI Authoring', icon: IconName.Create },
+      { view: View.Dashboard, label: 'Home', icon: IconName.Dashboard },
+      { view: View.Courses, label: 'Courses', icon: IconName.Courses },
+      { view: View.Create, label: 'Developer GenAI Authoring', icon: IconName.Create },
     ],
     [UserRole.Admin]: [
-        { view: View.Admin, label: 'Admin Dashboard', icon: IconName.Admin, page: AdminPage.Dashboard },
-        { view: View.Admin, label: 'Class Management', icon: IconName.Courses, page: AdminPage.ClassManagement },
-        { view: View.Admin, label: 'TPG Management', icon: IconName.DollarSign, page: AdminPage.TpgManagement },
+      { view: View.Admin, label: 'Admin Dashboard', icon: IconName.Admin, page: AdminPage.Dashboard },
+      { view: View.Admin, label: 'Class Management', icon: IconName.Courses, page: AdminPage.ClassManagement },
+      { view: View.Admin, label: 'TPG Management', icon: IconName.DollarSign, page: AdminPage.TpgManagement },
     ],
     [UserRole.TrainingProvider]: [
-        { view: View.Dashboard, label: 'Analytics', icon: IconName.Analytics },
-        { view: View.Courses, label: 'Courses', icon: IconName.Courses },
+      { view: View.Dashboard, label: 'Analytics', icon: IconName.Analytics },
+      { view: View.Courses, label: 'Courses', icon: IconName.Courses },
     ]
   };
 
@@ -193,36 +192,35 @@ const Header: React.FC = () => {
               <span className="text-xl font-bold text-on-surface">{trainingProviderProfile?.companyShortname || 'Training Provider'}</span>
             </div>
             <nav className="hidden md:flex items-center space-x-6">
-            {navItems.map(item => (
+              {navItems.map(item => (
                 <a
-                key={item.label}
-                href="#"
-                onClick={(e) => { 
-                    e.preventDefault(); 
-                    
+                  key={item.label}
+                  href="#"
+                  onClick={(e) => {
+                    e.preventDefault();
+
                     if (role === UserRole.Admin && 'page' in item) {
-                        if (item.page === AdminPage.Dashboard) {
-                            resetAdminView();
-                        }
-                        setAdminPage(item.page);
+                      if (item.page === AdminPage.Dashboard) {
+                        resetAdminView();
+                      }
+                      setAdminPage(item.page);
                     }
-                    
+
                     if (item.view === View.Create && currentView === item.view) {
-                    resetCreateView();
+                      resetCreateView();
                     } else {
-                    handleNavigation(item.view);
+                      handleNavigation(item.view);
                     }
-                }}
-                className={`flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                    (role === UserRole.Admin && isAdminPageActive(item)) || (role !== UserRole.Admin && currentView === item.view)
+                  }}
+                  className={`flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${(role === UserRole.Admin && isAdminPageActive(item)) || (role !== UserRole.Admin && currentView === item.view)
                     ? 'bg-primary text-white'
                     : 'text-on-surface hover:bg-surface-elevated hover:text-primary'
-                }`}
+                    }`}
                 >
-                <Icon name={item.icon} className="w-5 h-5" />
-                <span>{item.label}</span>
+                  <Icon name={item.icon} className="w-5 h-5" />
+                  <span>{item.label}</span>
                 </a>
-            ))}
+              ))}
             </nav>
           </div>
 
@@ -232,7 +230,7 @@ const Header: React.FC = () => {
               <div className="relative" ref={roleSwitcherRef}>
                 <button
                   onClick={() => setIsRoleSwitcherOpen(prev => !prev)}
-                  className="flex items-center space-x-2 px-3 py-1.5 bg-surface-elevated hover:bg-surface rounded-full text-sm font-medium text-on-surface transition-colors border border-default"
+                  className="flex items-center space-x-2 px-3 py-1.5 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full text-sm font-medium text-gray-700 dark:text-gray-200 transition-colors border border-gray-200 dark:border-gray-700"
                   title="Switch Role"
                 >
                   <span>{getRoleIcon(role)}</span>
@@ -247,16 +245,16 @@ const Header: React.FC = () => {
 
             {/* Profile Button */}
             <div className="relative" ref={profileRef}>
-                <button onClick={() => setIsProfileOpen(prev => !prev)} className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center ring-2 ring-offset-2 ring-primary overflow-hidden">
-                    {(role === UserRole.TrainingProvider && trainingProviderProfile?.companyLogoUrl) ? (
-                        <img src={ensureAbsoluteImageUrl(trainingProviderProfile.companyLogoUrl)} alt={trainingProviderProfile.companyShortname} className="w-full h-full object-cover" />
-                    ) : currentUserProfile?.profilePictureUrl ? (
-                        <img src={ensureAbsoluteImageUrl(currentUserProfile.profilePictureUrl)} alt={currentUserProfile.name} className="w-full h-full object-cover" />
-                    ) : (
-                        <Icon name={IconName.User} className="w-6 h-6 text-gray-600" />
-                    )}
-                </button>
-                {isProfileOpen && <ProfileDropdown onClose={() => setIsProfileOpen(false)} />}
+              <button onClick={() => setIsProfileOpen(prev => !prev)} className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center ring-2 ring-offset-2 ring-primary overflow-hidden">
+                {(role === UserRole.TrainingProvider && trainingProviderProfile?.companyLogoUrl) ? (
+                  <img src={ensureAbsoluteImageUrl(trainingProviderProfile.companyLogoUrl)} alt={trainingProviderProfile.companyShortname} className="w-full h-full object-cover" />
+                ) : currentUserProfile?.profilePictureUrl ? (
+                  <img src={ensureAbsoluteImageUrl(currentUserProfile.profilePictureUrl)} alt={currentUserProfile.name} className="w-full h-full object-cover" />
+                ) : (
+                  <Icon name={IconName.User} className="w-6 h-6 text-gray-600" />
+                )}
+              </button>
+              {isProfileOpen && <ProfileDropdown onClose={() => setIsProfileOpen(false)} />}
             </div>
           </div>
         </div>

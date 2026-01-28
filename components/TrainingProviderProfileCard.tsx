@@ -96,20 +96,20 @@ const FIXED_API_KEY_NAMES = Object.keys(API_KEY_CONFIGS) as (keyof typeof API_KE
 // Helper function to clean filename for display
 const getCleanDisplayName = (filename: string): string => {
     if (!filename) return '';
-    
+
     // Remove timestamp prefix (pattern: numbers_)
     const withoutTimestamp = filename.replace(/^\d+_/, '');
-    
+
     // Fix double extensions (e.g., "test.txt.txt" -> "test.txt")
     const extension = withoutTimestamp.includes('.') ? '.' + withoutTimestamp.split('.').pop() : '';
     const nameWithoutExt = withoutTimestamp.replace(new RegExp(`\\${extension}$`), '');
-    
+
     // Check if name ends with the same extension again
     if (extension && nameWithoutExt.toLowerCase().endsWith(extension.toLowerCase())) {
         const correctedName = nameWithoutExt.slice(0, -extension.length);
         return correctedName + extension;
     }
-    
+
     return withoutTimestamp;
 };
 
@@ -147,14 +147,12 @@ const ToggleSwitch: React.FC<{
             <button
                 type="button"
                 onClick={() => onChange(!checked)}
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                    checked ? 'bg-primary' : 'bg-gray-300 dark:bg-gray-600'
-                }`}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${checked ? 'bg-primary' : 'bg-gray-300 dark:bg-gray-600'
+                    }`}
             >
                 <span
-                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                        checked ? 'translate-x-6' : 'translate-x-1'
-                    }`}
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${checked ? 'translate-x-6' : 'translate-x-1'
+                        }`}
                 />
             </button>
         </div>
@@ -162,9 +160,9 @@ const ToggleSwitch: React.FC<{
 };
 
 // Login Details Card Component
-const LoginDetailsCard: React.FC<{ 
-    loginId: string; 
-    password?: string; 
+const LoginDetailsCard: React.FC<{
+    loginId: string;
+    password?: string;
     userId?: string;
     onPasswordUpdate?: (newPassword: string) => void;
 }> = ({ loginId, password, userId, onPasswordUpdate }) => {
@@ -187,7 +185,7 @@ const LoginDetailsCard: React.FC<{
 
         try {
             setIsUpdating(true);
-            
+
             if (!userId) {
                 throw new Error('No user ID found');
             }
@@ -212,17 +210,17 @@ const LoginDetailsCard: React.FC<{
             if (!result.success) {
                 throw new Error(result.message || 'Password update failed');
             }
-            
+
             console.log('✅ Training Provider password updated successfully with bcrypt hashing');
             alert('Password reset successfully!');
             setIsResetting(false);
             setNewPassword('');
-            
+
             // Call the callback to update the parent component
             if (onPasswordUpdate) {
                 onPasswordUpdate(newPassword);
             }
-            
+
         } catch (error) {
             console.error('❌ Failed to reset training provider password:', error);
             alert(`Failed to reset password: ${error instanceof Error ? error.message : 'Please try again.'}`);
@@ -308,19 +306,22 @@ interface TrainingProviderProfileCardProps {
 
 export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardProps> = ({ profile, onUpdate }) => {
     const [isEditing, setIsEditing] = useState(false);
-    
+
     // Transform initial profile data to ensure colorScheme is a string
     const getInitialFormData = (profile: TrainingProviderProfile) => {
-        const transformedProfile = { ...profile };
-        
+        const transformedProfile = {
+            ...profile,
+            apiKeyModels: profile.apiKeyModels || {}
+        };
+
         // Handle colorScheme transformation from object to string
         if (profile.colorScheme && typeof profile.colorScheme === 'object' && 'primary' in profile.colorScheme) {
             transformedProfile.colorScheme = (profile.colorScheme as any).primary;
         }
-        
+
         return transformedProfile;
     };
-    
+
     const [formData, setFormData] = useState(getInitialFormData(profile));
     const [isSaving, setIsSaving] = useState(false);
     const [newApiKey, setNewApiKey] = useState({ name: '', value: '' });
@@ -331,14 +332,14 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
 
     // Get the updateTrainingProviderProfile function from the LMS context
     const { updateTrainingProviderProfile, updateCurrentUserProfile } = useLms();
-    
+
     // Helper function to ensure absolute URL for images
     const getImageUrl = (url: string | undefined) => {
         if (!url) return '/images/default-company-logo.png'; // fallback image
         if (url.startsWith('http') || url.startsWith('blob:')) return url; // already absolute or blob URL
         return getFileUrl(url); // add server URL
     };
-    
+
     // File upload states
     const [logoFile, setLogoFile] = useState<File | null>(null);
     const [invoiceTemplateFile, setInvoiceTemplateFile] = useState<File | null>(null);
@@ -375,7 +376,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
     };
-    
+
     const handleContactChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value } = e.target;
         setFormData(prev => ({
@@ -399,7 +400,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
             };
         });
     };
-    
+
     const handleFundingChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
         setFormData(prev => ({
@@ -407,10 +408,10 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
             fundingSettings: {
                 ...prev.fundingSettings,
                 [name]: name === 'isGstRegistered' ? e.target.type === 'checkbox' ? (e.target as HTMLInputElement).checked : value === 'true'
-                      : name === 'normalFunding' ? (parseInt(value) as 50 | 70)
-                      : name === 'enhancedFunding' ? parseInt(value)
-                      : name === 'gstRate' ? parseFloat(value)
-                      : value
+                    : name === 'normalFunding' ? (parseInt(value) as 50 | 70)
+                        : name === 'enhancedFunding' ? parseInt(value)
+                            : name === 'gstRate' ? parseFloat(value)
+                                : value
             }
         }));
     };
@@ -438,7 +439,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
             };
         });
     };
-    
+
     const handleColorChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const newColor = e.target.value;
 
@@ -473,14 +474,14 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                 lastModified: file.lastModified,
                 webkitRelativePath: file.webkitRelativePath
             });
-            
+
             // Check if file is empty
             if (file.size === 0) {
                 alert(`⚠️ The selected file "${file.name}" is empty (0 bytes). Please select a file with content.`);
                 e.target.value = ''; // Clear the input
                 return;
             }
-            
+
             // Store the file in the appropriate state variable
             switch (field) {
                 case 'invoiceTemplateUrl':
@@ -502,7 +503,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                     setSsgPrivateKeyFile(file);
                     break;
             }
-            
+
             // Update the form data to show the cleaned filename for immediate display
             setFormData(prev => {
                 const cleanedName = getCleanDisplayName(file.name);
@@ -520,7 +521,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
         if (e.target.files && e.target.files[0]) {
             const file = e.target.files[0];
             setLogoFile(file); // Store the file for upload
-            
+
             // Create preview URL for immediate display
             const previewUrl = URL.createObjectURL(file);
             setFormData(prev => ({ ...prev, companyLogoUrl: previewUrl }));
@@ -576,7 +577,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
             // Add user ID and profile data as JSON string
             formDataToSend.append('userId', profile.id);
             formDataToSend.append('profileData', JSON.stringify(profileDataToSend));
-            
+
             // Add file uploads if they exist
             if (logoFile) {
                 formDataToSend.append('companyLogo', logoFile);
@@ -616,7 +617,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
             }
 
             console.log('✅ Profile updated successfully:', result);
-            
+
             // Clear file states after successful upload
             setLogoFile(null);
             setInvoiceTemplateFile(null);
@@ -625,11 +626,11 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
             setProFormaTemplateFile(null);
             setSsgCertFile(null);
             setSsgPrivateKeyFile(null);
-            
+
             // Update the profile with response data to get correct file URLs
             if (result.data && result.data.profile) {
                 setFormData(result.data.profile);
-                
+
                 // Update the training provider profile in the LMS context for header logo
                 updateTrainingProviderProfile({
                     companyLogoUrl: result.data.profile.companyLogoUrl,
@@ -648,14 +649,14 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                     console.log(`🎨 Re-applied color after save: ${formData.colorScheme}`);
                 }
             }
-            
+
             // Update the profile with new data and exit edit mode
             onUpdate(profile.id, formData);
             setIsEditing(false);
-            
+
             // Show success message (you can add toast notification here)
             alert('Profile updated successfully!');
-            
+
         } catch (error) {
             console.error('❌ Failed to update profile:', error);
             alert(`Failed to update profile: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -666,7 +667,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
 
     return (
         <>
-            <Card className="p-8">
+            <Card className="p-8 dark:bg-gray-800 dark:border-gray-700">
                 <div className="flex flex-col sm:flex-row items-center gap-6">
                     <div className="flex-shrink-0 text-center">
                         <div className="relative group w-24 h-24">
@@ -706,16 +707,16 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                 onClick={handleGenerateLogo}
                                 disabled={isGeneratingLogo}
                             >
-                                {isGeneratingLogo ? <Spinner size="sm"/> : 'Generate Logo'}
+                                {isGeneratingLogo ? <Spinner size="sm" /> : 'Generate Logo'}
                             </Button>
                         )}
                     </div>
-                    
+
                     <div className="flex-grow text-center sm:text-left">
                         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                             <div>
-                                <h1 className="text-3xl font-bold text-on-surface">{formData.companyName}</h1>
-                                <p className="text-subtle text-lg">{formData.companyShortname}</p>
+                                <h1 className="text-3xl font-bold text-on-surface dark:text-white">{formData.companyName}</h1>
+                                <p className="text-subtle text-lg dark:text-gray-400">{formData.companyShortname}</p>
                             </div>
                             <div className="flex gap-2">
                                 {isEditing ? (
@@ -734,7 +735,10 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                         </Button>
                                     </>
                                 ) : (
-                                    <Button variant="ghost" onClick={() => setIsEditing(true)}>
+                                    <Button
+                                        className="!text-white"
+                                        onClick={() => setIsEditing(true)}
+                                    >
                                         <Icon name={IconName.Edit} className="w-4 h-4 mr-2" />
                                         Edit Profile
                                     </Button>
@@ -743,9 +747,9 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                         </div>
                     </div>
                 </div>
-                
-                <div className="border-t my-6"></div>
-                <h2 className="text-xl font-bold mb-4">Company Details</h2>
+
+                <div className="border-t my-6 dark:border-gray-700"></div>
+                <h2 className="text-xl font-bold mb-4 dark:text-white">Company Details</h2>
                 {isEditing ? (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
@@ -775,7 +779,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                         </div>
                     </div>
                 )}
-                
+
                 <div className="border-t my-6"></div>
                 <h2 className="text-xl font-bold mb-4">Contact Person</h2>
                 {isEditing ? (
@@ -807,129 +811,135 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                     Configure your API keys and select the model to use for each provider. The default provider is Anthropic (Claude).
                 </p>
                 <div className="space-y-4">
-                {FIXED_API_KEY_NAMES.map((keyName) => {
-                    const keyValue = (formData.apiKeys || {})[keyName] || '';
-                    const selectedModel = (formData.apiKeyModels || {})[keyName] || API_KEY_CONFIGS[keyName]?.defaultModel || '';
-                    const isVisible = visibleApiKeys[keyName];
-                    const config = API_KEY_CONFIGS[keyName];
+                    {FIXED_API_KEY_NAMES.map((keyName) => {
+                        const keyValue = (formData.apiKeys || {})[keyName] || '';
+                        // Fix for allowing "None" (empty string) selection:
+                        // Only fallback to default if the key is NOT present in apiKeyModels
+                        const selectedModel = (formData.apiKeyModels && keyName in formData.apiKeyModels)
+                            ? formData.apiKeyModels[keyName]
+                            : (API_KEY_CONFIGS[keyName]?.defaultModel || '');
 
-                    return (
-                        <div
-                            key={keyName}
-                            className="p-4 rounded-lg border border-gray-300 dark:border-gray-600 bg-surface"
-                        >
-                            {/* Header with Provider Name and Configured Badge */}
-                            <div className="flex items-center justify-between mb-3">
-                                <span className="font-semibold text-on-surface">
-                                    {config?.label || keyName}
-                                </span>
-                                {keyValue && (
-                                    <span className="text-sm text-green-600 dark:text-green-400 flex items-center gap-1.5">
-                                        <span className="w-2 h-2 bg-green-500 rounded-full"></span>
-                                        Configured
+                        const isVisible = visibleApiKeys[keyName];
+                        const config = API_KEY_CONFIGS[keyName];
+
+                        return (
+                            <div
+                                key={keyName}
+                                className="p-4 rounded-lg border border-gray-300 dark:border-gray-600 bg-surface"
+                            >
+                                {/* Header with Provider Name and Configured Badge */}
+                                <div className="flex items-center justify-between mb-3">
+                                    <span className="font-semibold text-on-surface">
+                                        {config?.label || keyName}
                                     </span>
-                                )}
-                            </div>
+                                    {keyValue && (
+                                        <span className="text-sm text-green-600 dark:text-green-400 flex items-center gap-1.5">
+                                            <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+                                            Configured
+                                        </span>
+                                    )}
+                                </div>
 
-                            {/* API Key and Model side by side */}
-                            <div className="flex flex-col sm:flex-row gap-3">
-                                {/* API Key Input */}
-                                <div className="flex-1">
-                                    <label className="block text-xs text-subtle mb-1">API Key</label>
-                                    {isEditing ? (
-                                        <div className="relative">
-                                            <input
-                                                type={isVisible ? "text" : "password"}
-                                                value={keyValue}
-                                                onChange={(e) => {
-                                                    const newValue = e.target.value;
-                                                    setFormData(prev => ({
-                                                        ...prev,
-                                                        apiKeys: {
-                                                            ...(prev.apiKeys || {}),
-                                                            [keyName]: newValue
-                                                        }
-                                                    }));
-                                                }}
-                                                placeholder="Enter API key..."
-                                                className="w-full px-3 py-2 text-on-surface bg-surface border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent pr-10"
-                                            />
-                                            <button
-                                                type="button"
-                                                onClick={() => setVisibleApiKeys(prev => ({ ...prev, [keyName]: !prev[keyName] }))}
-                                                className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-1"
-                                            >
-                                                <Icon
-                                                    name={isVisible ? IconName.EyeOff : IconName.Eye}
-                                                    className="w-4 h-4"
+                                {/* API Key and Model side by side */}
+                                <div className="flex flex-col sm:flex-row gap-3">
+                                    {/* API Key Input */}
+                                    <div className="flex-1">
+                                        <label className="block text-xs text-subtle mb-1">API Key</label>
+                                        {isEditing ? (
+                                            <div className="relative">
+                                                <input
+                                                    type={isVisible ? "text" : "password"}
+                                                    value={keyValue}
+                                                    onChange={(e) => {
+                                                        const newValue = e.target.value;
+                                                        setFormData(prev => ({
+                                                            ...prev,
+                                                            apiKeys: {
+                                                                ...(prev.apiKeys || {}),
+                                                                [keyName]: newValue
+                                                            }
+                                                        }));
+                                                    }}
+                                                    placeholder="Enter API key..."
+                                                    className="w-full px-3 py-2 text-on-surface bg-surface border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent pr-10"
                                                 />
-                                            </button>
-                                        </div>
-                                    ) : (
-                                        <div className="flex items-center gap-2 px-3 py-2 bg-surface border border-gray-300 dark:border-gray-600 rounded-md">
-                                            <span className="flex-grow text-on-surface font-mono text-sm truncate">
-                                                {keyValue ? (
-                                                    isVisible ? keyValue : `••••••••••••••••••••${keyValue.slice(-4)}`
-                                                ) : (
-                                                    <span className="text-gray-500 italic">Not set</span>
-                                                )}
-                                            </span>
-                                            {keyValue && (
                                                 <button
                                                     type="button"
                                                     onClick={() => setVisibleApiKeys(prev => ({ ...prev, [keyName]: !prev[keyName] }))}
-                                                    className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-1 flex-shrink-0"
+                                                    className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-1"
                                                 >
                                                     <Icon
                                                         name={isVisible ? IconName.EyeOff : IconName.Eye}
                                                         className="w-4 h-4"
                                                     />
                                                 </button>
-                                            )}
-                                        </div>
-                                    )}
-                                </div>
-
-                                {/* Model Dropdown */}
-                                <div className="sm:w-48 flex-shrink-0">
-                                    <label className="block text-xs text-subtle mb-1">Model</label>
-                                    {isEditing ? (
-                                        <select
-                                            value={selectedModel}
-                                            onChange={(e) => {
-                                                setFormData(prev => ({
-                                                    ...prev,
-                                                    apiKeyModels: {
-                                                        ...(prev.apiKeyModels || {}),
-                                                        [keyName]: e.target.value
-                                                    }
-                                                }));
-                                            }}
-                                            className="w-full px-3 py-2 text-on-surface bg-surface border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-                                            disabled={!keyValue}
-                                        >
-                                            {config?.models.map((model) => (
-                                                <option key={model.value} value={model.value}>
-                                                    {model.label}
-                                                </option>
-                                            ))}
-                                        </select>
-                                    ) : (
-                                        <div className="px-3 py-2 bg-surface border border-gray-300 dark:border-gray-600 rounded-md">
-                                            <span className="text-on-surface text-sm">
-                                                {keyValue ? (
-                                                    config?.models.find(m => m.value === selectedModel)?.label || selectedModel
-                                                ) : (
-                                                    <span className="text-gray-500 italic">-</span>
+                                            </div>
+                                        ) : (
+                                            <div className="flex items-center gap-2 px-3 py-2 bg-surface border border-gray-300 dark:border-gray-600 rounded-md">
+                                                <span className="flex-grow text-on-surface font-mono text-sm truncate">
+                                                    {keyValue ? (
+                                                        isVisible ? keyValue : `••••••••••••••••••••${keyValue.slice(-4)}`
+                                                    ) : (
+                                                        <span className="text-gray-500 italic">Not set</span>
+                                                    )}
+                                                </span>
+                                                {keyValue && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setVisibleApiKeys(prev => ({ ...prev, [keyName]: !prev[keyName] }))}
+                                                        className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-1 flex-shrink-0"
+                                                    >
+                                                        <Icon
+                                                            name={isVisible ? IconName.EyeOff : IconName.Eye}
+                                                            className="w-4 h-4"
+                                                        />
+                                                    </button>
                                                 )}
-                                            </span>
-                                        </div>
-                                    )}
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Model Dropdown */}
+                                    <div className="sm:w-48 flex-shrink-0">
+                                        <label className="block text-xs text-subtle mb-1">Model</label>
+                                        {isEditing ? (
+                                            <select
+                                                value={selectedModel}
+                                                onChange={(e) => {
+                                                    setFormData(prev => ({
+                                                        ...prev,
+                                                        apiKeyModels: {
+                                                            ...(prev.apiKeyModels || {}),
+                                                            [keyName]: e.target.value
+                                                        }
+                                                    }));
+                                                }}
+                                                className="w-full px-3 py-2 text-on-surface bg-surface border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                                                disabled={!keyValue}
+                                            >
+                                                <option value="">None</option>
+                                                {config?.models.map((model) => (
+                                                    <option key={model.value} value={model.value}>
+                                                        {model.label}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        ) : (
+                                            <div className="px-3 py-2 bg-surface border border-gray-300 dark:border-gray-600 rounded-md">
+                                                <span className="text-on-surface text-sm">
+                                                    {keyValue ? (
+                                                        selectedModel === '' ? 'None' : (config?.models.find(m => m.value === selectedModel)?.label || selectedModel)
+                                                    ) : (
+                                                        <span className="text-gray-500 italic">-</span>
+                                                    )}
+                                                </span>
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                    );
-                })}
+                        );
+                    })}
                 </div>
 
                 <div className="border-t my-6"></div>
@@ -939,147 +949,147 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                     {/* Invoice Template */}
                     <div className="flex justify-between items-center p-3 bg-surface-elevated rounded-md border border-default">
                         <div>
-                        <p className="font-semibold">Invoice Template</p>
-                        <p className="text-xs text-subtle">
-                            {(() => {
-                                let displayText;
-                                if (invoiceTemplateFile) {
-                                    // For newly selected files, clean the name to remove double extensions
-                                    displayText = getCleanDisplayName(invoiceTemplateFile.name);
-                                    console.log(`🔍 Display - invoiceTemplateFile.name: "${invoiceTemplateFile.name}" -> cleaned: "${displayText}"`);
-                                } else if (formData.invoiceTemplateUrl) {
-                                    // For existing files, get filename from URL and clean it (remove timestamp and double extensions)
-                                    const filename = formData.invoiceTemplateUrl.split('/').pop() || '';
-                                    displayText = getCleanDisplayName(filename);
-                                    console.log(`🔍 Display - formData.invoiceTemplateUrl: "${formData.invoiceTemplateUrl}" -> filename: "${filename}" -> cleaned: "${displayText}"`);
-                                } else {
-                                    displayText = 'No template uploaded';
-                                }
-                                return displayText;
-                            })()}
-                        </p>
+                            <p className="font-semibold">Invoice Template</p>
+                            <p className="text-xs text-subtle">
+                                {(() => {
+                                    let displayText;
+                                    if (invoiceTemplateFile) {
+                                        // For newly selected files, clean the name to remove double extensions
+                                        displayText = getCleanDisplayName(invoiceTemplateFile.name);
+                                        console.log(`🔍 Display - invoiceTemplateFile.name: "${invoiceTemplateFile.name}" -> cleaned: "${displayText}"`);
+                                    } else if (formData.invoiceTemplateUrl) {
+                                        // For existing files, get filename from URL and clean it (remove timestamp and double extensions)
+                                        const filename = formData.invoiceTemplateUrl.split('/').pop() || '';
+                                        displayText = getCleanDisplayName(filename);
+                                        console.log(`🔍 Display - formData.invoiceTemplateUrl: "${formData.invoiceTemplateUrl}" -> filename: "${filename}" -> cleaned: "${displayText}"`);
+                                    } else {
+                                        displayText = 'No template uploaded';
+                                    }
+                                    return displayText;
+                                })()}
+                            </p>
                         </div>
                         {isEditing && (
-                        <>
-                            <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => document.getElementById('invoice-upload')?.click()}
-                            >
-                            <Icon name={IconName.Upload} className="w-4 h-4 mr-2" />
-                            Upload
-                            </Button>
-                            <input
-                            type="file"
-                            id="invoice-upload"
-                            className="hidden"
-                            accept="*/*"
-                            onChange={(e) => handleTemplateUpload(e, 'invoiceTemplateUrl')}
-                            />
-                        </>
+                            <>
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => document.getElementById('invoice-upload')?.click()}
+                                >
+                                    <Icon name={IconName.Upload} className="w-4 h-4 mr-2" />
+                                    Upload
+                                </Button>
+                                <input
+                                    type="file"
+                                    id="invoice-upload"
+                                    className="hidden"
+                                    accept="*/*"
+                                    onChange={(e) => handleTemplateUpload(e, 'invoiceTemplateUrl')}
+                                />
+                            </>
                         )}
                     </div>
 
                     {/* Receipt Template */}
                     <div className="flex justify-between items-center p-3 bg-surface-elevated rounded-md border border-default">
                         <div>
-                        <p className="font-semibold">Receipt Template</p>
-                        <p className="text-xs text-subtle">
-                            {receiptTemplateFile 
-                                ? getCleanDisplayName(receiptTemplateFile.name)
-                                : formData.receiptTemplateUrl
-                                    ? getCleanDisplayName(formData.receiptTemplateUrl.split('/').pop() || '')
-                                    : 'No template uploaded'}
-                        </p>
+                            <p className="font-semibold">Receipt Template</p>
+                            <p className="text-xs text-subtle">
+                                {receiptTemplateFile
+                                    ? getCleanDisplayName(receiptTemplateFile.name)
+                                    : formData.receiptTemplateUrl
+                                        ? getCleanDisplayName(formData.receiptTemplateUrl.split('/').pop() || '')
+                                        : 'No template uploaded'}
+                            </p>
                         </div>
                         {isEditing && (
-                        <>
-                            <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => document.getElementById('receipt-upload')?.click()}
-                            >
-                            <Icon name={IconName.Upload} className="w-4 h-4 mr-2" />
-                            Upload
-                            </Button>
-                            <input
-                            type="file"
-                            id="receipt-upload"
-                            className="hidden"
-                            accept="*/*"
-                            onChange={(e) => handleTemplateUpload(e, 'receiptTemplateUrl')}
-                            />
-                        </>
+                            <>
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => document.getElementById('receipt-upload')?.click()}
+                                >
+                                    <Icon name={IconName.Upload} className="w-4 h-4 mr-2" />
+                                    Upload
+                                </Button>
+                                <input
+                                    type="file"
+                                    id="receipt-upload"
+                                    className="hidden"
+                                    accept="*/*"
+                                    onChange={(e) => handleTemplateUpload(e, 'receiptTemplateUrl')}
+                                />
+                            </>
                         )}
                     </div>
 
                     {/* Certificate Template */}
                     <div className="flex justify-between items-center p-3 bg-surface-elevated rounded-md border border-default">
                         <div>
-                        <p className="font-semibold">Certificate Template</p>
-                        <p className="text-xs text-subtle">
-                            {certificateTemplateFile 
-                                ? getCleanDisplayName(certificateTemplateFile.name)
-                                : formData.certificateTemplateUrl
-                                    ? getCleanDisplayName(formData.certificateTemplateUrl.split('/').pop() || '')
-                                    : 'No template uploaded'}
-                        </p>
+                            <p className="font-semibold">Certificate Template</p>
+                            <p className="text-xs text-subtle">
+                                {certificateTemplateFile
+                                    ? getCleanDisplayName(certificateTemplateFile.name)
+                                    : formData.certificateTemplateUrl
+                                        ? getCleanDisplayName(formData.certificateTemplateUrl.split('/').pop() || '')
+                                        : 'No template uploaded'}
+                            </p>
                         </div>
                         {isEditing && (
-                        <>
-                            <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => document.getElementById('certificate-upload')?.click()}
-                            >
-                            <Icon name={IconName.Upload} className="w-4 h-4 mr-2" />
-                            Upload
-                            </Button>
-                            <input
-                            type="file"
-                            id="certificate-upload"
-                            className="hidden"
-                            accept="*/*"
-                            onChange={(e) => handleTemplateUpload(e, 'certificateTemplateUrl')}
-                            />
-                        </>
+                            <>
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => document.getElementById('certificate-upload')?.click()}
+                                >
+                                    <Icon name={IconName.Upload} className="w-4 h-4 mr-2" />
+                                    Upload
+                                </Button>
+                                <input
+                                    type="file"
+                                    id="certificate-upload"
+                                    className="hidden"
+                                    accept="*/*"
+                                    onChange={(e) => handleTemplateUpload(e, 'certificateTemplateUrl')}
+                                />
+                            </>
                         )}
                     </div>
 
                     {/* Pro Forma Invoice Template */}
                     <div className="flex justify-between items-center p-3 bg-surface-elevated rounded-md border border-default">
                         <div>
-                        <p className="font-semibold">Pro Forma Invoice Template</p>
-                        <p className="text-xs text-subtle">
-                            {proFormaTemplateFile 
-                                ? getCleanDisplayName(proFormaTemplateFile.name)
-                                : formData.proFormaInvoiceTemplateUrl
-                                    ? getCleanDisplayName(formData.proFormaInvoiceTemplateUrl.split('/').pop() || '')
-                                    : 'No template uploaded'}
-                        </p>
+                            <p className="font-semibold">Pro Forma Invoice Template</p>
+                            <p className="text-xs text-subtle">
+                                {proFormaTemplateFile
+                                    ? getCleanDisplayName(proFormaTemplateFile.name)
+                                    : formData.proFormaInvoiceTemplateUrl
+                                        ? getCleanDisplayName(formData.proFormaInvoiceTemplateUrl.split('/').pop() || '')
+                                        : 'No template uploaded'}
+                            </p>
                         </div>
                         {isEditing && (
-                        <>
-                            <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() =>
-                                document.getElementById('pro-forma-invoice-upload')?.click()
-                            }
-                            >
-                            <Icon name={IconName.Upload} className="w-4 h-4 mr-2" />
-                            Upload
-                            </Button>
-                            <input
-                            type="file"
-                            id="pro-forma-invoice-upload"
-                            className="hidden"
-                            accept="*/*"
-                            onChange={(e) =>
-                                handleTemplateUpload(e, 'proFormaInvoiceTemplateUrl')
-                            }
-                            />
-                        </>
+                            <>
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() =>
+                                        document.getElementById('pro-forma-invoice-upload')?.click()
+                                    }
+                                >
+                                    <Icon name={IconName.Upload} className="w-4 h-4 mr-2" />
+                                    Upload
+                                </Button>
+                                <input
+                                    type="file"
+                                    id="pro-forma-invoice-upload"
+                                    className="hidden"
+                                    accept="*/*"
+                                    onChange={(e) =>
+                                        handleTemplateUpload(e, 'proFormaInvoiceTemplateUrl')
+                                    }
+                                />
+                            </>
                         )}
                     </div>
                 </div>
@@ -1088,136 +1098,136 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
 
                 <h2 className="text-xl font-bold mb-4">SSG Developer Authorisation</h2>
                 {isEditing ? (
-                <div className="space-y-4">
-                    {/* Cert File */}
-                    <div>
-                    <label className="block text-sm font-medium text-on-surface-secondary mb-1 font-semibold">
-                        Self Signing Cert File
-                    </label>
-                    <div className="flex items-center gap-2 p-2 bg-surface-elevated rounded-md border border-default">
-                        <span className="text-sm text-on-surface-secondary flex-grow">
-                        {ssgCertFile
-                            ? getCleanDisplayName(ssgCertFile.name)
-                            : formData.ssgCertFile?.split('/').pop() ? getCleanDisplayName(formData.ssgCertFile.split('/').pop() || '') : 'No file uploaded'}
-                        </span>
-                        <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => document.getElementById('ssg-cert-upload')?.click()}
-                        >
-                        <Icon name={IconName.Upload} className="w-4 h-4 mr-2" />
-                        Upload
-                        </Button>
-                        <input
-                        type="file"
-                        id="ssg-cert-upload"
-                        accept="*/*"
-                        className="hidden"
-                        onChange={(e) => handleTemplateUpload(e, 'ssgCertFile' as any)}
-                        />
-                    </div>
-                    </div>
+                    <div className="space-y-4">
+                        {/* Cert File */}
+                        <div>
+                            <label className="block text-sm font-medium text-on-surface-secondary mb-1 font-semibold">
+                                Self Signing Cert File
+                            </label>
+                            <div className="flex items-center gap-2 p-2 bg-surface-elevated rounded-md border border-default">
+                                <span className="text-sm text-on-surface-secondary flex-grow">
+                                    {ssgCertFile
+                                        ? getCleanDisplayName(ssgCertFile.name)
+                                        : formData.ssgCertFile?.split('/').pop() ? getCleanDisplayName(formData.ssgCertFile.split('/').pop() || '') : 'No file uploaded'}
+                                </span>
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => document.getElementById('ssg-cert-upload')?.click()}
+                                >
+                                    <Icon name={IconName.Upload} className="w-4 h-4 mr-2" />
+                                    Upload
+                                </Button>
+                                <input
+                                    type="file"
+                                    id="ssg-cert-upload"
+                                    accept="*/*"
+                                    className="hidden"
+                                    onChange={(e) => handleTemplateUpload(e, 'ssgCertFile' as any)}
+                                />
+                            </div>
+                        </div>
 
-                    {/* Private Key File */}
-                    <div>
-                    <label className="block text-sm font-medium text-on-surface-secondary mb-1 font-semibold">
-                        Private Key File
-                    </label>
-                    <div className="flex items-center gap-2 p-2 bg-surface-elevated rounded-md border border-default">
-                        <span className="text-sm text-on-surface-secondary flex-grow">
-                        {ssgPrivateKeyFile
-                            ? getCleanDisplayName(ssgPrivateKeyFile.name)
-                            : formData.ssgPrivateKeyFile?.split('/').pop() ? getCleanDisplayName(formData.ssgPrivateKeyFile.split('/').pop() || '') : 'No file uploaded'}
-                        </span>
-                        <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() =>
-                            document.getElementById('ssg-privatekey-upload')?.click()
-                        }
-                        >
-                        <Icon name={IconName.Upload} className="w-4 h-4 mr-2" />
-                        Upload
-                        </Button>
-                        <input
-                        type="file"
-                        id="ssg-privatekey-upload"
-                        accept="*/*"
-                        className="hidden"
-                        onChange={(e) => handleTemplateUpload(e, 'ssgPrivateKeyFile' as any)}
-                        />
-                    </div>
-                    </div>
+                        {/* Private Key File */}
+                        <div>
+                            <label className="block text-sm font-medium text-on-surface-secondary mb-1 font-semibold">
+                                Private Key File
+                            </label>
+                            <div className="flex items-center gap-2 p-2 bg-surface-elevated rounded-md border border-default">
+                                <span className="text-sm text-on-surface-secondary flex-grow">
+                                    {ssgPrivateKeyFile
+                                        ? getCleanDisplayName(ssgPrivateKeyFile.name)
+                                        : formData.ssgPrivateKeyFile?.split('/').pop() ? getCleanDisplayName(formData.ssgPrivateKeyFile.split('/').pop() || '') : 'No file uploaded'}
+                                </span>
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() =>
+                                        document.getElementById('ssg-privatekey-upload')?.click()
+                                    }
+                                >
+                                    <Icon name={IconName.Upload} className="w-4 h-4 mr-2" />
+                                    Upload
+                                </Button>
+                                <input
+                                    type="file"
+                                    id="ssg-privatekey-upload"
+                                    accept="*/*"
+                                    className="hidden"
+                                    onChange={(e) => handleTemplateUpload(e, 'ssgPrivateKeyFile' as any)}
+                                />
+                            </div>
+                        </div>
 
-                    {/* Encryption Key */}
-                    <div>
-                    <label
-                        htmlFor="ssgEncryptionKey"
-                        className="block text-sm font-medium text-on-surface-secondary mb-1 font-semibold"
-                    >
-                        Encryption Key
-                    </label>
-                    <div className="relative">
-                        <input
-                            type={isEncryptionKeyVisible ? "text" : "password"}
-                            id="ssgEncryptionKey"
-                            name="ssgEncryptionKey"
-                            value={formData.ssgEncryptionKey || ''}
-                            onChange={(e) =>
-                            setFormData((prev) => ({ ...prev, ssgEncryptionKey: e.target.value }))
-                            }
-                            className={`${inputClasses} pr-10`}
-                            placeholder="Enter your encryption key"
-                        />
-                        <button
-                            type="button"
-                            onClick={() => setIsEncryptionKeyVisible(!isEncryptionKeyVisible)}
-                            className="absolute right-3 top-1/2 transform -translate-y-1/2 text-subtle hover:text-primary"
-                        >
-                            <Icon
-                                name={isEncryptionKeyVisible ? IconName.EyeOff : IconName.Eye}
-                                className="w-4 h-4"
-                            />
-                        </button>
-                    </div>
-                    </div>
-                </div>
-                ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                    <ProfileBioItem
-                    label="Self Signing Cert File"
-                    value={formData.ssgCertFile ? getCleanDisplayName(formData.ssgCertFile.split('/').pop() || '') : 'Not Uploaded'}
-                    />
-                    <ProfileBioItem
-                    label="Private Key File"
-                    value={formData.ssgPrivateKeyFile ? getCleanDisplayName(formData.ssgPrivateKeyFile.split('/').pop() || '') : 'Not Uploaded'}
-                    />
-                    <ProfileBioItem
-                    label="Encryption Key"
-                    value={
-                        <div className="flex items-center gap-2">
-                            <span className="font-semibold text-on-surface break-words">
-                                {formData.ssgEncryptionKey 
-                                    ? (isEncryptionKeyVisible ? formData.ssgEncryptionKey : '••••••••••••••••')
-                                    : 'Not Set'
-                                }
-                            </span>
-                            {formData.ssgEncryptionKey && (
+                        {/* Encryption Key */}
+                        <div>
+                            <label
+                                htmlFor="ssgEncryptionKey"
+                                className="block text-sm font-medium text-on-surface-secondary mb-1 font-semibold"
+                            >
+                                Encryption Key
+                            </label>
+                            <div className="relative">
+                                <input
+                                    type={isEncryptionKeyVisible ? "text" : "password"}
+                                    id="ssgEncryptionKey"
+                                    name="ssgEncryptionKey"
+                                    value={formData.ssgEncryptionKey || ''}
+                                    onChange={(e) =>
+                                        setFormData((prev) => ({ ...prev, ssgEncryptionKey: e.target.value }))
+                                    }
+                                    className={`${inputClasses} pr-10`}
+                                    placeholder="Enter your encryption key"
+                                />
                                 <button
                                     type="button"
                                     onClick={() => setIsEncryptionKeyVisible(!isEncryptionKeyVisible)}
-                                    className="text-subtle hover:text-primary p-1 rounded-full"
+                                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-subtle hover:text-primary"
                                 >
                                     <Icon
                                         name={isEncryptionKeyVisible ? IconName.EyeOff : IconName.Eye}
                                         className="w-4 h-4"
                                     />
                                 </button>
-                            )}
+                            </div>
                         </div>
-                    }
-                    />
-                </div>
+                    </div>
+                ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                        <ProfileBioItem
+                            label="Self Signing Cert File"
+                            value={formData.ssgCertFile ? getCleanDisplayName(formData.ssgCertFile.split('/').pop() || '') : 'Not Uploaded'}
+                        />
+                        <ProfileBioItem
+                            label="Private Key File"
+                            value={formData.ssgPrivateKeyFile ? getCleanDisplayName(formData.ssgPrivateKeyFile.split('/').pop() || '') : 'Not Uploaded'}
+                        />
+                        <ProfileBioItem
+                            label="Encryption Key"
+                            value={
+                                <div className="flex items-center gap-2">
+                                    <span className="font-semibold text-on-surface break-words">
+                                        {formData.ssgEncryptionKey
+                                            ? (isEncryptionKeyVisible ? formData.ssgEncryptionKey : '••••••••••••••••')
+                                            : 'Not Set'
+                                        }
+                                    </span>
+                                    {formData.ssgEncryptionKey && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setIsEncryptionKeyVisible(!isEncryptionKeyVisible)}
+                                            className="text-subtle hover:text-primary p-1 rounded-full"
+                                        >
+                                            <Icon
+                                                name={isEncryptionKeyVisible ? IconName.EyeOff : IconName.Eye}
+                                                className="w-4 h-4"
+                                            />
+                                        </button>
+                                    )}
+                                </div>
+                            }
+                        />
+                    </div>
                 )}
 
                 <div className="border-t my-6"></div>
@@ -1266,154 +1276,142 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                 <div className="border-t my-6"></div>
                 <h2 className="text-xl font-bold mb-4">Security</h2>
                 <div className="space-y-4">
-                {/* Auto Mask Sensitive Data */}
-                <div className="flex justify-between items-center p-3 bg-surface-elevated rounded-md border border-default">
-                    <p className="font-semibold text-sm text-on-surface">Auto Mask Sensitive Data</p>
-                    {isEditing ? (
-                    <button
-                        type="button"
-                        onClick={() => handleToggleChange('securitySettings', 'autoMaskSensitiveData')}
-                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                        formData.securitySettings.autoMaskSensitiveData ? 'bg-primary' : 'bg-gray-200'
-                        }`}
-                    >
-                        <span
-                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                            formData.securitySettings.autoMaskSensitiveData ? 'translate-x-6' : 'translate-x-1'
-                        }`}
-                        />
-                    </button>
-                    ) : (
-                    <span
-                        className={`text-sm font-medium ${
-                        formData.securitySettings.autoMaskSensitiveData ? 'text-green-600' : 'text-gray-400'
-                        }`}
-                    >
-                        {formData.securitySettings.autoMaskSensitiveData ? 'Enabled' : 'Disabled'}
-                    </span>
-                    )}
-                </div>
-
-                {/* Auto Delete After 6 Months */}
-                <div className="flex justify-between items-center p-3 bg-surface-elevated rounded-md border border-default">
-                    <p className="font-semibold text-sm text-on-surface">Auto Delete After 6 Months</p>
-                    {isEditing ? (
-                    <button
-                        type="button"
-                        onClick={() => handleToggleChange('securitySettings', 'autoDeleteAfter6Months')}
-                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                        formData.securitySettings.autoDeleteAfter6Months ? 'bg-primary' : 'bg-gray-200'
-                        }`}
-                    >
-                        <span
-                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                            formData.securitySettings.autoDeleteAfter6Months ? 'translate-x-6' : 'translate-x-1'
-                        }`}
-                        />
-                    </button>
-                    ) : (
-                    <span
-                        className={`text-sm font-medium ${
-                        formData.securitySettings.autoDeleteAfter6Months ? 'text-green-600' : 'text-gray-400'
-                        }`}
-                    >
-                        {formData.securitySettings.autoDeleteAfter6Months ? 'Enabled' : 'Disabled'}
-                    </span>
-                    )}
-                </div>
-
-                {/* Enable OTP Login */}
-                <div className="flex justify-between items-center p-3 bg-surface-elevated rounded-md border border-default">
-                    <p className="font-semibold text-sm text-on-surface">Enable OTP Login</p>
-                    {isEditing ? (
-                    <button
-                        type="button"
-                        onClick={() => handleToggleChange('securitySettings', 'enableOtpLogin')}
-                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                        formData.securitySettings.enableOtpLogin ? 'bg-primary' : 'bg-gray-200'
-                        }`}
-                    >
-                        <span
-                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                            formData.securitySettings.enableOtpLogin ? 'translate-x-6' : 'translate-x-1'
-                        }`}
-                        />
-                    </button>
-                    ) : (
-                    <span
-                        className={`text-sm font-medium ${
-                        formData.securitySettings.enableOtpLogin ? 'text-green-600' : 'text-gray-400'
-                        }`}
-                    >
-                        {formData.securitySettings.enableOtpLogin ? 'Enabled' : 'Disabled'}
-                    </span>
-                    )}
-                </div>
-
-                {/* Enable Default OTP (only if OTP login enabled) */}
-                {formData.securitySettings.enableOtpLogin && (
-                    <>
+                    {/* Auto Mask Sensitive Data */}
                     <div className="flex justify-between items-center p-3 bg-surface-elevated rounded-md border border-default">
-                        <p className="font-semibold text-sm text-on-surface">Enable Default OTP</p>
+                        <p className="font-semibold text-sm text-on-surface">Auto Mask Sensitive Data</p>
                         {isEditing ? (
-                        <button
-                            type="button"
-                            onClick={() => handleToggleChange('securitySettings', 'enableDefaultOtp')}
-                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                            formData.securitySettings.enableDefaultOtp ? 'bg-primary' : 'bg-gray-200'
-                            }`}
-                        >
-                            <span
-                            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                                formData.securitySettings.enableDefaultOtp ? 'translate-x-6' : 'translate-x-1'
-                            }`}
-                            />
-                        </button>
+                            <button
+                                type="button"
+                                onClick={() => handleToggleChange('securitySettings', 'autoMaskSensitiveData')}
+                                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${formData.securitySettings.autoMaskSensitiveData ? 'bg-primary' : 'bg-gray-200'
+                                    }`}
+                            >
+                                <span
+                                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${formData.securitySettings.autoMaskSensitiveData ? 'translate-x-6' : 'translate-x-1'
+                                        }`}
+                                />
+                            </button>
                         ) : (
-                        <span
-                            className={`text-sm font-medium ${
-                            formData.securitySettings.enableDefaultOtp ? 'text-green-600' : 'text-gray-400'
-                            }`}
-                        >
-                            {formData.securitySettings.enableDefaultOtp ? 'Enabled' : 'Disabled'}
-                        </span>
+                            <span
+                                className={`text-sm font-medium ${formData.securitySettings.autoMaskSensitiveData ? 'text-green-600' : 'text-gray-400'
+                                    }`}
+                            >
+                                {formData.securitySettings.autoMaskSensitiveData ? 'Enabled' : 'Disabled'}
+                            </span>
                         )}
                     </div>
 
-                    {/* Default OTP Value (only if both OTP and default OTP enabled) */}
-                    {formData.securitySettings.enableDefaultOtp && (
-                        <div className="p-3 bg-surface-elevated rounded-md border border-default">
-                        <label className="block text-sm font-medium text-on-surface-secondary mb-1 font-semibold">
-                            Default OTP Value
-                        </label>
+                    {/* Auto Delete After 6 Months */}
+                    <div className="flex justify-between items-center p-3 bg-surface-elevated rounded-md border border-default">
+                        <p className="font-semibold text-sm text-on-surface">Auto Delete After 6 Months</p>
                         {isEditing ? (
-                            <input
-                            type="text"
-                            value={formData.securitySettings.defaultOtpValue || ''}
-                            onChange={(e) =>
-                                setFormData((prev) => ({
-                                ...prev,
-                                securitySettings: {
-                                    ...prev.securitySettings,
-                                    defaultOtpValue: e.target.value,
-                                },
-                                }))
-                            }
-                            className={inputClasses}
-                            placeholder="Enter default OTP value"
-                            />
+                            <button
+                                type="button"
+                                onClick={() => handleToggleChange('securitySettings', 'autoDeleteAfter6Months')}
+                                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${formData.securitySettings.autoDeleteAfter6Months ? 'bg-primary' : 'bg-gray-200'
+                                    }`}
+                            >
+                                <span
+                                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${formData.securitySettings.autoDeleteAfter6Months ? 'translate-x-6' : 'translate-x-1'
+                                        }`}
+                                />
+                            </button>
                         ) : (
-                            <p className="font-mono text-sm">
-                            {formData.securitySettings.defaultOtpValue || 'Not Set'}
-                            </p>
+                            <span
+                                className={`text-sm font-medium ${formData.securitySettings.autoDeleteAfter6Months ? 'text-green-600' : 'text-gray-400'
+                                    }`}
+                            >
+                                {formData.securitySettings.autoDeleteAfter6Months ? 'Enabled' : 'Disabled'}
+                            </span>
                         )}
-                        </div>
+                    </div>
+
+                    {/* Enable OTP Login */}
+                    <div className="flex justify-between items-center p-3 bg-surface-elevated rounded-md border border-default">
+                        <p className="font-semibold text-sm text-on-surface">Enable OTP Login</p>
+                        {isEditing ? (
+                            <button
+                                type="button"
+                                onClick={() => handleToggleChange('securitySettings', 'enableOtpLogin')}
+                                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${formData.securitySettings.enableOtpLogin ? 'bg-primary' : 'bg-gray-200'
+                                    }`}
+                            >
+                                <span
+                                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${formData.securitySettings.enableOtpLogin ? 'translate-x-6' : 'translate-x-1'
+                                        }`}
+                                />
+                            </button>
+                        ) : (
+                            <span
+                                className={`text-sm font-medium ${formData.securitySettings.enableOtpLogin ? 'text-green-600' : 'text-gray-400'
+                                    }`}
+                            >
+                                {formData.securitySettings.enableOtpLogin ? 'Enabled' : 'Disabled'}
+                            </span>
+                        )}
+                    </div>
+
+                    {/* Enable Default OTP (only if OTP login enabled) */}
+                    {formData.securitySettings.enableOtpLogin && (
+                        <>
+                            <div className="flex justify-between items-center p-3 bg-surface-elevated rounded-md border border-default">
+                                <p className="font-semibold text-sm text-on-surface">Enable Default OTP</p>
+                                {isEditing ? (
+                                    <button
+                                        type="button"
+                                        onClick={() => handleToggleChange('securitySettings', 'enableDefaultOtp')}
+                                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${formData.securitySettings.enableDefaultOtp ? 'bg-primary' : 'bg-gray-200'
+                                            }`}
+                                    >
+                                        <span
+                                            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${formData.securitySettings.enableDefaultOtp ? 'translate-x-6' : 'translate-x-1'
+                                                }`}
+                                        />
+                                    </button>
+                                ) : (
+                                    <span
+                                        className={`text-sm font-medium ${formData.securitySettings.enableDefaultOtp ? 'text-green-600' : 'text-gray-400'
+                                            }`}
+                                    >
+                                        {formData.securitySettings.enableDefaultOtp ? 'Enabled' : 'Disabled'}
+                                    </span>
+                                )}
+                            </div>
+
+                            {/* Default OTP Value (only if both OTP and default OTP enabled) */}
+                            {formData.securitySettings.enableDefaultOtp && (
+                                <div className="p-3 bg-surface-elevated rounded-md border border-default">
+                                    <label className="block text-sm font-medium text-on-surface-secondary mb-1 font-semibold">
+                                        Default OTP Value
+                                    </label>
+                                    {isEditing ? (
+                                        <input
+                                            type="text"
+                                            value={formData.securitySettings.defaultOtpValue || ''}
+                                            onChange={(e) =>
+                                                setFormData((prev) => ({
+                                                    ...prev,
+                                                    securitySettings: {
+                                                        ...prev.securitySettings,
+                                                        defaultOtpValue: e.target.value,
+                                                    },
+                                                }))
+                                            }
+                                            className={inputClasses}
+                                            placeholder="Enter default OTP value"
+                                        />
+                                    ) : (
+                                        <p className="font-mono text-sm">
+                                            {formData.securitySettings.defaultOtpValue || 'Not Set'}
+                                        </p>
+                                    )}
+                                </div>
+                            )}
+                        </>
                     )}
-                    </>
-                )}
                 </div>
 
-                
+
                 <div className="border-t my-6"></div>
                 <h2 className="text-xl font-bold mb-4">Gamification Settings</h2>
                 <div className="space-y-4 font-semibold">
@@ -1434,103 +1432,101 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                 <div className="border-t my-6"></div>
                 <h2 className="text-xl font-bold mb-4">Funding & Tax Settings</h2>
                 {isEditing ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                    {/* Normal Funding Rate */}
-                    <div>
-                    <label className="block text-sm font-medium text-on-surface-secondary mb-1">
-                        Normal Funding Rate
-                    </label>
-                    <select
-                        name="normalFunding"
-                        value={formData.fundingSettings.normalFunding}
-                        onChange={handleFundingChange}
-                        className={inputClasses}
-                    >
-                        <option value={50}>50%</option>
-                        <option value={70}>70%</option>
-                    </select>
-                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                        {/* Normal Funding Rate */}
+                        <div>
+                            <label className="block text-sm font-medium text-on-surface-secondary mb-1">
+                                Normal Funding Rate
+                            </label>
+                            <select
+                                name="normalFunding"
+                                value={formData.fundingSettings.normalFunding}
+                                onChange={handleFundingChange}
+                                className={inputClasses}
+                            >
+                                <option value={50}>50%</option>
+                                <option value={70}>70%</option>
+                            </select>
+                        </div>
 
-                    {/* Enhanced Funding Rate */}
-                    <div>
-                    <label className="block text-sm font-medium text-on-surface-secondary mb-1">
-                        Enhanced Funding Rate (%)
-                    </label>
-                    <input
-                        type="number"
-                        name="enhancedFunding"
-                        value={formData.fundingSettings.enhancedFunding}
-                        onChange={handleFundingChange}
-                        className={inputClasses}
-                        min="0"
-                    />
-                    </div>
+                        {/* Enhanced Funding Rate */}
+                        <div>
+                            <label className="block text-sm font-medium text-on-surface-secondary mb-1">
+                                Enhanced Funding Rate (%)
+                            </label>
+                            <input
+                                type="number"
+                                name="enhancedFunding"
+                                value={formData.fundingSettings.enhancedFunding}
+                                onChange={handleFundingChange}
+                                className={inputClasses}
+                                min="0"
+                            />
+                        </div>
 
-                    {/* GST Rate */}
-                    <div>
-                    <label className="block text-sm font-medium text-on-surface-secondary mb-1">
-                        GST Rate (%)
-                    </label>
-                    <input
-                        type="number"
-                        step="0.1"
-                        name="gstRate"
-                        value={formData.fundingSettings.gstRate}
-                        onChange={handleFundingChange}
-                        className={inputClasses}
-                        min="0"
-                    />
-                    </div>
+                        {/* GST Rate */}
+                        <div>
+                            <label className="block text-sm font-medium text-on-surface-secondary mb-1">
+                                GST Rate (%)
+                            </label>
+                            <input
+                                type="number"
+                                step="0.1"
+                                name="gstRate"
+                                value={formData.fundingSettings.gstRate}
+                                onChange={handleFundingChange}
+                                className={inputClasses}
+                                min="0"
+                            />
+                        </div>
 
-                    {/* GST Registered Toggle */}
-                    <div className="flex justify-between items-center p-3 bg-surface-elevated rounded-md border border-default">
-                    <label className="text-sm text-on-surface">GST Registered</label>
-                    <button
-                        type="button"
-                        onClick={() => {
-                        const newValue = !formData.fundingSettings.isGstRegistered;
-                        setFormData((prev) => ({
-                            ...prev,
-                            fundingSettings: {
-                            ...prev.fundingSettings,
-                            isGstRegistered: newValue,
-                            },
-                        }));
-                        }}
-                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                        formData.fundingSettings.isGstRegistered ? 'bg-primary' : 'bg-gray-200'
-                        }`}
-                    >
-                        <span
-                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                            formData.fundingSettings.isGstRegistered ? 'translate-x-6' : 'translate-x-1'
-                        }`}
-                        />
-                    </button>
+                        {/* GST Registered Toggle */}
+                        <div className="flex justify-between items-center p-3 bg-surface-elevated rounded-md border border-default">
+                            <label className="text-sm text-on-surface">GST Registered</label>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    const newValue = !formData.fundingSettings.isGstRegistered;
+                                    setFormData((prev) => ({
+                                        ...prev,
+                                        fundingSettings: {
+                                            ...prev.fundingSettings,
+                                            isGstRegistered: newValue,
+                                        },
+                                    }));
+                                }}
+                                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${formData.fundingSettings.isGstRegistered ? 'bg-primary' : 'bg-gray-200'
+                                    }`}
+                            >
+                                <span
+                                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${formData.fundingSettings.isGstRegistered ? 'translate-x-6' : 'translate-x-1'
+                                        }`}
+                                />
+                            </button>
+                        </div>
                     </div>
-                </div>
                 ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                    <ProfileBioItem
-                    label="Normal Funding Rate"
-                    value={`${formData.fundingSettings.normalFunding}%`}
-                    />
-                    <ProfileBioItem
-                    label="Enhanced Funding Rate"
-                    value={`${formData.fundingSettings.enhancedFunding}%`}
-                    />
-                    <ProfileBioItem
-                    label="GST Registered"
-                    value={formData.fundingSettings.isGstRegistered ? 'Yes' : 'No'}
-                    />
-                    <ProfileBioItem
-                    label="GST Rate"
-                    value={`${formData.fundingSettings.gstRate}%`}
-                    />
-                </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                        <ProfileBioItem
+                            label="Normal Funding Rate"
+                            value={`${formData.fundingSettings.normalFunding}%`}
+                        />
+                        <ProfileBioItem
+                            label="Enhanced Funding Rate"
+                            value={`${formData.fundingSettings.enhancedFunding}%`}
+                        />
+                        <ProfileBioItem
+                            label="GST Registered"
+                            value={formData.fundingSettings.isGstRegistered ? 'Yes' : 'No'}
+                        />
+                        <ProfileBioItem
+                            label="GST Rate"
+                            value={`${formData.fundingSettings.gstRate}%`}
+                        />
+                    </div>
                 )}
 
-                
+
                 <div className="border-t my-6"></div>
                 <h2 className="text-xl font-bold mb-4">Appearance</h2>
 
@@ -1559,14 +1555,12 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                         <button
                             type="button"
                             onClick={handleThemeToggle}
-                            className={`relative inline-flex h-7 w-14 items-center rounded-full transition-colors duration-300 ${
-                                themeMode === 'dark' ? 'bg-primary' : 'bg-gray-300'
-                            }`}
+                            className={`relative inline-flex h-7 w-14 items-center rounded-full transition-colors duration-300 ${themeMode === 'dark' ? 'bg-primary' : 'bg-gray-300'
+                                }`}
                         >
                             <span
-                                className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-md transition-transform duration-300 ${
-                                    themeMode === 'dark' ? 'translate-x-8' : 'translate-x-1'
-                                }`}
+                                className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-md transition-transform duration-300 ${themeMode === 'dark' ? 'translate-x-8' : 'translate-x-1'
+                                    }`}
                             />
                         </button>
                     </div>
@@ -1607,9 +1601,9 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                 </div>
 
             </Card>
-            <LoginDetailsCard 
-                loginId={formData.loginId} 
-                password={formData.password} 
+            <LoginDetailsCard
+                loginId={formData.loginId}
+                password={formData.password}
                 userId={profile.id}
                 onPasswordUpdate={(newPassword) => {
                     setFormData(prev => ({ ...prev, password: newPassword }));

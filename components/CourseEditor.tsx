@@ -10,7 +10,7 @@ import { extractFilenameFromPath } from '@utils/fileUtils';
 import { getCourseImageUrl } from '@utils/imageUtils';
 import { getApiUrl } from '@/lib/urlHelpers';
 
-const inputGhostClasses = (isTitle: boolean) => 
+const inputGhostClasses = (isTitle: boolean) =>
     `flex-grow border border-transparent hover:border-gray-300 focus:border-gray-300 rounded-md px-2 py-1 bg-transparent hover:bg-gray-50 focus:bg-gray-50 focus:outline-none w-full transition-colors ${isTitle ? 'font-bold text-xl' : 'text-base'}`;
 
 // Helper function to display original filename
@@ -42,96 +42,94 @@ const EditableTopicAccordion: React.FC<{
     // Drag-and-drop props for the topic itself
     onSelfDragStart: (e: React.DragEvent) => void;
     onSelfDragEnd: (e: React.DragEvent) => void;
-}> = ({ 
+}> = ({
     topic, onUpdateTitle, onDelete, onAddSubtopic, onUpdateSubtopic, onDeleteSubtopic,
     draggedSubtopic, dropTargetSubtopic, onSubtopicDragStart, onSubtopicDrop, onSubtopicDragOver, onSubtopicDragLeave, onSubtopicDragEnd,
     onSelfDragStart, onSelfDragEnd
 }) => {
-    const [isSubtopicsOpen, setSubtopicsOpen] = useState(true);
-    
-    return (
-        <Card className="p-0 overflow-hidden bg-white">
-            {/* Learning Unit Header */}
-            <div className="p-4 flex items-center justify-between gap-2 bg-gray-50 border-b">
-                <div
-                    draggable
-                    onDragStart={onSelfDragStart}
-                    onDragEnd={onSelfDragEnd}
-                    className="cursor-grab p-1"
-                >
-                    <Icon name={IconName.DragHandle} className="w-5 h-5 text-gray-400" />
-                </div>
-                 <input 
-                    type="text" 
-                    value={topic.title}
-                    onChange={e => onUpdateTitle(topic.id, e.target.value)}
-                    className={inputGhostClasses(true)}
-                    placeholder="Learning Unit Title"
-                />
-                <div className="flex items-center ml-auto flex-shrink-0">
-                    <button onClick={() => setSubtopicsOpen(!isSubtopicsOpen)} className="p-1.5 text-gray-500 hover:bg-gray-200 rounded-full">
-                        <Icon name={IconName.ChevronDown} className={`w-5 h-5 transition-transform ${isSubtopicsOpen ? 'rotate-180' : ''}`} />
-                    </button>
-                    <button onClick={() => onDelete(topic.id)} className="p-1.5 text-red-500 hover:bg-red-100 rounded-full">
-                        <Icon name={IconName.Delete} className="w-5 h-5"/>
-                    </button>
-                </div>
-            </div>
+        const [isSubtopicsOpen, setSubtopicsOpen] = useState(true);
 
-            {/* Subtopics (Topics within Learning Unit) */}
-            {isSubtopicsOpen && (
-                <div className="px-4 pb-4">
-                    <ul className="pt-2 space-y-2">
-                        {topic.subtopics.map(subtopic => (
-                            <li 
-                                key={subtopic.id}
-                                onDragOver={(e) => onSubtopicDragOver(e, topic.id, subtopic.id)}
-                                onDragLeave={onSubtopicDragLeave}
-                                onDrop={(e) => onSubtopicDrop(e, topic.id, subtopic.id)}
-                                className={`relative flex items-center justify-between p-1 rounded-md group transition-all duration-200 ${
-                                    draggedSubtopic?.subtopicId === subtopic.id ? 'opacity-30' : 'hover:bg-gray-100/70'
-                                } ${
-                                    dropTargetSubtopic?.subtopicId === subtopic.id ? 'pt-2 border-t-2 border-blue-500' : 'border-t-2 border-transparent'
-                                }`}
-                            >
-                                <div
-                                    draggable
-                                    onDragStart={(e) => onSubtopicDragStart(e, topic.id, subtopic.id)}
-                                    onDragEnd={onSubtopicDragEnd}
-                                    className="cursor-grab p-1"
-                                >
-                                    <Icon name={IconName.Menu} className="w-5 h-5 text-gray-400" />
-                                </div>
-                                <Icon name={IconName.FileText} className="w-5 h-5 text-green-500 mr-2 flex-shrink-0" />
-                                <input 
-                                    type="text"
-                                    value={subtopic.title}
-                                    onChange={e => onUpdateSubtopic(topic.id, subtopic.id, e.target.value)}
-                                    className={inputGhostClasses(false)}
-                                    placeholder="Topic title"
-                                />
-                                <button onClick={() => onDeleteSubtopic(topic.id, subtopic.id)} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-100 rounded-full ml-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <Icon name={IconName.Delete} className="w-4 h-4"/>
-                                </button>
-                            </li>
-                        ))}
-                         <li className="pt-2">
-                            <Button size="sm" variant="ghost" onClick={() => onAddSubtopic(topic.id)} className="text-gray-600 hover:text-blue-600">
-                                <Icon name={IconName.Add} className="w-4 h-4 mr-2"/>
-                                Add Topic
-                            </Button>
-                        </li>
-                    </ul>
+        return (
+            <Card className="p-0 overflow-hidden bg-white">
+                {/* Learning Unit Header */}
+                <div className="p-4 flex items-center justify-between gap-2 bg-gray-50 border-b">
+                    <div
+                        draggable
+                        onDragStart={onSelfDragStart}
+                        onDragEnd={onSelfDragEnd}
+                        className="cursor-grab p-1"
+                    >
+                        <Icon name={IconName.DragHandle} className="w-5 h-5 text-gray-400" />
+                    </div>
+                    <input
+                        type="text"
+                        value={topic.title}
+                        onChange={e => onUpdateTitle(topic.id, e.target.value)}
+                        className={inputGhostClasses(true)}
+                        placeholder="Learning Unit Title"
+                    />
+                    <div className="flex items-center ml-auto flex-shrink-0">
+                        <button onClick={() => setSubtopicsOpen(!isSubtopicsOpen)} className="p-1.5 text-gray-500 hover:bg-gray-200 rounded-full">
+                            <Icon name={IconName.ChevronDown} className={`w-5 h-5 transition-transform ${isSubtopicsOpen ? 'rotate-180' : ''}`} />
+                        </button>
+                        <button onClick={() => onDelete(topic.id)} className="p-1.5 text-red-500 hover:bg-red-100 rounded-full">
+                            <Icon name={IconName.Delete} className="w-5 h-5" />
+                        </button>
+                    </div>
                 </div>
-            )}
-        </Card>
-    );
-};
+
+                {/* Subtopics (Topics within Learning Unit) */}
+                {isSubtopicsOpen && (
+                    <div className="px-4 pb-4">
+                        <ul className="pt-2 space-y-2">
+                            {topic.subtopics.map(subtopic => (
+                                <li
+                                    key={subtopic.id}
+                                    onDragOver={(e) => onSubtopicDragOver(e, topic.id, subtopic.id)}
+                                    onDragLeave={onSubtopicDragLeave}
+                                    onDrop={(e) => onSubtopicDrop(e, topic.id, subtopic.id)}
+                                    className={`relative flex items-center justify-between p-1 rounded-md group transition-all duration-200 ${draggedSubtopic?.subtopicId === subtopic.id ? 'opacity-30' : 'hover:bg-gray-100/70'
+                                        } ${dropTargetSubtopic?.subtopicId === subtopic.id ? 'pt-2 border-t-2 border-blue-500' : 'border-t-2 border-transparent'
+                                        }`}
+                                >
+                                    <div
+                                        draggable
+                                        onDragStart={(e) => onSubtopicDragStart(e, topic.id, subtopic.id)}
+                                        onDragEnd={onSubtopicDragEnd}
+                                        className="cursor-grab p-1"
+                                    >
+                                        <Icon name={IconName.Menu} className="w-5 h-5 text-gray-400" />
+                                    </div>
+                                    <Icon name={IconName.FileText} className="w-5 h-5 text-green-500 mr-2 flex-shrink-0" />
+                                    <input
+                                        type="text"
+                                        value={subtopic.title}
+                                        onChange={e => onUpdateSubtopic(topic.id, subtopic.id, e.target.value)}
+                                        className={inputGhostClasses(false)}
+                                        placeholder="Topic title"
+                                    />
+                                    <button onClick={() => onDeleteSubtopic(topic.id, subtopic.id)} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-100 rounded-full ml-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <Icon name={IconName.Delete} className="w-4 h-4" />
+                                    </button>
+                                </li>
+                            ))}
+                            <li className="pt-2">
+                                <Button size="sm" variant="ghost" onClick={() => onAddSubtopic(topic.id)} className="text-gray-600 hover:text-blue-600">
+                                    <Icon name={IconName.Add} className="w-4 h-4 mr-2" />
+                                    Add Topic
+                                </Button>
+                            </li>
+                        </ul>
+                    </div>
+                )}
+            </Card>
+        );
+    };
 
 
 const CourseEditor: React.FC = () => {
     const { editingCourse, setEditingCourse, role, courseEditMode, setCourseEditMode } = useLms();
-    
+
     if (!editingCourse) {
         return <div className="flex items-center justify-center h-full"><Spinner text="Loading course editor..." /></div>;
     }
@@ -146,10 +144,10 @@ const CourseEditor: React.FC = () => {
     });
     const [isSaving, setIsSaving] = useState(false);
     const [isGeneratingImage, setIsGeneratingImage] = useState(false);
-    
+
     // State to track preview URL for cleanup
     const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
-    
+
 
     // State to track deleted assessments for update operations
     const [deletedAssessments, setDeletedAssessments] = useState<string[]>([]);
@@ -173,7 +171,7 @@ const CourseEditor: React.FC = () => {
         assessmentFiles: [],
         assessmentFilesById: {}
     });
-    
+
     // Drag and Drop state for Topics (Learning Units)
     const [draggedTopicId, setDraggedTopicId] = useState<string | null>(null);
     const [dropTargetTopicId, setDropTargetTopicId] = useState<string | null>(null);
@@ -316,7 +314,7 @@ const CourseEditor: React.FC = () => {
 
     const handleCourseChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
         const { name, value, type } = e.target;
-        
+
         if (type === 'number') {
             setCourse({ ...course, [name]: parseFloat(value) || 0 });
         } else {
@@ -326,9 +324,9 @@ const CourseEditor: React.FC = () => {
 
     const handleModeOfLearningChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { value } = e.target;
-        
+
         setCourse(prev => ({
-            ...prev, 
+            ...prev,
             modeOfLearning: [value] // Single selection, stored as array for backward compatibility
         }));
     };
@@ -347,10 +345,10 @@ const CourseEditor: React.FC = () => {
     // File type validation functions
     const validateFileType = (file: File, allowedTypes: string[], fieldName: string): boolean => {
         const fileExtension = file.name.toLowerCase().split('.').pop();
-        const isValidType = allowedTypes.some(type => 
+        const isValidType = allowedTypes.some(type =>
             type.startsWith('.') ? type.slice(1) === fileExtension : fileExtension === type
         );
-        
+
         if (!isValidType) {
             alert(`Invalid file type for ${fieldName}. Please upload a file with one of these extensions: ${allowedTypes.join(', ')}`);
             return false;
@@ -387,21 +385,21 @@ const CourseEditor: React.FC = () => {
         ];
 
         const missingFields = requiredFields.filter(({ field }) => !field || field === '').map(({ name }) => name);
-        
+
         // Special validation for Mode of Learning - check if it's selected and valid
         const selectedMode = course.modeOfLearning?.[0];
         const validModes = Object.values(ModeOfLearning) as string[];
-        
+
         if (!selectedMode || !validModes.includes(selectedMode)) {
             missingFields.push('Mode of Learning');
         }
-        
+
         // Validate training and assessment hours are greater than 0
         if (course.trainingHours <= 0) {
             alert('Training Hours must be greater than 0');
             return;
         }
-        
+
         if (course.assessmentHours <= 0) {
             alert('Assessment Hours must be greater than 0');
             return;
@@ -497,7 +495,7 @@ const CourseEditor: React.FC = () => {
 
             // Collect old file URLs for deletion
             const oldFileUrls: { [key: string]: string } = {};
-            
+
             // Check if course image changed from uploaded file to AI-generated or new upload
             if (!isNewCourse && editingCourse?.imageUrl && editingCourse.imageUrl.includes('uploads/')) {
                 // If user uploaded a new image file, mark old file for deletion
@@ -506,13 +504,13 @@ const CourseEditor: React.FC = () => {
                     console.log('🗑️ Marking old course image for deletion (new file uploaded):', editingCourse.imageUrl);
                 }
                 // If user changed to AI-generated image (no new file upload and current imageUrl is different)
-                else if (!files.courseImage && course.imageUrl && course.imageUrl !== editingCourse.imageUrl && 
-                         (course.imageUrl.includes('picsum.photos') || course.imageUrl.includes('pravatar') || course.imageUrl.startsWith('https://'))) {
+                else if (!files.courseImage && course.imageUrl && course.imageUrl !== editingCourse.imageUrl &&
+                    (course.imageUrl.includes('picsum.photos') || course.imageUrl.includes('pravatar') || course.imageUrl.startsWith('https://'))) {
                     oldFileUrls.courseImage = editingCourse.imageUrl;
                     console.log('🗑️ Marking old course image for deletion (changed to AI-generated):', editingCourse.imageUrl);
                 }
             }
-            
+
             // Append file uploads and track old files for deletion
             if (files.courseImage) {
                 formData.append('courseImage', files.courseImage);
@@ -602,7 +600,7 @@ const CourseEditor: React.FC = () => {
                 learnerSlides: files.learnerSlides?.name,
                 trainerSlides: files.trainerSlides?.name,
                 assessmentFiles: files.assessmentFiles.map(f => f.name),
-                assessmentFilesById: files.assessmentFilesById ? 
+                assessmentFilesById: files.assessmentFilesById ?
                     Object.entries(files.assessmentFilesById).map(([id, file]) => `${id}: ${file.name}`) : []
             });
 
@@ -626,11 +624,11 @@ const CourseEditor: React.FC = () => {
                 // Update the editing course context
                 setEditingCourse(null);
                 setCourseEditMode(null); // Also clear the edit mode
-                
+
                 // Clear the files marked for deletion since they were successfully processed
                 setFilesToDelete([]);
                 setDeletedAssessments([]);
-                
+
                 // Show success message
                 alert(`Course "${courseData.title}" ${isNewCourse ? 'created' : 'updated'} successfully!`);
                 console.log('✅ Course saved:', result.data);
@@ -644,7 +642,7 @@ const CourseEditor: React.FC = () => {
             setIsSaving(false);
         }
     };
-    
+
     const addTopic = () => {
         const newTopic: Topic = { id: `t_${Date.now()}`, title: '', subtopics: [] };
         setCourse({ ...course, topics: [...course.topics, newTopic] });
@@ -653,7 +651,7 @@ const CourseEditor: React.FC = () => {
     const updateTopicTitle = (topicId: string, newTitle: string) => {
         setCourse(prev => ({ ...prev, topics: prev.topics.map(t => t.id === topicId ? { ...t, title: newTitle } : t) }));
     };
-    
+
     const deleteTopic = (topicId: string) => {
         setCourse(prev => ({ ...prev, topics: prev.topics.filter(t => t.id !== topicId) }));
     };
@@ -672,7 +670,7 @@ const CourseEditor: React.FC = () => {
             topics: prev.topics.map(t => t.id === topicId ? { ...t, subtopics: t.subtopics.map(st => st.id === subtopicId ? { ...st, title: newTitle } : st) } : t)
         }));
     };
-    
+
     const deleteSubtopic = (topicId: string, subtopicId: string) => {
         setCourse(prev => ({
             ...prev,
@@ -684,18 +682,18 @@ const CourseEditor: React.FC = () => {
         const newAssessment: Assessment = { id: `asm_${Date.now()}`, title: 'New Assessment', category: AssessmentCategory.PracticalExam, status: 'Draft' };
         setCourse(prev => ({ ...prev, assessments: [...(prev.assessments || []), newAssessment] }));
     };
-    
+
     const handleUpdateAssessment = (id: string, field: 'title' | 'category' | 'fileUrl', value: string) => {
-         setCourse(prev => ({...prev, assessments: prev.assessments?.map(a => a.id === id ? {...a, [field]: value} : a) }));
+        setCourse(prev => ({ ...prev, assessments: prev.assessments?.map(a => a.id === id ? { ...a, [field]: value } : a) }));
     }
 
     const handleDeleteAssessment = (assessmentId: string) => {
         // Find the assessment being deleted
         const assessmentToDelete = course.assessments?.find(a => a.id === assessmentId);
-        
+
         // If the assessment has a file URL that points to an uploaded file, mark it for deletion
-        if (assessmentToDelete?.fileUrl && 
-            assessmentToDelete.fileUrl.includes('/uploads/') && 
+        if (assessmentToDelete?.fileUrl &&
+            assessmentToDelete.fileUrl.includes('/uploads/') &&
             !assessmentToDelete.fileUrl.startsWith('http')) {
             setFilesToDelete(prev => [...prev, assessmentToDelete.fileUrl!]);
             console.log('📁 Marking assessment file for deletion:', assessmentToDelete.fileUrl);
@@ -746,7 +744,7 @@ const CourseEditor: React.FC = () => {
                 default:
                     break;
             }
-            
+
             if (isValid) {
                 setFiles(prev => ({ ...prev, [fileType]: file }));
                 console.log(`📁 ${fileType} file selected:`, file.name);
@@ -761,9 +759,9 @@ const CourseEditor: React.FC = () => {
     };
 
     const handleAssessmentFileAdd = (file: File) => {
-        setFiles(prev => ({ 
-            ...prev, 
-            assessmentFiles: [...prev.assessmentFiles, file] 
+        setFiles(prev => ({
+            ...prev,
+            assessmentFiles: [...prev.assessmentFiles, file]
         }));
         console.log('📁 Assessment file added:', file.name);
     };
@@ -789,10 +787,10 @@ const CourseEditor: React.FC = () => {
 
         // Find the current assessment
         const currentAssessment = course.assessments?.find(a => a.id === assessmentId);
-        
+
         // If the assessment already has a file that's uploaded to server, mark it for deletion
-        if (currentAssessment?.fileUrl && 
-            currentAssessment.fileUrl.includes('/uploads/') && 
+        if (currentAssessment?.fileUrl &&
+            currentAssessment.fileUrl.includes('/uploads/') &&
             !currentAssessment.fileUrl.startsWith('http')) {
             setFilesToDelete(prev => [...prev, currentAssessment.fileUrl!]);
             console.log('📁 Marking old assessment file for deletion:', currentAssessment.fileUrl);
@@ -804,11 +802,11 @@ const CourseEditor: React.FC = () => {
             ...prev,
             assessmentFilesById: { ...(prev.assessmentFilesById || {}), [assessmentId]: file }
         }));
-        
+
         // Update the assessment fileUrl for display (mock)
         const mockUrl = `/assessments/${file.name}`;
         handleUpdateAssessment(assessmentId, 'fileUrl', mockUrl);
-        
+
         console.log('📁 New assessment file mapped to assessment ID:', assessmentId, 'File:', file.name);
     };
 
@@ -822,13 +820,13 @@ const CourseEditor: React.FC = () => {
         }
     };
 
-    const inputClasses = "block w-full px-3 py-2 text-gray-900 bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent";
+    const inputClasses = "block w-full px-3 py-2 text-gray-900 bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white dark:border-gray-600 dark:placeholder-gray-400";
 
     return (
         <div>
             {/* Header */}
             <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6">
-                <h2 className="text-2xl sm:text-3xl font-bold">Edit Course</h2>
+                <h2 className="text-2xl sm:text-3xl font-bold dark:text-white">Edit Course</h2>
                 <div className="flex items-center gap-2 self-end sm:self-center">
                     <Button variant="ghost" onClick={() => {
                         setEditingCourse(null);
@@ -844,15 +842,15 @@ const CourseEditor: React.FC = () => {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
                 {/* Left Column: Course Details */}
                 <div className="lg:col-span-1 space-y-6 lg:sticky lg:top-24">
-                    <Card className="p-6">
-                        <h3 className="text-xl font-bold mb-4">Course Details</h3>
+                    <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
+                        <h3 className="text-xl font-bold mb-4 dark:text-white">Course Details</h3>
                         <div className="space-y-4">
                             <div>
-                                <label className="block text-sm font-bold text-gray-700 mb-2">Course Image</label>
+                                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Course Image</label>
                                 <div className="relative aspect-video bg-gray-200 rounded-md overflow-hidden">
-                                    <img 
-                                        src={getCourseImageUrl(course.imageUrl, course.id)} 
-                                        alt={course.title} 
+                                    <img
+                                        src={getCourseImageUrl(course.imageUrl, course.id)}
+                                        alt={course.title}
                                         className="w-full h-full object-cover"
                                         onError={(e) => {
                                             // If image fails to load (e.g., invalid blob URL), fall back to placeholder
@@ -876,18 +874,18 @@ const CourseEditor: React.FC = () => {
                                         onChange={(e) => {
                                             if (e.target.files && e.target.files[0]) {
                                                 const file = e.target.files[0];
-                                                
+
                                                 // Validate image file type
                                                 if (!validateImageFile(file)) {
                                                     e.target.value = ''; // Clear the input
                                                     return;
                                                 }
-                                                
+
                                                 // Clean up previous preview URL if it exists
                                                 if (previewImageUrl) {
                                                     URL.revokeObjectURL(previewImageUrl);
                                                 }
-                                                
+
                                                 handleFileSelect('courseImage', file);
                                                 // Create a preview URL for immediate display
                                                 // Note: This blob URL is only for preview - the actual file path
@@ -899,18 +897,18 @@ const CourseEditor: React.FC = () => {
                                         }}
                                         className="hidden"
                                     />
-                                    <Button 
-                                        variant="ghost" 
-                                        size="sm" 
-                                        className="flex-1" 
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="flex-1"
                                         onClick={() => document.getElementById('courseImageUpload')?.click()}
                                     >
                                         Upload Custom Image
                                     </Button>
-                                    <Button 
-                                        variant="ghost" 
-                                        size="sm" 
-                                        className="flex-1" 
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="flex-1"
                                         onClick={handleRegenerateImage}
                                         disabled={isGeneratingImage}
                                     >
@@ -920,62 +918,62 @@ const CourseEditor: React.FC = () => {
                             </div>
 
                             <div>
-                                <label htmlFor="title" className="block text-sm font-bold text-gray-700 mb-1">
+                                <label htmlFor="title" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
                                     Course Title <span className="text-red-500">*</span>
                                 </label>
-                                <input type="text" id="title" name="title" value={course.title} onChange={handleCourseChange} className={inputClasses} placeholder="e.g. React for Beginners"/>
+                                <input type="text" id="title" name="title" value={course.title} onChange={handleCourseChange} className={inputClasses} placeholder="e.g. React for Beginners" />
                             </div>
-                             <div>
-                                <label htmlFor="courseCode" className="block text-sm font-bold text-gray-700 mb-1">
+                            <div>
+                                <label htmlFor="courseCode" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
                                     Course Code <span className="text-red-500">*</span>
                                 </label>
-                                <input type="text" id="courseCode" name="courseCode" value={course.courseCode} onChange={handleCourseChange} className={inputClasses} placeholder="e.g. CRS-Q-0041188-1"/>
+                                <input type="text" id="courseCode" name="courseCode" value={course.courseCode} onChange={handleCourseChange} className={inputClasses} placeholder="e.g. CRS-Q-0041188-1" />
                             </div>
                             <div>
-                                <label htmlFor="tscTitle" className="block text-sm font-bold text-gray-700 mb-1">
+                                <label htmlFor="tscTitle" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
                                     TSC Title <span className="text-red-500">*</span>
                                 </label>
-                                <input type="text" id="tscTitle" name="tscTitle" value={course.tscTitle} onChange={handleCourseChange} className={inputClasses} placeholder="e.g. Web Development"/>
+                                <input type="text" id="tscTitle" name="tscTitle" value={course.tscTitle} onChange={handleCourseChange} className={inputClasses} placeholder="e.g. Web Development" />
                             </div>
                             <div>
-                                <label htmlFor="tscCode" className="block text-sm font-bold text-gray-700 mb-1">
+                                <label htmlFor="tscCode" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
                                     TSC Code <span className="text-red-500">*</span>
                                 </label>
-                                <input type="text" id="tscCode" name="tscCode" value={course.tscCode} onChange={handleCourseChange} className={inputClasses} placeholder="e.g. ICT-DIT-3011-1.1"/>
+                                <input type="text" id="tscCode" name="tscCode" value={course.tscCode} onChange={handleCourseChange} className={inputClasses} placeholder="e.g. ICT-DIT-3011-1.1" />
                             </div>
-                             <div>
-                                <label className="block text-sm font-bold text-gray-700 mb-1">
+                            <div>
+                                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
                                     Duration <span className="text-red-500">*</span>
                                 </label>
                                 <div className="space-y-2 border border-gray-200 p-3 rounded-md bg-gray-50/50">
                                     <div className="grid grid-cols-2 gap-4">
                                         <div>
-                                            <label htmlFor="trainingHours" className="block text-xs font-medium text-gray-600 mb-1">
+                                            <label htmlFor="trainingHours" className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
                                                 Training Hours <span className="text-red-500">*</span>
                                             </label>
                                             <input type="number" id="trainingHours" name="trainingHours" value={course.trainingHours} onChange={handleCourseChange} className={inputClasses} />
                                         </div>
                                         <div>
-                                            <label htmlFor="assessmentHours" className="block text-xs font-medium text-gray-600 mb-1">
+                                            <label htmlFor="assessmentHours" className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
                                                 Assessment Hours <span className="text-red-500">*</span>
                                             </label>
                                             <input type="number" id="assessmentHours" name="assessmentHours" value={course.assessmentHours} onChange={handleCourseChange} className={inputClasses} />
                                         </div>
                                     </div>
                                     <div className="pt-2 text-right">
-                                        <p className="text-sm font-bold text-gray-800">
+                                        <p className="text-sm font-bold text-gray-800 dark:text-gray-200">
                                             Total Duration: <span className="text-primary font-bold">{Number(course.trainingHours) + Number(course.assessmentHours)} hours</span>
                                         </p>
                                     </div>
                                 </div>
                             </div>
                             <div>
-                                <label className="block text-sm font-bold text-gray-700 mb-2">
+                                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">
                                     Mode of Learning <span className="text-red-500">*</span>
                                 </label>
                                 <div className="flex flex-col space-y-2">
                                     {(Object.values(ModeOfLearning)).map((mode) => (
-                                         <div key={mode} className="flex items-center">
+                                        <div key={mode} className="flex items-center">
                                             <input
                                                 type="radio"
                                                 id={`mode-${mode}`}
@@ -985,7 +983,7 @@ const CourseEditor: React.FC = () => {
                                                 onChange={handleModeOfLearningChange}
                                                 className="h-4 w-4 text-primary focus:ring-primary border-gray-300"
                                             />
-                                            <label htmlFor={`mode-${mode}`} className="ml-3 block text-sm text-gray-900">
+                                            <label htmlFor={`mode-${mode}`} className="ml-3 block text-sm text-gray-900 dark:text-gray-200">
                                                 {mode}
                                             </label>
                                         </div>
@@ -993,14 +991,14 @@ const CourseEditor: React.FC = () => {
                                 </div>
                             </div>
                             <div>
-                                <label htmlFor="courseType" className="block text-sm font-bold text-gray-700 mb-2">
+                                <label htmlFor="courseType" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">
                                     Course Type <span className="text-red-500">*</span>
                                 </label>
-                                <select 
-                                    id="courseType" 
-                                    name="courseType" 
-                                    value={course.courseType} 
-                                    onChange={handleCourseChange} 
+                                <select
+                                    id="courseType"
+                                    name="courseType"
+                                    value={course.courseType}
+                                    onChange={handleCourseChange}
                                     className={inputClasses}
                                 >
                                     <option value="Non-WSQ">Non-WSQ</option>
@@ -1014,151 +1012,151 @@ const CourseEditor: React.FC = () => {
 
                 {/* Right Column: Content Sections */}
                 <div className="lg:col-span-2 space-y-8">
-                    <Card className="p-6">
-                        <h3 className="text-xl font-bold mb-4">Learning Outcomes</h3>
-                        <textarea id="learningOutcomes" name="learningOutcomes" value={course.learningOutcomes} onChange={handleCourseChange} className={`${inputClasses} h-32`} placeholder="Describe the key learning outcomes..."/>
+                    <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
+                        <h3 className="text-xl font-bold mb-4 dark:text-white">Learning Outcomes</h3>
+                        <textarea id="learningOutcomes" name="learningOutcomes" value={course.learningOutcomes} onChange={handleCourseChange} className={`${inputClasses} h-32`} placeholder="Describe the key learning outcomes..." />
                     </Card>
 
-                    <Card className="p-6">
-                        <h3 className="text-xl font-bold mb-4">Lesson Plan</h3>
+                    <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
+                        <h3 className="text-xl font-bold mb-4 dark:text-white">Lesson Plan</h3>
                         <div>
-                            <label htmlFor="lessonPlanUpload" className="block text-sm font-bold text-gray-700 mb-1">Upload Lesson Plan (PDF, DOC, DOCX, PPT, PPTX)</label>
-                            <div className="flex items-center gap-2 p-2 bg-gray-50 rounded-md border">
+                            <label htmlFor="lessonPlanUpload" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Upload Lesson Plan (PDF, DOC, DOCX, PPT, PPTX)</label>
+                            <div className="flex items-center gap-2 p-2 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600">
                                 <Icon name={IconName.FilePdf} className="w-5 h-5 text-gray-500" />
                                 <span className="text-sm text-subtle flex-grow truncate">
                                     {getDisplayFilename(course.lessonPlanUrl, files.lessonPlan?.name) || 'No lesson plan uploaded.'}
                                 </span>
                                 <Button variant="ghost" size="sm" onClick={() => document.getElementById('lessonPlanUpload')?.click()}>
-                                    <Icon name={IconName.Upload} className="w-4 h-4 mr-1"/> Upload
+                                    <Icon name={IconName.Upload} className="w-4 h-4 mr-1" /> Upload
                                 </Button>
-                                <input 
-                                    type="file" 
-                                    id="lessonPlanUpload" 
-                                    className="hidden" 
+                                <input
+                                    type="file"
+                                    id="lessonPlanUpload"
+                                    className="hidden"
                                     accept=".pdf .doc .docx .ppt .pptx"
                                     onChange={(e) => {
                                         if (e.target.files?.[0]) {
                                             handleFileSelect('lessonPlan', e.target.files[0]);
                                         }
-                                    }} 
+                                    }}
                                 />
                             </div>
                         </div>
                     </Card>
-                    <Card className="p-6">
-                        <h3 className="text-xl font-bold mb-4">Learner Guide</h3>
+                    <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
+                        <h3 className="text-xl font-bold mb-4 dark:text-white">Learner Guide</h3>
                         <div>
-                            <label htmlFor="learnerGuideUpload" className="block text-sm font-bold text-gray-700 mb-1">Upload Learner Guide (PDF, DOC, DOCX, PPT, PPTX)</label>
-                            <div className="flex items-center gap-2 p-2 bg-gray-50 rounded-md border">
+                            <label htmlFor="learnerGuideUpload" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Upload Learner Guide (PDF, DOC, DOCX, PPT, PPTX)</label>
+                            <div className="flex items-center gap-2 p-2 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600">
                                 <Icon name={IconName.FilePdf} className="w-5 h-5 text-gray-500" />
                                 <span className="text-sm text-subtle flex-grow truncate">
                                     {getDisplayFilename(course.learnerGuideUrl, files.learnerGuide?.name) || 'No learner guide uploaded.'}
                                 </span>
                                 <Button variant="ghost" size="sm" onClick={() => document.getElementById('learnerGuideUpload')?.click()}>
-                                    <Icon name={IconName.Upload} className="w-4 h-4 mr-1"/> Upload
+                                    <Icon name={IconName.Upload} className="w-4 h-4 mr-1" /> Upload
                                 </Button>
-                                <input 
-                                    type="file" 
-                                    id="learnerGuideUpload" 
-                                    className="hidden" 
+                                <input
+                                    type="file"
+                                    id="learnerGuideUpload"
+                                    className="hidden"
                                     accept=".pdf .doc .docx .ppt .pptx"
                                     onChange={(e) => {
                                         if (e.target.files?.[0]) {
                                             handleFileSelect('learnerGuide', e.target.files[0]);
                                         }
-                                    }} 
+                                    }}
                                 />
                             </div>
                         </div>
                     </Card>
-                    <Card className="p-6">
-                        <h3 className="text-xl font-bold mb-4">Facilitator Guide</h3>
+                    <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
+                        <h3 className="text-xl font-bold mb-4 dark:text-white">Facilitator Guide</h3>
                         <div>
-                            <label htmlFor="facilitatorGuideUpload" className="block text-sm font-bold text-gray-700 mb-1">Upload Facilitator Guide (PDF, DOC, DOCX, PPT, PPTX)</label>
-                            <div className="flex items-center gap-2 p-2 bg-gray-50 rounded-md border">
+                            <label htmlFor="facilitatorGuideUpload" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Upload Facilitator Guide (PDF, DOC, DOCX, PPT, PPTX)</label>
+                            <div className="flex items-center gap-2 p-2 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600">
                                 <Icon name={IconName.FilePdf} className="w-5 h-5 text-gray-500" />
                                 <span className="text-sm text-subtle flex-grow truncate">
                                     {getDisplayFilename(course.facilitatorGuideUrl, files.facilitatorGuide?.name) || 'No facilitator guide uploaded.'}
                                 </span>
                                 <Button variant="ghost" size="sm" onClick={() => document.getElementById('facilitatorGuideUpload')?.click()}>
-                                    <Icon name={IconName.Upload} className="w-4 h-4 mr-1"/> Upload
+                                    <Icon name={IconName.Upload} className="w-4 h-4 mr-1" /> Upload
                                 </Button>
-                                <input 
-                                    type="file" 
-                                    id="facilitatorGuideUpload" 
-                                    className="hidden" 
+                                <input
+                                    type="file"
+                                    id="facilitatorGuideUpload"
+                                    className="hidden"
                                     accept=".pdf .doc .docx .ppt .pptx"
                                     onChange={(e) => {
                                         if (e.target.files?.[0]) {
                                             handleFileSelect('facilitatorGuide', e.target.files[0]);
                                         }
-                                    }} 
+                                    }}
                                 />
                             </div>
                         </div>
                     </Card>
-                    <Card className="p-6">
-                        <h3 className="text-xl font-bold mb-4">Assessment Plan</h3>
+                    <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
+                        <h3 className="text-xl font-bold mb-4 dark:text-white">Assessment Plan</h3>
                         <div>
-                            <label htmlFor="assessmentPlanUpload" className="block text-sm font-bold text-gray-700 mb-1">Upload Assessment Plan (PDF, DOC, DOCX, PPT, PPTX)</label>
-                            <div className="flex items-center gap-2 p-2 bg-gray-50 rounded-md border">
+                            <label htmlFor="assessmentPlanUpload" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Upload Assessment Plan (PDF, DOC, DOCX, PPT, PPTX)</label>
+                            <div className="flex items-center gap-2 p-2 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600">
                                 <Icon name={IconName.FilePdf} className="w-5 h-5 text-gray-500" />
                                 <span className="text-sm text-subtle flex-grow truncate">
                                     {getDisplayFilename(course.assessmentPlanUrl, files.assessmentPlan?.name) || 'No assessment plan uploaded.'}
                                 </span>
                                 <Button variant="ghost" size="sm" onClick={() => document.getElementById('assessmentPlanUpload')?.click()}>
-                                    <Icon name={IconName.Upload} className="w-4 h-4 mr-1"/> Upload
+                                    <Icon name={IconName.Upload} className="w-4 h-4 mr-1" /> Upload
                                 </Button>
-                                <input 
-                                    type="file" 
-                                    id="assessmentPlanUpload" 
-                                    className="hidden" 
+                                <input
+                                    type="file"
+                                    id="assessmentPlanUpload"
+                                    className="hidden"
                                     accept=".pdf .doc .docx .ppt .pptx"
                                     onChange={(e) => {
                                         if (e.target.files?.[0]) {
                                             handleFileSelect('assessmentPlan', e.target.files[0]);
                                         }
-                                    }} 
+                                    }}
                                 />
                             </div>
                         </div>
                     </Card>
-                    <Card className="p-6">
-                        <h3 className="text-xl font-bold mb-4">Learner Slides</h3>
+                    <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
+                        <h3 className="text-xl font-bold mb-4 dark:text-white">Learner Slides</h3>
                         <div>
-                            <label htmlFor="slidesUpload" className="block text-sm font-bold text-gray-700 mb-1">Upload Learner Slides (PDF, DOC, DOCX, PPT, PPTX)</label>
-                            <div className="flex items-center gap-2 p-2 bg-gray-50 rounded-md border">
+                            <label htmlFor="slidesUpload" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Upload Learner Slides (PDF, DOC, DOCX, PPT, PPTX)</label>
+                            <div className="flex items-center gap-2 p-2 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600">
                                 <Icon name={IconName.FilePdf} className="w-5 h-5 text-gray-500" />
                                 <span className="text-sm text-subtle flex-grow truncate">
                                     {getDisplayFilename(course.slidesUrl, files.learnerSlides?.name) || 'No slides uploaded.'}
                                 </span>
                                 <Button variant="ghost" size="sm" onClick={() => document.getElementById('slidesUpload')?.click()}>
-                                    <Icon name={IconName.Upload} className="w-4 h-4 mr-1"/> Upload
+                                    <Icon name={IconName.Upload} className="w-4 h-4 mr-1" /> Upload
                                 </Button>
-                                <input 
-                                    type="file" 
-                                    id="slidesUpload" 
-                                    className="hidden" 
+                                <input
+                                    type="file"
+                                    id="slidesUpload"
+                                    className="hidden"
                                     accept=".pdf .doc .docx .ppt .pptx"
                                     onChange={(e) => {
                                         if (e.target.files?.[0]) {
                                             handleFileSelect('learnerSlides', e.target.files[0]);
                                         }
-                                    }} 
+                                    }}
                                 />
                             </div>
                         </div>
                     </Card>
-                     <Card className="p-6">
-                        <h3 className="text-xl font-bold mb-4">Trainer Slides</h3>
+                    <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
+                        <h3 className="text-xl font-bold mb-4 dark:text-white">Trainer Slides</h3>
                         <div className="flex gap-6 mb-4">
-                             <div className="flex items-center">
-                                <input type="radio" id="trainer-slide-upload" name="trainerSlideType" value="upload" checked={trainerSlideInputType === 'upload'} onChange={() => setTrainerSlideInputType('upload')} className="h-4 w-4 text-primary focus:ring-primary border-gray-300"/>
+                            <div className="flex items-center">
+                                <input type="radio" id="trainer-slide-upload" name="trainerSlideType" value="upload" checked={trainerSlideInputType === 'upload'} onChange={() => setTrainerSlideInputType('upload')} className="h-4 w-4 text-primary focus:ring-primary border-gray-300" />
                                 <label htmlFor="trainer-slide-upload" className="ml-2 block text-sm font-medium text-gray-700">Upload File</label>
                             </div>
-                             <div className="flex items-center">
-                                <input type="radio" id="trainer-slide-link" name="trainerSlideType" value="link" checked={trainerSlideInputType === 'link'} onChange={() => setTrainerSlideInputType('link')} className="h-4 w-4 text-primary focus:ring-primary border-gray-300"/>
-                                <label htmlFor="trainer-slide-link" className="ml-2 block text-sm font-medium text-gray-700">Link to Google Slides</label>
+                            <div className="flex items-center">
+                                <input type="radio" id="trainer-slide-link" name="trainerSlideType" value="link" checked={trainerSlideInputType === 'link'} onChange={() => setTrainerSlideInputType('link')} className="h-4 w-4 text-primary focus:ring-primary border-gray-300" />
+                                <label htmlFor="trainer-slide-link" className="ml-2 block text-sm font-medium text-gray-700 dark:text-gray-300">Link to Google Slides</label>
                             </div>
                         </div>
 
@@ -1171,25 +1169,25 @@ const CourseEditor: React.FC = () => {
                                         {files.trainerSlides ? files.trainerSlides.name : (course.trainerSlidesUrl && !isTrainerSlidesUrl ? extractFilenameFromPath(course.trainerSlidesUrl) : 'No file uploaded.')}
                                     </span>
                                     <Button variant="ghost" size="sm" onClick={() => document.getElementById('trainerSlidesUpload')?.click()}>
-                                        <Icon name={IconName.Upload} className="w-4 h-4 mr-1"/> Upload
+                                        <Icon name={IconName.Upload} className="w-4 h-4 mr-1" /> Upload
                                     </Button>
-                                    <input 
-                                        type="file" 
-                                        id="trainerSlidesUpload" 
-                                        className="hidden" 
+                                    <input
+                                        type="file"
+                                        id="trainerSlidesUpload"
+                                        className="hidden"
                                         accept=".ppt,.pptx,.pdf,.doc,.docx"
                                         onChange={(e) => {
                                             if (e.target.files?.[0]) {
                                                 handleFileSelect('trainerSlides', e.target.files[0]);
                                             }
-                                        }} 
+                                        }}
                                     />
                                 </div>
                             </div>
                         ) : (
                             <div>
                                 <label htmlFor="trainerSlidesUrl" className="block text-sm font-bold text-gray-700 mb-1">Trainer Slides URL (Optional)</label>
-                                <input 
+                                <input
                                     type="url"
                                     id="trainerSlidesUrl"
                                     name="trainerSlidesUrl"
@@ -1207,15 +1205,15 @@ const CourseEditor: React.FC = () => {
                     <div className="space-y-4">
                         <h3 className="text-xl font-bold px-1">Lesson</h3>
                         {course.topics.map(topic => (
-                           <div
+                            <div
                                 key={topic.id}
                                 onDragOver={(e) => handleTopicDragOver(e, topic.id)}
                                 onDragLeave={handleTopicDragLeave}
                                 onDrop={(e) => handleTopicDrop(e, topic.id)}
                                 className={`transition-opacity ${draggedTopicId === topic.id ? 'opacity-30' : ''}`}
-                           >
+                            >
                                 <div className={`h-2 transition-all duration-200 ${dropTargetTopicId === topic.id ? 'border-t-4 border-primary' : 'border-t-0'}`}></div>
-                                <EditableTopicAccordion 
+                                <EditableTopicAccordion
                                     topic={topic}
                                     onUpdateTitle={updateTopicTitle}
                                     onDelete={deleteTopic}
@@ -1231,17 +1229,17 @@ const CourseEditor: React.FC = () => {
                                     onSubtopicDragOver={handleSubtopicDragOver}
                                     onSubtopicDragLeave={handleSubtopicDragLeave}
                                     onSubtopicDragEnd={handleSubtopicDragEnd}
-                               />
-                           </div>
+                                />
+                            </div>
                         ))}
-                         <Button variant="ghost" onClick={addTopic} className="w-full !py-3 !text-lg !font-semibold border-2 border-dashed !border-gray-300 hover:!border-primary !text-subtle hover:!text-primary">
+                        <Button variant="ghost" onClick={addTopic} className="w-full !py-3 !text-lg !font-semibold border-2 border-dashed !border-gray-300 hover:!border-primary !text-subtle hover:!text-primary">
                             + Add Learning Unit
                         </Button>
                     </div>
 
                     <div className="space-y-4">
-                         <h3 className="text-xl font-bold px-1">Assessment</h3>
-                         <div className="space-y-4">
+                        <h3 className="text-xl font-bold px-1">Assessment</h3>
+                        <div className="space-y-4">
                             {(course.assessments || []).map(assessment => (
                                 <Card key={assessment.id} className="p-4 relative group">
                                     <button onClick={() => handleDeleteAssessment(assessment.id)} className="absolute top-2 right-2 p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-100 rounded-full opacity-0 group-hover:opacity-100 transition-opacity z-10">
@@ -1249,14 +1247,14 @@ const CourseEditor: React.FC = () => {
                                     </button>
                                     <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
                                         <Icon name={IconName.ClipboardCheck} className="w-5 h-5 text-primary flex-shrink-0 hidden sm:block" />
-                                        <input 
-                                            type="text" 
+                                        <input
+                                            type="text"
                                             value={assessment.title}
                                             onChange={(e) => handleUpdateAssessment(assessment.id, 'title', e.target.value)}
                                             className={`${inputGhostClasses(false)} !font-semibold flex-grow`}
                                             placeholder="Assessment Title"
                                         />
-                                        <select 
+                                        <select
                                             value={assessment.category}
                                             onChange={(e) => handleUpdateAssessment(assessment.id, 'category', e.target.value)}
                                             className="text-sm font-medium bg-indigo-100 text-indigo-800 px-3 py-1 rounded-full border-transparent focus:border-indigo-300 focus:ring-indigo-300 w-full sm:w-auto"
@@ -1270,18 +1268,18 @@ const CourseEditor: React.FC = () => {
                                             <Icon name={IconName.FilePdf} className="w-5 h-5 text-gray-500" />
                                             <span className="text-sm text-subtle flex-grow truncate">{assessment.fileUrl ? getDisplayFilename(assessment.fileUrl) : 'No file uploaded.'}</span>
                                             <Button variant="ghost" size="sm" onClick={() => document.getElementById(`assessment-upload-${assessment.id}`)?.click()}>
-                                                <Icon name={IconName.Upload} className="w-4 h-4 mr-1"/> Upload
+                                                <Icon name={IconName.Upload} className="w-4 h-4 mr-1" /> Upload
                                             </Button>
-                                            <input 
-                                                type="file" 
-                                                id={`assessment-upload-${assessment.id}`} 
-                                                className="hidden" 
+                                            <input
+                                                type="file"
+                                                id={`assessment-upload-${assessment.id}`}
+                                                className="hidden"
                                                 accept=".doc,.docx,.pdf"
                                                 onChange={(e) => {
                                                     if (e.target.files?.[0]) {
                                                         handleAssessmentFileUpload(assessment.id, e.target.files[0]);
                                                     }
-                                                }} 
+                                                }}
                                             />
                                         </div>
                                     </div>
@@ -1289,28 +1287,28 @@ const CourseEditor: React.FC = () => {
                             ))}
                             {course.assessments?.length === 0 && <p className="text-subtle text-center py-4">No assessments added yet.</p>}
                             <Button variant="ghost" onClick={handleAddAssessment} className="w-full !py-3 !text-lg !font-semibold border-2 border-dashed !border-gray-300 hover:!border-primary !text-subtle hover:!text-primary">
-                               + Add Assessment
+                                + Add Assessment
                             </Button>
-                         </div>
+                        </div>
                     </div>
-                    
-                    { (role === UserRole.Admin) && (
+
+                    {(role === UserRole.Admin) && (
                         <Card className="p-6">
                             <h3 className="text-xl font-bold mb-4">Pricing & Funding</h3>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div>
                                     <label htmlFor="courseFee" className="block text-sm font-bold text-gray-700 mb-1">Course Fee ($)</label>
-                                    <input type="number" id="courseFee" name="courseFee" value={course.courseFee} onChange={handleCourseChange} className={inputClasses} placeholder="e.g. 500"/>
+                                    <input type="number" id="courseFee" name="courseFee" value={course.courseFee} onChange={handleCourseChange} className={inputClasses} placeholder="e.g. 500" />
                                 </div>
                                 <div>
                                     <label htmlFor="taxPercent" className="block text-sm font-bold text-gray-700 mb-1">Tax / GST (%)</label>
-                                    <input 
-                                        type="number" 
-                                        id="taxPercent" 
-                                        name="taxPercent" 
-                                        value={course.taxPercent} 
-                                        onChange={handleCourseChange} 
-                                        className={inputClasses} 
+                                    <input
+                                        type="number"
+                                        id="taxPercent"
+                                        name="taxPercent"
+                                        value={course.taxPercent}
+                                        onChange={handleCourseChange}
+                                        className={inputClasses}
                                         placeholder="e.g. 9"
                                         min="0"
                                         step="1"
@@ -1325,7 +1323,7 @@ const CourseEditor: React.FC = () => {
                             </div>
                         </Card>
                     )}
-                    
+
                     <Card className="p-6">
                         <h3 className="text-xl font-bold mb-4">Course Settings</h3>
                         <div className="flex justify-between items-center p-3 bg-gray-50 rounded-md border">
@@ -1334,7 +1332,7 @@ const CourseEditor: React.FC = () => {
                                 <p className="text-xs text-subtle">Allow learners to see a competitive leaderboard for this course.</p>
                             </div>
                             <button
-                                onClick={() => setCourse(prev => ({...prev, isLeaderboardEnabled: !(prev.isLeaderboardEnabled ?? false) }))}
+                                onClick={() => setCourse(prev => ({ ...prev, isLeaderboardEnabled: !(prev.isLeaderboardEnabled ?? false) }))}
                                 className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${(course.isLeaderboardEnabled ?? false) ? 'bg-primary' : 'bg-gray-200'}`}
                                 aria-pressed={course.isLeaderboardEnabled ?? false}
                             >
