@@ -12,16 +12,86 @@ import { getApiUrl, getFileUrl } from '@/lib/urlHelpers';
 // Constants for styling consistency
 const inputClasses = "block w-full px-3 py-2 text-on-surface bg-surface border border-default rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent";
 
+// API Key configurations with their available models
+const API_KEY_CONFIGS: Record<string, { label: string; models: { value: string; label: string }[]; defaultModel: string }> = {
+    'OPENROUTER_API_KEY': {
+        label: 'OpenRouter',
+        defaultModel: 'anthropic/claude-3.5-sonnet',
+        models: [
+            { value: 'anthropic/claude-3.5-sonnet', label: 'Claude 3.5 Sonnet' },
+            { value: 'anthropic/claude-3-opus', label: 'Claude 3 Opus' },
+            { value: 'openai/gpt-4-turbo', label: 'GPT-4 Turbo' },
+            { value: 'openai/gpt-4o', label: 'GPT-4o' },
+            { value: 'google/gemini-pro-1.5', label: 'Gemini Pro 1.5' },
+            { value: 'meta-llama/llama-3.1-405b-instruct', label: 'Llama 3.1 405B' },
+        ]
+    },
+    'OPENAI_API_KEY': {
+        label: 'OpenAI',
+        defaultModel: 'gpt-4o',
+        models: [
+            { value: 'gpt-4o', label: 'GPT-4o' },
+            { value: 'gpt-4o-mini', label: 'GPT-4o Mini' },
+            { value: 'gpt-4-turbo', label: 'GPT-4 Turbo' },
+            { value: 'gpt-4', label: 'GPT-4' },
+            { value: 'gpt-3.5-turbo', label: 'GPT-3.5 Turbo' },
+            { value: 'o1-preview', label: 'o1 Preview' },
+            { value: 'o1-mini', label: 'o1 Mini' },
+        ]
+    },
+    'ANTHROPIC_API_KEY': {
+        label: 'Anthropic (Claude)',
+        defaultModel: 'claude-sonnet-4-20250514',
+        models: [
+            { value: 'claude-sonnet-4-20250514', label: 'Claude Sonnet 4' },
+            { value: 'claude-3-5-sonnet-20241022', label: 'Claude 3.5 Sonnet' },
+            { value: 'claude-3-5-haiku-20241022', label: 'Claude 3.5 Haiku' },
+            { value: 'claude-3-opus-20240229', label: 'Claude 3 Opus' },
+        ]
+    },
+    'GEMINI_API_KEY': {
+        label: 'Google Gemini',
+        defaultModel: 'gemini-1.5-pro',
+        models: [
+            { value: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash' },
+            { value: 'gemini-1.5-pro', label: 'Gemini 1.5 Pro' },
+            { value: 'gemini-1.5-flash', label: 'Gemini 1.5 Flash' },
+            { value: 'gemini-1.0-pro', label: 'Gemini 1.0 Pro' },
+        ]
+    },
+    'GROQ_API_KEY': {
+        label: 'Groq',
+        defaultModel: 'llama-3.3-70b-versatile',
+        models: [
+            { value: 'llama-3.3-70b-versatile', label: 'Llama 3.3 70B' },
+            { value: 'llama-3.1-70b-versatile', label: 'Llama 3.1 70B' },
+            { value: 'llama-3.1-8b-instant', label: 'Llama 3.1 8B' },
+            { value: 'mixtral-8x7b-32768', label: 'Mixtral 8x7B' },
+            { value: 'gemma2-9b-it', label: 'Gemma 2 9B' },
+        ]
+    },
+    'GROK_API_KEY': {
+        label: 'Grok (xAI)',
+        defaultModel: 'grok-2',
+        models: [
+            { value: 'grok-2', label: 'Grok 2' },
+            { value: 'grok-2-mini', label: 'Grok 2 Mini' },
+            { value: 'grok-beta', label: 'Grok Beta' },
+        ]
+    },
+    'DEEPSEEK_API_KEY': {
+        label: 'DeepSeek',
+        defaultModel: 'deepseek-chat',
+        models: [
+            { value: 'deepseek-chat', label: 'DeepSeek Chat' },
+            { value: 'deepseek-coder', label: 'DeepSeek Coder' },
+            { value: 'deepseek-reasoner', label: 'DeepSeek Reasoner' },
+        ]
+    },
+};
+
 // Fixed API Key names - these are the only allowed API key names
-const FIXED_API_KEY_NAMES = [
-    'OPENROUTER_API_KEY',
-    'OPENAI_API_KEY',
-    'ANTHROPIC_API_KEY',
-    'GEMINI_API_KEY',
-    'GROQ_API_KEY',
-    'GROK_API_KEY',
-    'DEEPSEEK_API_KEY',
-] as const;
+const FIXED_API_KEY_NAMES = Object.keys(API_KEY_CONFIGS) as (keyof typeof API_KEY_CONFIGS)[];
 
 // Helper function to clean filename for display
 const getCleanDisplayName = (filename: string): string => {
@@ -732,47 +802,62 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                 )}
 
                 <div className="border-t my-6"></div>
-                <h2 className="text-xl font-bold mb-4">API Keys</h2>
+                <h2 className="text-xl font-bold mb-2">API Keys & Model Selection</h2>
+                <p className="text-sm text-subtle mb-4">
+                    Configure your API keys and select the model to use for each provider. The default provider is Anthropic (Claude).
+                </p>
                 <div className="space-y-4">
                 {FIXED_API_KEY_NAMES.map((keyName) => {
                     const keyValue = (formData.apiKeys || {})[keyName] || '';
+                    const selectedModel = (formData.apiKeyModels || {})[keyName] || API_KEY_CONFIGS[keyName]?.defaultModel || '';
                     const isVisible = visibleApiKeys[keyName];
+                    const config = API_KEY_CONFIGS[keyName];
 
                     return (
                         <div
                             key={keyName}
-                            className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4"
+                            className="p-4 rounded-lg border border-gray-300 dark:border-gray-600 bg-surface"
                         >
-                            {/* API Key Name */}
-                            <div className="w-full sm:w-48 flex-shrink-0">
-                                <span className="text-sm font-semibold text-on-surface">{keyName}</span>
+                            {/* Header with Provider Name and Configured Badge */}
+                            <div className="flex items-center justify-between mb-3">
+                                <span className="font-semibold text-on-surface">
+                                    {config?.label || keyName}
+                                </span>
+                                {keyValue && (
+                                    <span className="text-sm text-green-600 dark:text-green-400 flex items-center gap-1.5">
+                                        <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+                                        Configured
+                                    </span>
+                                )}
                             </div>
 
-                            {/* API Key Value Input/Display */}
-                            <div className="flex-grow flex items-center gap-2">
-                                {isEditing ? (
-                                    <div className="relative flex-grow">
-                                        <input
-                                            type={isVisible ? "text" : "password"}
-                                            value={keyValue}
-                                            onChange={(e) => {
-                                                const newValue = e.target.value;
-                                                setFormData(prev => ({
-                                                    ...prev,
-                                                    apiKeys: {
-                                                        ...(prev.apiKeys || {}),
-                                                        [keyName]: newValue
-                                                    }
-                                                }));
-                                            }}
-                                            placeholder="Enter API key..."
-                                            className="w-full px-3 py-2 text-on-surface bg-surface border border-gray-600 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent pr-20"
-                                        />
-                                        <div className="absolute right-2 top-1/2 transform -translate-y-1/2 flex items-center gap-1">
+                            {/* API Key and Model side by side */}
+                            <div className="flex flex-col sm:flex-row gap-3">
+                                {/* API Key Input */}
+                                <div className="flex-1">
+                                    <label className="block text-xs text-subtle mb-1">API Key</label>
+                                    {isEditing ? (
+                                        <div className="relative">
+                                            <input
+                                                type={isVisible ? "text" : "password"}
+                                                value={keyValue}
+                                                onChange={(e) => {
+                                                    const newValue = e.target.value;
+                                                    setFormData(prev => ({
+                                                        ...prev,
+                                                        apiKeys: {
+                                                            ...(prev.apiKeys || {}),
+                                                            [keyName]: newValue
+                                                        }
+                                                    }));
+                                                }}
+                                                placeholder="Enter API key..."
+                                                className="w-full px-3 py-2 text-on-surface bg-surface border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent pr-10"
+                                            />
                                             <button
                                                 type="button"
                                                 onClick={() => setVisibleApiKeys(prev => ({ ...prev, [keyName]: !prev[keyName] }))}
-                                                className="text-gray-400 hover:text-gray-300 p-1"
+                                                className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-1"
                                             >
                                                 <Icon
                                                     name={isVisible ? IconName.EyeOff : IconName.Eye}
@@ -780,30 +865,67 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                                 />
                                             </button>
                                         </div>
-                                    </div>
-                                ) : (
-                                    <div className="flex-grow flex items-center gap-2 px-3 py-2 bg-surface border border-gray-600 rounded-md">
-                                        <span className="flex-grow text-on-surface font-mono text-sm">
-                                            {keyValue ? (
-                                                isVisible ? keyValue : `••••••••••••••••••••${keyValue.slice(-4)}`
-                                            ) : (
-                                                <span className="text-gray-500 italic">Not set</span>
+                                    ) : (
+                                        <div className="flex items-center gap-2 px-3 py-2 bg-surface border border-gray-300 dark:border-gray-600 rounded-md">
+                                            <span className="flex-grow text-on-surface font-mono text-sm truncate">
+                                                {keyValue ? (
+                                                    isVisible ? keyValue : `••••••••••••••••••••${keyValue.slice(-4)}`
+                                                ) : (
+                                                    <span className="text-gray-500 italic">Not set</span>
+                                                )}
+                                            </span>
+                                            {keyValue && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setVisibleApiKeys(prev => ({ ...prev, [keyName]: !prev[keyName] }))}
+                                                    className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-1 flex-shrink-0"
+                                                >
+                                                    <Icon
+                                                        name={isVisible ? IconName.EyeOff : IconName.Eye}
+                                                        className="w-4 h-4"
+                                                    />
+                                                </button>
                                             )}
-                                        </span>
-                                        {keyValue && (
-                                            <button
-                                                type="button"
-                                                onClick={() => setVisibleApiKeys(prev => ({ ...prev, [keyName]: !prev[keyName] }))}
-                                                className="text-gray-400 hover:text-gray-300 p-1"
-                                            >
-                                                <Icon
-                                                    name={isVisible ? IconName.EyeOff : IconName.Eye}
-                                                    className="w-4 h-4"
-                                                />
-                                            </button>
-                                        )}
-                                    </div>
-                                )}
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Model Dropdown */}
+                                <div className="sm:w-48 flex-shrink-0">
+                                    <label className="block text-xs text-subtle mb-1">Model</label>
+                                    {isEditing ? (
+                                        <select
+                                            value={selectedModel}
+                                            onChange={(e) => {
+                                                setFormData(prev => ({
+                                                    ...prev,
+                                                    apiKeyModels: {
+                                                        ...(prev.apiKeyModels || {}),
+                                                        [keyName]: e.target.value
+                                                    }
+                                                }));
+                                            }}
+                                            className="w-full px-3 py-2 text-on-surface bg-surface border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                                            disabled={!keyValue}
+                                        >
+                                            {config?.models.map((model) => (
+                                                <option key={model.value} value={model.value}>
+                                                    {model.label}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    ) : (
+                                        <div className="px-3 py-2 bg-surface border border-gray-300 dark:border-gray-600 rounded-md">
+                                            <span className="text-on-surface text-sm">
+                                                {keyValue ? (
+                                                    config?.models.find(m => m.value === selectedModel)?.label || selectedModel
+                                                ) : (
+                                                    <span className="text-gray-500 italic">-</span>
+                                                )}
+                                            </span>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         </div>
                     );

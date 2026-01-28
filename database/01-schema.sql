@@ -1060,7 +1060,8 @@ CREATE TABLE public.training_provider (
     normal_fund_rate numeric,
     enhanced_fund_rate numeric,
     gst_rate numeric,
-    gst_register boolean DEFAULT false NOT NULL
+    gst_register boolean DEFAULT false NOT NULL,
+    selected_ai_model text
 );
 
 
@@ -1076,6 +1077,7 @@ CREATE TABLE public.training_provider_api (
     training_provider_id uuid NOT NULL,
     key_name text NOT NULL,
     key_value text NOT NULL,
+    selected_model text,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL
 );

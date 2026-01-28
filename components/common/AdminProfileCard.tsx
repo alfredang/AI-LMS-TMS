@@ -418,7 +418,7 @@ export const AdminProfileCard: React.FC<{ profile: AdminProfile }> = ({ profile 
 
     return (
         <>
-            <Card className="p-8">
+            <Card className="p-8 dark:bg-gray-800 dark:border-gray-700">
                 <div className="flex flex-col sm:flex-row items-center gap-6">
                     <div className="flex-shrink-0 text-center">
                         <div className="relative group w-24 h-24">
@@ -469,13 +469,13 @@ export const AdminProfileCard: React.FC<{ profile: AdminProfile }> = ({ profile 
                         <Button onClick={() => setIsEditing(true)}>Edit Profile</Button>
                     )}
                 </div>
-                <div className="border-t my-6"></div>
-                <h2 className="text-xl font-bold mb-4">Bio Data</h2>
+                <div className="border-t dark:border-gray-700 my-6"></div>
+                <h2 className="text-xl font-bold mb-4 dark:text-white">Bio Data</h2>
                 {isEditing ? (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                        <div><label className="text-sm font-medium">Name</label><input type="text" name="name" value={formData.name} onChange={handleChange} className={inputClasses} /></div>
-                        <div><label className="text-sm font-medium">Telephone</label><input type="tel" name="tel" value={formData.tel} onChange={handleChange} className={inputClasses} /></div>
-                        <div><label className="text-sm font-medium">Email</label><input type="email" name="email" value={formData.email} onChange={handleChange} className={inputClasses} /></div>
+                        <div><label className="text-sm font-medium dark:text-gray-200">Name</label><input type="text" name="name" value={formData.name} onChange={handleChange} className={inputClasses} /></div>
+                        <div><label className="text-sm font-medium dark:text-gray-200">Telephone</label><input type="tel" name="tel" value={formData.tel} onChange={handleChange} className={inputClasses} /></div>
+                        <div><label className="text-sm font-medium dark:text-gray-200">Email</label><input type="email" name="email" value={formData.email} onChange={handleChange} className={inputClasses} /></div>
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">

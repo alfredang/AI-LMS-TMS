@@ -52,8 +52,9 @@ export default async function handler(
     console.log('📋 Developer API: Fetching profile for userId:', userId);
 
     // Main query to get developer profile with user data
+    // Use LEFT JOIN to handle multi-role users who may not have developer_profile record yet
     const developerProfileQuery = `
-      SELECT 
+      SELECT
         au.profile_picture_url AS profile_picture,
         au.full_name AS name,
         dp.tel AS phone,
@@ -68,9 +69,9 @@ export default async function handler(
         dp.areas_of_specialty,
         au.password,
         au.password_hash
-      FROM developer_profile dp
-      JOIN app_user au ON dp.user_id = au.id
-      WHERE dp.user_id = $1
+      FROM app_user au
+      LEFT JOIN developer_profile dp ON dp.user_id = au.id
+      WHERE au.id = $1
     `;
 
     // Query for work experience
@@ -135,32 +136,15 @@ export default async function handler(
     });
 
     if (profileResult.rows.length === 0) {
-      console.log('❌ Developer API: No developer profile found for userId:', userId);
-      
-      // Check if user exists but isn't a developer
-      const userCheckQuery = `
-        SELECT u.full_name, ur.role 
-        FROM app_user u 
-        LEFT JOIN user_role_map ur ON u.id = ur.user_id 
-        WHERE u.id = $1
-      `;
-      
-      const userCheckResult = await pool.query(userCheckQuery, [userId]);
-      
-      if (userCheckResult.rows.length > 0) {
-        const user = userCheckResult.rows[0];
-        console.log('📋 Developer API: User exists but role is:', user.role);
-        return res.status(403).json({
-          success: false,
-          message: `User ${user.full_name} is not a developer (role: ${user.role})`
-        });
-      }
-      
+      console.log('❌ Developer API: No user found for userId:', userId);
       return res.status(404).json({
         success: false,
-        message: 'Developer profile not found'
+        message: 'User not found'
       });
     }
+
+    // Profile row exists (app_user found), but developer_profile may be NULL for multi-role users
+    console.log('📋 Developer API: User found, developer_profile may be NULL for multi-role users');
 
     const row: DeveloperProfileRow = profileResult.rows[0];
 
@@ -203,18 +187,19 @@ export default async function handler(
     }));
 
     // Transform the data to match frontend expectations
+    // Handle NULL values for multi-role users who may not have developer_profile record
     const developerProfile = {
       id: userId,
       name: row.name,
       email: row.email,
       loginId: row.email, // Using email as login ID
       profilePictureUrl: row.profile_picture,
-      tel: row.phone,
-      gender: row.gender,
-      developerType: row.developer_type,
-      linkedinUrl: row.linkedin_profile,
-      cvUrl: row.cv,
-      cvOriginalFilename: row.cv_original_filename,
+      tel: row.phone || '',
+      gender: row.gender || '',
+      developerType: row.developer_type || '',
+      linkedinUrl: row.linkedin_profile || '',
+      cvUrl: row.cv || '',
+      cvOriginalFilename: row.cv_original_filename || '',
       // Use data from certification table
       certifications: certifications,
       qualifications: (() => {

@@ -458,7 +458,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       // Update training_provider table
       const updateQuery = `
-        UPDATE training_provider 
+        UPDATE training_provider
         SET company_name = $1,
             company_shortname = $2,
             uen = $3,
@@ -497,7 +497,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         WHERE id = $36
         RETURNING *
       `;
-      
+
       const queryParams = [
         profileData.companyName,
         profileData.companyShortname,
@@ -550,22 +550,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       
       console.log('✅ training_provider updated, rows affected:', providerUpdateResult.rowCount);
 
-      // Handle API keys - delete existing and insert new ones
+      // Handle API keys - delete existing and insert new ones (with selected model)
       console.log('🔑 Processing API keys...');
       const deleteResult = await pool.query('DELETE FROM training_provider_api WHERE training_provider_id = $1', [userId]);
       console.log('🗑️ Deleted existing API keys, rows affected:', deleteResult.rowCount);
-      
+
       if (profileData.apiKeys && typeof profileData.apiKeys === 'object' && Object.keys(profileData.apiKeys).length > 0) {
         console.log('➕ Adding new API keys:', Object.keys(profileData.apiKeys));
         for (const [keyName, keyValue] of Object.entries(profileData.apiKeys)) {
           // Ensure keyValue is a non-empty string
           const strValue = typeof keyValue === 'string' ? keyValue.trim() : String(keyValue || '').trim();
           if (strValue !== '') {
+            // Get selected model for this API key (if any)
+            const selectedModel = profileData.apiKeyModels?.[keyName] || null;
             const insertResult = await pool.query(`
-              INSERT INTO training_provider_api (training_provider_id, key_name, key_value)
-              VALUES ($1, $2, $3)
-            `, [userId, keyName, strValue]);
-            console.log(`✅ Added API key "${keyName}", rows affected:`, insertResult.rowCount);
+              INSERT INTO training_provider_api (training_provider_id, key_name, key_value, selected_model)
+              VALUES ($1, $2, $3, $4)
+            `, [userId, keyName, strValue, selectedModel]);
+            console.log(`✅ Added API key "${keyName}" with model "${selectedModel}", rows affected:`, insertResult.rowCount);
           } else {
             console.log(`⚠️ Skipping empty API key "${keyName}"`);
           }

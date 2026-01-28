@@ -53,8 +53,9 @@ export default async function handler(
     console.log('📋 Trainer API: Executing trainer profile query...');
 
     // SQL query to get trainer profile data
+    // Use LEFT JOIN to handle multi-role users who may not have trainer_profile record yet
     const trainerProfileQuery = `
-      SELECT 
+      SELECT
         u.full_name AS name,
         u.profile_picture_url AS picture,
         t.tel AS telephone,
@@ -70,10 +71,10 @@ export default async function handler(
         t.qualifications,
         t.education,
         t.areas_of_expertise
-      FROM trainer_profile t
-      JOIN app_user u 
+      FROM app_user u
+      LEFT JOIN trainer_profile t
         ON t.user_id = u.id
-      WHERE t.user_id = $1
+      WHERE u.id = $1
     `;
 
     // SQL query to get work experience
@@ -137,32 +138,15 @@ export default async function handler(
     });
 
     if (profileResult.rows.length === 0) {
-      console.log('❌ Trainer API: No trainer profile found for userId:', userId);
-      
-      // Check if user exists but isn't a trainer
-      const userCheckQuery = `
-        SELECT u.full_name, ur.role 
-        FROM app_user u 
-        LEFT JOIN user_role_map ur ON u.id = ur.user_id 
-        WHERE u.id = $1
-      `;
-      
-      const userCheckResult = await pool.query(userCheckQuery, [userId]);
-      
-      if (userCheckResult.rows.length > 0) {
-        const user = userCheckResult.rows[0];
-        console.log('📋 Trainer API: User exists but role is:', user.role);
-        return res.status(403).json({
-          success: false,
-          message: `User ${user.full_name} is not a trainer (role: ${user.role})`
-        });
-      }
-      
+      console.log('❌ Trainer API: No user found for userId:', userId);
       return res.status(404).json({
         success: false,
-        message: 'Trainer profile not found'
+        message: 'User not found'
       });
     }
+
+    // Profile row exists (app_user found), but trainer_profile may be NULL for multi-role users
+    console.log('📋 Trainer API: User found, trainer_profile may be NULL for multi-role users');
 
     const row: TrainerProfileRow = profileResult.rows[0];
 
@@ -193,19 +177,20 @@ export default async function handler(
     }));
 
     // Transform the data to match frontend expectations
+    // Handle NULL values for multi-role users who may not have trainer_profile record
     const trainerProfile = {
       id: userId,
       name: row.name,
       email: row.email,
       loginId: row.email, // Using email as login ID
       profilePictureUrl: row.picture,
-      tel: row.telephone,
-      gender: row.gender,
-      trainerType: row.trainer_type,
-      status: row.status,
-      linkedinUrl: row.linkedin_url,
-      cvUrl: row.cv_url,
-      cvOriginalFilename: row.cv_original_filename,
+      tel: row.telephone || '',
+      gender: row.gender || '',
+      trainerType: row.trainer_type || '',
+      status: row.status || '',
+      linkedinUrl: row.linkedin_url || '',
+      cvUrl: row.cv_url || '',
+      cvOriginalFilename: row.cv_original_filename || '',
       // Use data from certification table
       certifications: certifications,
       qualifications: (() => {
@@ -215,7 +200,7 @@ export default async function handler(
         if (typeof row.qualifications === 'string') return JSON.parse(row.qualifications);
         return [];
       })(),
-      education: row.education || '', // Single string instead of array
+      education: row.education || '',
       areasOfExpertise: (() => {
         if (!row.areas_of_expertise) return [];
         if (Array.isArray(row.areas_of_expertise)) return row.areas_of_expertise;

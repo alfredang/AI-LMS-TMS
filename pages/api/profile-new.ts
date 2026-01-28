@@ -78,8 +78,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
 async function getLearnerProfile(userId: string) {
   console.log('📋 Fetching learner profile for userId:', userId);
-  
-  // Use the exact SQL query provided by the user
+
+  // Use LEFT JOIN to handle multi-role users who may not have learner_profile record yet
   const result = await pool.query(`
     SELECT au.id,
            au.full_name,
@@ -100,21 +100,21 @@ async function getLearnerProfile(userId: string) {
            lp.pro_forma_url,
            lp.receipt_url
     FROM app_user au
-    JOIN learner_profile lp ON au.id = lp.user_id
+    LEFT JOIN learner_profile lp ON au.id = lp.user_id
     WHERE au.id = $1
   `, [userId]);
 
   console.log('📊 Learner query result:', result.rows.length, 'rows found');
   console.log("here is the dob,", result.rows[0]?.dob);
-  
+
   if (result.rows.length === 0) {
-    console.log('❌ No learner found with ID:', userId);
+    console.log('❌ No user found with ID:', userId);
     return null;
   }
 
   const profile = result.rows[0];
-  console.log('✅ Raw profile data found');
-  
+  console.log('✅ Raw profile data found (learner_profile may be NULL for multi-role users)');
+
   const formattedProfile = {
     id: profile.id,
     name: profile.full_name,
@@ -122,30 +122,31 @@ async function getLearnerProfile(userId: string) {
     password: profile.password,
     loginId: profile.email,
     profilePictureUrl: profile.profile_picture_url,
-    tel: profile.tel,
-    nric: profile.nric,
-    gender: profile.gender,
-    company: profile.company,
-    employment_status: profile.employment_status,
-    nationality: profile.nationality,
-    ethnicity: profile.ethnicity,
-    invoice_url: profile.invoice_url,
-    pro_forma_url: profile.pro_forma_url,
-    receipt_url: profile.receipt_url,
-    dob: profile.dob,
+    tel: profile.tel || '',
+    nric: profile.nric || '',
+    gender: profile.gender || '',
+    company: profile.company || '',
+    employment_status: profile.employment_status || '',
+    nationality: profile.nationality || '',
+    ethnicity: profile.ethnicity || '',
+    invoice_url: profile.invoice_url || '',
+    pro_forma_url: profile.pro_forma_url || '',
+    receipt_url: profile.receipt_url || '',
+    dob: profile.dob || '',
     created_at: profile.created_at?.toISOString() || new Date().toISOString(),
     updated_at: profile.updated_at?.toISOString() || new Date().toISOString()
   };
-  
+
   console.log('✨ Formatted learner profile ready');
   return formattedProfile;
 }
 
 async function getAdminProfile(userId: string) {
   console.log('👨‍💼 Fetching admin profile for userId:', userId);
-  
+
+  // Use LEFT JOIN to handle multi-role users who may not have admin_profile record yet
   const result = await pool.query(`
-    SELECT 
+    SELECT
         au.id AS user_id,
         au.full_name,
         au.email,
@@ -153,30 +154,29 @@ async function getAdminProfile(userId: string) {
         au.profile_picture_url,
         ap.tel AS telephone
     FROM app_user au
-    JOIN admin_profile ap 
+    LEFT JOIN admin_profile ap
         ON ap.user_id = au.id
     WHERE au.id = $1
   `, [userId]);
 
   console.log('📊 Admin query result:', result.rows.length, 'rows found');
-  
+
   if (result.rows.length === 0) {
-    console.log('❌ No admin found with ID:', userId);
+    console.log('❌ No user found with ID:', userId);
     return null;
   }
 
   const profile = result.rows[0];
-  console.log('✅ Admin profile found:', profile.full_name);
+  console.log('✅ Admin profile found:', profile.full_name, '(admin_profile may be NULL for multi-role users)');
 
   return {
     id: profile.user_id,
     name: profile.full_name,
     email: profile.email,
-    tel: profile.telephone,
+    tel: profile.telephone || '',
     loginId: profile.email,
     profilePictureUrl: profile.profile_picture_url || `https://i.pravatar.cc/150?img=2`,
-    password: profile.password, // Include password for admin users
-    // Don't include password in production for security - only for development
+    password: profile.password,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString()
   };
@@ -297,7 +297,7 @@ async function getTrainingProviderProfile(userId: string) {
   // If not found, check if userId is an admin under a training provider
   if (result.rows.length === 0) {
     result = await pool.query(`
-      SELECT 
+      SELECT
           au.id,
           au.full_name,
           au.email,
@@ -356,21 +356,26 @@ async function getTrainingProviderProfile(userId: string) {
 
   const profileData = result.rows[0];
 
-  // Fetch API keys separately
+  // Fetch API keys separately (including selected_model)
   const apiKeyResult = await pool.query(`
-    SELECT 
+    SELECT
         tpa.key_name,
-        tpa.key_value
+        tpa.key_value,
+        tpa.selected_model
     FROM training_provider_api tpa
     WHERE tpa.training_provider_id = $1
   `, [profileData.provider_id]);
 
   console.log('📊 API keys query result:', apiKeyResult.rows.length, 'keys found');
 
-  // Build API keys object
+  // Build API keys and models objects
   const apiKeys: { [key: string]: string } = {};
+  const apiKeyModels: { [key: string]: string } = {};
   apiKeyResult.rows.forEach(row => {
     apiKeys[row.key_name] = row.key_value;
+    if (row.selected_model) {
+      apiKeyModels[row.key_name] = row.selected_model;
+    }
   });
 
   // Parse color scheme - now returning as string instead of object
@@ -406,6 +411,7 @@ async function getTrainingProviderProfile(userId: string) {
       tel: profileData.telephone || ''
     },
     apiKeys: apiKeys,
+    apiKeyModels: apiKeyModels,
     invoiceTemplateUrl: profileData.invoice_template_url || '',
     receiptTemplateUrl: profileData.receipt_template_url || '',
     certificateTemplateUrl: profileData.certificate_template_url || '',

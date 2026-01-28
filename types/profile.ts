@@ -208,6 +208,12 @@ export interface AdminProfile extends BaseProfile, ContactInfo {
   password?: string;
 }
 
+// API Key with model selection
+export interface ApiKeyWithModel {
+  value: string;
+  selectedModel?: string;
+}
+
 export interface TrainingProviderProfile extends BaseProfile {
   password?: string;
   companyName: string;
@@ -222,6 +228,7 @@ export interface TrainingProviderProfile extends BaseProfile {
     tel: string;
   };
   apiKeys: Record<string, string>;
+  apiKeyModels?: Record<string, string>; // Maps API key name to selected model
   invoiceTemplateUrl?: string;
   receiptTemplateUrl?: string;
   certificateTemplateUrl?: string;

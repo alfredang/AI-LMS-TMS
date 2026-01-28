@@ -8,18 +8,18 @@ import { ensureAbsoluteImageUrl } from '@utils/imageUtils';
 import { getApiUrl, getUploadUrl, getDeleteFileUrl, stripBaseUrl } from '@/lib/urlHelpers';
 
 // CSS classes for inputs
-const inputClasses = "block w-full px-3 py-2 text-gray-900 bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent";
+const inputClasses = "block w-full px-3 py-2 text-gray-900 bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-500";
 
 // --- Reusable Profile Components ---
 const ProfileBioItem: React.FC<{ label: string; value: React.ReactNode }> = ({ label, value }) => (
     <div>
-        <p className="text-sm text-gray-600">{label}</p>
-        <p className="font-semibold text-gray-900 break-words">{value}</p>
+        <p className="text-sm text-gray-600 dark:text-gray-400">{label}</p>
+        <p className="font-semibold text-gray-900 dark:text-gray-200 break-words">{value}</p>
     </div>
 );
 
-const MaskedProfileBioItem: React.FC<{ 
-    label: string; 
+const MaskedProfileBioItem: React.FC<{
+    label: string;
     value: string;
     isVisible: boolean;
     onToggle: () => void;
@@ -27,13 +27,13 @@ const MaskedProfileBioItem: React.FC<{
     maskFn: (val: string) => string;
 }> = ({ label, value, isVisible, onToggle, isAdmin, maskFn }) => (
     <div>
-        <p className="text-sm text-gray-600">{label}</p>
+        <p className="text-sm text-gray-600 dark:text-gray-400">{label}</p>
         <div className="flex items-center gap-2">
-            <p className="font-semibold text-gray-900 break-words">
+            <p className="font-semibold text-gray-900 dark:text-gray-200 break-words">
                 {isAdmin && isVisible ? value : maskFn(value)}
             </p>
             {isAdmin && (
-                <button onClick={onToggle} className="text-gray-600 hover:text-primary">
+                <button onClick={onToggle} className="text-gray-600 dark:text-gray-400 hover:text-primary">
                     <Icon name={isVisible ? IconName.EyeOff : IconName.Eye} className="w-5 h-5" />
                 </button>
             )}
@@ -112,19 +112,19 @@ const LoginDetailsCard: React.FC<{
     };
 
     return (
-        <Card className="p-8 mt-8">
-        <h2 className="text-xl font-bold mb-4">Login Details</h2>
+        <Card className="p-8 mt-8 dark:bg-gray-800 dark:border-gray-700">
+        <h2 className="text-xl font-bold mb-4 dark:text-white">Login Details</h2>
 
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4 flex-grow">
             <div>
-                <p className="text-sm text-gray-600">Login ID</p>
-                <p className="font-semibold text-gray-900 break-words">{loginId}</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">Login ID</p>
+                <p className="font-semibold text-gray-900 dark:text-gray-200 break-words">{loginId}</p>
             </div>
 
             {/* Password row */}
             <div>
-                <p className="text-sm text-gray-600">Password</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">Password</p>
 
                 {/* one row: input/display + eye (left) | actions (right) */}
                 <div className="flex items-end gap-2">
@@ -139,14 +139,14 @@ const LoginDetailsCard: React.FC<{
                         placeholder="Enter new password"
                     />
                     ) : (
-                    <p className="font-semibold text-gray-900 tracking-wider">
+                    <p className="font-semibold text-gray-900 dark:text-gray-200 tracking-wider">
                         {isPasswordVisible ? password : "••••••••••••••••"}
                     </p>
                     )}
                     <button
                     type="button"
                     onClick={() => setIsPasswordVisible(!isPasswordVisible)}
-                    className="text-gray-600 hover:text-primary p-1 rounded-full"
+                    className="text-gray-600 dark:text-gray-400 hover:text-primary p-1 rounded-full"
                     >
                     <Icon
                         name={isPasswordVisible ? IconName.EyeOff : IconName.Eye}
@@ -175,7 +175,7 @@ const LoginDetailsCard: React.FC<{
                 ) : (
                     <Button
                     variant="ghost"
-                    className="border border-gray-300 flex-shrink-0"
+                    className="border border-gray-300 dark:border-gray-600 dark:text-gray-200 flex-shrink-0"
                     onClick={() => setIsResetting(true)}
                     >
                     Reset Password
@@ -465,7 +465,7 @@ export const LearnerProfileCard: React.FC<{
     
     return (
     <>
-        <Card className="p-8">
+        <Card className="p-8 dark:bg-gray-800 dark:border-gray-700">
             <div className="flex flex-col sm:flex-row items-center gap-6">
                  <div className="flex-shrink-0 text-center">
                     <div className="relative group w-24 h-24">
@@ -498,8 +498,8 @@ export const LearnerProfileCard: React.FC<{
                     )}
                 </div>
                 <div className="text-center sm:text-left flex-grow">
-                    <h1 className="text-2xl font-bold">{isEditing ? 'Editing Profile' : formData.name}</h1>
-                    <p className="text-gray-600">Learner Profile</p>
+                    <h1 className="text-2xl font-bold dark:text-white">{isEditing ? 'Editing Profile' : formData.name}</h1>
+                    <p className="text-gray-600 dark:text-gray-400">Learner Profile</p>
                 </div>
                 {isEditing ? (
                     <div className="flex items-center gap-2">
@@ -517,21 +517,21 @@ export const LearnerProfileCard: React.FC<{
                     <Button onClick={() => setIsEditing(true)}>Edit Profile</Button>
                 )}
             </div>
-            <div className="border-t my-6"></div>
-            <h2 className="text-xl font-bold mb-4">Bio Data</h2>
+            <div className="border-t dark:border-gray-700 my-6"></div>
+            <h2 className="text-xl font-bold mb-4 dark:text-white">Bio Data</h2>
             
             {isEditing ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                    <div><label className="text-sm font-medium">Name</label><input type="text" name="name" value={formData.name} onChange={handleChange} className={inputClasses} /></div>
-                    <div><label className="text-sm font-medium">Telephone</label><input type="tel" name="tel" value={formData.tel} onChange={handleChange} className={inputClasses} /></div>
-                    <div><label className="text-sm font-medium">Email</label><input type="email" name="email" value={formData.email} onChange={handleChange} className={inputClasses} /></div>
-                    <div><label className="text-sm font-medium">Date of Birth</label><input type="date" name="dob" value={formatDateForInput(formData.dob || '')} onChange={handleChange} className={inputClasses} /></div>
-                    <div><label className="text-sm font-medium">NRIC</label><input type="text" name="nric" value={formData.nric || ''} onChange={handleChange} className={inputClasses} /></div>
-                    <div><label className="text-sm font-medium">Race</label><select name="ethnicity" value={formData.ethnicity} onChange={handleChange} className={inputClasses}>{Object.values(Ethnicity).map(e => <option key={e} value={e}>{e}</option>)}</select></div>
-                    <div><label className="text-sm font-medium">Gender</label><select name="gender" value={formData.gender} onChange={handleChange} className={inputClasses}>{Object.values(Gender).map(g => <option key={g} value={g}>{g}</option>)}</select></div>
-                    <div><label className="text-sm font-medium">Company</label><input type="text" name="company" value={formData.company} onChange={handleChange} className={inputClasses} /></div>
-                    <div><label className="text-sm font-medium">Employment Status</label><select name="employmentStatus" value={formData.employmentStatus} onChange={handleChange} className={inputClasses}>{Object.values(EmploymentStatus).map(s => <option key={s} value={s}>{s}</option>)}</select></div>
-                    <div><label className="text-sm font-medium">Nationality</label><select name="nationality" value={formData.nationality} onChange={handleChange} className={inputClasses}>{Object.values(Nationality).map(n => <option key={n} value={n}>{n}</option>)}</select></div>
+                    <div><label className="text-sm font-medium dark:text-gray-200">Name</label><input type="text" name="name" value={formData.name} onChange={handleChange} className={inputClasses} /></div>
+                    <div><label className="text-sm font-medium dark:text-gray-200">Telephone</label><input type="tel" name="tel" value={formData.tel} onChange={handleChange} className={inputClasses} /></div>
+                    <div><label className="text-sm font-medium dark:text-gray-200">Email</label><input type="email" name="email" value={formData.email} onChange={handleChange} className={inputClasses} /></div>
+                    <div><label className="text-sm font-medium dark:text-gray-200">Date of Birth</label><input type="date" name="dob" value={formatDateForInput(formData.dob || '')} onChange={handleChange} className={inputClasses} /></div>
+                    <div><label className="text-sm font-medium dark:text-gray-200">NRIC</label><input type="text" name="nric" value={formData.nric || ''} onChange={handleChange} className={inputClasses} /></div>
+                    <div><label className="text-sm font-medium dark:text-gray-200">Race</label><select name="ethnicity" value={formData.ethnicity} onChange={handleChange} className={inputClasses}>{Object.values(Ethnicity).map(e => <option key={e} value={e}>{e}</option>)}</select></div>
+                    <div><label className="text-sm font-medium dark:text-gray-200">Gender</label><select name="gender" value={formData.gender} onChange={handleChange} className={inputClasses}>{Object.values(Gender).map(g => <option key={g} value={g}>{g}</option>)}</select></div>
+                    <div><label className="text-sm font-medium dark:text-gray-200">Company</label><input type="text" name="company" value={formData.company} onChange={handleChange} className={inputClasses} /></div>
+                    <div><label className="text-sm font-medium dark:text-gray-200">Employment Status</label><select name="employmentStatus" value={formData.employmentStatus} onChange={handleChange} className={inputClasses}>{Object.values(EmploymentStatus).map(s => <option key={s} value={s}>{s}</option>)}</select></div>
+                    <div><label className="text-sm font-medium dark:text-gray-200">Nationality</label><select name="nationality" value={formData.nationality} onChange={handleChange} className={inputClasses}>{Object.values(Nationality).map(n => <option key={n} value={n}>{n}</option>)}</select></div>
                 </div>
             ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -565,44 +565,44 @@ export const LearnerProfileCard: React.FC<{
             
             {!isEditing && (
                 <>
-                    <div className="border-t my-6"></div>
-                    <h2 className="text-xl font-bold mb-4">Billing Documents</h2>
+                    <div className="border-t dark:border-gray-700 my-6"></div>
+                    <h2 className="text-xl font-bold mb-4 dark:text-white">Billing Documents</h2>
                     <div className="space-y-4">
-                        <div className="flex justify-between items-center p-3 bg-gray-50 rounded-md border">
+                        <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600">
                                 <div>
-                                    <p className="font-semibold">Pro Forma Invoice</p>
-                                    <p className="text-xs text-subtle">Pro forma invoice for your enrollment.</p>
+                                    <p className="font-semibold dark:text-gray-200">Pro Forma Invoice</p>
+                                    <p className="text-xs text-subtle dark:text-gray-400">Pro forma invoice for your enrollment.</p>
                                 </div>
-                                <Button 
-                                    variant="ghost" 
-                                    size="sm" 
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
                                     onClick={() => window.open(formData.pro_formal_url, '_blank')}
                                 >
                                     Download
                                 </Button>
                         </div>
-                        <div className="flex justify-between items-center p-3 bg-gray-50 rounded-md border">
+                        <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600">
                             <div>
-                                <p className="font-semibold">Course Invoice</p>
-                                <p className="text-xs text-subtle">Invoice for your course enrollment.</p>
+                                <p className="font-semibold dark:text-gray-200">Course Invoice</p>
+                                <p className="text-xs text-subtle dark:text-gray-400">Invoice for your course enrollment.</p>
                             </div>
-                            <Button 
-                                variant="ghost" 
-                                size="sm" 
+                            <Button
+                                variant="ghost"
+                                size="sm"
                                 disabled={!formData.invoice_url}
                                 onClick={() => formData.invoice_url && window.open(formData.invoice_url, '_blank')}
                             >
                                 Download
                             </Button>
                         </div>
-                        <div className="flex justify-between items-center p-3 bg-gray-50 rounded-md border">
+                        <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600">
                             <div>
-                                <p className="font-semibold">Payment Receipt</p>
-                                <p className="text-xs text-subtle">Receipt for your payment.</p>
+                                <p className="font-semibold dark:text-gray-200">Payment Receipt</p>
+                                <p className="text-xs text-subtle dark:text-gray-400">Receipt for your payment.</p>
                             </div>
-                            <Button 
-                                variant="ghost" 
-                                size="sm" 
+                            <Button
+                                variant="ghost"
+                                size="sm"
                                 disabled={!formData.receipt_url}
                                 onClick={() => formData.receipt_url && window.open(formData.receipt_url, '_blank')}
                             >

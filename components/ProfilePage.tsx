@@ -47,10 +47,10 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
 
     if (trainerLoading) {
       return (
-        <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
           <div className="text-center">
             <Spinner size="lg" />
-            <p className="mt-4 text-gray-600">Loading trainer profile...</p>
+            <p className="mt-4 text-gray-600 dark:text-gray-400">Loading trainer profile...</p>
           </div>
         </div>
       );
@@ -58,11 +58,11 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
 
     if (trainerError) {
       return (
-        <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
           <div className="text-center">
             <h1 className="text-2xl font-bold text-red-600 mb-4">Error Loading Trainer Profile</h1>
-            <p className="text-gray-600 mb-4">{trainerError}</p>
-            <p className="text-sm text-gray-500 mb-4">User ID: {actualUserId}</p>
+            <p className="text-gray-600 dark:text-gray-400 mb-4">{trainerError}</p>
+            <p className="text-sm text-gray-500 dark:text-gray-500 mb-4">User ID: {actualUserId}</p>
             <button
               onClick={() => window.location.reload()}
               className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
@@ -76,7 +76,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
 
     if (!trainerProfile) {
       return (
-        <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
           <div className="text-center text-subtle">
             <p>No trainer profile found</p>
             <p className="text-sm mt-2">User ID: {actualUserId}</p>
@@ -123,10 +123,10 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
   // Show error if no authenticated user
   if (!actualUserId) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
         <div className="text-center">
           <h1 className="text-2xl font-bold text-red-600 mb-4">Authentication Required</h1>
-          <p className="text-gray-600">Please log in to view your profile.</p>
+          <p className="text-gray-600 dark:text-gray-400">Please log in to view your profile.</p>
         </div>
       </div>
     );
@@ -134,10 +134,10 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading beautiful profile...</p>
+          <p className="mt-4 text-gray-600 dark:text-gray-400">Loading beautiful profile...</p>
         </div>
       </div>
     );
@@ -145,10 +145,10 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
         <div className="text-center">
           <h1 className="text-2xl font-bold text-red-600 mb-4">Error Loading Profile</h1>
-          <p className="text-gray-600 mb-4">{error}</p>
+          <p className="text-gray-600 dark:text-gray-400 mb-4">{error}</p>
           <button
             onClick={refreshProfile}
             className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
@@ -162,10 +162,10 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
 
   if (!profile) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-gray-800 mb-4">No Profile Found</h1>
-          <p className="text-gray-600">No profile data available.</p>
+          <h1 className="text-2xl font-bold text-gray-800 dark:text-gray-200 mb-4">No Profile Found</h1>
+          <p className="text-gray-600 dark:text-gray-400">No profile data available.</p>
         </div>
       </div>
     );
@@ -187,14 +187,14 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
       default:
         return (
           <div className="text-center">
-            <p className="text-gray-600">Profile type not supported: {actualRole}</p>
+            <p className="text-gray-600 dark:text-gray-400">Profile type not supported: {actualRole}</p>
           </div>
         );
     }
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <div className="py-8">
         <div className="max-w-4xl mx-auto px-4 space-y-6">
           {renderProfileCard()}
