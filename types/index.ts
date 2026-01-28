@@ -42,7 +42,9 @@ export enum AdminPage {
   SearchGrant = 'searchGrant',
   SearchEnrolment = 'searchEnrolment',
   ViewEnrolment = 'viewEnrolment',
-  CourseRun = 'courseRun'
+  CourseRun = 'courseRun',
+  UploadDirectApplication = 'uploadDirectApplication',
+  ViewDirectApplication = 'viewDirectApplication'
 }
 
 // Course related interfaces
