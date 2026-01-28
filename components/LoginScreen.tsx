@@ -276,12 +276,12 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
     setSuccessMessage(null);
   };
 
-  const inputClasses = "block w-full px-4 py-3 text-gray-900 bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent";
+  const inputClasses = "block w-full px-4 py-3 text-gray-900 bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-500";
 
   const renderEmailStep = () => (
     <form onSubmit={handleSendOtp} className="space-y-6">
       <div>
-        <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+        <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1 dark:text-gray-300">
           Email
         </label>
         <input
@@ -305,7 +305,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
         <button
           type="button"
           onClick={handleSwitchToPassword}
-          className="text-sm text-blue-600 hover:text-blue-800 underline"
+          className="text-sm text-blue-600 hover:text-blue-800 underline dark:text-blue-400 dark:hover:text-blue-300"
         >
           Login with password instead
         </button>
@@ -316,9 +316,9 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
   const renderOtpStep = () => (
     <div>
       <div className="text-center mb-6">
-        <p className="font-semibold">Verify your identity</p>
-        <p className="text-sm text-gray-600 mt-1">
-          An OTP has been sent to <span className="font-bold text-gray-900">{email}</span>.
+        <p className="font-semibold dark:text-white">Verify your identity</p>
+        <p className="text-sm text-gray-600 mt-1 dark:text-gray-400">
+          An OTP has been sent to <span className="font-bold text-gray-900 dark:text-white">{email}</span>.
         </p>
       </div>
       <form onSubmit={handleVerifyOtp} className="space-y-4">
@@ -347,22 +347,22 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
       <div className="mt-4 text-center text-sm">
         <button
           onClick={() => { setStep('email'); setError(null); setSuccessMessage(null); setOtp(''); }}
-          className="font-medium text-blue-600 hover:text-blue-800"
+          className="font-medium text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
         >
           Change Email
         </button>
-        <span className="mx-2 text-gray-500">|</span>
+        <span className="mx-2 text-gray-500 dark:text-gray-400">|</span>
         <button
           onClick={handleResendOtp}
           disabled={isResending}
-          className="font-medium text-blue-600 hover:text-blue-800 disabled:text-gray-400 disabled:cursor-not-allowed"
+          className="font-medium text-blue-600 hover:text-blue-800 disabled:text-gray-400 disabled:cursor-not-allowed dark:text-blue-400 dark:hover:text-blue-300 dark:disabled:text-gray-600"
         >
           {isResending ? 'Resending...' : 'Resend OTP'}
         </button>
-        <span className="mx-2 text-gray-500">|</span>
+        <span className="mx-2 text-gray-500 dark:text-gray-400">|</span>
         <button
           onClick={handleSwitchToPassword}
-          className="font-medium text-blue-600 hover:text-blue-800"
+          className="font-medium text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
         >
           Use Password
         </button>
@@ -373,7 +373,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
   const renderPasswordStep = () => (
     <form onSubmit={handlePasswordLogin} className="space-y-6">
       <div>
-        <label htmlFor="email-pw" className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+        <label htmlFor="email-pw" className="block text-sm font-medium text-gray-700 mb-1 dark:text-gray-300">Email</label>
         <input
           id="email-pw"
           name="email"
@@ -386,7 +386,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
         />
       </div>
       <div>
-        <label htmlFor="password-login" className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+        <label htmlFor="password-login" className="block text-sm font-medium text-gray-700 mb-1 dark:text-gray-300">Password</label>
         <div className="relative">
           <input
             id="password-login"
@@ -427,7 +427,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
           <button
             type="button"
             onClick={handleSwitchToOtp}
-            className="text-sm text-blue-600 hover:text-blue-800 underline"
+            className="text-sm text-blue-600 hover:text-blue-800 underline dark:text-blue-400 dark:hover:text-blue-300"
           >
             Login with OTP instead
           </button>
@@ -439,8 +439,8 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
   const renderRoleSelectStep = () => (
     <div className="space-y-6">
       <div className="text-center mb-6">
-        <p className="font-semibold text-lg text-gray-900">Welcome back, {pendingUser?.fullName}!</p>
-        <p className="text-sm text-gray-600 mt-2">
+        <p className="font-semibold text-lg text-gray-900 dark:text-white">Welcome back, {pendingUser?.fullName}!</p>
+        <p className="text-sm text-gray-600 mt-2 dark:text-gray-300">
           You have access to multiple roles. Please select one to continue:
         </p>
       </div>
@@ -450,15 +450,15 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
           <button
             key={role}
             onClick={() => handleRoleSelect(role)}
-            className="w-full flex items-center justify-between p-4 border-2 border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-all duration-200 group"
+            className="w-full flex items-center justify-between p-4 border-2 border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-all duration-200 group dark:border-gray-600 dark:hover:bg-gray-700 dark:hover:border-blue-400"
           >
             <div className="flex items-center space-x-3">
               <span className="text-2xl">{getRoleIcon(role)}</span>
               <div className="text-left">
-                <p className="font-medium text-gray-900 group-hover:text-blue-700">
+                <p className="font-medium text-gray-900 group-hover:text-blue-700 dark:text-white dark:group-hover:text-blue-400">
                   {getRoleDisplayName(role)}
                 </p>
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-gray-500 dark:text-gray-400">
                   {role === UserRole.Learner && 'Access courses and track your learning progress'}
                   {role === UserRole.Trainer && 'Manage classes and grade assessments'}
                   {role === UserRole.Developer && 'Create and edit course content'}
@@ -467,7 +467,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
                 </p>
               </div>
             </div>
-            <svg className="w-5 h-5 text-gray-400 group-hover:text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg className="w-5 h-5 text-gray-400 group-hover:text-blue-500 dark:text-gray-500 dark:group-hover:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
             </svg>
           </button>
@@ -481,7 +481,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
             setPendingUser(null);
             setAvailableRoles([]);
           }}
-          className="text-sm text-gray-500 hover:text-gray-700 underline"
+          className="text-sm text-gray-500 hover:text-gray-700 underline dark:text-gray-400 dark:hover:text-gray-200"
         >
           Sign in with a different account
         </button>
@@ -505,13 +505,13 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-[#1a3a69]">
+    <div className="flex items-center justify-center min-h-screen bg-[#1a3a69] dark:bg-gray-900">
       <div className="w-full max-w-md px-4">
-        <Card className="!p-8 sm:!p-10 !shadow-2xl">
+        <Card className="!p-8 sm:!p-10 !shadow-2xl dark:bg-gray-800 dark:border-gray-700">
           <div className="flex flex-col items-center text-center mb-8">
             {/* Only show logo and company name when data is loaded */}
             {isLoadingProviderData ? (
-              <div className="w-20 h-20 bg-gray-200 rounded-md mb-4 animate-pulse"></div>
+              <div className="w-20 h-20 bg-gray-200 rounded-md mb-4 animate-pulse dark:bg-gray-700"></div>
             ) : (
               <img
                 src={trainingProviderData?.companyLogoUrl}
@@ -522,15 +522,15 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
                 }}
               />
             )}
-            <h1 className="text-2xl font-bold text-gray-900">
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
               {isLoadingProviderData ? '...' : trainingProviderData?.companyName}
             </h1>
-            <p className="text-gray-600 mt-2">LMS cum TMS for WSQ Courses</p>
+            <p className="text-gray-600 mt-2 dark:text-gray-400">LMS cum TMS for WSQ Courses</p>
           </div>
 
           {renderCurrentStep()}
 
-          <div className="mt-8 text-center text-xs text-gray-500">
+          <div className="mt-8 text-center text-xs text-gray-500 dark:text-gray-400">
             <div className="flex justify-center space-x-4">
               <a href="#privacy" className="hover:underline">Privacy Policy</a>
               <a href="#acceptable-use" className="hover:underline">Acceptable Use Policy</a>

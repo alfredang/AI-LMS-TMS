@@ -418,11 +418,11 @@ const ManagementCourseList: React.FC = () => {
                     </div>
                     <div className="md:col-span-2 flex justify-end items-center gap-4">
                         <div className="flex items-center gap-2">
-                            <label className="text-sm font-medium text-gray-700 hidden sm:block">View:</label>
-                            <div className="flex items-center rounded-md bg-gray-100 p-0.5 border">
+                            <label className="text-sm font-medium text-gray-700 hidden sm:block dark:text-gray-300">View:</label>
+                            <div className="flex items-center rounded-md bg-gray-100 p-0.5 border dark:bg-gray-700 dark:border-gray-600">
                                 <button
                                     onClick={() => setViewMode('block')}
-                                    className={`p-1.5 rounded-md transition-colors ${viewMode === 'block' ? 'bg-white shadow text-primary dark:bg-gray-700 dark:text-blue-400' : 'text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200'}`}
+                                    className={`p-1.5 rounded-md transition-colors ${viewMode === 'block' ? 'bg-white shadow text-primary dark:bg-gray-600 dark:text-blue-400' : 'text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200'}`}
                                     aria-label="Block view"
                                     aria-pressed={viewMode === 'block'}
                                 >
@@ -430,7 +430,7 @@ const ManagementCourseList: React.FC = () => {
                                 </button>
                                 <button
                                     onClick={() => setViewMode('table')}
-                                    className={`p-1.5 rounded-md transition-colors ${viewMode === 'table' ? 'bg-white shadow text-primary dark:bg-gray-700 dark:text-blue-400' : 'text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200'}`}
+                                    className={`p-1.5 rounded-md transition-colors ${viewMode === 'table' ? 'bg-white shadow text-primary dark:bg-gray-600 dark:text-blue-400' : 'text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200'}`}
                                     aria-label="Table view"
                                     aria-pressed={viewMode === 'table'}
                                 >
@@ -438,8 +438,8 @@ const ManagementCourseList: React.FC = () => {
                                 </button>
                             </div>
                         </div>
-                        <Button variant="ghost" onClick={handleClearFilters}>Reset</Button>
-                        <Button variant="ghost" onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}>
+                        <Button variant="ghost" onClick={handleClearFilters} className="dark:text-white dark:hover:bg-gray-700">Reset</Button>
+                        <Button variant="ghost" onClick={() => setShowAdvancedFilters(!showAdvancedFilters)} className="dark:text-white dark:hover:bg-gray-700">
                             {showAdvancedFilters ? 'Hide' : 'Show'} Filters
                         </Button>
                     </div>
