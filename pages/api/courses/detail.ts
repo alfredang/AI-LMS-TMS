@@ -48,8 +48,10 @@ export default async function handler(
     
     if (courseRunId) {
       // Get specific course run details
+      // Use app_user instead of learner_profile since enrollments are linked to app_user
+      // This allows users with multiple roles (e.g., Developer + Learner) to view course details
       courseDetailQuery = `
-        SELECT 
+        SELECT
           c.title,
           c.course_code,
           c.tsc_title,
@@ -64,19 +66,18 @@ export default async function handler(
           c.slides_url,
           e.certificate
         FROM enrollment e
-        JOIN course_run cr 
+        JOIN course_run cr
           ON e.course_run_id = cr.id
-        JOIN course c 
+        JOIN course c
           ON cr.course_id = c.id
-        JOIN learner_profile l
-          ON e.user_id = l.user_id
-        WHERE l.user_id = $1 AND c.id = $2 AND cr.id = $3
+        WHERE e.user_id = $1 AND c.id = $2 AND cr.id = $3
       `;
       queryParams = [userId, courseId, courseRunId];
     } else {
       // Fallback to first enrollment found (original behavior)
+      // Use app_user instead of learner_profile since enrollments are linked to app_user
       courseDetailQuery = `
-        SELECT 
+        SELECT
           c.title,
           c.course_code,
           c.tsc_title,
@@ -91,13 +92,11 @@ export default async function handler(
           c.slides_url,
           e.certificate
         FROM enrollment e
-        JOIN course_run cr 
+        JOIN course_run cr
           ON e.course_run_id = cr.id
-        JOIN course c 
+        JOIN course c
           ON cr.course_id = c.id
-        JOIN learner_profile l
-          ON e.user_id = l.user_id
-        WHERE l.user_id = $1 AND c.id = $2
+        WHERE e.user_id = $1 AND c.id = $2
       `;
       queryParams = [userId, courseId];
     }

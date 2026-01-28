@@ -11,62 +11,62 @@ import { getApiUrl, getDownloadUrl } from '@/lib/urlHelpers';
 
 // --- Types (assuming these exist in your project) ---
 interface Topic {
-  id: string;
-  title: string;
-  subtopics: Subtopic[];
+    id: string;
+    title: string;
+    subtopics: Subtopic[];
 }
 
 interface Subtopic {
-  id: string;
-  title: string;
+    id: string;
+    title: string;
 }
 
 interface Assessment {
-  id: string;
-  title: string;
-  category: string;
-  status: string;
-  file_url: string;
+    id: string;
+    title: string;
+    category: string;
+    status: string;
+    file_url: string;
 }
 
 interface LearnerProgress {
-  email: string;
-  name: string;
-  progressPercent: number;
-  completedSubtopics: string[];
-  submissions: Submission[];
+    email: string;
+    name: string;
+    progressPercent: number;
+    completedSubtopics: string[];
+    submissions: Submission[];
 }
 
 interface Submission {
-  assessmentId: string;
-  fileName: string;
-  submittedAt: string;
+    assessmentId: string;
+    fileName: string;
+    submittedAt: string;
 }
 
 interface Course {
-  id: string;
-  title: string;
-  courseCode: string;
-  tscTitle?: string;
-  tscCode?: string;
-  courseRunId: string;
-  daId?: string;
-  trainingHours: number;
-  assessmentHours: number;
-  courseType: string;
-  modeOfLearning: string[];
-  classStatus?: string;
-  totalAssessments?: number;
-  topics: Topic[];
-  assessments?: Assessment[];
-  learners?: LearnerProgress[];
-  bookmarkedSubtopics?: string[];
-  lessonPlanUrl?: string;
-  facilitatorGuideUrl?: string;
-  learnerGuideUrl?: string;
-  slidesUrl?: string;
-  trainerSlidesUrl?: string;
-  assessmentPlanUrl?: string;
+    id: string;
+    title: string;
+    courseCode: string;
+    tscTitle?: string;
+    tscCode?: string;
+    courseRunId: string;
+    daId?: string;
+    trainingHours: number;
+    assessmentHours: number;
+    courseType: string;
+    modeOfLearning: string[];
+    classStatus?: string;
+    totalAssessments?: number;
+    topics: Topic[];
+    assessments?: Assessment[];
+    learners?: LearnerProgress[];
+    bookmarkedSubtopics?: string[];
+    lessonPlanUrl?: string;
+    facilitatorGuideUrl?: string;
+    learnerGuideUrl?: string;
+    slidesUrl?: string;
+    trainerSlidesUrl?: string;
+    assessmentPlanUrl?: string;
 }
 
 // --- Utility Functions ---
@@ -142,24 +142,24 @@ const ContentSection: React.FC<{ title: string; children: React.ReactNode; class
 // };
 
 // --- Assessment Section Component ---
-const AssessmentsSection: React.FC<{ 
-    course: Course; 
-    userRole: UserRole; 
-    developerAssessments?: any[]; 
+const AssessmentsSection: React.FC<{
+    course: Course;
+    userRole: UserRole;
+    developerAssessments?: any[];
     courseRunId?: string;
     courseId?: string;
     setDeveloperAssessments?: (assessments: any[]) => void;
     handleFileDownload: (filePath: string, e?: React.MouseEvent) => void;
 }> = ({ course, userRole, developerAssessments, courseRunId, courseId, setDeveloperAssessments, handleFileDownload }) => {
-    const { 
-        submissions, 
+    const {
+        submissions,
         submitAssessment,
         courseAssessments,
         publishAssessment,
         loadSubmissions,
         currentUser
     } = useLms();
-    
+
 
     const [accessCodeInputs, setAccessCodeInputs] = useState<Record<string, string>>({});
     const [errors, setErrors] = useState<Record<string, string>>({});
@@ -202,7 +202,7 @@ const AssessmentsSection: React.FC<{
             try {
                 const assessmentsResponse = await fetch(`/api/courses/developer-course-assessments?courseId=${courseId}`);
                 const assessmentsResult = await assessmentsResponse.json();
-                
+
                 if (assessmentsResult.success) {
                     setDeveloperAssessments(assessmentsResult.data);
                 }
@@ -214,7 +214,7 @@ const AssessmentsSection: React.FC<{
             try {
                 const assessmentsResponse = await fetch(`/api/courses/developer-assessments?courseRunId=${courseRunId}`);
                 const assessmentsResult = await assessmentsResponse.json();
-                
+
                 if (assessmentsResult.success) {
                     setDeveloperAssessments(assessmentsResult.data);
                 }
@@ -243,7 +243,7 @@ const AssessmentsSection: React.FC<{
             </ContentSection>
         );
     }
-    
+
 
     const handlePublish = async (assessmentId: string) => {
         try {
@@ -252,7 +252,7 @@ const AssessmentsSection: React.FC<{
                 console.warn('⚠️ Developers, Training Providers, and Admins cannot publish assessments');
                 return;
             }
-            
+
             // Use standard LMS context for trainer and other roles
             await publishAssessment(assessmentId, true);
         } catch (error) {
@@ -268,7 +268,7 @@ const AssessmentsSection: React.FC<{
                 console.warn('⚠️ Developers, Training Providers, and Admins cannot unpublish assessments');
                 return;
             }
-            
+
             // Use standard LMS context for trainer and other roles
             await publishAssessment(assessmentId, false);
         } catch (error) {
@@ -276,14 +276,14 @@ const AssessmentsSection: React.FC<{
             alert('Failed to unpublish assessment. Please try again.');
         }
     };
-    
-    
+
+
     const handleFileChange = (assessmentId: string, e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
             setSelectedFiles(prev => ({ ...prev, [assessmentId]: e.target.files![0] }));
         }
     };
-    
+
     const handleSubmit = async (assessmentId: string) => {
         const file = selectedFiles[assessmentId];
         if (file) {
@@ -291,29 +291,29 @@ const AssessmentsSection: React.FC<{
                 // First upload the file to get the file URL
                 const formData = new FormData();
                 formData.append('file', file);
-                
+
                 const uploadResponse = await fetch('/api/upload/file', {
                     method: 'POST',
                     body: formData,
                 });
-                
+
                 if (!uploadResponse.ok) {
                     throw new Error('Failed to upload file');
                 }
-                
+
                 const uploadResult = await uploadResponse.json();
                 if (!uploadResult.success) {
                     throw new Error(uploadResult.error || 'Failed to upload file');
                 }
-                
+
                 // Then submit the assessment with the file URL
                 await submitAssessment(assessmentId, file.name, uploadResult.data.fileUrl);
                 console.log('✅ Assessment submitted successfully, refreshing submissions...');
-                
+
                 // Refresh submissions to show the newly submitted file
                 await loadSubmissions();
                 console.log('✅ Submissions refreshed after successful submission');
-                
+
                 alert(`Submitted '${file.name}' for assessment.`);
                 setIsResubmitting(prev => ({ ...prev, [assessmentId]: false }));
                 setSelectedFiles(prev => ({ ...prev, [assessmentId]: null }));
@@ -323,24 +323,24 @@ const AssessmentsSection: React.FC<{
             }
         }
     };
-    
+
     const renderLearnerAssessment = (assessment: CourseAssessment) => {
         const canResubmit = isResubmitting[assessment.id];
-        
+
         // Filter submissions by both assessment_id and enrollment_id to ensure 
         // submissions are specific to this learner's enrollment in this course run
         let submission;
         if (currentEnrollmentId) {
             // Use enrollment-based filtering (preferred method)
-            submission = submissions.find(s => 
-                s.assessment_id === assessment.id && 
+            submission = submissions.find(s =>
+                s.assessment_id === assessment.id &&
                 s.enrollment_id === currentEnrollmentId
             );
         } else {
             // Fallback to assessment-only filtering if enrollment ID not available yet
             submission = submissions.find(s => s.assessment_id === assessment.id);
         }
-        
+
         // Debug logging to help verify enrollment-based filtering
         console.log(`🔍 Filtering submissions for assessment ${assessment.id}:`, {
             currentEnrollmentId,
@@ -356,12 +356,12 @@ const AssessmentsSection: React.FC<{
             matchingByAssessment: submissions.filter(s => s.assessment_id === assessment.id),
             foundSubmissionByEnrollment: submission
         });
-        
+
         // Only show assessments that are published by the trainer
         if (!assessment.published) {
             return <p className="text-gray-500">This assessment has not been published by the trainer yet.</p>;
         }
-        
+
         if (submission && !canResubmit) {
             return (
                 <div className="bg-green-50 p-3 rounded-md border border-green-200">
@@ -370,7 +370,7 @@ const AssessmentsSection: React.FC<{
                             <p className="font-semibold text-green-800">Submitted: {submission.file_name}</p>
                             <p className="text-xs text-green-600">On: {new Date(submission.submitted_at).toLocaleString()}</p>
                         </div>
-                        <Button variant="ghost" size="sm" onClick={() => setIsResubmitting(prev => ({...prev, [assessment.id]: true}))}>
+                        <Button variant="ghost" size="sm" onClick={() => setIsResubmitting(prev => ({ ...prev, [assessment.id]: true }))}>
                             Resubmit
                         </Button>
                     </div>
@@ -382,7 +382,7 @@ const AssessmentsSection: React.FC<{
             <div>
                 {assessment.file_url && (
                     <div className="mb-4">
-                        <div 
+                        <div
                             onClick={(e) => handleFileDownload(assessment.file_url!, e)}
                             className="flex items-center gap-3 p-3 bg-gray-50 rounded-md border hover:bg-gray-100 transition-colors cursor-pointer"
                         >
@@ -396,7 +396,7 @@ const AssessmentsSection: React.FC<{
                 )}
                 <p className="mb-2 text-gray-500">{canResubmit ? "Select a new file to replace your previous submission." : "The assessment is now available. Please upload your submission."}</p>
                 <div className="flex items-center gap-2">
-                    <input 
+                    <input
                         type="file"
                         onChange={(e) => handleFileChange(assessment.id, e)}
                         className="flex-grow text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-blue-600 hover:file:bg-indigo-100"
@@ -406,7 +406,7 @@ const AssessmentsSection: React.FC<{
                         {canResubmit ? 'Submit Again' : 'Submit'}
                     </Button>
                 </div>
-             </div>
+            </div>
         );
     };
 
@@ -415,7 +415,7 @@ const AssessmentsSection: React.FC<{
             <div className="space-y-3">
                 {/* Show assessment file download if available */}
                 {assessment.file_url && (
-                    <div 
+                    <div
                         onClick={(e) => handleFileDownload(assessment.file_url!, e)}
                         className="flex items-center gap-3 p-3 bg-gray-50 rounded-md border hover:bg-gray-100 transition-colors cursor-pointer"
                     >
@@ -426,7 +426,7 @@ const AssessmentsSection: React.FC<{
                         </div>
                     </div>
                 )}
-                
+
                 {/* Show publish/unpublish buttons only for trainers */}
                 {userRole === UserRole.Trainer && (
                     assessment.published ? (
@@ -435,8 +435,8 @@ const AssessmentsSection: React.FC<{
                                 <p className="text-sm font-semibold text-blue-800">Assessment is Live</p>
                                 <p className="text-xs text-blue-600">Learners can now submit their work.</p>
                             </div>
-                            <Button 
-                                onClick={() => handleUnpublish(assessment.id)} 
+                            <Button
+                                onClick={() => handleUnpublish(assessment.id)}
                                 variant="secondary"
                                 className="w-full"
                             >
@@ -464,11 +464,11 @@ const AssessmentsSection: React.FC<{
                             <span className="text-sm font-medium bg-indigo-100 text-indigo-800 px-3 py-1 rounded-full">{assessment.category}</span>
                         </div>
                         {/* Learners see assessment submission interface, trainers and developers can view/download files, trainers can also publish/unpublish */}
-                        {userRole === UserRole.Learner ? 
-                            renderLearnerAssessment(assessment) : 
+                        {userRole === UserRole.Learner ?
+                            renderLearnerAssessment(assessment) :
                             (userRole === UserRole.Trainer || userRole === UserRole.Developer || userRole === UserRole.TrainingProvider || userRole === UserRole.Admin) ?
-                            renderTrainerAssessment(assessment) :
-                            null
+                                renderTrainerAssessment(assessment) :
+                                null
                         }
                     </li>
                 ))}
@@ -515,9 +515,9 @@ const CertificateSection: React.FC<{ userRole: UserRole }> = ({ userRole }) => {
 
 
 //---- Course Info Panel ---
-const CourseInfoPanel: React.FC<{course: Course; userRole: UserRole}> = ({ course, userRole }) => {
+const CourseInfoPanel: React.FC<{ course: Course; userRole: UserRole }> = ({ course, userRole }) => {
     const totalDuration = Number(course.trainingHours) + Number(course.assessmentHours);
-    
+
     const DetailRow = ({ label, value }: { label: string, value: string | number }) => (
         <div className="flex justify-between items-start gap-4">
             <p className="text-gray-500 flex-shrink-0">{label}</p>
@@ -528,7 +528,7 @@ const CourseInfoPanel: React.FC<{course: Course; userRole: UserRole}> = ({ cours
     console.log('tsc ref', course.tscCode);
 
     return (
-         <div className="p-6 border-b">
+        <div className="p-6 border-b">
             <h3 className="font-bold text-lg text-gray-900 mb-6">Course Details</h3>
             <div className="space-y-4 text-sm">
                 <DetailRow label="Course Title" value={course.title} />
@@ -542,15 +542,15 @@ const CourseInfoPanel: React.FC<{course: Course; userRole: UserRole}> = ({ cours
                         <DetailRow label="Digital Attendance ID" value={course.daId || 'N/A'} />
                     </>
                 )}
-                
+
                 <div className="pt-4">
                     <p className="font-semibold text-gray-500 mb-3">Course Duration</p>
                     <div className="space-y-3">
-                         <div className="flex justify-between items-baseline">
+                        <div className="flex justify-between items-baseline">
                             <p className="text-gray-500">Training Hours:</p>
                             <p className="font-semibold text-gray-900">{course.trainingHours}</p>
                         </div>
-                         <div className="flex justify-between items-baseline">
+                        <div className="flex justify-between items-baseline">
                             <p className="text-gray-500">Assessment Hours:</p>
                             <p className="font-semibold text-gray-900">{course.assessmentHours}</p>
                         </div>
@@ -583,26 +583,26 @@ const CourseSidebar: React.FC<CourseSidebarProps> = ({ userRole, onSetGradingVie
         if (label === 'Grading') {
             onSetGradingView(true);
         } else {
-            onSetGradingView(false); 
+            onSetGradingView(false);
             setActiveItem(label);
-            
+
             let targetId = toId(label);
-            if (label === 'Lesson' || label === 'Lessons') targetId = 'lessons'; 
+            if (label === 'Lesson' || label === 'Lessons') targetId = 'lessons';
             else if (label === 'Assessment' || label === 'Assessments') targetId = 'assessments';
             else if (label === 'Certificate') targetId = 'certificate';
-            
+
             const element = document.getElementById(targetId);
             if (element) {
                 const yOffset = -90;
                 const y = element.getBoundingClientRect().top + window.pageYOffset + yOffset;
-                window.scrollTo({top: y, behavior: 'smooth'});
+                window.scrollTo({ top: y, behavior: 'smooth' });
             }
         }
         if (onMobileItemClick) {
             onMobileItemClick();
         }
     };
-    
+
     const learnerNavItems: NavItem[] = [
         { type: 'link', label: "Digital Attendance", icon: IconName.Calendar },
         { type: 'link', label: "Lesson Plan", icon: IconName.BookOpen },
@@ -613,7 +613,7 @@ const CourseSidebar: React.FC<CourseSidebarProps> = ({ userRole, onSetGradingVie
         { type: 'link', label: "Assessment", icon: IconName.ClipboardCheck },
         { type: 'link', label: "Certificate", icon: IconName.FileText },
     ];
-    
+
     let trainerNavItems: NavItem[] = [
         { type: 'link', label: "Digital Attendance", icon: IconName.Calendar },
         { type: 'link', label: "Lesson Plan", icon: IconName.BookOpen },
@@ -629,13 +629,13 @@ const CourseSidebar: React.FC<CourseSidebarProps> = ({ userRole, onSetGradingVie
     ];
 
     if (userRole === UserRole.Developer || userRole === UserRole.TrainingProvider || userRole === UserRole.Admin) {
-        trainerNavItems = trainerNavItems.filter(item => 
-            item.type === 'separator' || 
+        trainerNavItems = trainerNavItems.filter(item =>
+            item.type === 'separator' ||
             (item.label !== "Digital Attendance" && item.label !== "TRAQOM Survey" && item.label !== "Grading")
         );
     } else if (userRole === UserRole.Trainer) {
-        trainerNavItems = trainerNavItems.filter(item => 
-            item.type === 'separator' || 
+        trainerNavItems = trainerNavItems.filter(item =>
+            item.type === 'separator' ||
             (item.label !== "TRAQOM Survey" && item.label !== "Learner Slides")
         );
     }
@@ -650,11 +650,11 @@ const CourseSidebar: React.FC<CourseSidebarProps> = ({ userRole, onSetGradingVie
                     if (item.type === 'separator') {
                         return <li key={`sep-${index}`}><div className="border-t my-2 mx-4" /></li>;
                     }
-                    
+
                     return (
                         <li key={item.label}>
-                            <a 
-                                href={`#${toId(item.label)}`} 
+                            <a
+                                href={`#${toId(item.label)}`}
                                 onClick={(e) => { e.preventDefault(); handleItemClick(item.label); }}
                                 className={`flex items-center space-x-3 px-4 py-3 rounded-md font-semibold transition-colors ${activeItem === item.label ? 'bg-primary/10 text-primary' : 'hover:bg-gray-100'}`}
                             >
@@ -685,20 +685,20 @@ const TopicAccordion: React.FC<TopicAccordionProps> = ({ topic, progress, bookma
     const displayTitle = topic.title.replace('Module', 'Learning Unit');
     return (
         <Card>
-            <button 
+            <button
                 className="w-full text-left p-4 flex justify-between items-center"
                 onClick={() => setIsOpen(!isOpen)}
             >
                 <div className="flex-grow">
                     <h4 className="font-bold text-lg">{displayTitle}</h4>
-                     {userRole === UserRole.Learner && (
+                    {userRole === UserRole.Learner && (
                         <div className="flex items-center mt-2">
                             <p className="text-sm font-bold text-green-600 w-12">{progress.toFixed(0)}%</p>
                             <div className="w-full bg-gray-200 rounded-full h-2">
-                                <div className="bg-green-500 h-2 rounded-full" style={{width: `${progress}%`}}></div>
+                                <div className="bg-green-500 h-2 rounded-full" style={{ width: `${progress}%` }}></div>
                             </div>
                         </div>
-                     )}
+                    )}
                 </div>
                 <Icon name={IconName.ChevronDown} className={`w-5 h-5 ml-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
             </button>
@@ -749,11 +749,11 @@ const TopicAccordion: React.FC<TopicAccordionProps> = ({ topic, progress, bookma
 
 // --- Main Course Detail Component ---
 export const CourseDetail: React.FC = () => {
-    const { 
-        selectedCourse, 
-        setSelectedCourse, 
-        courseDetail, 
-        learningUnits, 
+    const {
+        selectedCourse,
+        setSelectedCourse,
+        courseDetail,
+        learningUnits,
         courseAssessments,
         bookmarkedSubtopics,
         completedSubtopics,
@@ -768,12 +768,12 @@ export const CourseDetail: React.FC = () => {
         if (e) {
             e.preventDefault();
         }
-        
+
         if (!filePath) return;
-        
+
         // Remove leading slash if present to normalize the path
         let cleanPath = filePath.startsWith('/') ? filePath.substring(1) : filePath;
-        
+
         // Fix assessment file paths: if it starts with "assessments/", prepend "uploads/"
         if (cleanPath.startsWith('assessments/')) {
             cleanPath = `uploads/${cleanPath}`;
@@ -797,7 +797,7 @@ export const CourseDetail: React.FC = () => {
     const [isTraqomOpen, setIsTraqomOpen] = useState(false);
     const [isCourseMenuOpen, setIsCourseMenuOpen] = useState(false);
     const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
-    
+
     // Developer-specific state
     const [developerCourseDetail, setDeveloperCourseDetail] = useState<any>(null);
     const [developerLearningUnits, setDeveloperLearningUnits] = useState<any[]>([]);
@@ -814,7 +814,7 @@ export const CourseDetail: React.FC = () => {
                     // Load developer course detail (use courseId instead of courseRunId)
                     const detailResponse = await fetch(`/api/courses/developer-course-detail?courseId=${selectedCourse.id}`);
                     const detailResult = await detailResponse.json();
-                    
+
                     if (detailResult.success) {
                         setDeveloperCourseDetail(detailResult.data);
                     }
@@ -822,7 +822,7 @@ export const CourseDetail: React.FC = () => {
                     // Load developer learning units
                     const unitsResponse = await fetch(`/api/courses/developer-learning-units?courseId=${selectedCourse.id}`);
                     const unitsResult = await unitsResponse.json();
-                    
+
                     if (unitsResult.success) {
                         setDeveloperLearningUnits(unitsResult.data);
                     }
@@ -830,7 +830,7 @@ export const CourseDetail: React.FC = () => {
                     // Load developer assessments (use courseId instead of courseRunId)
                     const assessmentsResponse = await fetch(`/api/courses/developer-course-assessments?courseId=${selectedCourse.id}`);
                     const assessmentsResult = await assessmentsResponse.json();
-                    
+
                     if (assessmentsResult.success) {
                         setDeveloperAssessments(assessmentsResult.data);
                     }
@@ -851,10 +851,10 @@ export const CourseDetail: React.FC = () => {
     // Use developer data if available, otherwise fall back to context data
     const contextDetail = courseDetail;
     const contextUnits = learningUnits;
-    
+
     const effectiveDetail = (userRole === UserRole.Developer || userRole === UserRole.TrainingProvider || userRole === UserRole.Admin) && developerCourseDetail ? developerCourseDetail : contextDetail;
     const effectiveUnits = (userRole === UserRole.Developer || userRole === UserRole.TrainingProvider || userRole === UserRole.Admin) && developerLearningUnits.length > 0 ? developerLearningUnits : contextUnits;
-    
+
     const convertedCourse: Course & {
         facilitatorGuideUrl?: string;
         trainerSlidesUrl?: string;
@@ -911,11 +911,11 @@ export const CourseDetail: React.FC = () => {
 
     const handleEditCourse = async () => {
         if (!selectedCourse?.id) return;
-        
+
         try {
             const response = await fetch(`/api/courses/edit-data?courseId=${selectedCourse.id}`);
             const result = await response.json();
-            
+
             if (result.success && result.data) {
                 setEditingCourse(result.data);
             } else {
@@ -930,20 +930,20 @@ export const CourseDetail: React.FC = () => {
 
     const handleDeleteCourse = async () => {
         if (!selectedCourse?.id) return;
-        
+
         // Show custom confirmation dialog
         setShowDeleteConfirmation(true);
     };
 
     const confirmDeleteCourse = async () => {
         if (!selectedCourse?.id) return;
-        
+
         setShowDeleteConfirmation(false);
-        
+
         try {
             console.log('🗑️ Deleting course:', selectedCourse.id);
             const result = await courseService.deleteCourse(selectedCourse.id.toString());
-            
+
             if (result.success) {
                 console.log('✅ Course deleted successfully');
                 alert('Course deleted successfully');
@@ -958,7 +958,7 @@ export const CourseDetail: React.FC = () => {
             alert('Failed to delete course. Please try again.');
         }
     };
-    
+
     const handleToggleBookmark = (e: React.MouseEvent, subtopicId: string) => {
         e.preventDefault();
         e.stopPropagation();
@@ -971,12 +971,13 @@ export const CourseDetail: React.FC = () => {
 
     const bookmarkedSubtopicsSet = new Set(bookmarkedSubtopics);
     const completedSubtopicsSet = new Set(completedSubtopics);
-    
+
     const traqomSurveyLink = 'https://ssgtraqom.qualtrics.com/jfe/form/SV_3K9i7rTJ9OLsauW?Q_CHL=qr';
-    const traqomQrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(traqomSurveyLink)}`;
+    // QR Code URLs temporarily disabled
+    // const traqomQrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(traqomSurveyLink)}`;
 
     const attendanceLink = convertedCourse.daId ? `https://www.myskillsfuture.gov.sg/api/take-attendance/${convertedCourse.daId}` : null;
-    const attendanceQrCodeUrl = attendanceLink ? `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(attendanceLink)}` : null;
+    // const attendanceQrCodeUrl = attendanceLink ? `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(attendanceLink)}` : null;
 
     const isTrainerSlidesExternal = convertedCourse.trainerSlidesUrl?.startsWith('http');
 
@@ -996,21 +997,21 @@ export const CourseDetail: React.FC = () => {
                                     <p className="text-sm text-gray-500">This action cannot be undone</p>
                                 </div>
                             </div>
-                            
+
                             <div className="mb-6">
                                 <p className="text-gray-700 mb-4">
                                     Are you sure you want to delete the course <strong>"{selectedCourse?.title}"</strong>?
                                 </p>
                             </div>
-                            
+
                             <div className="flex gap-3 justify-end">
-                                <Button 
-                                    variant="primary" 
+                                <Button
+                                    variant="primary"
                                     onClick={() => setShowDeleteConfirmation(false)}
                                 >
                                     Cancel
                                 </Button>
-                                <Button 
+                                <Button
                                     onClick={confirmDeleteCourse}
                                     className="bg-red-600 hover:bg-red-700 text-white"
                                 >
@@ -1037,372 +1038,415 @@ export const CourseDetail: React.FC = () => {
 
                     {/* Mobile Sidebar (Overlay) */}
                     {isCourseMenuOpen && (
-                <div 
-                    className="fixed inset-0 bg-black/50 z-40 lg:hidden" 
-                    onClick={() => setIsCourseMenuOpen(false)}
-                >
-                    <div 
-                        className="absolute left-0 top-0 h-full w-72 max-w-[calc(100%-3rem)] bg-white shadow-xl flex flex-col" 
-                        onClick={(e) => e.stopPropagation()}
-                    >
-                        <div className="p-4 flex justify-between items-center border-b flex-shrink-0">
-                            <h3 className="font-bold">Course Menu</h3>
-                            <button onClick={() => setIsCourseMenuOpen(false)} className="p-2 -mr-2 text-gray-600 hover:text-gray-900">
-                                <Icon name={IconName.X} className="w-6 h-6" />
-                            </button>
-                        </div>
-                        <div className="overflow-y-auto">
-                            <CourseSidebar 
-                                userRole={userRole} 
-                                onSetGradingView={setIsGradingView} 
-                                selectedCourse={convertedCourse} 
-                                onMobileItemClick={() => setIsCourseMenuOpen(false)}
-                            />
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            <div className="lg:grid lg:grid-cols-4 lg:gap-8">
-                {/* Desktop Sidebar */}
-                <aside className="hidden lg:block lg:col-span-1">
-                    <Card className="sticky top-24">
-                        <CourseSidebar userRole={userRole} onSetGradingView={setIsGradingView} selectedCourse={convertedCourse} />
-                    </Card>
-                </aside>
-                
-                {/* Main Content */}
-                <main className="lg:col-span-3 space-y-6">
-                    {/* Back Button */}
-                    <div className="mb-6 flex justify-between items-center">
-                        <button
-                            onClick={handleBackToDashboard}
-                            className="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg flex items-center gap-2   "
+                        <div
+                            className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+                            onClick={() => setIsCourseMenuOpen(false)}
                         >
-                            Back to Dashboard
-                        </button>
-                        <div className="ml-auto flex gap-3">
-                            {(userRole === UserRole.Developer || userRole === UserRole.Admin) && (
-                                <Button onClick={handleEditCourse} leftIcon={<Icon name={IconName.Edit} className="w-4 h-4"/>}>
-                                    Edit Course
-                                </Button>
-                            )}
-                            {(userRole === UserRole.Developer || userRole === UserRole.Admin) && (
-                                <Button onClick={handleDeleteCourse} leftIcon={<Icon name={IconName.Delete} className="w-4 h-4"/>}>
-                                    Delete Course
-                                </Button>
-                            )}
+                            <div
+                                className="absolute left-0 top-0 h-full w-72 max-w-[calc(100%-3rem)] bg-white shadow-xl flex flex-col"
+                                onClick={(e) => e.stopPropagation()}
+                            >
+                                <div className="p-4 flex justify-between items-center border-b flex-shrink-0">
+                                    <h3 className="font-bold">Course Menu</h3>
+                                    <button onClick={() => setIsCourseMenuOpen(false)} className="p-2 -mr-2 text-gray-600 hover:text-gray-900">
+                                        <Icon name={IconName.X} className="w-6 h-6" />
+                                    </button>
+                                </div>
+                                <div className="overflow-y-auto">
+                                    <CourseSidebar
+                                        userRole={userRole}
+                                        onSetGradingView={setIsGradingView}
+                                        selectedCourse={convertedCourse}
+                                        onMobileItemClick={() => setIsCourseMenuOpen(false)}
+                                    />
+                                </div>
+                            </div>
                         </div>
-                    </div>
+                    )}
 
-                    {/* Digital Attendance */}
-                    {(userRole === UserRole.Learner || userRole === UserRole.Trainer) && (
-                        <div id={toId("Digital Attendance")}>
-                            <Card className="p-0 overflow-hidden">
+                    <div className="lg:grid lg:grid-cols-4 lg:gap-8">
+                        {/* Desktop Sidebar */}
+                        <aside className="hidden lg:block lg:col-span-1">
+                            <Card className="sticky top-24">
+                                <CourseSidebar userRole={userRole} onSetGradingView={setIsGradingView} selectedCourse={convertedCourse} />
+                            </Card>
+                        </aside>
+
+                        {/* Main Content */}
+                        <main className="lg:col-span-3 space-y-6">
+                            {/* Back Button */}
+                            <div className="mb-6 flex justify-between items-center">
                                 <button
-                                    className="w-full text-left p-6 flex justify-between items-center"
-                                    onClick={() => setIsAttendanceOpen(!isAttendanceOpen)}
-                                    aria-expanded={isAttendanceOpen}
+                                    onClick={handleBackToDashboard}
+                                    className="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg flex items-center gap-2   "
                                 >
-                                    <h3 className="text-xl font-bold">Digital Attendance</h3>
-                                    <Icon name={isAttendanceOpen ? IconName.Minus : IconName.Plus} className="w-6 h-6 text-blue-600 flex-shrink-0" />
+                                    Back to Dashboard
                                 </button>
-                                {isAttendanceOpen && (
-                                    <div className="px-6 pb-6 border-t">
-                                        <div className="pt-4">
-                                            {attendanceLink && attendanceQrCodeUrl ? (
-                                                <div className="flex flex-col items-center gap-4 text-center">
+                                <div className="ml-auto flex gap-3">
+                                    {(userRole === UserRole.Developer || userRole === UserRole.Admin) && (
+                                        <Button onClick={handleEditCourse} leftIcon={<Icon name={IconName.Edit} className="w-4 h-4" />}>
+                                            Edit Course
+                                        </Button>
+                                    )}
+                                    {(userRole === UserRole.Developer || userRole === UserRole.Admin) && (
+                                        <Button onClick={handleDeleteCourse} leftIcon={<Icon name={IconName.Delete} className="w-4 h-4" />}>
+                                            Delete Course
+                                        </Button>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Digital Attendance */}
+                            {(userRole === UserRole.Learner || userRole === UserRole.Trainer) && (
+                                <div id={toId("Digital Attendance")}>
+                                    <Card className="p-0 overflow-hidden">
+                                        <button
+                                            className="w-full text-left p-6 flex justify-between items-center"
+                                            onClick={() => setIsAttendanceOpen(!isAttendanceOpen)}
+                                            aria-expanded={isAttendanceOpen}
+                                        >
+                                            <h3 className="text-xl font-bold">Digital Attendance</h3>
+                                            <Icon name={isAttendanceOpen ? IconName.Minus : IconName.Plus} className="w-6 h-6 text-blue-600 flex-shrink-0" />
+                                        </button>
+                                        {isAttendanceOpen && (
+                                            <div className="px-6 pb-6 border-t">
+                                                <div className="pt-4">
+                                                    {attendanceLink ? (
+                                                        <div className="flex flex-col gap-5 w-full">
+                                                            {/* Instructions Card */}
+                                                            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-5 border border-blue-100">
+                                                                <p className="text-gray-800 font-semibold mb-3 flex items-center gap-2">
+                                                                    <span className="w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center text-xs">?</span>
+                                                                    How to Take Attendance
+                                                                </p>
+                                                                <ol className="text-gray-600 space-y-2 text-sm ml-1">
+                                                                    <li className="flex items-start gap-3">
+                                                                        <span className="w-5 h-5 bg-blue-600 text-white rounded-full flex items-center justify-center text-xs flex-shrink-0 mt-0.5">1</span>
+                                                                        <span>Click on the attendance link below</span>
+                                                                    </li>
+                                                                    <li className="flex items-start gap-3">
+                                                                        <span className="w-5 h-5 bg-blue-600 text-white rounded-full flex items-center justify-center text-xs flex-shrink-0 mt-0.5">2</span>
+                                                                        <span>Select <strong>"Trainees"</strong></span>
+                                                                    </li>
+                                                                    <li className="flex items-start gap-3">
+                                                                        <span className="w-5 h-5 bg-blue-600 text-white rounded-full flex items-center justify-center text-xs flex-shrink-0 mt-0.5">3</span>
+                                                                        <span>Select <strong>Click The "Next" Button</strong></span>
+                                                                    </li>
+                                                                    <li className="flex items-start gap-3">
+                                                                        <span className="w-5 h-5 bg-blue-600 text-white rounded-full flex items-center justify-center text-xs flex-shrink-0 mt-0.5">4</span>
+                                                                        <span>Scan the QR Code displayed on screen</span>
+                                                                    </li>
+                                                                    <li className="flex items-start gap-3">
+                                                                        <span className="w-5 h-5 bg-blue-600 text-white rounded-full flex items-center justify-center text-xs flex-shrink-0 mt-0.5">5</span>
+                                                                        <span>Click <strong>"Retrieve Myinfo With Singpass"</strong></span>
+                                                                    </li>
+                                                                </ol>
+                                                            </div>
+
+                                                            {/* Note */}
+                                                            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 flex items-start gap-3">
+                                                                <span className="text-amber-500 text-lg flex-shrink-0">!</span>
+                                                                <p className="text-sm text-amber-700">
+                                                                    <strong>Note:</strong> If you see the message "Please enable location settings in your browser before submitting your attendance", please follow the SkillsFuture link guide on how to activate the location settings.
+                                                                </p>
+                                                            </div>
+
+                                                            {/* QR Code temporarily disabled
+                                                            <img
+                                                                src={attendanceQrCodeUrl}
+                                                                alt="Digital Attendance QR Code"
+                                                                className="rounded-lg shadow-md"
+                                                            />
+                                                            */}
+
+                                                            {/* Link Section */}
+                                                            <div className="w-full">
+                                                                <p className="text-sm text-gray-600 mb-2 font-medium">Attendance Link:</p>
+                                                                <div className="p-3 bg-gray-100 rounded-lg flex items-center justify-between gap-3">
+                                                                    <a
+                                                                        href={attendanceLink}
+                                                                        target="_blank"
+                                                                        rel="noopener noreferrer"
+                                                                        className="text-sm text-blue-600 hover:underline truncate flex-1"
+                                                                    >
+                                                                        {attendanceLink}
+                                                                    </a>
+                                                                    <Button
+                                                                        onClick={() => {
+                                                                            navigator.clipboard.writeText(attendanceLink);
+                                                                            alert('Link copied to clipboard!');
+                                                                        }}
+                                                                        className="flex-shrink-0"
+                                                                    >
+                                                                        Copy Link
+                                                                    </Button>
+                                                                </div>
+                                                                <p className="text-sm text-gray-500 mt-3">
+                                                                    DA ID: <span className="font-semibold text-gray-700">{convertedCourse.daId}</span>
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                    ) : (
+                                                        <p className="text-gray-500 text-center">Digital Attendance ID not available for this class.</p>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </Card>
+                                </div>
+                            )}
+
+                            {/* Lesson Plan */}
+                            <div id={toId("Lesson Plan")}>
+                                <ContentSection title="Lesson Plan">
+                                    {convertedCourse.lessonPlanUrl ? (
+                                        <div
+                                            onClick={(e) => handleFileDownload(convertedCourse.lessonPlanUrl!, e)}
+                                            className="flex items-center gap-3 p-3 bg-gray-50 rounded-md border hover:bg-gray-100 transition-colors cursor-pointer"
+                                        >
+                                            <Icon name={IconName.FileText} className="w-8 h-8 text-red-600 flex-shrink-0" />
+                                            <div>
+                                                <p className="font-semibold text-gray-900">{extractFilenameFromPath(convertedCourse.lessonPlanUrl)}</p>
+                                                <p className="text-xs text-gray-500">Click to download the lesson plan</p>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <p className="text-gray-500">The lesson plan for this course will be displayed here.</p>
+                                    )}
+                                </ContentSection>
+                            </div>
+
+                            {/* Learner Guide */}
+                            <div id={toId("Learner Guide")}>
+                                <ContentSection title="Learner Guide">
+                                    {convertedCourse.learnerGuideUrl ? (
+                                        <div
+                                            onClick={(e) => handleFileDownload(convertedCourse.learnerGuideUrl!, e)}
+                                            className="flex items-center gap-3 p-3 bg-gray-50 rounded-md border hover:bg-gray-100 transition-colors cursor-pointer"
+                                        >
+                                            <Icon name={IconName.FileText} className="w-8 h-8 text-red-600 flex-shrink-0" />
+                                            <div>
+                                                <p className="font-semibold text-gray-900">{extractFilenameFromPath(convertedCourse.learnerGuideUrl)}</p>
+                                                <p className="text-xs text-gray-500">Click to download the guide</p>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <p className="text-gray-500">The learner guide for this course will be displayed here.</p>
+                                    )}
+                                </ContentSection>
+                            </div>
+
+                            {/* Facilitator/Learner Guide */}
+                            {(userRole === UserRole.Trainer || userRole === UserRole.Developer || userRole === UserRole.TrainingProvider || userRole === UserRole.Admin) && (
+                                <div id={toId("Facilitator Guide")}>
+                                    <ContentSection title="Facilitator Guide">
+                                        {convertedCourse.facilitatorGuideUrl ? (
+                                            <div
+                                                onClick={(e) => handleFileDownload(convertedCourse.facilitatorGuideUrl!, e)}
+                                                className="flex items-center gap-3 p-3 bg-gray-50 rounded-md border hover:bg-gray-100 transition-colors cursor-pointer"
+                                            >
+                                                <Icon name={IconName.FileText} className="w-8 h-8 text-red-600 flex-shrink-0" />
+                                                <div>
+                                                    <p className="font-semibold text-gray-900">{extractFilenameFromPath(convertedCourse.facilitatorGuideUrl)}</p>
+                                                    <p className="text-xs text-gray-500">Click to download the guide</p>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <p className="text-gray-500">The facilitator guide for this course will be displayed here.</p>
+                                        )}
+                                    </ContentSection>
+                                </div>
+                            )}
+
+                            {/* Learner Slides */}
+                            {userRole !== UserRole.Trainer && (
+                                <div id={toId("Learner Slides")}>
+                                    <ContentSection title="Learner Slides">
+                                        {convertedCourse.slidesUrl ? (
+                                            <div
+                                                onClick={(e) => handleFileDownload(convertedCourse.slidesUrl!, e)}
+                                                className="flex items-center gap-3 p-3 bg-gray-50 rounded-md border hover:bg-gray-100 transition-colors cursor-pointer"
+                                            >
+                                                <Icon name={IconName.FileText} className="w-8 h-8 text-red-600 flex-shrink-0" />
+                                                <div>
+                                                    <p className="font-semibold text-gray-900">{extractFilenameFromPath(convertedCourse.slidesUrl)}</p>
+                                                    <p className="text-xs text-gray-500">Click to download the slides</p>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <p className="text-gray-500">The learner slides for this course will be displayed here.</p>
+                                        )}
+                                    </ContentSection>
+                                </div>
+                            )}
+
+                            {/* Trainer Slides */}
+                            {(userRole === UserRole.Trainer || userRole === UserRole.Developer || userRole === UserRole.TrainingProvider || userRole === UserRole.Admin) && (
+                                <div id={toId("Trainer Slides")}>
+                                    <ContentSection title="Trainer Slides">
+                                        {convertedCourse.trainerSlidesUrl ? (
+                                            isTrainerSlidesExternal ? (
+                                                // External URL (Google Slides) - open in new tab
+                                                <a href={convertedCourse.trainerSlidesUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-gray-50 rounded-md border hover:bg-gray-100 transition-colors">
+                                                    <Icon name={IconName.ExternalLink} className="w-8 h-8 text-orange-600 flex-shrink-0" />
+                                                    <div>
+                                                        <p className="font-semibold text-gray-900">Trainer Slide</p>
+                                                        <p className="text-xs text-gray-500">Click to view presentation online</p>
+                                                    </div>
+                                                </a>
+                                            ) : (
+                                                // Local file - download
+                                                <div
+                                                    onClick={(e) => handleFileDownload(convertedCourse.trainerSlidesUrl!, e)}
+                                                    className="flex items-center gap-3 p-3 bg-gray-50 rounded-md border hover:bg-gray-100 transition-colors cursor-pointer"
+                                                >
+                                                    <Icon name={IconName.FileText} className="w-8 h-8 text-orange-600 flex-shrink-0" />
+                                                    <div>
+                                                        <p className="font-semibold text-gray-900">{extractFilenameFromPath(convertedCourse.trainerSlidesUrl)}</p>
+                                                        <p className="text-xs text-gray-500">Click to download the trainer slides</p>
+                                                    </div>
+                                                </div>
+                                            )
+                                        ) : (
+                                            <p className="text-gray-500">The trainer slides for this course will be displayed here.</p>
+                                        )}
+                                    </ContentSection>
+                                </div>
+                            )}
+
+                            {/* Lessons */}
+                            <div id="lessons">
+                                <Card className="p-0 overflow-hidden">
+                                    <button className="w-full text-left p-6 flex justify-between items-center" onClick={() => setIsLessonsOpen(!isLessonsOpen)} aria-expanded={isLessonsOpen}>
+                                        <h3 className="text-xl font-bold">Lesson</h3>
+                                        <Icon name={IconName.ChevronDown} className={`w-5 h-5 transition-transform duration-200 ${isLessonsOpen ? 'rotate-180' : ''}`} />
+                                    </button>
+                                    {isLessonsOpen && (
+                                        <div className="px-6 pb-6 space-y-4 border-t pt-4">
+                                            {convertedCourse.topics.map(topic => {
+                                                const topicCompletedCount = topic.subtopics.filter(st => completedSubtopicsSet.has(st.id)).length;
+                                                const topicProgress = topic.subtopics.length > 0 ? (topicCompletedCount / topic.subtopics.length) * 100 : 0;
+
+                                                return (
+                                                    <TopicAccordion
+                                                        key={topic.id}
+                                                        topic={topic}
+                                                        progress={topicProgress}
+                                                        bookmarkedSubtopics={bookmarkedSubtopicsSet}
+                                                        onToggleBookmark={handleToggleBookmark}
+                                                        userRole={userRole}
+                                                        completedSubtopics={completedSubtopicsSet}
+                                                        onToggleCompletion={handleToggleCompletion}
+                                                    />
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                </Card>
+                            </div>
+
+                            {/* TRAQOM Survey */}
+                            {userRole === UserRole.Learner && (
+                                <div id={toId("TRAQOM Survey")}>
+                                    <Card className="p-0 overflow-hidden">
+                                        <button
+                                            className="w-full text-left p-6 flex justify-between items-center"
+                                            onClick={() => setIsTraqomOpen(!isTraqomOpen)}
+                                            aria-expanded={isTraqomOpen}
+                                        >
+                                            <h3 className="text-xl font-bold">TRAQOM Survey</h3>
+                                            <Icon name={isTraqomOpen ? IconName.Minus : IconName.Plus} className="w-6 h-6 text-blue-600 flex-shrink-0" />
+                                        </button>
+                                        {isTraqomOpen && (
+                                            <div className="px-6 pb-6 border-t">
+                                                <div className="pt-4 flex flex-col items-center gap-4 text-center">
                                                     <p className="text-gray-500">
-                                                        Please scan the QR code or use the link below to mark your attendance.
+                                                        Your feedback is important. Please use the link below to complete the survey.
                                                     </p>
-                                                    <img 
-                                                        src={attendanceQrCodeUrl}
-                                                        alt="Digital Attendance QR Code"
+                                                    {/* QR Code temporarily disabled
+                                                    <img
+                                                        src={traqomQrCodeUrl}
+                                                        alt="TRAQOM Survey QR Code"
                                                         className="rounded-lg shadow-md"
                                                     />
+                                                    */}
                                                     <div className="w-full max-w-md">
                                                         <div className="p-2 bg-gray-100 rounded-md flex items-center gap-2">
-                                                            <a 
-                                                                href={attendanceLink}
-                                                                target="_blank" 
+                                                            <a
+                                                                href={traqomSurveyLink}
+                                                                target="_blank"
                                                                 rel="noopener noreferrer"
                                                                 className="text-sm text-blue-600 hover:underline truncate"
                                                             >
-                                                                {attendanceLink}
+                                                                {traqomSurveyLink}
                                                             </a>
-                                                            <Button 
+                                                            <Button
                                                                 onClick={() => {
-                                                                    navigator.clipboard.writeText(attendanceLink);
+                                                                    navigator.clipboard.writeText(traqomSurveyLink);
                                                                     alert('Link copied to clipboard!');
                                                                 }}
                                                             >
                                                                 Copy Link
                                                             </Button>
                                                         </div>
-                                                         <p className="text-sm text-gray-500 mt-2">
-                                                            DA ID: <span className="font-semibold text-gray-700">{convertedCourse.daId}</span>
+                                                        <p className="text-sm text-gray-500 mt-2">
+                                                            Course Run ID: <span className="font-semibold text-gray-700">{convertedCourse.courseRunId}</span>
                                                         </p>
                                                     </div>
                                                 </div>
-                                            ) : (
-                                                <p className="text-gray-500 text-center">Digital Attendance ID not available for this class.</p>
-                                            )}
-                                        </div>
-                                    </div>
-                                )}
-                            </Card>
-                        </div>
-                    )}
-
-                    {/* Lesson Plan */}
-                    <div id={toId("Lesson Plan")}>
-                        <ContentSection title="Lesson Plan">
-                            {convertedCourse.lessonPlanUrl ? (
-                                <div 
-                                    onClick={(e) => handleFileDownload(convertedCourse.lessonPlanUrl!, e)}
-                                    className="flex items-center gap-3 p-3 bg-gray-50 rounded-md border hover:bg-gray-100 transition-colors cursor-pointer"
-                                >
-                                    <Icon name={IconName.FileText} className="w-8 h-8 text-red-600 flex-shrink-0" />
-                                    <div>
-                                        <p className="font-semibold text-gray-900">{extractFilenameFromPath(convertedCourse.lessonPlanUrl)}</p>
-                                        <p className="text-xs text-gray-500">Click to download the lesson plan</p>
-                                    </div>
-                                </div>
-                            ) : (
-                                <p className="text-gray-500">The lesson plan for this course will be displayed here.</p>
-                            )}
-                        </ContentSection>
-                    </div>
-
-                    {/* Learner Guide */}
-                    <div id={toId("Learner Guide")}>
-                        <ContentSection title="Learner Guide">
-                            {convertedCourse.learnerGuideUrl ? (
-                                <div 
-                                    onClick={(e) => handleFileDownload(convertedCourse.learnerGuideUrl!, e)}
-                                    className="flex items-center gap-3 p-3 bg-gray-50 rounded-md border hover:bg-gray-100 transition-colors cursor-pointer"
-                                >
-                                    <Icon name={IconName.FileText} className="w-8 h-8 text-red-600 flex-shrink-0" />
-                                    <div>
-                                        <p className="font-semibold text-gray-900">{extractFilenameFromPath(convertedCourse.learnerGuideUrl)}</p>
-                                        <p className="text-xs text-gray-500">Click to download the guide</p>
-                                    </div>
-                                </div>
-                            ) : (
-                                <p className="text-gray-500">The learner guide for this course will be displayed here.</p>
-                            )}
-                        </ContentSection>
-                    </div>
-
-                    {/* Facilitator/Learner Guide */}
-                    { (userRole === UserRole.Trainer || userRole === UserRole.Developer || userRole === UserRole.TrainingProvider || userRole === UserRole.Admin) && (
-                        <div id={toId("Facilitator Guide")}>
-                            <ContentSection title="Facilitator Guide">
-                                {convertedCourse.facilitatorGuideUrl ? (
-                                    <div 
-                                        onClick={(e) => handleFileDownload(convertedCourse.facilitatorGuideUrl!, e)}
-                                        className="flex items-center gap-3 p-3 bg-gray-50 rounded-md border hover:bg-gray-100 transition-colors cursor-pointer"
-                                    >
-                                        <Icon name={IconName.FileText} className="w-8 h-8 text-red-600 flex-shrink-0" />
-                                        <div>
-                                            <p className="font-semibold text-gray-900">{extractFilenameFromPath(convertedCourse.facilitatorGuideUrl)}</p>
-                                            <p className="text-xs text-gray-500">Click to download the guide</p>
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <p className="text-gray-500">The facilitator guide for this course will be displayed here.</p>
-                                )}
-                            </ContentSection>
-                        </div>
-                    )}
-                    
-                    {/* Learner Slides */}
-                    {userRole !== UserRole.Trainer && (
-                        <div id={toId("Learner Slides")}>
-                            <ContentSection title="Learner Slides">
-                                {convertedCourse.slidesUrl ? (
-                                     <div 
-                                        onClick={(e) => handleFileDownload(convertedCourse.slidesUrl!, e)}
-                                        className="flex items-center gap-3 p-3 bg-gray-50 rounded-md border hover:bg-gray-100 transition-colors cursor-pointer"
-                                    >
-                                        <Icon name={IconName.FileText} className="w-8 h-8 text-red-600 flex-shrink-0" />
-                                        <div>
-                                            <p className="font-semibold text-gray-900">{extractFilenameFromPath(convertedCourse.slidesUrl)}</p>
-                                            <p className="text-xs text-gray-500">Click to download the slides</p>
-                                        </div>
-                                    </div>
-                                ) : (
-                                     <p className="text-gray-500">The learner slides for this course will be displayed here.</p>
-                                )}
-                            </ContentSection>
-                        </div>
-                    )}
-
-                    {/* Trainer Slides */}
-                    {(userRole === UserRole.Trainer || userRole === UserRole.Developer || userRole === UserRole.TrainingProvider || userRole === UserRole.Admin) && (
-                        <div id={toId("Trainer Slides")}>
-                            <ContentSection title="Trainer Slides">
-                                {convertedCourse.trainerSlidesUrl ? (
-                                    isTrainerSlidesExternal ? (
-                                        // External URL (Google Slides) - open in new tab
-                                        <a href={convertedCourse.trainerSlidesUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-gray-50 rounded-md border hover:bg-gray-100 transition-colors">
-                                            <Icon name={IconName.ExternalLink} className="w-8 h-8 text-orange-600 flex-shrink-0" />
-                                            <div>
-                                                <p className="font-semibold text-gray-900">Trainer Slide</p>
-                                                <p className="text-xs text-gray-500">Click to view presentation online</p>
                                             </div>
-                                        </a>
-                                    ) : (
-                                        // Local file - download
-                                        <div 
-                                            onClick={(e) => handleFileDownload(convertedCourse.trainerSlidesUrl!, e)}
-                                            className="flex items-center gap-3 p-3 bg-gray-50 rounded-md border hover:bg-gray-100 transition-colors cursor-pointer"
-                                        >
-                                            <Icon name={IconName.FileText} className="w-8 h-8 text-orange-600 flex-shrink-0" />
-                                            <div>
-                                                <p className="font-semibold text-gray-900">{extractFilenameFromPath(convertedCourse.trainerSlidesUrl)}</p>
-                                                <p className="text-xs text-gray-500">Click to download the trainer slides</p>
-                                            </div>
-                                        </div>
-                                    )
-                                ) : (
-                                    <p className="text-gray-500">The trainer slides for this course will be displayed here.</p>
-                                )}
-                            </ContentSection>
-                        </div>
-                    )}
-
-                    {/* Lessons */}
-                    <div id="lessons">
-                         <Card className="p-0 overflow-hidden">
-                            <button className="w-full text-left p-6 flex justify-between items-center" onClick={() => setIsLessonsOpen(!isLessonsOpen)} aria-expanded={isLessonsOpen}>
-                                <h3 className="text-xl font-bold">Lesson</h3>
-                                <Icon name={IconName.ChevronDown} className={`w-5 h-5 transition-transform duration-200 ${isLessonsOpen ? 'rotate-180' : ''}`} />
-                            </button>
-                            {isLessonsOpen && (
-                                <div className="px-6 pb-6 space-y-4 border-t pt-4">
-                                    {convertedCourse.topics.map(topic => {
-                                        const topicCompletedCount = topic.subtopics.filter(st => completedSubtopicsSet.has(st.id)).length;
-                                        const topicProgress = topic.subtopics.length > 0 ? (topicCompletedCount / topic.subtopics.length) * 100 : 0;
-                                        
-                                        return (
-                                            <TopicAccordion 
-                                                key={topic.id} 
-                                                topic={topic} 
-                                                progress={topicProgress} 
-                                                bookmarkedSubtopics={bookmarkedSubtopicsSet} 
-                                                onToggleBookmark={handleToggleBookmark}
-                                                userRole={userRole}
-                                                completedSubtopics={completedSubtopicsSet}
-                                                onToggleCompletion={handleToggleCompletion}
-                                            />
-                                        );
-                                    })}
+                                        )}
+                                    </Card>
                                 </div>
                             )}
-                        </Card>
-                    </div>
 
-                    {/* TRAQOM Survey */}
-                    {userRole === UserRole.Learner && (
-                        <div id={toId("TRAQOM Survey")}>
-                            <Card className="p-0 overflow-hidden">
-                                <button
-                                    className="w-full text-left p-6 flex justify-between items-center"
-                                    onClick={() => setIsTraqomOpen(!isTraqomOpen)}
-                                    aria-expanded={isTraqomOpen}
-                                >
-                                    <h3 className="text-xl font-bold">TRAQOM Survey</h3>
-                                    <Icon name={isTraqomOpen ? IconName.Minus : IconName.Plus} className="w-6 h-6 text-blue-600 flex-shrink-0" />
-                                </button>
-                                {isTraqomOpen && (
-                                    <div className="px-6 pb-6 border-t">
-                                        <div className="pt-4 flex flex-col items-center gap-4 text-center">
-                                            <p className="text-gray-500">
-                                                Your feedback is important. Please scan the QR code or use the link below to complete the survey.
-                                            </p>
-                                            <img 
-                                                src={traqomQrCodeUrl}
-                                                alt="TRAQOM Survey QR Code"
-                                                className="rounded-lg shadow-md"
-                                            />
-                                            <div className="w-full max-w-md">
-                                                <div className="p-2 bg-gray-100 rounded-md flex items-center gap-2">
-                                                    <a 
-                                                        href={traqomSurveyLink}
-                                                        target="_blank" 
-                                                        rel="noopener noreferrer"
-                                                        className="text-sm text-blue-600 hover:underline truncate"
-                                                    >
-                                                        {traqomSurveyLink}
-                                                    </a>
-                                                    <Button 
-                                                        onClick={() => {
-                                                            navigator.clipboard.writeText(traqomSurveyLink);
-                                                            alert('Link copied to clipboard!');
-                                                        }}
-                                                    >
-                                                        Copy Link
-                                                    </Button>
+                            {/* Assessment Plan */}
+                            {(userRole === UserRole.Trainer || userRole === UserRole.Developer || userRole === UserRole.TrainingProvider || userRole === UserRole.Admin) && (
+                                <div id={toId("Assessment Plan")}>
+                                    <ContentSection title="Assessment Plan">
+                                        {convertedCourse.assessmentPlanUrl ? (
+                                            <div
+                                                onClick={(e) => handleFileDownload(convertedCourse.assessmentPlanUrl!, e)}
+                                                className="flex items-center gap-3 p-3 bg-gray-50 rounded-md border hover:bg-gray-100 transition-colors cursor-pointer"
+                                            >
+                                                <Icon name={IconName.FileText} className="w-8 h-8 text-red-600 flex-shrink-0" />
+                                                <div>
+                                                    <p className="font-semibold text-gray-900">{extractFilenameFromPath(convertedCourse.assessmentPlanUrl)}</p>
+                                                    <p className="text-xs text-gray-500">Click to download the assessment plan</p>
                                                 </div>
-                                                 <p className="text-sm text-gray-500 mt-2">
-                                                    Course Run ID: <span className="font-semibold text-gray-700">{convertedCourse.courseRunId}</span>
-                                                </p>
                                             </div>
-                                        </div>
-                                    </div>
-                                )}
-                            </Card>
-                        </div>
-                    )}
-                    
-                    {/* Assessment Plan */}
-                    {(userRole === UserRole.Trainer || userRole === UserRole.Developer || userRole === UserRole.TrainingProvider || userRole === UserRole.Admin) && (
-                        <div id={toId("Assessment Plan")}>
-                            <ContentSection title="Assessment Plan">
-                                {convertedCourse.assessmentPlanUrl ? (
-                                    <div 
-                                        onClick={(e) => handleFileDownload(convertedCourse.assessmentPlanUrl!, e)}
-                                        className="flex items-center gap-3 p-3 bg-gray-50 rounded-md border hover:bg-gray-100 transition-colors cursor-pointer"
-                                    >
-                                        <Icon name={IconName.FileText} className="w-8 h-8 text-red-600 flex-shrink-0" />
-                                        <div>
-                                            <p className="font-semibold text-gray-900">{extractFilenameFromPath(convertedCourse.assessmentPlanUrl)}</p>
-                                            <p className="text-xs text-gray-500">Click to download the assessment plan</p>
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <p className="text-gray-500">The assessment plan for this course will be displayed here.</p>
-                                )}
-                            </ContentSection>
-                        </div>
-                    )}
+                                        ) : (
+                                            <p className="text-gray-500">The assessment plan for this course will be displayed here.</p>
+                                        )}
+                                    </ContentSection>
+                                </div>
+                            )}
 
-                    {/* Assessments */}
-                    <div id="assessments">
-                       <AssessmentsSection 
-                           course={convertedCourse} 
-                           userRole={userRole} 
-                           developerAssessments={developerAssessments} 
-                           courseRunId={selectedCourse?.courseRunId}
-                           courseId={selectedCourse?.id}
-                           setDeveloperAssessments={setDeveloperAssessments}
-                           handleFileDownload={handleFileDownload}
-                       />
-                    </div>
+                            {/* Assessments */}
+                            <div id="assessments">
+                                <AssessmentsSection
+                                    course={convertedCourse}
+                                    userRole={userRole}
+                                    developerAssessments={developerAssessments}
+                                    courseRunId={selectedCourse?.courseRunId}
+                                    courseId={selectedCourse?.id}
+                                    setDeveloperAssessments={setDeveloperAssessments}
+                                    handleFileDownload={handleFileDownload}
+                                />
+                            </div>
 
-                    {/* Certificate */}
-                    <div id="certificate">
-                        <CertificateSection userRole={userRole} />
-                    </div>
+                            {/* Certificate */}
+                            <div id="certificate">
+                                <CertificateSection userRole={userRole} />
+                            </div>
 
-                    {/* Leaderboard */}
-                    {/* {userRole === UserRole.Learner && (
+                            {/* Leaderboard */}
+                            {/* {userRole === UserRole.Learner && (
                         <Leaderboard course={convertedCourse} />
                     )} */}
-                </main>
-            </div>
-            </>
+                        </main>
+                    </div>
+                </>
             )}
         </div>
     );
