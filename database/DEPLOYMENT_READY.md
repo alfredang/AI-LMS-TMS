@@ -86,15 +86,15 @@ Now you're ready to deploy!
 **Environment Variables for Vercel:**
 
 ```env
-DATABASE_URL=postgresql://postgres.qkjigltmkstxouworsci:ILoveLearning@2026@aws-1-ap-south-1.pooler.supabase.com:6543/postgres?pgbouncer=true
+DATABASE_URL=postgresql://postgres:[YOUR-PASSWORD]@aws-0-region.pooler.supabase.com:6543/postgres?pgbouncer=true
 
-NEXT_PUBLIC_SUPABASE_URL=https://qkjigltmkstxouworsci.supabase.co
+NEXT_PUBLIC_SUPABASE_URL=https://[YOUR-PROJECT-ID].supabase.co
 
-NEXT_PUBLIC_SUPABASE_ANON_KEY=sb_publishable_i_I9N4AYzIQPAYa21v35Ww_TtGFOG70
+NEXT_PUBLIC_SUPABASE_ANON_KEY=[YOUR-ANON-KEY]
 
-JWT_SECRET=your_super_secret_jwt_key_change_this_in_production
+JWT_SECRET=[YOUR-JWT-SECRET]
 
-NEXT_PUBLIC_GOOGLE_GEMINI_API_KEY=AIzaSyC8ou0qA4sOnO3Wm7jD3E9iT0PdJH0dDAU
+NEXT_PUBLIC_GOOGLE_GEMINI_API_KEY=[YOUR-GEMINI-KEY]
 
 NEXT_PUBLIC_BASE_URL=https://your-vercel-url.vercel.app
 ```

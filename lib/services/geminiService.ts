@@ -13,10 +13,11 @@ const getDynamicApiKey = async (): Promise<string> => {
   if (cachedApiKey) return cachedApiKey;
 
   // Check environment variable first as fallback/override
-  if (process.env.NEXT_PUBLIC_GOOGLE_GEMINI_API_KEY) {
-    cachedApiKey = process.env.NEXT_PUBLIC_GOOGLE_GEMINI_API_KEY;
-    return cachedApiKey;
-  }
+  // REMOVED: User requested to strictly load from database
+  // if (process.env.NEXT_PUBLIC_GOOGLE_GEMINI_API_KEY) {
+  //   cachedApiKey = process.env.NEXT_PUBLIC_GOOGLE_GEMINI_API_KEY;
+  //   return cachedApiKey;
+  // }
 
   try {
     const response = await fetch('/api/config/gemini-key');

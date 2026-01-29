@@ -6,7 +6,7 @@ const client = new Client({
     ssl: { rejectUnauthorized: false }
 });
 
-
+const VALID_API_KEY = process.env.GEMINI_API_KEY || 'YOUR_API_KEY_HERE'; // Load from env or placeholder
 
 async function seedKey() {
     try {
