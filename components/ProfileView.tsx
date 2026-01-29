@@ -150,6 +150,11 @@ const TrainingProviderProfileView: React.FC = () => {
             const response = await fetch(getApiUrl(`/api/profile-new?userId=${currentUser.id}&role=training_provider`));
 
             if (!response.ok) {
+                if (response.status === 404) {
+                    console.log('Profile not found (404), setting empty state');
+                    setProfile(null);
+                    return;
+                }
                 throw new Error(`Failed to fetch profile: ${response.status}`);
             }
 

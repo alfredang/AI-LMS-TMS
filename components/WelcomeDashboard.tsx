@@ -3,6 +3,8 @@ import { useLms } from '@contexts/LmsContext';
 import { useCourses } from '../hooks/useCourses';
 import { useTrainerCourses } from '../hooks/useTrainerCourses';
 import DashboardCourseCard from '../components/DashboardCourseCard';
+import { EmptyState } from './ui/EmptyState';
+import { IconName } from './ui/Icon';
 import { UserRole } from '@app-types';
 
 const WelcomeDashboard: React.FC = () => {
@@ -11,14 +13,14 @@ const WelcomeDashboard: React.FC = () => {
   const { courses: trainerCourses, loading: trainerLoading, error: trainerError } = useTrainerCourses(
     role === UserRole.Trainer && currentUser?.id ? currentUser.id : undefined
   );
-  
+
   console.log('WelcomeDashboard - Role:', role);
   console.log('WelcomeDashboard - UserId passed to useCourses:', role === UserRole.Learner && currentUser?.id ? currentUser.id : undefined);
   console.log('WelcomeDashboard - Courses:', courses);
   console.log('WelcomeDashboard - Trainer Courses:', trainerCourses);
   console.log('WelcomeDashboard - Loading:', loading, 'Trainer Loading:', trainerLoading);
   console.log('WelcomeDashboard - Error:', error, 'Trainer Error:', trainerError);
-    
+
   const getDashboardConfig = () => {
     switch (role) {
       case UserRole.Trainer:
@@ -38,7 +40,7 @@ const WelcomeDashboard: React.FC = () => {
         };
     }
   };
-    
+
   const { title: myCoursesTitle, courses: relevantCourses } = getDashboardConfig();
 
   // Use appropriate loading and error states based on role
@@ -60,8 +62,8 @@ const WelcomeDashboard: React.FC = () => {
     return (
       <div className="text-center py-8">
         <p className="text-red-600 mb-4">Error loading courses: {currentError}</p>
-        <button 
-          onClick={() => window.location.reload()} 
+        <button
+          onClick={() => window.location.reload()}
           className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
         >
           Retry
@@ -78,15 +80,16 @@ const WelcomeDashboard: React.FC = () => {
             {myCoursesTitle}
           </h2>
         </div>
-        
+
         {relevantCourses.length === 0 ? (
-          <div className="text-center py-12 bg-gray-50 rounded-lg">
-            <p className="text-gray-500 text-lg">No courses found</p>
-            <p className="text-gray-400 text-sm mt-2">
-              {role === UserRole.Learner 
-                ? "You haven't enrolled in any courses yet" 
-                : "No courses available"}
-            </p>
+          <div className="mt-6">
+            <EmptyState
+              title="No courses found"
+              description={role === UserRole.Learner
+                ? "You haven't enrolled in any courses yet. Browse the catalog to get started."
+                : "No courses available at the moment."}
+              icon={IconName.Courses}
+            />
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

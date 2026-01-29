@@ -11,13 +11,13 @@ import { initializeColorScheme } from '@utils/colorUtils';
 const fetchTrainingProviderInfo = async (): Promise<{ companyLogoUrl: string; companyShortname: string }> => {
   try {
     const response = await fetch('/api/training-provider-info');
-    
+
     if (!response.ok) {
       throw new Error('Failed to fetch training provider info');
     }
-    
+
     const result = await response.json();
-    
+
     if (!result.success || !result.data) {
       throw new Error(result.error || 'Training provider info not found');
     }
@@ -105,7 +105,7 @@ const fetchUserRole = async (userId: string): Promise<UserRole> => {
 const fetchUserProfileByRole = async (role: UserRole): Promise<CurrentUserProfile> => {
   try {
     const userId = getCurrentUserId();
-    
+
     // Use role-specific API endpoints
     let response;
     if (role === UserRole.Trainer) {
@@ -119,18 +119,27 @@ const fetchUserProfileByRole = async (role: UserRole): Promise<CurrentUserProfil
     } else {
       response = await fetch(`/api/profile-new?userId=${userId}&role=${role.toLowerCase()}`);
     }
-    
+
     if (!response.ok) {
-      throw new Error(`Failed to fetch ${role} profile`);
+      console.warn(`Failed to fetch ${role} profile (Status: ${response.status}). Using fallback.`);
+      // Return fallback immediately instead of throwing to avoid fast refresh/runtime error overlay issues
+      return {
+        profilePictureUrl: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMjAiIGN5PSIyMCIgcj0iMjAiIGZpbGw9IiM5Q0EzQUYiLz4KPGNpcmNsZSBjeD0iMjAiIGN5PSIxNSIgcj0iNiIgZmlsbD0id2hpdGUiLz4KPHBhdGggZD0iTTMwIDMzQzMwIDI3LjQ3NzIgMjUuNTIyOCAyMyAyMCAyM0MxNC40NzcyIDIzIDEwIDI3LjQ3NzIgMTAgMzNIMzBaIiBmaWxsPSJ3aGl0ZSIvPgo8L3N2Zz4K',
+        name: `${role} User (Fallback)`
+      };
     }
     const result = await response.json();
-    
+
     if (!result.success || !result.data?.profile) {
-      throw new Error(result.error || 'Profile not found');
+      console.warn(`Profile API returned error for ${role}: ${result.error || 'No profile data'}`);
+      return {
+        profilePictureUrl: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMjAiIGN5PSIyMCIgcj0iMjAiIGZpbGw9IiM5Q0EzQUYiLz4KPGNpcmNsZSBjeD0iMjAiIGN5PSIxNSIgcj0iNiIgZmlsbD0id2hpdGUiLz4KPHBhdGggZD0iTTMwIDMzQzMwIDI3LjQ3NzIgMjUuNTIyOCAyMyAyMCAyM0MxNC40NzcyIDIzIDEwIDI3LjQ3NzIgMTAgMzNIMzBaIiBmaWxsPSJ3aGl0ZSIvPgo8L3N2Zz4K',
+        name: `${role} User (Fallback)`
+      };
     }
 
     const profileData = result.data.profile;
-    
+
     return {
       profilePictureUrl: profileData.profilePictureUrl || 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMjAiIGN5PSIyMCIgcj0iMjAiIGZpbGw9IiM5Q0EzQUYiLz4KPGNpcmNsZSBjeD0iMjAiIGN5PSIxNSIgcj0iNiIgZmlsbD0id2hpdGUiLz4KPHBhdGggZD0iTTMwIDMzQzMwIDI3LjQ3NzIgMjUuNTIyOCAyMyAyMCAyM0MxNC40NzcyIDIzIDEwIDI3LjQ3NzIgMTAgMzNIMzBaIiBmaWxsPSJ3aGl0ZSIvPgo8L3N2Zz4K',
       name: profileData.name || profileData.fullName || 'Unknown User'
@@ -151,7 +160,7 @@ const fetchUserProfileByRole = async (role: UserRole): Promise<CurrentUserProfil
 const fetchCalendarEvents = async (userRole: UserRole): Promise<CalendarEvent[]> => {
   try {
     const userId = getCurrentUserId();
-    
+
     let apiUrl: string;
     if (userRole === UserRole.Trainer) {
       apiUrl = `/api/calendar/trainer?trainerId=${userId}`;
@@ -159,13 +168,13 @@ const fetchCalendarEvents = async (userRole: UserRole): Promise<CalendarEvent[]>
       // Default to assessments for learners and other roles
       apiUrl = `/api/assessments?userId=${userId}`;
     }
-    
+
     const response = await fetch(apiUrl);
     if (!response.ok) {
       throw new Error('Failed to fetch calendar events');
     }
     const result = await response.json();
-    
+
     if (!result.success || !Array.isArray(result.data)) {
       return [];
     }
@@ -204,7 +213,7 @@ interface LmsContextType {
   currentUser: User | null;
   login: (role: UserRole, user: User) => void;
   logout: () => void;
-  
+
   // Data
   trainingProviderProfile: TrainingProviderProfile | null;
   updateTrainingProviderProfile: (updates: Partial<TrainingProviderProfile>) => void;
@@ -226,10 +235,10 @@ interface LmsContextType {
   completedSubtopics: string[];
   submissions: Submission[];
   certificate: any | null;
-  
+
   // Navigation
   handleNavigation: (view: View) => void;
-  
+
   // Actions
   resetCreateView: () => void;
   resetAdminView: () => void;
@@ -242,7 +251,7 @@ interface LmsContextType {
   publishAssessment: (assessmentId: string, published: boolean) => Promise<void>;
   loadSubmissions: () => Promise<void>;
   loadCertificate: () => Promise<void>;
-  
+
   // Chat functionality
   isChatOpen: boolean;
   toggleChat: () => void;
@@ -254,7 +263,7 @@ const LmsContext = createContext<LmsContextType | undefined>(undefined);
 
 export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const router = useRouter();
-  
+
   // Core state
   const [role, setRole] = useState<UserRole>(UserRole.Learner);
   const [userRoles, setUserRoles] = useState<UserRole[]>([]); // All roles the user has
@@ -266,7 +275,7 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  
+
   // Data state
   const [currentUserProfile, setCurrentUserProfile] = useState<CurrentUserProfile | null>(null);
   const [trainingProviderProfile, setTrainingProviderProfile] = useState<TrainingProviderProfile | null>(null);
@@ -282,7 +291,7 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [completedSubtopics, setCompletedSubtopics] = useState<string[]>([]);
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [certificate, setCertificate] = useState<any | null>(null);
-  
+
   // Chat state
   const [isChatOpen, setIsChatOpen] = useState<boolean>(false);
   const [courses, setCourses] = useState<Course[]>([]);
@@ -290,14 +299,14 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Load training provider color scheme on mount (before authentication)
   useEffect(() => {
     console.log('🎨 LmsContext: Loading training provider color scheme...');
-    
+
     const loadColorScheme = async () => {
       try {
         const response = await fetch('/api/training-provider-info');
-        
+
         if (response.ok) {
           const result = await response.json();
-          
+
           if (result.success && result.data?.colorScheme) {
             console.log('🎨 LmsContext: Applying color scheme:', result.data.colorScheme);
             // The colorScheme might be a JSON string from database, pass it directly to initializeColorScheme
@@ -318,21 +327,21 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         initializeColorScheme();
       }
     };
-    
+
     loadColorScheme();
   }, []);
 
   // Check for existing authentication on mount
   useEffect(() => {
     console.log('🔄 LmsContext: Checking for existing authentication...');
-    
+
     const checkAuth = async () => {
       setIsLoading(true);
-      
+
       try {
         // Check if we have a token
         const token = authService.getAuthToken();
-        
+
         if (!token) {
           console.log('ℹ️ LmsContext: No token found, showing login screen');
           setIsAuthenticated(false);
@@ -341,17 +350,17 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
 
         console.log('🔍 LmsContext: Token found, verifying with server...');
-        
+
         // Verify token with server
         const verificationResult = await authService.verifyToken();
-        
+
         if (verificationResult.valid && verificationResult.user) {
           console.log('✅ LmsContext: Token verified, user authenticated:', verificationResult.user);
-          
+
           // Set user data
           setCurrentUser(verificationResult.user);
           setIsAuthenticated(true);
-          
+
           // Load training provider info for all users (since there's only one training provider)
           try {
             const providerInfo = await fetchTrainingProviderInfo();
@@ -362,7 +371,7 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           } catch (error) {
             console.error('❌ LmsContext: Failed to load training provider info:', error);
           }
-          
+
           // Fetch user's roles from database
           try {
             // First check if user object has roles (from localStorage)
@@ -430,9 +439,9 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Function to restore state from URL parameters
   const restoreStateFromURL = useCallback(async () => {
     console.log('🔄 LmsContext: Restoring state from URL...');
-    
+
     const { view, courseId } = router.query;
-    
+
     // Restore current view
     if (view && typeof view === 'string') {
       const viewValue = view.charAt(0).toUpperCase() + view.slice(1) as View;
@@ -441,7 +450,7 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setCurrentView(viewValue);
       }
     }
-    
+
     // Restore selected course
     if (courseId && typeof courseId === 'string') {
       try {
@@ -466,21 +475,21 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Function to update URL when state changes
   const updateURL = useCallback((view?: View, courseId?: string) => {
     const newQuery: any = { ...router.query };
-    
+
     // Update view in URL
     if (view) {
       newQuery.view = view.toLowerCase();
     } else {
       delete newQuery.view;
     }
-    
+
     // Update course in URL
     if (courseId) {
       newQuery.courseId = courseId;
     } else {
       delete newQuery.courseId;
     }
-    
+
     // Update URL without page reload
     router.replace({
       pathname: router.pathname,
@@ -585,13 +594,13 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Logout function
   const logout = useCallback(async () => {
     console.log('🚪 LmsContext: Logout called');
-    
+
     try {
       await authService.logout();
     } catch (error) {
       console.error('❌ LmsContext: Logout API call failed:', error);
     }
-    
+
     // Clear all state
     setIsAuthenticated(false);
     setCurrentUser(null);
@@ -608,30 +617,30 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setSubmissions([]);
     setCertificate(null);
     setCalendarEvents([]);
-    
+
     // Clear URL parameters
     router.replace('/', undefined, { shallow: true });
-    
+
     console.log('✅ LmsContext: Logout completed');
   }, [router]);
 
   // Navigation handler
   const handleNavigation = useCallback((view: View) => {
     console.log(`🧭 LmsContext: Navigation requested from ${currentView} to ${view}`);
-    
+
     // Clear selected course when navigating to prevent "sticky" course detail view
     if (selectedCourse) {
       console.log(`🗑️ LmsContext: Clearing selectedCourse to allow navigation`);
       setSelectedCourse(null);
     }
-    
+
     // Clear editing course when navigating to prevent "sticky" course editor view
     if (editingCourse) {
       console.log(`🗑️ LmsContext: Clearing editingCourse to allow navigation`);
       setEditingCourse(null);
       setCourseEditMode(null); // Also clear the edit mode
     }
-    
+
     setCurrentView(view);
     updateURL(view); // Update URL with new view
     console.log(`✅ LmsContext: Navigation completed to ${view}`);
@@ -693,9 +702,9 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         console.log(`🔄 LmsContext: Refreshing profile for ${role}...`);
         const updatedProfile = await fetchUserProfileByRole(role);
         setCurrentUserProfile(updatedProfile);
-        
+
         // Training provider info is already loaded globally and doesn't need refresh based on role
-        
+
         console.log(`✅ LmsContext: Profile refreshed for ${role}`);
       } catch (error) {
         console.error('❌ LmsContext: Failed to refresh user profile:', error);
@@ -731,18 +740,18 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     console.log('🔄 Full course object:', course);
     setSelectedCourse(course);
     updateURL(undefined, course.id); // Update URL with course ID
-    
+
     if (!currentUser?.id) {
       console.error('❌ No authenticated user found for course data loading');
       return;
     }
-    
+
     try {
       const userId = currentUser.id; // Use currentUser from context instead of localStorage
-      
+
       // Set the selected course first
       setSelectedCourse(course);
-      
+
       // Clear previous data
       console.log('🧹 Clearing previous course data before loading new course');
       setCourseDetail(null);
@@ -758,17 +767,17 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (role === UserRole.Trainer && course.courseRunId) {
         // Use trainer-specific API for course details
         const trainerResponse = await fetch(`/api/courses/trainer-detail?trainerUserId=${userId}&courseRunId=${course.courseRunId}`);
-        
+
         if (!trainerResponse.ok) {
           throw new Error(`Trainer API failed: ${trainerResponse.status} ${trainerResponse.statusText}`);
         }
-        
+
         const trainerData = await trainerResponse.json();
-        
+
         if (!trainerData.success || !trainerData.data) {
           throw new Error(`Trainer API response invalid: ${trainerData.error || 'No data returned'}`);
         }
-        
+
         // Set course detail from trainer API response
         setCourseDetail({
           title: trainerData.data.courseDetail.courseTitle,
@@ -788,19 +797,19 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           assessmentPlanUrl: trainerData.data.courseDetail.assessmentPlanUrl,
           certificate: ''
         });
-        
+
         console.log('✅ LmsContext: Course detail set with courseRunUuid:', trainerData.data.courseDetail.courseRunUuid);
         console.log('✅ LmsContext: Original course.courseRunId was:', course.courseRunId);
 
         // Set learning units and bookmarks from trainer API
         setLearningUnits(trainerData.data.learningUnits);
         setBookmarkedSubtopics(trainerData.data.bookmarkedSubtopics);
-        
+
         console.log('✅ LmsContext: Trainer course detail loaded:', trainerData.data.courseDetail);
         console.log('✅ LmsContext: Trainer learning units loaded:', trainerData.data.learningUnits);
         console.log('✅ LmsContext: Trainer bookmarks loaded for courseRunUuid:', trainerData.data.courseDetail.courseRunUuid);
         console.log('✅ LmsContext: Trainer bookmarked subtopics:', trainerData.data.bookmarkedSubtopics);
-        
+
         // Load trainer assessments with publish status
         if (course.courseRunId) {
           try {
@@ -832,7 +841,7 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         try {
           const detailResponse = await fetch(`/api/courses/developer-course-detail?courseId=${course.id}`);
           const detailResult = await detailResponse.json();
-          
+
           if (detailResult.success) {
             setCourseDetail(detailResult.data);
             console.log('✅ LmsContext: Developer course detail loaded:', detailResult.data);
@@ -841,12 +850,12 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           // Load learning units for developers using course ID
           const unitsResponse = await fetch(`/api/courses/developer-learning-units?courseId=${course.id}`);
           const unitsResult = await unitsResponse.json();
-          
+
           if (unitsResult.success) {
             setLearningUnits(unitsResult.data);
             console.log('✅ LmsContext: Developer learning units loaded:', unitsResult.data);
           }
-          
+
           // Developers don't need bookmarks, completions, or submissions for viewing courses
           setBookmarkedSubtopics([]);
           setCompletedSubtopics([]);
@@ -861,14 +870,14 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (course.id) {
           try {
             // Include courseRunId if available to get specific course run details
-            const detailUrl = course.courseRunId 
+            const detailUrl = course.courseRunId
               ? `/api/courses/detail?userId=${userId}&courseId=${course.id}&courseRunId=${course.courseRunId}`
               : `/api/courses/detail?userId=${userId}&courseId=${course.id}`;
-            
+
             console.log('🔍 LmsContext: Fetching learner course detail from:', detailUrl);
             const detailResponse = await fetch(detailUrl);
             const detailResult = await detailResponse.json();
-            
+
             if (detailResult.success) {
               const detail = detailResult.data;
               setCourseDetail(detail);
@@ -881,7 +890,7 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 // Load learning units
                 const unitsResponse = await fetch(`/api/courses/learning-units?userId=${userId}&courseRunId=${detail.courseRunUuid}`);
                 const unitsResult = await unitsResponse.json();
-                
+
                 // Load bookmarks - now using courseRunId instead of courseId
                 console.log('🔍 Loading bookmarks for courseRunUuid:', detail.courseRunUuid);
                 console.log('🔍 User role:', role);
@@ -890,31 +899,31 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 const bookmarksResponse = await fetch(`/api/bookmarks?userId=${userId}&courseRunId=${detail.courseRunUuid}`);
                 const bookmarksResult = await bookmarksResponse.json();
                 console.log('🔍 Bookmarks API response:', bookmarksResult);
-                
+
                 // Load completions using courseRunUuid (UUID format)
                 const completionsResponse = await fetch(`/api/completions?userId=${userId}&courseRunId=${detail.courseRunUuid}`);
                 const completionsResult = await completionsResponse.json();
                 console.log('🔍 Completions API response:', completionsResult);
-                
+
                 if (unitsResult.success) {
                   setLearningUnits(unitsResult.data);
                   console.log(`✅ LmsContext: Learning units loaded:`, unitsResult.data);
                 }
-                
+
                 if (bookmarksResult.success) {
                   // Transform bookmarks data to get only subtopic IDs
                   const bookmarkedSubtopicIds = bookmarksResult.data.map((bookmark: any) => bookmark.subtopic_id);
                   setBookmarkedSubtopics(bookmarkedSubtopicIds);
                   console.log(`✅ LmsContext: Learner bookmarks loaded for courseRunUuid ${detail.courseRunUuid}:`, bookmarkedSubtopicIds);
                 }
-                
+
                 if (completionsResult.success) {
                   // Transform completions data to get only subtopic IDs
                   const completedSubtopicIds = completionsResult.data.map((completion: any) => completion.subtopic_id);
                   setCompletedSubtopics(completedSubtopicIds);
                   console.log(`✅ LmsContext: Completions loaded:`, completedSubtopicIds);
                 }
-                
+
                 // Load assessments with publish status for learners
                 try {
                   const response = await fetch(`/api/assessments/learner?courseRunId=${detail.courseRunUuid}&learnerId=${userId}`);
@@ -946,7 +955,7 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                   console.error('❌ LmsContext: Failed to load assessments:', error);
                   setCourseAssessments([]);
                 }
-                
+
                 // Load submissions for the course
                 try {
                   const response = await fetch(`/api/submissions?userId=${userId}&courseId=${course.id}`);
@@ -991,31 +1000,31 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       console.error('❌ No selectedCourse or currentUser available for bookmark operation');
       return;
     }
-    
+
     try {
       const isCurrentlyBookmarked = bookmarkedSubtopics.includes(subtopicId);
       const newBookmarkState = !isCurrentlyBookmarked;
       const userId = currentUser.id; // Use currentUser from context instead of localStorage
-      
+
       // Get courseRunId - prefer courseDetail.courseRunUuid (UUID), fallback to selectedCourse.courseRunId 
       // Note: selectedCourse.courseRunId should be UUID but might be string in some cases
       let courseRunId = courseDetail?.courseRunUuid || selectedCourse?.courseRunId;
-      
+
       // Additional safety check: if courseRunId looks like a string format (no hyphens), log warning
       if (courseRunId && !courseRunId.includes('-')) {
         console.warn('⚠️ courseRunId appears to be string format, not UUID:', courseRunId);
         console.warn('⚠️ CourseDetail:', courseDetail);
         console.warn('⚠️ SelectedCourse:', selectedCourse);
       }
-      
+
       if (!courseRunId) {
         console.error('❌ No courseRunId available for bookmark operation. CourseDetail:', courseDetail, 'SelectedCourse:', selectedCourse);
         return;
       }
-      
-      console.log('🔖 Toggling bookmark:', { 
-        subtopicId, 
-        courseRunId, 
+
+      console.log('🔖 Toggling bookmark:', {
+        subtopicId,
+        courseRunId,
         newBookmarkState,
         userRole: role,
         userId: userId,
@@ -1025,7 +1034,7 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         selectedCourseRunId: selectedCourse?.courseRunId,
         selectedCourseTitle: selectedCourse?.title
       });
-      
+
       // Validate user ID consistency
       const localStorageUserId = getCurrentUserId();
       if (userId !== localStorageUserId) {
@@ -1035,40 +1044,40 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           contextUserEmail: currentUser.email
         });
       }
-      
+
       // Optimistic update
-      setBookmarkedSubtopics(prev => 
-        newBookmarkState 
+      setBookmarkedSubtopics(prev =>
+        newBookmarkState
           ? [...prev, subtopicId]
           : prev.filter(id => id !== subtopicId)
       );
-      
+
       // Call API with the required parameters including courseRunId
       const response = await fetch('/api/bookmarks/toggle', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          userId, 
-          subtopicId, 
+        body: JSON.stringify({
+          userId,
+          subtopicId,
           courseRunId,
-          isBookmarked: newBookmarkState 
+          isBookmarked: newBookmarkState
         })
       });
-      
+
       if (!response.ok) {
         throw new Error('Failed to toggle bookmark');
       }
-      
+
     } catch (error) {
       console.error('❌ LmsContext: Failed to toggle bookmark:', error);
       const userId = currentUser?.id;
       let courseRunId = courseDetail?.courseRunUuid || selectedCourse?.courseRunId;
-      
+
       // Additional safety check for revert logic
       if (courseRunId && !courseRunId.includes('-')) {
         console.warn('⚠️ courseRunId in error handler appears to be string format:', courseRunId);
       }
-      
+
       // Revert optimistic update on error
       if (courseRunId && userId) {
         const bookmarksResponse = await fetch(`/api/bookmarks?userId=${userId}&courseRunId=${courseRunId}`);
@@ -1087,38 +1096,38 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       console.error('❌ No selectedCourse, currentUser, or courseRunUuid available for completion operation');
       return;
     }
-    
+
     try {
       const isCurrentlyCompleted = completedSubtopics.includes(subtopicId);
       const newCompletionState = !isCurrentlyCompleted;
       const userId = currentUser.id; // Use currentUser from context instead of localStorage
       const courseRunId = courseDetail.courseRunUuid; // Use UUID format
-      
+
       console.log(`🔍 LmsContext: Toggling completion for subtopicId: ${subtopicId}, courseRunId: ${courseRunId}, newState: ${newCompletionState}`);
-      
+
       // Optimistic update
-      setCompletedSubtopics(prev => 
-        newCompletionState 
+      setCompletedSubtopics(prev =>
+        newCompletionState
           ? [...prev, subtopicId]
           : prev.filter(id => id !== subtopicId)
       );
-      
+
       // Call API with the required parameters (using courseRunId instead of courseId)
       const response = await fetch('/api/completions/toggle', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          userId, 
-          subtopicId, 
+        body: JSON.stringify({
+          userId,
+          subtopicId,
           courseRunId, // Changed from courseId to courseRunId
-          isCompleted: newCompletionState 
+          isCompleted: newCompletionState
         })
       });
-      
+
       if (!response.ok) {
         throw new Error('Failed to toggle completion');
       }
-      
+
     } catch (error) {
       console.error('❌ LmsContext: Failed to toggle completion:', error);
       const userId = currentUser?.id;
@@ -1138,7 +1147,7 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const loadSubmissions = useCallback(async () => {
     if (!selectedCourse?.id || !currentUser?.id) return;
-    
+
     try {
       const userId = currentUser.id; // Use currentUser from context
 
@@ -1146,7 +1155,7 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (!response.ok) {
         throw new Error('Failed to fetch submissions');
       }
-      
+
       const result = await response.json();
       if (result.success) {
         setSubmissions(result.data);
@@ -1159,7 +1168,7 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const loadCertificate = useCallback(async () => {
     if (!selectedCourse?.id || !currentUser?.id) return;
-    
+
     try {
       const userId = currentUser.id; // Use currentUser from context
 
@@ -1167,7 +1176,7 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (!response.ok) {
         throw new Error('Failed to fetch certificate');
       }
-      
+
       const result = await response.json();
       if (result.success) {
         setCertificate(result.data);
@@ -1180,7 +1189,7 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const submitAssessment = useCallback(async (assessmentId: string, fileName: string, fileUrl?: string) => {
     if (!selectedCourse?.id || !courseDetail?.courseRunUuid || !currentUser?.id) return;
-    
+
     try {
       const userId = currentUser.id; // Use currentUser from context
 
@@ -1189,14 +1198,14 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (!enrollmentResponse.ok) {
         throw new Error('Failed to get enrollment information');
       }
-      
+
       const enrollmentResult = await enrollmentResponse.json();
       if (!enrollmentResult.success || !enrollmentResult.data.length) {
         throw new Error('No enrollment found for this course');
       }
-      
+
       const enrollmentId = enrollmentResult.data[0].id;
-      
+
       // Submit the assessment
       const response = await fetch('/api/submissions/submit', {
         method: 'POST',
@@ -1210,11 +1219,11 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           fileUrl
         }),
       });
-      
+
       if (!response.ok) {
         throw new Error('Failed to submit assessment');
       }
-      
+
       const result = await response.json();
       if (result.success) {
         console.log(`✅ LmsContext: Assessment submitted:`, result.data);
@@ -1231,7 +1240,7 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!courseDetail?.courseRunUuid) {
       throw new Error('No course run ID available');
     }
-    
+
     try {
       const response = await fetch('/api/assessments/publish', {
         method: 'PUT',
@@ -1244,19 +1253,19 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           published
         }),
       });
-      
+
       if (!response.ok) {
         throw new Error('Failed to publish assessment');
       }
-      
+
       const result = await response.json();
       if (result.success) {
         console.log(`✅ LmsContext: Assessment publish status updated:`, result.message);
-        
+
         // Update the local courseAssessments state to reflect the change
-        setCourseAssessments(prev => 
-          prev.map(assessment => 
-            assessment.id === assessmentId 
+        setCourseAssessments(prev =>
+          prev.map(assessment =>
+            assessment.id === assessmentId
               ? { ...assessment, published }
               : assessment
           )
@@ -1272,14 +1281,14 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const updateTrainingProviderProfile = useCallback((updates: Partial<TrainingProviderProfile>) => {
     setTrainingProviderProfile(prev => {
       if (!prev) return null;
-      
+
       const updated = { ...prev, ...updates };
-      
+
       // Apply color scheme if it was updated
       if (updates.colorScheme) {
         initializeColorScheme(updated as TrainingProviderProfile);
       }
-      
+
       return updated;
     });
   }, []);
@@ -1345,7 +1354,7 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     publishAssessment,
     loadSubmissions,
     loadCertificate,
-    
+
     // Chat functionality
     isChatOpen,
     toggleChat,

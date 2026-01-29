@@ -5,6 +5,7 @@ import { useTrainerCourses, useTrainerCourseSearch } from '../hooks/useTrainerCo
 import { useDeveloperCourses, useDeveloperCourseSearch } from '../hooks/useDeveloperCourses';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
+import { EmptyState } from '../components/ui/EmptyState';
 import { Icon, IconName } from '../components/ui/Icon';
 import { UserRole } from '@app-types';
 import EnrolledCourseListItem from './EnrolledCourseListItem';
@@ -487,12 +488,15 @@ const ManagementCourseList: React.FC = () => {
                 {filteredCourses.length > 0 ? (
                     viewMode === 'block' ? <CourseBlockView /> : <CourseTableView />
                 ) : (
-                    <Card className="p-12 text-center text-subtle">
-                        {(searchQuery !== '' || filterCourseType !== 'All' || filterMode !== 'All' || (role === UserRole.Trainer && filterStartDate !== 'All'))
+                    <EmptyState
+                        title="No courses found"
+                        description={(searchQuery !== '' || filterCourseType !== 'All' || filterMode !== 'All' || (role === UserRole.Trainer && filterStartDate !== 'All'))
                             ? 'No courses match your search criteria.'
                             : 'No courses found.'
                         }
-                    </Card>
+                        icon={IconName.Courses}
+                        className="dark:bg-gray-800 dark:border-gray-700"
+                    />
                 )}
             </div>
         </div>
@@ -663,14 +667,12 @@ const LearnerCourseList: React.FC = () => {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 <div className="lg:col-span-3 space-y-4">
                     {enrolledCourses.length === 0 ? (
-                        <div className="text-center py-12 bg-gray-50 rounded-lg">
-                            <p className="text-gray-500 text-lg">
-                                {hasActiveFilters ? 'No courses match your search criteria' : 'No enrolled courses found'}
-                            </p>
-                            <p className="text-gray-400 text-sm mt-2">
-                                {hasActiveFilters ? 'Try adjusting your search or filters' : 'You haven\'t enrolled in any courses yet'}
-                            </p>
-                        </div>
+                        <EmptyState
+                            title={hasActiveFilters ? 'No courses match your search criteria' : 'No enrolled courses found'}
+                            description={hasActiveFilters ? 'Try adjusting your search or filters' : "You haven't enrolled in any courses yet"}
+                            icon={IconName.Courses}
+                            className="dark:bg-gray-800 dark:border-gray-700"
+                        />
                     ) : (
                         enrolledCourses.map(course => (
                             <EnrolledCourseListItem key={course.id} course={course} />
