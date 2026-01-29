@@ -1,11 +1,21 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 
+// Increase body size limit to 50MB (default is 1MB, which causes HTTP 413 for large Excel uploads)
+export const config = {
+    api: {
+        bodyParser: {
+            sizeLimit: '50mb',
+        },
+    },
+};
+
 // Column mapping from Excel headers to database columns
 const columnMapping: Record<string, string> = {
     'Trainee ID Type': 'trainee_id_type',
     'Trainee ID': 'trainee_id',
     'Date of Birth': 'date_of_birth',
+    'Date of Birth (DD-MM-YYYY)': 'date_of_birth',
     'Trainee Name': 'trainee_name',
     'Course Run ID': 'course_run_id',
     'Trainee Email': 'trainee_email',
@@ -20,8 +30,6 @@ const columnMapping: Record<string, string> = {
     'Course Reference Number': 'course_reference_number',
     'Course Start Date': 'course_start_date',
     'Course End Date': 'course_end_date',
-    'Enrolment/Grant': 'enrolment_grant',
-    'Enrolment Grant': 'enrolment_grant',
 };
 
 // Parse date from various formats
@@ -30,8 +38,8 @@ function parseDate(value: any): string | null {
 
     // If it's already a valid date string
     if (typeof value === 'string') {
-        // Try DD/MM/YYYY format
-        const ddmmyyyy = value.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+        // Try DD/MM/YYYY or DD-MM-YYYY format
+        const ddmmyyyy = value.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
         if (ddmmyyyy) {
             const [, day, month, year] = ddmmyyyy;
             return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
@@ -89,7 +97,17 @@ function transformRow(excelRow: Record<string, any>): Record<string, any> {
     for (const key of Object.keys(excelRow)) {
         const snakeKey = key.toLowerCase().replace(/\s+/g, '_');
         if (Object.values(columnMapping).includes(snakeKey) && !dbRow[snakeKey]) {
-            dbRow[snakeKey] = excelRow[key];
+            let value = excelRow[key];
+
+            // Apply same transformations as above
+            if (snakeKey.includes('date')) {
+                value = parseDate(value);
+            }
+            if (snakeKey === 'payable_fee' && value) {
+                value = parseFloat(String(value).replace(/[^0-9.-]/g, '')) || 0;
+            }
+
+            dbRow[snakeKey] = value;
         }
     }
 
@@ -120,16 +138,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
         console.log(`📊 Processing ${data.length} DA application records...`);
 
-        // Get existing application IDs to check for duplicates
+        // Get existing application IDs and their statuses to check for duplicates
         const existingResult = await pool.query(
-            `SELECT application_id FROM da_application`
+            `SELECT application_id, application_status FROM da_application`
         );
 
-        const existingIds = new Set(existingResult.rows.map(r => r.application_id));
+        const existingApps = new Map<string, string>(
+            existingResult.rows.map(r => [r.application_id, r.application_status])
+        );
 
         // Transform and filter records
         const newRecords: Record<string, any>[] = [];
         const duplicates: string[] = [];
+        const toUpdate: Record<string, any>[] = [];
         const errors: { row: number; error: string }[] = [];
 
         for (let i = 0; i < data.length; i++) {
@@ -143,19 +164,58 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                     continue;
                 }
 
-                if (existingIds.has(appId)) {
-                    duplicates.push(appId);
+                if (existingApps.has(appId)) {
+                    const existingStatus = (existingApps.get(appId) || '').toLowerCase();
+                    const uploadedStatus = (transformed.application_status || '').toLowerCase();
+
+                    // If existing is confirmed and uploaded is cancelled, queue for status update
+                    if (existingStatus === 'confirmed' && uploadedStatus === 'cancelled') {
+                        toUpdate.push({
+                            application_id: appId,
+                            application_status: transformed.application_status,
+                            old_status: existingApps.get(appId),
+                        });
+                    } else {
+                        duplicates.push(appId);
+                    }
                     continue;
                 }
 
                 newRecords.push(transformed);
-                existingIds.add(appId);
+                existingApps.set(appId, transformed.application_status || '');
             } catch (err) {
                 errors.push({ row: i + 1, error: err instanceof Error ? err.message : 'Unknown error' });
             }
         }
 
-        console.log(`✅ Found ${newRecords.length} new records, ${duplicates.length} duplicates`);
+        console.log(`✅ Found ${newRecords.length} new records, ${duplicates.length} duplicates, ${toUpdate.length} to update`);
+
+        // Update status for existing records (Confirmed -> Cancelled)
+        let updatedCount = 0;
+        const updatedRecords: any[] = [];
+        for (const record of toUpdate) {
+            try {
+                const result = await pool.query(
+                    `UPDATE da_application SET application_status = $1, enrolment_grant_status = $2 WHERE application_id = $3 RETURNING *`,
+                    [record.application_status, false, record.application_id]
+                );
+                if (result.rows.length > 0) {
+                    updatedCount++;
+                    updatedRecords.push({
+                        ...result.rows[0],
+                        old_status: record.old_status,
+                    });
+                }
+            } catch (err) {
+                console.error('Error updating record:', record.application_id, err);
+                errors.push({
+                    row: 0,
+                    error: `Failed to update status for ${record.application_id}: ${err instanceof Error ? err.message : 'Update failed'}`
+                });
+            }
+        }
+
+        console.log(`✅ Updated ${updatedCount} existing records (Confirmed -> Cancelled)`);
 
         // Insert new records using SQL
         let insertedCount = 0;
@@ -180,9 +240,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                         course_title,
                         course_reference_number,
                         course_start_date,
-                        course_end_date,
-                        enrolment_grant
-                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+                        course_end_date
+                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
                     RETURNING *`,
                     [
                         record.trainee_id_type || null,
@@ -200,16 +259,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                         record.course_title || null,
                         record.course_reference_number || null,
                         record.course_start_date || null,
-                        record.course_end_date || null,
-                        record.enrolment_grant || null
+                        record.course_end_date || null
                     ]
                 );
 
                 if (result.rows.length > 0) {
                     insertedCount++;
-                    if (insertedRecords.length < 10) {
-                        insertedRecords.push(result.rows[0]);
-                    }
+                    insertedRecords.push(result.rows[0]);
                 }
             } catch (err) {
                 console.error('Error inserting record:', record.application_id, err);
@@ -220,15 +276,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             }
         }
 
-        console.log(`✅ Successfully inserted ${insertedCount} records`);
+        console.log(`✅ Successfully inserted ${insertedCount} records, updated ${updatedCount} records`);
 
         return res.status(200).json({
             success: true,
             inserted: insertedCount,
+            updated: updatedCount,
             duplicates: duplicates.length,
             duplicateIds: duplicates.slice(0, 10),
             errors,
-            newRecords: insertedRecords
+            newRecords: insertedRecords,
+            updatedRecords,
         });
 
     } catch (error) {

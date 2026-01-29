@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS public.da_application (
     course_reference_number character varying(100),
     course_start_date date,
     course_end_date date,
-    enrolment_grant character varying(100),
+    enrolment_grant_status boolean DEFAULT false,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT da_application_pkey PRIMARY KEY (id),

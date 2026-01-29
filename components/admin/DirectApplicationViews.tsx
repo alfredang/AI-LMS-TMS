@@ -32,6 +32,17 @@ export const UploadDirectApplicationView: React.FC = () => {
     const [uploadResult, setUploadResult] = useState<any>(null);
     const [error, setError] = useState<string | null>(null);
     const [isDragOver, setIsDragOver] = useState(false);
+    const [showTraineeId, setShowTraineeId] = useState(false);
+    const [newRecordsPage, setNewRecordsPage] = useState(1);
+    const [updatedRecordsPage, setUpdatedRecordsPage] = useState(1);
+    const resultsPerPage = 10;
+
+    const maskTraineeId = (id: string | null) => {
+        if (!id) return 'N/A';
+        if (showTraineeId) return id;
+        if (id.length <= 4) return id;
+        return '****' + id.slice(-4);
+    };
 
     const handleFileChange = (selectedFile: File | undefined | null) => {
         if (selectedFile) {
@@ -212,13 +223,16 @@ export const UploadDirectApplicationView: React.FC = () => {
         setFile(null);
         setUploadResult(null);
         setError(null);
+        setShowTraineeId(false);
+        setNewRecordsPage(1);
+        setUpdatedRecordsPage(1);
     };
 
     const UploadStep = () => (
         <Card className="p-6">
             {/* Protected View Note - at top for visibility */}
             <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4">
-                <h4 className="font-semibold text-amber-800 mb-2">⚠️ Important: Downloaded Files</h4>
+                <h4 className="font-semibold text-amber-800 mb-2">⚠️ Important: For Direct Application File</h4>
                 <p className="text-sm text-amber-700">
                     If you just downloaded this Excel file, please do the following before uploading:
                 </p>
@@ -226,6 +240,9 @@ export const UploadDirectApplicationView: React.FC = () => {
                     <li><strong>Windows:</strong> Open the file in Excel → Click "Enable Editing" → Save the file</li>
                     <li><strong>Mac:</strong> Open the file in Excel → Save the file (⌘+S)</li>
                 </ul>
+                <p className="text-sm text-amber-700 mt-2">
+                    <strong>Reason:</strong> The Excel file downloaded from TPG opens in Protected View, which prevents the data from being read programmatically.
+                </p>
             </div>
 
             <div className="text-center mb-4">
@@ -258,15 +275,7 @@ export const UploadDirectApplicationView: React.FC = () => {
             </div>
             {error && <p className="text-red-500 text-sm mt-2 text-center">{error}</p>}
 
-            <div className="flex justify-between items-center mt-6">
-                <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => alert('Downloading DA Application template...')}
-                >
-                    <Icon name={IconName.Download} className="w-4 h-4 mr-2" />
-                    Download Template
-                </Button>
+            <div className="flex justify-end items-center mt-6">
                 <Button onClick={handleUpload} disabled={!file || isUploading}>
                     {isUploading ? (
                         <div className="flex items-center">
@@ -286,11 +295,12 @@ export const UploadDirectApplicationView: React.FC = () => {
                 <p className="text-gray-500 mt-1">The following results were returned from processing.</p>
             </div>
             <div className="p-6">
-                {uploadResult?.success && uploadResult?.inserted > 0 ? (
+                {uploadResult?.success && (uploadResult?.inserted > 0 || uploadResult?.updated > 0) ? (
                     <div className="space-y-4">
                         <div className="bg-green-50 border border-green-200 rounded-lg p-4">
                             <h4 className="font-bold text-green-800">
                                 {uploadResult.inserted} New Record(s) Inserted
+                                {uploadResult.updated > 0 && `, ${uploadResult.updated} Record(s) Updated`}
                             </h4>
                             <p className="text-sm text-green-700">
                                 {uploadResult.duplicates || 0} duplicate(s) were skipped
@@ -304,40 +314,240 @@ export const UploadDirectApplicationView: React.FC = () => {
 
                         {uploadResult.newRecords && uploadResult.newRecords.length > 0 && (
                             <div className="overflow-x-auto">
+                                <h4 className="font-semibold text-gray-800 mb-2">New Records</h4>
                                 <table className="min-w-full divide-y divide-gray-200">
                                     <thead className="bg-gray-50">
                                         <tr>
                                             <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Application ID</th>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Trainee ID Type</th>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Trainee ID</th>
                                             <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Trainee Name</th>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Phone</th>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">DOB</th>
                                             <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Course Title</th>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Course Ref No.</th>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Course Run ID</th>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Sponsorship</th>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Payable Fee</th>
                                             <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
                                         </tr>
                                     </thead>
                                     <tbody className="bg-white divide-y divide-gray-200">
-                                        {uploadResult.newRecords.map((record: any, index: number) => (
-                                            <tr key={index} className="hover:bg-gray-50">
-                                                <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
-                                                    {record.application_id || 'N/A'}
-                                                </td>
-                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                                                    {record.trainee_name || 'N/A'}
-                                                </td>
-                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                                                    {record.course_title || 'N/A'}
-                                                </td>
-                                                <td className="px-4 py-3 whitespace-nowrap">
-                                                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full border ${getStatusColor(record.application_status || 'Inserted')}`}>
-                                                        {record.application_status || 'Inserted'}
-                                                    </span>
-                                                </td>
-                                            </tr>
-                                        ))}
+                                        {uploadResult.newRecords
+                                            .slice((newRecordsPage - 1) * resultsPerPage, newRecordsPage * resultsPerPage)
+                                            .map((record: any, index: number) => (
+                                                <tr key={index} className="hover:bg-gray-50">
+                                                    <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
+                                                        {record.application_id || 'N/A'}
+                                                    </td>
+                                                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                                                        {record.trainee_id_type || 'N/A'}
+                                                    </td>
+                                                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                                                        <div className="flex items-center gap-1.5">
+                                                            <span className="font-mono">{maskTraineeId(record.trainee_id)}</span>
+                                                            <button
+                                                                onClick={() => setShowTraineeId(!showTraineeId)}
+                                                                className="p-0.5 text-gray-400 hover:text-blue-600 rounded transition-colors"
+                                                                title={showTraineeId ? 'Hide Trainee ID' : 'Show Trainee ID'}
+                                                            >
+                                                                <Icon name={showTraineeId ? IconName.EyeOff : IconName.Eye} className="w-4 h-4" />
+                                                            </button>
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                                                        {record.trainee_name || 'N/A'}
+                                                    </td>
+                                                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                                                        {record.trainee_email || 'N/A'}
+                                                    </td>
+                                                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                                                        {record.trainee_phone_country_code && record.trainee_phone
+                                                            ? `+${record.trainee_phone_country_code} ${record.trainee_phone}`
+                                                            : record.trainee_phone || 'N/A'}
+                                                    </td>
+                                                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                                                        {record.date_of_birth ? new Date(record.date_of_birth).toLocaleDateString('en-GB') : 'N/A'}
+                                                    </td>
+                                                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                                                        {record.course_title || 'N/A'}
+                                                    </td>
+                                                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                                                        {record.course_reference_number || 'N/A'}
+                                                    </td>
+                                                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                                                        {record.course_run_id || 'N/A'}
+                                                    </td>
+                                                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                                                        {record.sponsorship_type || 'N/A'}
+                                                    </td>
+                                                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                                                        ${parseFloat(record.payable_fee || 0).toFixed(2)}
+                                                    </td>
+                                                    <td className="px-4 py-3 whitespace-nowrap">
+                                                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full border ${getStatusColor(record.application_status || 'Inserted')}`}>
+                                                            {record.application_status || 'Inserted'}
+                                                        </span>
+                                                    </td>
+                                                </tr>
+                                            ))}
                                     </tbody>
                                 </table>
-                                {uploadResult.inserted > 10 && (
-                                    <p className="text-sm text-gray-500 p-4">
-                                        Showing first 10 of {uploadResult.inserted} records...
-                                    </p>
+                                {uploadResult.newRecords.length > resultsPerPage && (
+                                    <div className="flex items-center justify-between mt-3 px-1">
+                                        <p className="text-sm text-gray-500">
+                                            Showing {(newRecordsPage - 1) * resultsPerPage + 1}-{Math.min(newRecordsPage * resultsPerPage, uploadResult.newRecords.length)} of {uploadResult.newRecords.length}
+                                        </p>
+                                        <div className="flex items-center gap-1">
+                                            <button
+                                                onClick={() => setNewRecordsPage(p => Math.max(1, p - 1))}
+                                                disabled={newRecordsPage === 1}
+                                                className="px-3 py-1 text-sm border rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                                            >
+                                                Previous
+                                            </button>
+                                            {Array.from({ length: Math.ceil(uploadResult.newRecords.length / resultsPerPage) }, (_, i) => i + 1).map(page => (
+                                                <button
+                                                    key={page}
+                                                    onClick={() => setNewRecordsPage(page)}
+                                                    className={`px-3 py-1 text-sm border rounded ${newRecordsPage === page ? 'bg-blue-500 text-white border-blue-500' : 'hover:bg-gray-100'}`}
+                                                >
+                                                    {page}
+                                                </button>
+                                            ))}
+                                            <button
+                                                onClick={() => setNewRecordsPage(p => Math.min(Math.ceil(uploadResult.newRecords.length / resultsPerPage), p + 1))}
+                                                disabled={newRecordsPage === Math.ceil(uploadResult.newRecords.length / resultsPerPage)}
+                                                className="px-3 py-1 text-sm border rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                                            >
+                                                Next
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {uploadResult.updatedRecords && uploadResult.updatedRecords.length > 0 && (
+                            <div className="overflow-x-auto">
+                                <h4 className="font-semibold text-gray-800 mb-2">Updated Records (Confirmed → Cancelled)</h4>
+                                <table className="min-w-full divide-y divide-gray-200">
+                                    <thead className="bg-gray-50">
+                                        <tr>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Application ID</th>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Trainee ID Type</th>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Trainee ID</th>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Trainee Name</th>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Phone</th>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">DOB</th>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Course Title</th>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Course Ref No.</th>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Course Run ID</th>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Sponsorship</th>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Payable Fee</th>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Old Status</th>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">New Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="bg-white divide-y divide-gray-200">
+                                        {uploadResult.updatedRecords
+                                            .slice((updatedRecordsPage - 1) * resultsPerPage, updatedRecordsPage * resultsPerPage)
+                                            .map((record: any, index: number) => (
+                                                <tr key={index} className="hover:bg-gray-50">
+                                                    <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
+                                                        {record.application_id || 'N/A'}
+                                                    </td>
+                                                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                                                        {record.trainee_id_type || 'N/A'}
+                                                    </td>
+                                                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                                                        <div className="flex items-center gap-1.5">
+                                                            <span className="font-mono">{maskTraineeId(record.trainee_id)}</span>
+                                                            <button
+                                                                onClick={() => setShowTraineeId(!showTraineeId)}
+                                                                className="p-0.5 text-gray-400 hover:text-blue-600 rounded transition-colors"
+                                                                title={showTraineeId ? 'Hide Trainee ID' : 'Show Trainee ID'}
+                                                            >
+                                                                <Icon name={showTraineeId ? IconName.EyeOff : IconName.Eye} className="w-4 h-4" />
+                                                            </button>
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                                                        {record.trainee_name || 'N/A'}
+                                                    </td>
+                                                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                                                        {record.trainee_email || 'N/A'}
+                                                    </td>
+                                                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                                                        {record.trainee_phone_country_code && record.trainee_phone
+                                                            ? `+${record.trainee_phone_country_code} ${record.trainee_phone}`
+                                                            : record.trainee_phone || 'N/A'}
+                                                    </td>
+                                                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                                                        {record.date_of_birth ? new Date(record.date_of_birth).toLocaleDateString('en-GB') : 'N/A'}
+                                                    </td>
+                                                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                                                        {record.course_title || 'N/A'}
+                                                    </td>
+                                                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                                                        {record.course_reference_number || 'N/A'}
+                                                    </td>
+                                                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                                                        {record.course_run_id || 'N/A'}
+                                                    </td>
+                                                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                                                        {record.sponsorship_type || 'N/A'}
+                                                    </td>
+                                                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                                                        ${parseFloat(record.payable_fee || 0).toFixed(2)}
+                                                    </td>
+                                                    <td className="px-4 py-3 whitespace-nowrap">
+                                                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full border ${getStatusColor(record.old_status || '')}`}>
+                                                            {record.old_status || 'N/A'}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-4 py-3 whitespace-nowrap">
+                                                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full border ${getStatusColor(record.application_status || '')}`}>
+                                                            {record.application_status || 'N/A'}
+                                                        </span>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                    </tbody>
+                                </table>
+                                {uploadResult.updatedRecords.length > resultsPerPage && (
+                                    <div className="flex items-center justify-between mt-3 px-1">
+                                        <p className="text-sm text-gray-500">
+                                            Showing {(updatedRecordsPage - 1) * resultsPerPage + 1}-{Math.min(updatedRecordsPage * resultsPerPage, uploadResult.updatedRecords.length)} of {uploadResult.updatedRecords.length}
+                                        </p>
+                                        <div className="flex items-center gap-1">
+                                            <button
+                                                onClick={() => setUpdatedRecordsPage(p => Math.max(1, p - 1))}
+                                                disabled={updatedRecordsPage === 1}
+                                                className="px-3 py-1 text-sm border rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                                            >
+                                                Previous
+                                            </button>
+                                            {Array.from({ length: Math.ceil(uploadResult.updatedRecords.length / resultsPerPage) }, (_, i) => i + 1).map(page => (
+                                                <button
+                                                    key={page}
+                                                    onClick={() => setUpdatedRecordsPage(page)}
+                                                    className={`px-3 py-1 text-sm border rounded ${updatedRecordsPage === page ? 'bg-blue-500 text-white border-blue-500' : 'hover:bg-gray-100'}`}
+                                                >
+                                                    {page}
+                                                </button>
+                                            ))}
+                                            <button
+                                                onClick={() => setUpdatedRecordsPage(p => Math.min(Math.ceil(uploadResult.updatedRecords.length / resultsPerPage), p + 1))}
+                                                disabled={updatedRecordsPage === Math.ceil(uploadResult.updatedRecords.length / resultsPerPage)}
+                                                className="px-3 py-1 text-sm border rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                                            >
+                                                Next
+                                            </button>
+                                        </div>
+                                    </div>
                                 )}
                             </div>
                         )}
@@ -369,7 +579,7 @@ export const UploadDirectApplicationView: React.FC = () => {
 
     return (
         <div>
-            <h2 className="text-3xl font-bold mb-6">Upload Direct Application</h2>
+            <h2 className="text-3xl font-bold mb-6">Upload And Check Duplicate Direct Application</h2>
             {isUploading ? (
                 <div className="flex justify-center py-20">
                     <div className="text-center">

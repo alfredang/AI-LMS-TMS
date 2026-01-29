@@ -38,7 +38,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 course_reference_number,
                 course_start_date,
                 course_end_date,
-                enrolment_grant,
+                enrolment_grant_status,
                 created_at,
                 updated_at
             FROM da_application
