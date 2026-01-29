@@ -4,7 +4,7 @@ import React from 'react';
 interface ButtonProps {
   children: React.ReactNode;
   onClick?: () => void;
-  variant?: 'primary' | 'secondary' | 'ghost';
+  variant?: 'primary' | 'secondary' | 'ghost' | 'outline';
   size?: 'sm' | 'md' | 'lg';
   disabled?: boolean;
   className?: string;
@@ -23,7 +23,8 @@ export const Button: React.FC<ButtonProps> = ({
   const variantClasses = {
     primary: 'bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500',
     secondary: 'bg-green-600 text-white hover:bg-green-700 focus:ring-green-500',
-    ghost: 'bg-transparent text-gray-700 hover:bg-gray-100 border border-gray-300 focus:ring-gray-500'
+    ghost: 'bg-transparent text-gray-700 hover:bg-gray-100 border border-gray-300 focus:ring-gray-500',
+    outline: 'border border-gray-300 bg-transparent text-gray-700 hover:bg-gray-50 focus:ring-blue-500'
   };
   
   const sizeClasses = {
