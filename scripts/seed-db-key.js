@@ -6,7 +6,7 @@ const client = new Client({
     ssl: { rejectUnauthorized: false }
 });
 
-const VALID_API_KEY = 'AIzaSyBBUj0GgtcltKHSR9FpGjS2W04XInzXSWE'; // The known good key
+
 
 async function seedKey() {
     try {
