@@ -968,16 +968,33 @@ export const ViewDirectApplicationView: React.FC = () => {
         );
     });
 
+    // Sort applications
+    const sortedApplications = [...filteredApplications].sort((a, b) => {
+        if (!sortColumn) return 0;
+
+        const valA = (a[sortColumn] || '').toString().toLowerCase();
+        const valB = (b[sortColumn] || '').toString().toLowerCase();
+
+        if (valA < valB) return sortDirection === 'asc' ? -1 : 1;
+        if (valA > valB) return sortDirection === 'asc' ? 1 : -1;
+        return 0;
+    });
+
     // Pagination calculations
-    const totalPages = Math.ceil(filteredApplications.length / itemsPerPage);
+    const totalPages = Math.ceil(sortedApplications.length / itemsPerPage);
     const startIndex = (currentPage - 1) * itemsPerPage;
     const endIndex = startIndex + itemsPerPage;
-    const paginatedApplications = filteredApplications.slice(startIndex, endIndex);
+    const paginatedApplications = sortedApplications.slice(startIndex, endIndex);
 
     // Reset to page 1 when search changes
     React.useEffect(() => {
         setCurrentPage(1);
     }, [searchQuery]);
+
+    // Reset to page 1 when sort changes
+    React.useEffect(() => {
+        setCurrentPage(1);
+    }, [sortColumn, sortDirection]);
 
     // Pagination controls with confirmation when rows are selected
     const goToPage = (page: number) => {
