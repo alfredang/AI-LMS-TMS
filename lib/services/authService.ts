@@ -34,10 +34,10 @@ class AuthService {
 
   async login(credentials: LoginCredentials): Promise<AuthResponse> {
     try {
-      console.log('🔐 AuthService: Attempting login...', { 
-        email: credentials.email, 
+      console.log('🔐 AuthService: Attempting login...', {
+        email: credentials.email,
         role: credentials.role,
-        loginType: credentials.loginType 
+        loginType: credentials.loginType
       });
 
       const response = await fetch('/api/auth/login', {
@@ -221,6 +221,105 @@ class AuthService {
       localStorage.setItem(AuthService.USER_DATA_KEY, JSON.stringify(userData));
     }
   }
+
+  // OAuth Login Methods
+  async loginWithGoogle(): Promise<AuthResponse> {
+    try {
+      const { supabase } = await import('@lib/supabaseClient');
+      console.log('🔐 AuthService: Initiating Google OAuth login');
+
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}`,
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'consent',
+          }
+        }
+      });
+
+      if (error) {
+        console.error('❌ AuthService: Google OAuth error:', error);
+        return { success: false, error: error.message };
+      }
+
+      console.log('✅ AuthService: Google OAuth initiated');
+      return { success: true };
+    } catch (error) {
+      console.error('❌ AuthService: Google OAuth error:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to initiate Google login'
+      };
+    }
+  }
+
+  // Handle OAuth session after redirect
+  async handleOAuthSession(): Promise<AuthResponse> {
+    try {
+      const { supabase } = await import('@lib/supabaseClient');
+
+      const { data: { session }, error } = await supabase.auth.getSession();
+
+      if (error || !session) {
+        return { success: false, error: 'No OAuth session found' };
+      }
+
+      const user = session.user;
+      console.log('✅ AuthService: OAuth session found for user:', user.email);
+
+      // Sync OAuth user to our database
+      const syncResponse = await fetch('/api/auth/oauth-sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          supabaseUserId: user.id,
+          email: user.email,
+          fullName: user.user_metadata?.full_name || user.user_metadata?.name,
+          profilePictureUrl: user.user_metadata?.avatar_url || user.user_metadata?.picture,
+          provider: 'google'
+        })
+      });
+
+      const syncResult = await syncResponse.json();
+
+      if (!syncResult.success) {
+        console.error('❌ AuthService: User sync failed:', syncResult.error);
+        return { success: false, error: syncResult.error || 'Failed to sync user data' };
+      }
+
+      // Create user object for local storage
+      const userData: User = {
+        id: syncResult.data.userId,
+        email: syncResult.data.email,
+        fullName: user.user_metadata?.full_name || user.user_metadata?.name || syncResult.data.email.split('@')[0],
+        profilePictureUrl: user.user_metadata?.avatar_url || user.user_metadata?.picture,
+        role: syncResult.data.role as UserRole,
+        roles: syncResult.data.roles as UserRole[]
+      };
+
+      // Store auth data
+      this.setAuthData(userData, session.access_token);
+
+      return {
+        success: true,
+        data: {
+          user: userData,
+          role: userData.role,
+          roles: userData.roles,
+          token: session.access_token
+        }
+      };
+    } catch (error) {
+      console.error('❌ AuthService: OAuth session handling error:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to handle OAuth session'
+      };
+    }
+  }
 }
 
 export const authService = new AuthService();
+

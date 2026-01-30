@@ -313,6 +313,20 @@ skip_nonce_check = false
 # If enabled, it will allow the user to successfully authenticate when the provider does not return an email address.
 email_optional = false
 
+# Google OAuth Configuration
+# Configure OAuth credentials via Supabase Dashboard instead of environment variables
+# Go to: Supabase Studio > Authentication > Providers > Google
+[auth.external.google]
+enabled = true
+client_id = ""
+secret = ""
+# Overrides the default auth redirectUrl.
+redirect_uri = ""
+# If enabled, the nonce check will be skipped. Required for local sign in with Google auth.
+skip_nonce_check = true
+# If enabled, it will allow the user to successfully authenticate when the provider does not return an email address.
+email_optional = false
+
 # Allow Solana wallet holders to sign in to your project via the Sign in with Solana (SIWS, EIP-4361) standard.
 # You can configure "web3" rate limit in the [auth.rate_limit] section and set up [auth.captcha] if self-hosting.
 [auth.web3.solana]
