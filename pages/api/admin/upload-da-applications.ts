@@ -51,18 +51,22 @@ function parseDate(value: any): string | null {
             return value;
         }
 
-        // Try parsing as date string
+        // Try parsing as date string (extract components to avoid timezone shift)
         const dateValue = new Date(value);
         if (!isNaN(dateValue.getTime())) {
-            return dateValue.toISOString().split('T')[0];
+            const y = dateValue.getFullYear();
+            const m = String(dateValue.getMonth() + 1).padStart(2, '0');
+            const d = String(dateValue.getDate()).padStart(2, '0');
+            return `${y}-${m}-${d}`;
         }
     }
 
     // If it's a number (Excel serial date)
     if (typeof value === 'number') {
         // Excel uses days since 1900-01-01 (with a bug treating 1900 as leap year)
-        const excelEpoch = new Date(1899, 11, 30);
-        const date = new Date(excelEpoch.getTime() + value * 86400000);
+        // Use Date.UTC to avoid local timezone shifting the date back by one day
+        const utcMs = Date.UTC(1899, 11, 30) + value * 86400000;
+        const date = new Date(utcMs);
         return date.toISOString().split('T')[0];
     }
 
@@ -114,6 +118,170 @@ function transformRow(excelRow: Record<string, any>): Record<string, any> {
     return dbRow;
 }
 
+// DA Search Enrolment Webhook URL
+const DA_SEARCH_ENROLMENT_WEBHOOK = 'https://n8n.srv1231536.hstgr.cloud/webhook/4ac2fd52-7e73-493c-93a5-352295fc0d1c';
+
+/**
+ * Build the search enrolment payload for a single record.
+ */
+function buildEnrolmentPayload(record: Record<string, any>): Record<string, any> {
+    const runId = String(record.course_run_id || '');
+    const code = String(record.course_reference_number || '');
+    const traineeId = String(record.trainee_id || '');
+    const idTypeRaw = String(record.trainee_id_type || '').toUpperCase();
+    const sponsorshipRaw = String(record.sponsorship_type || '').toUpperCase();
+
+    // Convert ID Type: Singaporean/PR → NRIC, FIN → FIN, etc.
+    let idType = 'NRIC';
+    if (idTypeRaw.includes('FIN')) idType = 'FIN';
+    if (idTypeRaw.includes('PASSPORT')) idType = 'PASSPORT';
+
+    // Sponsorship type mapping
+    let sponsorshipType = 'INDIVIDUAL';
+    if (sponsorshipRaw.includes('EMPLOYER')) sponsorshipType = 'EMPLOYER';
+
+    // Build trainee object
+    const traineeJSON: Record<string, any> = {
+        id: traineeId,
+        idType: { type: idType },
+        sponsorshipType,
+    };
+
+    // Add employer if EMPLOYER sponsored
+    if (sponsorshipType === 'EMPLOYER' && record.employer_uen) {
+        traineeJSON.employer = { uen: String(record.employer_uen) };
+    }
+
+    return {
+        payload: {
+            enrolment: {
+                course: {
+                    run: { id: runId },
+                    referenceNumber: code
+                },
+                trainee: traineeJSON,
+                trainingPartner: {
+                    uen: '201200696W',
+                    code: '201200696W-01'
+                }
+            },
+            parameters: {
+                page: 0,
+                pageSize: 40
+            }
+        },
+        trainee_email: record.trainee_email || '',
+        application_id: record.application_id,
+        source: record.source || 'unknown'
+    };
+}
+
+/**
+ * Call the webhook with ALL records in a single batch request.
+ * Sends an array of enrolment payloads.
+ * Parses the response and updates enrolment_status in database.
+ * 
+ * Expected n8n response format (per record):
+ * Success: { result: { status: "200", data: { enrolment: { status: "Confirmed" } }, ... } }
+ * Not Found: { result: { status: "404", data: [], error: { message: "Not Found", ... } } }
+ */
+async function callSearchEnrolmentWebhookBatch(records: Record<string, any>[]): Promise<{ success: boolean; count: number; results: any[]; error?: string }> {
+    if (records.length === 0) {
+        return { success: true, count: 0, results: [] };
+    }
+
+    try {
+        // Build payloads for all records
+        const payloads = records.map(record => buildEnrolmentPayload(record));
+
+        console.log(`📤 Calling DA Search Enrolment webhook with ${payloads.length} records...`);
+
+        const response = await fetch(DA_SEARCH_ENROLMENT_WEBHOOK, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ records: payloads }),
+        });
+
+        if (!response.ok) {
+            console.error(`❌ Batch webhook failed: ${response.status}`);
+            return { success: false, count: payloads.length, results: [], error: `Webhook returned ${response.status}` };
+        }
+
+        const responseBody = await response.json();
+        const webhookResults = Array.isArray(responseBody) ? responseBody : [responseBody];
+
+        console.log(`✅ Batch webhook responded with ${webhookResults.length} results`);
+
+        // Process each result and update database
+        const processedResults: any[] = [];
+
+        for (let i = 0; i < webhookResults.length; i++) {
+            const webhookResult = webhookResults[i];
+            const originalRecord = records[i];
+            const applicationId = originalRecord?.application_id;
+
+            if (!applicationId) {
+                processedResults.push({ application_id: null, status: 'error', message: 'Missing application_id' });
+                continue;
+            }
+
+            // Parse the result - handle both string and object formats
+            let parsedResult = webhookResult?.result;
+            if (typeof parsedResult === 'string') {
+                try {
+                    parsedResult = JSON.parse(parsedResult);
+                } catch (e) {
+                    console.error(`Failed to parse result for ${applicationId}:`, e);
+                    processedResults.push({ application_id: applicationId, status: 'error', message: 'Failed to parse response' });
+                    continue;
+                }
+            }
+
+            // Determine enrolment status based on SSG response
+            let enrolmentStatus: string | null = null;
+            const ssgStatus = parsedResult?.status;
+            const ssgError = parsedResult?.error;
+
+            if (ssgStatus === '404' || ssgStatus === 404 || ssgError?.message === 'Not Found') {
+                // SSG returned 404 - No records found
+                enrolmentStatus = 'Not Found';
+            } else if (ssgStatus === '200' || ssgStatus === 200) {
+                // SSG returned success - get the enrolment status
+                const enrolmentData = parsedResult?.data?.enrolment || parsedResult?.data?.[0]?.enrolment;
+                if (enrolmentData?.status) {
+                    enrolmentStatus = enrolmentData.status; // "Confirmed", "Cancelled", etc.
+                } else {
+                    enrolmentStatus = 'Confirmed'; // Default to Confirmed if status not in response
+                }
+            } else {
+                // Unknown response - log and skip
+                console.warn(`⚠️ Unknown SSG response for ${applicationId}:`, parsedResult);
+                processedResults.push({ application_id: applicationId, status: 'unknown', response: parsedResult });
+                continue;
+            }
+
+            // Update database with enrolment_status
+            try {
+                await pool.query(
+                    `UPDATE da_application SET enrolment_status = $1, updated_at = NOW() WHERE application_id = $2`,
+                    [enrolmentStatus, applicationId]
+                );
+                console.log(`✅ Updated ${applicationId} enrolment_status to "${enrolmentStatus}"`);
+                processedResults.push({ application_id: applicationId, enrolment_status: enrolmentStatus, success: true });
+            } catch (dbError) {
+                console.error(`❌ Failed to update ${applicationId}:`, dbError);
+                processedResults.push({ application_id: applicationId, status: 'db_error', error: dbError instanceof Error ? dbError.message : 'DB update failed' });
+            }
+        }
+
+        return { success: true, count: payloads.length, results: processedResults };
+    } catch (error) {
+        console.error(`❌ Batch webhook error:`, error);
+        return { success: false, count: records.length, results: [], error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+}
+
+
 /**
  * API endpoint to upload DA Application data to the database.
  * Handles deduplication based on application_id.
@@ -138,13 +306,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
         console.log(`📊 Processing ${data.length} DA application records...`);
 
-        // Get existing application IDs and their statuses to check for duplicates
+        // Get existing application IDs, their statuses, and enrolment status to check for duplicates
         const existingResult = await pool.query(
-            `SELECT application_id, application_status FROM da_application`
+            `SELECT application_id, application_status, enrolment_status FROM da_application`
         );
 
-        const existingApps = new Map<string, string>(
-            existingResult.rows.map(r => [r.application_id, r.application_status])
+        const existingApps = new Map<string, { application_status: string; enrolment_status: string | null }>(
+            existingResult.rows.map(r => [r.application_id, {
+                application_status: r.application_status,
+                enrolment_status: r.enrolment_status,
+            }])
         );
 
         // Transform and filter records
@@ -165,15 +336,39 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 }
 
                 if (existingApps.has(appId)) {
-                    const existingStatus = (existingApps.get(appId) || '').toLowerCase();
+                    const existing = existingApps.get(appId)!;
+                    const existingStatus = (existing.application_status || '').toLowerCase();
                     const uploadedStatus = (transformed.application_status || '').toLowerCase();
 
-                    // If existing is confirmed and uploaded is cancelled, queue for status update
-                    if (existingStatus === 'confirmed' && uploadedStatus === 'cancelled') {
+                    // Check application status transitions
+                    const isExistingConfirmApplication = existingStatus === 'confirm application';
+                    const isExistingConfirmed = existingStatus === 'confirmed';
+                    const isExistingCancelled = existingStatus === 'cancelled';
+                    const isUploadedConfirmed = uploadedStatus === 'confirmed';
+                    const isUploadedCancelled = uploadedStatus === 'cancelled';
+
+                    // Valid status updates (not back to "Confirm application"):
+                    // 1. "Confirm application" → "Confirmed" or "Cancelled"
+                    // 2. "Confirmed" → "Cancelled"
+                    // 3. "Cancelled" → "Confirmed"
+                    const shouldUpdate =
+                        (isExistingConfirmApplication && (isUploadedConfirmed || isUploadedCancelled)) ||
+                        (isExistingConfirmed && isUploadedCancelled) ||
+                        (isExistingCancelled && isUploadedConfirmed);
+
+                    if (shouldUpdate) {
+                        // Webhook should be called for all updates EXCEPT "Confirm application" → "Confirmed"
+                        // "Confirm application" → "Confirmed" is the default acceptance flow from TPG
+                        const skipWebhook = isExistingConfirmApplication && isUploadedConfirmed;
+
                         toUpdate.push({
                             application_id: appId,
                             application_status: transformed.application_status,
-                            old_status: existingApps.get(appId),
+                            old_status: existing.application_status,
+                            old_enrolment_status: existing.enrolment_status,
+                            shouldCallWebhook: !skipWebhook,
+                            // Include all trainee info for webhook
+                            ...transformed,
                         });
                     } else {
                         duplicates.push(appId);
@@ -182,7 +377,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 }
 
                 newRecords.push(transformed);
-                existingApps.set(appId, transformed.application_status || '');
+                existingApps.set(appId, {
+                    application_status: transformed.application_status || '',
+                    enrolment_status: null,
+                });
             } catch (err) {
                 errors.push({ row: i + 1, error: err instanceof Error ? err.message : 'Unknown error' });
             }
@@ -190,14 +388,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
         console.log(`✅ Found ${newRecords.length} new records, ${duplicates.length} duplicates, ${toUpdate.length} to update`);
 
-        // Update status for existing records (Confirmed -> Cancelled)
+        // Collect records that need webhook calls
+        const webhookQueue: Record<string, any>[] = [];
+
+        // Update status for existing records
         let updatedCount = 0;
         const updatedRecords: any[] = [];
         for (const record of toUpdate) {
             try {
                 const result = await pool.query(
-                    `UPDATE da_application SET application_status = $1, enrolment_grant_status = $2 WHERE application_id = $3 RETURNING *`,
-                    [record.application_status, false, record.application_id]
+                    `UPDATE da_application SET application_status = $1 WHERE application_id = $2 RETURNING *`,
+                    [record.application_status, record.application_id]
                 );
                 if (result.rows.length > 0) {
                     updatedCount++;
@@ -205,6 +406,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                         ...result.rows[0],
                         old_status: record.old_status,
                     });
+
+                    // Queue for webhook if needed (skip for "Confirm application" → "Confirmed")
+                    if (record.shouldCallWebhook) {
+                        webhookQueue.push({ ...record, source: 'update' });
+                    }
                 }
             } catch (err) {
                 console.error('Error updating record:', record.application_id, err);
@@ -215,7 +421,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             }
         }
 
-        console.log(`✅ Updated ${updatedCount} existing records (Confirmed -> Cancelled)`);
+        console.log(`✅ Updated ${updatedCount} existing records`);
 
         // Insert new records using SQL
         let insertedCount = 0;
@@ -266,6 +472,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 if (result.rows.length > 0) {
                     insertedCount++;
                     insertedRecords.push(result.rows[0]);
+
+                    // Queue for webhook if new record has "Cancelled" status
+                    if ((record.application_status || '').toLowerCase() === 'cancelled') {
+                        webhookQueue.push({ ...record, source: 'insert' });
+                    }
                 }
             } catch (err) {
                 console.error('Error inserting record:', record.application_id, err);
@@ -278,6 +489,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
         console.log(`✅ Successfully inserted ${insertedCount} records, updated ${updatedCount} records`);
 
+        // Process webhook queue (single batch call)
+        let webhookResult: { success: boolean; count: number; results: any[]; error?: string } = { success: true, count: 0, results: [] };
+
+        if (webhookQueue.length > 0) {
+            webhookResult = await callSearchEnrolmentWebhookBatch(webhookQueue);
+        }
+
         return res.status(200).json({
             success: true,
             inserted: insertedCount,
@@ -287,6 +505,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             errors,
             newRecords: insertedRecords,
             updatedRecords,
+            webhookSummary: webhookQueue.length > 0 ? {
+                total: webhookQueue.length,
+                success: webhookResult.success,
+                count: webhookResult.count,
+                results: webhookResult.results,
+                error: webhookResult.error,
+            } : undefined,
         });
 
     } catch (error) {
@@ -298,3 +523,4 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         });
     }
 }
+

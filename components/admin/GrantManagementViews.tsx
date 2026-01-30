@@ -235,7 +235,7 @@ export const ViewGrantStatusView: React.FC = () => {
     const [searchError, setSearchError] = useState<string | null>(null);
 
     // Webhook URL
-    const WEBHOOK_URL = 'https://n8n.srv923061.hstgr.cloud/webhook/7e7f983f-a8c8-44f7-955b-291a72ae1b63';
+    const WEBHOOK_URL = 'https://n8n.srv1231536.hstgr.cloud/webhook/3ba28a37-dbfe-4c5a-8ec9-252c3d2cfc25';
 
     const handleSearch = async () => {
         if (!searchInput.trim()) {
@@ -264,7 +264,10 @@ export const ViewGrantStatusView: React.FC = () => {
             });
 
             if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
+                if (response.status === 500) {
+                    throw new Error('SSG API server error. The service may be temporarily unavailable. Please try again later.');
+                }
+                throw new Error(`Unable to connect to SSG API (Error ${response.status}). Please check your connection and try again.`);
             }
 
             const data = await response.json();
@@ -1225,7 +1228,7 @@ export const SearchGrantView: React.FC = () => {
     const [searchError, setSearchError] = useState<string | null>(null);
 
     // Webhook URL
-    const WEBHOOK_URL = 'https://n8n.srv923061.hstgr.cloud/webhook/372841ba-3d7a-4b04-a249-76545524fcf9';
+    const WEBHOOK_URL = 'https://n8n.srv1231536.hstgr.cloud/webhook/350792b8-727e-4140-9c54-1363524ab248';
 
     // Helper functions for consistent styling
     const getStatusColor = (status: string) => {
@@ -1296,7 +1299,10 @@ export const SearchGrantView: React.FC = () => {
             });
 
             if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
+                if (response.status === 500) {
+                    throw new Error('SSG API server error. The service may be temporarily unavailable. Please try again later.');
+                }
+                throw new Error(`Unable to connect to SSG API (Error ${response.status}). Please check your connection and try again.`);
             }
 
             const data = await response.json();
@@ -1545,7 +1551,7 @@ export const SearchEnrolmentView: React.FC = () => {
     const [searchError, setSearchError] = useState<string | null>(null);
 
     // Webhook URL for enrolment search
-    const WEBHOOK_URL = 'https://n8n.srv923061.hstgr.cloud/webhook/9c8454da-9643-44d9-81bb-e2010d7827ff';
+    const WEBHOOK_URL = 'https://n8n.srv1231536.hstgr.cloud/webhook/246caa5e-bd7e-42e8-82b1-cde2e05e5013';
 
     const inputClasses = "block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent";
 
@@ -1596,7 +1602,10 @@ export const SearchEnrolmentView: React.FC = () => {
             });
 
             if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
+                if (response.status === 500) {
+                    throw new Error('SSG API server error. The service may be temporarily unavailable. Please try again later.');
+                }
+                throw new Error(`Unable to connect to SSG API (Error ${response.status}). Please check your connection and try again.`);
             }
 
             const data = await response.json();
@@ -1644,23 +1653,22 @@ export const SearchEnrolmentView: React.FC = () => {
                 <div>
                     <h3 className="text-lg font-bold text-gray-700 mb-4">Enrolment Search Parameters</h3>
 
-                    <div className="mb-4">
-                        <label htmlFor="enrolment-course-run-id" className="block text-sm font-bold text-gray-700 mb-1">
-                            Course Run ID
-                        </label>
-                        <input
-                            id="enrolment-course-run-id"
-                            type="text"
-                            value={courseRunId}
-                            onChange={(e) => setCourseRunId(e.target.value)}
-                            onKeyDown={(e) => e.key === 'Enter' && !isSearching && courseRunId.trim() && handleSearch()}
-                            placeholder="e.g. 1068286"
-                            className={inputClasses}
-                            disabled={isSearching}
-                        />
-                    </div>
-
-                    <div className="flex justify-end">
+                    <div className="flex gap-3 items-end">
+                        <div className="flex-1">
+                            <label htmlFor="enrolment-course-run-id" className="block text-sm font-bold text-gray-700 mb-1">
+                                Course Run ID
+                            </label>
+                            <input
+                                id="enrolment-course-run-id"
+                                type="text"
+                                value={courseRunId}
+                                onChange={(e) => setCourseRunId(e.target.value)}
+                                onKeyDown={(e) => e.key === 'Enter' && !isSearching && courseRunId.trim() && handleSearch()}
+                                placeholder="e.g. 1068286"
+                                className={inputClasses}
+                                disabled={isSearching}
+                            />
+                        </div>
                         <Button
                             onClick={handleSearch}
                             disabled={isSearching || !courseRunId.trim()}
@@ -1846,7 +1854,7 @@ export const ViewEnrolmentView: React.FC = () => {
     const [searchError, setSearchError] = useState<string | null>(null);
 
     // Webhook URL for view enrolment
-    const WEBHOOK_URL = 'https://n8n.srv923061.hstgr.cloud/webhook/a5b2130d-04a0-4288-9dc7-b46c2c2c2f89';
+    const WEBHOOK_URL = 'https://n8n.srv1231536.hstgr.cloud/webhook/638428e2-07e7-4448-88be-f956c5b44620';
 
     const inputClasses = "block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent";
 
@@ -1897,7 +1905,10 @@ export const ViewEnrolmentView: React.FC = () => {
             });
 
             if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
+                if (response.status === 500) {
+                    throw new Error('SSG API server error. The service may be temporarily unavailable. Please try again later.');
+                }
+                throw new Error(`Unable to connect to SSG API (Error ${response.status}). Please check your connection and try again.`);
             }
 
             const data = await response.json();
@@ -2097,23 +2108,22 @@ export const ViewEnrolmentView: React.FC = () => {
                 <div>
                     <h3 className="text-lg font-bold text-gray-700 mb-4">Enrolment Lookup</h3>
 
-                    <div className="mb-4">
-                        <label htmlFor="view-enrolment-id" className="block text-sm font-bold text-gray-700 mb-1">
-                            Enrolment ID
-                        </label>
-                        <input
-                            id="view-enrolment-id"
-                            type="text"
-                            value={enrolmentId}
-                            onChange={(e) => setEnrolmentId(e.target.value)}
-                            onKeyDown={(e) => e.key === 'Enter' && !isSearching && enrolmentId.trim() && handleSearch()}
-                            placeholder="e.g. ENR-2601-094504"
-                            className={inputClasses}
-                            disabled={isSearching}
-                        />
-                    </div>
-
-                    <div className="flex justify-end">
+                    <div className="flex gap-3 items-end">
+                        <div className="flex-1">
+                            <label htmlFor="view-enrolment-id" className="block text-sm font-bold text-gray-700 mb-1">
+                                Enrolment ID
+                            </label>
+                            <input
+                                id="view-enrolment-id"
+                                type="text"
+                                value={enrolmentId}
+                                onChange={(e) => setEnrolmentId(e.target.value)}
+                                onKeyDown={(e) => e.key === 'Enter' && !isSearching && enrolmentId.trim() && handleSearch()}
+                                placeholder="e.g. ENR-2601-094504"
+                                className={inputClasses}
+                                disabled={isSearching}
+                            />
+                        </div>
                         <Button
                             onClick={handleSearch}
                             disabled={isSearching || !enrolmentId.trim()}

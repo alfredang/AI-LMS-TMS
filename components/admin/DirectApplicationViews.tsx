@@ -204,7 +204,10 @@ export const UploadDirectApplicationView: React.FC = () => {
 
             if (!response.ok) {
                 const errorData = await response.json().catch(() => ({}));
-                throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+                if (response.status === 500) {
+                    throw new Error(errorData.error || 'Server error. The service may be temporarily unavailable. Please try again later.');
+                }
+                throw new Error(errorData.error || `Unable to process request (Error ${response.status}). Please try again.`);
             }
 
             const result = await response.json();
@@ -431,7 +434,7 @@ export const UploadDirectApplicationView: React.FC = () => {
 
                         {uploadResult.updatedRecords && uploadResult.updatedRecords.length > 0 && (
                             <div className="overflow-x-auto">
-                                <h4 className="font-semibold text-gray-800 mb-2">Updated Records (Confirmed → Cancelled)</h4>
+                                <h4 className="font-semibold text-gray-800 mb-2">Updated Records</h4>
                                 <table className="min-w-full divide-y divide-gray-200">
                                     <thead className="bg-gray-50">
                                         <tr>
@@ -604,6 +607,296 @@ export const ViewDirectApplicationView: React.FC = () => {
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 10;
 
+    // Selection state
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+    const [isCancelling, setIsCancelling] = useState(false);
+    const [isDeleting, setIsDeleting] = useState(false);
+    const [isEnrolling, setIsEnrolling] = useState(false);
+
+    // Page navigation modal state
+    const [showPageModal, setShowPageModal] = useState(false);
+    const [pendingPage, setPendingPage] = useState<number | null>(null);
+
+    // Filter state
+    const [showFilterDropdown, setShowFilterDropdown] = useState(false);
+    const [filterColumn, setFilterColumn] = useState('');
+    const [filterValue, setFilterValue] = useState('');
+    const [activeFilter, setActiveFilter] = useState<{ column: string; value: string } | null>(null);
+
+    // Sort state
+    const [showSortDropdown, setShowSortDropdown] = useState(false);
+    const [sortColumn, setSortColumn] = useState('');
+    const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
+
+    // To Be Enrolled filter state
+    const [toBeEnrolledFilter, setToBeEnrolledFilter] = useState(false);
+
+    // Available columns for filter/sort
+    const filterableColumns = [
+        { value: 'application_id', label: 'Application ID' },
+        { value: 'trainee_name', label: 'Trainee Name' },
+        { value: 'trainee_id', label: 'Trainee ID' },
+        { value: 'trainee_email', label: 'Email' },
+        { value: 'course_title', label: 'Course Title' },
+        { value: 'course_run_id', label: 'Course Run ID' },
+        { value: 'application_status', label: 'Status' },
+        { value: 'sponsorship_type', label: 'Sponsorship' },
+    ];
+
+    // Selection handlers
+    const toggleSelect = (appId: string) => {
+        setSelectedIds(prev => {
+            const newSet = new Set(prev);
+            if (newSet.has(appId)) {
+                newSet.delete(appId);
+            } else {
+                newSet.add(appId);
+            }
+            return newSet;
+        });
+    };
+
+    const toggleSelectAll = () => {
+        const allSelected = paginatedApplications.length > 0 && paginatedApplications.every(app => selectedIds.has(app.application_id));
+        if (allSelected) {
+            // Uncheck all (including other pages)
+            setSelectedIds(new Set());
+        } else {
+            // Select only current page rows (unchecks other pages)
+            setSelectedIds(new Set(paginatedApplications.map(app => app.application_id)));
+        }
+    };
+
+    // Cancel enrolment handler
+    const handleCancelEnrolment = async () => {
+        if (selectedIds.size === 0) return;
+
+        const confirmCancel = window.confirm(
+            `Are you sure you want to cancel ${selectedIds.size} application(s)? This will set their status to "Cancelled".`
+        );
+        if (!confirmCancel) return;
+
+        setIsCancelling(true);
+        try {
+            const response = await fetch('/api/admin/cancel-da-applications', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ applicationIds: Array.from(selectedIds) }),
+            });
+
+            const result = await response.json();
+            if (result.success) {
+                const succeededCount = result.results?.succeeded?.length || 0;
+                const failedCount = result.results?.failed?.length || 0;
+
+                if (failedCount === 0 && succeededCount > 0) {
+                    // All succeeded
+                    alert(`Successfully cancelled ${succeededCount} application(s) and enrolment(s).`);
+                } else if (succeededCount > 0 && failedCount > 0) {
+                    // Partial success
+                    const failedList = result.results.failed.map((f: any) => `  - ${f.application_id}`).join('\n');
+                    alert(
+                        `${succeededCount} application(s) cancelled successfully.\n\n` +
+                        `${failedCount} application(s) failed to cancel:\n${failedList}\n\n` +
+                        `Please try again or cancel the failed enrolment(s) manually via the SSG portal.`
+                    );
+                } else {
+                    // All failed
+                    const failedIds = result.results?.failed?.map((f: any) => f.application_id).join(', ') || '';
+                    alert(
+                        `Enrolment cancellation failed for all ${failedCount} application(s).\n\n` +
+                        (failedIds ? `Application IDs: ${failedIds}\n\n` : '') +
+                        `No changes were made. Please try again or cancel manually via the SSG portal.`
+                    );
+                }
+                setSelectedIds(new Set());
+                fetchApplications(); // Refresh data
+            } else {
+                throw new Error(result.error);
+            }
+        } catch (err) {
+            alert(`Failed to cancel: ${err instanceof Error ? err.message : 'Unknown error'}`);
+        } finally {
+            setIsCancelling(false);
+        }
+    };
+
+    // Delete rows handler
+    const handleDeleteRows = async () => {
+        if (selectedIds.size === 0) return;
+
+        const confirmDelete = window.confirm(
+            `Are you sure you want to permanently delete ${selectedIds.size} application(s)? This action cannot be undone.`
+        );
+        if (!confirmDelete) return;
+
+        setIsDeleting(true);
+        try {
+            const response = await fetch('/api/admin/delete-da-applications', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ applicationIds: Array.from(selectedIds) }),
+            });
+
+            const result = await response.json();
+            if (result.success) {
+                alert(`Successfully deleted ${result.deleted} application(s).`);
+                setSelectedIds(new Set());
+                fetchApplications(); // Refresh data
+            } else {
+                throw new Error(result.error);
+            }
+        } catch (err) {
+            alert(`Failed to delete: ${err instanceof Error ? err.message : 'Unknown error'}`);
+        } finally {
+            setIsDeleting(false);
+        }
+    };
+
+    // Trigger Direct Application Enrolment workflow
+    const handleEnrolment = async () => {
+        // Get selected applications that are Confirmed with empty enrolment_status
+        const toEnrollApps = applications.filter(app => {
+            if (!selectedIds.has(app.application_id)) return false;
+            const isConfirmed = (app.application_status || '').toLowerCase() === 'confirmed';
+            const hasNoEnrolmentStatus = !app.enrolment_status || app.enrolment_status.trim() === '';
+            return isConfirmed && hasNoEnrolmentStatus;
+        });
+
+        if (toEnrollApps.length === 0) {
+            alert(
+                'No eligible applications found to enroll.\n\n' +
+                'Selected applications must meet both conditions:\n' +
+                '• Application Status = Confirmed\n' +
+                '• Enrolment Status = Empty\n\n' +
+                'Tip: Use the "To be enrolled Learner(s)" filter to automatically select all eligible applications.'
+            );
+            return;
+        }
+
+        const confirmEnrol = window.confirm(
+            `Are you sure you want to trigger enrolment for ${toEnrollApps.length} selected application(s)?\n\nThis will send them to the Direct Application Enrolment workflow.`
+        );
+        if (!confirmEnrol) return;
+
+        setIsEnrolling(true);
+        try {
+            const response = await fetch('https://n8n.srv1231536.hstgr.cloud/webhook/b50f2b79-40f6-4590-bb67-b714e60d2854', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    applications: toEnrollApps.map(app => ({
+                        ...app,
+                        date_of_birth: app.date_of_birth ? String(app.date_of_birth).split('T')[0] : app.date_of_birth,
+                    })),
+                }),
+            });
+
+            const webhookBody = await response.json();
+
+            // Webhook returns: { results: [{ application_id, result: "..." }, ...] }
+            // Handle both "results" and "result" keys, or direct array
+            let results: any[];
+            if (webhookBody.results && Array.isArray(webhookBody.results)) {
+                results = webhookBody.results;
+            } else if (webhookBody.result && Array.isArray(webhookBody.result)) {
+                results = webhookBody.result;
+            } else if (Array.isArray(webhookBody)) {
+                results = webhookBody;
+            } else {
+                results = [webhookBody];
+            }
+
+            const succeeded: { application_id: string }[] = [];
+            const failed: { application_id: string; message: string }[] = [];
+
+            for (const item of results) {
+                const appId = item.application_id || '';
+
+                // Parse the SSG result (stringified JSON)
+                let ssgResponse: any = null;
+                try {
+                    ssgResponse = typeof item.result === 'string'
+                        ? JSON.parse(item.result)
+                        : item.result;
+                } catch {
+                    failed.push({ application_id: appId, message: 'Failed to parse SSG response' });
+                    continue;
+                }
+
+                const status = ssgResponse?.status;
+
+                if (status === 200 || status === '200') {
+                    // Success - mark for DB update
+                    succeeded.push({ application_id: appId });
+                } else {
+                    // Error - collect error details
+                    let errorMsg = ssgResponse?.error?.message || 'Enrolment failed';
+                    if (ssgResponse?.error?.details && Array.isArray(ssgResponse.error.details)) {
+                        const details = ssgResponse.error.details
+                            .map((d: { message?: string; field?: string }) => d.message || d.field || '')
+                            .filter(Boolean)
+                            .join('; ');
+                        if (details) errorMsg += ` (${details})`;
+                    }
+                    failed.push({ application_id: appId, message: errorMsg });
+                }
+            }
+
+            // Update enrolment_status = "Confirmed" in database for successful ones
+            if (succeeded.length > 0) {
+                await fetch('/api/admin/update-da-enrolment-status', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        updates: succeeded.map(s => ({
+                            application_id: s.application_id,
+                            enrolment_status: 'Confirmed',
+                        })),
+                    }),
+                });
+            }
+
+            // Show summary to user
+            let message = '';
+            if (succeeded.length > 0) {
+                message += `Enrolment created successfully for ${succeeded.length} application(s).`;
+            }
+            if (failed.length > 0) {
+                if (message) message += '\n\n';
+                message += `Failed for ${failed.length} application(s):`;
+                failed.forEach(f => {
+                    message += `\n• ${f.application_id}: ${f.message}`;
+                });
+            }
+            if (!message) {
+                message = 'No results returned from the enrolment webhook.';
+            }
+
+            alert(message);
+            setSelectedIds(new Set());
+            fetchApplications();
+        } catch (err) {
+            alert(`Failed to trigger enrolment: ${err instanceof Error ? err.message : 'Unknown error'}`);
+        } finally {
+            setIsEnrolling(false);
+        }
+    };
+
+    // Apply column filter
+    const applyFilter = () => {
+        if (filterColumn && filterValue.trim()) {
+            setActiveFilter({ column: filterColumn, value: filterValue.trim() });
+        }
+        setShowFilterDropdown(false);
+    };
+
+    const clearFilter = () => {
+        setActiveFilter(null);
+        setFilterColumn('');
+        setFilterValue('');
+    };
+
     // Fetch applications from database API
     const fetchApplications = async () => {
         setIsLoading(true);
@@ -614,7 +907,10 @@ export const ViewDirectApplicationView: React.FC = () => {
             const response = await fetch('/api/admin/fetch-all-da-applications');
 
             if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
+                if (response.status === 500) {
+                    throw new Error('Server error. The service may be temporarily unavailable. Please try again later.');
+                }
+                throw new Error(`Unable to fetch applications (Error ${response.status}). Please try again.`);
             }
 
             const result = await response.json();
@@ -622,6 +918,7 @@ export const ViewDirectApplicationView: React.FC = () => {
 
             if (result.success && result.data) {
                 setApplications(result.data);
+                setSelectedIds(new Set()); // Clear selections on refresh
             } else {
                 throw new Error(result.error || 'Failed to fetch applications');
             }
@@ -639,8 +936,26 @@ export const ViewDirectApplicationView: React.FC = () => {
         fetchApplications();
     }, []);
 
-    // Filter applications based on search query
+    // Filter applications based on search query, active filter, and toBeEnrolled filter
     const filteredApplications = applications.filter(app => {
+        // Apply "To Be Enrolled" filter first (Confirmed status + empty enrolment_status)
+        if (toBeEnrolledFilter) {
+            const isConfirmed = (app.application_status || '').toLowerCase() === 'confirmed';
+            const hasNoEnrolmentStatus = !app.enrolment_status || app.enrolment_status.trim() === '';
+            if (!isConfirmed || !hasNoEnrolmentStatus) {
+                return false;
+            }
+        }
+
+        // Apply column-based filter
+        if (activeFilter) {
+            const fieldValue = (app[activeFilter.column] || '').toString().toLowerCase();
+            if (!fieldValue.includes(activeFilter.value.toLowerCase())) {
+                return false;
+            }
+        }
+
+        // Then apply search query
         if (!searchQuery.trim()) return true;
         const query = searchQuery.toLowerCase();
         return (
@@ -664,11 +979,36 @@ export const ViewDirectApplicationView: React.FC = () => {
         setCurrentPage(1);
     }, [searchQuery]);
 
-    // Pagination controls
+    // Pagination controls with confirmation when rows are selected
     const goToPage = (page: number) => {
-        if (page >= 1 && page <= totalPages) {
-            setCurrentPage(page);
+        if (page >= 1 && page <= totalPages && page !== currentPage) {
+            // If "To be enrolled" filter is active, navigate freely to allow reviewing selections across pages
+            if (toBeEnrolledFilter) {
+                setCurrentPage(page);
+            } else if (selectedIds.size > 0) {
+                // If rows are selected outside enrolment mode, show confirmation modal
+                setPendingPage(page);
+                setShowPageModal(true);
+            } else {
+                setCurrentPage(page);
+            }
         }
+    };
+
+    // Confirm page navigation (clear selections and navigate)
+    const confirmPageNavigation = () => {
+        if (pendingPage !== null) {
+            setSelectedIds(new Set());
+            setCurrentPage(pendingPage);
+            setPendingPage(null);
+            setShowPageModal(false);
+        }
+    };
+
+    // Cancel page navigation
+    const cancelPageNavigation = () => {
+        setPendingPage(null);
+        setShowPageModal(false);
     };
 
     // Generate page numbers to display
@@ -752,58 +1092,327 @@ export const ViewDirectApplicationView: React.FC = () => {
             {/* Results Table */}
             {!isLoading && (
                 <Card className="p-0">
-                    <div className="p-6 border-b">
-                        <h3 className="text-xl font-bold">DA Applications</h3>
-                        <p className="text-gray-500 mt-1">
-                            Showing {startIndex + 1}-{Math.min(endIndex, filteredApplications.length)} of {filteredApplications.length} applications
-                            {searchQuery && ` (filtered from ${applications.length} total)`}
-                        </p>
+                    <div className="p-6 border-b flex justify-between items-start">
+                        <div>
+                            <h3 className="text-xl font-bold">DA Applications</h3>
+                            <p className="text-gray-500 mt-1">
+                                Showing {startIndex + 1}-{Math.min(endIndex, filteredApplications.length)} of {filteredApplications.length} applications
+                                {(searchQuery || toBeEnrolledFilter) && ` (filtered from ${applications.length} total)`}
+                            </p>
+                        </div>
+                        <div className="flex items-center gap-3">
+                            {/* To Enroll DA Learners Button */}
+                            <button
+                                onClick={handleEnrolment}
+                                disabled={isEnrolling}
+                                className={`inline-flex items-center px-4 py-2 text-sm font-medium rounded-lg transition-colors bg-blue-600 text-white hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed`}
+                            >
+                                {isEnrolling ? (
+                                    <>
+                                        <svg className="animate-spin w-4 h-4 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                        </svg>
+                                        Enrolling...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Icon name={IconName.Users} className="w-4 h-4 mr-2" />
+                                        To Enroll DA Learners
+                                    </>
+                                )}
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Toolbar - Filter, Sort, Cancel */}
+                    <div className="px-4 py-3 border-b bg-gray-50 dark:bg-gray-800 dark:border-gray-700 flex flex-wrap items-center gap-2">
+                        {/* Filter Button */}
+                        <div className="relative">
+                            <button
+                                onClick={() => { setShowFilterDropdown(!showFilterDropdown); setShowSortDropdown(false); }}
+                                className="inline-flex items-center px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200"
+                            >
+                                <Icon name={IconName.Eye} className="w-4 h-4 mr-1.5" />
+                                Filter
+                            </button>
+                            {showFilterDropdown && (
+                                <div className="absolute left-0 top-full mt-1 w-72 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg z-50 p-3">
+                                    <div className="space-y-3">
+                                        <div>
+                                            <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">Column</label>
+                                            <select
+                                                value={filterColumn}
+                                                onChange={(e) => setFilterColumn(e.target.value)}
+                                                className="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-200"
+                                            >
+                                                <option value="">Select column...</option>
+                                                {filterableColumns.map(col => (
+                                                    <option key={col.value} value={col.value}>{col.label}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">Value</label>
+                                            <input
+                                                type="text"
+                                                value={filterValue}
+                                                onChange={(e) => setFilterValue(e.target.value)}
+                                                placeholder="Enter a value..."
+                                                className="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-200"
+                                            />
+                                        </div>
+                                        <button
+                                            onClick={applyFilter}
+                                            disabled={!filterColumn || !filterValue.trim()}
+                                            className="w-full px-3 py-1.5 text-sm bg-green-600 text-white rounded hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
+                                        >
+                                            Apply filter
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Sort Button */}
+                        <div className="relative">
+                            <button
+                                onClick={() => { setShowSortDropdown(!showSortDropdown); setShowFilterDropdown(false); }}
+                                className="inline-flex items-center px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200"
+                            >
+                                <Icon name={IconName.ChevronDown} className="w-4 h-4 mr-1.5" />
+                                Sort
+                            </button>
+                            {showSortDropdown && (
+                                <div className="absolute left-0 top-full mt-1 w-56 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg z-50 p-3">
+                                    <div className="space-y-3">
+                                        <div>
+                                            <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">Column</label>
+                                            <select
+                                                value={sortColumn}
+                                                onChange={(e) => setSortColumn(e.target.value)}
+                                                className="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-200"
+                                            >
+                                                <option value="">Default order</option>
+                                                {filterableColumns.map(col => (
+                                                    <option key={col.value} value={col.value}>{col.label}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <button
+                                                onClick={() => { setSortDirection('asc'); setShowSortDropdown(false); }}
+                                                className={`flex-1 px-2 py-1 text-xs rounded border ${sortDirection === 'asc' ? 'bg-blue-100 dark:bg-blue-900 border-blue-400 dark:border-blue-600' : 'bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600'} dark:text-gray-200`}
+                                            >
+                                                Ascending
+                                            </button>
+                                            <button
+                                                onClick={() => { setSortDirection('desc'); setShowSortDropdown(false); }}
+                                                className={`flex-1 px-2 py-1 text-xs rounded border ${sortDirection === 'desc' ? 'bg-blue-100 dark:bg-blue-900 border-blue-400 dark:border-blue-600' : 'bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600'} dark:text-gray-200`}
+                                            >
+                                                Descending
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* To Be Enrolled Checkbox Filter */}
+                        <div className="relative group">
+                            <label className="inline-flex items-center gap-2 px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    checked={toBeEnrolledFilter}
+                                    onChange={(e) => {
+                                        const checked = e.target.checked;
+                                        setToBeEnrolledFilter(checked);
+                                        setCurrentPage(1); // Reset to page 1 to avoid showing empty table
+                                        if (checked) {
+                                            // Auto-select all eligible rows (Confirmed + empty enrolment_status)
+                                            const eligibleIds = applications
+                                                .filter(app => {
+                                                    const isConfirmed = (app.application_status || '').toLowerCase() === 'confirmed';
+                                                    const hasNoEnrolmentStatus = !app.enrolment_status || app.enrolment_status.trim() === '';
+                                                    return isConfirmed && hasNoEnrolmentStatus;
+                                                })
+                                                .map(app => app.application_id);
+                                            setSelectedIds(new Set(eligibleIds));
+                                        } else {
+                                            // Clear selections when filter is turned off
+                                            setSelectedIds(new Set());
+                                        }
+                                    }}
+                                    className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+                                />
+                                To be enrolled Learner(s)
+                            </label>
+                            {/* Tooltip */}
+                            <div className="absolute left-0 top-full mt-2 w-64 p-3 bg-gray-900 text-white text-xs rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
+                                <p className="font-semibold mb-1">Filter applications where:</p>
+                                <ul className="list-disc list-inside space-y-0.5">
+                                    <li>Application Status = <span className="text-green-400">Confirmed</span></li>
+                                    <li>Enrolment Status = <span className="text-yellow-400">Empty</span></li>
+                                </ul>
+                                <div className="absolute -top-1.5 left-4 w-3 h-3 bg-gray-900 rotate-45"></div>
+                            </div>
+                        </div>
+
+                        {/* Active Filter Badge */}
+                        {activeFilter && (
+                            <div className="inline-flex items-center px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded border border-blue-200">
+                                <span className="font-medium">{filterableColumns.find(c => c.value === activeFilter.column)?.label}:</span>
+                                <span className="ml-1">{activeFilter.value}</span>
+                                <button onClick={clearFilter} className="ml-1.5 hover:text-red-600">×</button>
+                            </div>
+                        )}
+
+                        {/* Spacer */}
+                        <div className="flex-1" />
+
+                        {/* Selected Count & Action Buttons */}
+                        {selectedIds.size > 0 && (
+                            <>
+                                <span className="text-sm text-gray-600">{selectedIds.size} row(s) selected</span>
+                                <button
+                                    onClick={handleCancelEnrolment}
+                                    disabled={isCancelling || isDeleting}
+                                    className="inline-flex items-center px-3 py-1.5 text-sm bg-red-600 text-white rounded hover:bg-red-700 disabled:bg-red-400"
+                                >
+                                    {isCancelling ? (
+                                        <>
+                                            <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-1.5"></div>
+                                            Cancelling...
+                                        </>
+                                    ) : (
+                                        'Cancel Enrolment'
+                                    )}
+                                </button>
+                                <button
+                                    onClick={handleDeleteRows}
+                                    disabled={isDeleting || isCancelling}
+                                    className="inline-flex items-center px-3 py-1.5 text-sm bg-gray-700 text-white rounded hover:bg-gray-800 disabled:bg-gray-400"
+                                >
+                                    {isDeleting ? (
+                                        <>
+                                            <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-1.5"></div>
+                                            Deleting...
+                                        </>
+                                    ) : (
+                                        'Delete Row'
+                                    )}
+                                </button>
+                            </>
+                        )}
                     </div>
                     {paginatedApplications.length > 0 ? (
                         <>
                             <div className="overflow-x-auto">
-                                <table className="min-w-full divide-y divide-gray-200">
-                                    <thead className="bg-gray-50">
+                                <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-600">
+                                    <thead className="bg-gray-50 dark:bg-gray-800">
                                         <tr>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Application ID</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Trainee Name</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Trainee ID</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Course Title</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Course Run ID</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Payable Fee</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Sponsorship</th>
+                                            <th className="px-3 py-3 w-10">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={paginatedApplications.length > 0 && paginatedApplications.every(app => selectedIds.has(app.application_id))}
+                                                    onChange={toggleSelectAll}
+                                                    className="w-4 h-4 text-blue-600 rounded border-gray-300"
+                                                />
+                                            </th>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Application ID</th>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Trainee ID Type</th>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Trainee ID</th>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">DOB</th>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Trainee Name</th>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Email</th>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Phone</th>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Course Title</th>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Course Ref No.</th>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Course Run ID</th>
+                                            {/* <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Start Date</th>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">End Date</th> */}
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Sponsorship</th>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Payable Fee</th>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Application Status</th>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Enrolment Status</th>
                                         </tr>
                                     </thead>
-                                    <tbody className="bg-white divide-y divide-gray-200">
+                                    <tbody className="bg-white dark:bg-gray-700 divide-y divide-gray-200 dark:divide-gray-600">
                                         {paginatedApplications.map((app, index) => (
-                                            <tr key={app.id || index} className="hover:bg-gray-50">
-                                                <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
+                                            <tr key={app.id || index} className={`hover:bg-gray-50 dark:hover:bg-gray-600 ${selectedIds.has(app.application_id) ? 'bg-blue-50 dark:bg-blue-900' : ''}`}>
+                                                <td className="px-3 py-3">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={selectedIds.has(app.application_id)}
+                                                        onChange={() => toggleSelect(app.application_id)}
+                                                        className="w-4 h-4 text-blue-600 rounded border-gray-300"
+                                                    />
+                                                </td>
+                                                <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
                                                     {app.application_id || 'N/A'}
                                                 </td>
-                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                                                    {app.trainee_name || 'N/A'}
+                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
+                                                    {app.trainee_id_type || 'N/A'}
                                                 </td>
-                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
                                                     {app.trainee_id || 'N/A'}
                                                 </td>
-                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
+                                                    {app.date_of_birth ? new Date(app.date_of_birth).toLocaleDateString('en-GB') : 'N/A'}
+                                                </td>
+                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
+                                                    {app.trainee_name || 'N/A'}
+                                                </td>
+                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
+                                                    {app.trainee_email || 'N/A'}
+                                                </td>
+                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
+                                                    {app.trainee_phone_country_code && app.trainee_phone
+                                                        ? `+${app.trainee_phone_country_code} ${app.trainee_phone}`
+                                                        : app.trainee_phone || 'N/A'}
+                                                </td>
+                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
                                                     {app.course_title || 'N/A'}
                                                 </td>
-                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
+                                                    {app.course_reference_number || 'N/A'}
+                                                </td>
+                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
                                                     {app.course_run_id || 'N/A'}
+                                                </td>
+                                                {/* <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
+                                                    {app.course_start_date ? new Date(app.course_start_date).toLocaleDateString('en-GB') : 'N/A'}
+                                                </td>
+                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
+                                                    {app.course_end_date ? new Date(app.course_end_date).toLocaleDateString('en-GB') : 'N/A'}
+                                                </td> */}
+                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
+                                                    {app.sponsorship_type || 'N/A'}
+                                                </td>
+                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
+                                                    ${parseFloat(app.payable_fee || 0).toFixed(2)}
                                                 </td>
                                                 <td className="px-4 py-3 whitespace-nowrap">
                                                     <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full border ${getStatusColor(app.application_status || 'Pending')}`}>
                                                         {app.application_status || 'Pending'}
                                                     </span>
                                                 </td>
-                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                                                    ${parseFloat(app.payable_fee || 0).toFixed(2)}
+                                                <td className="px-4 py-3 whitespace-nowrap">
+                                                    {app.enrolment_status && app.enrolment_status.trim() !== '' ? (
+                                                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full border ${app.enrolment_status === 'Confirmed'
+                                                            ? 'bg-green-100 text-green-800 border-green-200'
+                                                            : app.enrolment_status === 'Not Found'
+                                                                ? 'bg-orange-100 text-orange-800 border-orange-200'
+                                                                : 'bg-red-100 text-red-800 border-red-200'
+                                                            }`}>
+                                                            {app.enrolment_status}
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-gray-400">-</span>
+                                                    )}
                                                 </td>
-                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                                                    {app.sponsorship_type || 'N/A'}
-                                                </td>
+
+
                                             </tr>
                                         ))}
                                     </tbody>
@@ -861,7 +1470,47 @@ export const ViewDirectApplicationView: React.FC = () => {
                         </div>
                     )}
                 </Card>
+            )
+            }
+            {/* Page Navigation Confirmation Modal */}
+            {showPageModal && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                    <div className="bg-white rounded-lg shadow-xl w-full max-w-md mx-4">
+                        <div className="flex items-center justify-between p-4 border-b">
+                            <h3 className="text-lg font-semibold text-gray-900">
+                                {pendingPage !== null && pendingPage > currentPage
+                                    ? 'Confirm moving to next page'
+                                    : 'Confirm moving to previous page'}
+                            </h3>
+                            <button
+                                onClick={cancelPageNavigation}
+                                className="text-gray-400 hover:text-gray-600"
+                            >
+                                <Icon name={IconName.Close} className="w-5 h-5" />
+                            </button>
+                        </div>
+                        <div className="p-4">
+                            <p className="text-gray-600">
+                                The currently selected lines will be deselected, do you want to proceed?
+                            </p>
+                        </div>
+                        <div className="flex gap-3 p-4 border-t">
+                            <button
+                                onClick={cancelPageNavigation}
+                                className="flex-1 px-4 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={confirmPageNavigation}
+                                className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700"
+                            >
+                                Confirm
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
-        </div>
+        </div >
     );
 };

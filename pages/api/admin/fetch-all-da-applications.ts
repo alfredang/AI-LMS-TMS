@@ -18,31 +18,32 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     try {
         console.log('📊 Fetching all DA applications from database...');
 
-        // Query all DA applications, ordered by created_at descending
+        // Query all DA applications with course_run dates, ordered by created_at descending
         const result = await pool.query(`
             SELECT 
-                id,
-                trainee_id_type,
-                trainee_id,
-                date_of_birth,
-                trainee_name,
-                course_run_id,
-                trainee_email,
-                trainee_phone_country_code,
-                trainee_phone,
-                sponsorship_type,
-                application_id,
-                payable_fee,
-                application_status,
-                course_title,
-                course_reference_number,
-                course_start_date,
-                course_end_date,
-                enrolment_grant_status,
-                created_at,
-                updated_at
-            FROM da_application
-            ORDER BY created_at DESC
+                da.id,
+                da.trainee_id_type,
+                da.trainee_id,
+                da.date_of_birth::text as date_of_birth,
+                da.trainee_name,
+                da.course_run_id,
+                da.trainee_email,
+                da.trainee_phone_country_code,
+                da.trainee_phone,
+                da.sponsorship_type,
+                da.application_id,
+                da.payable_fee,
+                da.application_status,
+                da.course_title,
+                da.course_reference_number,
+                COALESCE(cr.start_date, da.course_start_date) as course_start_date,
+                COALESCE(cr.end_date, da.course_end_date) as course_end_date,
+                da.enrolment_status,
+                da.created_at,
+                da.updated_at
+            FROM da_application da
+            LEFT JOIN course_run cr ON da.course_run_id = cr.course_run_id
+            ORDER BY da.created_at DESC
         `);
 
         console.log(`✅ Fetched ${result.rows.length} DA applications`);
