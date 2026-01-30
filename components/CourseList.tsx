@@ -48,6 +48,10 @@ const ManagementCourseList: React.FC = () => {
     const [viewMode, setViewMode] = useState<'block' | 'table'>('block');
     const [selectedCourse, setSelectedCourse] = useState<any>(null);
 
+    // Pagination state
+    const [currentPage, setCurrentPage] = useState(1);
+    const itemsPerPage = 9;
+
     // Determine which courses to use based on role
     let relevantCourses, currentLoading, currentError;
 
@@ -129,12 +133,35 @@ const ManagementCourseList: React.FC = () => {
         });
     }, [relevantCourses, searchQuery, filterCourseType, filterMode, filterStartDate, role]);
 
+    // Pagination calculations
+    const totalPages = Math.ceil(filteredCourses.length / itemsPerPage);
+    const paginatedCourses = useMemo(() => {
+        const startIndex = (currentPage - 1) * itemsPerPage;
+        const endIndex = startIndex + itemsPerPage;
+        const result = filteredCourses.slice(startIndex, endIndex);
+        console.log('📄 Pagination:', {
+            totalCourses: filteredCourses.length,
+            currentPage,
+            itemsPerPage,
+            startIndex,
+            endIndex,
+            displayedCount: result.length
+        });
+        return result;
+    }, [filteredCourses, currentPage, itemsPerPage]);
+
+    // Reset page when filters change
+    React.useEffect(() => {
+        setCurrentPage(1);
+    }, [searchQuery, filterCourseType, filterMode, filterStartDate]);
+
     // Handle clear filters
     const handleClearFilters = () => {
         setSearchQuery('');
         setFilterCourseType('All');
         setFilterMode('All');
         setFilterStartDate('All');
+        setCurrentPage(1);
     };
 
     // Handle edit course
@@ -193,25 +220,28 @@ const ManagementCourseList: React.FC = () => {
 
     const CourseBlockView = () => (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredCourses.map(course => {
+            {paginatedCourses.map(course => {
                 const totalHours = Number(course.trainingHours) + Number(course.assessmentHours);
                 console.log('course run info,', course);
                 return (
                     <Card key={course.id} className="flex flex-col dark:bg-gray-800 dark:border-gray-700">
-                        <img
-                            src={getCourseImageUrl(course.imageUrl, course.id)}
-                            alt={course.title}
-                            className="w-full h-40 object-cover"
-                            onError={(e) => {
-                                const target = e.target as HTMLImageElement;
-                                target.src = `https://picsum.photos/seed/${course.id}/400/200`;
-                            }}
-                        />
+                        <div className="aspect-[16/9] w-full overflow-hidden">
+                            <img
+                                src={getCourseImageUrl(course.imageUrl, course.id)}
+                                alt={course.title}
+                                className="w-full h-full object-cover object-center"
+                                onError={(e) => {
+                                    const target = e.target as HTMLImageElement;
+                                    target.src = `https://picsum.photos/seed/${course.id}/400/200`;
+                                }}
+                            />
+                        </div>
                         <div className="p-6 flex flex-col flex-grow">
-                            <h3 className="text-xl font-bold mb-4">{course.title}</h3>
+                            {/* Title with fixed height and line clamp */}
+                            <h3 className="text-xl font-bold mb-4 h-14 line-clamp-2 overflow-hidden">{course.title}</h3>
 
-                            {/* New Details Section */}
-                            <div className="text-xs space-y-2 mb-4 flex-grow">
+                            {/* Details Section with consistent height */}
+                            <div className="text-xs space-y-2 mb-4 flex-grow min-h-[180px]">
                                 <DetailRow label="TGS Ref" value={course.courseCode} />
                                 <DetailRow label="TSC Title" value={course.tscTitle || 'N/A'} />
                                 <DetailRow label="TSC Code" value={course.tscCode || 'N/A'} />
@@ -290,7 +320,7 @@ const ManagementCourseList: React.FC = () => {
                     </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200 dark:bg-gray-800 dark:divide-gray-700">
-                    {filteredCourses.map(course => {
+                    {paginatedCourses.map(course => {
                         const totalHours = Number(course.trainingHours) + Number(course.assessmentHours);
                         return (
                             <tr key={course.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
@@ -499,6 +529,60 @@ const ManagementCourseList: React.FC = () => {
                     />
                 )}
             </div>
+
+            {/* Pagination Controls */}
+            {filteredCourses.length > itemsPerPage && (
+                <div className="mt-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+                    <div className="text-sm text-gray-600 dark:text-gray-400">
+                        Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, filteredCourses.length)} of {filteredCourses.length} courses
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                            disabled={currentPage === 1}
+                        >
+                            <Icon name={IconName.Back} className="w-4 h-4 mr-1" />
+                            Previous
+                        </Button>
+                        <div className="flex items-center gap-1">
+                            {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
+                                let pageNum;
+                                if (totalPages <= 5) {
+                                    pageNum = i + 1;
+                                } else if (currentPage <= 3) {
+                                    pageNum = i + 1;
+                                } else if (currentPage >= totalPages - 2) {
+                                    pageNum = totalPages - 4 + i;
+                                } else {
+                                    pageNum = currentPage - 2 + i;
+                                }
+                                return (
+                                    <button
+                                        key={pageNum}
+                                        onClick={() => setCurrentPage(pageNum)}
+                                        className={`px-3 py-1 text-sm rounded-md transition-colors ${currentPage === pageNum
+                                            ? 'bg-primary text-white'
+                                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'
+                                            }`}
+                                    >
+                                        {pageNum}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                            disabled={currentPage === totalPages}
+                        >
+                            Next →
+                        </Button>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

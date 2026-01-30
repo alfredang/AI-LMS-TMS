@@ -1139,10 +1139,17 @@ export const UploadCourseRunsView: React.FC = () => {
                 <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => alert('Downloading SSG Course Run template...')}
+                    onClick={() => {
+                        const link = document.createElement('a');
+                        link.href = '/ssg_templates/Course_Run_Template.xlsx';
+                        link.download = 'Course_Run_Template.xlsx';
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                    }}
                 >
                     <Icon name={IconName.Download} className="w-4 h-4 mr-2" />
-                    Download Template
+                    Course Run Template
                 </Button>
                 <Button onClick={handleSimulateUpload} disabled={!file || isUploading}>
                     {isUploading ? (
@@ -2217,6 +2224,184 @@ export const ViewEnrolmentView: React.FC = () => {
                         <p className="text-sm mt-2">Provide an Enrolment ID (e.g. ENR-2601-094504) to fetch details from SSG</p>
                     </div>
                 </Card>
+            )}
+        </div>
+    );
+};
+
+export const UploadEnrolmentsView: React.FC = () => {
+    const [file, setFile] = useState<File | null>(null);
+    const [isUploading, setIsUploading] = useState(false);
+    const [submissionResult, setSubmissionResult] = useState<any[] | null>(null);
+    const [error, setError] = useState<string | null>(null);
+    const [isDragOver, setIsDragOver] = useState(false);
+
+    const handleFileChange = (selectedFile: File | undefined | null) => {
+        if (selectedFile) {
+            if (selectedFile.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' || selectedFile.type === 'application/vnd.ms-excel') {
+                setFile(selectedFile);
+                setError(null);
+            } else {
+                setError('Invalid file type. Please upload an Excel file (.xlsx, .xls).');
+                setFile(null);
+            }
+        }
+    };
+
+    const handleDragEvents = (e: React.DragEvent<HTMLDivElement>, isOver: boolean) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragOver(isOver);
+    };
+
+    const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragOver(false);
+        const droppedFile = e.dataTransfer.files?.[0];
+        handleFileChange(droppedFile);
+    };
+
+    const handleSimulateUpload = () => {
+        if (!file) return;
+
+        setIsUploading(true);
+        setSubmissionResult(null);
+
+        // Simulate a network request to SSG
+        setTimeout(() => {
+            const mockResults = [
+                { enrolmentRef: 'ENR-2501-123456', learnerName: 'John Doe', courseRunId: '1234567', status: 'Success', enrolmentId: 'ENR-' + Math.floor(1000 + Math.random() * 9000).toString() },
+                { enrolmentRef: 'ENR-2501-123457', learnerName: 'Jane Smith', courseRunId: '1234567', status: 'Success', enrolmentId: 'ENR-' + Math.floor(1000 + Math.random() * 9000).toString() },
+                { enrolmentRef: 'ENR-2501-123458', learnerName: 'Bob Wilson', courseRunId: '7654321', status: 'Failed', error: 'Learner NRIC not found in SSG database.' },
+            ];
+            setSubmissionResult(mockResults);
+            setIsUploading(false);
+        }, 2500);
+    };
+
+    const resetView = () => {
+        setFile(null);
+        setSubmissionResult(null);
+        setError(null);
+    };
+
+    const UploadStep = () => (
+        <Card className="p-6">
+            <div className="text-center mb-4">
+                <h3 className="text-xl font-bold">Upload Enrolments</h3>
+                <p className="text-gray-500 mt-1">Submit your enrolment details in bulk by uploading an Excel file.</p>
+            </div>
+
+            <div
+                onDragOver={(e) => handleDragEvents(e, true)}
+                onDragLeave={(e) => handleDragEvents(e, false)}
+                onDrop={handleDrop}
+                className={`p-10 border-2 border-dashed rounded-lg text-center cursor-pointer transition-colors ${isDragOver ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:border-blue-500'}`}
+            >
+                <input
+                    type="file"
+                    id="enrolment-file-upload"
+                    className="hidden"
+                    accept=".xlsx, .xls"
+                    onChange={(e) => handleFileChange(e.target.files?.[0])}
+                />
+                <label htmlFor="enrolment-file-upload" className="cursor-pointer">
+                    <Icon name={IconName.Upload} className="w-12 h-12 mx-auto text-gray-400" />
+                    <p className="mt-2 font-semibold text-gray-900">
+                        {file ? file.name : 'Drag & drop your file here, or click to browse'}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1">
+                        XLSX or XLS file format
+                    </p>
+                </label>
+            </div>
+            {error && <p className="text-red-500 text-sm mt-2 text-center">{error}</p>}
+
+            <div className="flex justify-between items-center mt-6">
+                <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                        const link = document.createElement('a');
+                        link.href = '/ssg_templates/Enrolment_Upload_Template.xlsx';
+                        link.download = 'Enrolment_Upload_Template.xlsx';
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                    }}
+                >
+                    <Icon name={IconName.Download} className="w-4 h-4 mr-2" />
+                    Enrolment Template
+                </Button>
+                <Button onClick={handleSimulateUpload} disabled={!file || isUploading}>
+                    {isUploading ? (
+                        <div className="flex items-center">
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                            Submitting...
+                        </div>
+                    ) : 'Submit to SSG'}
+                </Button>
+            </div>
+        </Card>
+    );
+
+    const ResultsStep = () => (
+        <Card>
+            <div className="p-6 border-b">
+                <h3 className="text-xl font-bold">Submission Results</h3>
+                <p className="text-gray-500 mt-1">The following results were returned from SSG.</p>
+            </div>
+            <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                        <tr>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Enrolment Reference</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Learner Name</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Course Run ID</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Details</th>
+                        </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                        {submissionResult?.map((result, index) => (
+                            <tr key={index} className="hover:bg-gray-50">
+                                <td className="px-6 py-4 whitespace-nowrap font-medium text-gray-900">{result.enrolmentRef}</td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{result.learnerName}</td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{result.courseRunId}</td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full border ${getStatusColor(result.status)}`}>
+                                        {result.status}
+                                    </span>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                    {result.status === 'Success' ? `Enrolment ID: ${result.enrolmentId}` : result.error}
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+            <div className="p-4 border-t text-right">
+                <Button onClick={resetView}>Start a New Upload</Button>
+            </div>
+        </Card>
+    );
+
+    return (
+        <div>
+            <h2 className="text-3xl font-bold mb-6">Upload Enrolments to SSG</h2>
+            {isUploading ? (
+                <div className="flex justify-center py-20">
+                    <div className="text-center">
+                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
+                        <p className="mt-4 text-gray-600">Submitting to SSG, this may take a moment...</p>
+                    </div>
+                </div>
+            ) : submissionResult ? (
+                <ResultsStep />
+            ) : (
+                <UploadStep />
             )}
         </div>
     );

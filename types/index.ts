@@ -37,14 +37,14 @@ export enum AdminPage {
   SubmitAssessment = 'submitAssessment',
   ViewAssessments = 'viewAssessments',
   ApplyNewClaim = 'applyNewClaim',
-  ViewClaimStatus = 'viewClaimStatus',
   UploadCourseRuns = 'uploadCourseRuns',
   SearchGrant = 'searchGrant',
   SearchEnrolment = 'searchEnrolment',
   ViewEnrolment = 'viewEnrolment',
   CourseRun = 'courseRun',
   UploadDirectApplication = 'uploadDirectApplication',
-  ViewDirectApplication = 'viewDirectApplication'
+  ViewDirectApplication = 'viewDirectApplication',
+  UploadEnrolments = 'uploadEnrolments'
 }
 
 // Course related interfaces

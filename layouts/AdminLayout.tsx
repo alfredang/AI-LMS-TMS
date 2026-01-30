@@ -31,11 +31,11 @@ import {
   SubmitAssessmentView,
   ViewAssessmentsView,
   ApplyNewClaimView,
-  ViewClaimStatusView,
   UploadCourseRunsView,
   SearchGrantView,
   SearchEnrolmentView,
-  ViewEnrolmentView
+  ViewEnrolmentView,
+  UploadEnrolmentsView
 } from '../components/admin/GrantManagementViews';
 import { CourseRunView } from '../components/admin/CourseRunView';
 import { UploadDirectApplicationView, ViewDirectApplicationView } from '../components/admin/DirectApplicationViews';
@@ -66,8 +66,8 @@ const ManagementDashboard: React.FC<ManagementDashboardProps> = ({ type }) => {
     { title: "Submit Assessment", description: "Submit learner assessment results to TPG.", icon: IconName.Upload, onClick: () => setAdminPage(AdminPage.SubmitAssessment) },
     { title: "View Assessments", description: "View official assessment results from TPG.", icon: IconName.ClipboardCheck, onClick: () => setAdminPage(AdminPage.ViewAssessments) },
     { title: "Apply New Claim", description: "Submit new claims to SSG for learners.", icon: IconName.DollarSign, onClick: () => setAdminPage(AdminPage.ApplyNewClaim) },
-    { title: "View Claim Status", description: "Check the status of submitted claims.", icon: IconName.InfoCircle, onClick: () => setAdminPage(AdminPage.ViewClaimStatus) },
     { title: "Upload Course Runs", description: "Bulk upload new course runs via Excel to SSG.", icon: IconName.FileText, onClick: () => setAdminPage(AdminPage.UploadCourseRuns) },
+    { title: "Upload Enrolments", description: "Bulk upload learner enrolments via Excel to SSG.", icon: IconName.FileText, onClick: () => setAdminPage(AdminPage.UploadEnrolments) },
   ];
 
   const isClass = type === 'class';
@@ -254,10 +254,10 @@ const AdminLayout: React.FC = () => {
         return <ViewAssessmentsView />;
       case AdminPage.ApplyNewClaim:
         return <ApplyNewClaimView />;
-      case AdminPage.ViewClaimStatus:
-        return <ViewClaimStatusView />;
       case AdminPage.UploadCourseRuns:
         return <UploadCourseRunsView />;
+      case AdminPage.UploadEnrolments:
+        return <UploadEnrolmentsView />;
       case AdminPage.ClassDetail:
         return <ClassDetailView courseRunId={selectedCourseRunId || undefined} />;
       case AdminPage.CourseRun:
