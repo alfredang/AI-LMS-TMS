@@ -58,7 +58,7 @@ const TrainingProviderLayout: React.FC = () => {
       <Header />
 
       {/* Mobile header and sidebar toggle */}
-      <div className="lg:hidden flex items-center gap-4 px-4 sm:px-6 py-3 border-b border-gray-200 dark:border-gray-700">
+      <div className="md:hidden flex items-center gap-4 px-4 sm:px-6 py-3 border-b border-gray-200 dark:border-gray-700">
         <button onClick={() => setIsSidebarOpen(true)} className="p-2 -ml-2 text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white">
           <Icon name={IconName.Menu} className="w-6 h-6" />
         </button>
@@ -67,7 +67,7 @@ const TrainingProviderLayout: React.FC = () => {
 
       {/* Mobile Sidebar Overlay */}
       {isSidebarOpen && (
-        <div className="fixed inset-0 z-40 lg:hidden" role="dialog" aria-modal="true">
+        <div className="fixed inset-0 z-40 md:hidden" role="dialog" aria-modal="true">
           {/* Backdrop */}
           <div
             className="absolute inset-0 bg-black/50"
@@ -92,19 +92,21 @@ const TrainingProviderLayout: React.FC = () => {
         </div>
       )}
 
-      <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-grow">
-        <div className="flex flex-row gap-8">
-          {/* Desktop Sidebar */}
-          <aside className="hidden lg:block w-64 flex-shrink-0">
-            <Card className="sticky top-24">
-              <TrainingProviderSidebar />
-            </Card>
-          </aside>
-          {/* Main Content */}
-          <main className="flex-1 min-w-0">
+      {/* Main Layout Container */}
+      <div className="flex flex-1">
+        {/* Desktop Sidebar - Fixed on left */}
+        <aside className="hidden md:flex w-64 flex-shrink-0 bg-slate-800 border-r border-slate-700">
+          <div className="w-full">
+            <TrainingProviderSidebar />
+          </div>
+        </aside>
+
+        {/* Main Content Area */}
+        <main className="flex-1 overflow-x-hidden">
+          <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
             {renderContent()}
-          </main>
-        </div>
+          </div>
+        </main>
       </div>
 
       <Footer />
