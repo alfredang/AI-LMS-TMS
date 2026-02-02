@@ -7,7 +7,8 @@ export enum View {
   Create = 'create',
   Admin = 'admin',
   Profile = 'profile',
-  HelpAndSupport = 'helpAndSupport'
+  HelpAndSupport = 'helpAndSupport',
+  UserManagement = 'userManagement'
 }
 
 export enum UserRole {

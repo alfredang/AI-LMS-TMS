@@ -112,7 +112,7 @@ const ProfileDropdown: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 };
 
 const Header: React.FC = () => {
-  const { role, userRoles, currentView, adminPage, handleNavigation, setAdminPage, resetCreateView, resetAdminView, trainingProviderProfile, currentUserProfile } = useLms();
+  const { role, userRoles, currentView, adminPage, handleNavigation, setAdminPage, resetCreateView, resetAdminView, trainingProviderProfile, currentUserProfile, logout } = useLms();
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isRoleSwitcherOpen, setIsRoleSwitcherOpen] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
@@ -174,10 +174,7 @@ const Header: React.FC = () => {
       { view: View.Admin, label: 'Class Management', icon: IconName.Courses, page: AdminPage.ClassManagement },
       { view: View.Admin, label: 'TPG Management', icon: IconName.DollarSign, page: AdminPage.TpgManagement },
     ],
-    [UserRole.TrainingProvider]: [
-      { view: View.Dashboard, label: 'Analytics', icon: IconName.Analytics },
-      { view: View.Courses, label: 'Courses', icon: IconName.Courses },
-    ]
+    [UserRole.TrainingProvider]: []
   };
 
   const navItems = navConfig[role];
@@ -233,8 +230,9 @@ const Header: React.FC = () => {
                   className="flex items-center space-x-2 px-3 py-1.5 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full text-sm font-medium text-gray-700 dark:text-gray-200 transition-colors border border-gray-200 dark:border-gray-700"
                   title="Switch Role"
                 >
-                  <span>{getRoleIcon(role)}</span>
-                  <span className="hidden sm:inline">{getRoleDisplayName(role)}</span>
+                  <Icon name={IconName.Eye} className="w-4 h-4" />
+                  <span className="hidden sm:inline text-on-surface-secondary">View As:</span>
+                  <span className="hidden sm:inline font-semibold">{getRoleDisplayName(role)}</span>
                   <svg className={`w-4 h-4 transition-transform ${isRoleSwitcherOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                   </svg>
@@ -243,19 +241,56 @@ const Header: React.FC = () => {
               </div>
             )}
 
-            {/* Profile Button */}
-            <div className="relative" ref={profileRef}>
-              <button onClick={() => setIsProfileOpen(prev => !prev)} className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center ring-2 ring-offset-2 ring-primary overflow-hidden">
-                {(role === UserRole.TrainingProvider && trainingProviderProfile?.companyLogoUrl) ? (
-                  <img src={ensureAbsoluteImageUrl(trainingProviderProfile.companyLogoUrl)} alt={trainingProviderProfile.companyShortname} className="w-full h-full object-cover" />
-                ) : currentUserProfile?.profilePictureUrl ? (
-                  <img src={ensureAbsoluteImageUrl(currentUserProfile.profilePictureUrl)} alt={currentUserProfile.name} className="w-full h-full object-cover" />
-                ) : (
-                  <Icon name={IconName.User} className="w-6 h-6 text-gray-600" />
-                )}
+            {/* User name + role badge (Training Provider layout) - Profile Dropdown REMOVED per requirements */}
+            {role === UserRole.TrainingProvider && (
+              <div className="hidden sm:flex items-center space-x-2">
+                <span className="text-sm font-medium text-on-surface">
+                  {currentUserProfile?.name || trainingProviderProfile?.companyShortname || 'User'}
+                </span>
+                <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-purple-100 text-purple-800 border border-purple-200 dark:bg-purple-900/50 dark:text-purple-300 dark:border-purple-700">
+                  Training Provider
+                </span>
+              </div>
+            )}
+
+            {/* Sign Out button (Training Provider layout) */}
+            {role === UserRole.TrainingProvider && (
+              <button
+                onClick={logout}
+                className="hidden sm:flex items-center space-x-1.5 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 transition-colors"
+              >
+                <Icon name={IconName.Logout} className="w-4 h-4" />
+                <span>Sign Out</span>
               </button>
-              {isProfileOpen && <ProfileDropdown onClose={() => setIsProfileOpen(false)} />}
-            </div>
+            )}
+
+            {/* Profile Button (non-Training Provider roles, or mobile fallback) */}
+            {(role !== UserRole.TrainingProvider) && (
+              <div className="relative" ref={profileRef}>
+                <button onClick={() => setIsProfileOpen(prev => !prev)} className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center ring-2 ring-offset-2 ring-primary overflow-hidden">
+                  {currentUserProfile?.profilePictureUrl ? (
+                    <img src={ensureAbsoluteImageUrl(currentUserProfile.profilePictureUrl)} alt={currentUserProfile.name} className="w-full h-full object-cover" />
+                  ) : (
+                    <Icon name={IconName.User} className="w-6 h-6 text-gray-600" />
+                  )}
+                </button>
+                {isProfileOpen && <ProfileDropdown onClose={() => setIsProfileOpen(false)} />}
+              </div>
+            )}
+
+            {/* Mobile-only profile button for Training Provider */}
+            {role === UserRole.TrainingProvider && (
+              <div className="relative sm:hidden" ref={profileRef}>
+                <button onClick={() => setIsProfileOpen(prev => !prev)} className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center ring-2 ring-offset-2 ring-primary overflow-hidden">
+                  {trainingProviderProfile?.companyLogoUrl ? (
+                    <img src={ensureAbsoluteImageUrl(trainingProviderProfile.companyLogoUrl)} alt={trainingProviderProfile.companyShortname} className="w-full h-full object-cover" />
+                  ) : (
+                    <Icon name={IconName.User} className="w-6 h-6 text-gray-600" />
+                  )}
+                </button>
+                {isProfileOpen && <ProfileDropdown onClose={() => setIsProfileOpen(false)} />}
+              </div>
+            )}
           </div>
         </div>
       </div>
