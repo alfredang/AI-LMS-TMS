@@ -2,6 +2,9 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { cors } from '../../../lib/cors';
 import bcrypt from 'bcryptjs';
+import { IncomingForm, File } from 'formidable';
+import fs from 'fs';
+import path from 'path';
 
 interface AddOrganizationRequest {
   // Owner account details
@@ -26,6 +29,42 @@ interface AddOrganizationRequest {
   gstRegister?: boolean;
 }
 
+// Disable body parser for file uploads
+export const config = {
+  api: {
+    bodyParser: false,
+  },
+};
+
+// Helper function to save uploaded logo
+// Helper function to save uploaded logo
+const saveLogoFile = async (file: File, providerId: string, companyName: string): Promise<string> => {
+  const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'training_provider', 'company_logo');
+  
+  // Ensure directory exists
+  if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
+  }
+
+  const timestamp = Date.now();
+  const fileExtension = path.extname(file.originalFilename || '.png');
+  
+  // Sanitize company name for filename (remove special characters, replace spaces with underscores)
+  const sanitizedCompanyName = companyName
+    .replace(/[^a-zA-Z0-9\s]/g, '') // Remove special characters
+    .replace(/\s+/g, '_') // Replace spaces with underscores
+    .toLowerCase(); // Convert to lowercase
+  
+  const fileName = `${sanitizedCompanyName}_${timestamp}${fileExtension}`;
+  const filePath = path.join(uploadDir, fileName);
+
+  // Copy file from temp location
+  const fileData = fs.readFileSync(file.filepath);
+  fs.writeFileSync(filePath, fileData);
+
+  return `/uploads/training_provider/company_logo/${fileName}`;
+};
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (cors(req, res)) return;
 
@@ -36,23 +75,107 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
   }
 
-  const {
-    ownerEmail,
-    ownerPassword,
-    ownerName,
-    ownerPhone,
-    companyName,
-    companyShortname,
-    uen,
-    companyAddress,
-    contactPersonName,
-    contactTel,
-    colorScheme,
-    normalFundRate,
-    enhancedFundRate,
-    gstRate,
-    gstRegister
-  } = req.body as AddOrganizationRequest;
+  try {
+    let ownerEmail: string;
+    let ownerPassword: string;
+    let ownerName: string;
+    let ownerPhone: string | undefined;
+    let companyName: string;
+    let companyShortname: string | undefined;
+    let uen: string;
+    let companyAddress: string;
+    let contactPersonName: string;
+    let contactTel: string;
+    let colorScheme: string | undefined;
+    let normalFundRate: number | undefined;
+    let enhancedFundRate: number | undefined;
+    let gstRate: number | undefined;
+    let gstRegister: boolean | undefined;
+    let logoFile: File | undefined;
+
+    // Check if request has multipart form data (file upload)
+    const contentType = req.headers['content-type'] || '';
+    
+    if (contentType.includes('multipart/form-data')) {
+      try {
+        // Parse multipart form data
+        const form = new IncomingForm({
+          uploadDir: '/tmp',
+          keepExtensions: true,
+          maxFileSize: 5 * 1024 * 1024, // 5MB max
+        });
+
+        const { fields, files } = await new Promise<{ fields: any; files: any }>((resolve, reject) => {
+          form.parse(req, (err, fields, files) => {
+            if (err) reject(err);
+            else resolve({ fields, files });
+          });
+        });
+
+        // Parse the JSON data from fields
+        const dataStr = Array.isArray(fields.data) ? fields.data[0] : fields.data;
+        const data = JSON.parse(dataStr || '{}') as AddOrganizationRequest;
+
+        ownerEmail = data.ownerEmail;
+        ownerPassword = data.ownerPassword;
+        ownerName = data.ownerName;
+        ownerPhone = data.ownerPhone;
+        companyName = data.companyName;
+        companyShortname = data.companyShortname;
+        uen = data.uen;
+        companyAddress = data.companyAddress;
+        contactPersonName = data.contactPersonName;
+        contactTel = data.contactTel;
+        colorScheme = data.colorScheme;
+        normalFundRate = data.normalFundRate;
+        enhancedFundRate = data.enhancedFundRate;
+        gstRate = data.gstRate;
+        gstRegister = data.gstRegister;
+
+        // Get logo file if present
+        if (files.companyLogo) {
+          logoFile = Array.isArray(files.companyLogo) ? files.companyLogo[0] : files.companyLogo;
+        }
+      } catch (parseError) {
+        console.error('Error parsing multipart form:', parseError);
+        return res.status(400).json({
+          success: false,
+          error: 'Failed to parse form data: ' + (parseError instanceof Error ? parseError.message : 'Unknown error')
+        });
+      }
+    } else {
+      // Parse JSON body manually since bodyParser is disabled
+      try {
+        const chunks: Buffer[] = [];
+        for await (const chunk of req) {
+          chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : chunk);
+        }
+        const bodyStr = Buffer.concat(chunks).toString('utf8');
+        const data = JSON.parse(bodyStr) as AddOrganizationRequest;
+        
+        ownerEmail = data.ownerEmail;
+        ownerPassword = data.ownerPassword;
+        ownerName = data.ownerName;
+        ownerPhone = data.ownerPhone;
+        companyName = data.companyName;
+        companyShortname = data.companyShortname;
+        uen = data.uen;
+        companyAddress = data.companyAddress;
+        contactPersonName = data.contactPersonName;
+        contactTel = data.contactTel;
+        colorScheme = data.colorScheme;
+        normalFundRate = data.normalFundRate;
+        enhancedFundRate = data.enhancedFundRate;
+        gstRate = data.gstRate;
+        gstRegister = data.gstRegister;
+      } catch (jsonError) {
+        console.error('Error parsing JSON body:', jsonError);
+        return res.status(400).json({
+          success: false,
+          error: 'Failed to parse JSON data: ' + (jsonError instanceof Error ? jsonError.message : 'Unknown error')
+        });
+      }
+    }
 
   // Validate required fields
   if (!ownerEmail || !ownerPassword || !ownerName) {
@@ -162,6 +285,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const providerId = tpResult.rows[0].id;
     console.log('✅ Created training provider organization:', providerId);
 
+    // Save logo file if provided
+    let logoUrl: string | null = null;
+    if (logoFile && logoFile.size > 0) {
+      logoUrl = await saveLogoFile(logoFile, providerId, companyName);
+      console.log('✅ Saved company logo:', logoUrl);
+
+      // Update training provider with logo URL
+      await client.query(`
+        UPDATE training_provider 
+        SET company_logo_url = $1 
+        WHERE id = $2
+      `, [logoUrl, providerId]);
+    }
+
     // 2. Create owner user account
     const hashedPassword = await bcrypt.hash(ownerPassword, 10);
     const userResult = await client.query(`
@@ -176,12 +313,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const userId = userResult.rows[0].id;
     console.log('✅ Created owner user account:', userId);
 
-    // 3. Assign Training Provider role
-    await client.query(`
-      INSERT INTO user_role_map (user_id, role)
-      VALUES ($1, 'Training Provider')
-    `, [userId]);
-    console.log('✅ Assigned Training Provider role to user');
+    // 3. Assign ALL roles to owner (master training provider with full access)
+    const allRoles = ['Training Provider', 'Trainer', 'Developer', 'Learner', 'Admin'];
+    for (const role of allRoles) {
+      await client.query(`
+        INSERT INTO user_role_map (user_id, role)
+        VALUES ($1, $2::user_role)
+      `, [userId, role]);
+    }
+    console.log('✅ Assigned all roles to owner:', allRoles);
 
     // 4. Link owner to organization via training_provider_member
     await client.query(`
@@ -241,5 +381,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
   } finally {
     client.release();
+  }
+  } catch (outerError) {
+    console.error('❌ Unexpected error in add-organization handler:', outerError);
+    return res.status(500).json({
+      success: false,
+      error: 'Internal server error',
+      details: outerError instanceof Error ? outerError.message : 'Unknown error'
+    });
   }
 }

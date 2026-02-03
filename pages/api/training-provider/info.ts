@@ -11,6 +11,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
+    const { userId } = req.query;
+
     // Helper function to ensure absolute URL for images
     const getAbsoluteImageUrl = (url: string | null) => {
       if (!url) return '/images/default-company-logo.png';
@@ -18,7 +20,89 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return `${getBaseUrl()}${url}`;
     };
 
-    // First try the specified SQL query for training_provider table
+    // If userId is provided, get info for that specific user's organization
+    if (userId && typeof userId === 'string') {
+      console.log('🔍 Fetching training provider info for user:', userId);
+      
+      // Try to find user's training provider organization using 3-tier lookup
+      let result;
+      
+      // 1. Try training_provider_member (multi-company approach)
+      result = await pool.query(`
+        SELECT
+          tp.id,
+          COALESCE(tp.company_logo_url, au.profile_picture_url) AS profile_picture_url,
+          tp.company_name,
+          tp.company_shortname,
+          tp.enable_otp_login,
+          tp.enable_default_otp,
+          tp.default_otp,
+          tp.color_scheme
+        FROM training_provider_member tpm
+        JOIN training_provider tp ON tpm.provider_id = tp.id
+        LEFT JOIN app_user au ON au.id = $1
+        WHERE tpm.user_id = $1
+      `, [userId]);
+      
+      // 2. If not found, check if user IS the training provider (direct ownership)
+      if (result.rows.length === 0) {
+        result = await pool.query(`
+          SELECT
+            tp.id,
+            COALESCE(tp.company_logo_url, au.profile_picture_url) AS profile_picture_url,
+            tp.company_name,
+            tp.company_shortname,
+            tp.enable_otp_login,
+            tp.enable_default_otp,
+            tp.default_otp,
+            tp.color_scheme
+          FROM training_provider tp
+          LEFT JOIN app_user au ON au.id = tp.id
+          WHERE tp.id = $1
+        `, [userId]);
+      }
+      
+      // 3. If still not found, check provider_admin_user (legacy)
+      if (result.rows.length === 0) {
+        result = await pool.query(`
+          SELECT
+            tp.id,
+            COALESCE(tp.company_logo_url, au.profile_picture_url) AS profile_picture_url,
+            tp.company_name,
+            tp.company_shortname,
+            tp.enable_otp_login,
+            tp.enable_default_otp,
+            tp.default_otp,
+            tp.color_scheme
+          FROM provider_admin_user pau
+          JOIN training_provider tp ON pau.provider_id = tp.id
+          LEFT JOIN app_user au ON au.id = $1
+          WHERE pau.user_id = $1
+        `, [userId]);
+      }
+      
+      if (result.rows.length > 0) {
+        const trainingProvider = result.rows[0];
+        const responseData = {
+          companyLogoUrl: getAbsoluteImageUrl(trainingProvider.profile_picture_url),
+          companyName: trainingProvider.company_name || 'Training Provider',
+          companyShortname: trainingProvider.company_shortname || 'TP',
+          enableOtpLogin: trainingProvider.enable_otp_login || false,
+          enableDefaultOtp: trainingProvider.enable_default_otp || false,
+          defaultOtp: trainingProvider.default_otp || '123456',
+          colorScheme: trainingProvider.color_scheme || null
+        };
+        
+        console.log('✅ Training provider info fetched for user:', responseData);
+        return res.status(200).json({
+          success: true,
+          data: responseData
+        });
+      }
+    }
+
+    // Fallback: Get the first training provider in the system (for login screen, etc.)
+    console.log('🔍 Fetching default training provider info (no userId or not found)');
     let result;
     try {
       result = await pool.query(`

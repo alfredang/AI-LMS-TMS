@@ -70,6 +70,26 @@ const UserManagementView: React.FC = () => {
     });
     const [isAddingUser, setIsAddingUser] = useState(false);
 
+    // Add Training Provider Modal State
+    const [isAddProviderModalOpen, setIsAddProviderModalOpen] = useState(false);
+    const [newProvider, setNewProvider] = useState({
+        ownerName: '',
+        ownerEmail: '',
+        ownerPassword: 'password123',
+        ownerPhone: '',
+        companyName: '',
+        companyShortname: '',
+        uen: '',
+        companyAddress: '',
+        contactPersonName: '',
+        contactTel: '',
+        colorScheme: '#3B82F6'
+    });
+    const [isAddingProvider, setIsAddingProvider] = useState(false);
+    const [showPassword, setShowPassword] = useState(false);
+    const [companyLogoFile, setCompanyLogoFile] = useState<File | null>(null);
+    const [companyLogoPreview, setCompanyLogoPreview] = useState<string | null>(null);
+
     // Delete User State
     const [deletingUser, setDeletingUser] = useState<UserData | null>(null);
     const [isDeletingUser, setIsDeletingUser] = useState(false);
@@ -285,6 +305,80 @@ const UserManagementView: React.FC = () => {
         }
     };
 
+    // Handle Add Training Provider
+    const handleAddProvider = async () => {
+        // Validate required fields
+        if (!newProvider.ownerName || !newProvider.ownerEmail || !newProvider.ownerPassword ||
+            !newProvider.companyName || !newProvider.uen || !newProvider.companyAddress ||
+            !newProvider.contactPersonName || !newProvider.contactTel) {
+            alert('Please fill in all required fields');
+            return;
+        }
+
+        // Validate email format
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(newProvider.ownerEmail)) {
+            alert('Please enter a valid email address');
+            return;
+        }
+
+        setIsAddingProvider(true);
+        try {
+            // Use FormData if logo file is present
+            let response;
+            if (companyLogoFile) {
+                const formData = new FormData();
+                formData.append('companyLogo', companyLogoFile);
+                formData.append('data', JSON.stringify(newProvider));
+                
+                response = await fetch('/api/training-provider/add-organization', {
+                    method: 'POST',
+                    body: formData
+                });
+            } else {
+                response = await fetch('/api/training-provider/add-organization', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(newProvider)
+                });
+            }
+
+            const result = await response.json();
+
+            if (!response.ok || !result.success) {
+                throw new Error(result.error || 'Failed to add training provider');
+            }
+
+            alert(`Training provider organization created successfully!\n\nOwner Account:\nEmail: ${newProvider.ownerEmail}\nPassword: ${newProvider.ownerPassword}\n\nPlease save these credentials.`);
+            
+            // Reset form
+            setNewProvider({
+                ownerName: '',
+                ownerEmail: '',
+                ownerPassword: 'password123',
+                ownerPhone: '',
+                companyName: '',
+                companyShortname: '',
+                uen: '',
+                companyAddress: '',
+                contactPersonName: '',
+                contactTel: '',
+                colorScheme: '#3B82F6'
+            });
+            setCompanyLogoFile(null);
+            setCompanyLogoPreview(null);
+            setIsAddProviderModalOpen(false);
+            
+            // Refresh users list
+            fetchUsers();
+        } catch (err) {
+            console.error('Error adding training provider:', err);
+            alert(`Failed to add training provider: ${err instanceof Error ? err.message : 'Unknown error'}`);
+        } finally {
+            setIsAddingProvider(false);
+        }
+    };
+
     // Handle Add User
     const handleAddUser = async () => {
         // Basic validation
@@ -418,6 +512,10 @@ const UserManagementView: React.FC = () => {
                         <Button onClick={() => setIsAddUserModalOpen(true)} className="bg-green-600 hover:bg-green-700 w-full sm:w-auto">
                             <Icon name={IconName.Plus} className="w-4 h-4 mr-2" />
                             Add User
+                        </Button>
+                        <Button onClick={() => setIsAddProviderModalOpen(true)} className="bg-purple-600 hover:bg-purple-700 w-full sm:w-auto">
+                            <Icon name={IconName.Plus} className="w-4 h-4 mr-2" />
+                            Add Training Provider
                         </Button>
                     </div>
                 </div>
@@ -907,6 +1005,278 @@ const UserManagementView: React.FC = () => {
                 </div>
             )}
 
+            {/* Add Training Provider Modal */}
+            {isAddProviderModalOpen && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 overflow-y-auto">
+                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-2xl w-full max-w-2xl mx-4 my-8 max-h-[90vh] overflow-y-auto">
+                        <div className="p-6 border-b border-gray-200 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-800">
+                            <h3 className="text-xl font-bold text-gray-900 dark:text-white">Add New Training Provider Organization</h3>
+                            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                                Create a new training provider company with an owner account (All roles assigned)
+                            </p>
+                        </div>
+                        <div className="p-6 space-y-6">
+                            {/* Owner Account Section */}
+                            <div className="space-y-4">
+                                <h4 className="text-lg font-semibold text-gray-900 dark:text-white border-b pb-2">Owner Account Details</h4>
+                                
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                            Owner Full Name <span className="text-red-500">*</span>
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={newProvider.ownerName}
+                                            onChange={(e) => setNewProvider({ ...newProvider, ownerName: e.target.value })}
+                                            className={inputClasses}
+                                            placeholder="John Doe"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                            Owner Email <span className="text-red-500">*</span>
+                                        </label>
+                                        <input
+                                            type="email"
+                                            value={newProvider.ownerEmail}
+                                            onChange={(e) => setNewProvider({ ...newProvider, ownerEmail: e.target.value })}
+                                            className={inputClasses}
+                                            placeholder="owner@company.com"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                            Owner Password <span className="text-red-500">*</span>
+                                        </label>
+                                        <div className="relative">
+                                            <input
+                                                type={showPassword ? "text" : "password"}
+                                                value={newProvider.ownerPassword}
+                                                onChange={(e) => setNewProvider({ ...newProvider, ownerPassword: e.target.value })}
+                                                className={inputClasses + " pr-10"}
+                                                placeholder="Default: password123"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowPassword(!showPassword)}
+                                                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                                            >
+                                                {showPassword ? (
+                                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+                                                    </svg>
+                                                ) : (
+                                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                                    </svg>
+                                                )}
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                            Owner Phone
+                                        </label>
+                                        <input
+                                            type="tel"
+                                            value={newProvider.ownerPhone}
+                                            onChange={(e) => setNewProvider({ ...newProvider, ownerPhone: e.target.value })}
+                                            className={inputClasses}
+                                            placeholder="1234 5678"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Company Information Section */}
+                            <div className="space-y-4">
+                                <h4 className="text-lg font-semibold text-gray-900 dark:text-white border-b pb-2">Company Information</h4>
+                                
+                                {/* Company Logo Upload */}
+                                <div className="col-span-full">
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                        Company Logo (Optional)
+                                    </label>
+                                    <div className="flex items-center gap-4">
+                                        {companyLogoPreview && (
+                                            <div className="relative">
+                                                <img 
+                                                    src={companyLogoPreview} 
+                                                    alt="Logo preview" 
+                                                    className="w-20 h-20 object-contain rounded-lg border border-gray-300 dark:border-gray-600"
+                                                />
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setCompanyLogoFile(null);
+                                                        setCompanyLogoPreview(null);
+                                                    }}
+                                                    className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center hover:bg-red-600"
+                                                >
+                                                    ×
+                                                </button>
+                                            </div>
+                                        )}
+                                        <input
+                                            type="file"
+                                            accept="image/*"
+                                            onChange={(e) => {
+                                                const file = e.target.files?.[0];
+                                                if (file) {
+                                                    setCompanyLogoFile(file);
+                                                    const reader = new FileReader();
+                                                    reader.onloadend = () => {
+                                                        setCompanyLogoPreview(reader.result as string);
+                                                    };
+                                                    reader.readAsDataURL(file);
+                                                }
+                                            }}
+                                            className="text-sm text-gray-500 dark:text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 dark:file:bg-blue-900/20 dark:file:text-blue-400"
+                                        />
+                                    </div>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                        Recommended: Square image, max 5MB
+                                    </p>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                            Company Name <span className="text-red-500">*</span>
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={newProvider.companyName}
+                                            onChange={(e) => setNewProvider({ ...newProvider, companyName: e.target.value })}
+                                            className={inputClasses}
+                                            placeholder="ABC Training Centre Pte Ltd"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                            Company Short Name
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={newProvider.companyShortname}
+                                            onChange={(e) => setNewProvider({ ...newProvider, companyShortname: e.target.value })}
+                                            className={inputClasses}
+                                            placeholder="ABC"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                            UEN (Unique Entity Number) <span className="text-red-500">*</span>
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={newProvider.uen}
+                                            onChange={(e) => setNewProvider({ ...newProvider, uen: e.target.value })}
+                                            className={inputClasses}
+                                            placeholder="202012345A"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                            Color Scheme
+                                        </label>
+                                        <input
+                                            type="color"
+                                            value={newProvider.colorScheme}
+                                            onChange={(e) => setNewProvider({ ...newProvider, colorScheme: e.target.value })}
+                                            className="h-10 w-full rounded-md border border-gray-300 dark:border-gray-600 cursor-pointer"
+                                        />
+                                    </div>
+
+                                    <div className="md:col-span-2">
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                            Company Address <span className="text-red-500">*</span>
+                                        </label>
+                                        <textarea
+                                            value={newProvider.companyAddress}
+                                            onChange={(e) => setNewProvider({ ...newProvider, companyAddress: e.target.value })}
+                                            className={inputClasses}
+                                            placeholder="123 Business Street #01-01, Singapore 123456"
+                                            rows={3}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Contact Information Section */}
+                            <div className="space-y-4">
+                                <h4 className="text-lg font-semibold text-gray-900 dark:text-white border-b pb-2">Contact Information</h4>
+                                
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                            Contact Person Name <span className="text-red-500">*</span>
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={newProvider.contactPersonName}
+                                            onChange={(e) => setNewProvider({ ...newProvider, contactPersonName: e.target.value })}
+                                            className={inputClasses}
+                                            placeholder="Jane Smith"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                            Contact Telephone <span className="text-red-500">*</span>
+                                        </label>
+                                        <input
+                                            type="tel"
+                                            value={newProvider.contactTel}
+                                            onChange={(e) => setNewProvider({ ...newProvider, contactTel: e.target.value })}
+                                            className={inputClasses}
+                                            placeholder="6789 0123"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                                <p className="text-sm text-blue-800 dark:text-blue-200">
+                                    <strong>Note:</strong> The owner account will be created with ALL roles (Training Provider, Trainer, Developer, Learner, Admin) and full access to manage the organization.
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="p-6 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3 sticky bottom-0 bg-white dark:bg-gray-800">
+                            <button
+                                onClick={() => setIsAddProviderModalOpen(false)}
+                                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleAddProvider}
+                                disabled={isAddingProvider}
+                                className="px-4 py-2 text-sm font-medium text-white bg-purple-600 rounded-lg hover:bg-purple-700 disabled:bg-purple-400 disabled:cursor-not-allowed transition-colors"
+                            >
+                                {isAddingProvider ? (
+                                    <div className="flex items-center">
+                                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                                        Creating...
+                                    </div>
+                                ) : (
+                                    'Create Training Provider'
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Delete User Confirmation Modal */}
             {deletingUser && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -920,7 +1290,7 @@ const UserManagementView: React.FC = () => {
                         <div className="p-6">
                             <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 mb-4">
                                 <div className="flex items-start gap-3">
-                                    <Icon name={IconName.Alert} className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+                                    <Icon name={IconName.InfoCircle} className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
                                     <div>
                                         <p className="text-sm font-semibold text-red-800 dark:text-red-300">
                                             This action cannot be undone

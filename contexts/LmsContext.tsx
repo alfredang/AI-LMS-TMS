@@ -8,9 +8,14 @@ import { resetTutorChat } from '@lib/services/geminiService';
 import { initializeColorScheme } from '@utils/colorUtils';
 
 // Function to fetch training provider info for all users
-const fetchTrainingProviderInfo = async (): Promise<{ companyLogoUrl: string; companyShortname: string }> => {
+const fetchTrainingProviderInfo = async (userId?: string): Promise<{ companyLogoUrl: string; companyName: string; companyShortname: string }> => {
   try {
-    const response = await fetch('/api/training-provider/info');
+    // If userId is provided, fetch specific organization info
+    const url = userId 
+      ? `/api/training-provider/info?userId=${encodeURIComponent(userId)}`
+      : '/api/training-provider/info';
+    
+    const response = await fetch(url);
 
     if (!response.ok) {
       throw new Error('Failed to fetch training provider info');
@@ -30,7 +35,8 @@ const fetchTrainingProviderInfo = async (): Promise<{ companyLogoUrl: string; co
 
     return {
       companyLogoUrl: result.data.companyLogoUrl || '/images/default-company-logo.png',
-      companyShortname: result.data.companyShortname || 'Training Provider'
+      companyName: result.data.companyName || 'Training Provider',
+      companyShortname: result.data.companyShortname || 'TP'
     };
   } catch (error) {
     console.error('Error fetching training provider info:', error);
@@ -361,11 +367,12 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           setCurrentUser(verificationResult.user);
           setIsAuthenticated(true);
 
-          // Load training provider info for all users (since there's only one training provider)
+          // Load training provider info for the logged-in user's organization
           try {
-            const providerInfo = await fetchTrainingProviderInfo();
+            const providerInfo = await fetchTrainingProviderInfo(verificationResult.user.id);
             setTrainingProviderProfile({
               companyLogoUrl: providerInfo.companyLogoUrl,
+              companyName: providerInfo.companyName,
               companyShortname: providerInfo.companyShortname
             } as TrainingProviderProfile);
           } catch (error) {
@@ -524,9 +531,10 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
 
         try {
-          const providerInfo = await fetchTrainingProviderInfo();
+          const providerInfo = await fetchTrainingProviderInfo(user.id);
           setTrainingProviderProfile({
             companyLogoUrl: providerInfo.companyLogoUrl,
+            companyName: providerInfo.companyName,
             companyShortname: providerInfo.companyShortname
           } as TrainingProviderProfile);
           console.log('✅ LmsContext: Training provider info loaded after login');
@@ -563,9 +571,10 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           }
 
           try {
-            const providerInfo = await fetchTrainingProviderInfo();
+            const providerInfo = await fetchTrainingProviderInfo(user.id);
             setTrainingProviderProfile({
               companyLogoUrl: providerInfo.companyLogoUrl,
+              companyName: providerInfo.companyName,
               companyShortname: providerInfo.companyShortname
             } as TrainingProviderProfile);
             console.log('✅ LmsContext: Training provider info loaded after login');

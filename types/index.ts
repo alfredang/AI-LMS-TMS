@@ -163,6 +163,7 @@ export interface Submission {
 // Interface definitions
 export interface TrainingProviderProfile {
   companyLogoUrl: string;
+  companyName: string;
   companyShortname: string;
 }
 

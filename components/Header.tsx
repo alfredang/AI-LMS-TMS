@@ -181,59 +181,68 @@ const Header: React.FC = () => {
 
   return (
     <header className="bg-surface shadow-sm sticky top-0 z-30">
-      <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
-          <div className="flex items-center space-x-4">
-            <div className="flex items-center space-x-2">
-              <img src={ensureAbsoluteImageUrl(trainingProviderProfile?.companyLogoUrl || '/images/default-company-logo.png')} alt="Company Logo" className="w-8 h-8 rounded-lg object-cover ring-2 ring-primary ring-offset-2 ring-offset-surface" />
-              <span className="text-xl font-bold text-on-surface">{trainingProviderProfile?.companyShortname || 'Training Provider'}</span>
-            </div>
-            <nav className="hidden md:flex items-center space-x-6">
-              {navItems.map(item => (
-                <a
-                  key={item.label}
-                  href="#"
-                  onClick={(e) => {
-                    e.preventDefault();
-
-                    if (role === UserRole.Admin && 'page' in item) {
-                      if (item.page === AdminPage.Dashboard) {
-                        resetAdminView();
-                      }
-                      setAdminPage(item.page);
-                    }
-
-                    if (item.view === View.Create && currentView === item.view) {
-                      resetCreateView();
-                    } else {
-                      handleNavigation(item.view);
-                    }
-                  }}
-                  className={`flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${(role === UserRole.Admin && isAdminPageActive(item)) || (role !== UserRole.Admin && currentView === item.view)
-                    ? 'bg-primary text-white'
-                    : 'text-on-surface hover:bg-surface-elevated hover:text-primary'
-                    }`}
-                >
-                  <Icon name={item.icon} className="w-5 h-5" />
-                  <span>{item.label}</span>
-                </a>
-              ))}
-            </nav>
+      <div className="container mx-auto px-3 sm:px-4 lg:px-6">
+        <div className="flex items-center justify-between h-14 sm:h-16">
+          {/* Left Section: Logo + Company Name */}
+          <div className="flex items-center space-x-2 sm:space-x-3 min-w-0 flex-shrink">
+            <img 
+              src={ensureAbsoluteImageUrl(trainingProviderProfile?.companyLogoUrl || '/images/default-company-logo.png')} 
+              alt="Company Logo" 
+              className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg object-cover ring-2 ring-primary ring-offset-1 ring-offset-surface flex-shrink-0" 
+            />
+            <span className="text-base sm:text-lg lg:text-xl font-bold text-on-surface truncate max-w-[120px] sm:max-w-[200px] lg:max-w-none">
+              {trainingProviderProfile?.companyName || 'Training Provider'}
+            </span>
           </div>
 
-          <div className="flex items-center space-x-3">
+          {/* Center Section: Navigation - Always visible */}
+          <nav className="flex items-center space-x-1 sm:space-x-1.5 xl:space-x-2">
+            {navItems.map(item => (
+              <a
+                key={item.label}
+                href="#"
+                onClick={(e) => {
+                  e.preventDefault();
+
+                  if (role === UserRole.Admin && 'page' in item) {
+                    if (item.page === AdminPage.Dashboard) {
+                      resetAdminView();
+                    }
+                    setAdminPage(item.page);
+                  }
+
+                  if (item.view === View.Create && currentView === item.view) {
+                    resetCreateView();
+                  } else {
+                    handleNavigation(item.view);
+                  }
+                }}
+                className={`flex items-center justify-center space-x-1 px-2 sm:px-2.5 xl:px-3 py-2 rounded-md text-xs xl:text-sm font-medium transition-colors whitespace-nowrap ${(role === UserRole.Admin && isAdminPageActive(item)) || (role !== UserRole.Admin && currentView === item.view)
+                  ? 'bg-primary text-white'
+                  : 'text-on-surface hover:bg-surface-elevated hover:text-primary'
+                  }`}
+              >
+                <Icon name={item.icon} className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" />
+                <span className="hidden lg:inline">{item.label}</span>
+              </a>
+            ))}
+          </nav>
+
+          {/* Right Section: Actions */}
+          <div className="flex items-center space-x-1.5 sm:space-x-2">
+
             {/* Role Switcher - only show if user has multiple roles */}
             {hasMultipleRoles && (
               <div className="relative" ref={roleSwitcherRef}>
                 <button
                   onClick={() => setIsRoleSwitcherOpen(prev => !prev)}
-                  className="flex items-center space-x-2 px-3 py-1.5 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full text-sm font-medium text-gray-700 dark:text-gray-200 transition-colors border border-gray-200 dark:border-gray-700"
+                  className="flex items-center space-x-1 sm:space-x-2 px-2 sm:px-3 py-1.5 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-200 transition-colors border border-gray-200 dark:border-gray-700"
                   title="Switch Role"
                 >
-                  <Icon name={IconName.Eye} className="w-4 h-4" />
-                  <span className="hidden sm:inline text-on-surface-secondary">View As:</span>
-                  <span className="hidden sm:inline font-semibold">{getRoleDisplayName(role)}</span>
-                  <svg className={`w-4 h-4 transition-transform ${isRoleSwitcherOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <Icon name={IconName.Eye} className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
+                  <span className="hidden md:inline text-on-surface-secondary text-xs">View As:</span>
+                  <span className="font-semibold truncate max-w-[80px] sm:max-w-none">{getRoleDisplayName(role)}</span>
+                  <svg className={`w-3 h-3 sm:w-4 sm:h-4 transition-transform flex-shrink-0 ${isRoleSwitcherOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                   </svg>
                 </button>
@@ -241,37 +250,25 @@ const Header: React.FC = () => {
               </div>
             )}
 
-            {/* User name + role badge (Training Provider layout) - Profile Dropdown REMOVED per requirements */}
-            {role === UserRole.TrainingProvider && (
-              <div className="hidden sm:flex items-center space-x-2">
-                <span className="text-sm font-medium text-on-surface">
-                  {currentUserProfile?.name || trainingProviderProfile?.companyShortname || 'User'}
-                </span>
-                <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-purple-100 text-purple-800 border border-purple-200 dark:bg-purple-900/50 dark:text-purple-300 dark:border-purple-700">
-                  Training Provider
-                </span>
-              </div>
-            )}
-
             {/* Sign Out button (Training Provider layout) */}
             {role === UserRole.TrainingProvider && (
               <button
                 onClick={logout}
-                className="hidden sm:flex items-center space-x-1.5 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 transition-colors"
+                className="hidden md:flex items-center space-x-1 sm:space-x-1.5 text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 transition-colors"
               >
-                <Icon name={IconName.Logout} className="w-4 h-4" />
-                <span>Sign Out</span>
+                <Icon name={IconName.Logout} className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                <span className="hidden lg:inline">Sign Out</span>
               </button>
             )}
 
-            {/* Profile Button (non-Training Provider roles, or mobile fallback) */}
+            {/* Profile Button (non-Training Provider roles) */}
             {(role !== UserRole.TrainingProvider) && (
               <div className="relative" ref={profileRef}>
-                <button onClick={() => setIsProfileOpen(prev => !prev)} className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center ring-2 ring-offset-2 ring-primary overflow-hidden">
+                <button onClick={() => setIsProfileOpen(prev => !prev)} className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-gray-200 flex items-center justify-center ring-2 ring-offset-1 ring-primary overflow-hidden flex-shrink-0">
                   {currentUserProfile?.profilePictureUrl ? (
                     <img src={ensureAbsoluteImageUrl(currentUserProfile.profilePictureUrl)} alt={currentUserProfile.name} className="w-full h-full object-cover" />
                   ) : (
-                    <Icon name={IconName.User} className="w-6 h-6 text-gray-600" />
+                    <Icon name={IconName.User} className="w-5 h-5 sm:w-6 sm:h-6 text-gray-600" />
                   )}
                 </button>
                 {isProfileOpen && <ProfileDropdown onClose={() => setIsProfileOpen(false)} />}
@@ -280,12 +277,12 @@ const Header: React.FC = () => {
 
             {/* Mobile-only profile button for Training Provider */}
             {role === UserRole.TrainingProvider && (
-              <div className="relative sm:hidden" ref={profileRef}>
-                <button onClick={() => setIsProfileOpen(prev => !prev)} className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center ring-2 ring-offset-2 ring-primary overflow-hidden">
+              <div className="relative md:hidden" ref={profileRef}>
+                <button onClick={() => setIsProfileOpen(prev => !prev)} className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center ring-2 ring-offset-1 ring-primary overflow-hidden flex-shrink-0">
                   {trainingProviderProfile?.companyLogoUrl ? (
                     <img src={ensureAbsoluteImageUrl(trainingProviderProfile.companyLogoUrl)} alt={trainingProviderProfile.companyShortname} className="w-full h-full object-cover" />
                   ) : (
-                    <Icon name={IconName.User} className="w-6 h-6 text-gray-600" />
+                    <Icon name={IconName.User} className="w-5 h-5 text-gray-600" />
                   )}
                 </button>
                 {isProfileOpen && <ProfileDropdown onClose={() => setIsProfileOpen(false)} />}
