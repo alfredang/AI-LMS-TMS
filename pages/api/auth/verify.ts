@@ -75,11 +75,12 @@ export default async function handler(
     console.log('🔍 Auth Verify: Fetching user data for ID:', userId);
     
     const userQuery = `
-      SELECT 
+      SELECT
         au.id,
         au.email,
         au.full_name,
         au.profile_picture_url,
+        au.account_status,
         urm.role
       FROM app_user au
       LEFT JOIN user_role_map urm ON au.id = urm.user_id
@@ -97,6 +98,15 @@ export default async function handler(
     }
 
     const user = userResult.rows[0];
+
+    // Check if account is disabled
+    if (user.account_status === 'disabled') {
+      console.log('❌ Auth Verify: Account disabled for user:', user.email);
+      return res.status(403).json({
+        success: false,
+        error: 'Your account has been disabled. Please contact an administrator.'
+      });
+    }
 
     console.log('✅ Auth Verify: Token verified successfully for user:', user.email);
 

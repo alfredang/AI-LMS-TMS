@@ -1,6 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import pool from '../../lib/db';
-import { cors } from '../../lib/cors';
+import pool from '../../../lib/db';
+import { cors } from '../../../lib/cors';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
@@ -44,14 +44,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         });
       }
 
-      // Fetch training provider profile from both app_user and training_provider tables
-      const profileQuery = `
+      // Fetch training provider profile based on user's organization membership
+      // Supports multiple training provider companies
+      console.log('🔍 Looking up user\'s training provider organization...');
+      
+      // Try training_provider_member first (new multi-company approach)
+      let profileQuery = `
         SELECT 
-          au.profile_picture_url as company_logo_url,
+          COALESCE(tp.company_logo_url, au.profile_picture_url) as company_logo_url,
           tp.company_shortname,
           tp.company_name,
           tp.contact_person_name,
-          au.email,
+          tp.email,
           tp.contact_tel as phone,
           tp.company_address as address,
           '' as website,
@@ -68,12 +72,80 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           tp.created_at,
           tp.updated_at
         FROM app_user au
-        LEFT JOIN training_provider tp ON tp.id = au.id
+        INNER JOIN training_provider_member tpm ON au.id = tpm.user_id
+        INNER JOIN training_provider tp ON tpm.provider_id = tp.id
         LEFT JOIN training_provider_api tpa ON tpa.training_provider_id = tp.id AND tpa.key_name = 'gemini_api_key'
         WHERE au.id = $1
       `;
       
-      const profileResult = await client.query(profileQuery, [userId]);
+      let profileResult = await client.query(profileQuery, [userId]);
+      
+      // If not found, try direct provider ownership
+      if (profileResult.rows.length === 0) {
+        console.log('🔍 Not found via member table, checking direct provider ownership...');
+        profileQuery = `
+          SELECT 
+            COALESCE(tp.company_logo_url, au.profile_picture_url) as company_logo_url,
+            tp.company_shortname,
+            tp.company_name,
+            tp.contact_person_name,
+            au.email,
+            tp.contact_tel as phone,
+            tp.company_address as address,
+            '' as website,
+            '' as description,
+            tp.uen as registration_number,
+            '' as tax_id,
+            tpa.key_value as api_key,
+            tp.invoice_template_url,
+            tp.receipt_template_url,
+            tp.certificate_template_url,
+            tp.pro_forma_template_url as pro_forma_invoice_template_url,
+            tp.ssg_self_sign_cert_file as self_signing_cert_file_url,
+            tp.ssg_private_key_file as private_key_file_url,
+            tp.created_at,
+            tp.updated_at
+          FROM app_user au
+          INNER JOIN training_provider tp ON au.id = tp.id
+          LEFT JOIN training_provider_api tpa ON tpa.training_provider_id = tp.id AND tpa.key_name = 'gemini_api_key'
+          WHERE au.id = $1
+        `;
+        profileResult = await client.query(profileQuery, [userId]);
+      }
+      
+      // If still not found, try provider_admin_user (legacy)
+      if (profileResult.rows.length === 0) {
+        console.log('🔍 Not found as owner, checking provider_admin_user...');
+        profileQuery = `
+          SELECT 
+            COALESCE(tp.company_logo_url, au.profile_picture_url) as company_logo_url,
+            tp.company_shortname,
+            tp.company_name,
+            tp.contact_person_name,
+            au.email,
+            tp.contact_tel as phone,
+            tp.company_address as address,
+            '' as website,
+            '' as description,
+            tp.uen as registration_number,
+            '' as tax_id,
+            tpa.key_value as api_key,
+            tp.invoice_template_url,
+            tp.receipt_template_url,
+            tp.certificate_template_url,
+            tp.pro_forma_template_url as pro_forma_invoice_template_url,
+            tp.ssg_self_sign_cert_file as self_signing_cert_file_url,
+            tp.ssg_private_key_file as private_key_file_url,
+            tp.created_at,
+            tp.updated_at
+          FROM app_user au
+          INNER JOIN provider_admin_user pau ON au.id = pau.user_id
+          INNER JOIN training_provider tp ON pau.provider_id = tp.id
+          LEFT JOIN training_provider_api tpa ON tpa.training_provider_id = tp.id AND tpa.key_name = 'gemini_api_key'
+          WHERE au.id = $1
+        `;
+        profileResult = await client.query(profileQuery, [userId]);
+      }
       
       if (profileResult.rows.length === 0) {
         return res.status(404).json({ 

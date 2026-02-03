@@ -244,13 +244,19 @@ async function getTrainerProfile(userId: string) {
 async function getTrainingProviderProfile(userId: string) {
   console.log('📋 Fetching training provider profile for userId:', userId);
 
-  // First, check if userId is a training provider directly
+  // Fetch the training provider profile based on the user's organization membership
+  // First, check training_provider_member table to find which organization this user belongs to
+  // If not found, fall back to checking if they're directly linked via training_provider.id
+  // If still not found, fall back to provider_admin_user table
+  console.log('🔍 Looking up user\'s training provider organization...');
+
   let result = await pool.query(`
     SELECT 
         au.id,
         au.full_name,
         au.email,
         au.profile_picture_url AS profile_image,
+        COALESCE(tp.company_logo_url, au.profile_picture_url) AS company_logo,
         au.password,
         tp.company_name,
         tp.company_shortname,
@@ -288,20 +294,77 @@ async function getTrainingProviderProfile(userId: string) {
         tp.gst_register,
         tp.color_scheme AS primary_color,
         tp.id as provider_id,
-        'direct' as access_type
+        'member' as access_type
     FROM app_user au
-    INNER JOIN training_provider tp ON au.id = tp.id
+    INNER JOIN training_provider_member tpm ON au.id = tpm.user_id
+    INNER JOIN training_provider tp ON tpm.provider_id = tp.id
     WHERE au.id = $1
   `, [userId]);
 
-  // If not found, check if userId is an admin under a training provider
+  // If not found via member table, check if user IS the training provider (direct ownership)
   if (result.rows.length === 0) {
+    console.log('🔍 Not found via member table, checking direct provider ownership...');
+    result = await pool.query(`
+      SELECT 
+          au.id,
+          au.full_name,
+          au.email,
+          au.profile_picture_url AS profile_image,
+          COALESCE(tp.company_logo_url, au.profile_picture_url) AS company_logo,
+          au.password,
+          tp.company_name,
+          tp.company_shortname,
+          tp.uen,
+          tp.company_address,
+          tp.contact_person_name,
+          tp.contact_tel AS telephone,
+          tp.pro_forma_template_url AS pro_forma_invoice_template,
+          tp.invoice_template_url,
+          tp.receipt_template_url,
+          tp.certificate_template_url,
+          tp.ssg_self_sign_cert_file,
+          tp.ssg_private_key_file,
+          tp.ssg_encryption_key,
+          tp.sync_google_calendar,
+          tp.sync_ms_calendar,
+          tp.integrate_google_drive,
+          tp.integrate_ms_onedrive,
+          tp.auto_send_proforma_invoice,
+          tp.auto_send_confirm_email,
+          tp.auto_send_invoice,
+          tp.auto_send_receipt,
+          tp.auto_send_certificate,
+          tp.auto_send_thankyou_email,
+          tp.auto_mask_sensitive_data,
+          tp.auto_delete_after_six_months,
+          tp.enable_otp_login,
+          tp.enable_default_otp,
+          tp.default_otp,
+          tp.enable_leaderboard,
+          tp.enable_point_sys,
+          tp.normal_fund_rate,
+          tp.enhanced_fund_rate,
+          tp.gst_rate,
+          tp.gst_register,
+          tp.color_scheme AS primary_color,
+          tp.id as provider_id,
+          'owner' as access_type
+      FROM app_user au
+      INNER JOIN training_provider tp ON au.id = tp.id
+      WHERE au.id = $1
+    `, [userId]);
+  }
+
+  // If still not found, check provider_admin_user table (legacy/admin access)
+  if (result.rows.length === 0) {
+    console.log('🔍 Not found as owner, checking provider_admin_user (legacy admin access)...');
     result = await pool.query(`
       SELECT
           au.id,
           au.full_name,
           au.email,
           au.profile_picture_url AS profile_image,
+          COALESCE(tp.company_logo_url, au.profile_picture_url) AS company_logo,
           au.password,
           tp.company_name,
           tp.company_shortname,
@@ -350,11 +413,13 @@ async function getTrainingProviderProfile(userId: string) {
   console.log('📊 Training provider query result:', result.rows.length, 'rows found');
 
   if (result.rows.length === 0) {
-    console.log('❌ No training provider found with ID:', userId);
+    console.log('❌ No training provider profile found for user:', userId);
+    console.log('⚠️ User may need to be linked to a training provider organization via training_provider_member table');
     return null;
   }
 
   const profileData = result.rows[0];
+  console.log('✅ Found training provider profile:', profileData.company_name, '(access type:', profileData.access_type + ')');
 
   // Fetch API keys separately (including selected_model)
   const apiKeyResult = await pool.query(`
@@ -405,7 +470,7 @@ async function getTrainingProviderProfile(userId: string) {
     companyShortname: profileData.company_shortname || '',
     uen: profileData.uen || '',
     companyAddress: profileData.company_address || '',
-    companyLogoUrl: profileData.profile_image,
+    companyLogoUrl: profileData.company_logo || profileData.profile_image,
     contactPerson: {
       name: profileData.contact_person_name || '',
       email: profileData.email || '',

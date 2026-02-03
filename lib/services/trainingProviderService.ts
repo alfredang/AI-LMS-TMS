@@ -19,8 +19,8 @@ export interface TrainingProviderResponse {
 export const trainingProviderService = {
   async getTrainingProviderInfo(): Promise<TrainingProviderResponse> {
     try {
-      console.log('🔍 trainingProviderService: Making API call to /api/training-provider-info');
-      const response = await apiClient.get('/api/training-provider-info') as TrainingProviderResponse;
+      console.log('🔍 trainingProviderService: Making API call to /api/training-provider/info');
+      const response = await apiClient.get('/api/training-provider/info') as TrainingProviderResponse;
       console.log('🔍 trainingProviderService: Raw response from apiClient:', response);
       console.log('🔍 trainingProviderService: response.success:', response.success);
       console.log('🔍 trainingProviderService: response.data:', response.data);

@@ -318,7 +318,7 @@ const AdminLayout: React.FC = () => {
       {/* Main Layout Container */}
       <div className="flex flex-1">
         {/* Desktop Sidebar - Fixed on left */}
-        <aside className="hidden md:flex w-64 flex-shrink-0 bg-slate-800 border-r border-slate-700">
+        <aside className="hidden md:flex w-64 flex-shrink-0 bg-white dark:bg-slate-800 border-r border-gray-200 dark:border-slate-700">
           <div className="w-full">
             <AdminSidebar />
           </div>

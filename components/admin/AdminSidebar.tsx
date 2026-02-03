@@ -9,7 +9,7 @@ interface NavSectionProps {
 
 const NavSection: React.FC<NavSectionProps> = ({ title, children }) => (
     <div>
-        <h3 className="px-3 text-xs font-semibold uppercase text-gray-400 tracking-wider">{title}</h3>
+        <h3 className="px-3 text-xs font-semibold uppercase text-gray-500 dark:text-gray-400 tracking-wider">{title}</h3>
         <div className="mt-2 space-y-1" role="group" aria-labelledby={`${title}-heading`}>
             {children}
         </div>
@@ -39,8 +39,8 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate }) => {
             }}
             className={`flex items-center rounded-md px-3 py-2 text-sm font-medium transition-colors ${isSubItem ? 'pl-8' : ''
                 } ${adminPage === page
-                    ? 'bg-blue-600/20 text-blue-400 border-l-3 border-blue-500'
-                    : 'text-gray-300 hover:bg-slate-700 hover:text-white'
+                    ? 'bg-blue-50 text-blue-600 border-l-3 border-blue-500 dark:bg-blue-600/20 dark:text-blue-400 dark:border-blue-500'
+                    : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-slate-700 dark:hover:text-white'
                 }`}
         >
             {label || page}
@@ -48,7 +48,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate }) => {
     );
 
     return (
-        <nav className="space-y-6 p-4 bg-slate-800 text-white h-full">
+        <nav className="space-y-6 p-4 bg-white dark:bg-slate-800 text-gray-900 dark:text-white h-full">
             <NavItem page={AdminPage.Dashboard} label="Admin Dashboard" />
 
             <NavSection title="Class Management">

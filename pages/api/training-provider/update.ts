@@ -1,8 +1,8 @@
-import pool from '../../lib/db';
+import pool from '../../../lib/db';
 import { IncomingForm, File, Fields, Files } from 'formidable';
 import fs from 'fs';
 import path from 'path';
-import { cors } from '../../lib/cors';
+import { cors } from '../../../lib/cors';
 import { NextApiRequest, NextApiResponse } from 'next';
 
 // Map field names to specific folder paths with your exact folder structure
@@ -276,27 +276,50 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     });
 
-    // Resolve the correct training_provider_id
-    // If the user is a direct training provider, userId is the training_provider_id
-    // If the user is an admin, we need to find the linked training_provider_id
-    let trainingProviderId = userId;
-
-    // Check if userId exists directly in training_provider
-    const directTpCheck = await pool.query('SELECT id FROM training_provider WHERE id = $1', [userId]);
-
-    if (directTpCheck.rows.length === 0) {
-      // Not a direct TP, check if it's an admin
-      console.log('🔍 User is not a direct training provider, checking admin linkage...');
+    // Resolve the training provider ID for this user
+    // Supports multiple training provider companies
+    console.log('🔍 Looking up user\'s training provider organization...');
+    
+    let trainingProviderId: string | null = null;
+    
+    // First, check training_provider_member table (new multi-company approach)
+    const memberCheck = await pool.query(
+      'SELECT provider_id FROM training_provider_member WHERE user_id = $1', 
+      [userId]
+    );
+    
+    if (memberCheck.rows.length > 0) {
+      trainingProviderId = memberCheck.rows[0].provider_id;
+      console.log('✅ Found via training_provider_member:', trainingProviderId);
+    }
+    
+    // If not found, check if user IS the training provider (direct ownership)
+    if (!trainingProviderId) {
+      console.log('🔍 Not found via member table, checking direct provider ownership...');
+      const directTpCheck = await pool.query('SELECT id FROM training_provider WHERE id = $1', [userId]);
+      
+      if (directTpCheck.rows.length > 0) {
+        trainingProviderId = userId;
+        console.log('✅ User is a direct Training Provider');
+      }
+    }
+    
+    // If still not found, check provider_admin_user table (legacy/admin access)
+    if (!trainingProviderId) {
+      console.log('🔍 Not found as owner, checking provider_admin_user (legacy admin access)...');
       const adminCheck = await pool.query('SELECT provider_id FROM provider_admin_user WHERE user_id = $1', [userId]);
-
+      
       if (adminCheck.rows.length > 0) {
         trainingProviderId = adminCheck.rows[0].provider_id;
         console.log('✅ Resolved Training Provider ID via Admin Linkage:', trainingProviderId);
-      } else {
-        console.warn('⚠️ User is neither a direct TP nor a linked Admin. Assuming new TP or legacy (using userId).');
       }
-    } else {
-      console.log('✅ User is a direct Training Provider.');
+    }
+    
+    if (!trainingProviderId) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'No training provider organization found for this user. Please contact administrator.' 
+      });
     }
 
     console.log('🎯 Target Training Provider ID for updates:', trainingProviderId);
@@ -518,7 +541,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             enhanced_fund_rate = $32,
             gst_rate = $33,
             gst_register = $34,
-            color_scheme = $35
+            color_scheme = $35,
+            company_logo_url = COALESCE($37, company_logo_url)
         WHERE id = $36
         RETURNING *
       `;
@@ -559,7 +583,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         profileData.fundingSettings?.gstRate || 8.0,
         profileData.fundingSettings?.isGstRegistered || false,
         profileData.colorScheme || '#3B82F6',
-        userId
+        trainingProviderId,
+        filePaths.companyLogoUrl || null
       ];
 
       console.log('🔍 File upload parameters being sent to database:', {
@@ -577,7 +602,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       // Handle API keys - delete existing and insert new ones (with selected model)
       console.log('🔑 Processing API keys...');
-      const deleteResult = await pool.query('DELETE FROM training_provider_api WHERE training_provider_id = $1', [userId]);
+      const deleteResult = await pool.query('DELETE FROM training_provider_api WHERE training_provider_id = $1', [trainingProviderId]);
       console.log('🗑️ Deleted existing API keys, rows affected:', deleteResult.rowCount);
 
       if (profileData.apiKeys && typeof profileData.apiKeys === 'object' && Object.keys(profileData.apiKeys).length > 0) {
@@ -591,7 +616,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             const insertResult = await pool.query(`
               INSERT INTO training_provider_api (training_provider_id, key_name, key_value, selected_model)
               VALUES ($1, $2, $3, $4)
-            `, [userId, keyName, strValue, selectedModel]);
+            `, [trainingProviderId, keyName, strValue, selectedModel]);
             console.log(`✅ Added API key "${keyName}" with model "${selectedModel}", rows affected:`, insertResult.rowCount);
           } else {
             console.log(`⚠️ Skipping empty API key "${keyName}"`);
@@ -609,7 +634,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // Fetch updated profile data to return
       const updatedProfileResult = await pool.query(`
         SELECT 
-          au.id, au.full_name as "companyName", au.email, au.profile_picture_url as "companyLogoUrl",
+          au.id, au.full_name as "companyName", au.email, COALESCE(tp.company_logo_url, au.profile_picture_url) as "companyLogoUrl",
           tp.company_name as "companyName", tp.company_shortname as "companyShortname", 
           tp.uen, tp.company_address as "companyAddress",
           tp.contact_person_name as "contactPersonName", tp.contact_tel as "contactPersonTel",

@@ -42,7 +42,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse<SendOtpResponse
 
     // Check if user exists in database
     const userQuery = `
-      SELECT id, email, full_name
+      SELECT id, email, full_name, account_status
       FROM public.app_user
       WHERE LOWER(email) = LOWER($1)
     `;
@@ -58,6 +58,15 @@ async function handler(req: NextApiRequest, res: NextApiResponse<SendOtpResponse
 
     const user = userResult.rows[0];
     console.log(`✅ User found: ${user.email}`);
+
+    // Check if account is disabled
+    if (user.account_status === 'disabled') {
+      console.log(`❌ Account disabled for user: ${email}`);
+      return res.status(403).json({
+        success: false,
+        error: 'Your account has been disabled. Please contact an administrator.'
+      });
+    }
 
     // Invalidate any existing unused OTPs for this email
     await pool.query(`

@@ -1,7 +1,7 @@
-import pool from '../../lib/db';
-import { cors } from '../../lib/cors';
+import pool from '../../../lib/db';
+import { cors } from '../../../lib/cors';
 import { NextApiRequest, NextApiResponse } from 'next';
-import { getBaseUrl } from '../../lib/config';
+import { getBaseUrl } from '../../../lib/config';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   await cors(req, res);
@@ -22,9 +22,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     let result;
     try {
       result = await pool.query(`
-        SELECT 
+        SELECT
           au.id AS user_id,
-          au.profile_picture_url,
+          COALESCE(tp.company_logo_url, au.profile_picture_url) AS profile_picture_url,
           tp.company_name,
           tp.company_shortname,
           tp.enable_otp_login,

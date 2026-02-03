@@ -10,7 +10,7 @@ import { initializeColorScheme } from '@utils/colorUtils';
 // Function to fetch training provider info for all users
 const fetchTrainingProviderInfo = async (): Promise<{ companyLogoUrl: string; companyShortname: string }> => {
   try {
-    const response = await fetch('/api/training-provider-info');
+    const response = await fetch('/api/training-provider/info');
 
     if (!response.ok) {
       throw new Error('Failed to fetch training provider info');
@@ -302,7 +302,7 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const loadColorScheme = async () => {
       try {
-        const response = await fetch('/api/training-provider-info');
+        const response = await fetch('/api/training-provider/info');
 
         if (response.ok) {
           const result = await response.json();

@@ -76,7 +76,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse<LoginResponse>)
 
     // Check if user exists in database
     const userQuery = `
-      SELECT id, email, password_hash as password, full_name, profile_picture_url
+      SELECT id, email, password_hash as password, full_name, profile_picture_url, account_status
       FROM public.app_user
       WHERE LOWER(email) = LOWER($1)
     `;
@@ -93,6 +93,15 @@ async function handler(req: NextApiRequest, res: NextApiResponse<LoginResponse>)
 
     const user = userResult.rows[0];
     console.log(`✅ User found: ${user.email}`);
+
+    // Check if account is disabled
+    if (user.account_status === 'disabled') {
+      console.log(`❌ Account disabled for user: ${email}`);
+      return res.status(403).json({
+        success: false,
+        error: 'Your account has been disabled. Please contact your training provider at enquiry@tertiaryinfotech.com to request reactivation.'
+      });
+    }
 
     // Handle different login types
     if (loginType === 'password') {

@@ -602,7 +602,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
             }
 
             // Call the training provider update API
-            const response = await fetch(getApiUrl('/api/training-provider-update'), {
+            const response = await fetch(getApiUrl('/api/training-provider/update'), {
                 method: 'PUT',
                 body: formDataToSend,
             });

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Icon, IconName } from '../ui/Icon';
+import { authService } from '@lib/services/authService';
 
 const inputClasses = "block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-500";
 
@@ -29,7 +30,7 @@ interface UserData {
     id: string;
     email: string;
     full_name: string;
-    created_at: string;
+    account_status: string;
     roles: string[];
 }
 
@@ -37,6 +38,7 @@ const UserManagementView: React.FC = () => {
     const [isLoading, setIsLoading] = useState(false);
     const [users, setUsers] = useState<UserData[]>([]);
     const [error, setError] = useState<string | null>(null);
+    const [currentUserId, setCurrentUserId] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 10;
@@ -55,6 +57,7 @@ const UserManagementView: React.FC = () => {
     // Edit role modal state
     const [editingUser, setEditingUser] = useState<UserData | null>(null);
     const [editRoles, setEditRoles] = useState<string[]>([]);
+    const [editAccountStatus, setEditAccountStatus] = useState<string>('active');
     const [isSaving, setIsSaving] = useState(false);
 
     // Add User Modal State
@@ -66,6 +69,10 @@ const UserManagementView: React.FC = () => {
         roles: ['Learner'] as string[]
     });
     const [isAddingUser, setIsAddingUser] = useState(false);
+
+    // Delete User State
+    const [deletingUser, setDeletingUser] = useState<UserData | null>(null);
+    const [isDeletingUser, setIsDeletingUser] = useState(false);
 
     const filterableColumns = [
         { value: 'full_name', label: 'Full Name' },
@@ -97,6 +104,10 @@ const UserManagementView: React.FC = () => {
 
     useEffect(() => {
         fetchUsers();
+        const userData = authService.getUserData();
+        if (userData?.id) {
+            setCurrentUserId(userData.id);
+        }
     }, []);
 
     // Apply column filter
@@ -217,6 +228,7 @@ const UserManagementView: React.FC = () => {
     const openEditModal = (user: UserData) => {
         setEditingUser(user);
         setEditRoles([...user.roles]);
+        setEditAccountStatus(user.account_status);
     };
 
     // Toggle a role in the edit list
@@ -249,6 +261,8 @@ const UserManagementView: React.FC = () => {
                 body: JSON.stringify({
                     userId: editingUser.id,
                     roles: editRoles,
+                    accountStatus: editAccountStatus,
+                    currentUserId: currentUserId,
                 }),
             });
 
@@ -257,7 +271,7 @@ const UserManagementView: React.FC = () => {
                 // Update local state
                 setUsers(prev =>
                     prev.map(u =>
-                        u.id === editingUser.id ? { ...u, roles: editRoles } : u
+                        u.id === editingUser.id ? { ...u, roles: editRoles, account_status: editAccountStatus } : u
                     )
                 );
                 setEditingUser(null);
@@ -334,15 +348,48 @@ const UserManagementView: React.FC = () => {
         });
     };
 
+    // Handle Delete User
+    const handleDeleteUser = async () => {
+        if (!deletingUser) return;
+
+        setIsDeletingUser(true);
+        try {
+            const response = await fetch('/api/training-provider/delete-user', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    userId: deletingUser.id,
+                }),
+            });
+
+            const result = await response.json();
+
+            if (!result.success) {
+                throw new Error(result.message || 'Failed to delete user');
+            }
+
+            // Success - refresh list
+            await fetchUsers();
+            setDeletingUser(null);
+            alert('User deleted successfully!');
+
+        } catch (err) {
+            alert(`Failed to delete user: ${err instanceof Error ? err.message : 'Unknown error'}`);
+        } finally {
+            setIsDeletingUser(false);
+        }
+    };
+
     return (
         <div>
             <h2 className="text-3xl font-bold mb-6">User Management</h2>
 
+
             {/* Search and Refresh Controls */}
-            <Card className="p-6 mb-6">
-                <div className="flex flex-col md:flex-row gap-4 items-end">
-                    <div className="flex-1">
-                        <label htmlFor="search-users" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
+            <Card className="p-4 sm:p-6 mb-6">
+                <div className="flex flex-col gap-4">
+                    <div className="w-full">
+                        <label htmlFor="search-users" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">
                             Search Users
                         </label>
                         <input
@@ -354,23 +401,25 @@ const UserManagementView: React.FC = () => {
                             className={inputClasses}
                         />
                     </div>
-                    <Button onClick={fetchUsers} disabled={isLoading}>
-                        {isLoading ? (
-                            <div className="flex items-center">
-                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                                Loading...
-                            </div>
-                        ) : (
-                            <>
-                                <Icon name={IconName.Download} className="w-4 h-4 mr-2" />
-                                Refresh
-                            </>
-                        )}
-                    </Button>
-                    <Button onClick={() => setIsAddUserModalOpen(true)} className="bg-green-600 hover:bg-green-700">
-                        <Icon name={IconName.Plus} className="w-4 h-4 mr-2" />
-                        Add User
-                    </Button>
+                    <div className="flex flex-col sm:flex-row gap-3">
+                        <Button onClick={fetchUsers} disabled={isLoading} className="w-full sm:w-auto">
+                            {isLoading ? (
+                                <div className="flex items-center justify-center">
+                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                                    Loading...
+                                </div>
+                            ) : (
+                                <>
+                                    <Icon name={IconName.Download} className="w-4 h-4 mr-2" />
+                                    Refresh
+                                </>
+                            )}
+                        </Button>
+                        <Button onClick={() => setIsAddUserModalOpen(true)} className="bg-green-600 hover:bg-green-700 w-full sm:w-auto">
+                            <Icon name={IconName.Plus} className="w-4 h-4 mr-2" />
+                            Add User
+                        </Button>
+                    </div>
                 </div>
                 {error && <p className="text-red-500 text-sm mt-3">{error}</p>}
             </Card>
@@ -510,7 +559,7 @@ const UserManagementView: React.FC = () => {
                                             <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Full Name</th>
                                             <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Email</th>
                                             <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Roles</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Created At</th>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Account Status</th>
                                             <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Actions</th>
                                         </tr>
                                     </thead>
@@ -519,6 +568,11 @@ const UserManagementView: React.FC = () => {
                                             <tr key={user.id} className="hover:bg-gray-50 dark:hover:bg-gray-600">
                                                 <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
                                                     {user.full_name || 'N/A'}
+                                                    {user.id === currentUserId && (
+                                                        <span className="ml-2 inline-flex px-1.5 py-0.5 text-xs font-medium rounded bg-gray-200 text-gray-600 dark:bg-gray-600 dark:text-gray-300">
+                                                            You
+                                                        </span>
+                                                    )}
                                                 </td>
                                                 <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
                                                     {user.email || 'N/A'}
@@ -545,17 +599,36 @@ const UserManagementView: React.FC = () => {
                                                         )}
                                                     </div>
                                                 </td>
-                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
-                                                    {user.created_at ? new Date(user.created_at).toLocaleDateString('en-GB') : 'N/A'}
+                                                <td className="px-4 py-3 whitespace-nowrap text-sm">
+                                                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full border ${
+                                                        user.account_status === 'active'
+                                                            ? 'bg-green-100 text-green-800 border-green-200'
+                                                            : 'bg-red-100 text-red-800 border-red-200'
+                                                    }`}>
+                                                        {user.account_status === 'active' ? 'Active' : 'Disabled'}
+                                                    </span>
                                                 </td>
                                                 <td className="px-4 py-3 whitespace-nowrap">
-                                                    <button
-                                                        onClick={() => openEditModal(user)}
-                                                        className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 border border-blue-300 dark:border-blue-600 rounded hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors"
-                                                    >
-                                                        <Icon name={IconName.Edit} className="w-4 h-4 mr-1" />
-                                                        Edit Roles
-                                                    </button>
+                                                    {user.id === currentUserId ? (
+                                                        <span className="text-xs text-gray-400 italic">Cannot edit own roles</span>
+                                                    ) : (
+                                                        <div className="flex gap-2">
+                                                            <button
+                                                                onClick={() => openEditModal(user)}
+                                                                className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 border border-blue-300 dark:border-blue-600 rounded hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors"
+                                                            >
+                                                                <Icon name={IconName.Edit} className="w-4 h-4 mr-1" />
+                                                                Edit
+                                                            </button>
+                                                            <button
+                                                                onClick={() => setDeletingUser(user)}
+                                                                className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 border border-red-300 dark:border-red-600 rounded hover:bg-red-50 dark:hover:bg-red-900/30 transition-colors"
+                                                            >
+                                                                <Icon name={IconName.Delete} className="w-4 h-4 mr-1" />
+                                                                Delete
+                                                            </button>
+                                                        </div>
+                                                    )}
                                                 </td>
                                             </tr>
                                         ))}
@@ -668,6 +741,37 @@ const UserManagementView: React.FC = () => {
                             {editRoles.length === 0 && (
                                 <p className="text-red-500 text-xs mt-2">At least one role must be selected.</p>
                             )}
+
+                            {/* Account Status Toggle */}
+                            <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
+                                <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Account Status</p>
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={() => setEditAccountStatus('active')}
+                                        className={`flex-1 flex items-center justify-center gap-2 p-3 rounded-lg border transition-colors ${
+                                            editAccountStatus === 'active'
+                                                ? 'border-green-400 bg-green-50 dark:bg-green-900/30 dark:border-green-600'
+                                                : 'border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
+                                        }`}
+                                    >
+                                        <span className="inline-flex px-2 py-0.5 text-xs font-semibold rounded-full border bg-green-100 text-green-800 border-green-200">
+                                            Active
+                                        </span>
+                                    </button>
+                                    <button
+                                        onClick={() => setEditAccountStatus('disabled')}
+                                        className={`flex-1 flex items-center justify-center gap-2 p-3 rounded-lg border transition-colors ${
+                                            editAccountStatus === 'disabled'
+                                                ? 'border-red-400 bg-red-50 dark:bg-red-900/30 dark:border-red-600'
+                                                : 'border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
+                                        }`}
+                                    >
+                                        <span className="inline-flex px-2 py-0.5 text-xs font-semibold rounded-full border bg-red-100 text-red-800 border-red-200">
+                                            Disabled
+                                        </span>
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                         <div className="p-6 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3">
                             <button
@@ -796,6 +900,61 @@ const UserManagementView: React.FC = () => {
                                     </div>
                                 ) : (
                                     'Add User'
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Delete User Confirmation Modal */}
+            {deletingUser && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-2xl w-full max-w-md mx-4">
+                        <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+                            <h3 className="text-lg font-bold text-gray-900 dark:text-white">Delete User</h3>
+                            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                                Are you sure you want to delete this user?
+                            </p>
+                        </div>
+                        <div className="p-6">
+                            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 mb-4">
+                                <div className="flex items-start gap-3">
+                                    <Icon name={IconName.Alert} className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+                                    <div>
+                                        <p className="text-sm font-semibold text-red-800 dark:text-red-300">
+                                            This action cannot be undone
+                                        </p>
+                                        <p className="text-sm text-red-700 dark:text-red-400 mt-1">
+                                            All data associated with <strong>{deletingUser.full_name}</strong> ({deletingUser.email}) will be permanently deleted.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="p-6 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3">
+                            <button
+                                onClick={() => setDeletingUser(null)}
+                                disabled={isDeletingUser}
+                                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleDeleteUser}
+                                disabled={isDeletingUser}
+                                className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:bg-red-400 disabled:cursor-not-allowed transition-colors"
+                            >
+                                {isDeletingUser ? (
+                                    <div className="flex items-center">
+                                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                                        Deleting...
+                                    </div>
+                                ) : (
+                                    <>
+                                        <Icon name={IconName.Delete} className="w-4 h-4 inline mr-2" />
+                                        Delete User
+                                    </>
                                 )}
                             </button>
                         </div>
