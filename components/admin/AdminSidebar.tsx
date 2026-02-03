@@ -65,6 +65,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate }) => {
             <NavSection title="Direct Application">
                 <NavItem page={AdminPage.UploadDirectApplication} label="Upload Direct Application" isSubItem />
                 <NavItem page={AdminPage.ViewDirectApplication} label="View Direct Application" isSubItem />
+                {/* <NavItem page={AdminPage.UpdateDirectApplication} label="Update Direct Application" isSubItem /> */}
             </NavSection>
 
             <NavSection title="TPG Management">

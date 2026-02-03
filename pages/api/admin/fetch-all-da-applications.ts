@@ -20,7 +20,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
         // Query all DA applications with course_run dates, ordered by created_at descending
         const result = await pool.query(`
-            SELECT 
+            SELECT
                 da.id,
                 da.trainee_id_type,
                 da.trainee_id,
@@ -32,12 +32,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 da.trainee_phone,
                 da.sponsorship_type,
                 da.application_id,
+                da.application_date::text as application_date,
+                da.application_cancelled_by,
                 da.payable_fee,
+                da.full_course_fee,
+                da.gst,
+                da.skillsfuture_subsidy,
+                da.skillsfuture_credit,
+                da.skillsfuture_credit_claim_id,
                 da.application_status,
                 da.course_title,
                 da.course_reference_number,
                 COALESCE(cr.start_date, da.course_start_date) as course_start_date,
                 COALESCE(cr.end_date, da.course_end_date) as course_end_date,
+                da.highest_qualification,
+                da.highest_relevant_certification,
                 da.enrolment_status,
                 da.created_at,
                 da.updated_at

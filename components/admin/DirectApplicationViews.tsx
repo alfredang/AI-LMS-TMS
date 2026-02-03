@@ -140,10 +140,9 @@ export const UploadDirectApplicationView: React.FC = () => {
                     if (rawRows.length === 1) {
                         throw new Error(
                             'Only headers found, no data rows.\n\n' +
-                            'This can happen if:\n' +
-                            '• The file is a template with no data\n' +
-                            '• The download was incomplete\n' +
-                            '• Excel Protected View blocked the data (unlikely but possible)\n\n' +
+                            'This happens because:\n' +
+                            '• The Excel file is opened in Protected View after being downloaded from the TPG portal.\n\n' +
+                            '• Protected View blocks access to the data rows.' +
                             'Solution: Open the file in Excel, ensure data is visible, save it, and upload again.'
                         );
                     }
@@ -276,7 +275,23 @@ export const UploadDirectApplicationView: React.FC = () => {
                     </p>
                 </label>
             </div>
-            {error && <p className="text-red-500 text-sm mt-2 text-center">{error}</p>}
+            {error && (
+                <div className="mt-4 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg p-4 flex items-start gap-3">
+                    <div className="flex-shrink-0 w-10 h-10 bg-white dark:bg-red-900/50 border border-red-200 dark:border-red-700 rounded-full flex items-center justify-center">
+                        <Icon name={IconName.Close} className="w-5 h-5 text-red-500 dark:text-red-400" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                        <h4 className="font-semibold text-gray-900 dark:text-gray-100">Something went wrong!</h4>
+                        <p className="text-sm text-gray-600 dark:text-gray-300 mt-1 whitespace-pre-line">{error}</p>
+                    </div>
+                    <button
+                        onClick={() => setError(null)}
+                        className="flex-shrink-0 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
+                    >
+                        <Icon name={IconName.Close} className="w-5 h-5" />
+                    </button>
+                </div>
+            )}
 
             <div className="flex justify-end items-center mt-6">
                 <Button onClick={handleUpload} disabled={!file || isUploading}>
@@ -293,120 +308,161 @@ export const UploadDirectApplicationView: React.FC = () => {
 
     const ResultsStep = () => (
         <Card>
-            <div className="p-6 border-b">
-                <h3 className="text-xl font-bold">Upload Results</h3>
-                <p className="text-gray-500 mt-1">The following results were returned from processing.</p>
+            <div className="p-6 border-b dark:border-gray-700">
+                <h3 className="text-xl font-bold dark:text-white">Upload Results</h3>
+                <p className="text-gray-500 dark:text-gray-400 mt-1">The following results were returned from processing.</p>
             </div>
             <div className="p-6">
                 {uploadResult?.success && (uploadResult?.inserted > 0 || uploadResult?.updated > 0) ? (
-                    <div className="space-y-4">
-                        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                            <h4 className="font-bold text-green-800">
+                    <div className="space-y-6">
+                        <div className="bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-lg p-4">
+                            <h4 className="font-bold text-green-800 dark:text-green-300">
                                 {uploadResult.inserted} New Record(s) Inserted
                                 {uploadResult.updated > 0 && `, ${uploadResult.updated} Record(s) Updated`}
                             </h4>
-                            <p className="text-sm text-green-700">
+                            <p className="text-sm text-green-700 dark:text-green-400">
                                 {uploadResult.duplicates || 0} duplicate(s) were skipped
                             </p>
                             {uploadResult.errors?.length > 0 && (
-                                <p className="text-sm text-amber-700 mt-1">
+                                <p className="text-sm text-amber-700 dark:text-amber-400 mt-1">
                                     {uploadResult.errors.length} row(s) had errors
                                 </p>
                             )}
                         </div>
 
                         {uploadResult.newRecords && uploadResult.newRecords.length > 0 && (
-                            <div className="overflow-x-auto">
-                                <h4 className="font-semibold text-gray-800 mb-2">New Records</h4>
-                                <table className="min-w-full divide-y divide-gray-200">
-                                    <thead className="bg-gray-50">
-                                        <tr>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Application ID</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Trainee ID Type</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Trainee ID</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Trainee Name</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Phone</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">DOB</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Course Title</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Course Ref No.</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Course Run ID</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Sponsorship</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Payable Fee</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="bg-white divide-y divide-gray-200">
-                                        {uploadResult.newRecords
-                                            .slice((newRecordsPage - 1) * resultsPerPage, newRecordsPage * resultsPerPage)
-                                            .map((record: any, index: number) => (
-                                                <tr key={index} className="hover:bg-gray-50">
-                                                    <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
-                                                        {record.application_id || 'N/A'}
-                                                    </td>
-                                                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                                                        {record.trainee_id_type || 'N/A'}
-                                                    </td>
-                                                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                                                        <div className="flex items-center gap-1.5">
-                                                            <span className="font-mono">{maskTraineeId(record.trainee_id)}</span>
-                                                            <button
-                                                                onClick={() => setShowTraineeId(!showTraineeId)}
-                                                                className="p-0.5 text-gray-400 hover:text-blue-600 rounded transition-colors"
-                                                                title={showTraineeId ? 'Hide Trainee ID' : 'Show Trainee ID'}
-                                                            >
-                                                                <Icon name={showTraineeId ? IconName.EyeOff : IconName.Eye} className="w-4 h-4" />
-                                                            </button>
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                                                        {record.trainee_name || 'N/A'}
-                                                    </td>
-                                                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                                                        {record.trainee_email || 'N/A'}
-                                                    </td>
-                                                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                                                        {record.trainee_phone_country_code && record.trainee_phone
-                                                            ? `+${record.trainee_phone_country_code} ${record.trainee_phone}`
-                                                            : record.trainee_phone || 'N/A'}
-                                                    </td>
-                                                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                                                        {record.date_of_birth ? new Date(record.date_of_birth).toLocaleDateString('en-GB') : 'N/A'}
-                                                    </td>
-                                                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                                                        {record.course_title || 'N/A'}
-                                                    </td>
-                                                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                                                        {record.course_reference_number || 'N/A'}
-                                                    </td>
-                                                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                                                        {record.course_run_id || 'N/A'}
-                                                    </td>
-                                                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                                                        {record.sponsorship_type || 'N/A'}
-                                                    </td>
-                                                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                                                        ${parseFloat(record.payable_fee || 0).toFixed(2)}
-                                                    </td>
-                                                    <td className="px-4 py-3 whitespace-nowrap">
-                                                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full border ${getStatusColor(record.application_status || 'Inserted')}`}>
-                                                            {record.application_status || 'Inserted'}
-                                                        </span>
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                    </tbody>
-                                </table>
+                            <div className="border border-green-200 dark:border-green-800 rounded-lg overflow-hidden">
+                                <div className="bg-green-100 dark:bg-green-900/50 px-4 py-3 flex items-center gap-2">
+                                    <span className="inline-flex items-center justify-center w-6 h-6 bg-green-500 text-white text-xs font-bold rounded-full">+</span>
+                                    <h4 className="font-semibold text-green-800 dark:text-green-300">Inserted Records ({uploadResult.newRecords.length})</h4>
+                                </div>
+                                <div className="overflow-x-auto">
+                                    <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-600">
+                                        <thead className="bg-gray-50 dark:bg-gray-800">
+                                            <tr>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Application ID</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Trainee ID Type</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Trainee ID</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">DOB</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Trainee Name</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Email</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Phone</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Course Title</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Course Ref No.</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Course Run ID</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Sponsorship</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Application Date</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Full Course Fee</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">GST</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">SF Subsidy</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">SF Credit</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Payable Fee</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">SF Credit Claim ID</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Highest Qualification</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Highest Certification</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Application Status</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Cancelled By</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="bg-white dark:bg-gray-700 divide-y divide-gray-200 dark:divide-gray-600">
+                                            {uploadResult.newRecords
+                                                .slice((newRecordsPage - 1) * resultsPerPage, newRecordsPage * resultsPerPage)
+                                                .map((record: any, index: number) => (
+                                                    <tr key={index} className="hover:bg-gray-50 dark:hover:bg-gray-600">
+                                                        <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
+                                                            {record.application_id || 'N/A'}
+                                                        </td>
+                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
+                                                            {record.trainee_id_type || 'N/A'}
+                                                        </td>
+                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
+                                                            <div className="flex items-center gap-1.5">
+                                                                <span className="font-mono">{maskTraineeId(record.trainee_id)}</span>
+                                                                <button
+                                                                    onClick={() => setShowTraineeId(!showTraineeId)}
+                                                                    className="p-0.5 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 rounded transition-colors"
+                                                                    title={showTraineeId ? 'Hide Trainee ID' : 'Show Trainee ID'}
+                                                                >
+                                                                    <Icon name={showTraineeId ? IconName.EyeOff : IconName.Eye} className="w-4 h-4" />
+                                                                </button>
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
+                                                            {record.date_of_birth ? new Date(record.date_of_birth).toLocaleDateString('en-GB') : 'N/A'}
+                                                        </td>
+                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
+                                                            {record.trainee_name || 'N/A'}
+                                                        </td>
+                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
+                                                            {record.trainee_email || 'N/A'}
+                                                        </td>
+                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
+                                                            {record.trainee_phone_country_code && record.trainee_phone
+                                                                ? `+${record.trainee_phone_country_code} ${record.trainee_phone}`
+                                                                : record.trainee_phone || 'N/A'}
+                                                        </td>
+                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
+                                                            {record.course_title || 'N/A'}
+                                                        </td>
+                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
+                                                            {record.course_reference_number || 'N/A'}
+                                                        </td>
+                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
+                                                            {record.course_run_id || 'N/A'}
+                                                        </td>
+                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
+                                                            {record.sponsorship_type || 'N/A'}
+                                                        </td>
+                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
+                                                            {record.application_date ? new Date(record.application_date).toLocaleDateString('en-GB') : 'N/A'}
+                                                        </td>
+                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
+                                                            {record.full_course_fee != null ? `$${parseFloat(record.full_course_fee || 0).toFixed(2)}` : 'N/A'}
+                                                        </td>
+                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
+                                                            {record.gst != null ? `$${parseFloat(record.gst || 0).toFixed(2)}` : 'N/A'}
+                                                        </td>
+                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
+                                                            {record.skillsfuture_subsidy != null ? `$${parseFloat(record.skillsfuture_subsidy || 0).toFixed(2)}` : 'N/A'}
+                                                        </td>
+                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
+                                                            {record.skillsfuture_credit != null ? `$${parseFloat(record.skillsfuture_credit || 0).toFixed(2)}` : 'N/A'}
+                                                        </td>
+                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
+                                                            ${parseFloat(record.payable_fee || 0).toFixed(2)}
+                                                        </td>
+                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
+                                                            {record.skillsfuture_credit_claim_id || 'N/A'}
+                                                        </td>
+                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
+                                                            {record.highest_qualification || 'N/A'}
+                                                        </td>
+                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
+                                                            {record.highest_relevant_certification || 'N/A'}
+                                                        </td>
+                                                        <td className="px-4 py-3 whitespace-nowrap">
+                                                            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full border ${getStatusColor(record.application_status || 'Inserted')}`}>
+                                                                {record.application_status || 'Inserted'}
+                                                            </span>
+                                                        </td>
+                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
+                                                            {record.application_cancelled_by || '-'}
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                        </tbody>
+                                    </table>
+                                </div>
                                 {uploadResult.newRecords.length > resultsPerPage && (
-                                    <div className="flex items-center justify-between mt-3 px-1">
-                                        <p className="text-sm text-gray-500">
+                                    <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 border-t dark:border-gray-700">
+                                        <p className="text-sm text-gray-500 dark:text-gray-400">
                                             Showing {(newRecordsPage - 1) * resultsPerPage + 1}-{Math.min(newRecordsPage * resultsPerPage, uploadResult.newRecords.length)} of {uploadResult.newRecords.length}
                                         </p>
                                         <div className="flex items-center gap-1">
                                             <button
                                                 onClick={() => setNewRecordsPage(p => Math.max(1, p - 1))}
                                                 disabled={newRecordsPage === 1}
-                                                className="px-3 py-1 text-sm border rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                className="px-3 py-1 text-sm border dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
                                             >
                                                 Previous
                                             </button>
@@ -414,7 +470,7 @@ export const UploadDirectApplicationView: React.FC = () => {
                                                 <button
                                                     key={page}
                                                     onClick={() => setNewRecordsPage(page)}
-                                                    className={`px-3 py-1 text-sm border rounded ${newRecordsPage === page ? 'bg-blue-500 text-white border-blue-500' : 'hover:bg-gray-100'}`}
+                                                    className={`px-3 py-1 text-sm border rounded ${newRecordsPage === page ? 'bg-blue-500 text-white border-blue-500' : 'hover:bg-gray-100 dark:hover:bg-gray-700 dark:border-gray-600 dark:text-gray-200'}`}
                                                 >
                                                     {page}
                                                 </button>
@@ -422,7 +478,7 @@ export const UploadDirectApplicationView: React.FC = () => {
                                             <button
                                                 onClick={() => setNewRecordsPage(p => Math.min(Math.ceil(uploadResult.newRecords.length / resultsPerPage), p + 1))}
                                                 disabled={newRecordsPage === Math.ceil(uploadResult.newRecords.length / resultsPerPage)}
-                                                className="px-3 py-1 text-sm border rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                className="px-3 py-1 text-sm border dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
                                             >
                                                 Next
                                             </button>
@@ -433,103 +489,144 @@ export const UploadDirectApplicationView: React.FC = () => {
                         )}
 
                         {uploadResult.updatedRecords && uploadResult.updatedRecords.length > 0 && (
-                            <div className="overflow-x-auto">
-                                <h4 className="font-semibold text-gray-800 mb-2">Updated Records</h4>
-                                <table className="min-w-full divide-y divide-gray-200">
-                                    <thead className="bg-gray-50">
-                                        <tr>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Application ID</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Trainee ID Type</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Trainee ID</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Trainee Name</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Phone</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">DOB</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Course Title</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Course Ref No.</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Course Run ID</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Sponsorship</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Payable Fee</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Old Status</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">New Status</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="bg-white divide-y divide-gray-200">
-                                        {uploadResult.updatedRecords
-                                            .slice((updatedRecordsPage - 1) * resultsPerPage, updatedRecordsPage * resultsPerPage)
-                                            .map((record: any, index: number) => (
-                                                <tr key={index} className="hover:bg-gray-50">
-                                                    <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
-                                                        {record.application_id || 'N/A'}
-                                                    </td>
-                                                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                                                        {record.trainee_id_type || 'N/A'}
-                                                    </td>
-                                                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                                                        <div className="flex items-center gap-1.5">
-                                                            <span className="font-mono">{maskTraineeId(record.trainee_id)}</span>
-                                                            <button
-                                                                onClick={() => setShowTraineeId(!showTraineeId)}
-                                                                className="p-0.5 text-gray-400 hover:text-blue-600 rounded transition-colors"
-                                                                title={showTraineeId ? 'Hide Trainee ID' : 'Show Trainee ID'}
-                                                            >
-                                                                <Icon name={showTraineeId ? IconName.EyeOff : IconName.Eye} className="w-4 h-4" />
-                                                            </button>
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                                                        {record.trainee_name || 'N/A'}
-                                                    </td>
-                                                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                                                        {record.trainee_email || 'N/A'}
-                                                    </td>
-                                                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                                                        {record.trainee_phone_country_code && record.trainee_phone
-                                                            ? `+${record.trainee_phone_country_code} ${record.trainee_phone}`
-                                                            : record.trainee_phone || 'N/A'}
-                                                    </td>
-                                                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                                                        {record.date_of_birth ? new Date(record.date_of_birth).toLocaleDateString('en-GB') : 'N/A'}
-                                                    </td>
-                                                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                                                        {record.course_title || 'N/A'}
-                                                    </td>
-                                                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                                                        {record.course_reference_number || 'N/A'}
-                                                    </td>
-                                                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                                                        {record.course_run_id || 'N/A'}
-                                                    </td>
-                                                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                                                        {record.sponsorship_type || 'N/A'}
-                                                    </td>
-                                                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                                                        ${parseFloat(record.payable_fee || 0).toFixed(2)}
-                                                    </td>
-                                                    <td className="px-4 py-3 whitespace-nowrap">
-                                                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full border ${getStatusColor(record.old_status || '')}`}>
-                                                            {record.old_status || 'N/A'}
-                                                        </span>
-                                                    </td>
-                                                    <td className="px-4 py-3 whitespace-nowrap">
-                                                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full border ${getStatusColor(record.application_status || '')}`}>
-                                                            {record.application_status || 'N/A'}
-                                                        </span>
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                    </tbody>
-                                </table>
+                            <div className="border border-blue-200 dark:border-blue-800 rounded-lg overflow-hidden">
+                                <div className="bg-blue-100 dark:bg-blue-900/50 px-4 py-3 flex items-center gap-2">
+                                    <span className="inline-flex items-center justify-center w-6 h-6 bg-blue-500 text-white text-xs font-bold rounded-full">~</span>
+                                    <h4 className="font-semibold text-blue-800 dark:text-blue-300">Updated Records ({uploadResult.updatedRecords.length})</h4>
+                                </div>
+                                <div className="overflow-x-auto">
+                                    <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-600">
+                                        <thead className="bg-gray-50 dark:bg-gray-800">
+                                            <tr>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Application ID</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Trainee ID Type</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Trainee ID</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">DOB</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Trainee Name</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Email</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Phone</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Course Title</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Course Ref No.</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Course Run ID</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Sponsorship</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Application Date</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Full Course Fee</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">GST</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">SF Subsidy</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">SF Credit</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Payable Fee</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">SF Credit Claim ID</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Highest Qualification</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Highest Certification</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Old Status</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">New Status</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Cancelled By</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="bg-white dark:bg-gray-700 divide-y divide-gray-200 dark:divide-gray-600">
+                                            {uploadResult.updatedRecords
+                                                .slice((updatedRecordsPage - 1) * resultsPerPage, updatedRecordsPage * resultsPerPage)
+                                                .map((record: any, index: number) => (
+                                                    <tr key={index} className="hover:bg-gray-50 dark:hover:bg-gray-600">
+                                                        <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
+                                                            {record.application_id || 'N/A'}
+                                                        </td>
+                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
+                                                            {record.trainee_id_type || 'N/A'}
+                                                        </td>
+                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
+                                                            <div className="flex items-center gap-1.5">
+                                                                <span className="font-mono">{maskTraineeId(record.trainee_id)}</span>
+                                                                <button
+                                                                    onClick={() => setShowTraineeId(!showTraineeId)}
+                                                                    className="p-0.5 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 rounded transition-colors"
+                                                                    title={showTraineeId ? 'Hide Trainee ID' : 'Show Trainee ID'}
+                                                                >
+                                                                    <Icon name={showTraineeId ? IconName.EyeOff : IconName.Eye} className="w-4 h-4" />
+                                                                </button>
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
+                                                            {record.date_of_birth ? new Date(record.date_of_birth).toLocaleDateString('en-GB') : 'N/A'}
+                                                        </td>
+                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
+                                                            {record.trainee_name || 'N/A'}
+                                                        </td>
+                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
+                                                            {record.trainee_email || 'N/A'}
+                                                        </td>
+                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
+                                                            {record.trainee_phone_country_code && record.trainee_phone
+                                                                ? `+${record.trainee_phone_country_code} ${record.trainee_phone}`
+                                                                : record.trainee_phone || 'N/A'}
+                                                        </td>
+                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
+                                                            {record.course_title || 'N/A'}
+                                                        </td>
+                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
+                                                            {record.course_reference_number || 'N/A'}
+                                                        </td>
+                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
+                                                            {record.course_run_id || 'N/A'}
+                                                        </td>
+                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
+                                                            {record.sponsorship_type || 'N/A'}
+                                                        </td>
+                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
+                                                            {record.application_date ? new Date(record.application_date).toLocaleDateString('en-GB') : 'N/A'}
+                                                        </td>
+                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
+                                                            {record.full_course_fee != null ? `$${parseFloat(record.full_course_fee || 0).toFixed(2)}` : 'N/A'}
+                                                        </td>
+                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
+                                                            {record.gst != null ? `$${parseFloat(record.gst || 0).toFixed(2)}` : 'N/A'}
+                                                        </td>
+                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
+                                                            {record.skillsfuture_subsidy != null ? `$${parseFloat(record.skillsfuture_subsidy || 0).toFixed(2)}` : 'N/A'}
+                                                        </td>
+                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
+                                                            {record.skillsfuture_credit != null ? `$${parseFloat(record.skillsfuture_credit || 0).toFixed(2)}` : 'N/A'}
+                                                        </td>
+                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
+                                                            ${parseFloat(record.payable_fee || 0).toFixed(2)}
+                                                        </td>
+                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
+                                                            {record.skillsfuture_credit_claim_id || 'N/A'}
+                                                        </td>
+                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
+                                                            {record.highest_qualification || 'N/A'}
+                                                        </td>
+                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
+                                                            {record.highest_relevant_certification || 'N/A'}
+                                                        </td>
+                                                        <td className="px-4 py-3 whitespace-nowrap">
+                                                            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full border ${getStatusColor(record.old_status || '')}`}>
+                                                                {record.old_status || 'N/A'}
+                                                            </span>
+                                                        </td>
+                                                        <td className="px-4 py-3 whitespace-nowrap">
+                                                            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full border ${getStatusColor(record.application_status || '')}`}>
+                                                                {record.application_status || 'N/A'}
+                                                            </span>
+                                                        </td>
+                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
+                                                            {record.application_cancelled_by || '-'}
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                        </tbody>
+                                    </table>
+                                </div>
                                 {uploadResult.updatedRecords.length > resultsPerPage && (
-                                    <div className="flex items-center justify-between mt-3 px-1">
-                                        <p className="text-sm text-gray-500">
+                                    <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 border-t dark:border-gray-700">
+                                        <p className="text-sm text-gray-500 dark:text-gray-400">
                                             Showing {(updatedRecordsPage - 1) * resultsPerPage + 1}-{Math.min(updatedRecordsPage * resultsPerPage, uploadResult.updatedRecords.length)} of {uploadResult.updatedRecords.length}
                                         </p>
                                         <div className="flex items-center gap-1">
                                             <button
                                                 onClick={() => setUpdatedRecordsPage(p => Math.max(1, p - 1))}
                                                 disabled={updatedRecordsPage === 1}
-                                                className="px-3 py-1 text-sm border rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                className="px-3 py-1 text-sm border dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
                                             >
                                                 Previous
                                             </button>
@@ -537,7 +634,7 @@ export const UploadDirectApplicationView: React.FC = () => {
                                                 <button
                                                     key={page}
                                                     onClick={() => setUpdatedRecordsPage(page)}
-                                                    className={`px-3 py-1 text-sm border rounded ${updatedRecordsPage === page ? 'bg-blue-500 text-white border-blue-500' : 'hover:bg-gray-100'}`}
+                                                    className={`px-3 py-1 text-sm border rounded ${updatedRecordsPage === page ? 'bg-blue-500 text-white border-blue-500' : 'hover:bg-gray-100 dark:hover:bg-gray-700 dark:border-gray-600 dark:text-gray-200'}`}
                                                 >
                                                     {page}
                                                 </button>
@@ -545,7 +642,7 @@ export const UploadDirectApplicationView: React.FC = () => {
                                             <button
                                                 onClick={() => setUpdatedRecordsPage(p => Math.min(Math.ceil(uploadResult.updatedRecords.length / resultsPerPage), p + 1))}
                                                 disabled={updatedRecordsPage === Math.ceil(uploadResult.updatedRecords.length / resultsPerPage)}
-                                                className="px-3 py-1 text-sm border rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                className="px-3 py-1 text-sm border dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
                                             >
                                                 Next
                                             </button>
@@ -556,25 +653,16 @@ export const UploadDirectApplicationView: React.FC = () => {
                         )}
                     </div>
                 ) : (
-                    <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-8 text-center">
-                        <Icon name={IconName.InfoCircle} className="w-12 h-12 mx-auto text-yellow-500 mb-3" />
-                        <h4 className="text-lg font-bold text-yellow-800 mb-2">No New Records</h4>
-                        <p className="text-yellow-700">
+                    <div className="bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-800 rounded-lg p-8 text-center">
+                        <Icon name={IconName.InfoCircle} className="w-12 h-12 mx-auto text-yellow-500 dark:text-yellow-400 mb-3" />
+                        <h4 className="text-lg font-bold text-yellow-800 dark:text-yellow-300 mb-2">No New Records</h4>
+                        <p className="text-yellow-700 dark:text-yellow-400">
                             All {uploadResult?.duplicates || 0} record(s) in the uploaded file already exist in the database.
                         </p>
                     </div>
                 )}
-
-                <details className="mt-6 bg-gray-50 border border-gray-200 rounded-lg p-4">
-                    <summary className="font-semibold text-gray-800 cursor-pointer hover:text-gray-600">
-                        View Raw JSON Response
-                    </summary>
-                    <pre className="mt-3 text-sm text-gray-700 whitespace-pre-wrap overflow-x-auto max-h-96 bg-white p-3 rounded border">
-                        {JSON.stringify(uploadResult, null, 2)}
-                    </pre>
-                </details>
             </div>
-            <div className="p-4 border-t text-right">
+            <div className="p-4 border-t dark:border-gray-700 text-right">
                 <Button onClick={resetView}>Start a New Upload</Button>
             </div>
         </Card>
@@ -641,6 +729,8 @@ export const ViewDirectApplicationView: React.FC = () => {
         { value: 'course_run_id', label: 'Course Run ID' },
         { value: 'application_status', label: 'Status' },
         { value: 'sponsorship_type', label: 'Sponsorship' },
+        { value: 'application_date', label: 'Application Date' },
+        { value: 'highest_qualification', label: 'Highest Qualification' },
     ];
 
     // Selection handlers
@@ -1349,8 +1439,17 @@ export const ViewDirectApplicationView: React.FC = () => {
                                             {/* <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Start Date</th>
                                             <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">End Date</th> */}
                                             <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Sponsorship</th>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Application Date</th>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Full Course Fee</th>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">GST</th>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">SF Subsidy</th>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">SF Credit</th>
                                             <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Payable Fee</th>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">SF Credit Claim ID</th>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Highest Qualification</th>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Highest Certification</th>
                                             <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Application Status</th>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Cancelled By</th>
                                             <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Enrolment Status</th>
                                         </tr>
                                     </thead>
@@ -1407,12 +1506,39 @@ export const ViewDirectApplicationView: React.FC = () => {
                                                     {app.sponsorship_type || 'N/A'}
                                                 </td>
                                                 <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
+                                                    {app.application_date ? new Date(app.application_date).toLocaleDateString('en-GB') : 'N/A'}
+                                                </td>
+                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
+                                                    {app.full_course_fee != null ? `$${parseFloat(app.full_course_fee || 0).toFixed(2)}` : 'N/A'}
+                                                </td>
+                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
+                                                    {app.gst != null ? `$${parseFloat(app.gst || 0).toFixed(2)}` : 'N/A'}
+                                                </td>
+                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
+                                                    {app.skillsfuture_subsidy != null ? `$${parseFloat(app.skillsfuture_subsidy || 0).toFixed(2)}` : 'N/A'}
+                                                </td>
+                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
+                                                    {app.skillsfuture_credit != null ? `$${parseFloat(app.skillsfuture_credit || 0).toFixed(2)}` : 'N/A'}
+                                                </td>
+                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
                                                     ${parseFloat(app.payable_fee || 0).toFixed(2)}
+                                                </td>
+                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
+                                                    {app.skillsfuture_credit_claim_id || 'N/A'}
+                                                </td>
+                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
+                                                    {app.highest_qualification || 'N/A'}
+                                                </td>
+                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
+                                                    {app.highest_relevant_certification || 'N/A'}
                                                 </td>
                                                 <td className="px-4 py-3 whitespace-nowrap">
                                                     <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full border ${getStatusColor(app.application_status || 'Pending')}`}>
                                                         {app.application_status || 'Pending'}
                                                     </span>
+                                                </td>
+                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
+                                                    {app.application_cancelled_by || '-'}
                                                 </td>
                                                 <td className="px-4 py-3 whitespace-nowrap">
                                                     {app.enrolment_status && app.enrolment_status.trim() !== '' ? (
@@ -1529,5 +1655,461 @@ export const ViewDirectApplicationView: React.FC = () => {
                 </div>
             )}
         </div >
+    );
+};
+
+export const UpdateDirectApplicationView: React.FC = () => {
+    const [file, setFile] = useState<File | null>(null);
+    const [isUploading, setIsUploading] = useState(false);
+    const [uploadResult, setUploadResult] = useState<any>(null);
+    const [error, setError] = useState<string | null>(null);
+    const [isDragOver, setIsDragOver] = useState(false);
+    const [updatedRecordsPage, setUpdatedRecordsPage] = useState(1);
+    const resultsPerPage = 10;
+
+    const handleFileChange = (selectedFile: File | undefined | null) => {
+        if (selectedFile) {
+            if (selectedFile.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
+                selectedFile.type === 'application/vnd.ms-excel' ||
+                selectedFile.name.endsWith('.xlsx') ||
+                selectedFile.name.endsWith('.xls')) {
+                setFile(selectedFile);
+                setError(null);
+            } else {
+                setError('Invalid file type. Please upload an Excel file (.xlsx, .xls).');
+                setFile(null);
+            }
+        }
+    };
+
+    const handleDragEvents = (e: React.DragEvent<HTMLDivElement>, isOver: boolean) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragOver(isOver);
+    };
+
+    const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragOver(false);
+        const droppedFile = e.dataTransfer.files?.[0];
+        handleFileChange(droppedFile);
+    };
+
+    const parseExcelFile = async (file: File): Promise<any[]> => {
+        const XLSX = await import('xlsx');
+
+        if (file.size < 100) {
+            throw new Error(
+                `File appears to be empty or corrupted (size: ${file.size} bytes).\n\n` +
+                'If you just downloaded this file, please:\n' +
+                '1. Open the file in Excel\n' +
+                '2. Click "Enable Editing" if prompted\n' +
+                '3. Save the file (Ctrl+S)\n' +
+                '4. Upload the saved file'
+            );
+        }
+
+        console.log('📁 File info:', { name: file.name, size: file.size, type: file.type });
+
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+
+            reader.onload = (e) => {
+                try {
+                    const data = new Uint8Array(e.target?.result as ArrayBuffer);
+                    console.log('📦 Read buffer size:', data.length);
+
+                    const firstBytes = new TextDecoder().decode(data.slice(0, 100));
+                    if (firstBytes.includes('<!DOCTYPE') || firstBytes.includes('<html')) {
+                        throw new Error(
+                            'The uploaded file appears to be an HTML page, not an Excel file.\n\n' +
+                            'This usually happens when the download requires authentication.\n' +
+                            'Please download the file properly and try again.'
+                        );
+                    }
+
+                    const workbook = XLSX.read(data, { type: 'array' });
+
+                    console.log('📚 Workbook sheets:', workbook.SheetNames);
+
+                    if (!workbook.SheetNames.length) {
+                        throw new Error('Excel file has no sheets.');
+                    }
+
+                    const sheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[sheetName];
+
+                    const rawRows: any[][] = XLSX.utils.sheet_to_json(worksheet, {
+                        header: 1,
+                        blankrows: false,
+                    });
+
+                    console.log('🧪 Raw Excel rows count:', rawRows.length);
+
+                    if (!rawRows.length) {
+                        throw new Error(
+                            'Excel file is empty.\n\n' +
+                            'The first sheet contains no data. Please check if the correct sheet is selected.'
+                        );
+                    }
+
+                    if (rawRows.length === 1) {
+                        throw new Error(
+                            'Only headers found, no data rows.\n\n' +
+                            'This happens because:\n' +
+                            '• The Excel file is opened in Protected View after being downloaded from the TPG portal.\n\n' +
+                            '• Protected View blocks access to the data rows.' +
+                            'Solution: Open the file in Excel, ensure data is visible, save it, and upload again.'
+                        );
+                    }
+
+                    const jsonData = XLSX.utils.sheet_to_json(worksheet, {
+                        defval: '',
+                        raw: false,
+                    });
+
+                    console.log('✅ Parsed', jsonData.length, 'data rows');
+                    if (jsonData.length > 0) {
+                        console.log('🔑 Column headers:', Object.keys(jsonData[0] as object));
+                    }
+
+                    resolve(jsonData);
+                } catch (err) {
+                    console.error('❌ Parse error:', err);
+                    reject(err);
+                }
+            };
+
+            reader.onerror = (err) => {
+                console.error('❌ FileReader error:', err);
+                reject(new Error('Failed to read the file. Please try again.'));
+            };
+
+            reader.readAsArrayBuffer(file);
+        });
+    };
+
+    const handleUpload = async () => {
+        if (!file) return;
+
+        setIsUploading(true);
+        setUploadResult(null);
+        setError(null);
+
+        try {
+            console.log('📊 Parsing Excel file for update:', file.name);
+            const excelData = await parseExcelFile(file);
+            console.log('✅ Parsed Excel data:', excelData.length, 'rows');
+
+            console.log('🔄 Sending data to update API...');
+            const response = await fetch('/api/admin/update-da-applications-bulk', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    data: excelData
+                })
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                if (response.status === 500) {
+                    throw new Error(errorData.error || 'Server error. The service may be temporarily unavailable. Please try again later.');
+                }
+                throw new Error(errorData.error || `Unable to process request (Error ${response.status}). Please try again.`);
+            }
+
+            const result = await response.json();
+            console.log('✅ Update result:', result);
+            setUploadResult(result);
+
+        } catch (err) {
+            console.error('❌ Upload error:', err);
+            setError(err instanceof Error ? err.message : 'Failed to upload file');
+        } finally {
+            setIsUploading(false);
+        }
+    };
+
+    const resetView = () => {
+        setFile(null);
+        setUploadResult(null);
+        setError(null);
+        setUpdatedRecordsPage(1);
+    };
+
+    const UploadStep = () => (
+        <Card className="p-6">
+            <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-4">
+                <h4 className="font-semibold text-blue-800 dark:text-blue-300 mb-2">Update Existing Records</h4>
+                <p className="text-sm text-blue-700 dark:text-blue-400">
+                    This feature will update existing DA records based on Application ID. It will:
+                </p>
+                <ul className="text-sm text-blue-700 dark:text-blue-400 mt-2 list-disc list-inside space-y-1">
+                    <li>Match records by <strong>Application ID</strong></li>
+                    <li>Update all fields from the Excel file</li>
+                    <li><strong>Preserve</strong> the current <strong>Enrolment Status</strong> (will not be changed)</li>
+                    <li>Skip records that don't exist in the database</li>
+                    <li>Will Take A Longer Time Than Usual Since It is Updating Every Rows Based On Application ID</li>
+                </ul>
+            </div>
+
+            <div className="bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 rounded-lg p-4 mb-4">
+                <h4 className="font-semibold text-amber-800 dark:text-amber-300 mb-2">Important: For Direct Application File</h4>
+                <p className="text-sm text-amber-700 dark:text-amber-400">
+                    If you just downloaded this Excel file, please do the following before uploading:
+                </p>
+                <ul className="text-sm text-amber-700 dark:text-amber-400 mt-2 list-disc list-inside space-y-1">
+                    <li><strong>Windows:</strong> Open the file in Excel → Click "Enable Editing" → Save the file</li>
+                    <li><strong>Mac:</strong> Open the file in Excel → Save the file (⌘+S)</li>
+                </ul>
+            </div>
+
+            <div className="text-center mb-4">
+                <h3 className="text-xl font-bold dark:text-white">Update Direct Applications</h3>
+                <p className="text-gray-500 dark:text-gray-400 mt-1">Upload an Excel file to bulk update existing DA records.</p>
+            </div>
+
+            <div
+                onDragOver={(e) => handleDragEvents(e, true)}
+                onDragLeave={(e) => handleDragEvents(e, false)}
+                onDrop={handleDrop}
+                className={`p-10 border-2 border-dashed rounded-lg text-center cursor-pointer transition-colors ${isDragOver ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' : 'border-gray-300 dark:border-gray-600 hover:border-blue-500'}`}
+            >
+                <input
+                    type="file"
+                    id="file-upload-da-update"
+                    className="hidden"
+                    accept=".xlsx, .xls"
+                    onChange={(e) => handleFileChange(e.target.files?.[0])}
+                />
+                <label htmlFor="file-upload-da-update" className="cursor-pointer">
+                    <Icon name={IconName.Upload} className="w-12 h-12 mx-auto text-gray-400" />
+                    <p className="mt-2 font-semibold text-gray-900 dark:text-white">
+                        {file ? file.name : 'Drag & drop your file here, or click to browse'}
+                    </p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        XLSX or XLS file format
+                    </p>
+                </label>
+            </div>
+
+            {error && (
+                <div className="mt-4 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg p-4 flex items-start gap-3">
+                    <div className="flex-shrink-0 w-10 h-10 bg-white dark:bg-red-900/50 border border-red-200 dark:border-red-700 rounded-full flex items-center justify-center">
+                        <Icon name={IconName.Close} className="w-5 h-5 text-red-500 dark:text-red-400" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                        <h4 className="font-semibold text-gray-900 dark:text-gray-100">Something went wrong!</h4>
+                        <p className="text-sm text-gray-600 dark:text-gray-300 mt-1 whitespace-pre-line">{error}</p>
+                    </div>
+                    <button
+                        onClick={() => setError(null)}
+                        className="flex-shrink-0 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
+                    >
+                        <Icon name={IconName.Close} className="w-5 h-5" />
+                    </button>
+                </div>
+            )}
+
+            <div className="flex justify-end items-center mt-6">
+                <Button onClick={handleUpload} disabled={!file || isUploading}>
+                    {isUploading ? (
+                        <div className="flex items-center">
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                            Updating...
+                        </div>
+                    ) : 'Upload & Update'}
+                </Button>
+            </div>
+        </Card>
+    );
+
+    const ResultsStep = () => (
+        <Card>
+            <div className="p-6 border-b dark:border-gray-700">
+                <h3 className="text-xl font-bold dark:text-white">Update Results</h3>
+                <p className="text-gray-500 dark:text-gray-400 mt-1">The following records were updated.</p>
+            </div>
+            <div className="p-6">
+                {uploadResult?.success && uploadResult?.updated > 0 ? (
+                    <div className="space-y-6">
+                        <div className="bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-lg p-4">
+                            <h4 className="font-bold text-green-800 dark:text-green-300">
+                                {uploadResult.updated} Record(s) Updated
+                            </h4>
+                            <p className="text-sm text-green-700 dark:text-green-400">
+                                {uploadResult.notFound || 0} record(s) were not found (skipped)
+                            </p>
+                            {uploadResult.errors?.length > 0 && (
+                                <p className="text-sm text-amber-700 dark:text-amber-400 mt-1">
+                                    {uploadResult.errors.length} row(s) had errors
+                                </p>
+                            )}
+                        </div>
+
+                        {uploadResult.errors && uploadResult.errors.length > 0 && (
+                            <div className="border border-red-200 dark:border-red-800 rounded-lg overflow-hidden">
+                                <div className="bg-red-100 dark:bg-red-900/50 px-4 py-3 flex items-center gap-2">
+                                    <span className="inline-flex items-center justify-center w-6 h-6 bg-red-500 text-white text-xs font-bold rounded-full">!</span>
+                                    <h4 className="font-semibold text-red-800 dark:text-red-300">Errors ({uploadResult.errors.length})</h4>
+                                </div>
+                                <div className="max-h-96 overflow-y-auto">
+                                    <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-600">
+                                        <thead className="bg-gray-50 dark:bg-gray-800 sticky top-0">
+                                            <tr>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Row</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Application ID</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Error Message</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="bg-white dark:bg-gray-700 divide-y divide-gray-200 dark:divide-gray-600">
+                                            {uploadResult.errors.map((error: any, index: number) => (
+                                                <tr key={index} className="hover:bg-red-50 dark:hover:bg-red-900/20">
+                                                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 dark:text-white">
+                                                        {error.row || 'N/A'}
+                                                    </td>
+                                                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 dark:text-white">
+                                                        {error.application_id || '-'}
+                                                    </td>
+                                                    <td className="px-4 py-3 text-sm text-red-600 dark:text-red-400">
+                                                        {error.error || 'Unknown error'}
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        )}
+
+                        {uploadResult.updatedRecords && uploadResult.updatedRecords.length > 0 && (
+                            <div className="border border-blue-200 dark:border-blue-800 rounded-lg overflow-hidden">
+                                <div className="bg-blue-100 dark:bg-blue-900/50 px-4 py-3 flex items-center gap-2">
+                                    <span className="inline-flex items-center justify-center w-6 h-6 bg-blue-500 text-white text-xs font-bold rounded-full">~</span>
+                                    <h4 className="font-semibold text-blue-800 dark:text-blue-300">Updated Records ({uploadResult.updatedRecords.length})</h4>
+                                </div>
+                                <div className="overflow-x-auto">
+                                    <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-600">
+                                        <thead className="bg-gray-50 dark:bg-gray-800">
+                                            <tr>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Application ID</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Trainee Name</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Course Title</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Application Date</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Application Status</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Enrolment Status</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="bg-white dark:bg-gray-700 divide-y divide-gray-200 dark:divide-gray-600">
+                                            {uploadResult.updatedRecords
+                                                .slice((updatedRecordsPage - 1) * resultsPerPage, updatedRecordsPage * resultsPerPage)
+                                                .map((record: any, index: number) => (
+                                                    <tr key={index} className="hover:bg-gray-50 dark:hover:bg-gray-600">
+                                                        <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
+                                                            {record.application_id || 'N/A'}
+                                                        </td>
+                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
+                                                            {record.trainee_name || 'N/A'}
+                                                        </td>
+                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
+                                                            {record.course_title || 'N/A'}
+                                                        </td>
+                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
+                                                            {record.application_date ? new Date(record.application_date).toLocaleDateString('en-GB') : 'N/A'}
+                                                        </td>
+                                                        <td className="px-4 py-3 whitespace-nowrap">
+                                                            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full border ${getStatusColor(record.application_status || '')}`}>
+                                                                {record.application_status || 'N/A'}
+                                                            </span>
+                                                        </td>
+                                                        <td className="px-4 py-3 whitespace-nowrap">
+                                                            {record.enrolment_status && record.enrolment_status.trim() !== '' ? (
+                                                                <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full border ${record.enrolment_status === 'Confirmed'
+                                                                    ? 'bg-green-100 text-green-800 border-green-200'
+                                                                    : 'bg-gray-100 text-gray-800 border-gray-200'
+                                                                    }`}>
+                                                                    {record.enrolment_status} (preserved)
+                                                                </span>
+                                                            ) : (
+                                                                <span className="text-gray-400">-</span>
+                                                            )}
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                                {uploadResult.updatedRecords.length > resultsPerPage && (
+                                    <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 border-t dark:border-gray-700">
+                                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                                            Showing {(updatedRecordsPage - 1) * resultsPerPage + 1}-{Math.min(updatedRecordsPage * resultsPerPage, uploadResult.updatedRecords.length)} of {uploadResult.updatedRecords.length}
+                                        </p>
+                                        <div className="flex items-center gap-1">
+                                            <button
+                                                onClick={() => setUpdatedRecordsPage(p => Math.max(1, p - 1))}
+                                                disabled={updatedRecordsPage === 1}
+                                                className="px-3 py-1 text-sm border dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                                            >
+                                                Previous
+                                            </button>
+                                            {Array.from({ length: Math.ceil(uploadResult.updatedRecords.length / resultsPerPage) }, (_, i) => i + 1).map(page => (
+                                                <button
+                                                    key={page}
+                                                    onClick={() => setUpdatedRecordsPage(page)}
+                                                    className={`px-3 py-1 text-sm border rounded ${updatedRecordsPage === page ? 'bg-blue-500 text-white border-blue-500' : 'hover:bg-gray-100 dark:hover:bg-gray-700 dark:border-gray-600 dark:text-gray-200'}`}
+                                                >
+                                                    {page}
+                                                </button>
+                                            ))}
+                                            <button
+                                                onClick={() => setUpdatedRecordsPage(p => Math.min(Math.ceil(uploadResult.updatedRecords.length / resultsPerPage), p + 1))}
+                                                disabled={updatedRecordsPage === Math.ceil(uploadResult.updatedRecords.length / resultsPerPage)}
+                                                className="px-3 py-1 text-sm border dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                                            >
+                                                Next
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                ) : (
+                    <div className="bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-800 rounded-lg p-8 text-center">
+                        <Icon name={IconName.InfoCircle} className="w-12 h-12 mx-auto text-yellow-500 dark:text-yellow-400 mb-3" />
+                        <h4 className="text-lg font-bold text-yellow-800 dark:text-yellow-300 mb-2">No Records Updated</h4>
+                        <p className="text-yellow-700 dark:text-yellow-400">
+                            {uploadResult?.notFound > 0
+                                ? `None of the ${uploadResult.notFound} record(s) in the uploaded file were found in the database.`
+                                : 'No matching records found to update.'}
+                        </p>
+                    </div>
+                )}
+            </div>
+            <div className="p-4 border-t dark:border-gray-700 text-right">
+                <Button onClick={resetView}>Start a New Update</Button>
+            </div>
+        </Card>
+    );
+
+    return (
+        <div>
+            <h2 className="text-3xl font-bold mb-6 dark:text-white">Update Direct Applications</h2>
+            {isUploading ? (
+                <div className="flex justify-center py-20">
+                    <div className="text-center">
+                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
+                        <p className="mt-4 text-gray-600 dark:text-gray-400">Updating records in database...</p>
+                    </div>
+                </div>
+            ) : uploadResult ? (
+                <ResultsStep />
+            ) : (
+                <UploadStep />
+            )}
+        </div>
     );
 };

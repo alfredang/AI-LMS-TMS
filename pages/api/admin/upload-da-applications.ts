@@ -24,12 +24,26 @@ const columnMapping: Record<string, string> = {
     'Trainee Phone': 'trainee_phone',
     'Sponsorship Type': 'sponsorship_type',
     'Application ID': 'application_id',
+    'Application Date': 'application_date',
+    'Application Cancelled By': 'application_cancelled_by',
     'Payable Fee': 'payable_fee',
+    'Full course fee': 'full_course_fee',
+    'Full Course Fee': 'full_course_fee',
+    'GST': 'gst',
+    'SkillsFuture subsidy': 'skillsfuture_subsidy',
+    'SkillsFuture Subsidy': 'skillsfuture_subsidy',
+    'SkillsFuture Credit': 'skillsfuture_credit',
+    'SkillsFuture Credit claim ID': 'skillsfuture_credit_claim_id',
+    'SkillsFuture Credit Claim ID': 'skillsfuture_credit_claim_id',
     'Application Status': 'application_status',
     'Course Title': 'course_title',
     'Course Reference Number': 'course_reference_number',
     'Course Start Date': 'course_start_date',
+    'Course Run Start Date': 'course_start_date',
     'Course End Date': 'course_end_date',
+    'Course Run End Date': 'course_end_date',
+    'Highest Qualification': 'highest_qualification',
+    'Highest Relevant Certification': 'highest_relevant_certification',
 };
 
 // Parse date from various formats
@@ -38,17 +52,18 @@ function parseDate(value: any): string | null {
 
     // If it's already a valid date string
     if (typeof value === 'string') {
-        // Try DD/MM/YYYY or DD-MM-YYYY format
-        const ddmmyyyy = value.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
-        if (ddmmyyyy) {
-            const [, day, month, year] = ddmmyyyy;
+        // Try DD/MM/YYYY or DD-MM-YYYY format (with optional time like "03-02-2026 15:18:00 PM")
+        const ddmmyyyyWithTime = value.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})(?:\s+[\d:]+(?:\s*[APap][Mm])?)?$/);
+        if (ddmmyyyyWithTime) {
+            const [, day, month, year] = ddmmyyyyWithTime;
             return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
         }
 
-        // Try YYYY-MM-DD format
-        const yyyymmdd = value.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+        // Try YYYY-MM-DD format (with optional time)
+        const yyyymmdd = value.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:\s+[\d:]+(?:\s*[APap][Mm])?)?$/);
         if (yyyymmdd) {
-            return value;
+            const [, year, month, day] = yyyymmdd;
+            return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
         }
 
         // Try parsing as date string (extract components to avoid timezone shift)
@@ -87,7 +102,7 @@ function transformRow(excelRow: Record<string, any>): Record<string, any> {
             }
 
             // Handle numeric fields
-            if (dbKey === 'payable_fee' && value) {
+            if (['payable_fee', 'full_course_fee', 'gst', 'skillsfuture_subsidy', 'skillsfuture_credit'].includes(dbKey) && value) {
                 value = parseFloat(String(value).replace(/[^0-9.-]/g, '')) || 0;
             }
 
@@ -107,7 +122,7 @@ function transformRow(excelRow: Record<string, any>): Record<string, any> {
             if (snakeKey.includes('date')) {
                 value = parseDate(value);
             }
-            if (snakeKey === 'payable_fee' && value) {
+            if (['payable_fee', 'full_course_fee', 'gst', 'skillsfuture_subsidy', 'skillsfuture_credit'].includes(snakeKey) && value) {
                 value = parseFloat(String(value).replace(/[^0-9.-]/g, '')) || 0;
             }
 
@@ -441,13 +456,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                         trainee_phone,
                         sponsorship_type,
                         application_id,
+                        application_date,
+                        application_cancelled_by,
                         payable_fee,
+                        full_course_fee,
+                        gst,
+                        skillsfuture_subsidy,
+                        skillsfuture_credit,
+                        skillsfuture_credit_claim_id,
                         application_status,
                         course_title,
                         course_reference_number,
                         course_start_date,
-                        course_end_date
-                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+                        course_end_date,
+                        highest_qualification,
+                        highest_relevant_certification
+                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25)
                     RETURNING *`,
                     [
                         record.trainee_id_type || null,
@@ -460,12 +484,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                         record.trainee_phone || null,
                         record.sponsorship_type || null,
                         record.application_id,
+                        record.application_date || null,
+                        record.application_cancelled_by || null,
                         record.payable_fee || null,
+                        record.full_course_fee || null,
+                        record.gst || null,
+                        record.skillsfuture_subsidy || null,
+                        record.skillsfuture_credit || null,
+                        record.skillsfuture_credit_claim_id || null,
                         record.application_status || null,
                         record.course_title || null,
                         record.course_reference_number || null,
                         record.course_start_date || null,
-                        record.course_end_date || null
+                        record.course_end_date || null,
+                        record.highest_qualification || null,
+                        record.highest_relevant_certification || null
                     ]
                 );
 

@@ -38,7 +38,7 @@ import {
   UploadEnrolmentsView
 } from '../components/admin/GrantManagementViews';
 import { CourseRunView } from '../components/admin/CourseRunView';
-import { UploadDirectApplicationView, ViewDirectApplicationView } from '../components/admin/DirectApplicationViews';
+import { UploadDirectApplicationView, ViewDirectApplicationView, UpdateDirectApplicationView } from '../components/admin/DirectApplicationViews';
 
 // Management Dashboard Component
 interface ManagementDashboardProps {
@@ -266,6 +266,8 @@ const AdminLayout: React.FC = () => {
         return <UploadDirectApplicationView />;
       case AdminPage.ViewDirectApplication:
         return <ViewDirectApplicationView />;
+      case AdminPage.UpdateDirectApplication:
+        return <UpdateDirectApplicationView />;
       default:
         return <AdminDashboard />;
     }

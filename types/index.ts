@@ -45,6 +45,7 @@ export enum AdminPage {
   CourseRun = 'courseRun',
   UploadDirectApplication = 'uploadDirectApplication',
   ViewDirectApplication = 'viewDirectApplication',
+  UpdateDirectApplication = 'updateDirectApplication',
   UploadEnrolments = 'uploadEnrolments'
 }
 
