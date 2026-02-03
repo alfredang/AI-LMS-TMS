@@ -4,7 +4,6 @@ import fs from 'fs';
 import path from 'path';
 import { cors } from '../../lib/cors';
 import { NextApiRequest, NextApiResponse } from 'next';
-import { MASTER_TRAINING_PROVIDER_EMAIL } from '../../lib/config';
 
 // Map field names to specific folder paths with your exact folder structure
 const FOLDER_MAPPING: { [key: string]: string } = {
