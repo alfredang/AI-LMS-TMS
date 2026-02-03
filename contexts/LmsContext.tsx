@@ -8,7 +8,7 @@ import { resetTutorChat } from '@lib/services/geminiService';
 import { initializeColorScheme } from '@utils/colorUtils';
 
 // Function to fetch training provider info for all users
-const fetchTrainingProviderInfo = async (userId?: string): Promise<{ companyLogoUrl: string; companyName: string; companyShortname: string }> => {
+const fetchTrainingProviderInfo = async (userId?: string): Promise<{ companyLogoUrl: string; companyName: string }> => {
   try {
     // If userId is provided, fetch specific organization info
     const url = userId 
@@ -35,15 +35,14 @@ const fetchTrainingProviderInfo = async (userId?: string): Promise<{ companyLogo
 
     return {
       companyLogoUrl: result.data.companyLogoUrl || '/images/default-company-logo.png',
-      companyName: result.data.companyName || 'Training Provider',
-      companyShortname: result.data.companyShortname || 'TP'
+      companyName: result.data.companyName || 'Training Provider'
     };
   } catch (error) {
     console.error('Error fetching training provider info:', error);
     // Return fallback data
     return {
       companyLogoUrl: '/images/default-company-logo.png',
-      companyShortname: 'Training Provider'
+      companyName: 'Training Provider'
     };
   }
 };
@@ -534,8 +533,7 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           const providerInfo = await fetchTrainingProviderInfo(user.id);
           setTrainingProviderProfile({
             companyLogoUrl: providerInfo.companyLogoUrl,
-            companyName: providerInfo.companyName,
-            companyShortname: providerInfo.companyShortname
+            companyName: providerInfo.companyName
           } as TrainingProviderProfile);
           console.log('✅ LmsContext: Training provider info loaded after login');
         } catch (error) {
@@ -574,8 +572,7 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             const providerInfo = await fetchTrainingProviderInfo(user.id);
             setTrainingProviderProfile({
               companyLogoUrl: providerInfo.companyLogoUrl,
-              companyName: providerInfo.companyName,
-              companyShortname: providerInfo.companyShortname
+              companyName: providerInfo.companyName
             } as TrainingProviderProfile);
             console.log('✅ LmsContext: Training provider info loaded after login');
           } catch (error) {

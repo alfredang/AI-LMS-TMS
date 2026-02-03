@@ -164,7 +164,6 @@ export interface Submission {
 export interface TrainingProviderProfile {
   companyLogoUrl: string;
   companyName: string;
-  companyShortname: string;
 }
 
 export interface CurrentUserProfile {

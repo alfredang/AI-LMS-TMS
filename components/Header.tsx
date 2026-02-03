@@ -280,7 +280,7 @@ const Header: React.FC = () => {
               <div className="relative md:hidden" ref={profileRef}>
                 <button onClick={() => setIsProfileOpen(prev => !prev)} className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center ring-2 ring-offset-1 ring-primary overflow-hidden flex-shrink-0">
                   {trainingProviderProfile?.companyLogoUrl ? (
-                    <img src={ensureAbsoluteImageUrl(trainingProviderProfile.companyLogoUrl)} alt={trainingProviderProfile.companyShortname} className="w-full h-full object-cover" />
+                    <img src={ensureAbsoluteImageUrl(trainingProviderProfile.companyLogoUrl)} alt={trainingProviderProfile.companyName} className="w-full h-full object-cover" />
                   ) : (
                     <Icon name={IconName.User} className="w-5 h-5 text-gray-600" />
                   )}
