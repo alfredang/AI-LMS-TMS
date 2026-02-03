@@ -371,8 +371,7 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             const providerInfo = await fetchTrainingProviderInfo(verificationResult.user.id);
             setTrainingProviderProfile({
               companyLogoUrl: providerInfo.companyLogoUrl,
-              companyName: providerInfo.companyName,
-              companyShortname: providerInfo.companyShortname
+              companyName: providerInfo.companyName
             } as TrainingProviderProfile);
           } catch (error) {
             console.error('❌ LmsContext: Failed to load training provider info:', error);
