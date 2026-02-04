@@ -216,10 +216,10 @@ export const BulkUploadEnrolmentView: React.FC = () => {
                     // Normalize column headers by removing extra spaces and trimming
                     const normalizedData = jsonData.map(row => {
                         const normalizedRow: any = {};
-                        Object.keys(row).forEach(key => {
+                        Object.keys(row as object).forEach(key => {
                             // Replace multiple spaces with single space and trim
                             const normalizedKey = key.replace(/\s+/g, ' ').trim();
-                            normalizedRow[normalizedKey] = row[key];
+                            normalizedRow[normalizedKey] = (row as any)[key];
                         });
                         return normalizedRow;
                     });
