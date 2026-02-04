@@ -47,7 +47,8 @@ export enum AdminPage {
   ViewDirectApplication = 'viewDirectApplication',
   UpdateDirectApplication = 'updateDirectApplication',
   UploadEnrolments = 'uploadEnrolments',
-  SearchCourseRuns = 'searchCourseRuns'
+  SearchCourseRuns = 'searchCourseRuns',
+  ViewCourseRun = 'viewCourseRun'
 }
 
 // Course related interfaces

@@ -2731,3 +2731,489 @@ export const SearchCourseRunsView: React.FC = () => {
         </div>
     );
 };
+
+export const ViewCourseRunView: React.FC = () => {
+    const [courseRunId, setCourseRunId] = useState<string>('');
+    const [isSearching, setIsSearching] = useState(false);
+    const [webhookResponse, setWebhookResponse] = useState<any>(null);
+    const [parsedData, setParsedData] = useState<any>(null);
+    const [searchError, setSearchError] = useState<string | null>(null);
+
+    // Webhook URL for view course run
+    const WEBHOOK_URL = 'https://n8n.srv1231536.hstgr.cloud/webhook/7f2f5d21-beb6-47a9-8056-e1ccf79a3ea7';
+
+    const inputClasses = "block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-500";
+
+    // Format YYYYMMDD integer to readable date
+    const formatDate = (dateInt: number | string | undefined): string => {
+        if (!dateInt) return 'N/A';
+        const str = String(dateInt);
+        if (str.length !== 8) return str;
+        const year = str.substring(0, 4);
+        const month = str.substring(4, 6);
+        const day = str.substring(6, 8);
+        return `${day}/${month}/${year}`;
+    };
+
+    // Map SSG mode of training codes to labels
+    const getModeLabel = (code: string | undefined): string => {
+        const modes: Record<string, string> = {
+            '1': 'Classroom',
+            '2': 'Asynchronous eLearning',
+            '3': 'In-house',
+            '4': 'On-the-Job',
+            '5': 'Practical / Practicum',
+            '6': 'Supervised Field',
+            '7': 'Traineeship',
+            '8': 'Assessment',
+            '9': 'Synchronous eLearning',
+        };
+        return code ? (modes[code] || code) : 'N/A';
+    };
+
+    // Format venue object to readable string
+    const formatVenue = (venue: any): string => {
+        if (!venue) return 'N/A';
+        const parts = [
+            venue.building,
+            venue.block ? `Blk ${venue.block}` : null,
+            venue.street,
+            venue.floor && venue.unit ? `#${venue.floor}-${venue.unit}` : null,
+            venue.postalCode ? `S(${venue.postalCode})` : null,
+        ].filter(Boolean);
+        return parts.length > 0 ? parts.join(', ') : 'N/A';
+    };
+
+    // Get vacancy badge color
+    const getVacancyColor = (code: string): string => {
+        switch (code) {
+            case 'A': return 'bg-green-100 text-green-800 border-green-200 dark:bg-green-900/30 dark:text-green-300 dark:border-green-700';
+            case 'L': return 'bg-yellow-100 text-yellow-800 border-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-300 dark:border-yellow-700';
+            case 'F': return 'bg-red-100 text-red-800 border-red-200 dark:bg-red-900/30 dark:text-red-300 dark:border-red-700';
+            default: return 'bg-gray-100 text-gray-800 border-gray-200 dark:bg-gray-900/30 dark:text-gray-300 dark:border-gray-700';
+        }
+    };
+
+    const handleSearch = async () => {
+        if (!courseRunId.trim()) {
+            setSearchError('Please enter a Course Run ID');
+            return;
+        }
+
+        setIsSearching(true);
+        setSearchError(null);
+        setWebhookResponse(null);
+        setParsedData(null);
+
+        try {
+            console.log('🔍 Sending view course run request to n8n webhook:', WEBHOOK_URL);
+
+            const payload = {
+                courseRunId: courseRunId.trim(),
+                timestamp: new Date().toISOString(),
+                source: 'admin-view-course-run'
+            };
+
+            console.log('📤 View course run payload:', payload);
+
+            const response = await fetch(WEBHOOK_URL, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+                if (response.status === 500) {
+                    throw new Error('SSG API server error. The service may be temporarily unavailable. Please try again later.');
+                }
+                throw new Error(`Unable to connect to SSG API (Error ${response.status}). Please check your connection and try again.`);
+            }
+
+            const data = await response.json();
+            console.log('✅ Webhook response:', data);
+            setWebhookResponse(data);
+
+            // Parse response - webhook returns { result: "{{ $json.data }}" }
+            // The result field contains the SSG API response (array with data.course.run structure)
+            try {
+                let resultData = null;
+
+                // Extract result field from webhook response
+                if (data?.result) {
+                    // Parse result if it's a string, otherwise use as-is
+                    const parsedResult = typeof data.result === 'string' ? JSON.parse(data.result) : data.result;
+                    
+                    // Handle array response from SSG
+                    if (Array.isArray(parsedResult) && parsedResult.length > 0) {
+                        resultData = parsedResult[0];
+                    } else {
+                        resultData = parsedResult;
+                    }
+                } else if (Array.isArray(data) && data.length > 0) {
+                    // Fallback: direct array response
+                    resultData = data[0];
+                } else {
+                    resultData = data;
+                }
+
+                if (resultData) {
+                    console.log('✅ Parsed course run data:', resultData);
+                    setParsedData(resultData);
+                }
+            } catch (e) {
+                console.error('❌ Error parsing result JSON:', e);
+                setParsedData(null);
+            }
+        } catch (error) {
+            console.error('❌ Error calling webhook:', error);
+            setSearchError(error instanceof Error ? error.message : 'Failed to fetch course run data');
+        } finally {
+            setIsSearching(false);
+        }
+    };
+
+    // Helper to render course run details
+    const renderCourseRunDetails = () => {
+        if (!parsedData) {
+            console.log('❌ No parsedData available');
+            return null;
+        }
+
+        console.log('📊 parsedData structure:', parsedData);
+
+        // Handle webhook response structure: result.course.run (after extraction, parsedData = result)
+        const courseData = parsedData.course;
+        if (!courseData) {
+            console.log('❌ No courseData found. parsedData:', parsedData);
+            return null;
+        }
+
+        const run = courseData.run;
+        if (!run) {
+            console.log('❌ No run data found. courseData:', courseData);
+            return null;
+        }
+
+        console.log('✅ Rendering course run:', run);
+
+        return (
+            <div className="space-y-6">
+                {/* Course Run Summary */}
+                <div className="bg-blue-50 dark:bg-blue-900/30 p-4 rounded-lg border border-blue-100 dark:border-blue-800">
+                    <h4 className="font-bold text-blue-900 dark:text-blue-300 text-lg">{courseData.title || 'N/A'}</h4>
+                    <p className="text-sm text-blue-700 dark:text-blue-400 mt-1">
+                        Reference Number: <span className="font-semibold">{courseData.referenceNumber || 'N/A'}</span>
+                    </p>
+                    <p className="text-sm text-blue-700 dark:text-blue-400 mt-1">
+                        Vacancy: <span className={`inline-flex px-2 py-0.5 text-xs font-semibold rounded-full border ${getVacancyColor(run.courseVacancy?.code || '')}`}>
+                            {run.courseVacancy?.description || 'N/A'}
+                        </span>
+                    </p>
+                </div>
+
+                {/* Course Run Information Table */}
+                <Card className="p-0 overflow-hidden">
+                    <div className="overflow-x-auto">
+                        <table className="w-full border-collapse">
+                            <thead className="bg-gray-50 dark:bg-gray-800">
+                                <tr>
+                                    <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider border-b dark:border-gray-700">
+                                        Field
+                                    </th>
+                                    <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider border-b dark:border-gray-700">
+                                        Value
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
+                                <tr className="hover:bg-gray-50 dark:hover:bg-gray-800">
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-700 dark:text-gray-300">
+                                        Course Run ID
+                                    </td>
+                                    <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
+                                        {run.id || 'N/A'}
+                                    </td>
+                                </tr>
+                                <tr className="hover:bg-gray-50 dark:hover:bg-gray-800">
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-700 dark:text-gray-300">
+                                        Course Start Date
+                                    </td>
+                                    <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
+                                        {formatDate(run.courseStartDate)}
+                                    </td>
+                                </tr>
+                                <tr className="hover:bg-gray-50 dark:hover:bg-gray-800">
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-700 dark:text-gray-300">
+                                        Course End Date
+                                    </td>
+                                    <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
+                                        {formatDate(run.courseEndDate)}
+                                    </td>
+                                </tr>
+                                <tr className="hover:bg-gray-50 dark:hover:bg-gray-800">
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-700 dark:text-gray-300">
+                                        Mode of Training
+                                    </td>
+                                    <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
+                                        {getModeLabel(run.modeOfTraining)}
+                                    </td>
+                                </tr>
+                                <tr className="hover:bg-gray-50 dark:hover:bg-gray-800">
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-700 dark:text-gray-300">
+                                        Venue
+                                    </td>
+                                    <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
+                                        {formatVenue(run.venue)}
+                                    </td>
+                                </tr>
+                                <tr className="hover:bg-gray-50 dark:hover:bg-gray-800">
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-700 dark:text-gray-300">
+                                        Registration Opening Date
+                                    </td>
+                                    <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
+                                        {formatDate(run.registrationOpeningDate)}
+                                    </td>
+                                </tr>
+                                <tr className="hover:bg-gray-50 dark:hover:bg-gray-800">
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-700 dark:text-gray-300">
+                                        Registration Closing Date
+                                    </td>
+                                    <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
+                                        {formatDate(run.registrationClosingDate)}
+                                    </td>
+                                </tr>
+                                {/* <tr className="hover:bg-gray-50 dark:hover:bg-gray-800">
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-700 dark:text-gray-300">
+                                        Intake Size
+                                    </td>
+                                    <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
+                                        {run.intakeSize || 0}
+                                    </td>
+                                </tr> */}
+                                {/* <tr className="hover:bg-gray-50 dark:hover:bg-gray-800">
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-700 dark:text-gray-300">
+                                        Registered Users
+                                    </td>
+                                    <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
+                                        {run.registeredUserCount || 0}
+                                    </td>
+                                </tr> */}
+                                {/* <tr className="hover:bg-gray-50 dark:hover:bg-gray-800">
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-700 dark:text-gray-300">
+                                        Threshold
+                                    </td>
+                                    <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
+                                        {run.threshold || 0}
+                                    </td>
+                                </tr>
+                                <tr className="hover:bg-gray-50 dark:hover:bg-gray-800">
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-700 dark:text-gray-300">
+                                        Course Vacancy
+                                    </td>
+                                    <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
+                                        <span className={`inline-flex px-2 py-1 text-sm font-semibold rounded-full border ${getVacancyColor(run.courseVacancy?.code || '')}`}>
+                                            {run.courseVacancy?.description || 'N/A'} ({run.courseVacancy?.code || 'N/A'})
+                                        </span>
+                                    </td>
+                                </tr> */}
+                                <tr className="hover:bg-gray-50 dark:hover:bg-gray-800">
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-700 dark:text-gray-300">
+                                        Course Admin Email
+                                    </td>
+                                    <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
+                                        {run.courseAdminEmail || 'N/A'}
+                                    </td>
+                                </tr>
+                                <tr className="hover:bg-gray-50 dark:hover:bg-gray-800">
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-700 dark:text-gray-300">
+                                        Attendance Taken
+                                    </td>
+                                    <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
+                                        {run.attendanceTaken ? 'Yes' : 'No'}
+                                    </td>
+                                </tr>
+                                <tr className="hover:bg-gray-50 dark:hover:bg-gray-800">
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-700 dark:text-gray-300">
+                                        QR Code Link
+                                    </td>
+                                    <td className="px-6 py-4 text-sm">
+                                        {run.qrCodeLink ? (
+                                            <a 
+                                                href={run.qrCodeLink} 
+                                                target="_blank" 
+                                                rel="noopener noreferrer"
+                                                className="text-blue-600 dark:text-blue-400 hover:underline flex items-center"
+                                            >
+                                                <Icon name={IconName.ExternalLink} className="w-4 h-4 mr-1" />
+                                                {run.qrCodeLink}
+                                            </a>
+                                        ) : (
+                                            <span className="text-gray-500 dark:text-gray-400">N/A</span>
+                                        )}
+                                    </td>
+                                </tr>
+                                {/* <tr className="hover:bg-gray-50 dark:hover:bg-gray-800">
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-700 dark:text-gray-300">
+                                        Schedule Info Type
+                                    </td>
+                                    <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
+                                        {run.scheduleInfoType?.description || 'N/A'} ({run.scheduleInfoType?.code || 'N/A'})
+                                    </td>
+                                </tr> */}
+                                {/* <tr className="hover:bg-gray-50 dark:hover:bg-gray-800">
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-700 dark:text-gray-300">
+                                        Schedule Info
+                                    </td>
+                                    <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
+                                        {run.scheduleInfo || 'N/A'}
+                                    </td>
+                                </tr> */}
+                                <tr className="hover:bg-gray-50 dark:hover:bg-gray-800">
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-700 dark:text-gray-300">
+                                        Organization UEN
+                                    </td>
+                                    <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
+                                        {run.organizationKey || 'N/A'}
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </Card>
+            </div>
+        );
+    };
+
+    return (
+        <div>
+            <h2 className="text-3xl font-bold mb-6 dark:text-white">View Course Run</h2>
+
+            {/* Search Bar Card */}
+            <Card className="p-6 mb-6">
+                <div>
+                    <h3 className="text-lg font-bold text-gray-700 dark:text-gray-200 mb-4">Course Run Lookup</h3>
+
+                    <div className="flex gap-3 items-end">
+                        <div className="flex-1">
+                            <label htmlFor="view-course-run-id" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
+                                Course Run ID
+                            </label>
+                            <input
+                                id="view-course-run-id"
+                                type="text"
+                                value={courseRunId}
+                                onChange={(e) => setCourseRunId(e.target.value)}
+                                onKeyDown={(e) => e.key === 'Enter' && !isSearching && courseRunId.trim() && handleSearch()}
+                                placeholder="e.g. 1234567"
+                                className={inputClasses}
+                                disabled={isSearching}
+                            />
+                        </div>
+                        <Button
+                            onClick={handleSearch}
+                            disabled={isSearching || !courseRunId.trim()}
+                            className="whitespace-nowrap"
+                        >
+                            {isSearching ? (
+                                <div className="flex items-center">
+                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                                    Searching...
+                                </div>
+                            ) : (
+                                <>
+                                    <Icon name={IconName.Search} className="w-4 h-4 mr-2" />
+                                    View Course Run
+                                </>
+                            )}
+                        </Button>
+                    </div>
+
+                    {searchError && (
+                        <p className="text-red-500 text-sm mt-3">{searchError}</p>
+                    )}
+                </div>
+            </Card>
+
+            {/* Loading State */}
+            {isSearching && (
+                <div className="flex justify-center py-10">
+                    <div className="text-center">
+                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
+                        <p className="mt-4 text-gray-600 dark:text-gray-400">Fetching course run details from SSG...</p>
+                    </div>
+                </div>
+            )}
+
+            {/* Webhook Response Display */}
+            {webhookResponse && !isSearching && (
+                <Card className="p-0">
+                    <div className="p-6 border-b dark:border-gray-700">
+                        <h3 className="text-xl font-bold dark:text-white">Course Run Details</h3>
+                        <p className="text-gray-500 dark:text-gray-400 mt-1">
+                            Course Run ID: {courseRunId}
+                        </p>
+                    </div>
+                    <div className="p-6">
+                        {parsedData ? (
+                            <>
+                                {renderCourseRunDetails()}
+
+                                <details className="mt-6 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg p-4">
+                                    <summary className="font-semibold text-gray-800 dark:text-gray-200 cursor-pointer hover:text-gray-600 dark:hover:text-gray-400">
+                                        ▼ View Raw JSON Response
+                                    </summary>
+                                    <pre className="mt-3 text-xs text-gray-700 dark:text-gray-300 whitespace-pre-wrap overflow-x-auto max-h-96 bg-white dark:bg-gray-800 p-3 rounded border dark:border-gray-600 font-mono">
+{JSON.stringify(webhookResponse, null, 2)}
+                                    </pre>
+                                </details>
+
+                                <details className="mt-6 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg p-4">
+                                    <summary className="font-semibold text-gray-800 dark:text-gray-200 cursor-pointer hover:text-gray-600 dark:hover:text-gray-400">
+                                        ▼ View Parsed Data
+                                    </summary>
+                                    <pre className="mt-3 text-xs text-gray-700 dark:text-gray-300 whitespace-pre-wrap overflow-x-auto max-h-96 bg-white dark:bg-gray-800 p-3 rounded border dark:border-gray-600 font-mono">
+{JSON.stringify(parsedData, null, 2)}
+                                    </pre>
+                                </details>
+
+                                <div className="mt-6 flex justify-end">
+                                    <Button
+                                        variant="outline"
+                                        onClick={() => {
+                                            setWebhookResponse(null);
+                                            setParsedData(null);
+                                            setCourseRunId('');
+                                        }}
+                                    >
+                                        Clear Results
+                                    </Button>
+                                </div>
+                            </>
+                        ) : (
+                            <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-lg p-8 text-center">
+                                <Icon name={IconName.InfoCircle} className="w-12 h-12 mx-auto text-yellow-500 dark:text-yellow-400 mb-3" />
+                                <h4 className="text-lg font-bold text-yellow-800 dark:text-yellow-300 mb-2">No Data Found</h4>
+                                <p className="text-yellow-700 dark:text-yellow-400">
+                                    No course run record was found for this Course Run ID.
+                                </p>
+                            </div>
+                        )}
+                    </div>
+                </Card>
+            )}
+
+            {/* Empty State */}
+            {!webhookResponse && !isSearching && (
+                <Card className="p-12">
+                    <div className="text-center text-gray-500 dark:text-gray-400">
+                        <Icon name={IconName.Search} className="w-16 h-16 mx-auto mb-4 text-gray-400" />
+                        <p className="text-lg font-medium">Enter Course Run ID to view details</p>
+                        <p className="text-sm mt-2">Provide a Course Run ID (e.g. 1234567) to fetch details from SSG</p>
+                    </div>
+                </Card>
+            )}
+        </div>
+    );
+};
