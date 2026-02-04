@@ -350,6 +350,8 @@ export const BulkUploadEnrolmentView: React.FC = () => {
                     if (item?.result && typeof item.result === 'string') {
                         try {
                             parsedResult = JSON.parse(item.result);
+                            // Attach parsedResult to item for status display
+                            item.parsedResult = parsedResult;
                         } catch (e) {
                             console.log('⚠️ Could not parse result for database insertion:', item);
                             continue;
@@ -542,22 +544,19 @@ export const BulkUploadEnrolmentView: React.FC = () => {
             results = [uploadResult];
         }
 
-        const successCount = results.filter(r => {
-            if (r.status === 'success') return true;
-            if (r.parsedResult?.status && r.parsedResult.status >= 200 && r.parsedResult.status < 300) return true;
-            if (r.parsedResult?.data && Object.keys(r.parsedResult.data).length > 0) return true;
-            if (r.result?.toLowerCase().includes('success')) return true;
-            return false;
-        }).length;
+        const isRecordSuccess = (r: any) => {
+            const pr = r.parsedResult;
+            const isStatusSuccess = pr?.status && pr.status >= 200 && pr.status < 300;
+            const hasData = pr?.data && Object.keys(pr.data).length > 0;
+            const hasSuccessFlag = pr?.success === true;
+            const hasRealError = (pr?.error?.details?.length > 0) ||
+                (pr?.error?.message) ||
+                (pr?.status >= 400);
+            return (isStatusSuccess || hasData || hasSuccessFlag || r.status === 'success') && !hasRealError;
+        };
 
-        const failedCount = results.filter(r => {
-            if (r.status === 'failed') return true;
-            if (r.parsedResult?.status && r.parsedResult.status >= 400) return true;
-            if (r.parsedResult?.error?.details?.length > 0) return true;
-            if (r.parsedResult?.error?.message) return true;
-            if (r.result?.toLowerCase().includes('error') || r.result?.toLowerCase().includes('fail')) return true;
-            return false;
-        }).length;
+        const successCount = results.filter(r => isRecordSuccess(r)).length;
+        const failedCount = results.filter(r => !isRecordSuccess(r)).length;
 
         const totalPages = Math.ceil(results.length / resultsPerPage);
         const paginatedResults = results.slice((resultsPage - 1) * resultsPerPage, resultsPage * resultsPerPage);
@@ -608,14 +607,7 @@ export const BulkUploadEnrolmentView: React.FC = () => {
                                                 console.log(`   - parsedResult?.error:`, record.parsedResult?.error);
                                                 console.log(`   - parsedResult?.status:`, record.parsedResult?.status);
 
-                                                // Check if it's a success based on status code or data existence
-                                                const hasData = record.parsedResult?.data && Object.keys(record.parsedResult.data).length > 0;
-                                                const isStatusSuccess = record.parsedResult?.status && record.parsedResult.status >= 200 && record.parsedResult.status < 300;
-                                                const hasError = (record.parsedResult?.error?.details?.length > 0) ||
-                                                    (record.parsedResult?.error?.message) ||
-                                                    (record.parsedResult?.status >= 400);
-
-                                                const isSuccess = (isStatusSuccess || hasData || record.status === 'success') && !hasError;
+                                                const isSuccess = isRecordSuccess(record);
                                                 const statusColor = isSuccess ? 'bg-green-100 text-green-800 border-green-200 dark:bg-green-900/30 dark:text-green-300 dark:border-green-700' : 'bg-red-100 text-red-800 border-red-200 dark:bg-red-900/30 dark:text-red-300 dark:border-red-700';
 
                                                 return (
@@ -649,27 +641,12 @@ export const BulkUploadEnrolmentView: React.FC = () => {
                                                         <td className="px-4 py-3 text-sm text-gray-500 dark:text-gray-200">
                                                             <div className="min-w-[280px]">
                                                                 {(() => {
-                                                                    console.log('🎨 Display check for record:', {
-                                                                        hasParsedResult: !!record.parsedResult,
-                                                                        hasError: !!record.parsedResult?.error,
-                                                                        hasErrorDetails: !!(record.parsedResult?.error?.details?.length),
-                                                                        hasData: !!record.parsedResult?.data,
-                                                                        status: record.parsedResult?.status,
-                                                                        hasMessage: !!record.message,
-                                                                        hasResult: !!record.result,
-                                                                        resultType: typeof record.result
-                                                                    });
-
-                                                                    // Check for success: status 200-299 or has data
-                                                                    const isSuccess = (record.parsedResult?.status >= 200 && record.parsedResult?.status < 300) ||
-                                                                        (record.parsedResult?.data && Object.keys(record.parsedResult.data).length > 0);
-
-                                                                    // Check for error: has error object with details or message, or status >= 400
-                                                                    const hasError = (record.parsedResult?.error?.details?.length > 0) ||
+                                                                    // Check for actual error (not empty error objects from SSG)
+                                                                    const hasRealError = (record.parsedResult?.error?.details?.length > 0) ||
                                                                         (record.parsedResult?.error?.message) ||
                                                                         (record.parsedResult?.status >= 400);
 
-                                                                    if (isSuccess && !hasError) {
+                                                                    if (isSuccess) {
                                                                         // Success case
                                                                         const enrolmentRef = record.parsedResult?.data?.enrolment?.referenceNumber || 'N/A';
                                                                         const enrolmentStatus = record.parsedResult?.data?.enrolment?.status || 'Confirmed';
@@ -689,7 +666,7 @@ export const BulkUploadEnrolmentView: React.FC = () => {
                                                                                 </div>
                                                                             </div>
                                                                         );
-                                                                    } else if (hasError) {
+                                                                    } else if (hasRealError) {
                                                                         // Error case
                                                                         return <ErrorMessageDisplay error={record.parsedResult.error} />;
                                                                     } else if (record.parsedResult) {

@@ -37,7 +37,8 @@ import {
   SearchCourseRunsView,
   ViewCourseRunView,
   SearchAssessmentsView,
-  ViewAssessmentView
+  ViewAssessmentView,
+  CancelEnrolmentView
 } from '../components/admin/GrantManagementViews';
 import { CourseRunView } from '../components/admin/CourseRunView';
 import { UploadDirectApplicationView, ViewDirectApplicationView, UpdateDirectApplicationView } from '../components/admin/DirectApplicationViews';
@@ -266,6 +267,8 @@ const AdminLayout: React.FC = () => {
         return <SearchAssessmentsView />;
       case AdminPage.ViewAssessment:
         return <ViewAssessmentView />;
+      case AdminPage.CancelEnrolment:
+        return <CancelEnrolmentView />;
       case AdminPage.ClassDetail:
         return <ClassDetailView courseRunId={selectedCourseRunId || undefined} />;
       case AdminPage.CourseRun:

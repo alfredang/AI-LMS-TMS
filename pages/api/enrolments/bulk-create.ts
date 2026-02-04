@@ -1,6 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
-import { v4 as uuidv4 } from 'uuid';
 import crypto from 'crypto';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -44,7 +43,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     if (courseResult.rows.length === 0) {
       // Course doesn't exist, create it
-      courseId = uuidv4();
+      courseId = crypto.randomUUID();
       await client.query(
         `INSERT INTO course (
           id, course_code, title, status, enrollment_status, created_at, updated_at
@@ -67,7 +66,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     if (userResult.rows.length === 0) {
       // Create learner account
-      userId = uuidv4();
+      userId = crypto.randomUUID();
       const tempPassword = crypto.randomBytes(8).toString('hex'); // Temporary password
       
       await client.query(
@@ -101,7 +100,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     if (courseRunResult.rows.length === 0) {
       // Create course run
-      courseRunUuid = uuidv4();
+      courseRunUuid = crypto.randomUUID();
       await client.query(
         `INSERT INTO course_run (
           id, course_id, course_run_id, class_status, created_at, updated_at
@@ -138,7 +137,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     // 5. Insert enrollment
-    const enrolmentUuid = uuidv4();
+    const enrolmentUuid = crypto.randomUUID();
     await client.query(
       `INSERT INTO enrollment (
         id, user_id, course_id, course_run_id, 

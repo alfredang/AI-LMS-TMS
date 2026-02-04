@@ -49,7 +49,8 @@ export enum AdminPage {
   SearchCourseRuns = 'searchCourseRuns',
   ViewCourseRun = 'viewCourseRun',
   SearchAssessments = 'searchAssessments',
-  ViewAssessment = 'viewAssessment'
+  ViewAssessment = 'viewAssessment',
+  CancelEnrolment = 'cancelEnrolment'
 }
 
 // Course related interfaces
