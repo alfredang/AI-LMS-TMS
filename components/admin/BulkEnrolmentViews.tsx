@@ -1,14 +1,14 @@
 import React, { useState } from 'react';
-import { Card } from '../ui/card';
-import { Button } from '../ui/button';
-import { Icon, IconName } from '../ui/icon';
+import { Card } from '../ui/Card';
+import { Button } from '../ui/Button';
+import { Icon, IconName } from '../ui/Icon';
 
 // Helper function to format error messages in a user-friendly way with React component
 const ErrorMessageDisplay: React.FC<{ error: any }> = ({ error }) => {
     if (!error) return <span>An error occurred</span>;
-    
+
     console.log('🔴 ErrorMessageDisplay received error:', error);
-    
+
     // If error has details array, format them as a list
     if (error.details && Array.isArray(error.details) && error.details.length > 0) {
         return (
@@ -22,10 +22,10 @@ const ErrorMessageDisplay: React.FC<{ error: any }> = ({ error }) => {
                 <div className="pl-7 space-y-1.5">
                     {error.details.map((detail: any, idx: number) => {
                         let message = detail.message || 'No message';
-                        
+
                         // Remove technical error codes like "TGS-441 - "
                         message = message.replace(/^[A-Z]+-\d+\s*-\s*/i, '').trim();
-                        
+
                         return (
                             <div key={idx} className="text-sm text-red-800 dark:text-red-300">
                                 {message}
@@ -36,7 +36,7 @@ const ErrorMessageDisplay: React.FC<{ error: any }> = ({ error }) => {
             </div>
         );
     }
-    
+
     // Fallback to error message if no details
     if (error.message) {
         return (
@@ -53,7 +53,7 @@ const ErrorMessageDisplay: React.FC<{ error: any }> = ({ error }) => {
             </div>
         );
     }
-    
+
     return <span>An error occurred during enrolment</span>;
 };
 
@@ -99,10 +99,10 @@ export const BulkUploadEnrolmentView: React.FC = () => {
     // Excel/xlsx often outputs dates in MM/DD/YYYY format, so we need to swap them
     const normalizeDateFormat = (dateStr: string | number): string => {
         if (!dateStr) return dateStr as string;
-        
+
         // Convert to string if it's a number
         const str = String(dateStr).trim();
-        
+
         // Check if it's in M/D/YYYY or MM/DD/YYYY format (need to swap to DD/MM/YYYY)
         if (/^\d{1,2}[/-]\d{1,2}[/-]\d{4}$/.test(str)) {
             const parts = str.split(/[/-]/);
@@ -113,7 +113,7 @@ export const BulkUploadEnrolmentView: React.FC = () => {
             const year = parts[2];
             return `${day}/${month}/${year}`;
         }
-        
+
         // Handle short year format like 1/3/01 or 3/1/01 (MM/DD/YY format from Excel)
         if (/^\d{1,2}[/-]\d{1,2}[/-]\d{2}$/.test(str)) {
             const parts = str.split(/[/-]/);
@@ -124,7 +124,7 @@ export const BulkUploadEnrolmentView: React.FC = () => {
             const year = '20' + parts[2];
             return `${day}/${month}/${year}`;
         }
-        
+
         // Try to parse as Excel serial date (numeric value)
         const numValue = Number(str);
         if (!isNaN(numValue) && numValue > 1000) {
@@ -136,7 +136,7 @@ export const BulkUploadEnrolmentView: React.FC = () => {
             const year = date.getFullYear();
             return `${day}/${month}/${year}`;
         }
-        
+
         return str;
     };
 
@@ -277,15 +277,15 @@ export const BulkUploadEnrolmentView: React.FC = () => {
                 Object.keys(normalizedRow).forEach(key => {
                     // Check if this field is a date field (by name matching)
                     const keyLower = key.toLowerCase();
-                    const isDateField = dateFields.some(dateField => 
+                    const isDateField = dateFields.some(dateField =>
                         keyLower.includes(dateField.toLowerCase())
                     ) || keyLower.includes('date') || keyLower.includes('birth') || keyLower.includes('dob');
-                    
+
                     if (isDateField && normalizedRow[key]) {
                         const originalValue = normalizedRow[key];
                         const normalizedValue = normalizeDateFormat(originalValue);
                         normalizedRow[key] = normalizedValue;
-                        
+
                         // Special logging for Date of Birth field
                         if (keyLower.includes('birth') || keyLower.includes('dob')) {
                             console.log(`📅 Row ${index + 1} - ${key}: "${originalValue}" → "${normalizedValue}"`);
@@ -326,7 +326,7 @@ export const BulkUploadEnrolmentView: React.FC = () => {
             }
 
             const text = await response.text();
-            
+
             let result;
             try {
                 result = JSON.parse(text);
@@ -343,7 +343,7 @@ export const BulkUploadEnrolmentView: React.FC = () => {
             // Process successful enrolments and save to database
             if (result?.results && Array.isArray(result.results)) {
                 console.log('💾 Processing successful enrolments for database insertion...');
-                
+
                 for (const item of result.results) {
                     // Parse the result to check if it was successful
                     let parsedResult;
@@ -358,10 +358,10 @@ export const BulkUploadEnrolmentView: React.FC = () => {
 
                     // Check if the SSG submission was successful (status 200-299)
                     const isSuccess = parsedResult?.status && parsedResult.status >= 200 && parsedResult.status < 300;
-                    
+
                     if (isSuccess && parsedResult?.data) {
                         console.log('✅ SSG enrolment successful, inserting to database:', item.traineeEmail);
-                        
+
                         try {
                             // Call our local API to insert the enrolment into database
                             const dbResponse = await fetch('/api/enrolments/bulk-create', {
@@ -499,9 +499,9 @@ export const BulkUploadEnrolmentView: React.FC = () => {
     const ResultsStep = () => {
         // Parse results - handle different response formats
         let results: any[] = [];
-        
+
         console.log('📦 uploadResult:', uploadResult);
-        
+
         // Handle nested results structure: [{results: [{result: "..."}, ...]}]
         if (Array.isArray(uploadResult) && uploadResult[0]?.results) {
             const nestedResults = uploadResult[0].results;
@@ -549,7 +549,7 @@ export const BulkUploadEnrolmentView: React.FC = () => {
             if (r.result?.toLowerCase().includes('success')) return true;
             return false;
         }).length;
-        
+
         const failedCount = results.filter(r => {
             if (r.status === 'failed') return true;
             if (r.parsedResult?.status && r.parsedResult.status >= 400) return true;
@@ -607,17 +607,17 @@ export const BulkUploadEnrolmentView: React.FC = () => {
                                                 console.log(`   - parsedResult:`, record.parsedResult);
                                                 console.log(`   - parsedResult?.error:`, record.parsedResult?.error);
                                                 console.log(`   - parsedResult?.status:`, record.parsedResult?.status);
-                                                
+
                                                 // Check if it's a success based on status code or data existence
                                                 const hasData = record.parsedResult?.data && Object.keys(record.parsedResult.data).length > 0;
                                                 const isStatusSuccess = record.parsedResult?.status && record.parsedResult.status >= 200 && record.parsedResult.status < 300;
-                                                const hasError = (record.parsedResult?.error?.details?.length > 0) || 
-                                                               (record.parsedResult?.error?.message) ||
-                                                               (record.parsedResult?.status >= 400);
-                                                
+                                                const hasError = (record.parsedResult?.error?.details?.length > 0) ||
+                                                    (record.parsedResult?.error?.message) ||
+                                                    (record.parsedResult?.status >= 400);
+
                                                 const isSuccess = (isStatusSuccess || hasData || record.status === 'success') && !hasError;
                                                 const statusColor = isSuccess ? 'bg-green-100 text-green-800 border-green-200 dark:bg-green-900/30 dark:text-green-300 dark:border-green-700' : 'bg-red-100 text-red-800 border-red-200 dark:bg-red-900/30 dark:text-red-300 dark:border-red-700';
-                                                
+
                                                 return (
                                                     <tr key={index} className="hover:bg-gray-50 dark:hover:bg-gray-600">
                                                         <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
@@ -659,16 +659,16 @@ export const BulkUploadEnrolmentView: React.FC = () => {
                                                                         hasResult: !!record.result,
                                                                         resultType: typeof record.result
                                                                     });
-                                                                    
+
                                                                     // Check for success: status 200-299 or has data
                                                                     const isSuccess = (record.parsedResult?.status >= 200 && record.parsedResult?.status < 300) ||
-                                                                                    (record.parsedResult?.data && Object.keys(record.parsedResult.data).length > 0);
-                                                                    
+                                                                        (record.parsedResult?.data && Object.keys(record.parsedResult.data).length > 0);
+
                                                                     // Check for error: has error object with details or message, or status >= 400
-                                                                    const hasError = (record.parsedResult?.error?.details?.length > 0) || 
-                                                                                   (record.parsedResult?.error?.message) ||
-                                                                                   (record.parsedResult?.status >= 400);
-                                                                    
+                                                                    const hasError = (record.parsedResult?.error?.details?.length > 0) ||
+                                                                        (record.parsedResult?.error?.message) ||
+                                                                        (record.parsedResult?.status >= 400);
+
                                                                     if (isSuccess && !hasError) {
                                                                         // Success case
                                                                         const enrolmentRef = record.parsedResult?.data?.enrolment?.referenceNumber || 'N/A';
@@ -700,11 +700,11 @@ export const BulkUploadEnrolmentView: React.FC = () => {
                                                                         try {
                                                                             const parsed = JSON.parse(record.result);
                                                                             const isSuccessParsed = (parsed.status >= 200 && parsed.status < 300) ||
-                                                                                                  (parsed.data && Object.keys(parsed.data).length > 0);
-                                                                            const hasErrorParsed = (parsed.error?.details?.length > 0) || 
-                                                                                                 (parsed.error?.message) ||
-                                                                                                 (parsed.status >= 400);
-                                                                            
+                                                                                (parsed.data && Object.keys(parsed.data).length > 0);
+                                                                            const hasErrorParsed = (parsed.error?.details?.length > 0) ||
+                                                                                (parsed.error?.message) ||
+                                                                                (parsed.status >= 400);
+
                                                                             if (isSuccessParsed && !hasErrorParsed) {
                                                                                 const enrolmentRef = parsed.data?.enrolment?.referenceNumber || 'N/A';
                                                                                 const enrolmentStatus = parsed.data?.enrolment?.status || 'Confirmed';

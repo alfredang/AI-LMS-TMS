@@ -21,10 +21,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     try {
         // Check if user already exists
-        const checkUserQuery = 'SELECT id FROM app_user WHERE email = $1';
+        const checkUserQuery = 'SELECT id, account_status FROM app_user WHERE email = $1';
         const checkUserResult = await client.query(checkUserQuery, [email]);
 
-        if (checkUserResult.rows.length > 0) {
+        // If user exists and is active, reject
+        if (checkUserResult.rows.length > 0 && checkUserResult.rows[0].account_status !== 'disabled') {
             return res.status(400).json({
                 success: false,
                 message: 'User with this email already exists'
@@ -38,36 +39,59 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         // Start transaction
         await client.query('BEGIN');
 
-        // 1. Insert into app_user
-        const insertUserQuery = `
-            INSERT INTO app_user (email, full_name, password, password_hash, created_at, updated_at)
-            VALUES ($1, $2, $3, $4, NOW(), NOW())
-            RETURNING id
-        `;
-        const insertUserResult = await client.query(insertUserQuery, [
-            email,
-            full_name,
-            password, // Storing plain password as requested (and for legacy compatibility if needed)
-            hashedPassword
-        ]);
-        const newUserId = insertUserResult.rows[0].id;
+        let newUserId: string;
 
-        // 2. Insert into learner_profile (for telephone)
-        // User requested "tel" column
-        const insertProfileQuery = `
-            INSERT INTO learner_profile (user_id, tel)
-            VALUES ($1, $2)
-        `;
-        await client.query(insertProfileQuery, [newUserId, telephone]);
+        // If user exists but is disabled, reactivate them
+        if (checkUserResult.rows.length > 0 && checkUserResult.rows[0].account_status === 'disabled') {
+            newUserId = checkUserResult.rows[0].id;
 
-        // 3. Insert roles into user_role_map
-        const insertRoleQuery = `
-            INSERT INTO user_role_map (user_id, role)
-            VALUES ($1, $2)
-        `;
+            // Update existing user
+            await client.query(
+                `UPDATE app_user 
+                 SET full_name = $1, password = $2, password_hash = $3, account_status = 'active', updated_at = NOW() 
+                 WHERE id = $4`,
+                [full_name, password, hashedPassword, newUserId]
+            );
 
-        for (const role of roles) {
-            await client.query(insertRoleQuery, [newUserId, role]);
+            // Update learner_profile telephone
+            await client.query(
+                `UPDATE learner_profile SET tel = $1 WHERE user_id = $2`,
+                [telephone, newUserId]
+            );
+
+            // Delete existing roles
+            await client.query('DELETE FROM user_role_map WHERE user_id = $1', [newUserId]);
+
+            // Insert new roles
+            const insertRoleQuery = `INSERT INTO user_role_map (user_id, role) VALUES ($1, $2)`;
+            for (const role of roles) {
+                await client.query(insertRoleQuery, [newUserId, role]);
+            }
+
+        } else {
+            // Create new user
+            const insertUserQuery = `
+                INSERT INTO app_user (email, full_name, password, password_hash, created_at, updated_at)
+                VALUES ($1, $2, $3, $4, NOW(), NOW())
+                RETURNING id
+            `;
+            const insertUserResult = await client.query(insertUserQuery, [
+                email,
+                full_name,
+                password,
+                hashedPassword
+            ]);
+            newUserId = insertUserResult.rows[0].id;
+
+            // Insert into learner_profile
+            const insertProfileQuery = `INSERT INTO learner_profile (user_id, tel) VALUES ($1, $2)`;
+            await client.query(insertProfileQuery, [newUserId, telephone]);
+
+            // Insert roles
+            const insertRoleQuery = `INSERT INTO user_role_map (user_id, role) VALUES ($1, $2)`;
+            for (const role of roles) {
+                await client.query(insertRoleQuery, [newUserId, role]);
+            }
         }
 
         // Commit transaction
