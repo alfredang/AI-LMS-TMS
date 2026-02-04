@@ -35,10 +35,11 @@ import {
   SearchGrantView,
   SearchEnrolmentView,
   ViewEnrolmentView,
-  UploadEnrolmentsView
+  SearchCourseRunsView
 } from '../components/admin/GrantManagementViews';
 import { CourseRunView } from '../components/admin/CourseRunView';
 import { UploadDirectApplicationView, ViewDirectApplicationView, UpdateDirectApplicationView } from '../components/admin/DirectApplicationViews';
+import { BulkUploadEnrolmentView } from '../components/admin/BulkEnrolmentViews';
 
 // Management Dashboard Component
 interface ManagementDashboardProps {
@@ -257,7 +258,9 @@ const AdminLayout: React.FC = () => {
       case AdminPage.UploadCourseRuns:
         return <UploadCourseRunsView />;
       case AdminPage.UploadEnrolments:
-        return <UploadEnrolmentsView />;
+        return <BulkUploadEnrolmentView />;
+      case AdminPage.SearchCourseRuns:
+        return <SearchCourseRunsView />;
       case AdminPage.ClassDetail:
         return <ClassDetailView courseRunId={selectedCourseRunId || undefined} />;
       case AdminPage.CourseRun:
@@ -278,7 +281,7 @@ const AdminLayout: React.FC = () => {
       <Header />
 
       {/* Mobile header and sidebar toggle */}
-      <div className="md:hidden flex items-center gap-4 px-4 sm:px-6 py-3 border-b border-gray-200">
+      <div className="flex items-center gap-4 px-4 sm:px-6 py-3 border-b border-gray-200">
         <button onClick={() => setIsSidebarOpen(true)} className="p-2 -ml-2 text-gray-600 hover:text-gray-900">
           <Icon name={IconName.Menu} className="w-6 h-6" />
         </button>

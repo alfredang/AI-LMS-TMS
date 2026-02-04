@@ -37,6 +37,55 @@ const getStatusColor = (status: string) => {
 
 const inputClasses = "block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-500";
 
+// Map common SSG/HTTP error messages to user-friendly text
+const friendlyErrorMessages: Record<string, string> = {
+    'Not Found': 'No results found for the given input. Please check your course reference number and try again.',
+    'Bad Request': 'The request was invalid. Please check your input and try again.',
+    'Unauthorized': 'Authentication failed. Please contact your administrator.',
+    'Forbidden': 'You do not have permission to access this resource.',
+    'Internal Server Error': 'The service is temporarily unavailable. Please try again later.',
+    'Service Unavailable': 'The service is temporarily unavailable. Please try again later.',
+};
+
+// Extract a human-readable error message from any n8n/SSG error shape
+const extractErrorMessage = (err: any): string => {
+    if (!err) return 'Something went wrong. Please try again later.';
+
+    // Try to parse nested JSON from n8n AxiosError message (format: "STATUS - \"{ JSON }\"")
+    const msg = err.message || '';
+    const jsonMatch = msg.match(/^\d+\s*-\s*"([\s\S]*)"$/);
+    if (jsonMatch) {
+        try {
+            const inner = JSON.parse(jsonMatch[1]);
+            const details = inner.error?.details;
+            if (details && Array.isArray(details) && details.length > 0) {
+                const msgs = details.map((d: any) => d.message).filter(Boolean);
+                if (msgs.length > 0) return msgs.join('. ');
+            }
+            const innerMsg = inner.error?.message || inner.message;
+            if (innerMsg) return friendlyErrorMessages[innerMsg] || innerMsg;
+        } catch { /* fall through */ }
+    }
+
+    // Direct error object with nested error property
+    if (err.error) {
+        const nested = err.error;
+        if (nested.details && Array.isArray(nested.details) && nested.details.length > 0) {
+            const msgs = nested.details.map((d: any) => d.message).filter(Boolean);
+            if (msgs.length > 0) return msgs.join('. ');
+        }
+        if (nested.message) return friendlyErrorMessages[nested.message] || nested.message;
+    }
+
+    // Simple message string (skip raw AxiosError stack traces)
+    if (msg && !msg.includes('AxiosError') && !msg.includes('node_modules')) {
+        return friendlyErrorMessages[msg] || msg;
+    }
+
+    // Friendly fallback
+    return 'Unable to retrieve data from SSG. Please try again later.';
+};
+
 const PlaceholderView: React.FC<{ title: string }> = ({ title }) => (
     <div>
         <h2 className="text-3xl font-bold mb-6 dark:text-white">{title}</h2>
@@ -1106,15 +1155,15 @@ export const UploadCourseRunsView: React.FC = () => {
     const UploadStep = () => (
         <Card className="p-6">
             <div className="text-center mb-4">
-                <h3 className="text-xl font-bold">Upload Course Runs</h3>
-                <p className="text-gray-500 mt-1">Submit your course run details in bulk by uploading an Excel file.</p>
+                <h3 className="text-xl font-bold dark:text-white">Upload Course Runs</h3>
+                <p className="text-gray-500 dark:text-gray-400 mt-1">Submit your course run details in bulk by uploading an Excel file.</p>
             </div>
 
             <div
                 onDragOver={(e) => handleDragEvents(e, true)}
                 onDragLeave={(e) => handleDragEvents(e, false)}
                 onDrop={handleDrop}
-                className={`p-10 border-2 border-dashed rounded-lg text-center cursor-pointer transition-colors ${isDragOver ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:border-blue-500'}`}
+                className={`p-10 border-2 border-dashed rounded-lg text-center cursor-pointer transition-colors ${isDragOver ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' : 'border-gray-300 dark:border-gray-600 hover:border-blue-500 dark:hover:border-blue-400'}`}
             >
                 <input
                     type="file"
@@ -1124,16 +1173,16 @@ export const UploadCourseRunsView: React.FC = () => {
                     onChange={(e) => handleFileChange(e.target.files?.[0])}
                 />
                 <label htmlFor="file-upload" className="cursor-pointer">
-                    <Icon name={IconName.Upload} className="w-12 h-12 mx-auto text-gray-400" />
-                    <p className="mt-2 font-semibold text-gray-900">
+                    <Icon name={IconName.Upload} className="w-12 h-12 mx-auto text-gray-400 dark:text-gray-500" />
+                    <p className="mt-2 font-semibold text-gray-900 dark:text-white">
                         {file ? file.name : 'Drag & drop your file here, or click to browse'}
                     </p>
-                    <p className="text-xs text-gray-500 mt-1">
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                         XLSX or XLS file format
                     </p>
                 </label>
             </div>
-            {error && <p className="text-red-500 text-sm mt-2 text-center">{error}</p>}
+            {error && <p className="text-red-500 dark:text-red-400 text-sm mt-2 text-center">{error}</p>}
 
             <div className="flex justify-between items-center mt-6">
                 <Button
@@ -1165,33 +1214,33 @@ export const UploadCourseRunsView: React.FC = () => {
 
     const ResultsStep = () => (
         <Card>
-            <div className="p-6 border-b">
-                <h3 className="text-xl font-bold">Submission Results</h3>
-                <p className="text-gray-500 mt-1">The following results were returned from SSG.</p>
+            <div className="p-6 border-b dark:border-gray-700">
+                <h3 className="text-xl font-bold dark:text-white">Submission Results</h3>
+                <p className="text-gray-500 dark:text-gray-400 mt-1">The following results were returned from SSG.</p>
             </div>
             <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
+                <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-600">
+                    <thead className="bg-gray-50 dark:bg-gray-800">
                         <tr>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Course Reference</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Start Date</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">End Date</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Details</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Course Reference</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Start Date</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">End Date</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Status</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Details</th>
                         </tr>
                     </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
+                    <tbody className="bg-white dark:bg-gray-700 divide-y divide-gray-200 dark:divide-gray-600">
                         {submissionResult?.map((result, index) => (
-                            <tr key={index} className="hover:bg-gray-50">
-                                <td className="px-6 py-4 whitespace-nowrap font-medium text-gray-900">{result.courseRef}</td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{result.startDate}</td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{result.endDate}</td>
+                            <tr key={index} className="hover:bg-gray-50 dark:hover:bg-gray-600">
+                                <td className="px-6 py-4 whitespace-nowrap font-medium text-gray-900 dark:text-white">{result.courseRef}</td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-200">{result.startDate}</td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-200">{result.endDate}</td>
                                 <td className="px-6 py-4 whitespace-nowrap">
                                     <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full border ${getStatusColor(result.status)}`}>
                                         {result.status}
                                     </span>
                                 </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-200">
                                     {result.status === 'Success' ? `Course Run ID: ${result.courseRunId}` : result.error}
                                 </td>
                             </tr>
@@ -1199,7 +1248,7 @@ export const UploadCourseRunsView: React.FC = () => {
                     </tbody>
                 </table>
             </div>
-            <div className="p-4 border-t text-right">
+            <div className="p-4 border-t dark:border-gray-700 text-right">
                 <Button onClick={resetView}>Start a New Upload</Button>
             </div>
         </Card>
@@ -1207,12 +1256,12 @@ export const UploadCourseRunsView: React.FC = () => {
 
     return (
         <div>
-            <h2 className="text-3xl font-bold mb-6">Upload Course Runs to SSG</h2>
+            <h2 className="text-3xl font-bold mb-6 dark:text-white">Upload Course Runs to SSG</h2>
             {isUploading ? (
                 <div className="flex justify-center py-20">
                     <div className="text-center">
                         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
-                        <p className="mt-4 text-gray-600">Submitting to SSG, this may take a moment...</p>
+                        <p className="mt-4 text-gray-600 dark:text-gray-300">Submitting to SSG, this may take a moment...</p>
                     </div>
                 </div>
             ) : submissionResult ? (
@@ -1269,10 +1318,7 @@ export const SearchGrantView: React.FC = () => {
         }
     };
 
-    // Reuse input classes if defined in scope, or redefine here if needed. 
-    // Assuming inputClasses is defined at module level from previous read.
-    const inputClasses = "block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent";
-
+    const inputClasses = "block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-500";
 
     const handleSearch = async () => {
         if (!courseRunId.trim()) {
@@ -1340,15 +1386,15 @@ export const SearchGrantView: React.FC = () => {
 
     return (
         <div>
-            <h2 className="text-3xl font-bold mb-6">Search Grant</h2>
+            <h2 className="text-3xl font-bold mb-6 dark:text-white">Search Grant</h2>
 
             {/* Search Bar Card */}
             <Card className="p-6 mb-6">
                 <div>
-                    <h3 className="text-lg font-bold text-gray-700 mb-4">Grant Search Parameters</h3>
+                    <h3 className="text-lg font-bold text-gray-700 dark:text-gray-200 mb-4">Grant Search Parameters</h3>
 
                     <div className="mb-4">
-                        <label htmlFor="course-run-id" className="block text-sm font-bold text-gray-700 mb-1">
+                        <label htmlFor="course-run-id" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
                             Course Run ID
                         </label>
                         <input
@@ -1364,7 +1410,7 @@ export const SearchGrantView: React.FC = () => {
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                         <div>
-                            <label htmlFor="page-number" className="block text-sm font-bold text-gray-700 mb-1">
+                            <label htmlFor="page-number" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
                                 Page Number
                             </label>
                             <input
@@ -1382,7 +1428,7 @@ export const SearchGrantView: React.FC = () => {
                             />
                         </div>
                         <div>
-                            <label htmlFor="page-size" className="block text-sm font-bold text-gray-700 mb-1">
+                            <label htmlFor="page-size" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
                                 Page Size
                             </label>
                             <input
@@ -1432,7 +1478,7 @@ export const SearchGrantView: React.FC = () => {
                 <div className="flex justify-center py-10">
                     <div className="text-center">
                         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
-                        <p className="mt-4 text-gray-600">Fetching grant details from n8n...</p>
+                        <p className="mt-4 text-gray-600 dark:text-gray-400">Fetching grant details from n8n...</p>
                     </div>
                 </div>
             )}
@@ -1440,45 +1486,45 @@ export const SearchGrantView: React.FC = () => {
             {/* Webhook Response Display */}
             {webhookResponse && !isSearching && (
                 <Card className="p-0">
-                    <div className="p-6 border-b">
-                        <h3 className="text-xl font-bold">Grant Status Results</h3>
-                        <p className="text-gray-500 mt-1">
+                    <div className="p-6 border-b dark:border-gray-700">
+                        <h3 className="text-xl font-bold dark:text-white">Grant Status Results</h3>
+                        <p className="text-gray-500 dark:text-gray-400 mt-1">
                             Run: {courseRunId}
                         </p>
                     </div>
                     <div className="p-6">
                         {parsedData && parsedData.data && Array.isArray(parsedData.data) && parsedData.data.length > 0 ? (
                             <div className="space-y-6">
-                                <div className="flex justify-between items-center bg-blue-50 p-4 rounded-lg border border-blue-100">
+                                <div className="flex justify-between items-center bg-blue-50 dark:bg-blue-900/30 p-4 rounded-lg border border-blue-100 dark:border-blue-800">
                                     <div>
-                                        <h4 className="font-bold text-blue-900">Total Records Found: {parsedData.meta?.totalRecords ?? 0}</h4>
-                                        <p className="text-sm text-blue-700">Course Run ID: {courseRunId}</p>
+                                        <h4 className="font-bold text-blue-900 dark:text-blue-300">Total Records Found: {parsedData.meta?.totalRecords ?? 0}</h4>
+                                        <p className="text-sm text-blue-700 dark:text-blue-400">Course Run ID: {courseRunId}</p>
                                     </div>
                                 </div>
 
-                                <div className="overflow-x-auto border border-gray-200 rounded-lg shadow-sm">
-                                    <table className="min-w-full divide-y divide-gray-200">
-                                        <thead className="bg-gray-50">
+                                <div className="overflow-x-auto border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm">
+                                    <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                                        <thead className="bg-gray-50 dark:bg-gray-700">
                                             <tr>
-                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Course Run ID</th>
-                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Enrolment ID</th>
-                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Grant Ref No</th>
-                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estimated</th>
-                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Paid</th>
-                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Recovery</th>
+                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Course Run ID</th>
+                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Enrolment ID</th>
+                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Grant Ref No</th>
+                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Status</th>
+                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Estimated</th>
+                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Paid</th>
+                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Recovery</th>
                                             </tr>
                                         </thead>
-                                        <tbody className="bg-white divide-y divide-gray-200">
+                                        <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                                             {parsedData.data.map((item: any, index: number) => (
-                                                <tr key={index} className="hover:bg-gray-50">
-                                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                                <tr key={index} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
                                                         {courseRunId}
                                                     </td>
-                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
                                                         {item.enrolment?.referenceNumber || 'N/A'}
                                                     </td>
-                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
                                                         {item.referenceNumber || 'N/A'}
                                                     </td>
                                                     <td className="px-6 py-4 whitespace-nowrap">
@@ -1486,13 +1532,13 @@ export const SearchGrantView: React.FC = () => {
                                                             {item.status || 'Pending'}
                                                         </span>
                                                     </td>
-                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
                                                         ${item.grantAmount?.estimated?.toFixed(2) || '0.00'}
                                                     </td>
-                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-green-600 font-medium">
+                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-green-600 dark:text-green-400 font-medium">
                                                         ${item.grantAmount?.paid?.toFixed(2) || '0.00'}
                                                     </td>
-                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-red-600">
+                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-red-600 dark:text-red-400">
                                                         ${item.grantAmount?.recovery?.toFixed(2) || '0.00'}
                                                     </td>
                                                 </tr>
@@ -1502,20 +1548,20 @@ export const SearchGrantView: React.FC = () => {
                                 </div>
                             </div>
                         ) : (
-                            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-8 text-center">
-                                <Icon name={IconName.InfoCircle} className="w-12 h-12 mx-auto text-yellow-500 mb-3" />
-                                <h4 className="text-lg font-bold text-yellow-800 mb-2">No Records Found</h4>
-                                <p className="text-yellow-700">
+                            <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-lg p-8 text-center">
+                                <Icon name={IconName.InfoCircle} className="w-12 h-12 mx-auto text-yellow-500 dark:text-yellow-400 mb-3" />
+                                <h4 className="text-lg font-bold text-yellow-800 dark:text-yellow-300 mb-2">No Records Found</h4>
+                                <p className="text-yellow-700 dark:text-yellow-400">
                                     No grant records were returned for this Course Run ID.
                                 </p>
                             </div>
                         )}
 
-                        <details className="mt-6 bg-gray-50 border border-gray-200 rounded-lg p-4">
-                            <summary className="font-semibold text-gray-800 cursor-pointer hover:text-gray-600">
+                        <details className="mt-6 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg p-4">
+                            <summary className="font-semibold text-gray-800 dark:text-gray-200 cursor-pointer hover:text-gray-600 dark:hover:text-gray-400">
                                 View Raw JSON Response
                             </summary>
-                            <pre className="mt-3 text-sm text-gray-700 whitespace-pre-wrap overflow-x-auto max-h-96 bg-white p-3 rounded border">
+                            <pre className="mt-3 text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap overflow-x-auto max-h-96 bg-white dark:bg-gray-800 p-3 rounded border dark:border-gray-600">
                                 {JSON.stringify(webhookResponse, null, 2)}
                             </pre>
                         </details>
@@ -1539,7 +1585,7 @@ export const SearchGrantView: React.FC = () => {
             {/* Empty State */}
             {!webhookResponse && !isSearching && (
                 <Card className="p-12">
-                    <div className="text-center text-gray-500">
+                    <div className="text-center text-gray-500 dark:text-gray-400">
                         <Icon name={IconName.Search} className="w-16 h-16 mx-auto mb-4 text-gray-400" />
                         <p className="text-lg font-medium">Enter details to search</p>
                         <p className="text-sm mt-2">Provide Course Run ID to fetch grant details</p>
@@ -1560,7 +1606,7 @@ export const SearchEnrolmentView: React.FC = () => {
     // Webhook URL for enrolment search
     const WEBHOOK_URL = 'https://n8n.srv1231536.hstgr.cloud/webhook/246caa5e-bd7e-42e8-82b1-cde2e05e5013';
 
-    const inputClasses = "block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent";
+    const inputClasses = "block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-500";
 
     const getEnrolmentStatusColor = (status: string) => {
         switch (status) {
@@ -1653,16 +1699,16 @@ export const SearchEnrolmentView: React.FC = () => {
 
     return (
         <div>
-            <h2 className="text-3xl font-bold mb-6">Search Enrolment</h2>
+            <h2 className="text-3xl font-bold mb-6 dark:text-white">Search Enrolment</h2>
 
             {/* Search Bar Card */}
             <Card className="p-6 mb-6">
                 <div>
-                    <h3 className="text-lg font-bold text-gray-700 mb-4">Enrolment Search Parameters</h3>
+                    <h3 className="text-lg font-bold text-gray-700 dark:text-gray-200 mb-4">Enrolment Search Parameters</h3>
 
                     <div className="flex gap-3 items-end">
                         <div className="flex-1">
-                            <label htmlFor="enrolment-course-run-id" className="block text-sm font-bold text-gray-700 mb-1">
+                            <label htmlFor="enrolment-course-run-id" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
                                 Course Run ID
                             </label>
                             <input
@@ -1706,7 +1752,7 @@ export const SearchEnrolmentView: React.FC = () => {
                 <div className="flex justify-center py-10">
                     <div className="text-center">
                         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
-                        <p className="mt-4 text-gray-600">Fetching enrolment details from SSG...</p>
+                        <p className="mt-4 text-gray-600 dark:text-gray-400">Fetching enrolment details from SSG...</p>
                     </div>
                 </div>
             )}
@@ -1714,41 +1760,41 @@ export const SearchEnrolmentView: React.FC = () => {
             {/* Webhook Response Display */}
             {webhookResponse && !isSearching && (
                 <Card className="p-0">
-                    <div className="p-6 border-b">
-                        <h3 className="text-xl font-bold">Enrolment Search Results</h3>
-                        <p className="text-gray-500 mt-1">
+                    <div className="p-6 border-b dark:border-gray-700">
+                        <h3 className="text-xl font-bold dark:text-white">Enrolment Search Results</h3>
+                        <p className="text-gray-500 dark:text-gray-400 mt-1">
                             Course Run ID: {courseRunId}
                         </p>
                     </div>
                     <div className="p-6">
                         {parsedData && parsedData.data && Array.isArray(parsedData.data) && parsedData.data.length > 0 ? (
                             <div className="space-y-6">
-                                <div className="flex justify-between items-center bg-blue-50 p-4 rounded-lg border border-blue-100">
+                                <div className="flex justify-between items-center bg-blue-50 dark:bg-blue-900/30 p-4 rounded-lg border border-blue-100 dark:border-blue-800">
                                     <div>
-                                        <h4 className="font-bold text-blue-900">Total Records Found: {parsedData.meta?.totalRecords ?? parsedData.data.length}</h4>
-                                        <p className="text-sm text-blue-700">Course: {parsedData.data[0]?.enrolment?.course?.title || 'N/A'}</p>
+                                        <h4 className="font-bold text-blue-900 dark:text-blue-300">Total Records Found: {parsedData.meta?.totalRecords ?? parsedData.data.length}</h4>
+                                        <p className="text-sm text-blue-700 dark:text-blue-400">Course: {parsedData.data[0]?.enrolment?.course?.title || 'N/A'}</p>
                                     </div>
                                 </div>
 
-                                <div className="overflow-x-auto border border-gray-200 rounded-lg shadow-sm">
-                                    <table className="min-w-full divide-y divide-gray-200">
-                                        <thead className="bg-gray-50">
+                                <div className="overflow-x-auto border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm">
+                                    <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                                        <thead className="bg-gray-50 dark:bg-gray-700">
                                             <tr>
-                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Course Run ID</th>
-                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Start Date</th>
-                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">End Date</th>
-                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Enrolment Ref</th>
-                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Trainee Name</th>
-                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">NRIC</th>
-                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
-                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sponsorship</th>
-                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Employer</th>
-                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Payment</th>
-                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Enrolment Date</th>
+                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Course Run ID</th>
+                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Start Date</th>
+                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">End Date</th>
+                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Enrolment Ref</th>
+                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Trainee Name</th>
+                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">NRIC</th>
+                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Email</th>
+                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Sponsorship</th>
+                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Employer</th>
+                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Status</th>
+                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Payment</th>
+                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Enrolment Date</th>
                                             </tr>
                                         </thead>
-                                        <tbody className="bg-white divide-y divide-gray-200">
+                                        <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                                             {parsedData.data.map((item: any, index: number) => {
                                                 const enrolment = item.enrolment || {};
                                                 const course = enrolment.course || {};
@@ -1756,32 +1802,32 @@ export const SearchEnrolmentView: React.FC = () => {
                                                 const trainee = enrolment.trainee || {};
                                                 const employer = trainee.employer || {};
                                                 return (
-                                                    <tr key={index} className="hover:bg-gray-50">
-                                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600">
+                                                    <tr key={index} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600 dark:text-blue-400">
                                                             {courseRun.id || 'N/A'}
                                                         </td>
-                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
                                                             {courseRun.startDate || 'N/A'}
                                                         </td>
-                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
                                                             {courseRun.endDate || 'N/A'}
                                                         </td>
-                                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
                                                             {enrolment.referenceNumber || 'N/A'}
                                                         </td>
-                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
                                                             {trainee.fullName || 'N/A'}
                                                         </td>
-                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
                                                             {trainee.id || 'N/A'}
                                                         </td>
-                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
                                                             {trainee.email?.full || 'N/A'}
                                                         </td>
-                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
                                                             {trainee.sponsorshipType || 'N/A'}
                                                         </td>
-                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
                                                             {employer.name || '-'}
                                                         </td>
                                                         <td className="px-6 py-4 whitespace-nowrap">
@@ -1794,7 +1840,7 @@ export const SearchEnrolmentView: React.FC = () => {
                                                                 {trainee.fees?.collectionStatus || 'N/A'}
                                                             </span>
                                                         </td>
-                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
                                                             {trainee.enrolmentDate || 'N/A'}
                                                         </td>
                                                     </tr>
@@ -1805,20 +1851,20 @@ export const SearchEnrolmentView: React.FC = () => {
                                 </div>
                             </div>
                         ) : (
-                            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-8 text-center">
-                                <Icon name={IconName.InfoCircle} className="w-12 h-12 mx-auto text-yellow-500 mb-3" />
-                                <h4 className="text-lg font-bold text-yellow-800 mb-2">No Records Found</h4>
-                                <p className="text-yellow-700">
+                            <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-lg p-8 text-center">
+                                <Icon name={IconName.InfoCircle} className="w-12 h-12 mx-auto text-yellow-500 dark:text-yellow-400 mb-3" />
+                                <h4 className="text-lg font-bold text-yellow-800 dark:text-yellow-300 mb-2">No Records Found</h4>
+                                <p className="text-yellow-700 dark:text-yellow-400">
                                     No enrolment records were returned for this Course Run ID.
                                 </p>
                             </div>
                         )}
 
-                        <details className="mt-6 bg-gray-50 border border-gray-200 rounded-lg p-4">
-                            <summary className="font-semibold text-gray-800 cursor-pointer hover:text-gray-600">
+                        <details className="mt-6 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg p-4">
+                            <summary className="font-semibold text-gray-800 dark:text-gray-200 cursor-pointer hover:text-gray-600 dark:hover:text-gray-400">
                                 View Raw JSON Response
                             </summary>
-                            <pre className="mt-3 text-sm text-gray-700 whitespace-pre-wrap overflow-x-auto max-h-96 bg-white p-3 rounded border">
+                            <pre className="mt-3 text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap overflow-x-auto max-h-96 bg-white dark:bg-gray-800 p-3 rounded border dark:border-gray-600">
                                 {JSON.stringify(webhookResponse, null, 2)}
                             </pre>
                         </details>
@@ -1842,7 +1888,7 @@ export const SearchEnrolmentView: React.FC = () => {
             {/* Empty State */}
             {!webhookResponse && !isSearching && (
                 <Card className="p-12">
-                    <div className="text-center text-gray-500">
+                    <div className="text-center text-gray-500 dark:text-gray-400">
                         <Icon name={IconName.Search} className="w-16 h-16 mx-auto mb-4 text-gray-400" />
                         <p className="text-lg font-medium">Enter Course Run ID to search</p>
                         <p className="text-sm mt-2">Provide a Course Run ID to fetch enrolment details from SSG</p>
@@ -1863,7 +1909,7 @@ export const ViewEnrolmentView: React.FC = () => {
     // Webhook URL for view enrolment
     const WEBHOOK_URL = 'https://n8n.srv1231536.hstgr.cloud/webhook/638428e2-07e7-4448-88be-f956c5b44620';
 
-    const inputClasses = "block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent";
+    const inputClasses = "block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-500";
 
     const getEnrolmentStatusColor = (status: string) => {
         switch (status) {
@@ -1966,9 +2012,9 @@ export const ViewEnrolmentView: React.FC = () => {
         return (
             <div className="space-y-6">
                 {/* Enrolment Summary */}
-                <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
-                    <h4 className="font-bold text-blue-900 text-lg">Enrolment: {enrolment.referenceNumber || enrolmentId}</h4>
-                    <p className="text-sm text-blue-700 mt-1">
+                <div className="bg-blue-50 dark:bg-blue-900/30 p-4 rounded-lg border border-blue-100 dark:border-blue-800">
+                    <h4 className="font-bold text-blue-900 dark:text-blue-300 text-lg">Enrolment: {enrolment.referenceNumber || enrolmentId}</h4>
+                    <p className="text-sm text-blue-700 dark:text-blue-400 mt-1">
                         Status: <span className={`inline-flex px-2 py-0.5 text-xs font-semibold rounded-full border ${getEnrolmentStatusColor(enrolment.status || 'Pending')}`}>
                             {enrolment.status || 'Pending'}
                         </span>
@@ -1977,67 +2023,67 @@ export const ViewEnrolmentView: React.FC = () => {
 
                 {/* Course Information */}
                 <Card className="p-4">
-                    <h5 className="font-bold text-gray-800 mb-3">Course Information</h5>
+                    <h5 className="font-bold text-gray-800 dark:text-gray-200 mb-3">Course Information</h5>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                         <div>
-                            <span className="text-gray-500">Course Title:</span>
-                            <p className="font-medium text-gray-900">{course.title || 'N/A'}</p>
+                            <span className="text-gray-500 dark:text-gray-400">Course Title:</span>
+                            <p className="font-medium text-gray-900 dark:text-white">{course.title || 'N/A'}</p>
                         </div>
                         <div>
-                            <span className="text-gray-500">Course Reference:</span>
-                            <p className="font-medium text-gray-900">{course.referenceNumber || 'N/A'}</p>
+                            <span className="text-gray-500 dark:text-gray-400">Course Reference:</span>
+                            <p className="font-medium text-gray-900 dark:text-white">{course.referenceNumber || 'N/A'}</p>
                         </div>
                         <div>
-                            <span className="text-gray-500">Course Run ID:</span>
-                            <p className="font-medium text-blue-600">{courseRun.id || 'N/A'}</p>
+                            <span className="text-gray-500 dark:text-gray-400">Course Run ID:</span>
+                            <p className="font-medium text-blue-600 dark:text-blue-400">{courseRun.id || 'N/A'}</p>
                         </div>
                         <div>
-                            <span className="text-gray-500">Start Date:</span>
-                            <p className="font-medium text-gray-900">{courseRun.startDate || 'N/A'}</p>
+                            <span className="text-gray-500 dark:text-gray-400">Start Date:</span>
+                            <p className="font-medium text-gray-900 dark:text-white">{courseRun.startDate || 'N/A'}</p>
                         </div>
                         <div>
-                            <span className="text-gray-500">End Date:</span>
-                            <p className="font-medium text-gray-900">{courseRun.endDate || 'N/A'}</p>
+                            <span className="text-gray-500 dark:text-gray-400">End Date:</span>
+                            <p className="font-medium text-gray-900 dark:text-white">{courseRun.endDate || 'N/A'}</p>
                         </div>
                     </div>
                 </Card>
 
                 {/* Trainee Information */}
                 <Card className="p-4">
-                    <h5 className="font-bold text-gray-800 mb-3">Trainee Information</h5>
+                    <h5 className="font-bold text-gray-800 dark:text-gray-200 mb-3">Trainee Information</h5>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                         <div>
-                            <span className="text-gray-500">Full Name:</span>
-                            <p className="font-medium text-gray-900">{trainee.fullName || 'N/A'}</p>
+                            <span className="text-gray-500 dark:text-gray-400">Full Name:</span>
+                            <p className="font-medium text-gray-900 dark:text-white">{trainee.fullName || 'N/A'}</p>
                         </div>
                         <div>
-                            <span className="text-gray-500">NRIC:</span>
-                            <p className="font-medium text-gray-900">{trainee.id || 'N/A'}</p>
+                            <span className="text-gray-500 dark:text-gray-400">NRIC:</span>
+                            <p className="font-medium text-gray-900 dark:text-white">{trainee.id || 'N/A'}</p>
                         </div>
                         <div>
-                            <span className="text-gray-500">Date of Birth:</span>
-                            <p className="font-medium text-gray-900">{trainee.dateOfBirth || 'N/A'}</p>
+                            <span className="text-gray-500 dark:text-gray-400">Date of Birth:</span>
+                            <p className="font-medium text-gray-900 dark:text-white">{trainee.dateOfBirth || 'N/A'}</p>
                         </div>
                         <div>
-                            <span className="text-gray-500">Email:</span>
-                            <p className="font-medium text-gray-900">{trainee.email?.full || 'N/A'}</p>
+                            <span className="text-gray-500 dark:text-gray-400">Email:</span>
+                            <p className="font-medium text-gray-900 dark:text-white">{trainee.email?.full || 'N/A'}</p>
                         </div>
                         <div>
-                            <span className="text-gray-500">Contact Number:</span>
-                            <p className="font-medium text-gray-900">
+                            <span className="text-gray-500 dark:text-gray-400">Contact Number:</span>
+                            <p className="font-medium text-gray-900 dark:text-white">
                                 {trainee.contactNumber ? `${trainee.contactNumber.countryCode || ''} ${trainee.contactNumber.phoneNumber || ''}`.trim() || 'N/A' : 'N/A'}
                             </p>
                         </div>
                         <div>
-                            <span className="text-gray-500">Sponsorship Type:</span>
-                            <p className="font-medium text-gray-900">{trainee.sponsorshipType || 'N/A'}</p>
+                            <span className="text-gray-500 dark:text-gray-400">Sponsorship Type:</span>
+                            <p className="font-medium text-gray-900 dark:text-white">{trainee.sponsorshipType || 'N/A'}</p>
                         </div>
                         <div>
-                            <span className="text-gray-500">Enrolment Date:</span>
-                            <p className="font-medium text-gray-900">{trainee.enrolmentDate || 'N/A'}</p>
+                            <span className="text-gray-500 dark:text-gray-400">Enrolment Date:</span>
+                            <p className="font-medium text-gray-900 dark:text-white">{trainee.enrolmentDate || 'N/A'}</p>
                         </div>
                         <div>
-                            <span className="text-gray-500">Payment Status:</span>
+                            <span className="text-gray-500 dark:text-gray-400">Payment Status:</span>
                             <p className="font-medium">
                                 <span className={`inline-flex px-2 py-0.5 text-xs font-semibold rounded-full border ${getEnrolmentStatusColor(trainee.fees?.collectionStatus || 'Pending')}`}>
                                     {trainee.fees?.collectionStatus || 'N/A'}
@@ -2050,29 +2096,29 @@ export const ViewEnrolmentView: React.FC = () => {
                 {/* Employer Information (if applicable) */}
                 {employer.name && (
                     <Card className="p-4">
-                        <h5 className="font-bold text-gray-800 mb-3">Employer Information</h5>
+                        <h5 className="font-bold text-gray-800 dark:text-gray-200 mb-3">Employer Information</h5>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                             <div>
-                                <span className="text-gray-500">Company Name:</span>
-                                <p className="font-medium text-gray-900">{employer.name || 'N/A'}</p>
+                                <span className="text-gray-500 dark:text-gray-400">Company Name:</span>
+                                <p className="font-medium text-gray-900 dark:text-white">{employer.name || 'N/A'}</p>
                             </div>
                             <div>
-                                <span className="text-gray-500">UEN:</span>
-                                <p className="font-medium text-gray-900">{employer.uen || 'N/A'}</p>
+                                <span className="text-gray-500 dark:text-gray-400">UEN:</span>
+                                <p className="font-medium text-gray-900 dark:text-white">{employer.uen || 'N/A'}</p>
                             </div>
                             {employer.contact && (
                                 <>
                                     <div>
-                                        <span className="text-gray-500">Contact Person:</span>
-                                        <p className="font-medium text-gray-900">{employer.contact.fullName || 'N/A'}</p>
+                                        <span className="text-gray-500 dark:text-gray-400">Contact Person:</span>
+                                        <p className="font-medium text-gray-900 dark:text-white">{employer.contact.fullName || 'N/A'}</p>
                                     </div>
                                     <div>
-                                        <span className="text-gray-500">Contact Email:</span>
-                                        <p className="font-medium text-gray-900">{employer.contact.email?.full || 'N/A'}</p>
+                                        <span className="text-gray-500 dark:text-gray-400">Contact Email:</span>
+                                        <p className="font-medium text-gray-900 dark:text-white">{employer.contact.email?.full || 'N/A'}</p>
                                     </div>
                                     <div>
-                                        <span className="text-gray-500">Contact Phone:</span>
-                                        <p className="font-medium text-gray-900">
+                                        <span className="text-gray-500 dark:text-gray-400">Contact Phone:</span>
+                                        <p className="font-medium text-gray-900 dark:text-white">
                                             {employer.contact.contactNumber ? `${employer.contact.contactNumber.countryCode || ''} ${employer.contact.contactNumber.phoneNumber || ''}`.trim() || 'N/A' : 'N/A'}
                                         </p>
                                     </div>
@@ -2085,19 +2131,19 @@ export const ViewEnrolmentView: React.FC = () => {
                 {/* Training Partner Information */}
                 {trainingPartner.name && (
                     <Card className="p-4">
-                        <h5 className="font-bold text-gray-800 mb-3">Training Partner</h5>
+                        <h5 className="font-bold text-gray-800 dark:text-gray-200 mb-3">Training Partner</h5>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                             <div>
-                                <span className="text-gray-500">Name:</span>
-                                <p className="font-medium text-gray-900">{trainingPartner.name || 'N/A'}</p>
+                                <span className="text-gray-500 dark:text-gray-400">Name:</span>
+                                <p className="font-medium text-gray-900 dark:text-white">{trainingPartner.name || 'N/A'}</p>
                             </div>
                             <div>
-                                <span className="text-gray-500">UEN:</span>
-                                <p className="font-medium text-gray-900">{trainingPartner.uen || 'N/A'}</p>
+                                <span className="text-gray-500 dark:text-gray-400">UEN:</span>
+                                <p className="font-medium text-gray-900 dark:text-white">{trainingPartner.uen || 'N/A'}</p>
                             </div>
                             <div>
-                                <span className="text-gray-500">Code:</span>
-                                <p className="font-medium text-gray-900">{trainingPartner.code || 'N/A'}</p>
+                                <span className="text-gray-500 dark:text-gray-400">Code:</span>
+                                <p className="font-medium text-gray-900 dark:text-white">{trainingPartner.code || 'N/A'}</p>
                             </div>
                         </div>
                     </Card>
@@ -2108,16 +2154,16 @@ export const ViewEnrolmentView: React.FC = () => {
 
     return (
         <div>
-            <h2 className="text-3xl font-bold mb-6">View Enrolment</h2>
+            <h2 className="text-3xl font-bold mb-6 dark:text-white">View Enrolment</h2>
 
             {/* Search Bar Card */}
             <Card className="p-6 mb-6">
                 <div>
-                    <h3 className="text-lg font-bold text-gray-700 mb-4">Enrolment Lookup</h3>
+                    <h3 className="text-lg font-bold text-gray-700 dark:text-gray-200 mb-4">Enrolment Lookup</h3>
 
                     <div className="flex gap-3 items-end">
                         <div className="flex-1">
-                            <label htmlFor="view-enrolment-id" className="block text-sm font-bold text-gray-700 mb-1">
+                            <label htmlFor="view-enrolment-id" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
                                 Enrolment ID
                             </label>
                             <input
@@ -2161,7 +2207,7 @@ export const ViewEnrolmentView: React.FC = () => {
                 <div className="flex justify-center py-10">
                     <div className="text-center">
                         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
-                        <p className="mt-4 text-gray-600">Fetching enrolment details from SSG...</p>
+                        <p className="mt-4 text-gray-600 dark:text-gray-400">Fetching enrolment details from SSG...</p>
                     </div>
                 </div>
             )}
@@ -2169,9 +2215,9 @@ export const ViewEnrolmentView: React.FC = () => {
             {/* Webhook Response Display */}
             {webhookResponse && !isSearching && (
                 <Card className="p-0">
-                    <div className="p-6 border-b">
-                        <h3 className="text-xl font-bold">Enrolment Details</h3>
-                        <p className="text-gray-500 mt-1">
+                    <div className="p-6 border-b dark:border-gray-700">
+                        <h3 className="text-xl font-bold dark:text-white">Enrolment Details</h3>
+                        <p className="text-gray-500 dark:text-gray-400 mt-1">
                             Enrolment ID: {enrolmentId}
                         </p>
                     </div>
@@ -2180,11 +2226,11 @@ export const ViewEnrolmentView: React.FC = () => {
                             <>
                                 {renderEnrolmentDetails()}
 
-                                <details className="mt-6 bg-gray-50 border border-gray-200 rounded-lg p-4">
-                                    <summary className="font-semibold text-gray-800 cursor-pointer hover:text-gray-600">
+                                <details className="mt-6 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg p-4">
+                                    <summary className="font-semibold text-gray-800 dark:text-gray-200 cursor-pointer hover:text-gray-600 dark:hover:text-gray-400">
                                         View Raw JSON Response
                                     </summary>
-                                    <pre className="mt-3 text-sm text-gray-700 whitespace-pre-wrap overflow-x-auto max-h-96 bg-white p-3 rounded border">
+                                    <pre className="mt-3 text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap overflow-x-auto max-h-96 bg-white dark:bg-gray-800 p-3 rounded border dark:border-gray-600">
                                         {JSON.stringify(webhookResponse, null, 2)}
                                     </pre>
                                 </details>
@@ -2203,10 +2249,10 @@ export const ViewEnrolmentView: React.FC = () => {
                                 </div>
                             </>
                         ) : (
-                            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-8 text-center">
-                                <Icon name={IconName.InfoCircle} className="w-12 h-12 mx-auto text-yellow-500 mb-3" />
-                                <h4 className="text-lg font-bold text-yellow-800 mb-2">No Data Found</h4>
-                                <p className="text-yellow-700">
+                            <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-lg p-8 text-center">
+                                <Icon name={IconName.InfoCircle} className="w-12 h-12 mx-auto text-yellow-500 dark:text-yellow-400 mb-3" />
+                                <h4 className="text-lg font-bold text-yellow-800 dark:text-yellow-300 mb-2">No Data Found</h4>
+                                <p className="text-yellow-700 dark:text-yellow-400">
                                     No enrolment record was found for this Enrolment ID.
                                 </p>
                             </div>
@@ -2218,7 +2264,7 @@ export const ViewEnrolmentView: React.FC = () => {
             {/* Empty State */}
             {!webhookResponse && !isSearching && (
                 <Card className="p-12">
-                    <div className="text-center text-gray-500">
+                    <div className="text-center text-gray-500 dark:text-gray-400">
                         <Icon name={IconName.Search} className="w-16 h-16 mx-auto mb-4 text-gray-400" />
                         <p className="text-lg font-medium">Enter Enrolment ID to view details</p>
                         <p className="text-sm mt-2">Provide an Enrolment ID (e.g. ENR-2601-094504) to fetch details from SSG</p>
@@ -2229,179 +2275,458 @@ export const ViewEnrolmentView: React.FC = () => {
     );
 };
 
-export const UploadEnrolmentsView: React.FC = () => {
-    const [file, setFile] = useState<File | null>(null);
-    const [isUploading, setIsUploading] = useState(false);
-    const [submissionResult, setSubmissionResult] = useState<any[] | null>(null);
-    const [error, setError] = useState<string | null>(null);
-    const [isDragOver, setIsDragOver] = useState(false);
+export const SearchCourseRunsView: React.FC = () => {
+    const [courseCode, setCourseCode] = useState<string>('');
+    const [isSearching, setIsSearching] = useState(false);
+    const [webhookResponse, setWebhookResponse] = useState<any>(null);
+    const [parsedData, setParsedData] = useState<any>(null);
+    const [searchError, setSearchError] = useState<string | null>(null);
+    const [currentPage, setCurrentPage] = useState(1);
+    const itemsPerPage = 10;
 
-    const handleFileChange = (selectedFile: File | undefined | null) => {
-        if (selectedFile) {
-            if (selectedFile.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' || selectedFile.type === 'application/vnd.ms-excel') {
-                setFile(selectedFile);
-                setError(null);
-            } else {
-                setError('Invalid file type. Please upload an Excel file (.xlsx, .xls).');
-                setFile(null);
+    const WEBHOOK_URL = 'https://n8n.srv1231536.hstgr.cloud/webhook/c963c0c9-e1f2-4914-9b09-e957f4292fae';
+
+    const inputClasses = "block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-500";
+
+    const handleSearch = async () => {
+        if (!courseCode.trim()) {
+            setSearchError('Please enter a Course Code');
+            return;
+        }
+
+        setIsSearching(true);
+        setSearchError(null);
+        setWebhookResponse(null);
+        setParsedData(null);
+        setCurrentPage(1);
+
+        try {
+            const payload = {
+                courseCode: courseCode.trim(),
+                timestamp: new Date().toISOString(),
+                source: 'admin-search-course-runs'
+            };
+
+            const response = await fetch(WEBHOOK_URL, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+                if (response.status === 500) {
+                    throw new Error('The service is temporarily unavailable. Please try again later.');
+                }
+                throw new Error('Unable to retrieve course runs. Please try again later.');
             }
+
+            const text = await response.text();
+            
+            let data;
+            try {
+                data = JSON.parse(text);
+            } catch {
+                // Only throw error if text is truly empty or invalid
+                if (!text || text.trim() === '') {
+                    throw new Error('No response received from the server. Please try again later.');
+                }
+                throw new Error('Received an unexpected response from the server. Please try again later.');
+            }
+
+            setWebhookResponse(data);
+
+            try {
+                let resultData = null;
+
+                // Handle results array structure (e.g., [{results: [{result: "..."}]}])
+                if (Array.isArray(data) && data[0]?.results) {
+                    const results = data[0].results;
+                    // Find the first result with actual data
+                    for (const item of results) {
+                        if (item?.result) {
+                            resultData = typeof item.result === 'string' ? JSON.parse(item.result) : item.result;
+                            break;
+                        }
+                    }
+                } else if (data?.result) {
+                    resultData = typeof data.result === 'string' ? JSON.parse(data.result) : data.result;
+                } else if (Array.isArray(data) && data[0]?.result) {
+                    resultData = typeof data[0].result === 'string' ? JSON.parse(data[0].result) : data[0].result;
+                }
+
+                // Check if the result is an error object (any shape)
+                const isError = resultData && (
+                    resultData.name === 'AxiosError' ||
+                    resultData.code?.startsWith?.('ERR_') ||
+                    resultData.error ||
+                    (resultData.status && resultData.status >= 400) ||
+                    (typeof resultData.message === 'string' && !resultData.data)
+                );
+
+                if (isError) {
+                    const errorMsg = extractErrorMessage(resultData);
+                    setSearchError(errorMsg);
+                    setParsedData(null);
+                } else if (resultData) {
+                    setParsedData(resultData);
+                }
+            } catch (e) {
+                setParsedData(null);
+            }
+        } catch (error) {
+            setSearchError(error instanceof Error ? error.message : 'Something went wrong. Please try again later.');
+        } finally {
+            setIsSearching(false);
         }
     };
 
-    const handleDragEvents = (e: React.DragEvent<HTMLDivElement>, isOver: boolean) => {
-        e.preventDefault();
-        e.stopPropagation();
-        setIsDragOver(isOver);
+    // Format YYYYMMDD integer to readable date
+    const formatDate = (dateInt: number | string | undefined): string => {
+        if (!dateInt) return 'N/A';
+        const str = String(dateInt);
+        if (str.length !== 8) return str;
+        const year = str.substring(0, 4);
+        const month = str.substring(4, 6);
+        const day = str.substring(6, 8);
+        return `${day}/${month}/${year}`;
     };
 
-    const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
-        e.preventDefault();
-        e.stopPropagation();
-        setIsDragOver(false);
-        const droppedFile = e.dataTransfer.files?.[0];
-        handleFileChange(droppedFile);
+    // Map SSG mode of training codes to labels
+    const getModeLabel = (code: string | undefined): string => {
+        const modes: Record<string, string> = {
+            '1': 'Classroom',
+            '2': 'Asynchronous eLearning',
+            '3': 'In-house',
+            '4': 'On-the-Job',
+            '5': 'Practical / Practicum',
+            '6': 'Supervised Field',
+            '7': 'Traineeship',
+            '8': 'Assessment',
+            '9': 'Synchronous eLearning',
+        };
+        return code ? (modes[code] || code) : 'N/A';
     };
 
-    const handleSimulateUpload = () => {
-        if (!file) return;
-
-        setIsUploading(true);
-        setSubmissionResult(null);
-
-        // Simulate a network request to SSG
-        setTimeout(() => {
-            const mockResults = [
-                { enrolmentRef: 'ENR-2501-123456', learnerName: 'John Doe', courseRunId: '1234567', status: 'Success', enrolmentId: 'ENR-' + Math.floor(1000 + Math.random() * 9000).toString() },
-                { enrolmentRef: 'ENR-2501-123457', learnerName: 'Jane Smith', courseRunId: '1234567', status: 'Success', enrolmentId: 'ENR-' + Math.floor(1000 + Math.random() * 9000).toString() },
-                { enrolmentRef: 'ENR-2501-123458', learnerName: 'Bob Wilson', courseRunId: '7654321', status: 'Failed', error: 'Learner NRIC not found in SSG database.' },
-            ];
-            setSubmissionResult(mockResults);
-            setIsUploading(false);
-        }, 2500);
+    // Format venue object to readable string
+    const formatVenue = (venue: any): string => {
+        if (!venue) return 'N/A';
+        const parts = [
+            venue.building,
+            venue.block ? `Blk ${venue.block}` : null,
+            venue.street,
+            venue.floor && venue.unit ? `#${venue.floor}-${venue.unit}` : null,
+            venue.postalCode ? `S(${venue.postalCode})` : null,
+        ].filter(Boolean);
+        return parts.length > 0 ? parts.join(', ') : 'N/A';
     };
 
-    const resetView = () => {
-        setFile(null);
-        setSubmissionResult(null);
-        setError(null);
+    // Get vacancy badge color
+    const getVacancyColor = (code: string): string => {
+        switch (code) {
+            case 'A': return 'bg-green-100 text-green-800 border-green-200';
+            case 'L': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+            case 'F': return 'bg-red-100 text-red-800 border-red-200';
+            default: return 'bg-gray-100 text-gray-800 border-gray-200';
+        }
     };
 
-    const UploadStep = () => (
-        <Card className="p-6">
-            <div className="text-center mb-4">
-                <h3 className="text-xl font-bold">Upload Enrolments</h3>
-                <p className="text-gray-500 mt-1">Submit your enrolment details in bulk by uploading an Excel file.</p>
-            </div>
+    const renderCourseRuns = () => {
+        if (!parsedData) return null;
 
-            <div
-                onDragOver={(e) => handleDragEvents(e, true)}
-                onDragLeave={(e) => handleDragEvents(e, false)}
-                onDrop={handleDrop}
-                className={`p-10 border-2 border-dashed rounded-lg text-center cursor-pointer transition-colors ${isDragOver ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:border-blue-500'}`}
-            >
-                <input
-                    type="file"
-                    id="enrolment-file-upload"
-                    className="hidden"
-                    accept=".xlsx, .xls"
-                    onChange={(e) => handleFileChange(e.target.files?.[0])}
-                />
-                <label htmlFor="enrolment-file-upload" className="cursor-pointer">
-                    <Icon name={IconName.Upload} className="w-12 h-12 mx-auto text-gray-400" />
-                    <p className="mt-2 font-semibold text-gray-900">
-                        {file ? file.name : 'Drag & drop your file here, or click to browse'}
-                    </p>
-                    <p className="text-xs text-gray-500 mt-1">
-                        XLSX or XLS file format
-                    </p>
-                </label>
-            </div>
-            {error && <p className="text-red-500 text-sm mt-2 text-center">{error}</p>}
+        // Handle SSG response: course.runs[] or fallback to data[] / direct array
+        const courseRuns = parsedData.course?.runs || parsedData.data || (Array.isArray(parsedData) ? parsedData : null);
+        const courseRef = parsedData.course?.referenceNumber || courseCode;
 
-            <div className="flex justify-between items-center mt-6">
-                <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                        const link = document.createElement('a');
-                        link.href = '/ssg_templates/Enrolment_Upload_Template.xlsx';
-                        link.download = 'Enrolment_Upload_Template.xlsx';
-                        document.body.appendChild(link);
-                        link.click();
-                        document.body.removeChild(link);
-                    }}
-                >
-                    <Icon name={IconName.Download} className="w-4 h-4 mr-2" />
-                    Enrolment Template
-                </Button>
-                <Button onClick={handleSimulateUpload} disabled={!file || isUploading}>
-                    {isUploading ? (
-                        <div className="flex items-center">
-                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                            Submitting...
+        if (courseRuns && Array.isArray(courseRuns) && courseRuns.length > 0) {
+            // Pagination calculations
+            const totalItems = courseRuns.length;
+            const totalPages = Math.ceil(totalItems / itemsPerPage);
+            const startIndex = (currentPage - 1) * itemsPerPage;
+            const endIndex = startIndex + itemsPerPage;
+            const currentPageData = courseRuns.slice(startIndex, endIndex);
+
+            return (
+                <div className="space-y-6">
+                    <div className="flex justify-between items-center bg-blue-50 dark:bg-blue-900/30 p-4 rounded-lg border border-blue-100 dark:border-blue-800">
+                        <div>
+                            <h4 className="font-bold text-blue-900 dark:text-blue-300">Total Course Runs Found: {totalItems}</h4>
+                            <p className="text-sm text-blue-700 dark:text-blue-400">Course Reference: {courseRef}</p>
                         </div>
-                    ) : 'Submit to SSG'}
-                </Button>
-            </div>
-        </Card>
-    );
+                        <div className="text-sm text-blue-700 dark:text-blue-400">
+                            Showing {startIndex + 1}-{Math.min(endIndex, totalItems)} of {totalItems}
+                        </div>
+                    </div>
 
-    const ResultsStep = () => (
-        <Card>
-            <div className="p-6 border-b">
-                <h3 className="text-xl font-bold">Submission Results</h3>
-                <p className="text-gray-500 mt-1">The following results were returned from SSG.</p>
+                    <div className="overflow-x-auto border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm">
+                        <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                            <thead className="bg-gray-50 dark:bg-gray-700">
+                                <tr>
+                                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Run ID</th>
+                                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Course Start Date</th>
+                                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Course End Date</th>
+                                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Registration Start Date</th>
+                                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Registration End Date</th>
+                                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">QR Code Link</th>
+                                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Mode</th>
+                                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Venue</th>
+                                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Vacancy</th>
+                                </tr>
+                            </thead>
+                            <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                                {currentPageData.map((run: any, index: number) => (
+                                    <tr key={index} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600 dark:text-blue-400">
+                                            {run.id || 'N/A'}
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                                            {formatDate(run.courseDates?.start)}
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                                            {formatDate(run.courseDates?.end)}
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                                            {formatDate(run.registrationDates?.opening)}
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                                            {formatDate(run.registrationDates?.closing)}
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                            {run.qrCodeLink ? (
+                                                <a 
+                                                    href={run.qrCodeLink} 
+                                                    target="_blank" 
+                                                    rel="noopener noreferrer"
+                                                    className="text-blue-600 dark:text-blue-400 hover:underline flex items-center"
+                                                >
+                                                    <Icon name={IconName.ExternalLink} className="w-4 h-4 mr-1" />
+                                                    View
+                                                </a>
+                                            ) : (
+                                                <span className="text-gray-400 dark:text-gray-500">N/A</span>
+                                            )}
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                                            {getModeLabel(run.modeOfTraining)}
+                                        </td>
+                                        <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-300 min-w-[300px]" title={formatVenue(run.venue)}>
+                                            {formatVenue(run.venue)}
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                            <span className={`inline-flex px-2 text-xs leading-5 font-semibold rounded-full border ${getVacancyColor(run.courseVacancy?.code || '')}`}>
+                                                {run.courseVacancy?.description || 'N/A'}
+                                            </span>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    {/* Pagination Controls */}
+                    {totalPages > 1 && (
+                        <div className="flex items-center justify-between border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-3 sm:px-6 rounded-b-lg">
+                            <div className="flex flex-1 justify-between sm:hidden">
+                                <Button
+                                    variant="outline"
+                                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                                    disabled={currentPage === 1}
+                                    className="relative inline-flex items-center"
+                                >
+                                    Previous
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                                    disabled={currentPage === totalPages}
+                                    className="relative ml-3 inline-flex items-center"
+                                >
+                                    Next
+                                </Button>
+                            </div>
+                            <div className="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
+                                <div>
+                                    <p className="text-sm text-gray-700 dark:text-gray-300">
+                                        Page <span className="font-medium">{currentPage}</span> of <span className="font-medium">{totalPages}</span>
+                                    </p>
+                                </div>
+                                <div>
+                                    <nav className="isolate inline-flex -space-x-px rounded-md shadow-sm" aria-label="Pagination">
+                                        <button
+                                            onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                                            disabled={currentPage === 1}
+                                            className="relative inline-flex items-center rounded-l-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50 disabled:cursor-not-allowed dark:ring-gray-600 dark:hover:bg-gray-700"
+                                        >
+                                            <span className="sr-only">Previous</span>
+                                            <Icon name={IconName.ChevronLeft} className="h-5 w-5" />
+                                        </button>
+                                        
+                                        {/* Page Numbers */}
+                                        {Array.from({ length: totalPages }, (_, i) => i + 1).map((pageNum) => {
+                                            // Show first page, last page, current page, and pages around current
+                                            const showPage = pageNum === 1 || 
+                                                           pageNum === totalPages || 
+                                                           (pageNum >= currentPage - 1 && pageNum <= currentPage + 1);
+                                            
+                                            if (!showPage && pageNum === 2 && currentPage > 3) {
+                                                return <span key={pageNum} className="relative inline-flex items-center px-4 py-2 text-sm font-semibold text-gray-700 dark:text-gray-300">...</span>;
+                                            }
+                                            if (!showPage && pageNum === totalPages - 1 && currentPage < totalPages - 2) {
+                                                return <span key={pageNum} className="relative inline-flex items-center px-4 py-2 text-sm font-semibold text-gray-700 dark:text-gray-300">...</span>;
+                                            }
+                                            if (!showPage) return null;
+
+                                            return (
+                                                <button
+                                                    key={pageNum}
+                                                    onClick={() => setCurrentPage(pageNum)}
+                                                    className={`relative inline-flex items-center px-4 py-2 text-sm font-semibold ${
+                                                        currentPage === pageNum
+                                                            ? 'z-10 bg-blue-600 text-white focus:z-20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600'
+                                                            : 'text-gray-900 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0 dark:text-gray-300 dark:ring-gray-600 dark:hover:bg-gray-700'
+                                                    }`}
+                                                >
+                                                    {pageNum}
+                                                </button>
+                                            );
+                                        })}
+
+                                        <button
+                                            onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                                            disabled={currentPage === totalPages}
+                                            className="relative inline-flex items-center rounded-r-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50 disabled:cursor-not-allowed dark:ring-gray-600 dark:hover:bg-gray-700"
+                                        >
+                                            <span className="sr-only">Next</span>
+                                            <Icon name={IconName.ChevronRight} className="h-5 w-5" />
+                                        </button>
+                                    </nav>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        return (
+            <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-lg p-8 text-center">
+                <Icon name={IconName.InfoCircle} className="w-12 h-12 mx-auto text-yellow-500 dark:text-yellow-400 mb-3" />
+                <h4 className="text-lg font-bold text-yellow-800 dark:text-yellow-300 mb-2">No Course Runs Found</h4>
+                <p className="text-yellow-700 dark:text-yellow-400">
+                    No course runs were found for this Course Code.
+                </p>
             </div>
-            <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
-                        <tr>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Enrolment Reference</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Learner Name</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Course Run ID</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Details</th>
-                        </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                        {submissionResult?.map((result, index) => (
-                            <tr key={index} className="hover:bg-gray-50">
-                                <td className="px-6 py-4 whitespace-nowrap font-medium text-gray-900">{result.enrolmentRef}</td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{result.learnerName}</td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{result.courseRunId}</td>
-                                <td className="px-6 py-4 whitespace-nowrap">
-                                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full border ${getStatusColor(result.status)}`}>
-                                        {result.status}
-                                    </span>
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                    {result.status === 'Success' ? `Enrolment ID: ${result.enrolmentId}` : result.error}
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
-            <div className="p-4 border-t text-right">
-                <Button onClick={resetView}>Start a New Upload</Button>
-            </div>
-        </Card>
-    );
+        );
+    };
 
     return (
         <div>
-            <h2 className="text-3xl font-bold mb-6">Upload Enrolments to SSG</h2>
-            {isUploading ? (
-                <div className="flex justify-center py-20">
+            <h2 className="text-3xl font-bold mb-6 dark:text-white">Get Course Runs By Course Code</h2>
+
+            {/* Search Bar Card */}
+            <Card className="p-6 mb-6">
+                <div>
+                    <h3 className="text-lg font-bold text-gray-700 dark:text-gray-200 mb-4">Course Run Search</h3>
+
+                    <div className="flex gap-3 items-end">
+                        <div className="flex-1">
+                            <label htmlFor="search-course-code" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
+                                Course Code
+                            </label>
+                            <input
+                                id="search-course-code"
+                                type="text"
+                                value={courseCode}
+                                onChange={(e) => setCourseCode(e.target.value)}
+                                onKeyDown={(e) => e.key === 'Enter' && !isSearching && courseCode.trim() && handleSearch()}
+                                placeholder="e.g. TGS-2024052076"
+                                className={inputClasses}
+                                disabled={isSearching}
+                            />
+                        </div>
+                        <Button
+                            onClick={handleSearch}
+                            disabled={isSearching || !courseCode.trim()}
+                            className="whitespace-nowrap"
+                        >
+                            {isSearching ? (
+                                <div className="flex items-center">
+                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                                    Searching...
+                                </div>
+                            ) : (
+                                <>
+                                    <Icon name={IconName.Search} className="w-4 h-4 mr-2" />
+                                    Search Course Runs
+                                </>
+                            )}
+                        </Button>
+                    </div>
+
+                    {searchError && (
+                        <p className="text-red-500 text-sm mt-3">{searchError}</p>
+                    )}
+                </div>
+            </Card>
+
+            {/* Loading State */}
+            {isSearching && (
+                <div className="flex justify-center py-10">
                     <div className="text-center">
                         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
-                        <p className="mt-4 text-gray-600">Submitting to SSG, this may take a moment...</p>
+                        <p className="mt-4 text-gray-600 dark:text-gray-400">Fetching course runs from SSG...</p>
                     </div>
                 </div>
-            ) : submissionResult ? (
-                <ResultsStep />
-            ) : (
-                <UploadStep />
+            )}
+
+            {/* Results Display */}
+            {webhookResponse && !isSearching && (
+                <Card className="p-0">
+                    <div className="p-6 border-b dark:border-gray-700">
+                        <h3 className="text-xl font-bold dark:text-white">Course Run Results</h3>
+                        <p className="text-gray-500 dark:text-gray-400 mt-1">
+                            Course Code: {courseCode}
+                        </p>
+                    </div>
+                    <div className="p-6">
+                        {renderCourseRuns()}
+
+                        <details className="mt-6 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg p-4">
+                            <summary className="font-semibold text-gray-800 dark:text-gray-200 cursor-pointer hover:text-gray-600 dark:hover:text-gray-400">
+                                View Raw JSON Response
+                            </summary>
+                            <pre className="mt-3 text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap overflow-x-auto max-h-96 bg-white dark:bg-gray-800 p-3 rounded border dark:border-gray-600">
+                                {JSON.stringify(webhookResponse, null, 2)}
+                            </pre>
+                        </details>
+
+                        <div className="mt-6 flex justify-end">
+                            <Button
+                                variant="outline"
+                                onClick={() => {
+                                    setWebhookResponse(null);
+                                    setParsedData(null);
+                                    setCourseCode('');
+                                    setCurrentPage(1);
+                                }}
+                            >
+                                Clear Results
+                            </Button>
+                        </div>
+                    </div>
+                </Card>
+            )}
+
+            {/* Empty State */}
+            {!webhookResponse && !isSearching && (
+                <Card className="p-12">
+                    <div className="text-center text-gray-500 dark:text-gray-400">
+                        <Icon name={IconName.Search} className="w-16 h-16 mx-auto mb-4 text-gray-400" />
+                        <p className="text-lg font-medium">Enter Course Code to search</p>
+                        <p className="text-sm mt-2">Provide a Course Code to fetch all associated course runs from SSG</p>
+                    </div>
+                </Card>
             )}
         </div>
     );

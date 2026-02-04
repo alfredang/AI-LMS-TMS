@@ -58,7 +58,7 @@ const TrainingProviderLayout: React.FC = () => {
       <Header />
 
       {/* Mobile header and sidebar toggle */}
-      <div className="md:hidden flex items-center gap-4 px-4 sm:px-6 py-3 border-b border-gray-200 dark:border-gray-700">
+      <div className="flex items-center gap-4 px-4 sm:px-6 py-3 border-b border-gray-200 dark:border-gray-700">
         <button onClick={() => setIsSidebarOpen(true)} className="p-2 -ml-2 text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white">
           <Icon name={IconName.Menu} className="w-6 h-6" />
         </button>

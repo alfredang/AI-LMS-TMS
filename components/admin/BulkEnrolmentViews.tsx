@@ -1,0 +1,828 @@
+import React, { useState } from 'react';
+import { Card } from '../ui/card';
+import { Button } from '../ui/button';
+import { Icon, IconName } from '../ui/icon';
+
+// Helper function to format error messages in a user-friendly way with React component
+const ErrorMessageDisplay: React.FC<{ error: any }> = ({ error }) => {
+    if (!error) return <span>An error occurred</span>;
+    
+    console.log('🔴 ErrorMessageDisplay received error:', error);
+    
+    // If error has details array, format them as a list
+    if (error.details && Array.isArray(error.details) && error.details.length > 0) {
+        return (
+            <div className="p-4 bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 dark:border-red-600 rounded-r-lg shadow-sm">
+                <div className="flex items-center gap-2 mb-3">
+                    <Icon name={IconName.XCircle} className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0" />
+                    <div className="font-semibold text-red-900 dark:text-red-200">
+                        Enrolment Created Unsuccessfully
+                    </div>
+                </div>
+                <div className="pl-7 space-y-1.5">
+                    {error.details.map((detail: any, idx: number) => {
+                        let message = detail.message || 'No message';
+                        
+                        // Remove technical error codes like "TGS-441 - "
+                        message = message.replace(/^[A-Z]+-\d+\s*-\s*/i, '').trim();
+                        
+                        return (
+                            <div key={idx} className="text-sm text-red-800 dark:text-red-300">
+                                {message}
+                            </div>
+                        );
+                    })}
+                </div>
+            </div>
+        );
+    }
+    
+    // Fallback to error message if no details
+    if (error.message) {
+        return (
+            <div className="space-y-2 p-4 bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 dark:border-red-600 rounded-r-lg shadow-sm">
+                <div className="flex items-center gap-2">
+                    <Icon name={IconName.XCircle} className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0" />
+                    <div className="font-semibold text-red-900 dark:text-red-200">
+                        Enrolment Created Unsuccessfully
+                    </div>
+                </div>
+                <div className="pl-7 text-sm text-red-800 dark:text-red-300">
+                    {error.message.replace(/^[A-Z]+-\d+\s*-\s*/i, '')}
+                </div>
+            </div>
+        );
+    }
+    
+    return <span>An error occurred during enrolment</span>;
+};
+
+export const BulkUploadEnrolmentView: React.FC = () => {
+    const [file, setFile] = useState<File | null>(null);
+    const [isUploading, setIsUploading] = useState(false);
+    const [uploadResult, setUploadResult] = useState<any>(null);
+    const [error, setError] = useState<string | null>(null);
+    const [isDragOver, setIsDragOver] = useState(false);
+    const [resultsPage, setResultsPage] = useState(1);
+    const resultsPerPage = 10;
+
+    const handleFileChange = (selectedFile: File | undefined | null) => {
+        if (selectedFile) {
+            if (selectedFile.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
+                selectedFile.type === 'application/vnd.ms-excel' ||
+                selectedFile.name.endsWith('.xlsx') ||
+                selectedFile.name.endsWith('.xls')) {
+                setFile(selectedFile);
+                setError(null);
+            } else {
+                setError('Invalid file type. Please upload an Excel file (.xlsx, .xls).');
+                setFile(null);
+            }
+        }
+    };
+
+    const handleDragEvents = (e: React.DragEvent<HTMLDivElement>, isOver: boolean) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragOver(isOver);
+    };
+
+    const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragOver(false);
+        const droppedFile = e.dataTransfer.files?.[0];
+        handleFileChange(droppedFile);
+    };
+
+    // Helper function to normalize dates to DD/MM/YYYY format
+    // Excel/xlsx often outputs dates in MM/DD/YYYY format, so we need to swap them
+    const normalizeDateFormat = (dateStr: string | number): string => {
+        if (!dateStr) return dateStr as string;
+        
+        // Convert to string if it's a number
+        const str = String(dateStr).trim();
+        
+        // Check if it's in M/D/YYYY or MM/DD/YYYY format (need to swap to DD/MM/YYYY)
+        if (/^\d{1,2}[/-]\d{1,2}[/-]\d{4}$/.test(str)) {
+            const parts = str.split(/[/-]/);
+            // Excel outputs MM/DD/YYYY, we need DD/MM/YYYY
+            // So parts[0] = month, parts[1] = day, parts[2] = year
+            const month = parts[0].padStart(2, '0');
+            const day = parts[1].padStart(2, '0');
+            const year = parts[2];
+            return `${day}/${month}/${year}`;
+        }
+        
+        // Handle short year format like 1/3/01 or 3/1/01 (MM/DD/YY format from Excel)
+        if (/^\d{1,2}[/-]\d{1,2}[/-]\d{2}$/.test(str)) {
+            const parts = str.split(/[/-]/);
+            // Excel outputs MM/DD/YY, we need DD/MM/YYYY
+            const month = parts[0].padStart(2, '0');
+            const day = parts[1].padStart(2, '0');
+            // Assume dates are in 2000s if year is 2-digit
+            const year = '20' + parts[2];
+            return `${day}/${month}/${year}`;
+        }
+        
+        // Try to parse as Excel serial date (numeric value)
+        const numValue = Number(str);
+        if (!isNaN(numValue) && numValue > 1000) {
+            // Excel date serial number starts from 1900-01-01
+            const excelEpoch = new Date(1899, 11, 30);
+            const date = new Date(excelEpoch.getTime() + numValue * 86400000);
+            const day = String(date.getDate()).padStart(2, '0');
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const year = date.getFullYear();
+            return `${day}/${month}/${year}`;
+        }
+        
+        return str;
+    };
+
+    const parseExcelFile = async (file: File): Promise<any[]> => {
+        const XLSX = await import('xlsx');
+
+        if (file.size < 100) {
+            throw new Error(
+                `File appears to be empty or corrupted (size: ${file.size} bytes).\n\n` +
+                'If you just downloaded this file, please:\n' +
+                '1. Open the file in Excel\n' +
+                '2. Click "Enable Editing" if prompted\n' +
+                '3. Save the file (Ctrl+S)\n' +
+                '4. Upload the saved file'
+            );
+        }
+
+        console.log('📁 File info:', { name: file.name, size: file.size, type: file.type });
+
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+
+            reader.onload = (e) => {
+                try {
+                    const data = new Uint8Array(e.target?.result as ArrayBuffer);
+                    console.log('📦 Read buffer size:', data.length);
+
+                    const firstBytes = new TextDecoder().decode(data.slice(0, 100));
+                    if (firstBytes.includes('<!DOCTYPE') || firstBytes.includes('<html')) {
+                        throw new Error(
+                            'The uploaded file appears to be an HTML page, not an Excel file.\n\n' +
+                            'This usually happens when the download requires authentication.\n' +
+                            'Please download the file properly and try again.'
+                        );
+                    }
+
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    console.log('📚 Workbook sheets:', workbook.SheetNames);
+
+                    if (!workbook.SheetNames.length) {
+                        throw new Error('Excel file has no sheets.');
+                    }
+
+                    const sheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[sheetName];
+
+                    const rawRows: any[][] = XLSX.utils.sheet_to_json(worksheet, {
+                        header: 1,
+                        blankrows: false,
+                    });
+
+                    console.log('🧪 Raw Excel rows count:', rawRows.length);
+                    console.log('🧪 First 3 rows:', rawRows.slice(0, 3));
+
+                    if (!rawRows.length) {
+                        throw new Error(
+                            'Excel file is empty.\n\n' +
+                            'The first sheet contains no data. Please check if the correct sheet is selected.'
+                        );
+                    }
+
+                    if (rawRows.length === 1) {
+                        throw new Error(
+                            'Only headers found, no data rows.\n\n' +
+                            'This happens because:\n' +
+                            '• The Excel file is opened in Protected View after being downloaded from the TPG portal.\n\n' +
+                            '• Protected View blocks access to the data rows.\n\n' +
+                            'Solution: Open the file in Excel, ensure data is visible, save it, and upload again.'
+                        );
+                    }
+
+                    const jsonData = XLSX.utils.sheet_to_json(worksheet, {
+                        defval: '',
+                        raw: false,
+                    });
+
+                    // Normalize column headers by removing extra spaces and trimming
+                    const normalizedData = jsonData.map(row => {
+                        const normalizedRow: any = {};
+                        Object.keys(row).forEach(key => {
+                            // Replace multiple spaces with single space and trim
+                            const normalizedKey = key.replace(/\s+/g, ' ').trim();
+                            normalizedRow[normalizedKey] = row[key];
+                        });
+                        return normalizedRow;
+                    });
+
+                    console.log('✅ Parsed', normalizedData.length, 'data rows');
+                    if (normalizedData.length > 0) {
+                        console.log('🔑 Normalized column headers:', Object.keys(normalizedData[0] as object));
+                        console.log('📋 First row data:', normalizedData[0]);
+                    }
+
+                    resolve(normalizedData);
+                } catch (err) {
+                    console.error('❌ Parse error:', err);
+                    reject(err);
+                }
+            };
+
+            reader.onerror = (err) => {
+                console.error('❌ FileReader error:', err);
+                reject(new Error('Failed to read the file. Please try again.'));
+            };
+
+            reader.readAsArrayBuffer(file);
+        });
+    };
+
+    const handleUpload = async () => {
+        if (!file) return;
+
+        setIsUploading(true);
+        setUploadResult(null);
+        setError(null);
+
+        try {
+            console.log('📊 Parsing Excel file:', file.name);
+            const excelData = await parseExcelFile(file);
+            console.log('✅ Parsed Excel data:', excelData.length, 'rows');
+
+            // Normalize date fields to DD/MM/YYYY format
+            const dateFields = [
+                'Enrolment Date',
+                'Course Start Date',
+                'Course End Date',
+                'Birth Date',
+                'Date of Birth',
+                'DOB',
+                'Training Start Date',
+                'Training End Date',
+                'Assessment Date',
+                'Completion Date'
+            ];
+
+            const normalizedData = excelData.map((row, index) => {
+                const normalizedRow = { ...row };
+                Object.keys(normalizedRow).forEach(key => {
+                    // Check if this field is a date field (by name matching)
+                    const keyLower = key.toLowerCase();
+                    const isDateField = dateFields.some(dateField => 
+                        keyLower.includes(dateField.toLowerCase())
+                    ) || keyLower.includes('date') || keyLower.includes('birth') || keyLower.includes('dob');
+                    
+                    if (isDateField && normalizedRow[key]) {
+                        const originalValue = normalizedRow[key];
+                        const normalizedValue = normalizeDateFormat(originalValue);
+                        normalizedRow[key] = normalizedValue;
+                        
+                        // Special logging for Date of Birth field
+                        if (keyLower.includes('birth') || keyLower.includes('dob')) {
+                            console.log(`📅 Row ${index + 1} - ${key}: "${originalValue}" → "${normalizedValue}"`);
+                        } else if (originalValue !== normalizedValue) {
+                            console.log(`🗓️  Normalized ${key}: "${originalValue}" → "${normalizedValue}"`);
+                        }
+                    }
+                });
+                return normalizedRow;
+            });
+
+            console.log('✅ Normalized date formats in', normalizedData.length, 'rows');
+            if (normalizedData.length > 0) {
+                console.log('📅 Sample normalized row (first entry):', normalizedData[0]);
+                console.log('🔑 All column keys being sent to webhook:', Object.keys(normalizedData[0]));
+            }
+
+            console.log('🔄 Sending data to n8n webhook for bulk enrolment...');
+            const response = await fetch('https://n8n.srv1231536.hstgr.cloud/webhook/f19790ae-0ba2-4edf-9c3e-87d1dec1d458', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    enrolments: normalizedData
+                })
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.error || `Unable to process request (Error ${response.status}). Please try again.`);
+            }
+
+            // Check if response has content
+            const contentType = response.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+                throw new Error('Server returned non-JSON response. Please check the webhook configuration.');
+            }
+
+            const text = await response.text();
+            
+            let result;
+            try {
+                result = JSON.parse(text);
+            } catch {
+                // Only throw error if text is truly empty
+                if (!text || text.trim() === '') {
+                    throw new Error('Server returned empty response. Please check the webhook is configured correctly.');
+                }
+                throw new Error('Server returned invalid JSON. Please check the webhook configuration.');
+            }
+
+            console.log('✅ Bulk enrolment result:', result);
+
+            // Process successful enrolments and save to database
+            if (result?.results && Array.isArray(result.results)) {
+                console.log('💾 Processing successful enrolments for database insertion...');
+                
+                for (const item of result.results) {
+                    // Parse the result to check if it was successful
+                    let parsedResult;
+                    if (item?.result && typeof item.result === 'string') {
+                        try {
+                            parsedResult = JSON.parse(item.result);
+                        } catch (e) {
+                            console.log('⚠️ Could not parse result for database insertion:', item);
+                            continue;
+                        }
+                    }
+
+                    // Check if the SSG submission was successful (status 200-299)
+                    const isSuccess = parsedResult?.status && parsedResult.status >= 200 && parsedResult.status < 300;
+                    
+                    if (isSuccess && parsedResult?.data) {
+                        console.log('✅ SSG enrolment successful, inserting to database:', item.traineeEmail);
+                        
+                        try {
+                            // Call our local API to insert the enrolment into database
+                            const dbResponse = await fetch('/api/enrolments/bulk-create', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                },
+                                body: JSON.stringify({
+                                    enrolment: {
+                                        traineeEmail: item.traineeEmail,
+                                        traineeName: item.traineeName,
+                                        traineeNric: item.traineeId, // Using traineeId as NRIC
+                                        courseCode: item.courseReferenceNumber,
+                                        courseTitle: '', // Will be fetched from SSG if needed
+                                        courseRunId: item.courseRunId,
+                                        courseReferenceNumber: item.courseReferenceNumber,
+                                        sponsorshipType: item.sponsorshipType,
+                                        enrolmentDate: new Date().toISOString().split('T')[0],
+                                        enrolmentStatus: parsedResult.data?.enrolment?.status || 'Confirmed',
+                                        enrolmentId: parsedResult.data?.enrolment?.referenceNumber || `ENR-${Date.now()}`
+                                    }
+                                })
+                            });
+
+                            if (dbResponse.ok) {
+                                const dbResult = await dbResponse.json();
+                                console.log('✅ Successfully inserted to database:', dbResult);
+                            } else {
+                                const dbError = await dbResponse.json().catch(() => ({}));
+                                console.error('❌ Database insertion failed:', dbError);
+                            }
+                        } catch (dbErr) {
+                            console.error('❌ Error inserting to database:', dbErr);
+                            // Don't throw - continue processing other enrolments
+                        }
+                    }
+                }
+                console.log('✅ Database insertion process completed');
+            }
+
+            setUploadResult(result);
+
+        } catch (err) {
+            console.error('❌ Upload error:', err);
+            setError(err instanceof Error ? err.message : 'Failed to upload file');
+        } finally {
+            setIsUploading(false);
+        }
+    };
+
+    const resetView = () => {
+        setFile(null);
+        setUploadResult(null);
+        setError(null);
+        setResultsPage(1);
+    };
+
+    const UploadStep = () => (
+        <Card className="p-6">
+            <div className="text-center mb-4">
+                <h3 className="text-xl font-bold dark:text-white">Bulk Upload Enrolments</h3>
+                <p className="text-gray-500 dark:text-gray-400 mt-1">Submit enrolment data in bulk by uploading an Excel file.</p>
+            </div>
+
+            <div
+                onDragOver={(e) => handleDragEvents(e, true)}
+                onDragLeave={(e) => handleDragEvents(e, false)}
+                onDrop={handleDrop}
+                className={`p-10 border-2 border-dashed rounded-lg text-center cursor-pointer transition-colors ${isDragOver ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' : 'border-gray-300 dark:border-gray-600 hover:border-blue-500 dark:hover:border-blue-400'}`}
+            >
+                <input
+                    type="file"
+                    id="file-upload-enrolment"
+                    className="hidden"
+                    accept=".xlsx, .xls"
+                    onChange={(e) => handleFileChange(e.target.files?.[0])}
+                />
+                <label htmlFor="file-upload-enrolment" className="cursor-pointer">
+                    <Icon name={IconName.Upload} className="w-12 h-12 mx-auto text-gray-400 dark:text-gray-500" />
+                    <p className="mt-2 font-semibold text-gray-900 dark:text-white">
+                        {file ? file.name : 'Drag & drop your file here, or click to browse'}
+                    </p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        XLSX or XLS file format
+                    </p>
+                </label>
+            </div>
+
+            {error && (
+                <div className="mt-4 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg p-4 flex items-start gap-3">
+                    <div className="flex-shrink-0 w-10 h-10 bg-white dark:bg-red-900/50 border border-red-200 dark:border-red-700 rounded-full flex items-center justify-center">
+                        <Icon name={IconName.Close} className="w-5 h-5 text-red-500 dark:text-red-400" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                        <h4 className="font-semibold text-gray-900 dark:text-gray-100">Something went wrong!</h4>
+                        <p className="text-sm text-gray-600 dark:text-gray-300 mt-1 whitespace-pre-line">{error}</p>
+                    </div>
+                    <button
+                        onClick={() => setError(null)}
+                        className="flex-shrink-0 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
+                    >
+                        <Icon name={IconName.Close} className="w-5 h-5" />
+                    </button>
+                </div>
+            )}
+
+            <div className="flex justify-between items-center mt-6">
+                <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                        const link = document.createElement('a');
+                        link.href = '/ssg_templates/Enrolment_Upload_Template.xlsx';
+                        link.download = 'Enrolment_Upload_Template.xlsx';
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                    }}
+                >
+                    <Icon name={IconName.Download} className="w-4 h-4 mr-2" />
+                    Enrolment Template
+                </Button>
+                <Button onClick={handleUpload} disabled={!file || isUploading}>
+                    {isUploading ? (
+                        <div className="flex items-center">
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                            Processing...
+                        </div>
+                    ) : 'Upload & Process'}
+                </Button>
+            </div>
+        </Card>
+    );
+
+    const ResultsStep = () => {
+        // Parse results - handle different response formats
+        let results: any[] = [];
+        
+        console.log('📦 uploadResult:', uploadResult);
+        
+        // Handle nested results structure: [{results: [{result: "..."}, ...]}]
+        if (Array.isArray(uploadResult) && uploadResult[0]?.results) {
+            const nestedResults = uploadResult[0].results;
+            results = nestedResults.map((item: any) => {
+                // Parse nested result string if it exists
+                if (item?.result && typeof item.result === 'string') {
+                    try {
+                        const parsed = JSON.parse(item.result);
+                        return { ...item, parsedResult: parsed };
+                    } catch {
+                        return item;
+                    }
+                }
+                return item;
+            });
+        } else if (uploadResult?.results && Array.isArray(uploadResult.results)) {
+            console.log('📋 Found uploadResult.results array');
+            results = uploadResult.results.map((item: any) => {
+                console.log('🔍 Processing item:', item);
+                if (item?.result && typeof item.result === 'string') {
+                    try {
+                        const parsed = JSON.parse(item.result);
+                        console.log('✅ Parsed result for item:', parsed);
+                        return { ...item, parsedResult: parsed };
+                    } catch (e) {
+                        console.log('❌ Failed to parse result:', item.result, e);
+                        return item;
+                    }
+                }
+                console.log('⚠️ Item has no result string:', item);
+                return item;
+            });
+        } else if (uploadResult?.result && Array.isArray(uploadResult.result)) {
+            results = uploadResult.result;
+        } else if (Array.isArray(uploadResult)) {
+            results = uploadResult;
+        } else if (uploadResult) {
+            results = [uploadResult];
+        }
+
+        const successCount = results.filter(r => {
+            if (r.status === 'success') return true;
+            if (r.parsedResult?.status && r.parsedResult.status >= 200 && r.parsedResult.status < 300) return true;
+            if (r.parsedResult?.data && Object.keys(r.parsedResult.data).length > 0) return true;
+            if (r.result?.toLowerCase().includes('success')) return true;
+            return false;
+        }).length;
+        
+        const failedCount = results.filter(r => {
+            if (r.status === 'failed') return true;
+            if (r.parsedResult?.status && r.parsedResult.status >= 400) return true;
+            if (r.parsedResult?.error?.details?.length > 0) return true;
+            if (r.parsedResult?.error?.message) return true;
+            if (r.result?.toLowerCase().includes('error') || r.result?.toLowerCase().includes('fail')) return true;
+            return false;
+        }).length;
+
+        const totalPages = Math.ceil(results.length / resultsPerPage);
+        const paginatedResults = results.slice((resultsPage - 1) * resultsPerPage, resultsPage * resultsPerPage);
+
+        return (
+            <Card>
+                <div className="p-6 border-b dark:border-gray-700">
+                    <h3 className="text-xl font-bold dark:text-white">Bulk Enrolment Results</h3>
+                    <p className="text-gray-500 dark:text-gray-400 mt-1">SSG response for each enrolment record.</p>
+                </div>
+                <div className="p-6">
+                    {results.length > 0 ? (
+                        <div className="space-y-6">
+                            <div className={`border rounded-lg p-4 ${successCount > 0 && failedCount === 0 ? 'bg-green-50 dark:bg-green-900/30 border-green-200 dark:border-green-800' : failedCount > 0 && successCount === 0 ? 'bg-red-50 dark:bg-red-900/30 border-red-200 dark:border-red-800' : 'bg-yellow-50 dark:bg-yellow-900/30 border-yellow-200 dark:border-yellow-800'}`}>
+                                <h4 className={`font-bold ${successCount > 0 && failedCount === 0 ? 'text-green-800 dark:text-green-300' : failedCount > 0 && successCount === 0 ? 'text-red-800 dark:text-red-300' : 'text-yellow-800 dark:text-yellow-300'}`}>
+                                    {successCount > 0 && `${successCount} Successful`}
+                                    {successCount > 0 && failedCount > 0 && ', '}
+                                    {failedCount > 0 && `${failedCount} Failed`}
+                                </h4>
+                                <p className={`text-sm ${successCount > 0 && failedCount === 0 ? 'text-green-700 dark:text-green-400' : failedCount > 0 && successCount === 0 ? 'text-red-700 dark:text-red-400' : 'text-yellow-700 dark:text-yellow-400'}`}>
+                                    Total: {results.length} record(s) processed
+                                </p>
+                            </div>
+
+                            <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+                                <div className="bg-gray-100 dark:bg-gray-800 px-4 py-3">
+                                    <h4 className="font-semibold text-gray-800 dark:text-gray-200">Enrolment Results ({results.length})</h4>
+                                </div>
+                                <div className="overflow-x-auto">
+                                    <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-600">
+                                        <thead className="bg-gray-50 dark:bg-gray-800">
+                                            <tr>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">#</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Trainee ID</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Trainee Name</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Trainee Email</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Course Run ID</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Course Reference</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Sponsorship Type</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Status</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">SSG Response</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="bg-white dark:bg-gray-700 divide-y divide-gray-200 dark:divide-gray-600">
+                                            {paginatedResults.map((record: any, index: number) => {
+                                                console.log(`🎯 Rendering record ${index}:`, record);
+                                                console.log(`   - parsedResult:`, record.parsedResult);
+                                                console.log(`   - parsedResult?.error:`, record.parsedResult?.error);
+                                                console.log(`   - parsedResult?.status:`, record.parsedResult?.status);
+                                                
+                                                // Check if it's a success based on status code or data existence
+                                                const hasData = record.parsedResult?.data && Object.keys(record.parsedResult.data).length > 0;
+                                                const isStatusSuccess = record.parsedResult?.status && record.parsedResult.status >= 200 && record.parsedResult.status < 300;
+                                                const hasError = (record.parsedResult?.error?.details?.length > 0) || 
+                                                               (record.parsedResult?.error?.message) ||
+                                                               (record.parsedResult?.status >= 400);
+                                                
+                                                const isSuccess = (isStatusSuccess || hasData || record.status === 'success') && !hasError;
+                                                const statusColor = isSuccess ? 'bg-green-100 text-green-800 border-green-200 dark:bg-green-900/30 dark:text-green-300 dark:border-green-700' : 'bg-red-100 text-red-800 border-red-200 dark:bg-red-900/30 dark:text-red-300 dark:border-red-700';
+                                                
+                                                return (
+                                                    <tr key={index} className="hover:bg-gray-50 dark:hover:bg-gray-600">
+                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
+                                                            {(resultsPage - 1) * resultsPerPage + index + 1}
+                                                        </td>
+                                                        <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
+                                                            {record.traineeId || 'N/A'}
+                                                        </td>
+                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
+                                                            {record.traineeName || 'N/A'}
+                                                        </td>
+                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
+                                                            {record.traineeEmail || 'N/A'}
+                                                        </td>
+                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
+                                                            {record.courseRunId || 'N/A'}
+                                                        </td>
+                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
+                                                            {record.courseReferenceNumber || 'N/A'}
+                                                        </td>
+                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
+                                                            {record.sponsorshipType || 'N/A'}
+                                                        </td>
+                                                        <td className="px-4 py-3 whitespace-nowrap">
+                                                            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full border ${statusColor}`}>
+                                                                {isSuccess ? 'Success' : 'Failed'}
+                                                            </span>
+                                                        </td>
+                                                        <td className="px-4 py-3 text-sm text-gray-500 dark:text-gray-200">
+                                                            <div className="min-w-[280px]">
+                                                                {(() => {
+                                                                    console.log('🎨 Display check for record:', {
+                                                                        hasParsedResult: !!record.parsedResult,
+                                                                        hasError: !!record.parsedResult?.error,
+                                                                        hasErrorDetails: !!(record.parsedResult?.error?.details?.length),
+                                                                        hasData: !!record.parsedResult?.data,
+                                                                        status: record.parsedResult?.status,
+                                                                        hasMessage: !!record.message,
+                                                                        hasResult: !!record.result,
+                                                                        resultType: typeof record.result
+                                                                    });
+                                                                    
+                                                                    // Check for success: status 200-299 or has data
+                                                                    const isSuccess = (record.parsedResult?.status >= 200 && record.parsedResult?.status < 300) ||
+                                                                                    (record.parsedResult?.data && Object.keys(record.parsedResult.data).length > 0);
+                                                                    
+                                                                    // Check for error: has error object with details or message, or status >= 400
+                                                                    const hasError = (record.parsedResult?.error?.details?.length > 0) || 
+                                                                                   (record.parsedResult?.error?.message) ||
+                                                                                   (record.parsedResult?.status >= 400);
+                                                                    
+                                                                    if (isSuccess && !hasError) {
+                                                                        // Success case
+                                                                        const enrolmentRef = record.parsedResult?.data?.enrolment?.referenceNumber || 'N/A';
+                                                                        const enrolmentStatus = record.parsedResult?.data?.enrolment?.status || 'Confirmed';
+                                                                        return (
+                                                                            <div className="space-y-2 p-4 bg-green-50 dark:bg-green-900/20 border-l-4 border-green-500 dark:border-green-600 rounded-r-lg shadow-sm">
+                                                                                <div className="flex items-center gap-2">
+                                                                                    <Icon name={IconName.CheckCircle} className="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0" />
+                                                                                    <div className="text-sm text-green-800 dark:text-green-200 font-semibold">Enrolment created successfully</div>
+                                                                                </div>
+                                                                                <div className="pl-7 space-y-1">
+                                                                                    <div className="text-xs text-green-700 dark:text-green-300">
+                                                                                        <span className="font-medium">Reference:</span> <span className="font-mono bg-green-100 dark:bg-green-900/40 px-2 py-0.5 rounded">{enrolmentRef}</span>
+                                                                                    </div>
+                                                                                    <div className="text-xs text-green-700 dark:text-green-300">
+                                                                                        <span className="font-medium">Status:</span> <span className="font-medium">{enrolmentStatus}</span>
+                                                                                    </div>
+                                                                                </div>
+                                                                            </div>
+                                                                        );
+                                                                    } else if (hasError) {
+                                                                        // Error case
+                                                                        return <ErrorMessageDisplay error={record.parsedResult.error} />;
+                                                                    } else if (record.parsedResult) {
+                                                                        // parsedResult exists but no clear error or data - show parsed result
+                                                                        return <pre className="text-xs bg-gray-100 dark:bg-gray-800 p-2 rounded">{JSON.stringify(record.parsedResult, null, 2)}</pre>;
+                                                                    } else if (record.result && typeof record.result === 'string' && record.result.startsWith('{')) {
+                                                                        // If result is JSON string but not parsed, try to parse it here
+                                                                        try {
+                                                                            const parsed = JSON.parse(record.result);
+                                                                            const isSuccessParsed = (parsed.status >= 200 && parsed.status < 300) ||
+                                                                                                  (parsed.data && Object.keys(parsed.data).length > 0);
+                                                                            const hasErrorParsed = (parsed.error?.details?.length > 0) || 
+                                                                                                 (parsed.error?.message) ||
+                                                                                                 (parsed.status >= 400);
+                                                                            
+                                                                            if (isSuccessParsed && !hasErrorParsed) {
+                                                                                const enrolmentRef = parsed.data?.enrolment?.referenceNumber || 'N/A';
+                                                                                const enrolmentStatus = parsed.data?.enrolment?.status || 'Confirmed';
+                                                                                return (
+                                                                                    <div className="space-y-2 p-4 bg-green-50 dark:bg-green-900/20 border-l-4 border-green-500 dark:border-green-600 rounded-r-lg shadow-sm">
+                                                                                        <div className="flex items-center gap-2">
+                                                                                            <Icon name={IconName.CheckCircle} className="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0" />
+                                                                                            <div className="text-sm text-green-800 dark:text-green-200 font-semibold">Enrolment created successfully</div>
+                                                                                        </div>
+                                                                                        <div className="pl-7 space-y-1">
+                                                                                            <div className="text-xs text-green-700 dark:text-green-300">
+                                                                                                <span className="font-medium">Reference:</span> <span className="font-mono bg-green-100 dark:bg-green-900/40 px-2 py-0.5 rounded">{enrolmentRef}</span>
+                                                                                            </div>
+                                                                                            <div className="text-xs text-green-700 dark:text-green-300">
+                                                                                                <span className="font-medium">Status:</span> <span className="font-medium">{enrolmentStatus}</span>
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                );
+                                                                            } else if (hasErrorParsed) {
+                                                                                return <ErrorMessageDisplay error={parsed.error} />;
+                                                                            }
+                                                                            return <pre className="text-xs bg-gray-100 dark:bg-gray-800 p-2 rounded">{JSON.stringify(parsed, null, 2)}</pre>;
+                                                                        } catch (e) {
+                                                                            return (
+                                                                                <div className="flex items-center gap-2 p-3 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg">
+                                                                                    <Icon name={IconName.AlertCircle} className="w-4 h-4 text-orange-600 dark:text-orange-400 flex-shrink-0" />
+                                                                                    <span className="text-sm text-orange-700 dark:text-orange-300">Failed to parse response</span>
+                                                                                </div>
+                                                                            );
+                                                                        }
+                                                                    } else if (record.message) {
+                                                                        return <span className="text-sm">{record.message}</span>;
+                                                                    } else if (record.result && typeof record.result === 'string' && !record.result.startsWith('{') && !record.result.startsWith('[')) {
+                                                                        return <span className="text-sm">{record.result}</span>;
+                                                                    } else {
+                                                                        return (
+                                                                            <div className="flex items-center gap-2 p-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
+                                                                                <Icon name={IconName.InfoCircle} className="w-4 h-4 text-gray-400 dark:text-gray-500 flex-shrink-0" />
+                                                                                <span className="text-sm text-gray-500 dark:text-gray-400">No response</span>
+                                                                            </div>
+                                                                        );
+                                                                    }
+                                                                })()}
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+                                {results.length > resultsPerPage && (
+                                    <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 border-t dark:border-gray-700">
+                                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                                            Showing {(resultsPage - 1) * resultsPerPage + 1}-{Math.min(resultsPage * resultsPerPage, results.length)} of {results.length}
+                                        </p>
+                                        <div className="flex items-center gap-1">
+                                            <button
+                                                onClick={() => setResultsPage(p => Math.max(1, p - 1))}
+                                                disabled={resultsPage === 1}
+                                                className="px-3 py-1 text-sm border dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                                            >
+                                                Previous
+                                            </button>
+                                            {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                                                <button
+                                                    key={page}
+                                                    onClick={() => setResultsPage(page)}
+                                                    className={`px-3 py-1 text-sm border rounded ${resultsPage === page ? 'bg-blue-500 text-white border-blue-500' : 'hover:bg-gray-100 dark:hover:bg-gray-700 dark:border-gray-600 dark:text-gray-200'}`}
+                                                >
+                                                    {page}
+                                                </button>
+                                            ))}
+                                            <button
+                                                onClick={() => setResultsPage(p => Math.min(totalPages, p + 1))}
+                                                disabled={resultsPage === totalPages}
+                                                className="px-3 py-1 text-sm border dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                                            >
+                                                Next
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-800 rounded-lg p-8 text-center">
+                            <Icon name={IconName.InfoCircle} className="w-12 h-12 mx-auto text-yellow-500 dark:text-yellow-400 mb-3" />
+                            <h4 className="text-lg font-bold text-yellow-800 dark:text-yellow-300 mb-2">No Results</h4>
+                            <p className="text-yellow-700 dark:text-yellow-400">
+                                The webhook did not return any results.
+                            </p>
+                        </div>
+                    )}
+                </div>
+                <div className="p-4 border-t dark:border-gray-700 text-right">
+                    <Button onClick={resetView}>Start a New Upload</Button>
+                </div>
+            </Card>
+        );
+    };
+
+    return (
+        <div>
+            <h2 className="text-3xl font-bold mb-6">Bulk Upload Enrolments</h2>
+            {isUploading ? (
+                <div className="flex justify-center py-20">
+                    <div className="text-center">
+                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
+                        <p className="mt-4 text-gray-600">Processing bulk enrolment...</p>
+                    </div>
+                </div>
+            ) : uploadResult ? (
+                <ResultsStep />
+            ) : (
+                <UploadStep />
+            )}
+        </div>
+    );
+};

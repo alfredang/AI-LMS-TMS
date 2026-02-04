@@ -23,8 +23,8 @@ export const Button: React.FC<ButtonProps> = ({
     primary: 'bg-primary text-white hover:bg-primary focus:ring-primary',
     secondary: 'bg-secondary text-white hover:bg-secondary focus:ring-secondary',
     danger: 'bg-red-600 text-white hover:bg-red-700 focus:ring-red-500',
-    ghost: 'bg-transparent text-gray-700 hover:bg-gray-100 focus:ring-primary',
-    outline: 'border border-gray-300 bg-transparent text-gray-700 hover:bg-gray-50 focus:ring-primary',
+    ghost: 'bg-transparent text-gray-700 hover:bg-gray-100 focus:ring-primary dark:text-gray-200 dark:hover:bg-gray-700',
+    outline: 'border border-gray-300 bg-transparent text-gray-700 hover:bg-gray-50 focus:ring-primary dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700',
   };
 
   const sizeStyles = {

@@ -77,6 +77,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate }) => {
                 <NavItem page={AdminPage.ViewAssessments} label="View Assessments" isSubItem />
                 <NavItem page={AdminPage.UploadCourseRuns} label="Upload Course Runs" isSubItem />
                 <NavItem page={AdminPage.UploadEnrolments} label="Upload Enrolments" isSubItem />
+                <NavItem page={AdminPage.SearchCourseRuns} label="Search Course Runs" isSubItem />
             </NavSection>
 
 
