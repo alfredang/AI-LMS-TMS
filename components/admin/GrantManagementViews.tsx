@@ -3217,3 +3217,6 @@ export const ViewCourseRunView: React.FC = () => {
         </div>
     );
 };
+
+// Export assessment views from separate file
+export { SearchAssessmentsView, ViewAssessmentView } from './AssessmentViews';

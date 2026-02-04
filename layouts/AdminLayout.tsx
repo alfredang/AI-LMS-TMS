@@ -29,14 +29,15 @@ import {
   ApplyNewGrantView,
   ViewGrantStatusView,
   SubmitAssessmentView,
-  ViewAssessmentsView,
   ApplyNewClaimView,
   UploadCourseRunsView,
   SearchGrantView,
   SearchEnrolmentView,
   ViewEnrolmentView,
   SearchCourseRunsView,
-  ViewCourseRunView
+  ViewCourseRunView,
+  SearchAssessmentsView,
+  ViewAssessmentView
 } from '../components/admin/GrantManagementViews';
 import { CourseRunView } from '../components/admin/CourseRunView';
 import { UploadDirectApplicationView, ViewDirectApplicationView, UpdateDirectApplicationView } from '../components/admin/DirectApplicationViews';
@@ -66,7 +67,6 @@ const ManagementDashboard: React.FC<ManagementDashboardProps> = ({ type }) => {
     { title: "Search Grant", description: "Search for grant details using Reference ID.", icon: IconName.Search, onClick: () => setAdminPage(AdminPage.SearchGrant) },
     { title: "View Grant Status", description: "Check the status of submitted grant applications.", icon: IconName.Eye, onClick: () => setAdminPage(AdminPage.ViewGrantStatus) },
     { title: "Submit Assessment", description: "Submit learner assessment results to TPG.", icon: IconName.Upload, onClick: () => setAdminPage(AdminPage.SubmitAssessment) },
-    { title: "View Assessments", description: "View official assessment results from TPG.", icon: IconName.ClipboardCheck, onClick: () => setAdminPage(AdminPage.ViewAssessments) },
     { title: "Apply New Claim", description: "Submit new claims to SSG for learners.", icon: IconName.DollarSign, onClick: () => setAdminPage(AdminPage.ApplyNewClaim) },
     { title: "Upload Course Runs", description: "Bulk upload new course runs via Excel to SSG.", icon: IconName.FileText, onClick: () => setAdminPage(AdminPage.UploadCourseRuns) },
     { title: "Upload Enrolments", description: "Bulk upload learner enrolments via Excel to SSG.", icon: IconName.FileText, onClick: () => setAdminPage(AdminPage.UploadEnrolments) },
@@ -252,8 +252,6 @@ const AdminLayout: React.FC = () => {
         return <ViewGrantStatusView />;
       case AdminPage.SubmitAssessment:
         return <SubmitAssessmentView />;
-      case AdminPage.ViewAssessments:
-        return <ViewAssessmentsView />;
       case AdminPage.ApplyNewClaim:
         return <ApplyNewClaimView />;
       case AdminPage.UploadCourseRuns:
@@ -264,6 +262,10 @@ const AdminLayout: React.FC = () => {
         return <SearchCourseRunsView />;
       case AdminPage.ViewCourseRun:
         return <ViewCourseRunView />;
+      case AdminPage.SearchAssessments:
+        return <SearchAssessmentsView />;
+      case AdminPage.ViewAssessment:
+        return <ViewAssessmentView />;
       case AdminPage.ClassDetail:
         return <ClassDetailView courseRunId={selectedCourseRunId || undefined} />;
       case AdminPage.CourseRun:
