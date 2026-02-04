@@ -13,6 +13,7 @@ import { ensureAbsoluteImageUrl } from '@utils/imageUtils';
 import { generateAvatarImage } from '@lib/services/geminiService';
 import { SKILLS_FUTURE_INDUSTRIES } from '@app-types/profile';
 import { getApiUrl, getUploadUrl, getDeleteFileUrl, stripBaseUrl } from '@/lib/urlHelpers';
+import { ThemeMode, getCurrentTheme, applyTheme } from '@utils/colorUtils';
 
 
 // Constants
@@ -914,6 +915,7 @@ const DeveloperProfileCard: React.FC<{
     const [selectedProfilePictureFile, setSelectedProfilePictureFile] = useState<File | null>(null);
     const [profilePicturePreviewUrl, setProfilePicturePreviewUrl] = useState<string | null>(null);
     const [uploadedProfilePicturePath, setUploadedProfilePicturePath] = useState<string | null>(null);
+    const [themeMode, setThemeMode] = useState<ThemeMode>(() => getCurrentTheme());
 
     useEffect(() => {
         setFormData(profile);
@@ -939,6 +941,13 @@ const DeveloperProfileCard: React.FC<{
 
     const handleWorkExperienceUpdate = (workExperience: WorkExperienceItem[]) => {
         setFormData(prev => ({ ...prev, workExperience }));
+    };
+
+    const handleThemeToggle = () => {
+        const newTheme: ThemeMode = themeMode === 'dark' ? 'light' : 'dark';
+        setThemeMode(newTheme);
+        applyTheme(newTheme);
+        console.log(`🌓 Theme toggled to: ${newTheme}`);
     };
 
     const handleCvUpdate = (file: File) => {
@@ -1589,6 +1598,49 @@ const DeveloperProfileCard: React.FC<{
                         />
                     </section>
                 </div>
+
+                {!isEditing && (
+                    <>
+                        <div className="border-t dark:border-gray-700 my-6"></div>
+                        <h2 className="text-xl font-bold mb-4 dark:text-white">Appearance</h2>
+
+                        {/* Theme Mode Toggle */}
+                        <div className="space-y-4">
+                            <div className="flex justify-between items-center p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
+                                <div className="flex items-center gap-3">
+                                    <div className={`p-2 rounded-lg ${themeMode === 'dark' ? 'bg-gray-600' : 'bg-blue-100'}`}>
+                                        {themeMode === 'dark' ? (
+                                            <svg className="w-5 h-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
+                                                <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z" />
+                                            </svg>
+                                        ) : (
+                                            <svg className="w-5 h-5 text-yellow-500" fill="currentColor" viewBox="0 0 20 20">
+                                                <path fillRule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" clipRule="evenodd" />
+                                            </svg>
+                                        )}
+                                    </div>
+                                    <div>
+                                        <p className="font-semibold text-gray-900 dark:text-gray-200">Theme Mode</p>
+                                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                                            {themeMode === 'dark' ? 'Dark theme active' : 'Light theme active'}
+                                        </p>
+                                    </div>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={handleThemeToggle}
+                                    className={`relative inline-flex h-7 w-14 items-center rounded-full transition-colors duration-300 ${themeMode === 'dark' ? 'bg-blue-600' : 'bg-gray-300'
+                                        }`}
+                                >
+                                    <span
+                                        className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-md transition-transform duration-300 ${themeMode === 'dark' ? 'translate-x-8' : 'translate-x-1'
+                                            }`}
+                                    />
+                                </button>
+                            </div>
+                        </div>
+                    </>
+                )}
             </Card>
 
             <LoginDetailsCard
