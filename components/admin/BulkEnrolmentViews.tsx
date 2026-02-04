@@ -731,7 +731,7 @@ export const BulkUploadEnrolmentView: React.FC = () => {
                                                                         } catch (e) {
                                                                             return (
                                                                                 <div className="flex items-center gap-2 p-3 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg">
-                                                                                    <Icon name={IconName.AlertCircle} className="w-4 h-4 text-orange-600 dark:text-orange-400 flex-shrink-0" />
+                                                                                    <Icon name={IconName.InfoCircle} className="w-4 h-4 text-orange-600 dark:text-orange-400 flex-shrink-0" />
                                                                                     <span className="text-sm text-orange-700 dark:text-orange-300">Failed to parse response</span>
                                                                                 </div>
                                                                             );
