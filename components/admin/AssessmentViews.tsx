@@ -892,7 +892,7 @@ export const ViewAssessmentView: React.FC = () => {
                     </div>
                     <div className="p-6">
                         <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-lg p-8 text-center">
-                            <Icon name={IconName.AlertTriangle} className="w-12 h-12 mx-auto text-red-500 dark:text-red-400 mb-3" />
+                            <Icon name={IconName.X} className="w-12 h-12 mx-auto text-red-500 dark:text-red-400 mb-3" />
                             <h4 className="text-lg font-bold text-red-800 dark:text-red-300 mb-2">Assessment Not Found</h4>
                             <p className="text-red-700 dark:text-red-400 mb-4">
                                 {searchError}

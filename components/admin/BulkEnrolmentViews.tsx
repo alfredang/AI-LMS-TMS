@@ -14,7 +14,7 @@ const ErrorMessageDisplay: React.FC<{ error: any }> = ({ error }) => {
         return (
             <div className="p-4 bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 dark:border-red-600 rounded-r-lg shadow-sm">
                 <div className="flex items-center gap-2 mb-3">
-                    <Icon name={IconName.XCircle} className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0" />
+                    <Icon name={IconName.X} className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0" />
                     <div className="font-semibold text-red-900 dark:text-red-200">
                         Enrolment Created Unsuccessfully
                     </div>
@@ -42,7 +42,7 @@ const ErrorMessageDisplay: React.FC<{ error: any }> = ({ error }) => {
         return (
             <div className="space-y-2 p-4 bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 dark:border-red-600 rounded-r-lg shadow-sm">
                 <div className="flex items-center gap-2">
-                    <Icon name={IconName.XCircle} className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0" />
+                    <Icon name={IconName.X} className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0" />
                     <div className="font-semibold text-red-900 dark:text-red-200">
                         Enrolment Created Unsuccessfully
                     </div>
