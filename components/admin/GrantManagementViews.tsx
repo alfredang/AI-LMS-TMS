@@ -2559,7 +2559,7 @@ export const SearchCourseRunsView: React.FC = () => {
                                             className="relative inline-flex items-center rounded-l-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50 disabled:cursor-not-allowed dark:ring-gray-600 dark:hover:bg-gray-700"
                                         >
                                             <span className="sr-only">Previous</span>
-                                            <Icon name={IconName.ChevronLeft} className="h-5 w-5" />
+                                            <Icon name={IconName.Back} className="h-5 w-5" />
                                         </button>
                                         
                                         {/* Page Numbers */}
@@ -2598,7 +2598,7 @@ export const SearchCourseRunsView: React.FC = () => {
                                             className="relative inline-flex items-center rounded-r-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50 disabled:cursor-not-allowed dark:ring-gray-600 dark:hover:bg-gray-700"
                                         >
                                             <span className="sr-only">Next</span>
-                                            <Icon name={IconName.ChevronRight} className="h-5 w-5" />
+                                            <Icon name={IconName.ChevronDown} className="h-5 w-5 rotate-[-90deg]" />
                                         </button>
                                     </nav>
                                 </div>
