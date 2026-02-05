@@ -2559,7 +2559,7 @@ export const SearchCourseRunsView: React.FC = () => {
                                             className="relative inline-flex items-center rounded-l-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50 disabled:cursor-not-allowed dark:ring-gray-600 dark:hover:bg-gray-700"
                                         >
                                             <span className="sr-only">Previous</span>
-                                            <Icon name={IconName.ChevronLeft} className="h-5 w-5" />
+                                            <Icon name={IconName.Back} className="h-5 w-5" />
                                         </button>
                                         
                                         {/* Page Numbers */}
@@ -2598,7 +2598,7 @@ export const SearchCourseRunsView: React.FC = () => {
                                             className="relative inline-flex items-center rounded-r-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50 disabled:cursor-not-allowed dark:ring-gray-600 dark:hover:bg-gray-700"
                                         >
                                             <span className="sr-only">Next</span>
-                                            <Icon name={IconName.ChevronRight} className="h-5 w-5" />
+                                            <Icon name={IconName.ChevronDown} className="h-5 w-5 rotate-[-90deg]" />
                                         </button>
                                     </nav>
                                 </div>
@@ -3217,3 +3217,233 @@ export const ViewCourseRunView: React.FC = () => {
         </div>
     );
 };
+
+// Cancel Enrolment View
+export const CancelEnrolmentView: React.FC = () => {
+    const [enrolmentId, setEnrolmentId] = useState<string>('');
+    const [courseRunId, setCourseRunId] = useState<string>('');
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [result, setResult] = useState<any>(null);
+    const [error, setError] = useState<string | null>(null);
+    const [showConfirm, setShowConfirm] = useState(false);
+
+    const WEBHOOK_URL = 'https://n8n.srv1231536.hstgr.cloud/webhook/b0e0eaf3-00f2-4273-8a3d-159d9e7734a4';
+
+    const inputClasses = "block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-500";
+
+    const handleSubmit = async () => {
+        setShowConfirm(false);
+        setIsSubmitting(true);
+        setError(null);
+        setResult(null);
+
+        try {
+            const payload = {
+                enrolmentId: enrolmentId.trim(),
+                courseRunId: courseRunId.trim(),
+                timestamp: new Date().toISOString(),
+                source: 'admin-cancel-enrolment'
+            };
+
+            console.log('📤 Cancel enrolment payload:', payload);
+
+            const response = await fetch(WEBHOOK_URL, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+                if (response.status === 500) {
+                    throw new Error('SSG API server error. The service may be temporarily unavailable. Please try again later.');
+                }
+                throw new Error(`Unable to connect to SSG API (Error ${response.status}). Please check your connection and try again.`);
+            }
+
+            const data = await response.json();
+            console.log('✅ Cancel enrolment response:', data);
+
+            // Parse response
+            let parsedResult = data;
+            if (data?.result) {
+                parsedResult = typeof data.result === 'string' ? JSON.parse(data.result) : data.result;
+            }
+
+            // Check for error status
+            const hasError = (parsedResult?.error?.details?.length > 0) ||
+                (parsedResult?.error?.message) ||
+                (parsedResult?.status && parsedResult.status >= 400);
+
+            if (hasError) {
+                const errorMessage = parsedResult?.error?.details?.[0]?.message ||
+                    parsedResult?.error?.message ||
+                    'Failed to cancel enrolment';
+                setError(errorMessage);
+            }
+
+            setResult(parsedResult);
+        } catch (err) {
+            console.error('❌ Error cancelling enrolment:', err);
+            setError(err instanceof Error ? err.message : 'Failed to cancel enrolment');
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleClear = () => {
+        setEnrolmentId('');
+        setCourseRunId('');
+        setResult(null);
+        setError(null);
+        setShowConfirm(false);
+    };
+
+    const isFormValid = enrolmentId.trim() && courseRunId.trim();
+
+    return (
+        <div>
+            <h2 className="text-3xl font-bold mb-6 dark:text-white">Cancel Enrolment</h2>
+
+            {/* Input Form Card */}
+            <Card className="p-6 mb-6">
+                <h3 className="text-lg font-bold text-gray-700 dark:text-gray-200 mb-4">Enrolment Details</h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                    Both Enrolment ID and Course Run ID are required to cancel an enrolment.
+                </p>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    <div>
+                        <label htmlFor="cancel-enrolment-id" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
+                            Enrolment ID <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                            id="cancel-enrolment-id"
+                            type="text"
+                            value={enrolmentId}
+                            onChange={(e) => setEnrolmentId(e.target.value)}
+                            placeholder="e.g. ENR-2602-014784"
+                            className={inputClasses}
+                            disabled={isSubmitting}
+                        />
+                    </div>
+                    <div>
+                        <label htmlFor="cancel-course-run-id" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
+                            Course Run ID <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                            id="cancel-course-run-id"
+                            type="text"
+                            value={courseRunId}
+                            onChange={(e) => setCourseRunId(e.target.value)}
+                            placeholder="e.g. 1225151"
+                            className={inputClasses}
+                            disabled={isSubmitting}
+                        />
+                    </div>
+                </div>
+
+                <div className="flex gap-3">
+                    {!showConfirm ? (
+                        <Button
+                            onClick={() => setShowConfirm(true)}
+                            disabled={isSubmitting || !isFormValid}
+                        >
+                            {isSubmitting ? (
+                                <div className="flex items-center">
+                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                                    Cancelling...
+                                </div>
+                            ) : (
+                                <>
+                                    <Icon name={IconName.X} className="w-4 h-4 mr-2" />
+                                    Cancel Enrolment
+                                </>
+                            )}
+                        </Button>
+                    ) : (
+                        <div className="flex items-center gap-3">
+                            <span className="text-sm text-red-600 dark:text-red-400 font-medium">
+                                Are you sure you want to cancel this enrolment?
+                            </span>
+                            <Button onClick={handleSubmit}>
+                                Yes, Cancel It
+                            </Button>
+                            <Button variant="outline" onClick={() => setShowConfirm(false)}>
+                                No, Go Back
+                            </Button>
+                        </div>
+                    )}
+                    <Button variant="outline" onClick={handleClear} disabled={isSubmitting}>
+                        Clear
+                    </Button>
+                </div>
+
+                {error && !result && (
+                    <p className="text-red-500 text-sm mt-3">{error}</p>
+                )}
+            </Card>
+
+            {/* Loading State */}
+            {isSubmitting && (
+                <div className="flex justify-center py-10">
+                    <div className="text-center">
+                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
+                        <p className="mt-4 text-gray-600 dark:text-gray-400">Processing cancellation...</p>
+                    </div>
+                </div>
+            )}
+
+            {/* Result Display */}
+            {!isSubmitting && result && (
+                <Card className="p-6">
+                    {error ? (
+                        <div className="bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 dark:border-red-600 rounded-r-lg p-4">
+                            <div className="flex items-center gap-2 mb-2">
+                                <Icon name={IconName.X} className="w-5 h-5 text-red-600 dark:text-red-400" />
+                                <h4 className="font-semibold text-red-900 dark:text-red-200">Cancellation Failed</h4>
+                            </div>
+                            <p className="text-sm text-red-800 dark:text-red-300 pl-7">{error}</p>
+                        </div>
+                    ) : (
+                        <div className="bg-green-50 dark:bg-green-900/20 border-l-4 border-green-500 dark:border-green-600 rounded-r-lg p-4">
+                            <div className="flex items-center gap-2 mb-2">
+                                <Icon name={IconName.CheckCircle} className="w-5 h-5 text-green-600 dark:text-green-400" />
+                                <h4 className="font-semibold text-green-900 dark:text-green-200">Enrolment Cancelled Successfully</h4>
+                            </div>
+                            <div className="pl-7 space-y-1">
+                                {result?.data?.enrolment?.referenceNumber && (
+                                    <p className="text-sm text-green-700 dark:text-green-300">
+                                        <span className="font-medium">Reference:</span>{' '}
+                                        <span className="font-mono bg-green-100 dark:bg-green-900/40 px-2 py-0.5 rounded">
+                                            {result.data.enrolment.referenceNumber}
+                                        </span>
+                                    </p>
+                                )}
+                                {result?.data?.enrolment?.status && (
+                                    <p className="text-sm text-green-700 dark:text-green-300">
+                                        <span className="font-medium">Status:</span> {result.data.enrolment.status}
+                                    </p>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Raw Response (collapsible) */}
+                    <details className="mt-4">
+                        <summary className="text-sm text-gray-500 dark:text-gray-400 cursor-pointer hover:text-gray-700 dark:hover:text-gray-300">
+                            View Raw Response
+                        </summary>
+                        <pre className="mt-2 text-xs bg-gray-100 dark:bg-gray-800 p-3 rounded overflow-auto max-h-60">
+                            {JSON.stringify(result, null, 2)}
+                        </pre>
+                    </details>
+                </Card>
+            )}
+        </div>
+    );
+};
+
+// Export assessment views from separate file
+export { SearchAssessmentsView, ViewAssessmentView } from './AssessmentViews';
