@@ -40,9 +40,44 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             'DELETE FROM training_provider_member WHERE user_id = $1 RETURNING provider_id',
             [userId]
         );
-        
+
         if (deletedMemberships.rows.length > 0) {
             console.log(`🗑️ Removed user ${userId} from ${deletedMemberships.rows.length} training provider organization(s)`);
+
+            // Check if this was the last member of any training provider organization
+            // If so, delete the training provider record to free up the UEN
+            for (const membership of deletedMemberships.rows) {
+                const providerId = membership.provider_id;
+
+                // Count remaining members for this provider
+                const remainingMembers = await client.query(
+                    'SELECT COUNT(*) as count FROM training_provider_member WHERE provider_id = $1',
+                    [providerId]
+                );
+
+                const memberCount = parseInt(remainingMembers.rows[0].count);
+
+                if (memberCount === 0) {
+                    // This was the last member - delete the training provider organization
+                    // This will cascade delete related records (training_provider_api, etc.)
+                    const providerInfo = await client.query(
+                        'SELECT company_name, uen FROM training_provider WHERE id = $1',
+                        [providerId]
+                    );
+
+                    if (providerInfo.rows.length > 0) {
+                        const { company_name, uen } = providerInfo.rows[0];
+
+                        await client.query(
+                            'DELETE FROM training_provider WHERE id = $1',
+                            [providerId]
+                        );
+
+                        console.log(`🏢 Deleted training provider organization: ${company_name} (UEN: ${uen})`);
+                        console.log(`✅ UEN ${uen} is now available for reuse`);
+                    }
+                }
+            }
         }
 
         // Also remove from legacy provider_admin_user if exists
@@ -50,7 +85,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             'DELETE FROM provider_admin_user WHERE user_id = $1 RETURNING provider_id',
             [userId]
         );
-        
+
         if (deletedAdminLinks.rows.length > 0) {
             console.log(`🗑️ Removed user ${userId} from ${deletedAdminLinks.rows.length} legacy provider admin link(s)`);
         }

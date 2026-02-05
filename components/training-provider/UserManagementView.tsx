@@ -93,6 +93,11 @@ const UserManagementView: React.FC = () => {
     // Delete User State
     const [deletingUser, setDeletingUser] = useState<UserData | null>(null);
     const [isDeletingUser, setIsDeletingUser] = useState(false);
+    const [deletingUserOrgInfo, setDeletingUserOrgInfo] = useState<{
+        isLastMember: boolean;
+        companyName: string;
+        uen: string;
+    } | null>(null);
 
     const filterableColumns = [
         { value: 'full_name', label: 'Full Name' },
@@ -330,7 +335,7 @@ const UserManagementView: React.FC = () => {
                 const formData = new FormData();
                 formData.append('companyLogo', companyLogoFile);
                 formData.append('data', JSON.stringify(newProvider));
-                
+
                 response = await fetch('/api/training-provider/add-organization', {
                     method: 'POST',
                     body: formData
@@ -350,7 +355,7 @@ const UserManagementView: React.FC = () => {
             }
 
             alert(`Training provider organization created successfully!\n\nOwner Account:\nEmail: ${newProvider.ownerEmail}\nPassword: ${newProvider.ownerPassword}\n\nPlease save these credentials.`);
-            
+
             // Reset form
             setNewProvider({
                 ownerName: '',
@@ -368,7 +373,7 @@ const UserManagementView: React.FC = () => {
             setCompanyLogoFile(null);
             setCompanyLogoPreview(null);
             setIsAddProviderModalOpen(false);
-            
+
             // Refresh users list
             fetchUsers();
         } catch (err) {
@@ -442,6 +447,34 @@ const UserManagementView: React.FC = () => {
         });
     };
 
+    // Check if user is last member of their organization
+    const checkIfLastMember = async (userId: string) => {
+        try {
+            const response = await fetch(`/api/training-provider/check-last-member?userId=${userId}`);
+            const result = await response.json();
+
+            if (result.success) {
+                setDeletingUserOrgInfo({
+                    isLastMember: result.isLastMember,
+                    companyName: result.companyName || '',
+                    uen: result.uen || ''
+                });
+            }
+        } catch (err) {
+            console.error('Error checking last member status:', err);
+            setDeletingUserOrgInfo(null);
+        }
+    };
+
+    // Handle opening delete modal
+    const handleOpenDeleteModal = async (user: UserData) => {
+        setDeletingUser(user);
+        // Check if this user is the last member of their organization
+        if (user.roles.includes('Training Provider')) {
+            await checkIfLastMember(user.id);
+        }
+    };
+
     // Handle Delete User
     const handleDeleteUser = async () => {
         if (!deletingUser) return;
@@ -465,7 +498,13 @@ const UserManagementView: React.FC = () => {
             // Success - refresh list
             await fetchUsers();
             setDeletingUser(null);
-            alert('User deleted successfully!');
+            setDeletingUserOrgInfo(null);
+
+            if (deletingUserOrgInfo?.isLastMember) {
+                alert(`User deleted successfully!\n\nThe training provider organization "${deletingUserOrgInfo.companyName}" has been removed and UEN ${deletingUserOrgInfo.uen} is now available for reuse.`);
+            } else {
+                alert('User deleted successfully!');
+            }
 
         } catch (err) {
             alert(`Failed to delete user: ${err instanceof Error ? err.message : 'Unknown error'}`);
@@ -698,11 +737,10 @@ const UserManagementView: React.FC = () => {
                                                     </div>
                                                 </td>
                                                 <td className="px-4 py-3 whitespace-nowrap text-sm">
-                                                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full border ${
-                                                        user.account_status === 'active'
+                                                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full border ${user.account_status === 'active'
                                                             ? 'bg-green-100 text-green-800 border-green-200'
                                                             : 'bg-red-100 text-red-800 border-red-200'
-                                                    }`}>
+                                                        }`}>
                                                         {user.account_status === 'active' ? 'Active' : 'Disabled'}
                                                     </span>
                                                 </td>
@@ -719,7 +757,7 @@ const UserManagementView: React.FC = () => {
                                                                 Edit
                                                             </button>
                                                             <button
-                                                                onClick={() => setDeletingUser(user)}
+                                                                onClick={() => handleOpenDeleteModal(user)}
                                                                 className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 border border-red-300 dark:border-red-600 rounded hover:bg-red-50 dark:hover:bg-red-900/30 transition-colors"
                                                             >
                                                                 <Icon name={IconName.Delete} className="w-4 h-4 mr-1" />
@@ -846,11 +884,10 @@ const UserManagementView: React.FC = () => {
                                 <div className="flex gap-2">
                                     <button
                                         onClick={() => setEditAccountStatus('active')}
-                                        className={`flex-1 flex items-center justify-center gap-2 p-3 rounded-lg border transition-colors ${
-                                            editAccountStatus === 'active'
+                                        className={`flex-1 flex items-center justify-center gap-2 p-3 rounded-lg border transition-colors ${editAccountStatus === 'active'
                                                 ? 'border-green-400 bg-green-50 dark:bg-green-900/30 dark:border-green-600'
                                                 : 'border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
-                                        }`}
+                                            }`}
                                     >
                                         <span className="inline-flex px-2 py-0.5 text-xs font-semibold rounded-full border bg-green-100 text-green-800 border-green-200">
                                             Active
@@ -858,11 +895,10 @@ const UserManagementView: React.FC = () => {
                                     </button>
                                     <button
                                         onClick={() => setEditAccountStatus('disabled')}
-                                        className={`flex-1 flex items-center justify-center gap-2 p-3 rounded-lg border transition-colors ${
-                                            editAccountStatus === 'disabled'
+                                        className={`flex-1 flex items-center justify-center gap-2 p-3 rounded-lg border transition-colors ${editAccountStatus === 'disabled'
                                                 ? 'border-red-400 bg-red-50 dark:bg-red-900/30 dark:border-red-600'
                                                 : 'border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
-                                        }`}
+                                            }`}
                                     >
                                         <span className="inline-flex px-2 py-0.5 text-xs font-semibold rounded-full border bg-red-100 text-red-800 border-red-200">
                                             Disabled
@@ -1019,7 +1055,7 @@ const UserManagementView: React.FC = () => {
                             {/* Owner Account Section */}
                             <div className="space-y-4">
                                 <h4 className="text-lg font-semibold text-gray-900 dark:text-white border-b pb-2">Owner Account Details</h4>
-                                
+
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -1096,7 +1132,7 @@ const UserManagementView: React.FC = () => {
                             {/* Company Information Section */}
                             <div className="space-y-4">
                                 <h4 className="text-lg font-semibold text-gray-900 dark:text-white border-b pb-2">Company Information</h4>
-                                
+
                                 {/* Company Logo Upload */}
                                 <div className="col-span-full">
                                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -1105,9 +1141,9 @@ const UserManagementView: React.FC = () => {
                                     <div className="flex items-center gap-4">
                                         {companyLogoPreview && (
                                             <div className="relative">
-                                                <img 
-                                                    src={companyLogoPreview} 
-                                                    alt="Logo preview" 
+                                                <img
+                                                    src={companyLogoPreview}
+                                                    alt="Logo preview"
                                                     className="w-20 h-20 object-contain rounded-lg border border-gray-300 dark:border-gray-600"
                                                 />
                                                 <button
@@ -1214,7 +1250,7 @@ const UserManagementView: React.FC = () => {
                             {/* Contact Information Section */}
                             <div className="space-y-4">
                                 <h4 className="text-lg font-semibold text-gray-900 dark:text-white border-b pb-2">Contact Information</h4>
-                                
+
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -1298,6 +1334,18 @@ const UserManagementView: React.FC = () => {
                                         <p className="text-sm text-red-700 dark:text-red-400 mt-1">
                                             All data associated with <strong>{deletingUser.full_name}</strong> ({deletingUser.email}) will be permanently deleted.
                                         </p>
+                                        {deletingUserOrgInfo?.isLastMember && (
+                                            <div className="mt-3 pt-3 border-t border-red-300 dark:border-red-700">
+                                                <p className="text-sm font-semibold text-red-900 dark:text-red-200">
+                                                    ⚠️ Last Member Warning
+                                                </p>
+                                                <p className="text-sm text-red-800 dark:text-red-300 mt-1">
+                                                    This is the last user in <strong>{deletingUserOrgInfo.companyName}</strong>.
+                                                    Deleting this user will also <strong>delete the entire training provider organization</strong> and
+                                                    free up UEN <strong>{deletingUserOrgInfo.uen}</strong> for reuse.
+                                                </p>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             </div>
