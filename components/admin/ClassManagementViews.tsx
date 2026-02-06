@@ -2002,7 +2002,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                             onClick={() => setActiveTab('courseRun')}
                             className={`whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm ${activeTab === 'courseRun'
                                     ? 'border-blue-500 text-blue-600'
-                                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                                    : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300'
                                 }`}
                         >
                             Course Run
@@ -2011,7 +2011,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                             onClick={() => setActiveTab('sessions')}
                             className={`whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm ${activeTab === 'sessions'
                                     ? 'border-blue-500 text-blue-600'
-                                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                                    : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300'
                                 }`}
                         >
                             Sessions
@@ -2020,7 +2020,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                             onClick={() => setActiveTab('trainer')}
                             className={`whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm ${activeTab === 'trainer'
                                     ? 'border-blue-500 text-blue-600'
-                                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                                    : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300'
                                 }`}
                         >
                             Trainer
@@ -2055,7 +2055,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                         <FormSection title="Basic Class Information">
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-sm font-bold text-gray-700 mb-1">
+                                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
                                         Course Run ID *
                                     </label>
                                     <input
@@ -2070,7 +2070,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                 </div>
                                 {isEditMode && (
                                     <div>
-                                        <label className="block text-sm font-bold text-gray-700 mb-1">
+                                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
                                             Course Reference Number *
                                         </label>
                                         <input
@@ -2091,7 +2091,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                         {isEditMode && (
                             <FormSection title="Course Vacancy Details">
                                 <div>
-                                    <label className="block text-sm font-bold text-gray-700 mb-1">Course Vacancy *</label>
+                                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Course Vacancy *</label>
                                     <select
                                         value={editFormData.courseVacancy?.code || ''}
                                         onChange={(e) => handleInputChange('courseVacancy', {
@@ -2116,7 +2116,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                             <FormSection title="Registration Dates">
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                     <div>
-                                        <label className="block text-sm font-bold text-gray-700 mb-1">Opening Registration Date *</label>
+                                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Opening Registration Date *</label>
                                         <input
                                             type="date"
                                             value={editFormData.openingRegistrationDate || ''}
@@ -2125,7 +2125,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-bold text-gray-700 mb-1">Closing Registration Date *</label>
+                                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Closing Registration Date *</label>
                                         <input
                                             type="date"
                                             value={editFormData.closingRegistrationDate || ''}
@@ -2142,7 +2142,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                             <FormSection title="Course Dates">
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                     <div>
-                                        <label className="block text-sm font-bold text-gray-700 mb-1">Course Start Date *</label>
+                                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Course Start Date *</label>
                                         <input
                                             type="date"
                                             value={editFormData.courseStartDate || startDate}
@@ -2154,7 +2154,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-bold text-gray-700 mb-1">Course End Date *</label>
+                                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Course End Date *</label>
                                         <input
                                             type="date"
                                             value={editFormData.courseEndDate || endDate}
@@ -2174,7 +2174,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                             <FormSection title="Venue Information">
                                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                                     <div>
-                                        <label className="block text-sm font-bold text-gray-700 mb-1">Block *</label>
+                                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Block *</label>
                                         <input
                                             type="text"
                                             value={editFormData.block || ''}
@@ -2185,7 +2185,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-bold text-gray-700 mb-1">Street *</label>
+                                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Street *</label>
                                         <input
                                             type="text"
                                             value={editFormData.street || ''}
@@ -2196,7 +2196,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-bold text-gray-700 mb-1">Building *</label>
+                                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Building *</label>
                                         <input
                                             type="text"
                                             value={editFormData.building || ''}
@@ -2207,7 +2207,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-bold text-gray-700 mb-1">Floor *</label>
+                                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Floor *</label>
                                         <input
                                             type="text"
                                             value={editFormData.floor || ''}
@@ -2218,7 +2218,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-bold text-gray-700 mb-1">Unit *</label>
+                                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Unit *</label>
                                         <input
                                             type="text"
                                             value={editFormData.unit || ''}
@@ -2229,7 +2229,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-bold text-gray-700 mb-1">Postal Code *</label>
+                                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Postal Code *</label>
                                         <input
                                             type="text"
                                             value={editFormData.postalCode || ''}
@@ -2240,7 +2240,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-bold text-gray-700 mb-1">Room *</label>
+                                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Room *</label>
                                         <input
                                             type="text"
                                             value={editFormData.room || ''}
@@ -2251,7 +2251,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-bold text-gray-700 mb-1">Wheelchair Access *</label>
+                                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Wheelchair Access *</label>
                                         <select
                                             value={editFormData.wheelChairAccess || ''}
                                             onChange={(e) => handleInputChange('wheelChairAccess', e.target.value as OptionalSelector)}
@@ -2274,7 +2274,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                         {isEditMode && (
                             <FormSection title="Course Administration">
                                 <div>
-                                    <label className="block text-sm font-bold text-gray-700 mb-1">Course Admin Email</label>
+                                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Course Admin Email</label>
                                     <input
                                         type="email"
                                         value={editFormData.courseAdminEmail || ''}
@@ -2283,7 +2283,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                         placeholder="Enter course admin email"
                                     />
                                     {ssgApiResponse?.data && (
-                                        <p className="text-xs text-gray-500 mt-1">
+                                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                                             This field is populated from SSG data and cannot be edited
                                         </p>
                                     )}
@@ -2387,7 +2387,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                                         disabled={session.modeOfTraining === '2' || session.modeOfTraining === '4' ? false : false}
                                                                     />
                                                                     {(session.modeOfTraining && session.modeOfTraining !== '2' && session.modeOfTraining !== '4') && (
-                                                                        <p className="text-xs text-gray-500 mt-1">Auto-filled from start date for this mode</p>
+                                                                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Auto-filled from start date for this mode</p>
                                                                     )}
                                                                 </div>
                                                                 <div>
@@ -2404,7 +2404,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                                         disabled={session.modeOfTraining === '2' || session.modeOfTraining === '4'}
                                                                     />
                                                                     {(session.modeOfTraining === '2' || session.modeOfTraining === '4') && (
-                                                                        <p className="text-xs text-gray-500 mt-1">Auto-set to 00:00 for this mode</p>
+                                                                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Auto-set to 00:00 for this mode</p>
                                                                     )}
                                                                 </div>
                                                                 <div>
@@ -2421,14 +2421,14 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                                         disabled={session.modeOfTraining === '2' || session.modeOfTraining === '4'}
                                                                     />
                                                                     {(session.modeOfTraining === '2' || session.modeOfTraining === '4') && (
-                                                                        <p className="text-xs text-gray-500 mt-1">Auto-set to 23:59 for this mode</p>
+                                                                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Auto-set to 23:59 for this mode</p>
                                                                     )}
                                                                 </div>
                                                             </div>
 
                                                             {/* Session Venue Fields */}
                                                             <div className="border-t pt-4">
-                                                                <h5 className="text-md font-medium text-gray-700 mb-3">Session Venue</h5>
+                                                                <h5 className="text-md font-medium text-gray-700 dark:text-gray-300 mb-3">Session Venue</h5>
                                                                 <div className="grid grid-cols-2 gap-4">
                                                                     <div>
                                                                         <label className="block text-sm font-medium mb-1">Block</label>
@@ -2705,7 +2705,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                                 className="w-full px-3 py-2 border border-gray-300 rounded-md"
                                                             />
                                                             {(session.modeOfTraining && session.modeOfTraining !== '2' && session.modeOfTraining !== '4') && (
-                                                                <p className="text-xs text-gray-500 mt-1">Auto-filled from start date for this mode</p>
+                                                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Auto-filled from start date for this mode</p>
                                                             )}
                                                         </div>
                                                         <div>
@@ -2718,7 +2718,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                                 disabled={session.modeOfTraining === '2' || session.modeOfTraining === '4'}
                                                             />
                                                             {(session.modeOfTraining === '2' || session.modeOfTraining === '4') && (
-                                                                <p className="text-xs text-gray-500 mt-1">Auto-set to 00:00 for this mode</p>
+                                                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Auto-set to 00:00 for this mode</p>
                                                             )}
                                                         </div>
                                                         <div>
@@ -2731,14 +2731,14 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                                 disabled={session.modeOfTraining === '2' || session.modeOfTraining === '4'}
                                                             />
                                                             {(session.modeOfTraining === '2' || session.modeOfTraining === '4') && (
-                                                                <p className="text-xs text-gray-500 mt-1">Auto-set to 23:59 for this mode</p>
+                                                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Auto-set to 23:59 for this mode</p>
                                                             )}
                                                         </div>
                                                     </div>
 
                                                     {/* Session Venue Fields */}
                                                     <div className="border-t pt-4">
-                                                        <h5 className="text-md font-medium text-gray-700 mb-3">Session Venue</h5>
+                                                        <h5 className="text-md font-medium text-gray-700 dark:text-gray-300 mb-3">Session Venue</h5>
                                                         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                                                             <div>
                                                                 <label className="block text-sm font-medium mb-1">Floor *</label>
@@ -2858,16 +2858,16 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                                 </h5>
                                                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
                                                                     <div>
-                                                                        <span className="font-bold text-gray-700 ">ID Number:</span>
-                                                                        <div className="text-gray-900">{trainer.idNumber}</div>
+                                                                        <span className="font-bold text-gray-700 dark:text-gray-300 ">ID Number:</span>
+                                                                        <div className="text-gray-900 dark:text-white">{trainer.idNumber}</div>
                                                                     </div>
                                                                     <div>
-                                                                        <span className="font-bold text-gray-700">Name:</span>
-                                                                        <div className="text-gray-900">{trainer.name}</div>
+                                                                        <span className="font-bold text-gray-700 dark:text-gray-300">Name:</span>
+                                                                        <div className="text-gray-900 dark:text-white">{trainer.name}</div>
                                                                     </div>
                                                                     <div>
-                                                                        <span className="font-bold text-gray-700">Email:</span>
-                                                                        <div className="text-gray-900">{trainer.email}</div>
+                                                                        <span className="font-bold text-gray-700 dark:text-gray-300">Email:</span>
+                                                                        <div className="text-gray-900 dark:text-white">{trainer.email}</div>
                                                                     </div>
                                                                 </div>
                                                             </div>
@@ -2878,12 +2878,12 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                         </div>
                                     ) : (
                                         <Card className="p-6 bg-gray-50 border-gray-200 text-center">
-                                            <div className="text-gray-600">
+                                            <div className="text-gray-600 dark:text-gray-300">
                                                 <svg className="mx-auto h-12 w-12 text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                                                 </svg>
                                                 <h5 className="text-lg font-medium text-gray-900 mb-2">No Trainer Assigned</h5>
-                                                <p className="text-sm text-gray-500">
+                                                <p className="text-sm text-gray-500 dark:text-gray-400">
                                                     No trainer has been assigned to this course run yet. Use the form below to assign a trainer.
                                                 </p>
                                             </div>
@@ -2936,7 +2936,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
 
                                                 {/* Trainer ID Number field - always displayed */}
                                                 <div>
-                                                    <label className="block text-sm font-medium text-gray-700 mb-1">Trainer ID Number *</label>
+                                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Trainer ID Number *</label>
                                                     <input
                                                         type="text"
                                                         value={trainerInfo.trainerIdNumber || ''}
@@ -2945,7 +2945,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                         placeholder="Enter existing trainer ID"
                                                         required
                                                     />
-                                                    <p className="text-xs text-gray-500 mt-1">
+                                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                                                         Enter the ID number of an existing trainer to assign them to this course run.
                                                     </p>
                                                 </div>
@@ -3002,7 +3002,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                         </svg>
                                     )}
                                 </div>
-                                <h3 className="text-lg font-semibold text-gray-900">{popupConfig.title}</h3>
+                                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{popupConfig.title}</h3>
                             </div>
 
                             <p className="text-gray-600 mb-6">{popupConfig.message}</p>
@@ -3070,8 +3070,8 @@ export const EnrollLearnersView: React.FC = () => {
 
             <Card className="p-6">
                 <div className="text-center py-8">
-                    <h3 className="text-xl font-semibold text-gray-700 mb-2">Enroll Learners Feature</h3>
-                    <p className="text-gray-500">This feature will allow bulk enrollment of learners to classes.</p>
+                    <h3 className="text-xl font-semibold text-gray-700 dark:text-gray-300 mb-2">Enroll Learners Feature</h3>
+                    <p className="text-gray-500 dark:text-gray-400">This feature will allow bulk enrollment of learners to classes.</p>
                     <p className="text-sm text-gray-400 mt-2">Coming soon...</p>
                 </div>
             </Card>
@@ -3093,8 +3093,8 @@ export const AssignTrainerView: React.FC = () => {
 
             <Card className="p-6">
                 <div className="text-center py-8">
-                    <h3 className="text-xl font-semibold text-gray-700 mb-2">Assign Trainer Feature</h3>
-                    <p className="text-gray-500">This feature will allow assignment of trainers to specific classes.</p>
+                    <h3 className="text-xl font-semibold text-gray-700 dark:text-gray-300 mb-2">Assign Trainer Feature</h3>
+                    <p className="text-gray-500 dark:text-gray-400">This feature will allow assignment of trainers to specific classes.</p>
                     <p className="text-sm text-gray-400 mt-2">Coming soon...</p>
                 </div>
             </Card>

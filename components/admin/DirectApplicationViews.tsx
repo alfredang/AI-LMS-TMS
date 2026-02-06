@@ -249,7 +249,7 @@ export const UploadDirectApplicationView: React.FC = () => {
 
             <div className="text-center mb-4">
                 <h3 className="text-xl font-bold">Upload Direct Application</h3>
-                <p className="text-gray-500 mt-1">Submit DA application data in bulk by uploading an Excel file.</p>
+                <p className="text-gray-500 dark:text-gray-400 mt-1">Submit DA application data in bulk by uploading an Excel file.</p>
             </div>
 
             <div
@@ -267,10 +267,10 @@ export const UploadDirectApplicationView: React.FC = () => {
                 />
                 <label htmlFor="file-upload-da" className="cursor-pointer">
                     <Icon name={IconName.Upload} className="w-12 h-12 mx-auto text-gray-400" />
-                    <p className="mt-2 font-semibold text-gray-900">
+                    <p className="mt-2 font-semibold text-gray-900 dark:text-white">
                         {file ? file.name : 'Drag & drop your file here, or click to browse'}
                     </p>
-                    <p className="text-xs text-gray-500 mt-1">
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                         XLSX or XLS file format
                     </p>
                 </label>
@@ -675,7 +675,7 @@ export const UploadDirectApplicationView: React.FC = () => {
                 <div className="flex justify-center py-20">
                     <div className="text-center">
                         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
-                        <p className="mt-4 text-gray-600">Uploading to database...</p>
+                        <p className="mt-4 text-gray-600 dark:text-gray-300">Uploading to database...</p>
                     </div>
                 </div>
             ) : uploadResult ? (
@@ -1157,7 +1157,7 @@ export const ViewDirectApplicationView: React.FC = () => {
             <Card className="p-6 mb-6">
                 <div className="flex flex-col md:flex-row gap-4 items-end">
                     <div className="flex-1">
-                        <label htmlFor="search-da" className="block text-sm font-bold text-gray-700 mb-1">
+                        <label htmlFor="search-da" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
                             Search Applications
                         </label>
                         <input
@@ -1191,7 +1191,7 @@ export const ViewDirectApplicationView: React.FC = () => {
                 <div className="flex justify-center py-10">
                     <div className="text-center">
                         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
-                        <p className="mt-4 text-gray-600">Fetching DA applications from database...</p>
+                        <p className="mt-4 text-gray-600 dark:text-gray-300">Fetching DA applications from database...</p>
                     </div>
                 </div>
             )}
@@ -1202,7 +1202,7 @@ export const ViewDirectApplicationView: React.FC = () => {
                     <div className="p-6 border-b flex justify-between items-start">
                         <div>
                             <h3 className="text-xl font-bold">DA Applications</h3>
-                            <p className="text-gray-500 mt-1">
+                            <p className="text-gray-500 dark:text-gray-400 mt-1">
                                 Showing {startIndex + 1}-{Math.min(endIndex, filteredApplications.length)} of {filteredApplications.length} applications
                                 {(searchQuery || toBeEnrolledFilter) && ` (filtered from ${applications.length} total)`}
                             </p>
@@ -1380,7 +1380,7 @@ export const ViewDirectApplicationView: React.FC = () => {
                         {/* Selected Count & Action Buttons */}
                         {selectedIds.size > 0 && (
                             <>
-                                <span className="text-sm text-gray-600">{selectedIds.size} row(s) selected</span>
+                                <span className="text-sm text-gray-600 dark:text-gray-300">{selectedIds.size} row(s) selected</span>
                                 <button
                                     onClick={handleCancelEnrolment}
                                     disabled={isCancelling || isDeleting}
@@ -1565,7 +1565,7 @@ export const ViewDirectApplicationView: React.FC = () => {
                             {/* Pagination Controls */}
                             {totalPages > 1 && (
                                 <div className="p-4 border-t flex items-center justify-between">
-                                    <div className="text-sm text-gray-500">
+                                    <div className="text-sm text-gray-500 dark:text-gray-400">
                                         Page {currentPage} of {totalPages}
                                     </div>
                                     <div className="flex items-center gap-1">
@@ -1604,7 +1604,7 @@ export const ViewDirectApplicationView: React.FC = () => {
                             )}
                         </>
                     ) : (
-                        <div className="p-12 text-center text-gray-500">
+                        <div className="p-12 text-center text-gray-500 dark:text-gray-400">
                             <Icon name={IconName.FileText} className="w-16 h-16 mx-auto mb-4 text-gray-400" />
                             <p className="text-lg font-medium">No applications found</p>
                             <p className="text-sm mt-2">
@@ -1620,7 +1620,7 @@ export const ViewDirectApplicationView: React.FC = () => {
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
                     <div className="bg-white rounded-lg shadow-xl w-full max-w-md mx-4">
                         <div className="flex items-center justify-between p-4 border-b">
-                            <h3 className="text-lg font-semibold text-gray-900">
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
                                 {pendingPage !== null && pendingPage > currentPage
                                     ? 'Confirm moving to next page'
                                     : 'Confirm moving to previous page'}
@@ -1633,7 +1633,7 @@ export const ViewDirectApplicationView: React.FC = () => {
                             </button>
                         </div>
                         <div className="p-4">
-                            <p className="text-gray-600">
+                            <p className="text-gray-600 dark:text-gray-300">
                                 The currently selected lines will be deselected, do you want to proceed?
                             </p>
                         </div>

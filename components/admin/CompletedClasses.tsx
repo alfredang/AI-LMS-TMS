@@ -277,7 +277,7 @@ const CompletedClasses: React.FC = () => {
             <div className="bg-gray-50 p-4 rounded-lg space-y-4 dark:bg-gray-700/30">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Course Title</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Course Title</label>
                   <input
                     type="text"
                     placeholder="Enter course title..."
@@ -288,7 +288,7 @@ const CompletedClasses: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Course Code</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Course Code</label>
                   <input
                     type="text"
                     placeholder="Enter course code..."
@@ -299,7 +299,7 @@ const CompletedClasses: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Course Run ID</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Course Run ID</label>
                   <input
                     type="text"
                     placeholder="Enter run ID..."
@@ -310,7 +310,7 @@ const CompletedClasses: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Trainer</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Trainer</label>
                   <select
                     value={selectedTrainer}
                     onChange={(e) => setSelectedTrainer(e.target.value)}
@@ -326,7 +326,7 @@ const CompletedClasses: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Start Date (From)</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Start Date (From)</label>
                   <input
                     type="text"
                     placeholder="YYYY/MM/DD"
@@ -337,7 +337,7 @@ const CompletedClasses: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">End Date (Until)</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">End Date (Until)</label>
                   <input
                     type="text"
                     placeholder="YYYY/MM/DD"
@@ -409,7 +409,7 @@ const CompletedClasses: React.FC = () => {
             {/* Pagination */}
             {totalPages > 1 && (
               <div className="flex justify-between items-center mt-6">
-                <p className="text-sm text-gray-500">
+                <p className="text-sm text-gray-500 dark:text-gray-400">
                   Showing {currentPage * ITEMS_PER_PAGE + 1} to {Math.min((currentPage + 1) * ITEMS_PER_PAGE, total)} of {total} classes
                 </p>
                 <div className="flex gap-2">

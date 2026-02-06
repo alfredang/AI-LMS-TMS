@@ -63,7 +63,7 @@ export const CourseRunView: React.FC = () => {
                 {loading && (
                     <div className="flex flex-col items-center justify-center py-12">
                         <Icon name={IconName.Spinner} className="h-8 w-8 text-blue-500 animate-spin mb-4" />
-                        <p className="text-gray-500">Searching...</p>
+                        <p className="text-gray-500 dark:text-gray-400">Searching...</p>
                     </div>
                 )}
 
@@ -85,8 +85,8 @@ export const CourseRunView: React.FC = () => {
                 {!loading && !error && results && (
                     <div className="space-y-4">
                         <div className="flex justify-between items-center">
-                            <h3 className="text-lg font-medium text-gray-900">Search Results</h3>
-                            <span className="text-sm text-gray-500">
+                            <h3 className="text-lg font-medium text-gray-900 dark:text-white">Search Results</h3>
+                            <span className="text-sm text-gray-500 dark:text-gray-400">
                                 {Array.isArray(results?.data?.courses?.course?.runs)
                                     ? `${results.data.courses.course.runs.length} result(s)`
                                     : Array.isArray(results)
@@ -109,11 +109,11 @@ export const CourseRunView: React.FC = () => {
                                 <tbody className="bg-white divide-y divide-gray-200">
                                     {(Array.isArray(results?.data?.courses?.course?.runs) ? results.data.courses.course.runs : (Array.isArray(results) ? results : [])).map((run: any, index: number) => (
                                         <tr key={index}>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{run.courseRunId || 'N/A'}</td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{run.startDateTime || run.startDate || 'N/A'}</td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{run.endDateTime || run.endDate || 'N/A'}</td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{run.modeOfTraining || 'N/A'}</td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">{run.courseRunId || 'N/A'}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{run.startDateTime || run.startDate || 'N/A'}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{run.endDateTime || run.endDate || 'N/A'}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{run.modeOfTraining || 'N/A'}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                                                 <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${(run.runStatus || run.class_status) === 'Published' || (run.runStatus || run.class_status) === 'Confirmed' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
                                                     }`}>
                                                     {run.runStatus || run.class_status || 'Unknown'}
@@ -123,7 +123,7 @@ export const CourseRunView: React.FC = () => {
                                     ))}
                                     {(!results || (Array.isArray(results) && results.length === 0) || (results && !Array.isArray(results) && !results.data?.courses?.course?.runs)) && (
                                         <tr>
-                                            <td colSpan={5} className="px-6 py-4 text-center text-sm text-gray-500">
+                                            <td colSpan={5} className="px-6 py-4 text-center text-sm text-gray-500 dark:text-gray-400">
                                                 No course runs found.
                                             </td>
                                         </tr>
@@ -134,7 +134,7 @@ export const CourseRunView: React.FC = () => {
 
                         {/* Fallback raw view for debugging if needed */}
                         <div className="mt-4">
-                            <details className="text-xs text-gray-500">
+                            <details className="text-xs text-gray-500 dark:text-gray-400">
                                 <summary className="cursor-pointer hover:text-blue-600 mb-2">View Raw API Response</summary>
                                 <div className="bg-gray-50 rounded-lg p-4 overflow-auto max-h-[200px] border border-gray-200 font-mono">
                                     <pre>{JSON.stringify(results, null, 2)}</pre>

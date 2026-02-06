@@ -240,7 +240,7 @@ const ClassDetailView: React.FC<ClassDetailViewProps> = ({ courseRunId }) => {
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading class details...</p>
+          <p className="mt-4 text-gray-600 dark:text-gray-300">Loading class details...</p>
         </div>
       </div>
     );
@@ -358,20 +358,20 @@ const ClassDetailView: React.FC<ClassDetailViewProps> = ({ courseRunId }) => {
                 return (
                   <tr key={index}>
                     <td className="px-4 py-4 whitespace-nowrap text-sm">
-                      <p className="font-medium text-gray-900">{learner.learnerName}</p>
-                      <p className="text-gray-500">{learner.learnerEmail}</p>
-                      <p className="text-gray-500">{learner.learnerTel}</p>
+                      <p className="font-medium text-gray-900 dark:text-white">{learner.learnerName}</p>
+                      <p className="text-gray-500 dark:text-gray-400">{learner.learnerEmail}</p>
+                      <p className="text-gray-500 dark:text-gray-400">{learner.learnerTel}</p>
                     </td>
-                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                       {learner.company || 'N/A'}
                     </td>
-                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                       {learner.sponsorship || 'N/A'}
                     </td>
-                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                       {learner.nationality || 'N/A'}
                     </td>
-                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                       {ageGroup}
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap text-sm">
@@ -451,20 +451,20 @@ const ClassDetailView: React.FC<ClassDetailViewProps> = ({ courseRunId }) => {
                 return (
                   <tr key={index}>
                     <td className="px-4 py-4 whitespace-nowrap text-sm">
-                      <p className="font-medium text-gray-900">{trainee.fullName || 'N/A'}</p>
-                      <p className="text-gray-500">{trainee.email.full || 'N/A'}</p>
-                      <p className="text-gray-500">{trainee.contactNumber.phoneNumber || 'N/A'}</p>
+                      <p className="font-medium text-gray-900 dark:text-white">{trainee.fullName || 'N/A'}</p>
+                      <p className="text-gray-500 dark:text-gray-400">{trainee.email.full || 'N/A'}</p>
+                      <p className="text-gray-500 dark:text-gray-400">{trainee.contactNumber.phoneNumber || 'N/A'}</p>
                     </td>
-                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                       {trainee.employer.name || 'N/A'}
                     </td>
-                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                       {trainee.sponsorshipType || 'N/A'}
                     </td>
-                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                       {trainee.idType.type || 'N/A'}
                     </td>
-                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                       {ageGroup}
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap text-sm">
@@ -473,7 +473,7 @@ const ClassDetailView: React.FC<ClassDetailViewProps> = ({ courseRunId }) => {
                       </span>
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap text-sm">
-                      <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">
+                      <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800 dark:text-white">
                         Pending
                       </span>
                     </td>
@@ -567,19 +567,19 @@ const ClassDetailView: React.FC<ClassDetailViewProps> = ({ courseRunId }) => {
                   <div className="bg-gray-50 p-4 rounded-md">
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                       <div>
-                        <span className="font-medium text-gray-600">Course Run ID:</span>
+                        <span className="font-medium text-gray-600 dark:text-gray-300">Course Run ID:</span>
                         <p className="font-mono">{enrolmentData.requestBody?.enrolment?.course?.run?.id || 'N/A'}</p>
                       </div>
                       <div>
-                        <span className="font-medium text-gray-600">Training Partner UEN:</span>
+                        <span className="font-medium text-gray-600 dark:text-gray-300">Training Partner UEN:</span>
                         <p className="font-mono">{enrolmentData.requestBody?.enrolment?.trainingPartner?.uen || 'N/A'}</p>
                       </div>
                       <div>
-                        <span className="font-medium text-gray-600">Training Partner Code:</span>
+                        <span className="font-medium text-gray-600 dark:text-gray-300">Training Partner Code:</span>
                         <p className="font-mono">{enrolmentData.requestBody?.enrolment?.trainingPartner?.code || 'N/A'}</p>
                       </div>
                       <div>
-                        <span className="font-medium text-gray-600">Page Size:</span>
+                        <span className="font-medium text-gray-600 dark:text-gray-300">Page Size:</span>
                         <p className="font-mono">{enrolmentData.requestBody?.parameters?.pageSize || 'N/A'}</p>
                       </div>
                     </div>
@@ -619,7 +619,7 @@ const ClassDetailView: React.FC<ClassDetailViewProps> = ({ courseRunId }) => {
             {!enrolmentLoading && !enrolmentError && !enrolmentData && (
               <div className="text-center py-8">
                 <Icon name={IconName.Eye} className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                <p className="text-gray-500">Click "Search Enrolment Records" to fetch enrolment data for this course run.</p>
+                <p className="text-gray-500 dark:text-gray-400">Click "Search Enrolment Records" to fetch enrolment data for this course run.</p>
               </div>
             )}
           </Card>

@@ -157,7 +157,7 @@ export const ApplyNewGrantView: React.FC = () => {
             <Card className="p-6 mb-6 dark:bg-gray-800 dark:border-gray-700">
                 <div className="space-y-4">
                     <div>
-                        <label htmlFor="class-select-grant" className="block text-sm font-bold text-gray-700 mb-1 dark:text-gray-300">
+                        <label htmlFor="class-select-grant" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1 dark:text-gray-300">
                             1. Select an Upcoming Class
                         </label>
                         <select
@@ -182,10 +182,10 @@ export const ApplyNewGrantView: React.FC = () => {
                             )}
                         </select>
                         {courses.length === 0 && (
-                            <p className="text-sm text-gray-500 mt-2">No classes found. Please create classes first.</p>
+                            <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">No classes found. Please create classes first.</p>
                         )}
                         {courses.length > 0 && upcomingClasses.length === 0 && (
-                            <p className="text-sm text-gray-500 mt-2">No upcoming classes found.</p>
+                            <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">No upcoming classes found.</p>
                         )}
                     </div>
 
@@ -248,7 +248,7 @@ export const ApplyNewGrantView: React.FC = () => {
                                     ))
                                 ) : (
                                     <tr>
-                                        <td colSpan={5} className="px-6 py-12 text-center text-gray-500">
+                                        <td colSpan={5} className="px-6 py-12 text-center text-gray-500 dark:text-gray-400">
                                             No learners enrolled in this class yet.
                                         </td>
                                     </tr>
@@ -343,7 +343,7 @@ export const ViewGrantStatusView: React.FC = () => {
             {/* Search Bar Card */}
             <Card className="p-6 mb-6 dark:bg-gray-800 dark:border-gray-700">
                 <div>
-                    <label htmlFor="grant-search" className="block text-sm font-bold text-gray-700 mb-1 dark:text-gray-300">
+                    <label htmlFor="grant-search" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1 dark:text-gray-300">
                         Search Grant Status
                     </label>
                     <p className="text-sm text-gray-500 mb-3 dark:text-gray-400">
@@ -389,7 +389,7 @@ export const ViewGrantStatusView: React.FC = () => {
                 <div className="flex justify-center py-10">
                     <div className="text-center">
                         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
-                        <p className="mt-4 text-gray-600">Fetching grant status from n8n...</p>
+                        <p className="mt-4 text-gray-600 dark:text-gray-300">Fetching grant status from n8n...</p>
                     </div>
                 </div>
             )}
@@ -399,7 +399,7 @@ export const ViewGrantStatusView: React.FC = () => {
                 <Card className="p-0 dark:bg-gray-800 dark:border-gray-700">
                     <div className="p-6 border-b dark:border-gray-700">
                         <h3 className="text-xl font-bold dark:text-white">Grant Status Results</h3>
-                        <p className="text-gray-500 mt-1 dark:text-gray-400">Search query: "{searchInput}"</p>
+                        <p className="text-gray-500 dark:text-gray-400 mt-1 dark:text-gray-400">Search query: "{searchInput}"</p>
                     </div>
                     <div className="p-6">
                         {/* Check if response has the expected structure */}
@@ -536,7 +536,7 @@ export const ViewGrantStatusView: React.FC = () => {
             {/* Empty State */}
             {!webhookResponse && !isSearching && (
                 <Card className="p-12">
-                    <div className="text-center text-gray-500">
+                    <div className="text-center text-gray-500 dark:text-gray-400">
                         <Icon name={IconName.Search} className="w-16 h-16 mx-auto mb-4 text-gray-400" />
                         <p className="text-lg font-medium">No search results yet</p>
                         <p className="text-sm mt-2">Enter a search query above to fetch grant status information</p>
@@ -587,7 +587,7 @@ export const SubmitAssessmentView: React.FC = () => {
             <Card className="p-6 mb-6 dark:bg-gray-800 dark:border-gray-700">
                 <div className="grid grid-cols-1">
                     <div>
-                        <label htmlFor="class-select-assessment" className="block text-sm font-bold text-gray-700 mb-1 dark:text-gray-300">
+                        <label htmlFor="class-select-assessment" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1 dark:text-gray-300">
                             1. Select a Class
                         </label>
                         <select
@@ -611,7 +611,7 @@ export const SubmitAssessmentView: React.FC = () => {
                             )}
                         </select>
                         {courses.length === 0 && (
-                            <p className="text-sm text-gray-500 mt-2">No classes found. Please create classes first.</p>
+                            <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">No classes found. Please create classes first.</p>
                         )}
                     </div>
                 </div>
@@ -621,7 +621,7 @@ export const SubmitAssessmentView: React.FC = () => {
                 <Card className="p-0 overflow-x-auto dark:bg-gray-800 dark:border-gray-700">
                     <div className="p-6 border-b dark:border-gray-700">
                         <h3 className="text-xl font-bold dark:text-white">Assessment Roster for "{selectedCourse.title}"</h3>
-                        <p className="text-gray-500 mt-1 dark:text-gray-400">Update each learner's overall assessment status below. Changes are saved automatically.</p>
+                        <p className="text-gray-500 dark:text-gray-400 mt-1 dark:text-gray-400">Update each learner's overall assessment status below. Changes are saved automatically.</p>
                     </div>
                     <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                         <thead className="bg-gray-50 dark:bg-gray-700/50">
@@ -656,7 +656,7 @@ export const SubmitAssessmentView: React.FC = () => {
                                 ))
                             ) : (
                                 <tr>
-                                    <td colSpan={3} className="px-6 py-12 text-center text-gray-500">
+                                    <td colSpan={3} className="px-6 py-12 text-center text-gray-500 dark:text-gray-400">
                                         No learners enrolled in this class yet.
                                     </td>
                                 </tr>
@@ -726,7 +726,7 @@ export const ViewAssessmentsView: React.FC = () => {
             <h2 className="text-3xl font-bold mb-6">View Assessments from TPG</h2>
             <Card className="p-6 mb-6">
                 <div>
-                    <label htmlFor="class-select-view-assessment" className="block text-sm font-bold text-gray-700 mb-1">
+                    <label htmlFor="class-select-view-assessment" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
                         Select a Class to Retrieve Assessment Status
                     </label>
                     <select
@@ -747,7 +747,7 @@ export const ViewAssessmentsView: React.FC = () => {
                         )}
                     </select>
                     {courses.length === 0 && (
-                        <p className="text-sm text-gray-500 mt-2">No classes found. Please create classes first.</p>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">No classes found. Please create classes first.</p>
                     )}
                 </div>
             </Card>
@@ -756,7 +756,7 @@ export const ViewAssessmentsView: React.FC = () => {
                 <div className="flex justify-center py-10">
                     <div className="text-center">
                         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
-                        <p className="mt-4 text-gray-600">Retrieving data from TPG...</p>
+                        <p className="mt-4 text-gray-600 dark:text-gray-300">Retrieving data from TPG...</p>
                     </div>
                 </div>
             )}
@@ -765,7 +765,7 @@ export const ViewAssessmentsView: React.FC = () => {
                 <Card className="p-0">
                     <div className="p-6 border-b">
                         <h3 className="text-xl font-bold">Assessment Status for {courses.find(c => c.id === selectedCourseId)?.title}</h3>
-                        <p className="text-gray-500 mt-1">Showing official results retrieved from TPG.</p>
+                        <p className="text-gray-500 dark:text-gray-400 mt-1">Showing official results retrieved from TPG.</p>
                     </div>
                     <div className="overflow-x-auto">
                         <table className="min-w-full divide-y divide-gray-200">
@@ -780,11 +780,11 @@ export const ViewAssessmentsView: React.FC = () => {
                                 {results.map((result, index) => (
                                     <tr key={index} className="hover:bg-gray-50">
                                         <td className="px-6 py-4 whitespace-nowrap">
-                                            <div className="font-medium text-gray-900">{result.learnerName}</div>
+                                            <div className="font-medium text-gray-900 dark:text-white">{result.learnerName}</div>
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap">
-                                            <div className="text-sm text-gray-900">{result.courseTitle}</div>
-                                            <div className="text-sm text-gray-500">{result.courseRunId}</div>
+                                            <div className="text-sm text-gray-900 dark:text-white">{result.courseTitle}</div>
+                                            <div className="text-sm text-gray-500 dark:text-gray-400">{result.courseRunId}</div>
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap">
                                             <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full border ${getStatusColor(result.assessmentStatus)}`}>
@@ -865,7 +865,7 @@ export const ApplyNewClaimView: React.FC = () => {
             <Card className="p-6 mb-6">
                 <div className="space-y-4">
                     <div>
-                        <label htmlFor="class-select-claim" className="block text-sm font-bold text-gray-700 mb-1">
+                        <label htmlFor="class-select-claim" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
                             1. Select a Class
                         </label>
                         <select
@@ -890,7 +890,7 @@ export const ApplyNewClaimView: React.FC = () => {
                             )}
                         </select>
                         {courses.length === 0 && (
-                            <p className="text-sm text-gray-500 mt-2">No classes found. Please create classes first.</p>
+                            <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">No classes found. Please create classes first.</p>
                         )}
                     </div>
 
@@ -940,10 +940,10 @@ export const ApplyNewClaimView: React.FC = () => {
                                                     )}
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap">
-                                                    <div className="font-medium text-gray-900">{learner.name || 'N/A'}</div>
+                                                    <div className="font-medium text-gray-900 dark:text-white">{learner.name || 'N/A'}</div>
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap">
-                                                    <div className="text-sm text-gray-900">{learner.email || 'N/A'}</div>
+                                                    <div className="text-sm text-gray-900 dark:text-white">{learner.email || 'N/A'}</div>
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap">
                                                     <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full border ${getStatusColor(learner.grantStatus || 'Pending')}`}>
@@ -960,7 +960,7 @@ export const ApplyNewClaimView: React.FC = () => {
                                     })
                                 ) : (
                                     <tr>
-                                        <td colSpan={5} className="px-6 py-12 text-center text-gray-500">
+                                        <td colSpan={5} className="px-6 py-12 text-center text-gray-500 dark:text-gray-400">
                                             No learners enrolled in this class yet.
                                         </td>
                                     </tr>
@@ -1007,7 +1007,7 @@ export const ViewClaimStatusView: React.FC = () => {
             <h2 className="text-3xl font-bold mb-6">View Claim Status</h2>
             <Card className="p-6 mb-6">
                 <div>
-                    <label htmlFor="class-select-claim-status" className="block text-sm font-bold text-gray-700 mb-1">
+                    <label htmlFor="class-select-claim-status" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
                         Select a Class to View Claim Statuses
                     </label>
                     <select
@@ -1028,7 +1028,7 @@ export const ViewClaimStatusView: React.FC = () => {
                         )}
                     </select>
                     {courses.length === 0 && (
-                        <p className="text-sm text-gray-500 mt-2">No classes found. Please create classes first.</p>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">No classes found. Please create classes first.</p>
                     )}
                 </div>
             </Card>
@@ -1037,7 +1037,7 @@ export const ViewClaimStatusView: React.FC = () => {
                 <Card className="p-0">
                     <div className="p-6 border-b">
                         <h3 className="text-xl font-bold">Claim Status for {selectedCourse.title}</h3>
-                        <p className="text-gray-500 mt-1">Showing all enrolled learners and their claim application status.</p>
+                        <p className="text-gray-500 dark:text-gray-400 mt-1">Showing all enrolled learners and their claim application status.</p>
                     </div>
                     <div className="overflow-x-auto">
                         <table className="min-w-full divide-y divide-gray-200">
@@ -1056,10 +1056,10 @@ export const ViewClaimStatusView: React.FC = () => {
                                     selectedCourse.learners.map((learner: any) => (
                                         <tr key={learner.email} className="hover:bg-gray-50">
                                             <td className="px-6 py-4 whitespace-nowrap">
-                                                <div className="font-medium text-gray-900">{learner.name || 'N/A'}</div>
+                                                <div className="font-medium text-gray-900 dark:text-white">{learner.name || 'N/A'}</div>
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
-                                                <div className="text-sm text-gray-900">{learner.email || 'N/A'}</div>
+                                                <div className="text-sm text-gray-900 dark:text-white">{learner.email || 'N/A'}</div>
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full border ${getStatusColor(learner.grantStatus || 'Pending')}`}>
@@ -1071,17 +1071,17 @@ export const ViewClaimStatusView: React.FC = () => {
                                                     {learner.claimStatus || 'Pending'}
                                                 </span>
                                             </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
                                                 {learner.claimId || 'N/A'}
                                             </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                                                 N/A
                                             </td>
                                         </tr>
                                     ))
                                 ) : (
                                     <tr>
-                                        <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
+                                        <td colSpan={6} className="px-6 py-12 text-center text-gray-500 dark:text-gray-400">
                                             No learners enrolled in this class yet.
                                         </td>
                                     </tr>
@@ -2504,7 +2504,7 @@ export const SearchCourseRunsView: React.FC = () => {
                                                     View
                                                 </a>
                                             ) : (
-                                                <span className="text-gray-400 dark:text-gray-500">N/A</span>
+                                                <span className="text-gray-400 dark:text-gray-500 dark:text-gray-400">N/A</span>
                                             )}
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">

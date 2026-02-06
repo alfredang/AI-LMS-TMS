@@ -8,7 +8,7 @@ import { AdminPage } from '@app-types';
 // FormSection component definition moved outside to prevent re-creation on re-renders
 const FormSection: React.FC<{ title: string | React.ReactNode; children: React.ReactNode; className?: string }> = ({ title, children, className = "" }) => (
     <Card className={`p-6 ${className}`}>
-        <h3 className="text-xl font-bold mb-4">{title}</h3>
+        <h3 className="text-xl font-bold mb-4 dark:text-white">{title}</h3>
         <div className="space-y-4">{children}</div>
     </Card>
 );
@@ -34,14 +34,14 @@ const SuccessPopup: React.FC<{
                         </div>
                     </div>
                     <div className="ml-3">
-                        <h3 className="text-lg font-medium text-gray-900">Success!</h3>
+                        <h3 className="text-lg font-medium text-gray-900 dark:text-white">Success!</h3>
                     </div>
                 </div>
 
                 <div className="mb-4">
-                    <p className="text-sm text-gray-700 mb-3">{message}</p>
+                    <p className="text-sm text-gray-700 dark:text-gray-300 mb-3">{message}</p>
                     <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
-                        <p className="text-sm font-medium text-gray-800">Course Run ID:</p>
+                        <p className="text-sm font-medium text-gray-800 dark:text-white">Course Run ID:</p>
                         <p className="text-lg font-mono text-blue-600 mt-1">{courseRunId}</p>
                     </div>
                 </div>
@@ -197,7 +197,7 @@ export const CreateNewClassView: React.FC = () => {
         fileContent: false
     });
 
-    const inputClasses = "block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent";
+    const inputClasses = "block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-500";
 
     // Fetch available courses on component mount
     const fetchAvailableCourses = async () => {
@@ -672,13 +672,13 @@ export const CreateNewClassView: React.FC = () => {
                     <FormSection title="Basic Information">
                         <div className="grid grid-cols-1 md:grid-cols-1 gap-4">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-gray-300">
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 dark:text-gray-300">
                                     * Select the Course
                                 </label>
                                 {loadingCourses ? (
                                     <div className="flex items-center space-x-2">
                                         <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
-                                        <span className="text-sm text-gray-500">Loading courses...</span>
+                                        <span className="text-sm text-gray-500 dark:text-gray-400">Loading courses...</span>
                                     </div>
                                 ) : (
                                     <select
@@ -707,7 +707,7 @@ export const CreateNewClassView: React.FC = () => {
                     <FormSection title="Registration Dates">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                                     * Opening Registration Date
                                 </label>
                                 <input
@@ -719,7 +719,7 @@ export const CreateNewClassView: React.FC = () => {
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                                     * Closing Registration Date
                                 </label>
                                 <input
@@ -736,7 +736,7 @@ export const CreateNewClassView: React.FC = () => {
                     <FormSection title="Course Dates">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                                     * Course Start Date
                                 </label>
                                 <input
@@ -748,7 +748,7 @@ export const CreateNewClassView: React.FC = () => {
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                                     * Course End Date
                                 </label>
                                 <input
@@ -766,7 +766,7 @@ export const CreateNewClassView: React.FC = () => {
                         <div className="space-y-4">
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                                         Venue Block
                                     </label>
                                     <input
@@ -780,7 +780,7 @@ export const CreateNewClassView: React.FC = () => {
                                 </div>
 
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                                         Venue Street
                                     </label>
                                     <input
@@ -794,7 +794,7 @@ export const CreateNewClassView: React.FC = () => {
                                 </div>
 
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                                         Venue Building
                                     </label>
                                     <input
@@ -809,7 +809,7 @@ export const CreateNewClassView: React.FC = () => {
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                                     Wheelchair Accessible
                                 </label>
                                 <select
@@ -827,7 +827,7 @@ export const CreateNewClassView: React.FC = () => {
 
                             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                                         * Floor
                                     </label>
                                     <input
@@ -841,7 +841,7 @@ export const CreateNewClassView: React.FC = () => {
                                 </div>
 
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                                         * Unit
                                     </label>
                                     <input
@@ -855,7 +855,7 @@ export const CreateNewClassView: React.FC = () => {
                                 </div>
 
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                                         * Postal Code
                                     </label>
                                     <input
@@ -869,7 +869,7 @@ export const CreateNewClassView: React.FC = () => {
                                 </div>
 
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                                         * Room
                                     </label>
                                     <input
@@ -889,7 +889,7 @@ export const CreateNewClassView: React.FC = () => {
                     <FormSection title="Course Admin Details">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                                     * Mode of Training
                                 </label>
                                 <select
@@ -906,7 +906,7 @@ export const CreateNewClassView: React.FC = () => {
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                                     * Course Admin Email
                                 </label>
                                 <input
@@ -917,7 +917,7 @@ export const CreateNewClassView: React.FC = () => {
                                     maxLength={255}
                                     readOnly
                                 />
-                                <p className="text-xs text-gray-500 mt-1">
+                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                                     Auto-filled with your account email
                                 </p>
                             </div>
@@ -927,7 +927,7 @@ export const CreateNewClassView: React.FC = () => {
                     {/* Course Vacancy Details */}
                     <FormSection title="Course Vacancy Details">
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                                 * Course Vacancy
                             </label>
                             <select
@@ -959,10 +959,10 @@ export const CreateNewClassView: React.FC = () => {
                                     onChange={(e) => setShowSessions(e.target.checked)}
                                     className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                                 />
-                                <label htmlFor="add-sessions" className="text-sm font-medium text-gray-700">
+                                <label htmlFor="add-sessions" className="text-sm font-medium text-gray-700 dark:text-gray-300">
                                     Add Sessions
                                 </label>
-                                <span className="text-xs text-gray-500">
+                                <span className="text-xs text-gray-500 dark:text-gray-400">
                                     (Add specific session details with dates, times, and venues)
                                 </span>
                             </div>
@@ -975,10 +975,10 @@ export const CreateNewClassView: React.FC = () => {
                                     onChange={(e) => setShowTrainer(e.target.checked)}
                                     className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                                 />
-                                <label htmlFor="assign-trainer" className="text-sm font-medium text-gray-700">
+                                <label htmlFor="assign-trainer" className="text-sm font-medium text-gray-700 dark:text-gray-300">
                                     Assign Trainer
                                 </label>
-                                <span className="text-xs text-gray-500">
+                                <span className="text-xs text-gray-500 dark:text-gray-400">
                                     (Assign an existing trainer to this course)
                                 </span>
                             </div>
@@ -991,7 +991,7 @@ export const CreateNewClassView: React.FC = () => {
             {showSessions && (
                 <div className="mb-12 border-t border-gray-200 pt-8">
                     <div className="flex items-center justify-between mb-6">
-                        <h3 className="text-2xl font-bold text-gray-800">Sessions</h3>
+                        <h3 className="text-2xl font-bold text-gray-800 dark:text-white">Sessions</h3>
                         <Button
                             variant="outline"
                             onClick={() => updateSessionCount(sessions.length + 1)}
@@ -1023,7 +1023,7 @@ export const CreateNewClassView: React.FC = () => {
                             }>
                                 <div className="space-y-4">
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                                             * Mode of Training
                                         </label>
                                         <select
@@ -1041,7 +1041,7 @@ export const CreateNewClassView: React.FC = () => {
 
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                                                 * Start Date
                                             </label>
                                             <input
@@ -1053,7 +1053,7 @@ export const CreateNewClassView: React.FC = () => {
                                         </div>
 
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                                                 * End Date
                                             </label>
                                             <input
@@ -1068,7 +1068,7 @@ export const CreateNewClassView: React.FC = () => {
 
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                                                 * Start Time
                                             </label>
                                             <input
@@ -1081,7 +1081,7 @@ export const CreateNewClassView: React.FC = () => {
                                         </div>
 
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                                                 * End Time
                                             </label>
                                             <input
@@ -1112,10 +1112,10 @@ export const CreateNewClassView: React.FC = () => {
 
                                     {/* Session Venue */}
                                     <div className="border-t pt-4">
-                                        <h5 className="font-medium text-gray-700 mb-3">Venue Information</h5>
+                                        <h5 className="font-medium text-gray-700 dark:text-gray-300 mb-3">Venue Information</h5>
                                         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                                             <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                                                     * Floor
                                                 </label>
                                                 <input
@@ -1129,7 +1129,7 @@ export const CreateNewClassView: React.FC = () => {
                                             </div>
 
                                             <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                                                     * Unit
                                                 </label>
                                                 <input
@@ -1143,7 +1143,7 @@ export const CreateNewClassView: React.FC = () => {
                                             </div>
 
                                             <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                                                     * Postal Code
                                                 </label>
                                                 <input
@@ -1157,7 +1157,7 @@ export const CreateNewClassView: React.FC = () => {
                                             </div>
 
                                             <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                                                     * Room
                                                 </label>
                                                 <input
@@ -1182,7 +1182,7 @@ export const CreateNewClassView: React.FC = () => {
             {showTrainer && (
                 <div className="mb-12 border-t border-gray-200 pt-8">
                     <div className="flex items-center mb-6">
-                        <h3 className="text-2xl font-bold text-gray-800">Trainer</h3>
+                        <h3 className="text-2xl font-bold text-gray-800 dark:text-white">Trainer</h3>
                     </div>
                     <div className="space-y-6">
 
@@ -1197,7 +1197,7 @@ export const CreateNewClassView: React.FC = () => {
                                 </div>
 
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                                         * Trainer ID Number
                                     </label>
                                     <input
@@ -1208,7 +1208,7 @@ export const CreateNewClassView: React.FC = () => {
                                         placeholder="S1234567A"
                                         maxLength={50}
                                     />
-                                    <p className="text-xs text-gray-500 mt-1">
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                                         This refers to the NRIC number of the existing trainer.
                                     </p>
                                 </div>
@@ -1222,7 +1222,7 @@ export const CreateNewClassView: React.FC = () => {
             {(requestBody || apiResponse) && (
                 <div className="mb-12 border-t border-gray-200 pt-8">
                     <div className="flex items-center mb-6">
-                        <h3 className="text-2xl font-bold text-gray-800">API Debug Information</h3>
+                        <h3 className="text-2xl font-bold text-gray-800 dark:text-white">API Debug Information</h3>
                     </div>
                     <div className="space-y-6">
 

@@ -210,7 +210,7 @@ const ViewTrainers: React.FC = () => {
         {showAdvancedFilters && (
           <div className="mt-4 pt-4 border-t grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-end dark:border-gray-700">
             <div>
-              <label className="block text-sm font-medium text-gray-700">Trainer Name</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Trainer Name</label>
               <input type="text" value={filterName} onChange={e => setFilterName(e.target.value)} className={`${inputClasses} mt-1`} placeholder="Filter by trainer name..." />
             </div>
             <div>
@@ -291,7 +291,7 @@ const ViewTrainers: React.FC = () => {
                         {trainer.status}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                       {trainer.linkedin_url ? (
                         <a
                           href={trainer.linkedin_url.startsWith('http') ? trainer.linkedin_url : `https://${trainer.linkedin_url}`}
@@ -306,7 +306,7 @@ const ViewTrainers: React.FC = () => {
                         'N/A'
                       )}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                       {trainer.courses_taught ? (
                         <ul className="list-disc list-inside space-y-1">
                           {trainer.courses_taught.split(', ').map((course, courseIndex) => (
@@ -317,7 +317,7 @@ const ViewTrainers: React.FC = () => {
                         'None'
                       )}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                       {trainer.status === 'Active' ? (
                         <Button
                           variant="ghost"
@@ -351,7 +351,7 @@ const ViewTrainers: React.FC = () => {
                 >
                   Previous
                 </Button>
-                <span className="text-sm text-gray-500">
+                <span className="text-sm text-gray-500 dark:text-gray-400">
                   Page {currentPage} of {totalPages}
                 </span>
                 <Button
@@ -398,7 +398,7 @@ const ViewTrainers: React.FC = () => {
               </div>
 
               <div className="mb-6">
-                <p className="text-gray-700 mb-4">
+                <p className="text-gray-700 dark:text-gray-300 mb-4">
                   Are you sure you want to {targetStatus.toLowerCase()} the trainer{' '}
                   <strong>"{selectedTrainer.trainer_name}"</strong>?
                 </p>
