@@ -401,11 +401,31 @@ export const EditDeleteCourseRuns: React.FC<EditDeleteCourseRunsProps> = ({ onSu
         body: JSON.stringify(requestBody)
       });
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+      // Try to parse JSON response, handle empty responses
+      let data;
+      const contentType = response.headers.get('content-type');
+      
+      if (contentType && contentType.includes('application/json')) {
+        const text = await response.text();
+        try {
+          data = text ? JSON.parse(text) : {};
+        } catch (e) {
+          console.error('Failed to parse JSON response:', text);
+          throw new Error(`Invalid JSON response: ${text}`);
+        }
+      } else {
+        // Non-JSON response
+        const text = await response.text();
+        throw new Error(`Unexpected response type: ${text}`);
       }
 
-      const data = await response.json();
+      if (!response.ok) {
+        // Handle error responses
+        const errorMessage = data?.error?.message || 
+                            data?.error?.details?.[0]?.message ||
+                            `HTTP error! status: ${response.status}`;
+        throw new Error(errorMessage);
+      }
       
       // Ensure we always have a valid response object and include the status
       const safeResponse = data ? { 

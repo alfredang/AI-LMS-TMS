@@ -300,6 +300,12 @@ export interface SSGApiResponse<T = any> {
   error?: {
     code: string;
     message: string;
+    details?: Array<{
+      field: string;
+      message: string;
+    }>;
+    errorId?: string;
   };
   status: number;
+  meta?: any;
 }

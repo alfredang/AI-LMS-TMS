@@ -319,7 +319,15 @@ export const ViewGrantStatusView: React.FC = () => {
                 throw new Error(`Unable to connect to SSG API (Error ${response.status}). Please check your connection and try again.`);
             }
 
-            const data = await response.json();
+            // Safe JSON parsing
+            const text = await response.text();
+            let data;
+            try {
+                data = text ? JSON.parse(text) : {};
+            } catch (e) {
+                console.error('Failed to parse JSON response:', text);
+                throw new Error(`Invalid JSON response from webhook`);
+            }
             console.log('✅ Webhook response:', data);
             setWebhookResponse(data);
         } catch (error) {
@@ -1358,7 +1366,15 @@ export const SearchGrantView: React.FC = () => {
                 throw new Error(`Unable to connect to SSG API (Error ${response.status}). Please check your connection and try again.`);
             }
 
-            const data = await response.json();
+            // Safe JSON parsing
+            const text = await response.text();
+            let data;
+            try {
+                data = text ? JSON.parse(text) : {};
+            } catch (e) {
+                console.error('Failed to parse JSON response:', text);
+                throw new Error(`Invalid JSON response from webhook`);
+            }
             console.log('✅ Webhook response:', data);
             setWebhookResponse(data);
 
@@ -1661,7 +1677,15 @@ export const SearchEnrolmentView: React.FC = () => {
                 throw new Error(`Unable to connect to SSG API (Error ${response.status}). Please check your connection and try again.`);
             }
 
-            const data = await response.json();
+            // Safe JSON parsing
+            const text = await response.text();
+            let data;
+            try {
+                data = text ? JSON.parse(text) : {};
+            } catch (e) {
+                console.error('Failed to parse JSON response:', text);
+                throw new Error(`Invalid JSON response from webhook`);
+            }
             console.log('✅ Webhook response:', data);
             setWebhookResponse(data);
 
@@ -1964,7 +1988,15 @@ export const ViewEnrolmentView: React.FC = () => {
                 throw new Error(`Unable to connect to SSG API (Error ${response.status}). Please check your connection and try again.`);
             }
 
-            const data = await response.json();
+            // Safe JSON parsing
+            const text = await response.text();
+            let data;
+            try {
+                data = text ? JSON.parse(text) : {};
+            } catch (e) {
+                console.error('Failed to parse JSON response:', text);
+                throw new Error(`Invalid JSON response from webhook`);
+            }
             console.log('✅ Webhook response:', data);
             setWebhookResponse(data);
 
@@ -2831,7 +2863,15 @@ export const ViewCourseRunView: React.FC = () => {
                 throw new Error(`Unable to connect to SSG API (Error ${response.status}). Please check your connection and try again.`);
             }
 
-            const data = await response.json();
+            // Safe JSON parsing
+            const text = await response.text();
+            let data;
+            try {
+                data = text ? JSON.parse(text) : {};
+            } catch (e) {
+                console.error('Failed to parse JSON response:', text);
+                throw new Error(`Invalid JSON response from webhook`);
+            }
             console.log('✅ Webhook response:', data);
             setWebhookResponse(data);
 
@@ -3224,6 +3264,7 @@ export const CancelEnrolmentView: React.FC = () => {
     const [courseRunId, setCourseRunId] = useState<string>('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [result, setResult] = useState<any>(null);
+    const [webhookData, setWebhookData] = useState<any>(null); // Store complete webhook response
     const [error, setError] = useState<string | null>(null);
     const [showConfirm, setShowConfirm] = useState(false);
 
@@ -3236,6 +3277,7 @@ export const CancelEnrolmentView: React.FC = () => {
         setIsSubmitting(true);
         setError(null);
         setResult(null);
+        setWebhookData(null);
 
         try {
             const payload = {
@@ -3262,13 +3304,46 @@ export const CancelEnrolmentView: React.FC = () => {
                 throw new Error(`Unable to connect to SSG API (Error ${response.status}). Please check your connection and try again.`);
             }
 
-            const data = await response.json();
+            // Safe JSON parsing
+            const text = await response.text();
+            let data;
+            try {
+                data = text ? JSON.parse(text) : {};
+            } catch (e) {
+                console.error('Failed to parse JSON response:', text);
+                throw new Error(`Invalid JSON response from webhook`);
+            }
             console.log('✅ Cancel enrolment response:', data);
 
-            // Parse response
+            // Check if webhook returned empty response
+            if (!data || (typeof data === 'object' && Object.keys(data).length === 0)) {
+                throw new Error('Webhook returned empty response. Please check your n8n workflow configuration.');
+            }
+
+            // Store the complete webhook response for raw display (after validation)
+            setWebhookData(data);
+
+            // Parse response - handle various response formats
             let parsedResult = data;
-            if (data?.result) {
-                parsedResult = typeof data.result === 'string' ? JSON.parse(data.result) : data.result;
+            
+            // If response has a 'result' property, use that
+            if (data?.result !== undefined && data?.result !== null) {
+                // If result is a string, try to parse it as JSON
+                if (typeof data.result === 'string') {
+                    try {
+                        parsedResult = JSON.parse(data.result);
+                    } catch (e) {
+                        // If parsing fails, treat the string as error message
+                        console.error('Failed to parse result string:', data.result);
+                        parsedResult = { error: { message: data.result } };
+                    }
+                } else if (typeof data.result === 'object') {
+                    // If result is already an object, use it directly
+                    parsedResult = data.result;
+                } else {
+                    // For other types, treat as error
+                    parsedResult = { error: { message: String(data.result) } };
+                }
             }
 
             // Check for error status
@@ -3296,6 +3371,7 @@ export const CancelEnrolmentView: React.FC = () => {
         setEnrolmentId('');
         setCourseRunId('');
         setResult(null);
+        setWebhookData(null);
         setError(null);
         setShowConfirm(false);
     };
@@ -3436,7 +3512,318 @@ export const CancelEnrolmentView: React.FC = () => {
                             View Raw Response
                         </summary>
                         <pre className="mt-2 text-xs bg-gray-100 dark:bg-gray-800 p-3 rounded overflow-auto max-h-60">
-                            {JSON.stringify(result, null, 2)}
+                            {JSON.stringify(webhookData || result, null, 2)}
+                        </pre>
+                    </details>
+                </Card>
+            )}
+        </div>
+    );
+};
+
+// Delete Course Run View
+export const DeleteCourseRunView: React.FC = () => {
+    const [courseReferenceNumber, setCourseReferenceNumber] = useState<string>('');
+    const [courseRunId, setCourseRunId] = useState<string>('');
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [result, setResult] = useState<any>(null);
+    const [webhookData, setWebhookData] = useState<any>(null); // Store complete webhook response
+    const [error, setError] = useState<string | null>(null);
+    const [showConfirm, setShowConfirm] = useState(false);
+
+    const WEBHOOK_URL = 'https://n8n.srv1231536.hstgr.cloud/webhook/57ee587b-5e8d-4927-8717-30833ba1b7ea';
+
+    const inputClasses = "block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-500";
+
+    const handleSubmit = async () => {
+        setShowConfirm(false);
+        setIsSubmitting(true);
+        setError(null);
+        setResult(null);
+
+        try {
+            const payload = {
+                courseReferenceNumber: courseReferenceNumber.trim(),
+                courseRunId: courseRunId.trim(),
+                timestamp: new Date().toISOString(),
+                source: 'admin-delete-course-run'
+            };
+
+            console.log('📤 Delete course run payload:', payload);
+
+            const response = await fetch(WEBHOOK_URL, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+                if (response.status === 500) {
+                    throw new Error('SSG API server error. The service may be temporarily unavailable. Please try again later.');
+                }
+                throw new Error(`Unable to connect to SSG API (Error ${response.status}). Please check your connection and try again.`);
+            }
+
+            // Safe JSON parsing
+            const text = await response.text();
+            let data;
+            try {
+                data = text ? JSON.parse(text) : {};
+            } catch (e) {
+                console.error('Failed to parse JSON response:', text);
+                throw new Error(`Invalid JSON response from webhook`);
+            }
+            console.log('✅ Delete course run response:', data);
+
+            // Check if webhook returned empty response
+            if (!data || (typeof data === 'object' && Object.keys(data).length === 0)) {
+                throw new Error('Webhook returned empty response. Please check your n8n workflow configuration.');
+            }
+
+            // Store the complete webhook response for raw display (after validation)
+            setWebhookData(data);
+
+            // Parse response - handle various response formats
+            let parsedResult = data;
+
+            // If response has a 'result' property, use that
+            if (data?.result !== undefined && data?.result !== null) {
+                // If result is a string, try to parse it as JSON
+                if (typeof data.result === 'string') {
+                    try {
+                        parsedResult = JSON.parse(data.result);
+                    } catch (e) {
+                        // If parsing fails, treat the string as error message
+                        console.error('Failed to parse result string:', data.result);
+                        parsedResult = { error: { message: data.result } };
+                    }
+                } else if (typeof data.result === 'object') {
+                    // If result is already an object, check if it's an AxiosError with embedded JSON
+                    if (data.result.message && typeof data.result.message === 'string') {
+                        // Handle format like "400 - \"{...json...}\""
+                        const match = data.result.message.match(/^\d+\s*-\s*"([\s\S]+)"$/);
+                        if (match) {
+                            try {
+                                // Unescape the JSON string and parse it
+                                const unescaped = match[1].replace(/\\n/g, '').replace(/\\"/g, '"');
+                                parsedResult = JSON.parse(unescaped);
+                            } catch (e) {
+                                console.error('Failed to parse embedded JSON:', e);
+                                parsedResult = data.result;
+                            }
+                        } else {
+                            parsedResult = data.result;
+                        }
+                    } else {
+                        // If result is already an object, use it directly
+                        parsedResult = data.result;
+                    }
+                } else {
+                    // For other types, treat as error
+                    parsedResult = { error: { message: String(data.result) } };
+                }
+            }
+
+            // Check for error status
+            const hasError = (parsedResult?.error?.details?.length > 0) ||
+                (parsedResult?.error?.message) ||
+                (parsedResult?.status && parsedResult.status >= 400);
+
+            // Check if it's a "record not found" error - this means already deleted in SSG
+            const isRecordNotFound = parsedResult?.error?.details?.some(
+                (detail: any) => detail.message?.toLowerCase().includes('record not found')
+            ) || parsedResult?.error?.message?.toLowerCase().includes('record not found');
+
+            // Always mark as deleted in database for success OR "record not found"
+            if (!hasError || isRecordNotFound) {
+                // Either success OR "record not found" (already deleted) - mark as deleted in local database
+                try {
+                    console.log('🔄 Calling local database API to mark course run as deleted:', courseRunId.trim());
+                    
+                    const dbResponse = await fetch('/api/admin/delete-course-run', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ courseRunId: courseRunId.trim() })
+                    });
+
+                    console.log('📥 Database API response status:', dbResponse.status);
+
+                    if (dbResponse.ok) {
+                        const dbData = await dbResponse.json();
+                        console.log('✅ Course run marked as deleted in database:', dbData);
+                    } else {
+                        const dbError = await dbResponse.json().catch(() => ({}));
+                        console.error('❌ Database update failed:', dbError);
+                    }
+                } catch (dbErr) {
+                    console.error('❌ Error updating database:', dbErr);
+                }
+            }
+
+            // Show error message if there's an error (including "record not found")
+            if (hasError) {
+                const errorMessage = parsedResult?.error?.details?.[0]?.message ||
+                    parsedResult?.error?.message ||
+                    'Failed to delete course run';
+                setError(errorMessage);
+            }
+
+            setResult(parsedResult);
+        } catch (err) {
+            console.error('❌ Error deleting course run:', err);
+            setError(err instanceof Error ? err.message : 'Failed to delete course run');
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleClear = () => {
+        setCourseReferenceNumber('');
+        setCourseRunId('');
+        setResult(null);
+        setWebhookData(null);
+        setError(null);
+        setShowConfirm(false);
+    };
+
+    const isFormValid = courseReferenceNumber.trim() && courseRunId.trim();
+
+    return (
+        <div>
+            <h2 className="text-3xl font-bold mb-6 dark:text-white">Delete Course Run</h2>
+
+            {/* Input Form Card */}
+            <Card className="p-6 mb-6">
+                <h3 className="text-lg font-bold text-gray-700 dark:text-gray-200 mb-4">Course Run Details</h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                    Both Course Reference Number and Course Run ID are required to delete a course run.
+                </p>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    <div>
+                        <label htmlFor="delete-course-ref" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
+                            Course Reference Number <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                            id="delete-course-ref"
+                            type="text"
+                            value={courseReferenceNumber}
+                            onChange={(e) => setCourseReferenceNumber(e.target.value)}
+                            placeholder="e.g. TGS-2024052076"
+                            className={inputClasses}
+                            disabled={isSubmitting}
+                        />
+                    </div>
+                    <div>
+                        <label htmlFor="delete-course-run-id" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
+                            Course Run ID <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                            id="delete-course-run-id"
+                            type="text"
+                            value={courseRunId}
+                            onChange={(e) => setCourseRunId(e.target.value)}
+                            placeholder="e.g. 1225151"
+                            className={inputClasses}
+                            disabled={isSubmitting}
+                        />
+                    </div>
+                </div>
+
+                <div className="flex gap-3">
+                    {!showConfirm ? (
+                        <Button
+                            onClick={() => setShowConfirm(true)}
+                            disabled={isSubmitting || !isFormValid}
+                        >
+                            {isSubmitting ? (
+                                <div className="flex items-center">
+                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                                    Deleting...
+                                </div>
+                            ) : (
+                                <>
+                                    <Icon name={IconName.X} className="w-4 h-4 mr-2" />
+                                    Delete Course Run
+                                </>
+                            )}
+                        </Button>
+                    ) : (
+                        <div className="flex items-center gap-3">
+                            <span className="text-sm text-red-600 dark:text-red-400 font-medium">
+                                Are you sure you want to delete this course run?
+                            </span>
+                            <Button onClick={handleSubmit}>
+                                Yes, Delete It
+                            </Button>
+                            <Button variant="outline" onClick={() => setShowConfirm(false)}>
+                                No, Go Back
+                            </Button>
+                        </div>
+                    )}
+                    <Button variant="outline" onClick={handleClear} disabled={isSubmitting}>
+                        Clear
+                    </Button>
+                </div>
+
+                {error && !result && (
+                    <p className="text-red-500 text-sm mt-3">{error}</p>
+                )}
+            </Card>
+
+            {/* Loading State */}
+            {isSubmitting && (
+                <div className="flex justify-center py-10">
+                    <div className="text-center">
+                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
+                        <p className="mt-4 text-gray-600 dark:text-gray-400">Processing deletion...</p>
+                    </div>
+                </div>
+            )}
+
+            {/* Result Display */}
+            {!isSubmitting && result && (
+                <Card className="p-6">
+                    {error ? (
+                        <div className="bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 dark:border-red-600 rounded-r-lg p-4">
+                            <div className="flex items-center gap-2 mb-2">
+                                <Icon name={IconName.X} className="w-5 h-5 text-red-600 dark:text-red-400" />
+                                <h4 className="font-semibold text-red-900 dark:text-red-200">Fail To Delete Course Run</h4>
+                            </div>
+                            <p className="text-sm text-red-800 dark:text-red-300 pl-7">{error}</p>
+                        </div>
+                    ) : (
+                        <div className="bg-green-50 dark:bg-green-900/20 border-l-4 border-green-500 dark:border-green-600 rounded-r-lg p-4">
+                            <div className="flex items-center gap-2 mb-2">
+                                <Icon name={IconName.CheckCircle} className="w-5 h-5 text-green-600 dark:text-green-400" />
+                                <h4 className="font-semibold text-green-900 dark:text-green-200">Course Run Deleted Successfully</h4>
+                            </div>
+                            <div className="pl-7 space-y-1">
+                                <p className="text-sm text-green-700 dark:text-green-300">
+                                    <span className="font-medium">Course Reference:</span>{' '}
+                                    <span className="font-mono bg-green-100 dark:bg-green-900/40 px-2 py-0.5 rounded">
+                                        {courseReferenceNumber}
+                                    </span>
+                                </p>
+                                <p className="text-sm text-green-700 dark:text-green-300">
+                                    <span className="font-medium">Course Run ID:</span>{' '}
+                                    <span className="font-mono bg-green-100 dark:bg-green-900/40 px-2 py-0.5 rounded">
+                                        {courseRunId}
+                                    </span>
+                                </p>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Raw Response (collapsible) */}
+                    <details className="mt-4">
+                        <summary className="text-sm text-gray-500 dark:text-gray-400 cursor-pointer hover:text-gray-700 dark:hover:text-gray-300">
+                            View Raw Response
+                        </summary>
+                        <pre className="mt-2 text-xs bg-gray-100 dark:bg-gray-800 p-3 rounded overflow-auto max-h-60">
+                            {JSON.stringify(webhookData || result, null, 2)}
                         </pre>
                     </details>
                 </Card>

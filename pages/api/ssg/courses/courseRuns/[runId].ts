@@ -105,25 +105,59 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const runInfo: DeleteRunInfo = req.body;
       
       if (!runInfo) {
-        return res.status(400).json({ error: 'Request body with courseReferenceNumber is required for deletion' });
+        return res.status(400).json({ 
+          data: {},
+          error: {
+            code: '400',
+            message: 'Invalid input parameter(s).',
+            details: [
+              {
+                field: 'body',
+                message: 'Request body with courseReferenceNumber is required for deletion'
+              }
+            ]
+          },
+          meta: {},
+          status: 400
+        });
       }
 
       // Validate the run info
       const validation = EditDeleteCourseRunUtils.validateDeleteRunInfo(runInfo);
       if (!validation.isValid) {
         return res.status(400).json({ 
-          error: 'Validation failed', 
-          details: validation.errors 
+          data: {},
+          error: {
+            code: '400',
+            message: 'Invalid input parameter(s).',
+            details: validation.errors.map(err => ({
+              field: 'validation',
+              message: err
+            }))
+          },
+          meta: {},
+          status: 400
         });
       }
 
       const result = await apiClient.deleteCourseRun(runId, runInfo, includeExpired);
 
       if (result.error) {
-        return res.status(result.status || 500).json(result.error);
+        return res.status(result.status || 500).json({
+          data: {},
+          error: result.error,
+          meta: {},
+          status: result.status || 500
+        });
       }
 
-      return res.status(200).json(result.data);
+      // Success response - return SSG API format
+      return res.status(200).json({
+        data: result.data || {},
+        error: {},
+        meta: {},
+        status: 200
+      });
 
     } else if (action === 'delete-sessions') {
       // Delete sessions within a course run (NOT the entire course run)

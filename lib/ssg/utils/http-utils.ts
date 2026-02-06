@@ -323,11 +323,44 @@ export class HttpClient {
 // Utility functions for handling responses
 export const handleResponse = <T = any>(response: HttpResponse<T>): SSGApiResponse<T> => {
   if (response.status >= 200 && response.status < 300) {
+    // Success response - check if it's the SSG API format
+    const data = response.data as any;
+    if (data && typeof data === 'object' && 'data' in data && 'status' in data) {
+      // This is SSG API format with nested data/error/meta/status structure
+      return {
+        data: data.data,
+        error: data.error,
+        status: data.status || response.status
+      };
+    }
+    // Regular success response
     return {
       data: response.data,
       status: response.status
     };
   } else {
+    // Error response - parse SSG API error format
+    const data = response.data as any;
+    
+    // Check if response contains SSG API error format
+    if (data && typeof data === 'object' && 'error' in data) {
+      // Extract the nested error details if present
+      const errorData = data.error;
+      
+      if (errorData && typeof errorData === 'object') {
+        return {
+          error: {
+            code: errorData.code?.toString() || response.status.toString(),
+            message: errorData.message || response.statusText || 'Request failed',
+            details: errorData.details, // Include details array if present
+            errorId: errorData.errorId // Include errorId if present
+          },
+          status: data.status || response.status
+        };
+      }
+    }
+    
+    // Fallback to basic error format
     return {
       error: {
         code: response.status.toString(),
