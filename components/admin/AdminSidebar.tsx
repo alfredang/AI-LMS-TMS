@@ -57,9 +57,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate }) => {
                 <NavItem page={AdminPage.UpcomingClasses} label="Upcoming Classes" isSubItem />
                 <NavItem page={AdminPage.OngoingClasses} label="Ongoing Classes" isSubItem />
                 <NavItem page={AdminPage.CompletedClasses} label="Completed Classes" isSubItem />
-                <NavItem page={AdminPage.CreateNewClass} label="Create New Class" isSubItem />
-                <NavItem page={AdminPage.EnrollLearners} label="Enroll Learners" isSubItem />
-                <NavItem page={AdminPage.AssignTrainer} label="Assign Trainer" isSubItem />
+                {/* <NavItem page={AdminPage.AssignTrainer} label="Assign Trainer" isSubItem /> */}
             </NavSection>
 
             <NavSection title="Direct Application">
@@ -69,15 +67,19 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate }) => {
             </NavSection>
 
             <NavSection title="TPG Management">
+                <NavItem page={AdminPage.CreateNewClass} label="Create New Class" isSubItem />
                 <NavItem page={AdminPage.SearchCourseRuns} label="Search Course Runs" isSubItem />
                 <NavItem page={AdminPage.ViewCourseRun} label="View Course Run" isSubItem />
                 <NavItem page={AdminPage.UploadCourseRuns} label="Upload Course Runs" isSubItem />
+                <NavItem page={AdminPage.EnrollLearners} label="Enroll Learners" isSubItem />
                 <NavItem page={AdminPage.UploadEnrolments} label="Upload Enrolments" isSubItem />
                 <NavItem page={AdminPage.SearchEnrolment} label="Search Enrolment" isSubItem />
                 <NavItem page={AdminPage.ViewEnrolment} label="View Enrolment" isSubItem />
                 <NavItem page={AdminPage.SearchGrant} label="Search Grant" isSubItem />
                 <NavItem page={AdminPage.ViewGrantStatus} label="View Grant Status" isSubItem /> 
                 <NavItem page={AdminPage.SubmitAssessment} label="Submit Assessment" isSubItem />
+                <NavItem page={AdminPage.UpdateAssessment} label="Update Assessment" isSubItem />
+                <NavItem page={AdminPage.UpdateEnrolmentFees} label="Update Enrolment Fees" isSubItem />
                 <NavItem page={AdminPage.SearchAssessments} label="Search Assessments" isSubItem />
                 <NavItem page={AdminPage.ViewAssessment} label="View Assessment" isSubItem />
                 <NavItem page={AdminPage.CancelEnrolment} label="Cancel Enrolment" isSubItem />

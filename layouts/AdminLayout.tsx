@@ -29,6 +29,7 @@ import {
   ApplyNewGrantView,
   ViewGrantStatusView,
   SubmitAssessmentView,
+  UpdateAssessmentView,
   ApplyNewClaimView,
   UploadCourseRunsView,
   SearchGrantView,
@@ -39,7 +40,8 @@ import {
   SearchAssessmentsView,
   ViewAssessmentView,
   CancelEnrolmentView,
-  DeleteCourseRunView
+  DeleteCourseRunView,
+  UpdateEnrolmentFeesView
 } from '../components/admin/GrantManagementViews';
 import { CourseRunView } from '../components/admin/CourseRunView';
 import { UploadDirectApplicationView, ViewDirectApplicationView, UpdateDirectApplicationView } from '../components/admin/DirectApplicationViews';
@@ -254,6 +256,10 @@ const AdminLayout: React.FC = () => {
         return <ViewGrantStatusView />;
       case AdminPage.SubmitAssessment:
         return <SubmitAssessmentView />;
+      case AdminPage.UpdateAssessment:
+        return <UpdateAssessmentView />;
+      case AdminPage.UpdateEnrolmentFees:
+        return <UpdateEnrolmentFeesView />;
       case AdminPage.ApplyNewClaim:
         return <ApplyNewClaimView />;
       case AdminPage.UploadCourseRuns:

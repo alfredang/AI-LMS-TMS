@@ -356,6 +356,10 @@ export const BulkUploadEnrolmentView: React.FC = () => {
                             console.log('⚠️ Could not parse result for database insertion:', item);
                             continue;
                         }
+                    } else if (item?.result && typeof item.result === 'object') {
+                        // If result is already an object, use it directly
+                        parsedResult = item.result;
+                        item.parsedResult = parsedResult;
                     }
 
                     // Check if the SSG submission was successful (status 200-299)

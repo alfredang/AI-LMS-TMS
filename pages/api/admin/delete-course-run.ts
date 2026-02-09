@@ -18,9 +18,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       });
     }
 
-    // First check if course run exists in course_run table
+    // First check if course run exists in course_run table and get course details
     const checkResult = await pool.query(
-      `SELECT id, course_run_id, is_deleted FROM course_run WHERE course_run_id = $1`,
+      `SELECT cr.id, cr.course_run_id, cr.is_deleted, c.course_code 
+       FROM course_run cr
+       JOIN course c ON cr.course_id = c.id
+       WHERE cr.course_run_id = $1`,
       [courseRunId]
     );
 
@@ -30,11 +33,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       console.log('❌ Course run not found in database');
       return res.status(404).json({
         success: false,
-        error: `Course run not found with course_run_id: ${courseRunId}`
+        error: 'Course run not found in database'
       });
     }
 
-    console.log('✅ Course run found, current is_deleted status:', checkResult.rows[0].is_deleted);
+    const courseRun = checkResult.rows[0];
+    console.log('✅ Course run found, current is_deleted status:', courseRun.is_deleted);
 
     // Ensure is_deleted column exists (auto-migration)
     await pool.query(`
@@ -58,7 +62,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(200).json({
       success: true,
       data: {
-        courseRunId,
+        courseReferenceNumber: courseRun.course_code,
+        courseRunId: courseRun.course_run_id,
         isDeleted: true
       }
     });

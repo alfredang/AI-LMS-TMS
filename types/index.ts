@@ -36,6 +36,7 @@ export enum AdminPage {
   ApplyNewGrant = 'applyNewGrant',
   ViewGrantStatus = 'viewGrantStatus',
   SubmitAssessment = 'submitAssessment',
+  UpdateAssessment = 'updateAssessment',
   ApplyNewClaim = 'applyNewClaim',
   UploadCourseRuns = 'uploadCourseRuns',
   SearchGrant = 'searchGrant',
@@ -51,7 +52,8 @@ export enum AdminPage {
   SearchAssessments = 'searchAssessments',
   ViewAssessment = 'viewAssessment',
   CancelEnrolment = 'cancelEnrolment',
-  DeleteCourseRun = 'deleteCourseRun'
+  DeleteCourseRun = 'deleteCourseRun',
+  UpdateEnrolmentFees = 'updateEnrolmentFees'
 }
 
 // Course related interfaces

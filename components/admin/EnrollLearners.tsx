@@ -92,8 +92,8 @@ const EnrollLearners: React.FC = () => {
     traineeContactNumberCountryCode: '+65',
     traineeContactNumberPhoneNumber: '',
     traineeSponsorshipType: SponsorshipType.INDIVIDUAL,
-    trainingPartnerUen: '',
-    trainingPartnerCode: ''
+    trainingPartnerUen: '201200696W',
+    trainingPartnerCode: '201200696W-01'
   });
 
   // Course management state
@@ -131,7 +131,7 @@ const EnrollLearners: React.FC = () => {
   const [warnings, setWarnings] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const inputClasses = "block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-500";
+  const inputClasses = "block w-full px-3 py-2 text-gray-900 bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400";
 
   // Helper function to calculate age group from date of birth (from ClassDetailView)
   const getAgeGroup = (dob: string): 'Above 40' | 'Below 40' | 'N/A' => {
@@ -700,69 +700,93 @@ const EnrollLearners: React.FC = () => {
             <h2 className="text-lg font-semibold text-gray-900 mb-4 dark:text-white">Course Information</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 dark:text-gray-300">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Course Reference Number <span className="text-red-500">*</span>
                 </label>
-                {loadingCourses ? (
-                  <div className="flex items-center space-x-2">
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
-                    <span className="text-sm text-gray-500 dark:text-gray-400">Loading courses...</span>
-                  </div>
-                ) : (
-                  <select
-                    value={formData.courseReferenceNumber}
-                    onChange={(e) => handleInputChange('courseReferenceNumber', e.target.value)}
-                    className={inputClasses}
-                  >
-                    <option value="">Select a course...</option>
-                    {availableCourses.map((course) => (
-                      <option key={course.courseCode} value={course.courseCode}>
-                        {course.title} ({course.courseCode})
-                      </option>
-                    ))}
-                  </select>
-                )}
-                {availableCourses.length === 0 && !loadingCourses && (
-                  <p className="text-xs text-amber-600 mt-1">
-                    No courses found. Please create a course first.
-                  </p>
-                )}
+                <input
+                  type="text"
+                  value={formData.courseReferenceNumber}
+                  onChange={(e) => handleInputChange('courseReferenceNumber', e.target.value)}
+                  className={inputClasses}
+                  placeholder="Enter course code (e.g., TGS-2024001234)"
+                />
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Enter the course code manually or select from available courses below
+                </p>
+                <div className="mt-2">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Or Select from Available Courses
+                  </label>
+                  {loadingCourses ? (
+                    <div className="flex items-center space-x-2">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
+                      <span className="text-sm text-gray-500 dark:text-gray-400">Loading courses...</span>
+                    </div>
+                  ) : (
+                    <select
+                      value={formData.courseReferenceNumber}
+                      onChange={(e) => handleInputChange('courseReferenceNumber', e.target.value)}
+                      className={inputClasses}
+                    >
+                      <option value="">Select a course...</option>
+                      {availableCourses.map((course) => (
+                        <option key={course.courseCode} value={course.courseCode}>
+                          {course.title} ({course.courseCode})
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  {availableCourses.length === 0 && !loadingCourses && (
+                    <p className="text-xs text-amber-600 mt-1">
+                      No courses found in the database. You can still enter a course code manually above.
+                    </p>
+                  )}
+                </div>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 dark:text-gray-300">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Course Run ID <span className="text-red-500">*</span>
                 </label>
-                {loadingCourseRuns ? (
-                  <div className="flex items-center space-x-2">
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
-                    <span className="text-sm text-gray-500 dark:text-gray-400">Loading course runs...</span>
-                  </div>
-                ) : (
-                  <select
-                    value={formData.courseRunId}
-                    onChange={(e) => handleInputChange('courseRunId', e.target.value)}
-                    className={inputClasses}
-                    disabled={!formData.courseReferenceNumber}
-                  >
-                    <option value="">Select a course run...</option>
-                    {availableCourseRuns.map((courseRun) => (
-                      <option key={courseRun.course_run_id} value={courseRun.course_run_id}>
-                        {courseRun.course_run_id}
-                      </option>
-                    ))}
-                  </select>
-                )}
-                {!formData.courseReferenceNumber && (
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 dark:text-gray-400">
-                    Please select a course first.
-                  </p>
-                )}
-                {formData.courseReferenceNumber && availableCourseRuns.length === 0 && !loadingCourseRuns && (
-                  <p className="text-xs text-amber-600 mt-1">
-                    No course runs found for this course.
-                  </p>
-                )}
+                <input
+                  type="text"
+                  value={formData.courseRunId}
+                  onChange={(e) => handleInputChange('courseRunId', e.target.value)}
+                  className={inputClasses}
+                  placeholder="Enter course run ID (e.g., 101)"
+                />
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Enter the course run ID manually or select from available runs below
+                </p>
+                <div className="mt-2">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Or Select from Available Course Runs
+                  </label>
+                  {loadingCourseRuns ? (
+                    <div className="flex items-center space-x-2">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
+                      <span className="text-sm text-gray-500 dark:text-gray-400">Loading course runs...</span>
+                    </div>
+                  ) : (
+                    <select
+                      value={formData.courseRunId}
+                      onChange={(e) => handleInputChange('courseRunId', e.target.value)}
+                      className={inputClasses}
+                    >
+                      <option value="">Select a course run...</option>
+                      {availableCourseRuns.map((courseRun) => (
+                        <option key={courseRun.course_run_id} value={courseRun.course_run_id}>
+                          {courseRun.course_run_id}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  {formData.courseReferenceNumber && availableCourseRuns.length === 0 && !loadingCourseRuns && (
+                    <p className="text-xs text-amber-600 mt-1">
+                      No course runs found for this course. You can still enter a course run ID manually above.
+                    </p>
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -798,8 +822,8 @@ const EnrollLearners: React.FC = () => {
                     </div>
                   ))}
                 </div>
-                <div className="text-center p-4 border-2 border-dashed rounded-md mt-4">
-                  <p className="text-gray-600 text-sm mb-2">Can't find a learner?</p>
+                <div className="text-center p-4 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-md mt-4">
+                  <p className="text-gray-600 dark:text-gray-400 text-sm mb-2">Can't find a learner?</p>
                   <Button size="sm" onClick={() => setIsAddingLearner(true)} disabled={!selectedCourseId}>
                     + Add New Learner Profile
                   </Button>
@@ -818,10 +842,10 @@ const EnrollLearners: React.FC = () => {
                     enrolmentData.data.map((record: any, index: number) => {
                       const ageGroup = getAgeGroup(record.enrolment?.trainee?.dateOfBirth);
                       return (
-                        <div key={index} className="p-2 bg-blue-50 rounded-md">
+                        <div key={index} className="p-2 bg-blue-50 rounded-md dark:bg-blue-900/30">
                           <div className="flex justify-between items-start">
                             <div className="flex-1">
-                              <p className="font-semibold text-sm">{record.enrolment?.trainee?.fullName || 'N/A'}</p>
+                              <p className="font-semibold text-sm dark:text-white">{record.enrolment?.trainee?.fullName || 'N/A'}</p>
                               <p className="text-xs text-gray-600 dark:text-gray-300">{record.enrolment?.trainee?.email.full || 'N/A'}</p>
                             </div>
                             <Button size="sm" variant="danger" onClick={() => unenrollLearnerFromClass(selectedCourseId, record.enrolment?.trainee?.emailAddress)}>
@@ -832,7 +856,7 @@ const EnrollLearners: React.FC = () => {
                       );
                     })
                   ) : (
-                    <p className="text-center text-gray-600 py-10">
+                    <p className="text-center text-gray-600 dark:text-gray-400 py-10">
                       {formData.courseRunId ? 'No enrolled learners found for this course run.' : 'Select a course run to see enrolled learners.'}
                     </p>
                   )}
@@ -884,7 +908,7 @@ const EnrollLearners: React.FC = () => {
                   <select
                     value={formData.traineeIdType}
                     onChange={(e) => handleInputChange('traineeIdType', e.target.value as IdTypeSummary)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className={inputClasses}
                   >
                     {Object.values(IdTypeSummary).map(type => (
                       <option key={type} value={type}>{type}</option>
@@ -902,7 +926,7 @@ const EnrollLearners: React.FC = () => {
                     onChange={(e) => handleInputChange('traineeId', e.target.value)}
                     placeholder="e.g., S7020587D"
                     maxLength={20}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className={inputClasses}
                   />
                 </div>
               </div>
@@ -920,7 +944,7 @@ const EnrollLearners: React.FC = () => {
                     onChange={(e) => handleInputChange('traineeFullName', e.target.value)}
                     placeholder="e.g., Aileen Chong"
                     maxLength={200}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className={inputClasses}
                   />
                 </div>
 
@@ -933,7 +957,7 @@ const EnrollLearners: React.FC = () => {
                     value={formData.traineeDateOfBirth}
                     onChange={(e) => handleInputChange('traineeDateOfBirth', e.target.value)}
                     min="1900-01-01"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className={inputClasses}
                   />
                 </div>
 
@@ -947,7 +971,7 @@ const EnrollLearners: React.FC = () => {
                     onChange={(e) => handleInputChange('traineeEmailAddress', e.target.value)}
                     placeholder="e.g., test@test.com"
                     maxLength={100}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className={inputClasses}
                   />
                 </div>
 
@@ -963,7 +987,7 @@ const EnrollLearners: React.FC = () => {
                       onChange={(e) => handleInputChange('traineeContactNumberCountryCode', e.target.value)}
                       placeholder="+65"
                       maxLength={5}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className={inputClasses}
                     />
                   </div>
 
@@ -977,7 +1001,7 @@ const EnrollLearners: React.FC = () => {
                       onChange={(e) => handleInputChange('traineeContactNumberPhoneNumber', e.target.value)}
                       placeholder="98765432"
                       maxLength={20}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className={inputClasses}
                     />
                   </div>
                 </div>
@@ -1008,7 +1032,7 @@ const EnrollLearners: React.FC = () => {
                       value={formData.traineeEnrolmentDate || ''}
                       onChange={(e) => handleInputChange('traineeEnrolmentDate', e.target.value)}
                       min="1900-01-01"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className={inputClasses}
                     />
                   </div>
                 )}
@@ -1021,7 +1045,7 @@ const EnrollLearners: React.FC = () => {
                 <select
                   value={formData.traineeSponsorshipType}
                   onChange={(e) => handleInputChange('traineeSponsorshipType', e.target.value as SponsorshipType)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className={inputClasses}
                 >
                   {Object.values(SponsorshipType).map(type => (
                     <option key={type} value={type}>{type}</option>
@@ -1044,7 +1068,7 @@ const EnrollLearners: React.FC = () => {
                       onChange={(e) => handleInputChange('employerUen', e.target.value)}
                       placeholder="e.g., 201000372W"
                       maxLength={50}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className={inputClasses}
                     />
                     <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Employer organisation's UEN</p>
                   </div>
@@ -1059,7 +1083,7 @@ const EnrollLearners: React.FC = () => {
                       onChange={(e) => handleInputChange('employerFullName', e.target.value)}
                       placeholder="e.g., Stephen Chua"
                       maxLength={50}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className={inputClasses}
                     />
                     <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">The employer contact's person name</p>
                   </div>
@@ -1074,7 +1098,7 @@ const EnrollLearners: React.FC = () => {
                       onChange={(e) => handleInputChange('employerEmailAddress', e.target.value)}
                       placeholder="test@test.com"
                       maxLength={100}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className={inputClasses}
                     />
                     <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">The employer contact's email address</p>
                   </div>
@@ -1099,7 +1123,7 @@ const EnrollLearners: React.FC = () => {
                           onChange={(e) => handleInputChange('employerAreaCode', e.target.value)}
                           placeholder="Area Code"
                           maxLength={10}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          className={inputClasses}
                         />
                       )}
                     </div>
@@ -1114,7 +1138,7 @@ const EnrollLearners: React.FC = () => {
                         onChange={(e) => handleInputChange('employerCountryCode', e.target.value)}
                         placeholder="+65"
                         maxLength={5}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className={inputClasses}
                       />
                     </div>
 
@@ -1128,7 +1152,7 @@ const EnrollLearners: React.FC = () => {
                         onChange={(e) => handleInputChange('employerPhoneNumber', e.target.value)}
                         placeholder="98765432"
                         maxLength={20}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className={inputClasses}
                       />
                     </div>
                   </div>
@@ -1157,7 +1181,7 @@ const EnrollLearners: React.FC = () => {
                           onChange={(e) => handleInputChange('employerUen', e.target.value)}
                           placeholder="e.g., 201000372W"
                           maxLength={50}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          className={inputClasses}
                         />
                       </div>
                     )}
@@ -1182,7 +1206,7 @@ const EnrollLearners: React.FC = () => {
                           onChange={(e) => handleInputChange('employerFullName', e.target.value)}
                           placeholder="e.g., Stephen Chua"
                           maxLength={50}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          className={inputClasses}
                         />
                       </div>
                     )}
@@ -1207,7 +1231,7 @@ const EnrollLearners: React.FC = () => {
                           onChange={(e) => handleInputChange('employerEmailAddress', e.target.value)}
                           placeholder="test@test.com"
                           maxLength={100}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          className={inputClasses}
                         />
                       </div>
                     )}
@@ -1232,7 +1256,7 @@ const EnrollLearners: React.FC = () => {
                   onChange={(e) => handleInputChange('trainingPartnerUen', e.target.value)}
                   placeholder="e.g., 199900650G"
                   maxLength={12}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className={inputClasses}
                 />
               </div>
 
@@ -1246,7 +1270,7 @@ const EnrollLearners: React.FC = () => {
                   onChange={(e) => handleInputChange('trainingPartnerCode', e.target.value)}
                   placeholder="e.g., 199900650G-01"
                   maxLength={15}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className={inputClasses}
                 />
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Code for the training partner conducting the course for which the trainee is enrolled</p>
               </div>
@@ -1281,8 +1305,8 @@ const EnrollLearners: React.FC = () => {
                     traineeContactNumberCountryCode: '+65',
                     traineeContactNumberPhoneNumber: '',
                     traineeSponsorshipType: SponsorshipType.INDIVIDUAL,
-                    trainingPartnerUen: '',
-                    trainingPartnerCode: ''
+                    trainingPartnerUen: '201200696W',
+                    trainingPartnerCode: '201200696W-01'
                   });
                   setShowOptionalFields({
                     feeDiscount: false,
@@ -1299,7 +1323,7 @@ const EnrollLearners: React.FC = () => {
                   setWarnings([]);
                 }
               }}
-              className="px-6 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+              className="px-6 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
             >
               Clear Form
             </button>
@@ -1307,7 +1331,7 @@ const EnrollLearners: React.FC = () => {
             <button
               type="submit"
               disabled={isSubmitting}
-              className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+              className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed dark:bg-blue-500 dark:hover:bg-blue-600"
             >
               {isSubmitting ? 'Creating Enrolment...' : 'Create Enrolment'}
             </button>

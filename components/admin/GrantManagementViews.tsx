@@ -556,135 +556,1128 @@ export const ViewGrantStatusView: React.FC = () => {
 };
 
 export const SubmitAssessmentView: React.FC = () => {
-    // No mock data - empty arrays for now
-    const courses: any[] = [];
-
-    const [selectedCourseId, setSelectedCourseId] = useState<string>('');
+    const [courseRunId, setCourseRunId] = useState<string>('');
+    const [courseReferenceNumber, setCourseReferenceNumber] = useState<string>('');
+    const [assessmentResult, setAssessmentResult] = useState<string>('Pass');
+    const [traineeId, setTraineeId] = useState<string>('');
+    const [traineeFullName, setTraineeFullName] = useState<string>('');
+    const [skillCode, setSkillCode] = useState<string>('');
+    const [assessmentDate, setAssessmentDate] = useState<string>('');
+    const [trainingPartnerUen, setTrainingPartnerUen] = useState<string>('201200696W');
+    const [trainingPartnerCode, setTrainingPartnerCode] = useState<string>('201200696W-01');
+    const [enrolmentNumber, setEnrolmentNumber] = useState<string>('');
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [submissionStatus, setSubmissionStatus] = useState<string | null>(null);
+    const [result, setResult] = useState<any>(null);
+    const [error, setError] = useState<string | null>(null);
 
-    const selectedCourse = useMemo(() => {
-        return courses.find(c => c.id === selectedCourseId);
-    }, [courses, selectedCourseId]);
+    const WEBHOOK_URL = 'https://n8n.srv1231536.hstgr.cloud/webhook/3955e2d7-38c5-4f06-9177-53281157763c';
 
-    const handleGradeChange = (learnerEmail: string, newStatus: string) => {
-        // In real implementation, this would update the learner's assessment grade
-        console.log(`Grade change for ${learnerEmail}: ${newStatus}`);
+    const inputClasses = "block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-500";
+
+    // Auto-determine idType based on first letter of trainee ID
+    const getIdType = (id: string): string => {
+        const firstLetter = id.charAt(0).toUpperCase();
+        if (firstLetter === 'S' || firstLetter === 'T') {
+            return 'NRIC';
+        } else if (firstLetter === 'F' || firstLetter === 'G' || firstLetter === 'M') {
+            return 'FIN';
+        } else {
+            return 'OTHERS';
+        }
     };
 
-    const allLearnersGraded = useMemo(() => {
-        if (!selectedCourse || !selectedCourse.learners) return false;
-        if (selectedCourse.learners.length === 0) return false;
-        return selectedCourse.learners.every((learner: any) => learner.assessmentStatus !== 'Pending');
-    }, [selectedCourse]);
+    const handleSubmit = async () => {
+        // Validate required fields based on SSG API
+        if (!courseRunId.trim()) {
+            setError('Course Run ID is required');
+            return;
+        }
+        if (!courseReferenceNumber.trim()) {
+            setError('Course Reference Number is required');
+            return;
+        }
+        if (!traineeId.trim()) {
+            setError('Trainee ID is required');
+            return;
+        }
+        if (!traineeFullName.trim()) {
+            setError('Trainee Full Name is required');
+            return;
+        }
+        if (!assessmentDate.trim()) {
+            setError('Assessment Date is required');
+            return;
+        }
+        if (!skillCode.trim()) {
+            setError('Skill Code is required');
+            return;
+        }
+        if (!trainingPartnerUen.trim()) {
+            setError('Training Partner UEN is required');
+            return;
+        }
+        if (!trainingPartnerCode.trim()) {
+            setError('Training Partner Code is required');
+            return;
+        }
 
-    const handleSubmitToTPG = () => {
         setIsSubmitting(true);
-        setSubmissionStatus(null);
+        setError(null);
+        setResult(null);
 
-        // Simulate API call to TPG
-        setTimeout(() => {
+        try {
+            const idType = getIdType(traineeId);
+
+            const payload: any = {
+                payload: {
+                    assessment: {
+                        course: {
+                            run: {
+                                id: courseRunId.trim()
+                            },
+                            referenceNumber: courseReferenceNumber.trim()
+                        },
+                        result: assessmentResult,
+                        trainee: {
+                            id: traineeId.trim(),
+                            idType: idType,
+                            fullName: traineeFullName.trim()
+                        },
+                        assessmentDate: assessmentDate.trim(),
+                        skillCode: skillCode.trim(),
+                        trainingPartner: {
+                            uen: trainingPartnerUen.trim(),
+                            code: trainingPartnerCode.trim()
+                        }
+                    }
+                }
+            };
+
+            // Add optional field if provided
+
+            if (enrolmentNumber.trim()) {
+                payload.enrolmentNumber = enrolmentNumber.trim();
+            }
+
+            console.log('📤 Submit assessment payload:', payload);
+
+            const response = await fetch(WEBHOOK_URL, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+                if (response.status === 500) {
+                    throw new Error('SSG API server error. The service may be temporarily unavailable. Please try again later.');
+                }
+                throw new Error(`Unable to connect to SSG API (Error ${response.status}). Please check your connection and try again.`);
+            }
+
+            // Safe JSON parsing
+            const text = await response.text();
+            let data;
+            try {
+                data = text ? JSON.parse(text) : {};
+            } catch (e) {
+                console.error('Failed to parse JSON response:', text);
+                throw new Error(`Invalid JSON response from webhook`);
+            }
+            console.log('✅ Submit assessment response:', data);
+
+            // Parse response
+            let parsedResult = data;
+            if (data?.result !== undefined && data?.result !== null) {
+                if (typeof data.result === 'string') {
+                    try {
+                        parsedResult = JSON.parse(data.result);
+                    } catch (e) {
+                        console.error('Failed to parse result string:', data.result);
+                        parsedResult = { error: { message: data.result } };
+                    }
+                } else if (typeof data.result === 'object') {
+                    parsedResult = data.result;
+                } else {
+                    parsedResult = { error: { message: String(data.result) } };
+                }
+            }
+
+            // Check for error status - handle both nested error object and root level errors
+            const hasError = (parsedResult?.error?.details?.length > 0) ||
+                (parsedResult?.error?.message) ||
+                (parsedResult?.status && parsedResult.status >= 400) ||
+                (parsedResult?.details?.length > 0) ||
+                (parsedResult?.message && parsedResult.message.toLowerCase().includes('cannot'));
+
+            if (hasError) {
+                const errorMessage = parsedResult?.error?.details?.[0]?.message ||
+                    parsedResult?.error?.message ||
+                    parsedResult?.details?.[0]?.message ||
+                    parsedResult?.message ||
+                    'Failed to submit assessment';
+                setError(errorMessage);
+            }
+
+            setResult(parsedResult);
+        } catch (err) {
+            console.error('❌ Error submitting assessment:', err);
+            setError(err instanceof Error ? err.message : 'Failed to submit assessment');
+        } finally {
             setIsSubmitting(false);
-            setSubmissionStatus(`Successfully submitted assessment results for ${selectedCourse?.title} to TPG.`);
-        }, 1500);
+        }
     };
+
+    const handleClear = () => {
+        setCourseRunId('');
+        setCourseReferenceNumber('');
+        setAssessmentResult('Pass');
+        setTraineeId('');
+        setTraineeFullName('');
+        setSkillCode('');
+        setAssessmentDate('');
+        setTrainingPartnerUen('201200696W');
+        setTrainingPartnerCode('201200696W-01');
+        setEnrolmentNumber('');
+        setResult(null);
+        setError(null);
+    };
+
+    const isFormValid = courseRunId.trim() && courseReferenceNumber.trim() &&
+        traineeId.trim() && traineeFullName.trim() &&
+        assessmentDate.trim() && skillCode.trim() &&
+        trainingPartnerUen.trim() && trainingPartnerCode.trim();
 
     return (
         <div>
-            <h2 className="text-3xl font-bold mb-6 dark:text-white">Submit Assessment Results</h2>
-            <Card className="p-6 mb-6 dark:bg-gray-800 dark:border-gray-700">
-                <div className="grid grid-cols-1">
+            <h2 className="text-3xl font-bold mb-6 dark:text-white">Submit Assessment</h2>
+
+            {/* Input Form Card */}
+            <Card className="p-6 mb-6">
+                <h3 className="text-lg font-bold text-gray-700 dark:text-gray-200 mb-4">Assessment Details</h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                    All fields marked with * are required. Only Enrolment Number is optional.
+                </p>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                     <div>
-                        <label htmlFor="class-select-assessment" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1 dark:text-gray-300">
-                            1. Select a Class
+                        <label htmlFor="submit-course-run-id" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
+                            Course Run ID <span className="text-red-500">*</span>
                         </label>
-                        <select
-                            id="class-select-assessment"
-                            value={selectedCourseId}
-                            onChange={(e) => {
-                                setSelectedCourseId(e.target.value);
-                                setSubmissionStatus(null);
-                            }}
+                        <input
+                            id="submit-course-run-id"
+                            type="text"
+                            value={courseRunId}
+                            onChange={(e) => setCourseRunId(e.target.value)}
+                            placeholder="e.g. 1234567"
                             className={inputClasses}
-                        >
-                            <option value="" disabled>-- Choose a class --</option>
-                            {courses.length === 0 ? (
-                                <option value="" disabled>No classes available</option>
-                            ) : (
-                                courses.map(course => (
-                                    <option key={course.id} value={course.id}>
-                                        {course.title} ({course.courseRunId})
-                                    </option>
-                                ))
-                            )}
-                        </select>
-                        {courses.length === 0 && (
-                            <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">No classes found. Please create classes first.</p>
+                            disabled={isSubmitting}
+                        />
+                    </div>
+                    <div>
+                        <label htmlFor="submit-course-ref" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
+                            Course Reference Number <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                            id="submit-course-ref"
+                            type="text"
+                            value={courseReferenceNumber}
+                            onChange={(e) => setCourseReferenceNumber(e.target.value)}
+                            placeholder="e.g. TGS-2024052076"
+                            className={inputClasses}
+                            disabled={isSubmitting}
+                        />
+                    </div>
+                    <div>
+                        <label htmlFor="submit-trainee-id" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
+                            Trainee ID <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                            id="submit-trainee-id"
+                            type="text"
+                            value={traineeId}
+                            onChange={(e) => setTraineeId(e.target.value)}
+                            placeholder="e.g. S1234567A"
+                            className={inputClasses}
+                            disabled={isSubmitting}
+                        />
+                        {traineeId && (
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                ID Type: {getIdType(traineeId)}
+                            </p>
                         )}
                     </div>
+                    <div>
+                        <label htmlFor="submit-trainee-name" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
+                            Trainee Full Name <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                            id="submit-trainee-name"
+                            type="text"
+                            value={traineeFullName}
+                            onChange={(e) => setTraineeFullName(e.target.value)}
+                            placeholder="e.g. John Doe"
+                            className={inputClasses}
+                            disabled={isSubmitting}
+                        />
+                    </div>
+                    <div>
+                        <label htmlFor="submit-assessment-date" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
+                            Assessment Date <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                            id="submit-assessment-date"
+                            type="date"
+                            value={assessmentDate}
+                            onChange={(e) => setAssessmentDate(e.target.value)}
+                            placeholder="$$YYYY-MM-DD"
+                            className={inputClasses}
+                            disabled={isSubmitting}
+                        />
+                    </div>
+                    <div>
+                        <label htmlFor="submit-assessment-result" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
+                            Assessment Result <span className="text-red-500">*</span>
+                        </label>
+                        <select
+                            id="submit-assessment-result"
+                            value={assessmentResult}
+                            onChange={(e) => setAssessmentResult(e.target.value)}
+                            className={inputClasses}
+                            disabled={isSubmitting}
+                        >
+                            <option value="Pass">Pass</option>
+                            <option value="Fail">Fail</option>
+                            <option value="Exempt">Exempt</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label htmlFor="submit-tp-uen" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
+                            Training Partner UEN <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                            id="submit-tp-uen"
+                            type="text"
+                            value={trainingPartnerUen}
+                            onChange={(e) => setTrainingPartnerUen(e.target.value)}
+                            placeholder="e.g. 201200696W"
+                            className={inputClasses}
+                            disabled={isSubmitting}
+                        />
+                    </div>
+                    <div>
+                        <label htmlFor="submit-tp-code" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
+                            Training Partner Code <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                            id="submit-tp-code"
+                            type="text"
+                            value={trainingPartnerCode}
+                            onChange={(e) => setTrainingPartnerCode(e.target.value)}
+                            placeholder="e.g. 201200696W-01"
+                            className={inputClasses}
+                            disabled={isSubmitting}
+                        />
+                    </div>
+                    <div>
+                        <label htmlFor="submit-skill-code" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
+                            Skill Code <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                            id="submit-skill-code"
+                            type="text"
+                            value={skillCode}
+                            onChange={(e) => setSkillCode(e.target.value)}
+                            placeholder="e.g. ABC-123"
+                            className={inputClasses}
+                            disabled={isSubmitting}
+                        />
+                    </div>
+                    <div>
+                        <label htmlFor="submit-enrolment-number" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
+                            Enrolment Number
+                        </label>
+                        <input
+                            id="submit-enrolment-number"
+                            type="text"
+                            value={enrolmentNumber}
+                            onChange={(e) => setEnrolmentNumber(e.target.value)}
+                            placeholder="e.g. ENR-2024-001 (optional)"
+                            className={inputClasses}
+                            disabled={isSubmitting}
+                        />
+                    </div>
+                </div>
+
+                <div className="flex gap-3">
+                    <Button
+                        onClick={handleSubmit}
+                        disabled={isSubmitting || !isFormValid}
+                    >
+                        {isSubmitting ? (
+                            <div className="flex items-center">
+                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                                Submitting...
+                            </div>
+                        ) : (
+                            <>
+                                <Icon name={IconName.CheckCircle} className="w-4 h-4 mr-2" />
+                                Submit Assessment
+                            </>
+                        )}
+                    </Button>
+                    <Button variant="outline" onClick={handleClear} disabled={isSubmitting}>
+                        Clear
+                    </Button>
+                </div>
+
+                {error && !result && (
+                    <p className="text-red-500 text-sm mt-3">{error}</p>
+                )}
+            </Card>
+
+            {/* Loading State */}
+            {isSubmitting && (
+                <div className="flex justify-center py-10">
+                    <div className="text-center">
+                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
+                        <p className="mt-4 text-gray-600 dark:text-gray-400">Submitting assessment...</p>
+                    </div>
+                </div>
+            )}
+
+            {/* Result Display */}
+            {!isSubmitting && result && (
+                <Card className="p-6">
+                    {error ? (
+                        <div className="bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 dark:border-red-600 rounded-r-lg p-4">
+                            <div className="flex items-center gap-2 mb-2">
+                                <Icon name={IconName.X} className="w-5 h-5 text-red-600 dark:text-red-400" />
+                                <h4 className="font-semibold text-red-900 dark:text-red-200">Submission Creation Failed</h4>
+                            </div>
+                            {/* <p className="text-sm text-red-800 dark:text-red-300 pl-7">{error}</p> */}
+                        </div>
+                    ) : (
+                        <div className="bg-green-50 dark:bg-green-900/20 border-l-4 border-green-500 dark:border-green-600 rounded-r-lg p-4">
+                            <div className="flex items-center gap-2 mb-2">
+                                <Icon name={IconName.CheckCircle} className="w-5 h-5 text-green-600 dark:text-green-400" />
+                                <h4 className="font-semibold text-green-900 dark:text-green-200">Assessment Submitted Successfully</h4>
+                            </div>
+                            <div className="pl-7 space-y-1">
+                                <p className="text-sm text-green-700 dark:text-green-300">
+                                    <span className="font-medium">Reference:</span>{' '}
+                                    <span className="font-mono bg-green-100 dark:bg-green-900/40 px-2 py-0.5 rounded">
+                                        {result?.data?.assessment?.referenceNumber || 'N/A'}
+                                    </span>
+                                </p>
+                                <p className="text-sm text-green-700 dark:text-green-300">
+                                    <span className="font-medium">Status:</span>{' '}
+                                    <span className="font-semibold">Confirmed</span>
+                                </p>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Raw Response (collapsible) */}
+                    {/* <details className="mt-4">
+                        <summary className="text-sm text-gray-500 dark:text-gray-400 cursor-pointer hover:text-gray-700 dark:hover:text-gray-300">
+                            View Raw Response
+                        </summary>
+                        <pre className="mt-2 text-xs bg-gray-100 dark:bg-gray-800 p-3 rounded overflow-auto max-h-60">
+                            {JSON.stringify(result, null, 2)}
+                        </pre>
+                    </details> */}
+                </Card>
+            )}
+        </div>
+    );
+};
+
+export const UpdateAssessmentView: React.FC = () => {
+    const [referenceNumber, setReferenceNumber] = useState<string>('');
+    const [action, setAction] = useState<string>('update');
+    const [result, setResult] = useState<string>('Pass');
+    const [grade, setGrade] = useState<string>('');
+    const [score, setScore] = useState<string>('');
+    const [traineeFullName, setTraineeFullName] = useState<string>('');
+    const [skillCode, setSkillCode] = useState<string>('');
+    const [assessmentDate, setAssessmentDate] = useState<string>('');
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [apiResult, setApiResult] = useState<any>(null);
+    const [error, setError] = useState<string | null>(null);
+
+    const WEBHOOK_URL = 'https://n8n.srv1231536.hstgr.cloud/webhook/5a3271b2-6b10-455b-a5a1-196c5d3a6887'; // TODO: Replace with actual webhook URL
+
+    const inputClasses = "block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-500";
+
+    const handleSubmit = async () => {
+        // Validate required fields
+        if (!referenceNumber.trim()) {
+            setError('Assessment Reference Number is required');
+            return;
+        }
+        if (!action.trim()) {
+            setError('Action is required');
+            return;
+        }
+
+        // For update action, validate required fields
+        if (action === 'update') {
+            if (!result.trim()) {
+                setError('Assessment Result is required for update action');
+                return;
+            }
+            if (!traineeFullName.trim()) {
+                setError('Trainee Full Name is required for update action');
+                return;
+            }
+            if (!assessmentDate.trim()) {
+                setError('Assessment Date is required for update action');
+                return;
+            }
+            if (!skillCode.trim()) {
+                setError('Skill Code is required for update action');
+                return;
+            }
+        }
+
+        setIsSubmitting(true);
+        setError(null);
+        setApiResult(null);
+
+        try {
+            const payload: any = {
+                referenceNumber: referenceNumber.trim(),
+                assessment: {
+                    action: action
+                }
+            };
+
+            // Only add fields for update action (void action leaves fields blank)
+            if (action === 'update') {
+                payload.assessment.result = result;
+                payload.assessment.trainee = {
+                    fullName: traineeFullName.trim()
+                };
+                payload.assessment.assessmentDate = assessmentDate.trim();
+                payload.assessment.skillCode = skillCode.trim();
+
+                // Add optional fields if provided
+                if (grade.trim()) {
+                    payload.assessment.grade = grade.trim();
+                }
+                if (score.trim()) {
+                    payload.assessment.score = parseInt(score.trim(), 10);
+                }
+            }
+
+            console.log('📤 Update assessment payload:', payload);
+
+            const response = await fetch(WEBHOOK_URL, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+                if (response.status === 500) {
+                    throw new Error('SSG API server error. The service may be temporarily unavailable. Please try again later.');
+                }
+                throw new Error(`Unable to connect to SSG API (Error ${response.status}). Please check your connection and try again.`);
+            }
+
+            // Safe JSON parsing
+            const text = await response.text();
+            let data;
+            try {
+                data = text ? JSON.parse(text) : {};
+            } catch (e) {
+                console.error('Failed to parse JSON response:', text);
+                throw new Error(`Invalid JSON response from webhook`);
+            }
+            console.log('✅ Update assessment response:', data);
+
+            // Parse response
+            let parsedResult = data;
+            if (data?.result !== undefined && data?.result !== null) {
+                if (typeof data.result === 'string') {
+                    try {
+                        parsedResult = JSON.parse(data.result);
+                    } catch (e) {
+                        console.error('Failed to parse result string:', data.result);
+                        parsedResult = { error: { message: data.result } };
+                    }
+                } else if (typeof data.result === 'object') {
+                    parsedResult = data.result;
+                } else {
+                    parsedResult = { error: { message: String(data.result) } };
+                }
+            }
+
+            // Check for error status
+            const hasError = (parsedResult?.error?.details?.length > 0) ||
+                (parsedResult?.error?.message) ||
+                (parsedResult?.status && parsedResult.status >= 400) ||
+                (parsedResult?.details?.length > 0) ||
+                (parsedResult?.message && parsedResult.message.toLowerCase().includes('cannot'));
+
+            if (hasError) {
+                const errorMessage = parsedResult?.error?.details?.[0]?.message ||
+                    parsedResult?.error?.message ||
+                    parsedResult?.details?.[0]?.message ||
+                    parsedResult?.message ||
+                    `Failed to ${action} assessment`;
+                setError(errorMessage);
+            }
+
+            setApiResult(parsedResult);
+        } catch (err) {
+            console.error('❌ Error updating assessment:', err);
+            setError(err instanceof Error ? err.message : 'Failed to update assessment');
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleClear = () => {
+        setReferenceNumber('');
+        setAction('update');
+        setResult('Pass');
+        setGrade('');
+        setScore('');
+        setTraineeFullName('');
+        setSkillCode('');
+        setAssessmentDate('');
+        setApiResult(null);
+        setError(null);
+    };
+
+    const isFormValid = referenceNumber.trim() && action.trim() &&
+        (action === 'void' || (result.trim() && traineeFullName.trim() && assessmentDate.trim() && skillCode.trim()));
+
+    return (
+        <div>
+            <h2 className="text-3xl font-bold mb-6 dark:text-white">Update Assessment</h2>
+
+            {/* Input Form Card */}
+            <Card className="p-6 mb-6">
+                <h3 className="text-lg font-bold text-gray-700 dark:text-gray-200 mb-4">Assessment Update Details</h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                    Update or void an existing assessment record. For void action, only Reference Number and Action are required.
+                </p>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    <div>
+                        <label htmlFor="update-reference-number" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
+                            Assessment Reference Number <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                            id="update-reference-number"
+                            type="text"
+                            value={referenceNumber}
+                            onChange={(e) => setReferenceNumber(e.target.value)}
+                            placeholder="e.g. ASM-2602-038292"
+                            className={inputClasses}
+                            disabled={isSubmitting}
+                        />
+                    </div>
+                    <div>
+                        <label htmlFor="update-action" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
+                            Action <span className="text-red-500">*</span>
+                        </label>
+                        <select
+                            id="update-action"
+                            value={action}
+                            onChange={(e) => setAction(e.target.value)}
+                            className={inputClasses}
+                            disabled={isSubmitting}
+                        >
+                            <option value="update">Update</option>
+                            <option value="void">Void</option>
+                        </select>
+                    </div>
+
+                    {/* Fields for update action only */}
+                    {action === 'update' && (
+                        <>
+                            <div>
+                                <label htmlFor="update-result" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
+                                    Assessment Result <span className="text-red-500">*</span>
+                                </label>
+                                <select
+                                    id="update-result"
+                                    value={result}
+                                    onChange={(e) => setResult(e.target.value)}
+                                    className={inputClasses}
+                                    disabled={isSubmitting}
+                                >
+                                    <option value="Pass">Pass</option>
+                                    <option value="Fail">Fail</option>
+                                    <option value="Exempt">Exempt</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label htmlFor="update-trainee-name" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
+                                    Trainee Full Name <span className="text-red-500">*</span>
+                                </label>
+                                <input
+                                    id="update-trainee-name"
+                                    type="text"
+                                    value={traineeFullName}
+                                    onChange={(e) => setTraineeFullName(e.target.value)}
+                                    placeholder="e.g. John Doe"
+                                    className={inputClasses}
+                                    disabled={isSubmitting}
+                                />
+                            </div>
+                            <div>
+                                <label htmlFor="update-assessment-date" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
+                                    Assessment Date <span className="text-red-500">*</span>
+                                </label>
+                                <input
+                                    id="update-assessment-date"
+                                    type="date"
+                                    value={assessmentDate}
+                                    onChange={(e) => setAssessmentDate(e.target.value)}
+                                    placeholder="$$YYYY-MM-DD"
+                                    className={inputClasses}
+                                    disabled={isSubmitting}
+                                />
+                            </div>
+                            <div>
+                                <label htmlFor="update-skill-code" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
+                                    Skill Code <span className="text-red-500">*</span>
+                                </label>
+                                <input
+                                    id="update-skill-code"
+                                    type="text"
+                                    value={skillCode}
+                                    onChange={(e) => setSkillCode(e.target.value)}
+                                    placeholder="e.g. TGS-MKG-234222"
+                                    className={inputClasses}
+                                    disabled={isSubmitting}
+                                    maxLength={30}
+                                />
+                            </div>
+                            {/* Grade and Score fields hidden
+                            <div>
+                                <label htmlFor="update-grade" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
+                                    Grade
+                                </label>
+                                <select
+                                    id="update-grade"
+                                    value={grade}
+                                    onChange={(e) => setGrade(e.target.value)}
+                                    className={inputClasses}
+                                    disabled={isSubmitting}
+                                >
+                                    <option value="">-- Select Grade (optional) --</option>
+                                    <option value="A">A</option>
+                                    <option value="B">B</option>
+                                    <option value="C">C</option>
+                                    <option value="D">D</option>
+                                    <option value="E">E</option>
+                                    <option value="F">F</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label htmlFor="update-score" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
+                                    Score
+                                </label>
+                                <input
+                                    id="update-score"
+                                    type="number"
+                                    value={score}
+                                    onChange={(e) => setScore(e.target.value)}
+                                    placeholder="e.g. 80 (optional)"
+                                    className={inputClasses}
+                                    disabled={isSubmitting}
+                                    min="0"
+                                    max="999"
+                                />
+                            </div>
+                            */}
+                        </>
+                    )}
+                </div>
+
+                <div className="flex gap-3">
+                    <Button
+                        onClick={handleSubmit}
+                        disabled={isSubmitting || !isFormValid}
+                    >
+                        {isSubmitting ? (
+                            <div className="flex items-center">
+                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                                {action === 'void' ? 'Voiding...' : 'Updating...'}
+                            </div>
+                        ) : (
+                            <>
+                                <Icon name={action === 'void' ? IconName.X : IconName.CheckCircle} className="w-4 h-4 mr-2" />
+                                {action === 'void' ? 'Void Assessment' : 'Update Assessment'}
+                            </>
+                        )}
+                    </Button>
+                    <Button variant="outline" onClick={handleClear} disabled={isSubmitting}>
+                        Clear
+                    </Button>
+                </div>
+
+                {error && !apiResult && (
+                    <p className="text-red-500 text-sm mt-3">{error}</p>
+                )}
+            </Card>
+
+            {/* Loading State */}
+            {isSubmitting && (
+                <div className="flex justify-center py-10">
+                    <div className="text-center">
+                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
+                        <p className="mt-4 text-gray-600 dark:text-gray-400">
+                            {action === 'void' ? 'Voiding assessment...' : 'Updating assessment...'}
+                        </p>
+                    </div>
+                </div>
+            )}
+
+            {/* Result Display */}
+            {!isSubmitting && apiResult && (
+                <Card className="p-6">
+                    {error ? (
+                        <div className="bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 dark:border-red-600 rounded-r-lg p-4">
+                            <div className="flex items-center gap-2 mb-2">
+                                <Icon name={IconName.X} className="w-5 h-5 text-red-600 dark:text-red-400" />
+                                <h4 className="font-semibold text-red-900 dark:text-red-200">
+                                    Assessment {action === 'void' ? 'Voided' : 'Updated'} Unsuccessfully
+                                </h4>
+                            </div>
+                            <div className="pl-7 space-y-1">
+                                <p className="text-sm text-red-800 dark:text-red-300">{error}</p>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="bg-green-50 dark:bg-green-900/20 border-l-4 border-green-500 dark:border-green-600 rounded-r-lg p-4">
+                            <div className="flex items-center gap-2 mb-2">
+                                <Icon name={IconName.CheckCircle} className="w-5 h-5 text-green-600 dark:text-green-400" />
+                                <h4 className="font-semibold text-green-900 dark:text-green-200">
+                                    Assessment {action === 'void' ? 'Voided' : 'Updated'} Successfully
+                                </h4>
+                            </div>
+                            <div className="pl-7 space-y-1">
+                                <p className="text-sm text-green-700 dark:text-green-300">
+                                    <span className="font-medium">Reference:</span>{' '}
+                                    <span className="font-mono bg-green-100 dark:bg-green-900/40 px-2 py-0.5 rounded">
+                                        {apiResult?.data?.assessment?.referenceNumber || referenceNumber}
+                                    </span>
+                                </p>
+                                {apiResult?.meta?.updatedOn && (
+                                    <p className="text-sm text-green-700 dark:text-green-300">
+                                        <span className="font-medium">Updated On:</span>{' '}
+                                        {new Date(apiResult.meta.updatedOn).toLocaleString()}
+                                    </p>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Raw Response (collapsible) */}
+                    <details className="mt-4">
+                        <summary className="text-sm text-gray-500 dark:text-gray-400 cursor-pointer hover:text-gray-700 dark:hover:text-gray-300">
+                            View Raw Response
+                        </summary>
+                        <pre className="mt-2 text-xs bg-gray-100 dark:bg-gray-800 p-3 rounded overflow-auto max-h-60">
+                            {JSON.stringify(apiResult, null, 2)}
+                        </pre>
+                    </details>
+                </Card>
+            )}
+        </div>
+    );
+};
+
+export const UpdateEnrolmentFeesView: React.FC = () => {
+    const [enrolmentReferenceNumber, setEnrolmentReferenceNumber] = useState<string>('');
+    const [collectionStatus, setCollectionStatus] = useState<string>('Full Payment');
+    const [trainingPartnerUen, setTrainingPartnerUen] = useState<string>('201200696W');
+    const [trainingPartnerCode, setTrainingPartnerCode] = useState<string>('201200696W-01');
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [result, setResult] = useState<any>(null);
+    const [error, setError] = useState<string | null>(null);
+
+    const WEBHOOK_URL = 'https://n8n.srv1231536.hstgr.cloud/webhook/7cd0d0da-f438-432c-8857-93346ac83b78';
+
+    const inputClasses = "block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-500";
+
+    const collectionStatusOptions = [
+        'Full Payment',
+        'Pending',
+        'Partial Payment',
+        'Cancelled'
+    ];
+
+    const handleSubmit = async () => {
+        if (!enrolmentReferenceNumber.trim()) {
+            setError('Enrolment Reference Number is required');
+            return;
+        }
+        if (!trainingPartnerUen.trim()) {
+            setError('Training Partner UEN is required');
+            return;
+        }
+        if (!trainingPartnerCode.trim()) {
+            setError('Training Partner Code is required');
+            return;
+        }
+
+        setIsSubmitting(true);
+        setError(null);
+        setResult(null);
+
+        try {
+            const payload = {
+                payload: {
+                    referenceNumber: enrolmentReferenceNumber.trim(),
+                    enrolment: {
+                        trainingPartner: {
+                            uen: trainingPartnerUen.trim(),
+                            code: trainingPartnerCode.trim()
+                        },
+                        fees: {
+                            collectionStatus: collectionStatus
+                        }
+                    }
+                }
+            };
+
+            console.log('📤 Update enrolment fees payload:', payload);
+
+            const response = await fetch(WEBHOOK_URL, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+                if (response.status === 500) {
+                    throw new Error('SSG API server error. The service may be temporarily unavailable. Please try again later.');
+                }
+                throw new Error(`Unable to connect to SSG API (Error ${response.status}). Please check your connection and try again.`);
+            }
+
+            const text = await response.text();
+            let data;
+            try {
+                data = text ? JSON.parse(text) : {};
+            } catch (e) {
+                console.error('Failed to parse JSON response:', text);
+                throw new Error(`Invalid JSON response from webhook`);
+            }
+            console.log('✅ Update enrolment fees response:', data);
+
+            let parsedResult = data;
+            if (data?.result !== undefined && data?.result !== null) {
+                if (typeof data.result === 'string') {
+                    try {
+                        parsedResult = JSON.parse(data.result);
+                    } catch (e) {
+                        console.error('Failed to parse result string:', data.result);
+                        parsedResult = { error: { message: data.result } };
+                    }
+                } else if (typeof data.result === 'object') {
+                    if (data.result.message && typeof data.result.message === 'string') {
+                        const match = data.result.message.match(/^\d+\s*-\s*"([\s\S]+)"$/);
+                        if (match) {
+                            try {
+                                const unescaped = match[1].replace(/\\n/g, '').replace(/\\"/g, '"');
+                                parsedResult = JSON.parse(unescaped);
+                            } catch (e) {
+                                console.error('Failed to parse embedded JSON:', e);
+                                parsedResult = data.result;
+                            }
+                        } else {
+                            parsedResult = data.result;
+                        }
+                    } else {
+                        parsedResult = data.result;
+                    }
+                } else {
+                    parsedResult = { error: { message: String(data.result) } };
+                }
+            }
+
+            // Check for error status - handle both nested error object and root level errors
+            const hasError = (parsedResult?.error?.details?.length > 0) ||
+                (parsedResult?.error?.message) ||
+                (parsedResult?.status && parsedResult.status >= 400) ||
+                (parsedResult?.details?.length > 0) ||
+                (parsedResult?.message && parsedResult.message.toLowerCase().includes('cannot'));
+
+            if (hasError) {
+                const errorMessage = parsedResult?.error?.details?.[0]?.message ||
+                    parsedResult?.error?.message ||
+                    parsedResult?.details?.[0]?.message ||
+                    parsedResult?.message ||
+                    'Failed to update enrolment fees';
+                setError(errorMessage);
+            }
+
+            setResult(parsedResult);
+        } catch (err) {
+            console.error('❌ Error updating enrolment fees:', err);
+            setError(err instanceof Error ? err.message : 'Failed to update enrolment fees');
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleClear = () => {
+        setEnrolmentReferenceNumber('');
+        setCollectionStatus('Full Payment');
+        setTrainingPartnerUen('201200696W');
+        setTrainingPartnerCode('201200696W-01');
+        setResult(null);
+        setError(null);
+    };
+
+    const isFormValid = enrolmentReferenceNumber.trim() && trainingPartnerUen.trim() && trainingPartnerCode.trim();
+
+    return (
+        <div>
+            <h2 className="text-3xl font-bold mb-6 dark:text-white">Update Enrolment Fees</h2>
+
+            <Card className="p-6 mb-6">
+                <h3 className="text-lg font-bold text-gray-700 dark:text-gray-200 mb-4">Fee Collection Details</h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                    Update the fee collection status for an enrolment. All fields are required.
+                </p>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
+                            Enrolment Reference Number *
+                        </label>
+                        <input
+                            type="text"
+                            value={enrolmentReferenceNumber}
+                            onChange={(e) => setEnrolmentReferenceNumber(e.target.value)}
+                            className={inputClasses}
+                            placeholder="e.g., ENR-2401-000123"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
+                            Collection Status *
+                        </label>
+                        <select
+                            value={collectionStatus}
+                            onChange={(e) => setCollectionStatus(e.target.value)}
+                            className={inputClasses}
+                        >
+                            {collectionStatusOptions.map((status) => (
+                                <option key={status} value={status}>{status}</option>
+                            ))}
+                        </select>
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
+                            Training Partner UEN *
+                        </label>
+                        <input
+                            type="text"
+                            value={trainingPartnerUen}
+                            onChange={(e) => setTrainingPartnerUen(e.target.value)}
+                            className={inputClasses}
+                            placeholder="e.g., 201200696W"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
+                            Training Partner Code *
+                        </label>
+                        <input
+                            type="text"
+                            value={trainingPartnerCode}
+                            onChange={(e) => setTrainingPartnerCode(e.target.value)}
+                            className={inputClasses}
+                            placeholder="e.g., 201200696W-01"
+                        />
+                    </div>
+                </div>
+
+                <div className="mt-6 flex gap-3">
+                    <button
+                        onClick={handleSubmit}
+                        disabled={!isFormValid || isSubmitting}
+                        className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white px-6 py-2 rounded-md font-medium transition-colors"
+                    >
+                        {isSubmitting ? 'Updating...' : 'Update Fees'}
+                    </button>
+                    <button
+                        onClick={handleClear}
+                        className="bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-700 dark:text-white px-6 py-2 rounded-md font-medium transition-colors"
+                    >
+                        Clear
+                    </button>
                 </div>
             </Card>
 
-            {selectedCourse && (
-                <Card className="p-0 overflow-x-auto dark:bg-gray-800 dark:border-gray-700">
-                    <div className="p-6 border-b dark:border-gray-700">
-                        <h3 className="text-xl font-bold dark:text-white">Assessment Roster for "{selectedCourse.title}"</h3>
-                        <p className="text-gray-500 dark:text-gray-400 mt-1 dark:text-gray-400">Update each learner's overall assessment status below. Changes are saved automatically.</p>
+            {isSubmitting && (
+                <div className="flex items-center justify-center py-8">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                    <span className="ml-3 text-gray-600 dark:text-gray-300">Updating enrolment fees...</span>
+                </div>
+            )}
+
+            {!isSubmitting && error && (
+                <Card className="p-6 mb-6">
+                    <div className="bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 dark:border-red-600 rounded-r-lg p-4">
+                        <div className="flex items-center gap-2 mb-2">
+                            <Icon name={IconName.X} className="w-5 h-5 text-red-600 dark:text-red-400" />
+                            <h4 className="font-semibold text-red-900 dark:text-red-200">Failed to Update Enrolment Fees</h4>
+                        </div>
+                        <p className="text-sm text-red-800 dark:text-red-300 pl-7">{error}</p>
                     </div>
-                    <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                        <thead className="bg-gray-50 dark:bg-gray-700/50">
-                            <tr>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Learner Name</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Email</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Assessment Status</th>
-                            </tr>
-                        </thead>
-                        <tbody className="bg-white divide-y divide-gray-200 dark:bg-gray-800 dark:divide-gray-700">
-                            {selectedCourse.learners && selectedCourse.learners.length > 0 ? (
-                                selectedCourse.learners.map((learner: any) => (
-                                    <tr key={learner.email} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                                        <td className="px-6 py-4 whitespace-nowrap">
-                                            <div className="font-medium text-gray-900 dark:text-white">{learner.name || 'N/A'}</div>
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap">
-                                            <div className="text-sm text-gray-900 dark:text-white">{learner.email || 'N/A'}</div>
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap">
-                                            <select
-                                                value={learner.assessmentStatus || 'Pending'}
-                                                onChange={(e) => handleGradeChange(learner.email, e.target.value)}
-                                                className="text-sm border border-gray-300 rounded px-2 py-1"
-                                            >
-                                                <option value="Pending">Pending</option>
-                                                <option value="C">Competent</option>
-                                                <option value="NYC">Not Yet Competent</option>
-                                            </select>
-                                        </td>
-                                    </tr>
-                                ))
-                            ) : (
-                                <tr>
-                                    <td colSpan={3} className="px-6 py-12 text-center text-gray-500 dark:text-gray-400">
-                                        No learners enrolled in this class yet.
-                                    </td>
-                                </tr>
-                            )}
-                        </tbody>
-                    </table>
-                    <div className="p-4 border-t flex justify-end items-center gap-4">
-                        {submissionStatus && <p className="text-green-600 text-sm font-semibold">{submissionStatus}</p>}
-                        <Button
-                            onClick={handleSubmitToTPG}
-                            disabled={!allLearnersGraded || isSubmitting}
-                        >
-                            {isSubmitting ? (
-                                <div className="flex items-center">
-                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                                    Submitting...
-                                </div>
-                            ) : 'Submit to TPG'}
-                        </Button>
+                </Card>
+            )}
+
+            {!isSubmitting && result && !error && (
+                <Card className="p-6 mb-6">
+                    <div className="bg-green-50 dark:bg-green-900/20 border-l-4 border-green-500 dark:border-green-600 rounded-r-lg p-4">
+                        <div className="flex items-center gap-2 mb-2">
+                            <Icon name={IconName.CheckCircle} className="w-5 h-5 text-green-600 dark:text-green-400" />
+                            <h4 className="font-semibold text-green-900 dark:text-green-200">Enrolment Fees Updated Successfully</h4>
+                        </div>
+                        <div className="pl-7 space-y-1">
+                            <p className="text-sm text-green-700 dark:text-green-300">
+                                <span className="font-medium">Reference:</span>{' '}
+                                <span className="font-mono bg-green-100 dark:bg-green-900/40 px-2 py-0.5 rounded">
+                                    {enrolmentReferenceNumber}
+                                </span>
+                            </p>
+                            <p className="text-sm text-green-700 dark:text-green-300">
+                                <span className="font-medium">New Collection Status:</span>{' '}
+                                <span className="font-semibold">{collectionStatus}</span>
+                            </p>
+                        </div>
                     </div>
+                </Card>
+            )}
+
+            {result && (
+                <Card className="p-4">
+                    <details>
+                        <summary className="cursor-pointer text-sm font-medium text-gray-700 dark:text-gray-300">
+                            View Raw Response
+                        </summary>
+                        <pre className="mt-2 text-xs bg-gray-100 dark:bg-gray-800 p-3 rounded overflow-auto max-h-60">
+                            {JSON.stringify(result, null, 2)}
+                        </pre>
+                    </details>
                 </Card>
             )}
         </div>
@@ -2355,7 +3348,7 @@ export const SearchCourseRunsView: React.FC = () => {
             }
 
             const text = await response.text();
-            
+
             let data;
             try {
                 data = JSON.parse(text);
@@ -2526,9 +3519,9 @@ export const SearchCourseRunsView: React.FC = () => {
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm">
                                             {run.qrCodeLink ? (
-                                                <a 
-                                                    href={run.qrCodeLink} 
-                                                    target="_blank" 
+                                                <a
+                                                    href={run.qrCodeLink}
+                                                    target="_blank"
                                                     rel="noopener noreferrer"
                                                     className="text-blue-600 dark:text-blue-400 hover:underline flex items-center"
                                                 >
@@ -2593,14 +3586,14 @@ export const SearchCourseRunsView: React.FC = () => {
                                             <span className="sr-only">Previous</span>
                                             <Icon name={IconName.Back} className="h-5 w-5" />
                                         </button>
-                                        
+
                                         {/* Page Numbers */}
                                         {Array.from({ length: totalPages }, (_, i) => i + 1).map((pageNum) => {
                                             // Show first page, last page, current page, and pages around current
-                                            const showPage = pageNum === 1 || 
-                                                           pageNum === totalPages || 
-                                                           (pageNum >= currentPage - 1 && pageNum <= currentPage + 1);
-                                            
+                                            const showPage = pageNum === 1 ||
+                                                pageNum === totalPages ||
+                                                (pageNum >= currentPage - 1 && pageNum <= currentPage + 1);
+
                                             if (!showPage && pageNum === 2 && currentPage > 3) {
                                                 return <span key={pageNum} className="relative inline-flex items-center px-4 py-2 text-sm font-semibold text-gray-700 dark:text-gray-300">...</span>;
                                             }
@@ -2613,11 +3606,10 @@ export const SearchCourseRunsView: React.FC = () => {
                                                 <button
                                                     key={pageNum}
                                                     onClick={() => setCurrentPage(pageNum)}
-                                                    className={`relative inline-flex items-center px-4 py-2 text-sm font-semibold ${
-                                                        currentPage === pageNum
-                                                            ? 'z-10 bg-blue-600 text-white focus:z-20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600'
-                                                            : 'text-gray-900 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0 dark:text-gray-300 dark:ring-gray-600 dark:hover:bg-gray-700'
-                                                    }`}
+                                                    className={`relative inline-flex items-center px-4 py-2 text-sm font-semibold ${currentPage === pageNum
+                                                        ? 'z-10 bg-blue-600 text-white focus:z-20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600'
+                                                        : 'text-gray-900 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0 dark:text-gray-300 dark:ring-gray-600 dark:hover:bg-gray-700'
+                                                        }`}
                                                 >
                                                     {pageNum}
                                                 </button>
@@ -2884,7 +3876,7 @@ export const ViewCourseRunView: React.FC = () => {
                 if (data?.result) {
                     // Parse result if it's a string, otherwise use as-is
                     const parsedResult = typeof data.result === 'string' ? JSON.parse(data.result) : data.result;
-                    
+
                     // Handle array response from SSG
                     if (Array.isArray(parsedResult) && parsedResult.length > 0) {
                         resultData = parsedResult[0];
@@ -3080,9 +4072,9 @@ export const ViewCourseRunView: React.FC = () => {
                                     </td>
                                     <td className="px-6 py-4 text-sm">
                                         {run.qrCodeLink ? (
-                                            <a 
-                                                href={run.qrCodeLink} 
-                                                target="_blank" 
+                                            <a
+                                                href={run.qrCodeLink}
+                                                target="_blank"
                                                 rel="noopener noreferrer"
                                                 className="text-blue-600 dark:text-blue-400 hover:underline flex items-center"
                                             >
@@ -3205,7 +4197,7 @@ export const ViewCourseRunView: React.FC = () => {
                                         ▼ View Raw JSON Response
                                     </summary>
                                     <pre className="mt-3 text-xs text-gray-700 dark:text-gray-300 whitespace-pre-wrap overflow-x-auto max-h-96 bg-white dark:bg-gray-800 p-3 rounded border dark:border-gray-600 font-mono">
-{JSON.stringify(webhookResponse, null, 2)}
+                                        {JSON.stringify(webhookResponse, null, 2)}
                                     </pre>
                                 </details>
 
@@ -3214,7 +4206,7 @@ export const ViewCourseRunView: React.FC = () => {
                                         ▼ View Parsed Data
                                     </summary>
                                     <pre className="mt-3 text-xs text-gray-700 dark:text-gray-300 whitespace-pre-wrap overflow-x-auto max-h-96 bg-white dark:bg-gray-800 p-3 rounded border dark:border-gray-600 font-mono">
-{JSON.stringify(parsedData, null, 2)}
+                                        {JSON.stringify(parsedData, null, 2)}
                                     </pre>
                                 </details>
 
@@ -3325,7 +4317,7 @@ export const CancelEnrolmentView: React.FC = () => {
 
             // Parse response - handle various response formats
             let parsedResult = data;
-            
+
             // If response has a 'result' property, use that
             if (data?.result !== undefined && data?.result !== null) {
                 // If result is a string, try to parse it as JSON
@@ -3346,14 +4338,18 @@ export const CancelEnrolmentView: React.FC = () => {
                 }
             }
 
-            // Check for error status
+            // Check for error status - handle both nested error object and root level errors
             const hasError = (parsedResult?.error?.details?.length > 0) ||
                 (parsedResult?.error?.message) ||
-                (parsedResult?.status && parsedResult.status >= 400);
+                (parsedResult?.status && parsedResult.status >= 400) ||
+                (parsedResult?.details?.length > 0) ||
+                (parsedResult?.message && parsedResult.message.toLowerCase().includes('cannot'));
 
             if (hasError) {
                 const errorMessage = parsedResult?.error?.details?.[0]?.message ||
                     parsedResult?.error?.message ||
+                    parsedResult?.details?.[0]?.message ||
+                    parsedResult?.message ||
                     'Failed to cancel enrolment';
                 setError(errorMessage);
             }
@@ -3626,22 +4622,27 @@ export const DeleteCourseRunView: React.FC = () => {
                 }
             }
 
-            // Check for error status
+            // Check for error status - handle both nested error object and root level errors
             const hasError = (parsedResult?.error?.details?.length > 0) ||
                 (parsedResult?.error?.message) ||
-                (parsedResult?.status && parsedResult.status >= 400);
+                (parsedResult?.status && parsedResult.status >= 400) ||
+                (parsedResult?.details?.length > 0) ||
+                (parsedResult?.message && parsedResult.message.toLowerCase().includes('cannot'));
 
             // Check if it's a "record not found" error - this means already deleted in SSG
             const isRecordNotFound = parsedResult?.error?.details?.some(
                 (detail: any) => detail.message?.toLowerCase().includes('record not found')
-            ) || parsedResult?.error?.message?.toLowerCase().includes('record not found');
+            ) || parsedResult?.error?.message?.toLowerCase().includes('record not found') ||
+                parsedResult?.details?.some(
+                    (detail: any) => detail.message?.toLowerCase().includes('record not found')
+                ) || parsedResult?.message?.toLowerCase().includes('record not found');
 
             // Always mark as deleted in database for success OR "record not found"
             if (!hasError || isRecordNotFound) {
                 // Either success OR "record not found" (already deleted) - mark as deleted in local database
                 try {
                     console.log('🔄 Calling local database API to mark course run as deleted:', courseRunId.trim());
-                    
+
                     const dbResponse = await fetch('/api/admin/delete-course-run', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -3666,6 +4667,8 @@ export const DeleteCourseRunView: React.FC = () => {
             if (hasError) {
                 const errorMessage = parsedResult?.error?.details?.[0]?.message ||
                     parsedResult?.error?.message ||
+                    parsedResult?.details?.[0]?.message ||
+                    parsedResult?.message ||
                     'Failed to delete course run';
                 setError(errorMessage);
             }

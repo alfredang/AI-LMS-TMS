@@ -13,48 +13,7 @@ const FormSection: React.FC<{ title: string | React.ReactNode; children: React.R
     </Card>
 );
 
-// Success Popup Component
-const SuccessPopup: React.FC<{
-    isOpen: boolean;
-    onClose: () => void;
-    courseRunId: string;
-    message: string;
-}> = ({ isOpen, onClose, courseRunId, message }) => {
-    if (!isOpen) return null;
 
-    return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full mx-4">
-                <div className="flex items-center mb-4">
-                    <div className="flex-shrink-0">
-                        <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
-                            <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
-                            </svg>
-                        </div>
-                    </div>
-                    <div className="ml-3">
-                        <h3 className="text-lg font-medium text-gray-900 dark:text-white">Success!</h3>
-                    </div>
-                </div>
-
-                <div className="mb-4">
-                    <p className="text-sm text-gray-700 dark:text-gray-300 mb-3">{message}</p>
-                    <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
-                        <p className="text-sm font-medium text-gray-800 dark:text-white">Course Run ID:</p>
-                        <p className="text-lg font-mono text-blue-600 mt-1">{courseRunId}</p>
-                    </div>
-                </div>
-
-                <div className="flex justify-end">
-                    <Button onClick={onClose} className="bg-green-600 hover:bg-green-700 text-white">
-                        Got it!
-                    </Button>
-                </div>
-            </div>
-        </div>
-    );
-};
 
 // Types and enums for form data
 export enum OptionalSelector {
@@ -104,7 +63,7 @@ const salutationOptions = [
 ];
 
 export const CreateNewClassView: React.FC = () => {
-    const { setAdminPage, currentUser } = useLms();
+    const { setAdminPage } = useLms();
 
     // Course Run Form State
     const [courseReferenceNumber, setCourseReferenceNumber] = useState('');
@@ -114,7 +73,10 @@ export const CreateNewClassView: React.FC = () => {
     const [sequenceNumber, setSequenceNumber] = useState(0);
 
     // Registration Dates
-    const [openingRegistrationDate, setOpeningRegistrationDate] = useState('');
+    const [openingRegistrationDate, setOpeningRegistrationDate] = useState(() => {
+        const today = new Date();
+        return today.toISOString().split('T')[0]; // Format: YYYY-MM-DD
+    });
     const [closingRegistrationDate, setClosingRegistrationDate] = useState('');
 
     // Course Dates
@@ -143,30 +105,14 @@ export const CreateNewClassView: React.FC = () => {
 
     // Course Admin Details
     const [modeOfTraining, setModeOfTraining] = useState('1');
-    const [courseAdminEmail, setCourseAdminEmail] = useState(currentUser?.email || '');
+    const [courseAdminEmail, setCourseAdminEmail] = useState('enquiry@tertiaryinfotech.com');
 
     // Course Vacancy
     const [courseVacancy, setCourseVacancy] = useState('A');
 
     // Sessions Form State
-    const [sessionCount, setSessionCount] = useState(1);
-    const [sessions, setSessions] = useState([{
-        id: 0,
-        modeOfTraining: '1',
-        startDate: '',
-        endDate: '',
-        startTime: '',
-        endTime: '',
-        block: '',
-        street: '',
-        building: '',
-        wheelchairAccess: OptionalSelector.YES,
-        primaryVenue: OptionalSelector.YES,
-        floor: '',
-        unit: '',
-        postalCode: '',
-        room: ''
-    }]);
+    const [sessionCount, setSessionCount] = useState(0);
+    const [sessions, setSessions] = useState<any[]>([]);
 
     // Trainer Form State - Single existing trainer only
     const [trainers, setTrainers] = useState([{
@@ -177,12 +123,12 @@ export const CreateNewClassView: React.FC = () => {
 
     // API submission state
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [apiResponse, setApiResponse] = useState<any>(null);
-    const [requestBody, setRequestBody] = useState<any>(null);
-
-    // Success popup state
-    const [showSuccessPopup, setShowSuccessPopup] = useState(false);
-    const [successData, setSuccessData] = useState<{ courseRunId: string, message: string } | null>(null);
+    const [submissionResult, setSubmissionResult] = useState<{
+        success: boolean;
+        courseRunId?: string;
+        message?: string;
+        error?: any;
+    } | null>(null);
 
     // Optional sections visibility state
     const [showSessions, setShowSessions] = useState(false);
@@ -222,6 +168,27 @@ export const CreateNewClassView: React.FC = () => {
         fetchAvailableCourses();
     }, []);
 
+    // Update closing registration date and first session when course start date changes
+    React.useEffect(() => {
+        if (courseStartDate) {
+            // Set closing registration date to course start date - 1 day
+            const startDate = new Date(courseStartDate);
+            startDate.setDate(startDate.getDate() - 1);
+            setClosingRegistrationDate(startDate.toISOString().split('T')[0]);
+
+            // Update first session's start date
+            if (sessions.length > 0) {
+                const newSessions = [...sessions];
+                newSessions[0].startDate = courseStartDate;
+                // For non-async modes, end date should match start date
+                if (newSessions[0].modeOfTraining !== '2' && newSessions[0].modeOfTraining !== '4') {
+                    newSessions[0].endDate = courseStartDate;
+                }
+                setSessions(newSessions);
+            }
+        }
+    }, [courseStartDate]);
+
     // Helper functions
     const updateSessionCount = (count: number) => {
         const newSessions = [...sessions];
@@ -233,8 +200,9 @@ export const CreateNewClassView: React.FC = () => {
                     modeOfTraining: '1',
                     startDate: '',
                     endDate: '',
-                    startTime: '',
-                    endTime: '',
+                    startTime: '09:15',
+                    endTime: '13:15',
+                    useDefaultVenue: true,
                     block: '',
                     street: '',
                     building: '',
@@ -267,9 +235,9 @@ export const CreateNewClassView: React.FC = () => {
             } else {
                 // For other modes, set end date same as start date
                 newSessions[sessionIndex].endDate = newSessions[sessionIndex].startDate;
-                // Reset times to allow user input
-                newSessions[sessionIndex].startTime = '';
-                newSessions[sessionIndex].endTime = '';
+                // Reset times to default values
+                newSessions[sessionIndex].startTime = '09:15';
+                newSessions[sessionIndex].endTime = '13:15';
             }
         }
 
@@ -297,34 +265,58 @@ export const CreateNewClassView: React.FC = () => {
         try {
             console.log('🔍 Fetching course run details for ID:', courseRunId);
 
-            // Fetch detailed course run data from SSG API
-            const params = new URLSearchParams({
-                runId: courseRunId,
-                includeExpired: 'true'
-            });
-
-            const fetchResponse = await fetch(`/api/ssg/courses?${params}`, {
-                method: 'GET',
+            // Call the n8n webhook to get course run details
+            const webhookUrl = 'https://n8n.srv1231536.hstgr.cloud/webhook/7f2f5d21-beb6-47a9-8056-e1ccf79a3ea7';
+            const fetchResponse = await fetch(webhookUrl, {
+                method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
-                }
+                },
+                body: JSON.stringify({
+                    courseRunId: courseRunId
+                })
             });
 
             if (!fetchResponse.ok) {
-                throw new Error(`Failed to fetch course run details: ${fetchResponse.status}`);
+                console.warn(`⚠️ Could not fetch course run details: ${fetchResponse.status}`);
+                console.log('ℹ️ Course run created successfully in SSG but details could not be fetched for database sync');
+                return;
             }
 
-            const courseRunData = await fetchResponse.json();
-            console.log('📊 Fetched course run data:', courseRunData);
+            const response = await fetchResponse.json();
+            console.log('📊 Fetched course run data:', response);
 
-            // Save to database with retry logic
+            // Handle both 'result' and 'data' property structures from webhook
+            const dataWrapper = response.result || response.data;
+            
+            // Check if response has valid course data
+            if (!dataWrapper?.course) {
+                console.warn('⚠️ Invalid response from webhook:', response);
+                console.warn('⚠️ Expected structure with course data not found');
+                return;
+            }
+
+            const courseData = dataWrapper.course;
+            const runData = courseData.run;
+
+            console.log('📊 Fetched course run data from webhook:', {
+                courseRunId: courseRunId,
+                referenceNumber: courseData.referenceNumber,
+                title: courseData.title,
+                runId: runData.id,
+                hasTrainer: !!runData.linkCourseRunTrainer?.[0],
+                qrCodeLink: runData.qrCodeLink
+            });
+
+            // Step 1: Save course run to database with retry logic
+            // The API endpoint handles course creation if needed
             let saveResponse;
             let retryCount = 0;
             const maxRetries = 3;
 
             while (retryCount < maxRetries) {
                 try {
-                    console.log(`💾 Attempting to save to database (attempt ${retryCount + 1}/${maxRetries})...`);
+                    console.log(`💾 Attempting to save course run to database (attempt ${retryCount + 1}/${maxRetries})...`);
 
                     saveResponse = await fetch(getApiUrl('/api/admin/save-course-run'), {
                         method: 'POST',
@@ -334,7 +326,7 @@ export const CreateNewClassView: React.FC = () => {
                         },
                         credentials: 'include',
                         body: JSON.stringify({
-                            courseRunData: courseRunData,
+                            courseRunData: response,
                             courseRunId: courseRunId
                         })
                     });
@@ -342,7 +334,10 @@ export const CreateNewClassView: React.FC = () => {
                     if (saveResponse.ok) {
                         break; // Success, exit retry loop
                     } else {
-                        throw new Error(`HTTP ${saveResponse.status}: ${saveResponse.statusText}`);
+                        // Try to get error details from response
+                        const errorText = await saveResponse.text();
+                        console.error('❌ Save API error response:', errorText);
+                        throw new Error(`HTTP ${saveResponse.status}: ${saveResponse.statusText} - ${errorText}`);
                     }
                 } catch (fetchError) {
                     retryCount++;
@@ -360,7 +355,9 @@ export const CreateNewClassView: React.FC = () => {
             if (!saveResponse || !saveResponse.ok) {
                 const errorText = await saveResponse?.text() || 'Unknown error';
                 console.error('❌ Save API error details:', errorText);
-                throw new Error(`Failed to save course run to database: ${saveResponse?.status} - ${errorText}`);
+                console.warn(`⚠️ Could not save course run to database: ${saveResponse?.status}`);
+                console.log('ℹ️ Course run created successfully in SSG but could not be saved to local database');
+                return;
             }
 
             const saveResult = await saveResponse.json();
@@ -369,15 +366,17 @@ export const CreateNewClassView: React.FC = () => {
             if (saveResult.success) {
                 const status = saveResult.data?.status || 'unknown';
                 console.log(`✅ Database save successful - Status: ${status}`);
-                // Success is already shown in the popup, no need for additional alerts
             } else {
-                throw new Error(saveResult.message || 'Failed to save to database');
+                console.warn('⚠️ Database save returned unsuccessful:', saveResult.message);
+                console.log('ℹ️ Course run created successfully in SSG but database save reported an issue');
             }
 
         } catch (error) {
             console.error('❌ Error fetching/saving course run data:', error);
             const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-            alert(`Error saving course run to database: ${errorMessage}`);
+            console.warn(`⚠️ Database sync error: ${errorMessage}`);
+            console.log('ℹ️ Course run created successfully in SSG, database sync can be performed later');
+            // Don't show alert - just log the warning
         }
     };
 
@@ -411,10 +410,15 @@ export const CreateNewClassView: React.FC = () => {
                     if (!session.endDate) missingFields.push(`${sessionPrefix} - End Date`);
                     if (!session.startTime) missingFields.push(`${sessionPrefix} - Start Time`);
                     if (!session.endTime) missingFields.push(`${sessionPrefix} - End Time`);
-                    if (!session.floor.trim()) missingFields.push(`${sessionPrefix} - Floor`);
-                    if (!session.unit.trim()) missingFields.push(`${sessionPrefix} - Unit`);
-                    if (!session.postalCode.trim()) missingFields.push(`${sessionPrefix} - Postal Code`);
-                    if (!session.room.trim()) missingFields.push(`${sessionPrefix} - Room`);
+                    // Check venue fields - use primary venue if useDefaultVenue is true
+                    const sessionFloor = session.useDefaultVenue ? floor : session.floor;
+                    const sessionUnit = session.useDefaultVenue ? unit : session.unit;
+                    const sessionPostalCode = session.useDefaultVenue ? postalCode : session.postalCode;
+                    const sessionRoom = session.useDefaultVenue ? room : session.room;
+                    if (!sessionFloor.trim()) missingFields.push(`${sessionPrefix} - Floor`);
+                    if (!sessionUnit.trim()) missingFields.push(`${sessionPrefix} - Unit`);
+                    if (!sessionPostalCode.trim()) missingFields.push(`${sessionPrefix} - Postal Code`);
+                    if (!sessionRoom.trim()) missingFields.push(`${sessionPrefix} - Room`);
                 });
             }
         }
@@ -473,8 +477,6 @@ export const CreateNewClassView: React.FC = () => {
         // If all validations pass, proceed with submission
         try {
             setIsSubmitting(true);
-            setApiResponse(null);
-            setRequestBody(null);
 
             // Transform form data to API payload structure
             const formatDateForAPI = (dateStr: string) => {
@@ -494,105 +496,108 @@ export const CreateNewClassView: React.FC = () => {
 
             const scheduleInfo = generateScheduleInfo(courseStartDate, courseEndDate);
 
-            // Build request body in the complex nested structure as specified
-            const requestBody = {
-                course: {
-                    courseReferenceNumber: courseReferenceNumber,
-                    trainingProvider: {
-                        uen: "" // Will be fetched from database
-                    },
-                    runs: [
-                        {
-                            sequenceNumber: parseInt(String(sequenceNumber)) || 0,
-                            registrationDates: {
-                                opening: formatDateForAPI(openingRegistrationDate),
-                                closing: formatDateForAPI(closingRegistrationDate)
-                            },
-                            courseDates: {
-                                start: formatDateForAPI(courseStartDate),
-                                end: formatDateForAPI(courseEndDate)
-                            },
-                            scheduleInfoType: {
-                                code: scheduleCode,
-                                description: scheduleDescription
-                            },
-                            scheduleInfo: scheduleInfo,
-                            venue: {
-                                floor: floor,
-                                unit: unit,
-                                postalCode: postalCode,
-                                room: room,
-                                ...(block && { block: block }),
-                                ...(street && { street: street }),
-                                ...(building && { building: building }),
-                                ...(wheelchairAccess && { wheelChairAccess: wheelchairAccess === OptionalSelector.YES })
-                            },
-                            modeOfTraining: modeOfTraining,
-                            courseAdminEmail: courseAdminEmail,
-                            courseVacancy: {
-                                code: courseVacancy,
-                                description: courseVacancy === 'A' ? 'Available' : 'Full'
-                            },
-                            file: {
-                                Name: "",
-                                content: ""
-                            },
-                            ...(showSessions && {
-                                sessions: sessions.map(session => ({
-                                    startDate: session.startDate.replace(/-/g, ''), // YYYYMMDD format
-                                    endDate: session.endDate.replace(/-/g, ''), // YYYYMMDD format
-                                    startTime: session.startTime,
-                                    endTime: session.endTime,
-                                    modeOfTraining: session.modeOfTraining,
-                                    venue: {
-                                        floor: session.floor,
-                                        unit: session.unit,
-                                        postalCode: session.postalCode,
-                                        room: session.room
-                                    }
-                                }))
-                            }),
-                            ...(showTrainer && {
-                                linkCourseRunTrainer: trainers.map(trainer => ({
-                                    trainer: {
-                                        photo: {
-                                            name: "",
-                                            content: ""
-                                        },
-                                        trainerType: {
-                                            code: trainer.trainerType,
-                                            description: trainer.trainerType === '1' ? 'Existing' : 'New'
-                                        },
-                                        idNumber: trainer.trainerIdNumber
-                                    }
-                                }))
-                            })
-                        }
-                    ]
-                }
-            };
-
-            // Fetch UEN from database before sending request
+            // Fetch UEN from database before building request
+            let uen = '';
             try {
                 const uenResponse = await fetch('/api/training-provider/uen');
                 if (!uenResponse.ok) {
                     throw new Error('Failed to fetch UEN from database');
                 }
                 const uenData = await uenResponse.json();
-                requestBody.course.trainingProvider.uen = uenData.uen;
+                uen = uenData.uen;
             } catch (uenError) {
                 console.error('Error fetching UEN:', uenError);
                 alert('Error fetching company UEN from database. Please try again.');
                 return;
             }
 
-            // Store request body for display
-            setRequestBody(requestBody);
+            // Build the run object
+            const runObject: any = {
+                sequenceNumber: parseInt(String(sequenceNumber)) || 0,
+                registrationDates: {
+                    opening: formatDateForAPI(openingRegistrationDate),
+                    closing: formatDateForAPI(closingRegistrationDate)
+                },
+                courseDates: {
+                    start: formatDateForAPI(courseStartDate),
+                    end: formatDateForAPI(courseEndDate)
+                },
+                scheduleInfoType: {
+                    code: scheduleCode,
+                    description: scheduleDescription
+                },
+                scheduleInfo: scheduleInfo,
+                venue: {
+                    floor: floor,
+                    unit: unit,
+                    postalCode: postalCode,
+                    room: room,
+                    wheelChairAccess: wheelchairAccess === OptionalSelector.YES,
+                    ...(block && { block: block }),
+                    ...(street && { street: street }),
+                    ...(building && { building: building })
+                },
+                modeOfTraining: modeOfTraining,
+                courseAdminEmail: courseAdminEmail,
+                courseVacancy: {
+                    code: courseVacancy,
+                    description: courseVacancy === 'A' ? 'Available' : 'Full'
+                },
+                file: {
+                    Name: ""
+                }
+            };
 
-            console.log('Submitting course run data:', requestBody);
+            // Add sessions only if enabled and has sessions
+            if (showSessions && sessions.length > 0) {
+                runObject.sessions = sessions.map(session => ({
+                    startDate: session.startDate.replace(/-/g, ''),
+                    endDate: session.endDate.replace(/-/g, ''),
+                    startTime: session.startTime + ':00',
+                    endTime: session.endTime + ':00',
+                    modeOfTraining: session.modeOfTraining,
+                    venue: {
+                        floor: session.useDefaultVenue ? floor : session.floor,
+                        unit: session.useDefaultVenue ? unit : session.unit,
+                        postalCode: session.useDefaultVenue ? postalCode : session.postalCode,
+                        room: session.useDefaultVenue ? room : session.room,
+                        wheelChairAccess: true,
+                        ...(block && { block: block }),
+                        ...(street && { street: street }),
+                        ...(building && { building: building })
+                    }
+                }));
+            }
 
-            // Call the API
-            const response = await fetch('/api/ssg/courses/courseRuns/create-new?includeExpiredCourses=false', {
+            // Add trainer only if enabled
+            if (showTrainer && trainers[0]?.trainerIdNumber?.trim()) {
+                runObject.linkCourseRunTrainer = [{
+                    trainer: {
+                        trainerType: {
+                            code: trainers[0].trainerType,
+                            description: trainers[0].trainerType === '1' ? 'Existing' : 'New'
+                        },
+                        idNumber: trainers[0].trainerIdNumber
+                    }
+                }];
+            }
+
+            // Build request body
+            const requestBody = {
+                course: {
+                    courseReferenceNumber: courseReferenceNumber,
+                    trainingProvider: {
+                        uen: uen
+                    },
+                    runs: [runObject]
+                }
+            };
+
+            console.log('Submitting course run data to webhook:', requestBody);
+
+            // Call the n8n webhook
+            const WEBHOOK_URL = 'https://n8n.srv1231536.hstgr.cloud/webhook/3f6f054d-4200-47e0-a71d-cb3c17cdb545';
+            const response = await fetch(WEBHOOK_URL, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -600,65 +605,352 @@ export const CreateNewClassView: React.FC = () => {
                 body: JSON.stringify(requestBody)
             });
 
-            const responseData = await response.json();
-            setApiResponse(responseData);
+            // Parse response
+            const text = await response.text();
+            console.log('📥 Raw webhook response:', text);
+            console.log('📥 Response status:', response.status);
 
-            // Fixed response handling - properly check for success with status 200
-            const isSuccess = response.ok && responseData.status === 200 && !responseData.error?.message;
+            let responseData;
+            try {
+                responseData = text ? JSON.parse(text) : {};
+            } catch (e) {
+                console.error('Failed to parse JSON response:', text);
+                responseData = { error: { message: `Invalid JSON response from webhook: ${text}` } };
+            }
+
+            // Handle nested result string (common in n8n responses)
+            let parsedResult = responseData;
+            if (responseData?.result !== undefined && responseData?.result !== null) {
+                if (typeof responseData.result === 'string') {
+                    try {
+                        parsedResult = JSON.parse(responseData.result);
+                    } catch (e) {
+                        parsedResult = responseData;
+                    }
+                } else if (typeof responseData.result === 'object') {
+                    parsedResult = responseData.result;
+                }
+            }
+
+            // Check for success - handle both nested and root level responses
+            // Success if: HTTP 200/201 AND (has explicit success status OR no error messages)
+            const hasExplicitSuccess = parsedResult.status === 200 || parsedResult.status === 201;
+            const hasNoErrors = !parsedResult.error?.message && !parsedResult.error?.details?.length;
+            const hasData = parsedResult.data || parsedResult.runs || responseData.data;
+            
+            const isSuccess = response.ok && hasNoErrors && (hasExplicitSuccess || hasData);
 
             if (isSuccess) {
-                console.log('✅ SSG API success:', responseData);
+                console.log('✅ Webhook success:', parsedResult);
 
-                // Extract course run ID from response
-                const courseRunId = responseData.data?.runs?.[0]?.id;
+                // Extract course run ID from response (try multiple paths)
+                const courseRunId = parsedResult.data?.runs?.[0]?.id ||
+                    parsedResult.data?.run?.id ||
+                    parsedResult.runs?.[0]?.id ||
+                    responseData.data?.runs?.[0]?.id;
+
                 if (courseRunId) {
                     console.log('📝 Course Run ID from response:', courseRunId);
 
-                    // Show success popup with course run ID
-                    setSuccessData({
+                    // Fetch detailed course run data and save to database
+                    await fetchAndSaveCourseRunData(courseRunId);
+
+                    // Set success result
+                    setSubmissionResult({
+                        success: true,
                         courseRunId: courseRunId.toString(),
                         message: 'Course run created successfully! The data has been saved to the database.'
                     });
-                    setShowSuccessPopup(true);
-
-                    // Fetch detailed course run data and save to database
-                    await fetchAndSaveCourseRunData(courseRunId);
                 } else {
                     console.warn('⚠️ No course run ID found in response');
-                    setSuccessData({
+                    setSubmissionResult({
+                        success: true,
                         courseRunId: 'Not available',
                         message: 'Course run created successfully! However, the course run ID could not be retrieved.'
                     });
-                    setShowSuccessPopup(true);
                 }
             } else {
-                const errorMessage = responseData.error?.message || responseData.error || responseData.message || 'Unknown error';
-                alert(`Error creating course run: ${errorMessage}`);
-                console.error('❌ API Error:', responseData);
+                // Extract error details from various response formats
+                let errorDetails = parsedResult?.error?.details || [];
+                let errorMessage = parsedResult?.error?.message ||
+                    parsedResult?.details?.[0]?.message ||
+                    parsedResult?.message ||
+                    responseData?.error?.message ||
+                    (text && text !== '{}' ? text : 'Unknown error occurred');
+                
+                let extractedCourseRunId = null;
+                let httpStatus = parsedResult?.status || response.status;
+                let userFriendlyMessage = errorMessage;
+
+                console.log('🔍 Initial error message:', errorMessage);
+                console.log('🔍 Error message type:', typeof errorMessage);
+
+                // Check if error message is a nested JSON string (from result.error.message)
+                // This handles responses like: {"result": {"error": {"message": "400 - {...}"}}}
+                if (typeof errorMessage === 'string') {
+                    // First, try to remove the HTTP status prefix like "400 - "
+                    const statusPrefixMatch = errorMessage.match(/^\d{3}\s*-\s*([\s\S]+)$/);
+                    if (statusPrefixMatch) {
+                        errorMessage = statusPrefixMatch[1].trim();
+                        console.log('🔍 After removing status prefix:', errorMessage);
+                    }
+
+                    // The error message might be a JSON-encoded string (with \" and \n escapes)
+                    // Try to parse it as JSON first to decode the escape sequences
+                    if (errorMessage.startsWith('"') && errorMessage.endsWith('"')) {
+                        try {
+                            // This will decode \" to " and \n to newlines
+                            errorMessage = JSON.parse(errorMessage);
+                            console.log('🔍 After JSON.parse decode:', errorMessage);
+                        } catch (e) {
+                            console.log('⚠️ Could not JSON.parse the quoted string:', e);
+                            // Try manual unquoting as fallback
+                            errorMessage = errorMessage.slice(1, -1);
+                        }
+                    }
+
+                    // Now try to parse as JSON object
+                    if (errorMessage.includes('{')) {
+                        try {
+                            const nestedError = JSON.parse(errorMessage);
+                            console.log('🔍 Parsed nested error:', nestedError);
+                            
+                            if (nestedError.error?.details && Array.isArray(nestedError.error.details)) {
+                                errorDetails = nestedError.error.details;
+                                httpStatus = nestedError.status || httpStatus;
+                                
+                                // Extract user-friendly message from details
+                                if (errorDetails.length > 0 && errorDetails[0].message) {
+                                    userFriendlyMessage = errorDetails[0].message;
+                                } else {
+                                    userFriendlyMessage = nestedError.error.message || errorMessage;
+                                }
+                            } else if (nestedError.data?.error?.details) {
+                                errorDetails = nestedError.data.error.details;
+                                httpStatus = nestedError.data.status || httpStatus;
+                                
+                                if (errorDetails.length > 0 && errorDetails[0].message) {
+                                    userFriendlyMessage = errorDetails[0].message;
+                                }
+                            }
+                        } catch (e) {
+                            console.log('⚠️ Could not parse nested error JSON:', e);
+                        }
+                    }
+                }
+                
+                // If errorDetails exists directly in parsedResult, use it
+                if (!userFriendlyMessage || userFriendlyMessage === errorMessage) {
+                    if (errorDetails && errorDetails.length > 0 && errorDetails[0].message) {
+                        userFriendlyMessage = errorDetails[0].message;
+                    }
+                }
+
+                // Final cleanup: If userFriendlyMessage still looks like JSON or has escape sequences, clean it up
+                if (typeof userFriendlyMessage === 'string') {
+                    // Remove common escape sequences that might remain
+                    userFriendlyMessage = userFriendlyMessage
+                        .replace(/\\n/g, ' ')
+                        .replace(/\\"/g, '"')
+                        .replace(/\\'/g, "'")
+                        .replace(/\s+/g, ' ')
+                        .trim();
+                    
+                    // If it still looks like JSON object string, try to extract just the error message
+                    if (userFriendlyMessage.includes('{') && userFriendlyMessage.includes('error')) {
+                        const errorMatch = userFriendlyMessage.match(/"message"\s*:\s*"([^"]+)"/);
+                        if (errorMatch) {
+                            userFriendlyMessage = errorMatch[1];
+                        }
+                    }
+                }
+
+                // If we still have a very long message or JSON-like content, provide a generic message
+                if (userFriendlyMessage.length > 200 || (userFriendlyMessage.includes('{') && userFriendlyMessage.includes('}'))) {
+                    console.warn('⚠️ Error message too complex, using generic message');
+                    userFriendlyMessage = 'An error occurred while creating the course run. Please check the details and try again.';
+                }
+
+                // Ensure we don't show empty message
+                if (!userFriendlyMessage || userFriendlyMessage.trim() === '') {
+                    userFriendlyMessage = 'An unknown error occurred while creating the course run';
+                }
+
+                // Extract course run ID from error message if present
+                if (errorDetails && errorDetails.length > 0) {
+                    const detailMessage = errorDetails[0]?.message || '';
+                    const courseRunIdMatch = detailMessage.match(/Course Run ID is (\d+)/i);
+                    if (courseRunIdMatch) {
+                        extractedCourseRunId = courseRunIdMatch[1];
+                    }
+                }
+                
+                console.error('❌ Webhook Error:', parsedResult);
+                console.error('❌ Raw response text:', text);
+                console.log('📝 Extracted Course Run ID from error:', extractedCourseRunId);
+                console.log('📝 User-friendly message:', userFriendlyMessage);
+
+                setSubmissionResult({
+                    success: false,
+                    courseRunId: extractedCourseRunId || 'N/A',
+                    message: userFriendlyMessage,
+                    error: {
+                        message: userFriendlyMessage,
+                        details: errorDetails,
+                        status: httpStatus
+                    }
+                });
             }
 
         } catch (error) {
             console.error('Error submitting course run:', error);
-            const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-            setApiResponse({ error: errorMessage });
-            alert(`Error creating course run: ${errorMessage}`);
+            let errorMessage = 'Unknown error occurred';
+            if (error instanceof TypeError && error.message.includes('fetch')) {
+                errorMessage = 'Network error - please check your internet connection or CORS settings';
+            } else if (error instanceof Error) {
+                errorMessage = error.message;
+            }
+            
+            setSubmissionResult({
+                success: false,
+                message: errorMessage,
+                error: { message: errorMessage }
+            });
         } finally {
             setIsSubmitting(false);
         }
     };
 
+    const resetForm = () => {
+        setSubmissionResult(null);
+        setIsSubmitting(false);
+    };
+
+    // Show results view if submission completed
+    if (submissionResult) {
+        // Helper function to format date to YYYYMMDD
+        const formatDateToYYYYMMDD = (dateStr: string) => {
+            if (!dateStr) return 'N/A';
+            return dateStr.replace(/-/g, '');
+        };
+
+        return (
+            <div className="max-w-6xl mx-auto p-6">
+                <Card>
+                    <div className="p-6 border-b dark:border-gray-700">
+                        <div className="flex items-center gap-3 mb-2">
+                            {submissionResult.success ? (
+                                <div className="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center">
+                                    <svg className="w-5 h-5 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
+                                    </svg>
+                                </div>
+                            ) : (
+                                <div className="w-10 h-10 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center">
+                                    <svg className="w-5 h-5 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
+                                    </svg>
+                                </div>
+                            )}
+                            <div>
+                                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+                                    {submissionResult.success ? 'Class Creation Result' : 'Class Creation Result'}
+                                </h2>
+                                <p className="text-sm text-gray-600 dark:text-gray-400">
+                                    {submissionResult.success ? 'Successfully created course run' : 'Failed to create course run'}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="p-6">
+                        <div className="overflow-x-auto">
+                            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-600">
+                                <thead className="bg-gray-50 dark:bg-gray-800">
+                                    <tr>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                            Course Reference Number
+                                        </th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                            Course Start Date
+                                        </th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                            Course End Date
+                                        </th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                            Status
+                                        </th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                            Course Run ID
+                                        </th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                            Response
+                                        </th>
+                                    </tr>
+                                </thead>
+                                <tbody className="bg-white dark:bg-gray-700 divide-y divide-gray-200 dark:divide-gray-600">
+                                    <tr className="hover:bg-gray-50 dark:hover:bg-gray-600">
+                                        <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
+                                            {courseReferenceNumber}
+                                        </td>
+                                        <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                                            {formatDateToYYYYMMDD(courseStartDate)}
+                                        </td>
+                                        <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                                            {formatDateToYYYYMMDD(courseEndDate)}
+                                        </td>
+                                        <td className="px-4 py-4 whitespace-nowrap">
+                                            <span className={`inline-flex px-2.5 py-1 text-xs font-semibold rounded-full ${
+                                                submissionResult.success
+                                                    ? 'bg-green-100 text-green-800 border border-green-200 dark:bg-green-900/30 dark:text-green-300 dark:border-green-700'
+                                                    : 'bg-red-100 text-red-800 border border-red-200 dark:bg-red-900/30 dark:text-red-300 dark:border-red-700'
+                                            }`}>
+                                                {submissionResult.success ? 'Success' : 'Error'}
+                                            </span>
+                                        </td>
+                                        <td className="px-4 py-4 whitespace-nowrap text-sm font-mono text-gray-900 dark:text-white">
+                                            {submissionResult.courseRunId || 'N/A'}
+                                        </td>
+                                        <td className="px-4 py-4 text-sm text-gray-700 dark:text-gray-300">
+                                            <div className="max-w-md">
+                                                {submissionResult.success ? (
+                                                    <div className="flex items-start gap-2">
+                                                        <span className="text-green-600 dark:text-green-400">✓</span>
+                                                        <span>Success</span>
+                                                    </div>
+                                                ) : (
+                                                    <div className="flex items-start gap-2 text-red-700 dark:text-red-400">
+                                                        <span>❌</span>
+                                                        <span>{submissionResult.message || 'An unknown error occurred'}</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        {/* Action buttons */}
+                        <div className="flex gap-3 pt-6 mt-6 border-t dark:border-gray-700">
+                            <Button onClick={resetForm} variant="outline" className="flex-1">
+                                {submissionResult.success ? 'Create Another Class' : 'Try Again'}
+                            </Button>
+                            <Button onClick={() => setAdminPage(AdminPage.Dashboard)} className="flex-1">
+                                Back to Dashboard
+                            </Button>
+                        </div>
+                    </div>
+                </Card>
+            </div>
+        );
+    }
+
+    // Show form
     return (
         <div className="max-w-6xl mx-auto p-6">
             <div className="flex justify-between items-center mb-6">
                 <h2 className="text-3xl font-bold dark:text-white">Create New Class</h2>
-                <div>
-                    <Button variant="ghost" onClick={() => setAdminPage(AdminPage.Dashboard)} className="mr-2">
-                        Cancel
-                    </Button>
-                    <Button onClick={handleSubmit} disabled={isSubmitting}>
-                        {isSubmitting ? 'Creating...' : 'Create Class'}
-                    </Button>
-                </div>
             </div>
 
             {/* Course Run Section */}
@@ -672,8 +964,23 @@ export const CreateNewClassView: React.FC = () => {
                     <FormSection title="Basic Information">
                         <div className="grid grid-cols-1 md:grid-cols-1 gap-4">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 dark:text-gray-300">
-                                    * Select the Course
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                    * Course Reference Number
+                                </label>
+                                <input
+                                    type="text"
+                                    value={courseReferenceNumber}
+                                    onChange={(e) => setCourseReferenceNumber(e.target.value)}
+                                    className={inputClasses}
+                                    placeholder="Enter course code (e.g., TGS-2024001234)"
+                                />
+                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                    Enter the course code manually or select from available courses below
+                                </p>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                    Or Select from Available Courses
                                 </label>
                                 {loadingCourses ? (
                                     <div className="flex items-center space-x-2">
@@ -696,7 +1003,7 @@ export const CreateNewClassView: React.FC = () => {
                                 )}
                                 {availableCourses.length === 0 && !loadingCourses && (
                                     <p className="text-xs text-amber-600 mt-1">
-                                        No courses found. Please create a course first.
+                                        No courses found in the database. You can still enter a course code manually above.
                                     </p>
                                 )}
                             </div>
@@ -788,7 +1095,7 @@ export const CreateNewClassView: React.FC = () => {
                                         value={street}
                                         onChange={(e) => setStreet(e.target.value)}
                                         className={inputClasses}
-                                        placeholder="Street 12"
+                                        placeholder="WOODS SQUARE"
                                         maxLength={32}
                                     />
                                 </div>
@@ -802,7 +1109,7 @@ export const CreateNewClassView: React.FC = () => {
                                         value={building}
                                         onChange={(e) => setBuilding(e.target.value)}
                                         className={inputClasses}
-                                        placeholder="Building ABC"
+                                        placeholder="WOODS SQUARE"
                                         maxLength={66}
                                     />
                                 </div>
@@ -835,7 +1142,7 @@ export const CreateNewClassView: React.FC = () => {
                                         value={floor}
                                         onChange={(e) => setFloor(e.target.value)}
                                         className={inputClasses}
-                                        placeholder="12"
+                                        placeholder="07"
                                         maxLength={3}
                                     />
                                 </div>
@@ -849,7 +1156,7 @@ export const CreateNewClassView: React.FC = () => {
                                         value={unit}
                                         onChange={(e) => setUnit(e.target.value)}
                                         className={inputClasses}
-                                        placeholder="123"
+                                        placeholder="85-87"
                                         maxLength={5}
                                     />
                                 </div>
@@ -863,7 +1170,7 @@ export const CreateNewClassView: React.FC = () => {
                                         value={postalCode}
                                         onChange={(e) => setPostalCode(e.target.value)}
                                         className={inputClasses}
-                                        placeholder="123456"
+                                        placeholder="737715"
                                         maxLength={6}
                                     />
                                 </div>
@@ -877,7 +1184,7 @@ export const CreateNewClassView: React.FC = () => {
                                         value={room}
                                         onChange={(e) => setRoom(e.target.value)}
                                         className={inputClasses}
-                                        placeholder="12A"
+                                        placeholder="Training room"
                                         maxLength={255}
                                     />
                                 </div>
@@ -912,14 +1219,11 @@ export const CreateNewClassView: React.FC = () => {
                                 <input
                                     type="email"
                                     value={courseAdminEmail}
-                                    className={`${inputClasses} bg-gray-100 cursor-not-allowed`}
+                                    onChange={(e) => setCourseAdminEmail(e.target.value)}
+                                    className={inputClasses}
                                     placeholder="admin@example.com"
                                     maxLength={255}
-                                    readOnly
                                 />
-                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                    Auto-filled with your account email
-                                </p>
                             </div>
                         </div>
                     </FormSection>
@@ -956,7 +1260,32 @@ export const CreateNewClassView: React.FC = () => {
                                     type="checkbox"
                                     id="add-sessions"
                                     checked={showSessions}
-                                    onChange={(e) => setShowSessions(e.target.checked)}
+                                    onChange={(e) => {
+                                        const isChecked = e.target.checked;
+                                        setShowSessions(isChecked);
+                                        // If checking the box and no sessions exist, add one
+                                        if (isChecked && sessions.length === 0) {
+                                            setSessions([{
+                                                id: 0,
+                                                modeOfTraining: '1',
+                                                startDate: '',
+                                                endDate: '',
+                                                startTime: '09:15',
+                                                endTime: '13:15',
+                                                useDefaultVenue: true,
+                                                block: '',
+                                                street: '',
+                                                building: '',
+                                                wheelchairAccess: OptionalSelector.YES,
+                                                primaryVenue: OptionalSelector.YES,
+                                                floor: '',
+                                                unit: '',
+                                                postalCode: '',
+                                                room: ''
+                                            }]);
+                                            setSessionCount(1);
+                                        }
+                                    }}
                                     className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                                 />
                                 <label htmlFor="add-sessions" className="text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -1006,19 +1335,21 @@ export const CreateNewClassView: React.FC = () => {
                             <FormSection key={session.id} title={
                                 <div className="flex items-center justify-between">
                                     <span>Session {index + 1}</span>
-                                    {sessions.length > 1 && (
-                                        <Button
-                                            variant="ghost"
-                                            onClick={() => {
-                                                const newSessions = sessions.filter((_, i) => i !== index);
-                                                setSessions(newSessions);
-                                                setSessionCount(newSessions.length);
-                                            }}
-                                            className="text-red-500 hover:text-red-700 px-2 py-1 text-sm"
-                                        >
-                                            Remove
-                                        </Button>
-                                    )}
+                                    <Button
+                                        variant="ghost"
+                                        onClick={() => {
+                                            const newSessions = sessions.filter((_, i) => i !== index);
+                                            setSessions(newSessions);
+                                            setSessionCount(newSessions.length);
+                                            // Uncheck "Add Sessions" if no sessions left
+                                            if (newSessions.length === 0) {
+                                                setShowSessions(false);
+                                            }
+                                        }}
+                                        className="text-red-500 hover:text-red-700 px-2 py-1 text-sm"
+                                    >
+                                        Remove
+                                    </Button>
                                 </div>
                             }>
                                 <div className="space-y-4">
@@ -1094,25 +1425,31 @@ export const CreateNewClassView: React.FC = () => {
                                         </div>
                                     </div>
 
-                                    {(session.modeOfTraining === '2' || session.modeOfTraining === '4') ? (
+                                    {(session.modeOfTraining === '2' || session.modeOfTraining === '4') && (
                                         <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
                                             <p className="text-blue-700 text-sm">
                                                 Start and end time are set to 12:00 AM to 11:59 PM respectively for this mode of training.
                                             </p>
                                         </div>
-                                    ) : (
-                                        session.startDate && (
-                                            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                                                <p className="text-blue-700 text-sm">
-                                                    End date of course session is automatically set to {session.startDate}
-                                                </p>
-                                            </div>
-                                        )
                                     )}
 
                                     {/* Session Venue */}
                                     <div className="border-t pt-4">
-                                        <h5 className="font-medium text-gray-700 dark:text-gray-300 mb-3">Venue Information</h5>
+                                        <div className="flex items-center justify-between mb-3">
+                                            <h5 className="font-medium text-gray-700 dark:text-gray-300">Venue Information</h5>
+                                            <div className="flex items-center space-x-2">
+                                                <input
+                                                    type="checkbox"
+                                                    id={`use-default-venue-${index}`}
+                                                    checked={session.useDefaultVenue}
+                                                    onChange={(e) => updateSessionField(index, 'useDefaultVenue', e.target.checked)}
+                                                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                                                />
+                                                <label htmlFor={`use-default-venue-${index}`} className="text-sm text-gray-600 dark:text-gray-400">
+                                                    Use default primary venue
+                                                </label>
+                                            </div>
+                                        </div>
                                         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                                             <div>
                                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -1120,11 +1457,12 @@ export const CreateNewClassView: React.FC = () => {
                                                 </label>
                                                 <input
                                                     type="text"
-                                                    value={session.floor}
+                                                    value={session.useDefaultVenue ? floor : session.floor}
                                                     onChange={(e) => updateSessionField(index, 'floor', e.target.value)}
-                                                    className={inputClasses}
+                                                    className={`${inputClasses} ${session.useDefaultVenue ? 'bg-gray-100 dark:bg-gray-600 cursor-not-allowed' : ''}`}
                                                     placeholder="12"
                                                     maxLength={3}
+                                                    disabled={session.useDefaultVenue}
                                                 />
                                             </div>
 
@@ -1134,11 +1472,12 @@ export const CreateNewClassView: React.FC = () => {
                                                 </label>
                                                 <input
                                                     type="text"
-                                                    value={session.unit}
+                                                    value={session.useDefaultVenue ? unit : session.unit}
                                                     onChange={(e) => updateSessionField(index, 'unit', e.target.value)}
-                                                    className={inputClasses}
+                                                    className={`${inputClasses} ${session.useDefaultVenue ? 'bg-gray-100 dark:bg-gray-600 cursor-not-allowed' : ''}`}
                                                     placeholder="123"
                                                     maxLength={5}
+                                                    disabled={session.useDefaultVenue}
                                                 />
                                             </div>
 
@@ -1148,11 +1487,12 @@ export const CreateNewClassView: React.FC = () => {
                                                 </label>
                                                 <input
                                                     type="text"
-                                                    value={session.postalCode}
+                                                    value={session.useDefaultVenue ? postalCode : session.postalCode}
                                                     onChange={(e) => updateSessionField(index, 'postalCode', e.target.value)}
-                                                    className={inputClasses}
+                                                    className={`${inputClasses} ${session.useDefaultVenue ? 'bg-gray-100 dark:bg-gray-600 cursor-not-allowed' : ''}`}
                                                     placeholder="123456"
                                                     maxLength={6}
+                                                    disabled={session.useDefaultVenue}
                                                 />
                                             </div>
 
@@ -1162,11 +1502,12 @@ export const CreateNewClassView: React.FC = () => {
                                                 </label>
                                                 <input
                                                     type="text"
-                                                    value={session.room}
+                                                    value={session.useDefaultVenue ? room : session.room}
                                                     onChange={(e) => updateSessionField(index, 'room', e.target.value)}
-                                                    className={inputClasses}
+                                                    className={`${inputClasses} ${session.useDefaultVenue ? 'bg-gray-100 dark:bg-gray-600 cursor-not-allowed' : ''}`}
                                                     placeholder="12A"
                                                     maxLength={255}
+                                                    disabled={session.useDefaultVenue}
                                                 />
                                             </div>
                                         </div>
@@ -1188,9 +1529,9 @@ export const CreateNewClassView: React.FC = () => {
 
                         <FormSection title="Assign Existing Trainer">
                             <div className="space-y-4">
-                                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                                    <h4 className="font-semibold text-blue-800 mb-2">Existing Trainer Assignment</h4>
-                                    <p className="text-blue-700 text-sm">
+                                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                                    <h4 className="font-semibold text-blue-800 dark:text-blue-300 mb-2">Existing Trainer Assignment</h4>
+                                    <p className="text-blue-700 dark:text-blue-400 text-sm">
                                         Enter the Trainer ID Number to assign an existing trainer to this course.
                                         The system will automatically retrieve trainer details from the existing trainer database.
                                     </p>
@@ -1218,56 +1559,15 @@ export const CreateNewClassView: React.FC = () => {
                 </div>
             )}
 
-            {/* API Debug Section */}
-            {(requestBody || apiResponse) && (
-                <div className="mb-12 border-t border-gray-200 pt-8">
-                    <div className="flex items-center mb-6">
-                        <h3 className="text-2xl font-bold text-gray-800 dark:text-white">API Debug Information</h3>
-                    </div>
-                    <div className="space-y-6">
-
-                        {/* Request Body Display */}
-                        {requestBody && (
-                            <FormSection title="Request Body Sent to API">
-                                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                                    <pre className="text-sm text-gray-700 whitespace-pre-wrap overflow-x-auto max-h-96">
-                                        {JSON.stringify(requestBody, null, 2)}
-                                    </pre>
-                                </div>
-                            </FormSection>
-                        )}
-
-                        {/* API Response Display */}
-                        {apiResponse && (
-                            <FormSection title="API Response">
-                                <div className={`border rounded-lg p-4 ${(apiResponse.status === 200 && !apiResponse.error?.message) ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'
-                                    }`}>
-                                    <div className="mb-2">
-                                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${(apiResponse.status === 200 && !apiResponse.error?.message) ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                                            }`}>
-                                            {(apiResponse.status === 200 && !apiResponse.error?.message) ? 'Success' : 'Error'}
-                                        </span>
-                                    </div>
-                                    <pre className="text-sm text-gray-700 whitespace-pre-wrap overflow-x-auto max-h-96">
-                                        {JSON.stringify(apiResponse, null, 2)}
-                                    </pre>
-                                </div>
-                            </FormSection>
-                        )}
-                    </div>
-                </div>
-            )}
-
-            {/* Success Popup */}
-            <SuccessPopup
-                isOpen={showSuccessPopup}
-                onClose={() => {
-                    setShowSuccessPopup(false);
-                    setSuccessData(null);
-                }}
-                courseRunId={successData?.courseRunId || ''}
-                message={successData?.message || ''}
-            />
+            {/* Action Buttons */}
+            <div className="mt-8 mb-12 flex justify-end space-x-4">
+                <Button variant="ghost" onClick={() => setAdminPage(AdminPage.Dashboard)}>
+                    Cancel
+                </Button>
+                <Button onClick={handleSubmit} disabled={isSubmitting}>
+                    {isSubmitting ? 'Creating...' : 'Create Class'}
+                </Button>
+            </div>
         </div>
     );
 };

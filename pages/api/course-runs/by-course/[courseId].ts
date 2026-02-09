@@ -13,7 +13,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(400).json({ message: 'Course ID is required' });
     }
 
-    // Query to get all course runs for a specific course
+    // Query to get all course runs for a specific course (excluding deleted ones)
     const courseRuns = await pool.query(
       `SELECT 
         course_run_id
@@ -21,6 +21,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         course_run
       WHERE 
         course_id = $1
+        AND (is_deleted IS NULL OR is_deleted = false)
       ORDER BY course_run_id DESC`,
       [courseId]
     );

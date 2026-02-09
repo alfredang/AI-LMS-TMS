@@ -1,5 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
+import bcrypt from 'bcryptjs';
 
 // Helper function for database queries
 const query = (text: string, params?: any[]) => pool.query(text, params);
@@ -40,35 +41,29 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         console.log('📊 Saving course run to database:', {
             courseRunId,
             hasData: !!courseRunData.data,
-            hasCourse: !!courseRunData.data?.course,
-            hasDoubleNestedCourse: !!courseRunData.data?.data?.course,
-            hasRun: !!courseRunData.data?.course?.run,
-            hasDoubleNestedRun: !!courseRunData.data?.data?.course?.run,
-            responseStructure: courseRunData.data ? Object.keys(courseRunData.data) : 'no data property'
+            hasResult: !!courseRunData.result,
+            hasCourse: !!courseRunData.data?.course || !!courseRunData.result?.course,
+            responseStructure: courseRunData.data ? 'data structure' : courseRunData.result ? 'result structure' : 'unknown'
         });
 
-        // Extract course run details from SSG API response
-        // Handle both single and double-nested data structures
-        const actualData = courseRunData.data?.data || courseRunData.data;
-        const course = actualData?.course;
-        const courseRun = actualData?.course?.run;
+        // Extract course run details from webhook response
+        // Handle both 'data' and 'result' property structures
+        const dataWrapper = courseRunData.result || courseRunData.data || courseRunData;
+        const course = dataWrapper?.course;
+        const courseRun = dataWrapper?.course?.run;
         
         if (!course || !courseRun) {
             console.error('❌ Missing course or run data');
-            console.log('📋 Available data keys at top level:', Object.keys(courseRunData.data || {}));
-            console.log('📋 Available data keys at nested level:', courseRunData.data?.data ? Object.keys(courseRunData.data.data) : 'no nested data');
-            console.log('📋 Full data object structure:', {
-                topLevel: courseRunData.data,
-                nestedLevel: courseRunData.data?.data
-            });
+            console.log('📋 Available top-level keys:', Object.keys(courseRunData));
+            console.log('📋 Data wrapper keys:', dataWrapper ? Object.keys(dataWrapper) : 'no wrapper');
             return res.status(400).json({ 
-                error: 'No course or course run data found in API response',
+                error: 'No course or course run data found in webhook response',
                 debug: {
                     hasCourse: !!course,
                     hasCourseRun: !!courseRun,
-                    topLevelKeys: Object.keys(courseRunData.data || {}),
-                    nestedLevelKeys: courseRunData.data?.data ? Object.keys(courseRunData.data.data) : null,
-                    actualDataUsed: actualData
+                    topLevelKeys: Object.keys(courseRunData),
+                    wrapperKeys: dataWrapper ? Object.keys(dataWrapper) : null,
+                    courseRunData: courseRunData
                 }
             });
         }
@@ -198,12 +193,121 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         // Extract trainer information if available
         let trainerName = '';
         let trainerEmail = '';
+        let trainerId: string | null = null;
         
         if (courseRun.linkCourseRunTrainer && courseRun.linkCourseRunTrainer.length > 0) {
             const trainer = courseRun.linkCourseRunTrainer[0]?.trainer;
             if (trainer) {
                 trainerName = trainer.name || '';
                 trainerEmail = trainer.email || '';
+
+                // Check if trainer exists in database by email
+                if (trainerEmail) {
+                    console.log('🔍 Checking if trainer exists:', trainerEmail);
+                    try {
+                        const existingTrainer = await query(
+                            `SELECT u.id, u.email, u.full_name 
+                             FROM app_user u
+                             INNER JOIN user_role_map urm ON u.id = urm.user_id
+                             WHERE u.email = $1 AND urm.role = 'Trainer'`,
+                            [trainerEmail]
+                        );
+
+                        if (existingTrainer.rows.length > 0) {
+                            trainerId = existingTrainer.rows[0].id;
+                            console.log('✅ Found existing trainer user:', trainerId);
+                            
+                            // Check if trainer_profile exists
+                            const trainerProfile = await query(
+                                `SELECT user_id FROM trainer_profile WHERE user_id = $1`,
+                                [trainerId]
+                            );
+                            
+                            if (trainerProfile.rows.length === 0) {
+                                // Create trainer_profile
+                                console.log('📝 Creating trainer_profile for existing user:', trainerId);
+                                await query(
+                                    `INSERT INTO trainer_profile (
+                                        user_id,
+                                        tel,
+                                        gender,
+                                        trainer_type,
+                                        status
+                                    ) VALUES ($1, $2, $3, $4, $5)`,
+                                    [
+                                        trainerId,
+                                        '',                    // Empty tel for now
+                                        'Prefer not to say',   // Default gender
+                                        'ACLP',                // Default trainer type
+                                        'Active'               // Default status
+                                    ]
+                                );
+                                console.log('✅ Created trainer_profile');
+                            } else {
+                                console.log('✅ Trainer profile already exists');
+                            }
+                        } else {
+                            // Create new trainer user
+                            console.log('📝 Creating new trainer user:', trainerEmail);
+                            
+                            // Hash the default password for password_hash column
+                            const hashedPassword = await bcrypt.hash('password123', 10);
+                            
+                            const newTrainer = await query(
+                                `INSERT INTO app_user (
+                                    email,
+                                    password,
+                                    password_hash,
+                                    full_name,
+                                    created_at,
+                                    updated_at
+                                ) VALUES ($1, $2, $3, $4, NOW(), NOW()) RETURNING id`,
+                                [
+                                    trainerEmail,
+                                    'password123',      // Plain text password
+                                    hashedPassword,     // Hashed password
+                                    trainerName || 'Trainer'
+                                ]
+                            );
+
+                            trainerId = newTrainer.rows[0].id;
+                            console.log('✅ Created new trainer user:', trainerId);
+
+                            // Assign Trainer role
+                            await query(
+                                `INSERT INTO user_role_map (user_id, role) VALUES ($1, 'Trainer')`,
+                                [trainerId]
+                            );
+                            console.log('✅ Assigned Trainer role to user');
+                            
+                            // Create trainer_profile
+                            console.log('📝 Creating trainer_profile for new user:', trainerId);
+                            await query(
+                                `INSERT INTO trainer_profile (
+                                    user_id,
+                                    tel,
+                                    gender,
+                                    trainer_type,
+                                    status
+                                ) VALUES ($1, $2, $3, $4, $5)`,
+                                [
+                                    trainerId,
+                                    '',                    // Empty tel for now
+                                    'Prefer not to say',   // Default gender
+                                    'ACLP',                // Default trainer type
+                                    'Active'               // Default status
+                                ]
+                            );
+                            console.log('✅ Created trainer_profile');
+                        }
+                    } catch (trainerError) {
+                        console.error('⚠️ Error handling trainer:', trainerError);
+                        console.error('⚠️ Error details:', trainerError instanceof Error ? trainerError.message : trainerError);
+                        // Reset trainerId to null on error to prevent FK constraint violation
+                        trainerId = null;
+                        console.log('⚠️ Trainer ID reset to null due to error');
+                    }
+                }
             }
         }
 
@@ -213,41 +317,103 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             startDate,
             endDate,
             trainerName,
-            trainerEmail
+            trainerEmail,
+            trainerId,
+            hasValidTrainerId: !!trainerId
         });
+
+        // Verify trainer ID exists in trainer_profile before using it (FK constraint requirement)
+        if (trainerId) {
+            try {
+                const verifyTrainer = await query(
+                    `SELECT user_id FROM trainer_profile WHERE user_id = $1`,
+                    [trainerId]
+                );
+                if (verifyTrainer.rows.length === 0) {
+                    console.warn('⚠️ Trainer profile not found in database, resetting to null:', trainerId);
+                    trainerId = null;
+                } else {
+                    console.log('✅ Verified trainer profile exists in database:', trainerId);
+                }
+            } catch (verifyError) {
+                console.error('⚠️ Error verifying trainer profile:', verifyError);
+                trainerId = null;
+            }
+        }
 
         // Insert course run record using existing table structure
         console.log('💾 Inserting course run record...');
+        console.log('💾 Will insert with trainer ID?', !!trainerId);
         let courseRunInsert;
         try {
-            courseRunInsert = await query(
-                `INSERT INTO course_run (
-                    id,
-                    course_id,
-                    course_run_id,
-                    digital_attendance_id,
-                    class_status,
-                    start_date,
-                    end_date,
-                    assigned_trainer_name,
-                    assigned_trainer_email,
-                    created_at,
-                    updated_at
-                ) VALUES (
-                    gen_random_uuid(),
-                    $1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW()
-                ) RETURNING id`,
-                [
-                    courseId,                    // course_id
-                    courseRunId,                 // course_run_id (SSG course run ID)
-                    digitalAttendanceId,         // digital_attendance_id (extracted from qrCodeLink)
-                    'Confirmed',                 // class_status
-                    startDate,                   // start_date
-                    endDate,                     // end_date
-                    trainerName,                 // assigned_trainer_name
-                    trainerEmail                 // assigned_trainer_email
-                ]
-            );
+            // Build dynamic SQL based on whether we have a valid trainer ID
+            if (trainerId) {
+                // Insert with trainer ID
+                courseRunInsert = await query(
+                    `INSERT INTO course_run (
+                        id,
+                        course_id,
+                        course_run_id,
+                        digital_attendance_id,
+                        class_status,
+                        start_date,
+                        end_date,
+                        mode_of_learning,
+                        assigned_trainer_id,
+                        assigned_trainer_name,
+                        assigned_trainer_email,
+                        created_at,
+                        updated_at
+                    ) VALUES (
+                        gen_random_uuid(),
+                        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW()
+                    ) RETURNING id, assigned_trainer_id`,
+                    [
+                        courseId,                    // course_id
+                        courseRunId,                 // course_run_id (SSG course run ID)
+                        digitalAttendanceId,         // digital_attendance_id (extracted from qrCodeLink)
+                        'Confirmed',                 // class_status
+                        startDate,                   // start_date
+                        endDate,                     // end_date
+                        'Physical',                  // mode_of_learning (default to Physical/classroom)
+                        trainerId,                   // assigned_trainer_id
+                        trainerName,                 // assigned_trainer_name
+                        trainerEmail                 // assigned_trainer_email
+                    ]
+                );
+            } else {
+                // Insert without trainer ID (only name and email)
+                courseRunInsert = await query(
+                    `INSERT INTO course_run (
+                        id,
+                        course_id,
+                        course_run_id,
+                        digital_attendance_id,
+                        class_status,
+                        start_date,
+                        end_date,
+                        mode_of_learning,
+                        assigned_trainer_name,
+                        assigned_trainer_email,
+                        created_at,
+                        updated_at
+                    ) VALUES (
+                        gen_random_uuid(),
+                        $1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW()
+                    ) RETURNING id, assigned_trainer_id`,
+                    [
+                        courseId,                    // course_id
+                        courseRunId,                 // course_run_id (SSG course run ID)
+                        digitalAttendanceId,         // digital_attendance_id (extracted from qrCodeLink)
+                        'Confirmed',                 // class_status
+                        startDate,                   // start_date
+                        endDate,                     // end_date
+                        'Physical',                  // mode_of_learning (default to Physical/classroom)
+                        trainerName,                 // assigned_trainer_name
+                        trainerEmail                 // assigned_trainer_email
+                    ]
+                );
+            }
         } catch (insertError) {
             console.error('❌ Error inserting course run:', insertError);
             return res.status(500).json({ 
@@ -266,6 +432,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }
 
         const newCourseRunId = courseRunInsert.rows[0].id;
+        const assignedTrainerId = courseRunInsert.rows[0].assigned_trainer_id;
 
         console.log('✅ Course run saved successfully:', {
             courseRunId: newCourseRunId,
@@ -273,10 +440,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             courseId: courseId,
             courseCode: courseReferenceNumber,
             digitalAttendanceId: digitalAttendanceId,
+            trainerId: assignedTrainerId,
             trainerName: trainerName,
             trainerEmail: trainerEmail,
             startDate: startDate,
-            endDate: endDate
+            endDate: endDate,
+            modeOfLearning: 'Physical'
         });
 
         return res.status(200).json({
@@ -288,10 +457,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 courseId: courseId,
                 courseCode: courseReferenceNumber,
                 digitalAttendanceId: digitalAttendanceId,
+                trainerId: assignedTrainerId,
                 trainerName: trainerName,
                 trainerEmail: trainerEmail,
                 startDate: startDate,
                 endDate: endDate,
+                modeOfLearning: 'Physical',
                 status: 'newly_created'
             }
         });
