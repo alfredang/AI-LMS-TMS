@@ -82,8 +82,8 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         );
       } else if (role === 'Trainer') {
         await client.query(
-          `INSERT INTO public.trainer_profile (user_id, tel, trainer_type, status)
-           VALUES ($1, $2, 'non-ACLP', 'Active')
+          `INSERT INTO public.trainer_profile (user_id, tel, gender, trainer_type, status)
+           VALUES ($1, $2, 'Prefer not to say', 'non-ACLP', 'Active')
            ON CONFLICT (user_id) DO NOTHING`,
           [userId, tel]
         );
@@ -110,7 +110,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
             `SELECT provider_id FROM public.training_provider_member WHERE user_id = $1 LIMIT 1`,
             [currentUserId]
           );
-          
+
           // If not found, try direct ownership
           if (providerIdResult.rows.length === 0) {
             providerIdResult = await client.query(
@@ -118,7 +118,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
               [currentUserId]
             );
           }
-          
+
           // If still not found, try provider_admin_user (legacy)
           if (providerIdResult.rows.length === 0) {
             providerIdResult = await client.query(
@@ -126,10 +126,10 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
               [currentUserId]
             );
           }
-          
+
           if (providerIdResult.rows.length > 0) {
             const providerId = providerIdResult.rows[0].provider_id;
-            
+
             // Add to training_provider_member (new approach)
             await client.query(
               `INSERT INTO public.training_provider_member (provider_id, user_id)
@@ -137,7 +137,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
                ON CONFLICT (provider_id, user_id) DO NOTHING`,
               [providerId, userId]
             );
-            
+
             console.log(`✅ Added user ${userId} to training provider ${providerId} via training_provider_member`);
           } else {
             console.warn(`⚠️ Could not find training provider for current user ${currentUserId}`);

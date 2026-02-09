@@ -74,37 +74,36 @@ async function handler(req: NextApiRequest, res: NextApiResponse<LoginResponse>)
       });
     }
 
-    // Check if user exists in database
-    const userQuery = `
-      SELECT id, email, password_hash as password, full_name, profile_picture_url, account_status
-      FROM public.app_user
-      WHERE LOWER(email) = LOWER($1)
-    `;
-
-    const userResult = await pool.query(userQuery, [email]);
-
-    if (userResult.rows.length === 0) {
-      console.log(`❌ User not found: ${email}`);
-      return res.status(401).json({
-        success: false,
-        error: 'Invalid email or user does not exist'
-      });
-    }
-
-    const user = userResult.rows[0];
-    console.log(`✅ User found: ${user.email}`);
-
-    // Check if account is disabled
-    if (user.account_status === 'disabled') {
-      console.log(`❌ Account disabled for user: ${email}`);
-      return res.status(403).json({
-        success: false,
-        error: 'Your account has been disabled. Please contact your training provider at enquiry@tertiaryinfotech.com to request reactivation.'
-      });
-    }
-
     // Handle different login types
     if (loginType === 'password') {
+      // For password login, user MUST exist
+      const userQuery = `
+        SELECT id, email, password_hash as password, full_name, profile_picture_url, account_status
+        FROM public.app_user
+        WHERE LOWER(email) = LOWER($1)
+      `;
+      const userResult = await pool.query(userQuery, [email]);
+
+      if (userResult.rows.length === 0) {
+        console.log(`❌ User not found: ${email}`);
+        return res.status(401).json({
+          success: false,
+          error: 'Invalid email or user does not exist'
+        });
+      }
+
+      const user = userResult.rows[0];
+      console.log(`✅ User found: ${user.email}`);
+
+      // Check if account is disabled
+      if (user.account_status === 'disabled') {
+        console.log(`❌ Account disabled for user: ${email}`);
+        return res.status(403).json({
+          success: false,
+          error: 'Your account has been disabled. Please contact your training provider at enquiry@tertiaryinfotech.com to request reactivation.'
+        });
+      }
+
       // Verify password using bcrypt
       if (!password) {
         return res.status(400).json({
@@ -128,8 +127,9 @@ async function handler(req: NextApiRequest, res: NextApiResponse<LoginResponse>)
         });
       }
       console.log(`✅ Password verified for user: ${email}`);
+
     } else if (loginType === 'otp') {
-      // For OTP login, verify against stored OTP in otp_codes table
+      // For OTP login, verify OTP first, then create user if needed
       // First check if OTP login is enabled for the training provider
       const settingsQuery = `
         SELECT enable_otp_login
@@ -184,6 +184,58 @@ async function handler(req: NextApiRequest, res: NextApiResponse<LoginResponse>)
       `, [storedOtp.id]);
 
       console.log(`✅ OTP verified and marked as used for user: ${email}`);
+    }
+
+    // After authentication, check if user exists (or create for OTP login)
+    const userQuery = `
+      SELECT id, email, password_hash as password, full_name, profile_picture_url, account_status
+      FROM public.app_user
+      WHERE LOWER(email) = LOWER($1)
+    `;
+    const userResult = await pool.query(userQuery, [email]);
+
+    let user: any;
+
+    if (userResult.rows.length === 0 && loginType === 'otp') {
+      // Create new user for OTP login (similar to OAuth flow)
+      console.log(`🆕 Creating new user via OTP login: ${email}`);
+
+      const insertQuery = `
+        INSERT INTO public.app_user (
+          email,
+          full_name,
+          password,
+          password_hash
+        )
+        VALUES ($1, $2, NULL, NULL)
+        RETURNING id, email, full_name, profile_picture_url, account_status
+      `;
+
+      const insertResult = await pool.query(insertQuery, [
+        email,
+        email.split('@')[0] // Use email prefix as default name
+      ]);
+
+      user = insertResult.rows[0];
+
+      // Assign default "Learner" role to new OTP users
+      await pool.query(`
+        INSERT INTO public.user_role_map (user_id, role)
+        VALUES ($1, 'Learner')
+      `, [user.id]);
+
+      console.log(`✅ Created new user and assigned Learner role: ${email}`);
+    } else {
+      user = userResult.rows[0];
+
+      // Check if account is disabled (for existing users)
+      if (user.account_status === 'disabled') {
+        console.log(`❌ Account disabled for user: ${email}`);
+        return res.status(403).json({
+          success: false,
+          error: 'Your account has been disabled. Please contact your training provider at enquiry@tertiaryinfotech.com to request reactivation.'
+        });
+      }
     }
 
     // Get ALL user roles from user_role_map table

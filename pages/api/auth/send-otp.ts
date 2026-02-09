@@ -40,33 +40,9 @@ async function handler(req: NextApiRequest, res: NextApiResponse<SendOtpResponse
   try {
     console.log(`📧 Send OTP request for email: ${email}`);
 
-    // Check if user exists in database
-    const userQuery = `
-      SELECT id, email, full_name, account_status
-      FROM public.app_user
-      WHERE LOWER(email) = LOWER($1)
-    `;
-    const userResult = await pool.query(userQuery, [email]);
-
-    if (userResult.rows.length === 0) {
-      console.log(`❌ User not found: ${email}`);
-      return res.status(404).json({
-        success: false,
-        error: 'No account found with this email address'
-      });
-    }
-
-    const user = userResult.rows[0];
-    console.log(`✅ User found: ${user.email}`);
-
-    // Check if account is disabled
-    if (user.account_status === 'disabled') {
-      console.log(`❌ Account disabled for user: ${email}`);
-      return res.status(403).json({
-        success: false,
-        error: 'Your account has been disabled. Please contact an administrator.'
-      });
-    }
+    // Note: We allow OTP generation for any email, including new users
+    // User creation will happen during the login step after OTP verification
+    // This matches the behavior of OAuth login where users are created on first login
 
     // Invalidate any existing unused OTPs for this email
     await pool.query(`
