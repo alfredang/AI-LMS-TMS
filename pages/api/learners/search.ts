@@ -13,34 +13,33 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(400).json({ message: 'Search query is required' });
     }
 
-    // Search for learners by name or email
-    const learners = await pool.query(
-      `SELECT 
-        user_id,
-        name,
-        email
-      FROM 
-        users
-      WHERE 
-        user_type = 'learner' 
-        AND (
-          LOWER(name) LIKE LOWER($1)
-          OR LOWER(email) LIKE LOWER($1)
-        )
-      ORDER BY name
-      LIMIT 10`,
-      [`%${searchQuery}%`]
+    const term = `%${searchQuery}%`;
+
+    // Search app_user by full_name or email, restricted to Learner role
+    const result = await pool.query(
+      `SELECT
+         u.id,
+         u.full_name AS name,
+         u.email
+       FROM app_user u
+       JOIN user_role_map r ON r.user_id = u.id AND r.role = 'Learner'
+       WHERE
+         LOWER(u.full_name) LIKE LOWER($1)
+         OR LOWER(u.email)  LIKE LOWER($1)
+       ORDER BY u.full_name
+       LIMIT 20`,
+      [term]
     );
 
     res.status(200).json({
       success: true,
-      data: learners.rows
+      data: result.rows,
     });
   } catch (error) {
     console.error('Error searching learners:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: 'Internal server error' 
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
     });
   }
 }

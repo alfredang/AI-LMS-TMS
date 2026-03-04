@@ -40,6 +40,7 @@ import {
   SearchAssessmentsView,
   ViewAssessmentView,
   CancelEnrolmentView,
+  UpdateEnrolmentView,
   DeleteCourseRunView,
   UpdateEnrolmentFeesView
 } from '../components/admin/GrantManagementViews';
@@ -276,6 +277,8 @@ const AdminLayout: React.FC = () => {
         return <ViewAssessmentView />;
       case AdminPage.CancelEnrolment:
         return <CancelEnrolmentView />;
+      case AdminPage.UpdateEnrolment:
+        return <UpdateEnrolmentView />;
       case AdminPage.DeleteCourseRun:
         return <DeleteCourseRunView />;
       case AdminPage.ClassDetail:

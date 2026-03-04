@@ -52,6 +52,7 @@ export enum AdminPage {
   SearchAssessments = 'searchAssessments',
   ViewAssessment = 'viewAssessment',
   CancelEnrolment = 'cancelEnrolment',
+  UpdateEnrolment = 'updateEnrolment',
   DeleteCourseRun = 'deleteCourseRun',
   UpdateEnrolmentFees = 'updateEnrolmentFees'
 }

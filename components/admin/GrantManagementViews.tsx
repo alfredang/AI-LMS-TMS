@@ -4517,6 +4517,256 @@ export const CancelEnrolmentView: React.FC = () => {
     );
 };
 
+// Update Enrolment View
+export const UpdateEnrolmentView: React.FC = () => {
+    const [enrolmentId, setEnrolmentId] = useState<string>('');
+    const [courseRunId, setCourseRunId] = useState<string>('');
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [result, setResult] = useState<any>(null);
+    const [webhookData, setWebhookData] = useState<any>(null); // Store complete webhook response
+    const [error, setError] = useState<string | null>(null);
+
+    const WEBHOOK_URL = 'https://n8n.srv1231536.hstgr.cloud/webhook/789cf428-911e-4354-8bed-9187726727aa';
+
+    const inputClasses = "block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-500";
+
+    const handleSubmit = async () => {
+        setIsSubmitting(true);
+        setError(null);
+        setResult(null);
+        setWebhookData(null);
+
+        try {
+            const payload = {
+                enrolmentId: enrolmentId.trim(),
+                courseRunId: courseRunId.trim(),
+                timestamp: new Date().toISOString(),
+                source: 'admin-update-enrolment'
+            };
+
+            console.log('📤 Update enrolment payload:', payload);
+
+            const response = await fetch(WEBHOOK_URL, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+                if (response.status === 500) {
+                    throw new Error('SSG API server error. The service may be temporarily unavailable. Please try again later.');
+                }
+                throw new Error(`Unable to connect to SSG API (Error ${response.status}). Please check your connection and try again.`);
+            }
+
+            // Safe JSON parsing
+            const text = await response.text();
+            let data;
+            try {
+                data = text ? JSON.parse(text) : {};
+            } catch (e) {
+                console.error('Failed to parse JSON response:', text);
+                throw new Error(`Invalid JSON response from webhook`);
+            }
+            console.log('✅ Update enrolment response:', data);
+
+            // Check if webhook returned empty response
+            if (!data || (typeof data === 'object' && Object.keys(data).length === 0)) {
+                throw new Error('Webhook returned empty response. Please check your n8n workflow configuration.');
+            }
+
+            // Store the complete webhook response for raw display (after validation)
+            setWebhookData(data);
+
+            // Parse response - handle various response formats
+            let parsedResult = data;
+
+            // If response has a 'result' property, use that
+            if (data?.result !== undefined && data?.result !== null) {
+                // If result is a string, try to parse it as JSON
+                if (typeof data.result === 'string') {
+                    try {
+                        parsedResult = JSON.parse(data.result);
+                    } catch (e) {
+                        // If parsing fails, treat the string as error message
+                        console.error('Failed to parse result string:', data.result);
+                        parsedResult = { error: { message: data.result } };
+                    }
+                } else if (typeof data.result === 'object') {
+                    // If result is already an object, use it directly
+                    parsedResult = data.result;
+                } else {
+                    // For other types, treat as error
+                    parsedResult = { error: { message: String(data.result) } };
+                }
+            }
+
+            // Check for error status - handle both nested error object and root level errors
+            const hasError = (parsedResult?.error?.details?.length > 0) ||
+                (parsedResult?.error?.message) ||
+                (parsedResult?.status && parsedResult.status >= 400) ||
+                (parsedResult?.details?.length > 0) ||
+                (parsedResult?.message && parsedResult.message.toLowerCase().includes('cannot'));
+
+            if (hasError) {
+                const errorMessage = parsedResult?.error?.details?.[0]?.message ||
+                    parsedResult?.error?.message ||
+                    parsedResult?.details?.[0]?.message ||
+                    parsedResult?.message ||
+                    'Failed to update enrolment';
+                setError(errorMessage);
+            }
+
+            setResult(parsedResult);
+        } catch (err) {
+            console.error('❌ Error updating enrolment:', err);
+            setError(err instanceof Error ? err.message : 'Failed to update enrolment');
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleClear = () => {
+        setEnrolmentId('');
+        setCourseRunId('');
+        setResult(null);
+        setWebhookData(null);
+        setError(null);
+    };
+
+    const isFormValid = enrolmentId.trim() && courseRunId.trim();
+
+    return (
+        <div>
+            <h2 className="text-3xl font-bold mb-6 dark:text-white">Update Enrolment</h2>
+
+            {/* Input Form Card */}
+            <Card className="p-6 mb-6">
+                <h3 className="text-lg font-bold text-gray-700 dark:text-gray-200 mb-4">Enrolment Details</h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                    Both Enrolment ID and Course Run ID are required to update an enrolment.
+                </p>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    <div>
+                        <label htmlFor="update-enrolment-id" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
+                            Enrolment ID <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                            id="update-enrolment-id"
+                            type="text"
+                            value={enrolmentId}
+                            onChange={(e) => setEnrolmentId(e.target.value)}
+                            placeholder="e.g. ENR-2602-014784"
+                            className={inputClasses}
+                            disabled={isSubmitting}
+                        />
+                    </div>
+                    <div>
+                        <label htmlFor="update-course-run-id" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
+                            Course Run ID <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                            id="update-course-run-id"
+                            type="text"
+                            value={courseRunId}
+                            onChange={(e) => setCourseRunId(e.target.value)}
+                            placeholder="e.g. 1225151"
+                            className={inputClasses}
+                            disabled={isSubmitting}
+                        />
+                    </div>
+                </div>
+
+                <div className="flex gap-3">
+                    <Button
+                        onClick={handleSubmit}
+                        disabled={isSubmitting || !isFormValid}
+                    >
+                        {isSubmitting ? (
+                            <div className="flex items-center">
+                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                                Updating...
+                            </div>
+                        ) : (
+                            <>
+                                <Icon name={IconName.Edit} className="w-4 h-4 mr-2" />
+                                Update Enrolment
+                            </>
+                        )}
+                    </Button>
+                    <Button variant="outline" onClick={handleClear} disabled={isSubmitting}>
+                        Clear
+                    </Button>
+                </div>
+
+                {error && !result && (
+                    <p className="text-red-500 text-sm mt-3">{error}</p>
+                )}
+            </Card>
+
+            {/* Loading State */}
+            {isSubmitting && (
+                <div className="flex justify-center py-10">
+                    <div className="text-center">
+                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
+                        <p className="mt-4 text-gray-600 dark:text-gray-400">Processing update...</p>
+                    </div>
+                </div>
+            )}
+
+            {/* Result Display */}
+            {!isSubmitting && result && (
+                <Card className="p-6">
+                    {error ? (
+                        <div className="bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 dark:border-red-600 rounded-r-lg p-4">
+                            <div className="flex items-center gap-2 mb-2">
+                                <Icon name={IconName.X} className="w-5 h-5 text-red-600 dark:text-red-400" />
+                                <h4 className="font-semibold text-red-900 dark:text-red-200">Update Failed</h4>
+                            </div>
+                            <p className="text-sm text-red-800 dark:text-red-300 pl-7">{error}</p>
+                        </div>
+                    ) : (
+                        <div className="bg-green-50 dark:bg-green-900/20 border-l-4 border-green-500 dark:border-green-600 rounded-r-lg p-4">
+                            <div className="flex items-center gap-2 mb-2">
+                                <Icon name={IconName.CheckCircle} className="w-5 h-5 text-green-600 dark:text-green-400" />
+                                <h4 className="font-semibold text-green-900 dark:text-green-200">Enrolment Updated Successfully</h4>
+                            </div>
+                            <div className="pl-7 space-y-1">
+                                {result?.data?.enrolment?.referenceNumber && (
+                                    <p className="text-sm text-green-700 dark:text-green-300">
+                                        <span className="font-medium">Reference:</span>{' '}
+                                        <span className="font-mono bg-green-100 dark:bg-green-900/40 px-2 py-0.5 rounded">
+                                            {result.data.enrolment.referenceNumber}
+                                        </span>
+                                    </p>
+                                )}
+                                {result?.data?.enrolment?.status && (
+                                    <p className="text-sm text-green-700 dark:text-green-300">
+                                        <span className="font-medium">Status:</span> {result.data.enrolment.status}
+                                    </p>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Raw Response (collapsible) */}
+                    <details className="mt-4">
+                        <summary className="text-sm text-gray-500 dark:text-gray-400 cursor-pointer hover:text-gray-700 dark:hover:text-gray-300">
+                            View Raw Response
+                        </summary>
+                        <pre className="mt-2 text-xs bg-gray-100 dark:bg-gray-800 p-3 rounded overflow-auto max-h-60">
+                            {JSON.stringify(webhookData || result, null, 2)}
+                        </pre>
+                    </details>
+                </Card>
+            )}
+        </div>
+    );
+};
+
 // Delete Course Run View
 export const DeleteCourseRunView: React.FC = () => {
     const [courseReferenceNumber, setCourseReferenceNumber] = useState<string>('');

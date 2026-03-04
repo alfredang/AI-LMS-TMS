@@ -1,5 +1,5 @@
 import { getApiUrl, getFileUrl } from '@/lib/urlHelpers';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 
@@ -35,9 +35,9 @@ interface CourseRun {
 }
 
 interface Learner {
+  id: string;
   name: string;
   email: string;
-  // Add other properties as needed
 }
 
 interface SelectedCourse {
@@ -130,6 +130,27 @@ const EnrollLearners: React.FC = () => {
   const [errors, setErrors] = useState<string[]>([]);
   const [warnings, setWarnings] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  interface SubmissionResult {
+    success: boolean;
+    referenceNumber?: string;
+    enrolmentStatus?: string;
+    errorMessages?: string[];
+    // Trainee snapshot from localStorage
+    traineeName?: string;
+    traineeId?: string;
+    traineeIdType?: string;
+    traineeEmail?: string;
+    courseReferenceNumber?: string;
+    courseRunId?: string;
+    sponsorshipType?: string;
+    feesCollectionStatus?: string;
+    submittedAt?: string;
+  }
+  const [submissionResult, setSubmissionResult] = useState<SubmissionResult | null>(null);
+  const ENROLMENT_DRAFT_KEY = 'enrolment_submission_draft';
 
   const inputClasses = "block w-full px-3 py-2 text-gray-900 bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400";
 
@@ -269,6 +290,27 @@ const EnrollLearners: React.FC = () => {
     }
   };
 
+  // Fetch course information by course run ID
+  const fetchCourseByRunId = async (courseRunId: string) => {
+    if (!courseRunId.trim()) return;
+
+    try {
+      const response = await fetch(getApiUrl(`/api/course-runs/get-course-by-run-id?courseRunId=${encodeURIComponent(courseRunId)}`));
+      if (!response.ok) {
+        // If not found, just silently fail - user might be entering a new course run
+        return;
+      }
+      const result = await response.json();
+      if (result.success && result.data && result.data.courseCode) {
+        // Auto-fill the course reference number if found
+        setFormData(prev => ({ ...prev, courseReferenceNumber: result.data.courseCode }));
+      }
+    } catch (error) {
+      console.error('Error fetching course by run ID:', error);
+      // Silently fail - don't disrupt user input
+    }
+  };
+
   // Unenroll learner from class
   const unenrollLearnerFromClass = async (courseId: string, learnerEmail: string) => {
     try {
@@ -299,15 +341,46 @@ const EnrollLearners: React.FC = () => {
   };
 
   // Handle learner selection for enrollment
-  const handleLearnerSelection = (learner: Learner) => {
-    setSelectedLearner(learner);
-    setIsAddingLearner(false); // Hide the search section
-    // Auto-fill trainee information when a learner is selected
+  const handleLearnerSelection = async (learner: Learner) => {
+    // Pre-fill what we already have from search results
     setFormData(prev => ({
       ...prev,
       traineeFullName: learner.name,
-      traineeEmailAddress: learner.email
+      traineeEmailAddress: learner.email,
+      traineeId: '',
+      traineeDateOfBirth: '',
+      traineeContactNumberPhoneNumber: '',
     }));
+
+    // Switch to the "Add New Learner Profile" view
+    setSelectedLearner(learner);
+    setIsAddingLearner(true);
+    setSearchQuery('');
+    setSearchResults([]);
+
+    // Fetch full profile from app_user + learner_profile
+    try {
+      const url = getApiUrl(`/api/learners/profile?id=${encodeURIComponent(learner.id)}`);
+      console.log('Fetching learner profile:', url);
+      const res = await fetch(url);
+      const result = await res.json();
+      console.log('Learner profile response:', result);
+      if (res.ok && result.success && result.data) {
+        const profile = result.data;
+        const dobFormatted = profile.dob || '';
+        console.log('Populating form with:', { nric: profile.nric, tel: profile.tel, dob: dobFormatted });
+        setFormData(prev => ({
+          ...prev,
+          traineeFullName: profile.full_name || learner.name,
+          traineeEmailAddress: profile.email || learner.email,
+          traineeId: profile.nric || '',
+          traineeDateOfBirth: dobFormatted,
+          traineeContactNumberPhoneNumber: profile.tel || '',
+        }));
+      }
+    } catch (err) {
+      console.warn('Could not fetch learner profile, using search data only:', err);
+    }
   };
 
   // Handle going back to search from adding learner
@@ -359,70 +432,57 @@ const EnrollLearners: React.FC = () => {
     return () => clearTimeout(timeoutId);
   }, [searchQuery]);
 
-  // Search for enrolment records when courseRunId changes
+  // Search for enrolment records when courseRunId changes (only trigger when exactly 7 digits)
   useEffect(() => {
-    if (formData.courseRunId) {
+    setEnrolmentData(null);
+    setEnrolmentError(null);
+    if (/^\d{7}$/.test(formData.courseRunId.trim())) {
       searchEnrolmentRecords(formData.courseRunId);
-    } else {
-      setEnrolmentData(null);
-      setEnrolmentError(null);
     }
   }, [formData.courseRunId]);
 
-  // Function to search enrolment records (similar to ClassDetailView)
+  // Function to search enrolment records via n8n webhook
   const searchEnrolmentRecords = async (courseRunId: string) => {
     if (!courseRunId) {
       setEnrolmentError('Course Run ID is required for enrolment search');
       return;
     }
 
+    // Cancel any in-flight request
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    abortControllerRef.current = new AbortController();
+    const { signal } = abortControllerRef.current;
+
     try {
       setEnrolmentLoading(true);
       setEnrolmentError(null);
       console.log('🔍 Searching enrolment records for course run:', courseRunId);
 
-      // Fetch UEN from database
-      const uenResponse = await fetch(getApiUrl('/api/training-provider/uen'));
-      if (!uenResponse.ok) {
-        throw new Error('Failed to fetch UEN from database');
-      }
-      const uenData = await uenResponse.json();
-
-      if (!uenData.uen) {
-        throw new Error('UEN not found in database');
-      }
-
-      // Prepare search request
-      const searchRequest = {
-        courseRunId: courseRunId,
-        trainingPartnerUen: uenData.uen,
-        trainingPartnerCode: `${uenData.uen}-01`, // Concatenate UEN with "-01"
-        pageSize: 100
-      };
-
-      console.log('📤 Enrolment search request:', searchRequest);
-
-      const response = await fetch(getApiUrl('/api/enrolment/search'), {
+      const response = await fetch('https://n8n.srv1231536.hstgr.cloud/webhook/246caa5e-bd7e-42e8-82b1-cde2e05e5013', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify(searchRequest)
+        body: JSON.stringify({ courseRunId }),
+        signal
       });
 
-      const result = await response.json();
-
-      // Treat 404 as valid response (no records found), only throw error for other failures
-      if (!response.ok || (!result.success && result.status !== "404" && result.status !== 404)) {
-        throw new Error(result.error || 'Failed to search enrolment records');
+      if (!response.ok) {
+        throw new Error(`Enrolment search failed with status: ${response.status}`);
       }
 
-      // Extract the actual SSG response from the wrapper
-      const ssgResponse = result.data;
-      console.log('✅ Enrolment search results:', ssgResponse);
-      setEnrolmentData(ssgResponse);
+      const rawResult = await response.json();
+      // n8n returns { result: "<JSON string>" } — parse the inner JSON
+      const parsed = typeof rawResult.result === 'string'
+        ? JSON.parse(rawResult.result)
+        : rawResult.result ?? rawResult;
+      console.log('✅ Enrolment search results from n8n:', parsed);
+      setEnrolmentData(parsed);
 
-    } catch (err) {
+    } catch (err: any) {
+      if (err.name === 'AbortError') return; // stale request cancelled — ignore
       console.error('❌ Error searching enrolment records:', err);
       setEnrolmentError(err instanceof Error ? err.message : 'Failed to search enrolment records');
     } finally {
@@ -436,6 +496,11 @@ const EnrollLearners: React.FC = () => {
     // Clear course run ID when course reference number changes
     if (field === 'courseReferenceNumber') {
       setFormData(prev => ({ ...prev, courseRunId: '' }));
+    }
+
+    // Fetch course code when course run ID is entered
+    if (field === 'courseRunId' && value) {
+      fetchCourseByRunId(value as string);
     }
 
     // Clear errors when user types
@@ -574,7 +639,7 @@ const EnrollLearners: React.FC = () => {
         trainee: {
           id: formData.traineeId,
           fees: {
-            discountAmount: formData.traineeFeesDiscountAmount || null,
+            discountAmount: formData.traineeFeesDiscountAmount || 0,
             collectionStatus: formData.traineeFeesCollectionStatus
           },
           idType: {
@@ -619,13 +684,29 @@ const EnrollLearners: React.FC = () => {
     }
 
     setIsSubmitting(true);
+    setSubmissionResult(null);
 
     try {
       const payload = buildPayload();
 
-      console.log('Submitting enrolment payload:', JSON.stringify(payload, null, 2));
+      // Snapshot the submitted form data to localStorage before the network call
+      const submittedAt = new Date().toISOString();
+      const draft = {
+        traineeFullName:       formData.traineeFullName,
+        traineeId:             formData.traineeId,
+        traineeIdType:         formData.traineeIdType,
+        traineeEmailAddress:   formData.traineeEmailAddress,
+        courseReferenceNumber: formData.courseReferenceNumber,
+        courseRunId:           formData.courseRunId,
+        sponsorshipType:       formData.traineeSponsorshipType,
+        feesCollectionStatus:  formData.traineeFeesCollectionStatus,
+        submittedAt,
+      };
+      localStorage.setItem(ENROLMENT_DRAFT_KEY, JSON.stringify(draft));
 
-      const response = await fetch('/api/enrolment/create', {
+      console.log('Submitting enrolment to webhook:', JSON.stringify(payload, null, 2));
+
+      const response = await fetch('https://n8n.srv1231536.hstgr.cloud/webhook/7f595887-aa07-4b0f-a94e-7ed5982fe077', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -633,11 +714,53 @@ const EnrollLearners: React.FC = () => {
         body: JSON.stringify(payload),
       });
 
-      const result = await response.json();
+      const rawResult = await response.json();
 
-      if (result.success) {
-        alert('Enrolment created successfully!');
-        // Reset form or redirect
+      // n8n returns { result: "<JSON string>" } — parse the inner JSON
+      const parsed = typeof rawResult.result === 'string'
+        ? JSON.parse(rawResult.result)
+        : rawResult.result ?? rawResult;
+
+      // Read back from localStorage to populate the result page
+      const storedDraft = JSON.parse(localStorage.getItem(ENROLMENT_DRAFT_KEY) || '{}');
+
+      if (parsed?.status === 200) {
+        setSubmissionResult({
+          success: true,
+          referenceNumber:       parsed.data?.enrolment?.referenceNumber,
+          enrolmentStatus:       parsed.data?.enrolment?.status,
+          traineeName:           storedDraft.traineeFullName,
+          traineeId:             storedDraft.traineeId,
+          traineeIdType:         storedDraft.traineeIdType,
+          traineeEmail:          storedDraft.traineeEmailAddress,
+          courseReferenceNumber: storedDraft.courseReferenceNumber,
+          courseRunId:           storedDraft.courseRunId,
+          sponsorshipType:       storedDraft.sponsorshipType,
+          feesCollectionStatus:  storedDraft.feesCollectionStatus,
+          submittedAt:           storedDraft.submittedAt,
+        });
+
+        // Sync enrollment to local DB — auto-creates learner / course / course_run
+        // if any are missing, then inserts the enrollment row.
+        try {
+          const syncRes = await fetch(getApiUrl('/api/enrolments/post-ssg-enrol'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              traineeEmail:          storedDraft.traineeEmailAddress,
+              courseReferenceNumber: storedDraft.courseReferenceNumber,
+              courseRunId:           storedDraft.courseRunId,
+              sponsorshipType:       storedDraft.sponsorshipType,
+              traineeName:           storedDraft.traineeFullName,
+              traineeNric:           storedDraft.traineeId,
+            }),
+          });
+          const syncData = await syncRes.json();
+          console.log('📋 Local enrollment sync:', syncData);
+        } catch (syncErr) {
+          console.warn('⚠️ Local enrollment sync failed (non-critical):', syncErr);
+        }
+
         setFormData({
           courseReferenceNumber: '',
           courseRunId: '',
@@ -650,21 +773,194 @@ const EnrollLearners: React.FC = () => {
           traineeContactNumberCountryCode: '+65',
           traineeContactNumberPhoneNumber: '',
           traineeSponsorshipType: SponsorshipType.INDIVIDUAL,
-          trainingPartnerUen: '',
-          trainingPartnerCode: ''
+          trainingPartnerUen: '201200696W',
+          trainingPartnerCode: '201200696W-01'
         });
       } else {
-        setErrors([result.error || 'Failed to create enrolment']);
+        const errorMessages: string[] =
+          parsed?.error?.details?.map((d: { field: string; message: string }) => d.message) ||
+          (parsed?.error?.message ? [parsed.error.message] : ['Failed to create enrolment']);
+        setSubmissionResult({
+          success: false,
+          errorMessages,
+          traineeName:           storedDraft.traineeFullName,
+          traineeId:             storedDraft.traineeId,
+          traineeIdType:         storedDraft.traineeIdType,
+          traineeEmail:          storedDraft.traineeEmailAddress,
+          courseReferenceNumber: storedDraft.courseReferenceNumber,
+          courseRunId:           storedDraft.courseRunId,
+          sponsorshipType:       storedDraft.sponsorshipType,
+          feesCollectionStatus:  storedDraft.feesCollectionStatus,
+          submittedAt:           storedDraft.submittedAt,
+        });
       }
     } catch (error) {
       console.error('Error submitting enrolment:', error);
-      setErrors(['Network error occurred while creating enrolment']);
+      const storedDraft = JSON.parse(localStorage.getItem(ENROLMENT_DRAFT_KEY) || '{}');
+      setSubmissionResult({
+        success: false,
+        errorMessages: ['Network error occurred while creating enrolment. Please try again.'],
+        traineeName:           storedDraft.traineeFullName,
+        traineeId:             storedDraft.traineeId,
+        traineeIdType:         storedDraft.traineeIdType,
+        traineeEmail:          storedDraft.traineeEmailAddress,
+        courseReferenceNumber: storedDraft.courseReferenceNumber,
+        courseRunId:           storedDraft.courseRunId,
+        sponsorshipType:       storedDraft.sponsorshipType,
+        feesCollectionStatus:  storedDraft.feesCollectionStatus,
+        submittedAt:           storedDraft.submittedAt,
+      });
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const isEmployerSponsored = formData.traineeSponsorshipType === SponsorshipType.EMPLOYER;
+
+  const resetForm = () => {
+    localStorage.removeItem(ENROLMENT_DRAFT_KEY);
+    setSubmissionResult(null);
+    setFormData({
+      courseReferenceNumber: '',
+      courseRunId: '',
+      traineeFeesCollectionStatus: CollectionStatus.PENDING_PAYMENT,
+      traineeIdType: IdTypeSummary.NRIC,
+      traineeId: '',
+      traineeFullName: '',
+      traineeDateOfBirth: '',
+      traineeEmailAddress: '',
+      traineeContactNumberCountryCode: '+65',
+      traineeContactNumberPhoneNumber: '',
+      traineeSponsorshipType: SponsorshipType.INDIVIDUAL,
+      trainingPartnerUen: '201200696W',
+      trainingPartnerCode: '201200696W-01'
+    });
+    setErrors([]);
+    setWarnings([]);
+    setSelectedLearner(null);
+    setIsAddingLearner(false);
+    setSearchQuery('');
+    setSearchResults([]);
+  };
+
+  if (submissionResult) {
+    const formatDateTime = (iso?: string) => {
+      if (!iso) return 'N/A';
+      return new Date(iso).toLocaleString('en-SG', {
+        dateStyle: 'medium', timeStyle: 'medium', hour12: false
+      });
+    };
+
+    return (
+      <div className="max-w-4xl mx-auto p-6">
+        <Card>
+          {/* Header */}
+          <div className="p-6 border-b dark:border-gray-700">
+            <div className="flex items-center gap-3">
+              {submissionResult.success ? (
+                <div className="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center flex-shrink-0">
+                  <svg className="w-5 h-5 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+              ) : (
+                <div className="w-10 h-10 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center flex-shrink-0">
+                  <svg className="w-5 h-5 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </div>
+              )}
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Enrolment Creation Result</h2>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+                  Submitted at: {formatDateTime(submissionResult.submittedAt)}
+                </p>
+              </div>
+              <div className="ml-auto">
+                <span className={`inline-flex px-3 py-1.5 text-sm font-semibold rounded-full border ${
+                  submissionResult.success
+                    ? 'bg-green-100 text-green-800 border-green-200 dark:bg-green-900/30 dark:text-green-300 dark:border-green-700'
+                    : 'bg-red-100 text-red-800 border-red-200 dark:bg-red-900/30 dark:text-red-300 dark:border-red-700'
+                }`}>
+                  {submissionResult.success ? 'Success' : 'Error'}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div className="p-6 space-y-6">
+            {/* Section 1: Submitted Trainee Data (from localStorage) */}
+            <div>
+              <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">
+                Submitted Data
+              </h3>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {[
+                  { label: 'Trainee Name',    value: submissionResult.traineeName },
+                  { label: 'Trainee ID',      value: submissionResult.traineeId },
+                  { label: 'ID Type',         value: submissionResult.traineeIdType },
+                  { label: 'Email',           value: submissionResult.traineeEmail },
+                  { label: 'Course Ref No.',  value: submissionResult.courseReferenceNumber },
+                  { label: 'Course Run ID',   value: submissionResult.courseRunId },
+                  { label: 'Sponsorship',     value: submissionResult.sponsorshipType },
+                  { label: 'Fee Status',      value: submissionResult.feesCollectionStatus },
+                ].map(({ label, value }) => (
+                  <div key={label} className="bg-gray-50 dark:bg-gray-700/40 rounded-lg p-3">
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{label}</p>
+                    <p className="text-sm font-medium text-gray-900 dark:text-white break-all">
+                      {value || 'N/A'}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Section 2: SSG Response */}
+            <div>
+              <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">
+                SSG Response
+              </h3>
+              {submissionResult.success ? (
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg p-4">
+                    <p className="text-xs text-green-600 dark:text-green-400 mb-1">Enrolment ID</p>
+                    <p className="text-lg font-bold text-green-800 dark:text-green-300">
+                      {submissionResult.referenceNumber || 'N/A'}
+                    </p>
+                  </div>
+                  <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg p-4">
+                    <p className="text-xs text-green-600 dark:text-green-400 mb-1">Enrolment Status</p>
+                    <p className="text-lg font-bold text-green-800 dark:text-green-300">
+                      {submissionResult.enrolmentStatus || 'Confirmed'}
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-lg p-4">
+                  <p className="text-xs font-semibold text-red-600 dark:text-red-400 mb-2">Error Details</p>
+                  <ul className="space-y-1">
+                    {submissionResult.errorMessages?.map((msg, i) => (
+                      <li key={i} className="flex items-start gap-2 text-sm text-red-700 dark:text-red-300">
+                        <span className="flex-shrink-0 mt-0.5">✗</span>
+                        <span>{msg}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+
+            {/* Action Button */}
+            <div className="pt-2 border-t dark:border-gray-700">
+              <Button onClick={resetForm} variant="outline" className="w-full">
+                {submissionResult.success ? 'Create Another Enrolment' : 'Try Again'}
+              </Button>
+            </div>
+          </div>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-white rounded-lg shadow-md dark:bg-gray-800 dark:border-gray-700">
@@ -806,7 +1102,6 @@ const EnrollLearners: React.FC = () => {
                     value={searchQuery}
                     onChange={e => setSearchQuery(e.target.value)}
                     className={`${inputClasses} pl-9`}
-                    disabled={!selectedCourseId}
                   />
                 </div>
                 <div className="mt-4 max-h-60 overflow-y-auto space-y-2">
@@ -816,7 +1111,7 @@ const EnrollLearners: React.FC = () => {
                         <p className="font-semibold text-sm dark:text-white">{learner.name}</p>
                         <p className="text-xs text-gray-600 dark:text-gray-400">{learner.email}</p>
                       </div>
-                      <Button size="sm" variant="ghost" onClick={() => handleLearnerSelection(learner)}>
+                      <Button type="button" size="sm" variant="ghost" onClick={() => handleLearnerSelection(learner)}>
                         Select
                       </Button>
                     </div>
@@ -824,15 +1119,53 @@ const EnrollLearners: React.FC = () => {
                 </div>
                 <div className="text-center p-4 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-md mt-4">
                   <p className="text-gray-600 dark:text-gray-400 text-sm mb-2">Can't find a learner?</p>
-                  <Button size="sm" onClick={() => setIsAddingLearner(true)} disabled={!selectedCourseId}>
+                  <Button type="button" size="sm" onClick={() => setIsAddingLearner(true)}>
                     + Add New Learner Profile
                   </Button>
                 </div>
               </Card>
 
               <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
-                <h3 className="text-xl font-bold mb-4 dark:text-white">Currently Enrolled ({enrolmentData && enrolmentData.data ? enrolmentData.data.length : 0})</h3>
-                <div className="max-h-[22rem] overflow-y-auto space-y-2">
+                {/* Header */}
+                <h3 className="text-xl font-bold mb-3 dark:text-white">
+                  Currently Enrolled ({enrolmentData && enrolmentData.data ? enrolmentData.data.length : 0})
+                </h3>
+
+                {/* Course run summary — shown once when data is available */}
+                {enrolmentData && (enrolmentData.status === "200" || enrolmentData.status === 200) && enrolmentData.data && Array.isArray(enrolmentData.data) && enrolmentData.data.length > 0 && (() => {
+                  const firstRun = enrolmentData.data[0]?.enrolment?.course?.run ?? enrolmentData.data[0]?.enrolment?.courseRun ?? {};
+                  const startDate = firstRun.startDate || firstRun.start_date || '';
+                  const endDate = firstRun.endDate || firstRun.end_date || '';
+                  const formatDate = (d: string) => {
+                    if (!d) return 'N/A';
+                    // Handle YYYYMMDD format
+                    if (/^\d{8}$/.test(d)) return `${d.slice(0,4)}-${d.slice(4,6)}-${d.slice(6,8)}`;
+                    return d;
+                  };
+                  return (
+                    <div className="mb-4 p-3 bg-gray-50 rounded-md dark:bg-gray-700/50 text-sm space-y-1">
+                      <div className="flex justify-between">
+                        <span className="text-gray-500 dark:text-gray-400">Course Run ID</span>
+                        <span className="font-medium dark:text-white">{formData.courseRunId}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-500 dark:text-gray-400">Start Date</span>
+                        <span className="font-medium dark:text-white">{formatDate(startDate)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-500 dark:text-gray-400">End Date</span>
+                        <span className="font-medium dark:text-white">{formatDate(endDate)}</span>
+                      </div>
+                      <div className="flex justify-between border-t border-gray-200 dark:border-gray-600 pt-1 mt-1">
+                        <span className="text-gray-500 dark:text-gray-400">Total Enrolments</span>
+                        <span className="font-semibold dark:text-white">{enrolmentData.data.length}</span>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Learner list */}
+                <div className="max-h-[18rem] overflow-y-auto space-y-2">
                   {enrolmentLoading ? (
                     <div className="text-center py-8">
                       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto"></div>
@@ -840,17 +1173,22 @@ const EnrollLearners: React.FC = () => {
                     </div>
                   ) : enrolmentData && (enrolmentData.status === "200" || enrolmentData.status === 200) && enrolmentData.data && Array.isArray(enrolmentData.data) && enrolmentData.data.length > 0 ? (
                     enrolmentData.data.map((record: any, index: number) => {
-                      const ageGroup = getAgeGroup(record.enrolment?.trainee?.dateOfBirth);
+                      const enrolment = record.enrolment ?? {};
+                      const refNum = enrolment.referenceNumber || enrolment.enrolmentReferenceNumber || 'N/A';
+                      const status = enrolment.status || enrolment.enrolmentStatus || '';
                       return (
                         <div key={index} className="p-2 bg-blue-50 rounded-md dark:bg-blue-900/30">
-                          <div className="flex justify-between items-start">
-                            <div className="flex-1">
-                              <p className="font-semibold text-sm dark:text-white">{record.enrolment?.trainee?.fullName || 'N/A'}</p>
-                              <p className="text-xs text-gray-600 dark:text-gray-300">{record.enrolment?.trainee?.email.full || 'N/A'}</p>
+                          <div className="flex justify-between items-start gap-2">
+                            <div className="flex-1 min-w-0">
+                              <p className="font-semibold text-sm dark:text-white truncate">{enrolment.trainee?.fullName || 'N/A'}</p>
+                              <p className="text-xs text-gray-600 dark:text-gray-300 truncate">{enrolment.trainee?.email?.full || 'N/A'}</p>
+                              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Ref: {refNum}</p>
                             </div>
-                            <Button size="sm" variant="danger" onClick={() => unenrollLearnerFromClass(selectedCourseId, record.enrolment?.trainee?.emailAddress)}>
-                              Remove
-                            </Button>
+                            {status && (
+                              <span className={`text-xs font-medium px-2 py-0.5 rounded-full whitespace-nowrap ${getStatusColor(status)}`}>
+                                {status}
+                              </span>
+                            )}
                           </div>
                         </div>
                       );
@@ -870,7 +1208,7 @@ const EnrollLearners: React.FC = () => {
             <div className="bg-blue-50 p-6 rounded-lg border border-blue-200 dark:bg-blue-900/20 dark:border-blue-800">
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-lg font-semibold text-blue-900 dark:text-blue-300">Selected Learner</h3>
-                <Button size="sm" variant="ghost" onClick={() => setSelectedLearner(null)} className="dark:text-blue-300 dark:hover:text-blue-200">
+                <Button type="button" size="sm" variant="ghost" onClick={() => setSelectedLearner(null)} className="dark:text-blue-300 dark:hover:text-blue-200">
                   × Clear Selection
                 </Button>
               </div>
@@ -895,7 +1233,7 @@ const EnrollLearners: React.FC = () => {
             <div className="bg-gray-50 p-6 rounded-lg dark:bg-gray-700/30">
               <div className="flex justify-between items-center mb-4">
                 <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Trainee Information</h2>
-                <Button size="sm" variant="ghost" onClick={handleBackToSearch} className="dark:text-gray-300 dark:hover:text-white">
+                <Button type="button" size="sm" variant="ghost" onClick={handleBackToSearch} className="dark:text-gray-300 dark:hover:text-white">
                   ← Back to Search
                 </Button>
               </div>
@@ -985,7 +1323,7 @@ const EnrollLearners: React.FC = () => {
                       type="text"
                       value={formData.traineeContactNumberCountryCode}
                       onChange={(e) => handleInputChange('traineeContactNumberCountryCode', e.target.value)}
-                      placeholder="+65"
+                      placeholder="65"
                       maxLength={5}
                       className={inputClasses}
                     />
