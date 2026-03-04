@@ -24,13 +24,18 @@ services:
   db:
     image: postgres:17-alpine
     # Pass admin credentials as GUC variables so 02-init-admin.sql can read them
-    command: >
-      postgres
-      -c "app.admin_email=${ADMIN_EMAIL:-admin@example.com}"
-      -c "app.admin_password=${ADMIN_PASSWORD:-password123}"
-      -c "app.admin_name=${ADMIN_FULL_NAME:-System Administrator}"
-      -c "app.company_name=${COMPANY_NAME:-My Company}"
-      -c "app.partner_uen=${TRAINING_PARTNER_UEN:-000000000A}"
+    # List format avoids shell quoting issues with the inner -c values
+    command:
+      - postgres
+      - -c
+      - app.admin_email=${ADMIN_EMAIL:-admin@example.com}
+      - -c
+      - app.admin_password=${ADMIN_PASSWORD:-password123}
+      - -c
+      - app.admin_name=${ADMIN_FULL_NAME:-System Administrator}
+      - -c
+      - app.company_name=${COMPANY_NAME:-My Company}
+      - -c
     environment:
       POSTGRES_DB: ${DB_NAME:-lmsdb}
       POSTGRES_USER: postgres
@@ -47,9 +52,10 @@ services:
       - "6434:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d ${DB_NAME:-lmsdb}"]
-      interval: 5s
+      interval: 10s
       timeout: 5s
-      retries: 10
+      retries: 15
+      start_period: 30s
     restart: unless-stopped
 
 volumes:
