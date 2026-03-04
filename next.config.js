@@ -2,6 +2,7 @@
 const nextConfig = {
   reactStrictMode: true,
   swcMinify: true,
+  output: 'standalone',
 
   // Silence conflict warning between Turbopack and Webpack
   // by explicitly acknowledging we have no specific Turbopack config yet

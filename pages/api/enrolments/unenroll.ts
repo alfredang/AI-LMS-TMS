@@ -15,8 +15,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Get learner ID
     const learnerResult = await pool.query(
-      'SELECT user_id FROM users WHERE email = $1 AND user_type = $2',
-      [learnerEmail, 'learner']
+      'SELECT id AS user_id FROM public.app_user WHERE email = $1',
+      [learnerEmail]
     );
 
     if (learnerResult.rows.length === 0) {

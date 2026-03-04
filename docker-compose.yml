@@ -12,9 +12,9 @@ services:
       - .env
     environment:
       NODE_ENV: production
-      # DATABASE_URL is constructed from the db service below.
-      # Override in .env if using an external database.
-      DATABASE_URL: postgresql://${DB_USER:-postgres}:${DB_PASSWORD}@db:5432/${DB_NAME:-lmsdb}
+      # Internal URL — app talks to the db container within the Docker network
+      # Public URL for external tools: postgresql://postgres:password123@76.13.180.29:6434/lmsdb?sslmode=disable
+      DATABASE_URL: postgresql://postgres:${DB_PASSWORD:-password123}@db:5432/${DB_NAME:-lmsdb}?sslmode=disable
     restart: unless-stopped
     depends_on:
       db:
@@ -22,19 +22,19 @@ services:
 
   # ── PostgreSQL Database ───────────────────────────────────────────────────────
   db:
-    image: postgres:16-alpine
+    image: postgres:17-alpine
     # Pass admin credentials as GUC variables so 02-init-admin.sql can read them
     command: >
       postgres
       -c "app.admin_email=${ADMIN_EMAIL:-admin@example.com}"
-      -c "app.admin_password=${ADMIN_PASSWORD:-ChangeMe123!}"
+      -c "app.admin_password=${ADMIN_PASSWORD:-password123}"
       -c "app.admin_name=${ADMIN_FULL_NAME:-System Administrator}"
       -c "app.company_name=${COMPANY_NAME:-My Company}"
       -c "app.partner_uen=${TRAINING_PARTNER_UEN:-000000000A}"
     environment:
       POSTGRES_DB: ${DB_NAME:-lmsdb}
-      POSTGRES_USER: ${DB_USER:-postgres}
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-password123}
     volumes:
       # Persist data across container restarts
       - postgres_data:/var/lib/postgresql/data
@@ -42,9 +42,11 @@ services:
       - ./database/01-schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
       - ./database/02-init-admin.sql:/docker-entrypoint-initdb.d/02-init-admin.sql
     ports:
-      - "5432:5432"
+      # 6434 = public port on the server (e.g. 76.13.180.29:6434)
+      # 5432 = internal postgres port inside the container
+      - "6434:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-lmsdb}"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d ${DB_NAME:-lmsdb}"]
       interval: 5s
       timeout: 5s
       retries: 10

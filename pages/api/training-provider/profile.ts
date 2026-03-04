@@ -27,7 +27,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     
     try {
       // First check if user is a training provider
-      const userRoleQuery = 'SELECT role FROM users WHERE id = $1';
+      const userRoleQuery = 'SELECT role FROM public.user_role_map WHERE user_id = $1';
       const userRoleResult = await client.query(userRoleQuery, [userId]);
       
       if (userRoleResult.rows.length === 0) {

@@ -77,6 +77,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         paramIndex++;
       }
 
+      // Check email uniqueness before attempting update
+      if (profileData.email !== undefined) {
+        const emailCheck = await client.query(
+          'SELECT id FROM public.app_user WHERE email = $1 AND id != $2',
+          [profileData.email, userId]
+        );
+        if (emailCheck.rows.length > 0) {
+          await client.query('ROLLBACK');
+          return res.status(409).json(
+            createApiResponse(false, 'This email address is already in use by another account.')
+          );
+        }
+      }
+
       // Always update the updated_at timestamp
       appUserFields.push(`updated_at = NOW()`);
 
