@@ -520,10 +520,14 @@ CREATE TABLE public.admin_profile (
 CREATE TABLE public.app_user (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     email text NOT NULL,
-    password text NOT NULL,
-    password_hash text NOT NULL,
+    password text,
+    password_hash text,
     full_name text NOT NULL,
     profile_picture_url text,
+    account_status text NOT NULL DEFAULT 'active',
+    is_protected boolean NOT NULL DEFAULT false,
+    supabase_user_id uuid,
+    auth_provider text,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT email_valid CHECK ((POSITION(('@'::text) IN (email)) > 1))
@@ -1144,6 +1148,63 @@ CREATE TABLE public.work_experience (
     developer_id uuid,
     CONSTRAINT work_experience_owner_check CHECK ((((trainer_id IS NOT NULL) AND (developer_id IS NULL)) OR ((trainer_id IS NULL) AND (developer_id IS NOT NULL))))
 );
+
+
+--
+-- Name: da_application; Type: TABLE; Schema: public; Owner: postgres
+-- Merged from: 02-da-application.sql + add_da_application_columns.sql
+--
+
+CREATE TABLE public.da_application (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    trainee_id_type character varying(50),
+    trainee_id character varying(100),
+    date_of_birth date,
+    trainee_name character varying(255),
+    course_run_id character varying(100),
+    trainee_email character varying(255),
+    trainee_phone_country_code character varying(10),
+    trainee_phone character varying(50),
+    sponsorship_type character varying(50),
+    application_id character varying(100),
+    payable_fee numeric(10,2),
+    application_status character varying(50),
+    course_title character varying(255),
+    course_reference_number character varying(100),
+    course_start_date date,
+    course_end_date date,
+    enrolment_status text DEFAULT NULL,
+    application_date date,
+    application_cancelled_by character varying(255),
+    full_course_fee numeric(10,2),
+    gst numeric(10,2),
+    skillsfuture_subsidy numeric(10,2),
+    skillsfuture_credit numeric(10,2),
+    skillsfuture_credit_claim_id character varying(100),
+    highest_qualification character varying(255),
+    highest_relevant_certification character varying(255),
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT da_application_pkey PRIMARY KEY (id),
+    CONSTRAINT da_application_unique UNIQUE (application_id)
+);
+
+COMMENT ON TABLE public.da_application IS 'Stores Direct Application data imported from SSG Excel files';
+COMMENT ON COLUMN public.da_application.enrolment_status IS 'Enrolment status from SSG API: Confirmed, Cancelled, or Not Found';
+COMMENT ON COLUMN public.da_application.application_date IS 'Date when the application was submitted';
+COMMENT ON COLUMN public.da_application.application_cancelled_by IS 'Entity or person who cancelled the application';
+COMMENT ON COLUMN public.da_application.full_course_fee IS 'Full course fee before subsidies';
+COMMENT ON COLUMN public.da_application.gst IS 'GST amount';
+COMMENT ON COLUMN public.da_application.skillsfuture_subsidy IS 'SkillsFuture subsidy amount';
+COMMENT ON COLUMN public.da_application.skillsfuture_credit IS 'SkillsFuture credit amount used';
+COMMENT ON COLUMN public.da_application.skillsfuture_credit_claim_id IS 'SkillsFuture credit claim ID';
+COMMENT ON COLUMN public.da_application.highest_qualification IS 'Trainee highest qualification';
+COMMENT ON COLUMN public.da_application.highest_relevant_certification IS 'Trainee highest relevant certification';
+
+CREATE INDEX IF NOT EXISTS idx_da_application_application_id ON public.da_application(application_id);
+CREATE INDEX IF NOT EXISTS idx_da_application_trainee_id ON public.da_application(trainee_id);
+CREATE INDEX IF NOT EXISTS idx_da_application_course_run_id ON public.da_application(course_run_id);
+CREATE INDEX IF NOT EXISTS idx_da_application_trainee_email ON public.da_application(trainee_email);
 
 
 -- Ownership managed by Supabase

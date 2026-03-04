@@ -1,0 +1,54 @@
+version: '3.9'
+
+services:
+  # ── Next.js Application ──────────────────────────────────────────────────────
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3003:3000"
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      # DATABASE_URL is constructed from the db service below.
+      # Override in .env if using an external database.
+      DATABASE_URL: postgresql://${DB_USER:-postgres}:${DB_PASSWORD}@db:5432/${DB_NAME:-lmsdb}
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # ── PostgreSQL Database ───────────────────────────────────────────────────────
+  db:
+    image: postgres:16-alpine
+    # Pass admin credentials as GUC variables so 02-init-admin.sql can read them
+    command: >
+      postgres
+      -c "app.admin_email=${ADMIN_EMAIL:-admin@example.com}"
+      -c "app.admin_password=${ADMIN_PASSWORD:-ChangeMe123!}"
+      -c "app.admin_name=${ADMIN_FULL_NAME:-System Administrator}"
+      -c "app.company_name=${COMPANY_NAME:-My Company}"
+      -c "app.partner_uen=${TRAINING_PARTNER_UEN:-000000000A}"
+    environment:
+      POSTGRES_DB: ${DB_NAME:-lmsdb}
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      # Persist data across container restarts
+      - postgres_data:/var/lib/postgresql/data
+      # Both scripts run automatically on first start (empty volume only)
+      - ./database/01-schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+      - ./database/02-init-admin.sql:/docker-entrypoint-initdb.d/02-init-admin.sql
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-lmsdb}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
