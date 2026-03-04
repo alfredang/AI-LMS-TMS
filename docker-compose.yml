@@ -36,6 +36,7 @@ services:
       - -c
       - app.company_name=${COMPANY_NAME:-My Company}
       - -c
+      - app.partner_uen=${TRAINING_PARTNER_UEN:-000000000A}
     environment:
       POSTGRES_DB: ${DB_NAME:-lmsdb}
       POSTGRES_USER: postgres
