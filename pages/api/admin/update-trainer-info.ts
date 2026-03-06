@@ -29,7 +29,7 @@ export default async function handler(
   }
 
   try {
-    const { courseRunUuid, courseRunId, trainerName, trainerEmail } = req.body;
+    const { courseRunUuid, courseRunId, trainerName, trainerEmail, trainerId } = req.body;
 
     // Validate required fields
     if (!courseRunUuid || !trainerName) {
@@ -43,6 +43,7 @@ export default async function handler(
     console.log('🔄 Course run ID (for reference):', courseRunId);
     console.log('👨‍🏫 Trainer name:', trainerName);
     console.log('📧 Trainer email:', trainerEmail);
+    console.log('🆔 Trainer UUID:', trainerId || '(none)');
 
     // Check if the assigned_trainer_name column exists, if not add it
     const checkNameColumnQuery = `
@@ -80,17 +81,51 @@ export default async function handler(
       `);
     }
 
-    // Update the course_run with both trainer name and email
-    const updateQuery = `
-      UPDATE course_run 
-      SET assigned_trainer_name = $1, 
-          assigned_trainer_email = $2, 
-          updated_at = NOW() 
-      WHERE id = $3
+    // Check if the assigned_trainer_id column exists, if not add it
+    const checkIdColumnQuery = `
+      SELECT column_name
+      FROM information_schema.columns
+      WHERE table_name = 'course_run'
+      AND column_name = 'assigned_trainer_id'
     `;
 
-    console.log('🔍 Executing update query with params:', [trainerName, trainerEmail, courseRunUuid]);
-    const result = await pool.query(updateQuery, [trainerName, trainerEmail || null, courseRunUuid]);
+    const idColumnCheck = await pool.query(checkIdColumnQuery);
+
+    if (idColumnCheck.rows.length === 0) {
+      console.log('📝 Adding assigned_trainer_id column to course_run table');
+      await pool.query(`
+        ALTER TABLE course_run
+        ADD COLUMN assigned_trainer_id UUID
+      `);
+    }
+
+    // Update the course_run with trainer name, email, and optionally the UUID
+    let updateQuery: string;
+    let updateParams: any[];
+
+    if (trainerId) {
+      updateQuery = `
+        UPDATE course_run
+        SET assigned_trainer_name = $1,
+            assigned_trainer_email = $2,
+            assigned_trainer_id = $3,
+            updated_at = NOW()
+        WHERE id = $4
+      `;
+      updateParams = [trainerName, trainerEmail || null, trainerId, courseRunUuid];
+    } else {
+      updateQuery = `
+        UPDATE course_run
+        SET assigned_trainer_name = $1,
+            assigned_trainer_email = $2,
+            updated_at = NOW()
+        WHERE id = $3
+      `;
+      updateParams = [trainerName, trainerEmail || null, courseRunUuid];
+    }
+
+    console.log('🔍 Executing update query with params:', updateParams);
+    const result = await pool.query(updateQuery, updateParams);
 
     console.log('📊 Query result - rows affected:', result.rowCount);
 

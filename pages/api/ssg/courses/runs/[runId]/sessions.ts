@@ -14,32 +14,35 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const { runId } = req.query;
-    const { courseReferenceNumber, includeExpired, month, year } = req.query;
+    const { runId, courseRunId: courseRunIdParam, courseCode, includeExpired, month, year, uen } = req.query;
+    // Accept courseRunId from URL path segment OR as an explicit query param fallback
+    const courseRunId = (runId ?? courseRunIdParam) as string | undefined;
 
     console.log('📚 Course Sessions API - Request received:', {
-      runId,
-      courseReferenceNumber,
+      courseRunId,
+      courseCode,
+      uen: uen || '(not provided)',
       includeExpired,
       month,
       year,
       timestamp: new Date().toISOString()
     });
 
-    if (!runId || typeof runId !== 'string') {
+    if (!courseRunId || typeof courseRunId !== 'string') {
       console.error('❌ Missing or invalid runId');
       return res.status(400).json({ error: 'runId is required' });
     }
 
-    if (!courseReferenceNumber || typeof courseReferenceNumber !== 'string') {
+    if (!courseCode || typeof courseCode !== 'string') {
       console.error('❌ Missing or invalid courseReferenceNumber');
       return res.status(400).json({ error: 'courseReferenceNumber is required as a query parameter' });
     }
 
     const requestBody = {
-      runId,
-      courseReferenceNumber,
+      courseRunId,
+      courseCode,
       includeExpired: includeExpired || 'false',
+      ...(uen && { uen: typeof uen === 'string' ? uen : uen[0] }),
       ...(month && { month }),
       ...(year && { year }),
     };

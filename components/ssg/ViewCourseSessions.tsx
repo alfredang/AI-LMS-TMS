@@ -34,7 +34,7 @@ const ViewCourseSessions: React.FC<ViewCourseSessionsProps> = ({ config }) => {
     try {
       const params = new URLSearchParams({
         includeExpired: includeExpired.toString(),
-        courseReferenceNumber: courseReferenceNumber
+        courseCode: courseReferenceNumber
       });
 
       // Add month and year parameters if specified

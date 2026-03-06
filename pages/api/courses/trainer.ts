@@ -15,7 +15,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // SQL query to get all courses assigned to a trainer
     const sqlQuery = `
-      SELECT 
+      SELECT
           c.id AS course_id,
           c.title AS course_title,
           c.course_code AS course_code,
@@ -27,12 +27,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           c.assessment_hours,
           cr.id AS course_run_id,
           cr.course_run_id AS course_run_code,
+          cr.digital_attendance_id,
+          COALESCE(cr.assigned_trainer_name, au.full_name, '') AS assigned_trainer_name,
           cr.start_date,
           cr.end_date,
           cr.mode_of_learning
       FROM trainer_profile tp
       JOIN course_run cr ON tp.user_id = cr.assigned_trainer_id
       JOIN course c ON cr.course_id = c.id
+      LEFT JOIN app_user au ON cr.assigned_trainer_id = au.id
       WHERE tp.user_id = $1
       ORDER BY cr.start_date DESC
     `;
@@ -53,6 +56,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       assessmentHours: row.assessment_hours,
       courseRunId: row.course_run_id,
       courseRunCode: row.course_run_code,
+      digitalAttendanceId: row.digital_attendance_id || '',
+      assignedTrainerName: row.assigned_trainer_name || '',
       startDate: row.start_date,
       endDate: row.end_date,
       modeOfLearning: Array.isArray(row.mode_of_learning) 

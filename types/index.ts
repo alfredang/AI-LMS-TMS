@@ -33,6 +33,8 @@ export enum AdminPage {
   EditClass = 'editClass',
   EnrollLearners = 'enrollLearners',
   AssignTrainer = 'assignTrainer',
+  AddCourse = 'addCourse',
+  AddCourseRun = 'addCourseRun',
   ApplyNewGrant = 'applyNewGrant',
   ViewGrantStatus = 'viewGrantStatus',
   SubmitAssessment = 'submitAssessment',
@@ -83,6 +85,8 @@ export interface Course {
   enrollmentStatus?: string;
   courseRunId?: string; // Add this for course detail navigation
   courseRunCode?: string; // The actual course run identifier from database
+  assignedTrainerName?: string; // Trainer name stored on the course run
+  digitalAttendanceId?: string; // RA###### code from course_run.digital_attendance_id
   // Course Editor specific properties
   learningOutcomes?: string;
   description?: string;

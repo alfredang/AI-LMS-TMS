@@ -22,7 +22,7 @@ import CompletedClasses from '../components/admin/CompletedClasses';
 import { getApiUrl } from '@/lib/urlHelpers';
 import ClassDetailView from '../components/admin/ClassDetailView';
 import { UpcomingClassesTable } from '../components/UpcomingClassesTable';
-import { ClassManagerView, AssignTrainerView } from '../components/admin/ClassManagementViews';
+import { ClassManagerView, AssignTrainerView, AddCourseView, AddCourseRunView } from '../components/admin/ClassManagementViews';
 import { CreateNewClassView } from '../components/admin/CreateNewClassView';
 import EnrollLearners from '../components/admin/EnrollLearners';
 import {
@@ -247,6 +247,10 @@ const AdminLayout: React.FC = () => {
         return <EnrollLearners />;
       case AdminPage.AssignTrainer:
         return <AssignTrainerView />;
+      case AdminPage.AddCourse:
+        return <AddCourseView />;
+      case AdminPage.AddCourseRun:
+        return <AddCourseRunView />;
       case AdminPage.ApplyNewGrant:
         return <ApplyNewGrantView />;
       case AdminPage.SearchGrant:

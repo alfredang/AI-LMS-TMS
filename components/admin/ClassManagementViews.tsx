@@ -145,6 +145,16 @@ export const ClassManagerView: React.FC<ClassManagerViewProps> = ({ courseToEdit
         0: {}
     });
 
+    // Local DB trainer assignment state
+    const [availableTrainers, setAvailableTrainers] = useState<any[]>([]);
+    const [selectedDbTrainerId, setSelectedDbTrainerId] = useState('');
+    const [dbTrainerAssignMode, setDbTrainerAssignMode] = useState<'dropdown' | 'manual'>('dropdown');
+    const [manualTrainerName, setManualTrainerName] = useState('');
+    const [manualTrainerEmail, setManualTrainerEmail] = useState('');
+    // Track the currently locally-assigned trainer (initialised from courseToEdit)
+    const [localAssignedTrainerName, setLocalAssignedTrainerName] = useState(courseToEdit?.assignedTrainerName || '');
+    const [localAssignedTrainerEmail, setLocalAssignedTrainerEmail] = useState(courseToEdit?.assignedTrainerEmail || '');
+
     // ViewCourseRun state management
     const [includeExpired, setIncludeExpired] = useState(false);
     const [ssgApiResponse, setSsgApiResponse] = useState<any>(null);
@@ -456,7 +466,7 @@ export const ClassManagerView: React.FC<ClassManagerViewProps> = ({ courseToEdit
         try {
             const params = new URLSearchParams({
                 includeExpired: includeExpiredSessions.toString(),
-                courseReferenceNumber: refNumberToUse
+                courseCode: refNumberToUse
             });
 
             // Add month and year parameters if specified
@@ -523,7 +533,7 @@ export const ClassManagerView: React.FC<ClassManagerViewProps> = ({ courseToEdit
         try {
             const params = new URLSearchParams({
                 includeExpired: includeExpiredSessions.toString(),
-                courseReferenceNumber: courseReferenceNumber
+                courseCode: courseReferenceNumber
             });
 
             if (specifyMonthYear) {
@@ -1705,6 +1715,81 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=edit
         // TODO: Implement sessions update logic
     };
 
+    // Fetch trainers list from local DB for the dropdown
+    const fetchAvailableTrainers = async () => {
+        try {
+            const res = await fetch('/api/admin/trainers-detail');
+            const json = await res.json();
+            if (json.success) setAvailableTrainers(json.data.trainers);
+        } catch {
+            // silent – dropdown just stays empty
+        }
+    };
+
+    // Load trainers when trainer tab becomes active
+    useEffect(() => {
+        if (isEditMode && activeTab === 'trainer' && availableTrainers.length === 0) {
+            fetchAvailableTrainers();
+        }
+    }, [isEditMode, activeTab]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // Assign trainer to course run in local DB (sets assigned_trainer_id / name / email)
+    const handleAssignTrainerLocal = async () => {
+        if (!courseToEdit?.id) {
+            showErrorPopup('No course run selected');
+            return;
+        }
+
+        let trainerName = '';
+        let trainerEmail = '';
+        let trainerId = '';
+
+        if (dbTrainerAssignMode === 'dropdown') {
+            const selected = availableTrainers.find((t: any) => t.user_id === selectedDbTrainerId);
+            if (!selected) {
+                showErrorPopup('Please select a trainer from the list');
+                return;
+            }
+            trainerName = selected.trainer_name;
+            trainerEmail = selected.email;
+            trainerId = selected.user_id;
+        } else {
+            if (!manualTrainerName.trim()) {
+                showErrorPopup('Trainer name is required');
+                return;
+            }
+            trainerName = manualTrainerName.trim();
+            trainerEmail = manualTrainerEmail.trim();
+        }
+
+        try {
+            setLoading(true);
+            const updateResponse = await fetch('/api/admin/update-trainer-info', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    courseRunUuid: courseToEdit.id,
+                    courseRunId: courseToEdit.courseRunId,
+                    trainerName,
+                    trainerEmail,
+                    trainerId: trainerId || undefined,
+                }),
+            });
+            const data = await updateResponse.json();
+            if (!updateResponse.ok) throw new Error(data.error || 'Failed to assign trainer');
+            showSuccessPopup(`Trainer "${trainerName}" has been assigned to this course run.`);
+            setLocalAssignedTrainerName(trainerName);
+            setLocalAssignedTrainerEmail(trainerEmail);
+            setSelectedDbTrainerId('');
+            setManualTrainerName('');
+            setManualTrainerEmail('');
+        } catch (err) {
+            showErrorPopup(err instanceof Error ? err.message : 'Failed to assign trainer');
+        } finally {
+            setLoading(false);
+        }
+    };
+
     // Function to handle trainer update
     // Function to handle trainer assignment to course run
     const handleUpdateTrainer = async () => {
@@ -2849,6 +2934,32 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                 {isEditMode && activeTab === 'trainer' && (
                     <FormSection title="Trainer Management">
                         <div className="space-y-6">
+                            {/* Currently Assigned Local Trainer */}
+                            {localAssignedTrainerName ? (
+                                <div className="bg-green-50 border border-green-200 rounded-md p-4">
+                                    <h4 className="text-sm font-semibold text-green-800 mb-2">Assigned Trainer (Local System)</h4>
+                                    <div className="flex flex-wrap gap-6 text-sm">
+                                        <div>
+                                            <span className="font-bold text-gray-700">Name:</span>{' '}
+                                            <span className="text-gray-900">{localAssignedTrainerName}</span>
+                                        </div>
+                                        {localAssignedTrainerEmail && (
+                                            <div>
+                                                <span className="font-bold text-gray-700">Email:</span>{' '}
+                                                <span className="text-gray-900">{localAssignedTrainerEmail}</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                    <p className="text-xs text-green-700 mt-2">
+                                        This trainer can view this class in their attendance dashboard.
+                                    </p>
+                                </div>
+                            ) : (
+                                <div className="bg-gray-50 border border-gray-200 rounded-md p-4 text-sm text-gray-500">
+                                    No trainer has been locally assigned to this course run yet. Use the form below to assign one.
+                                </div>
+                            )}
+
                             {/* Display Assigned Trainer Information */}
                             {ssgApiResponse?.data?.data?.course?.run ? (
                                 <div>
@@ -2978,6 +3089,106 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                     </Button>
                                 </div>
                             </div>
+
+                            {/* Local DB Trainer Assignment */}
+                            <div className="border-t pt-6 mt-6">
+                                <h4 className="text-lg font-medium text-gray-900 mb-1">Assign Trainer (Local Database)</h4>
+                                <p className="text-sm text-gray-500 mb-4">
+                                    Select a trainer from your system so they can view this class in their attendance dashboard.
+                                </p>
+
+                                {/* Toggle: dropdown vs manual */}
+                                <div className="flex gap-3 mb-4">
+                                    <button
+                                        type="button"
+                                        onClick={() => setDbTrainerAssignMode('dropdown')}
+                                        className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
+                                            dbTrainerAssignMode === 'dropdown'
+                                                ? 'bg-blue-600 text-white'
+                                                : 'border border-gray-300 text-gray-600 hover:bg-gray-50'
+                                        }`}
+                                    >
+                                        Select from list
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setDbTrainerAssignMode('manual')}
+                                        className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
+                                            dbTrainerAssignMode === 'manual'
+                                                ? 'bg-blue-600 text-white'
+                                                : 'border border-gray-300 text-gray-600 hover:bg-gray-50'
+                                        }`}
+                                    >
+                                        Enter manually
+                                    </button>
+                                </div>
+
+                                {dbTrainerAssignMode === 'dropdown' ? (
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                            Trainer <span className="text-red-500">*</span>
+                                        </label>
+                                        {availableTrainers.length === 0 ? (
+                                            <p className="text-sm text-gray-500 italic">Loading trainers...</p>
+                                        ) : (
+                                            <select
+                                                value={selectedDbTrainerId}
+                                                onChange={e => setSelectedDbTrainerId(e.target.value)}
+                                                className={inputClasses}
+                                            >
+                                                <option value="">— Select a trainer —</option>
+                                                {availableTrainers.map((t: any) => (
+                                                    <option key={t.user_id} value={t.user_id}>
+                                                        {t.trainer_name} ({t.email})
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        )}
+                                    </div>
+                                ) : (
+                                    <div className="space-y-3">
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                Trainer Name <span className="text-red-500">*</span>
+                                            </label>
+                                            <input
+                                                type="text"
+                                                placeholder="Full name"
+                                                value={manualTrainerName}
+                                                onChange={e => setManualTrainerName(e.target.value)}
+                                                className={inputClasses}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                Trainer Email
+                                            </label>
+                                            <input
+                                                type="email"
+                                                placeholder="email@example.com"
+                                                value={manualTrainerEmail}
+                                                onChange={e => setManualTrainerEmail(e.target.value)}
+                                                className={inputClasses}
+                                            />
+                                        </div>
+                                    </div>
+                                )}
+
+                                <div className="flex justify-end mt-4">
+                                    <Button
+                                        onClick={handleAssignTrainerLocal}
+                                        disabled={loading}
+                                        className="bg-green-600 hover:bg-green-700 text-white"
+                                    >
+                                        {loading ? (
+                                            <div className="flex items-center">
+                                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                                                Saving...
+                                            </div>
+                                        ) : 'Save Local Assignment'}
+                                    </Button>
+                                </div>
+                            </div>
                         </div>
                     </FormSection>
                 )}
@@ -3089,23 +3300,527 @@ export const EnrollLearnersView: React.FC = () => {
 };
 
 export const AssignTrainerView: React.FC = () => {
-    const { setAdminPage, currentUser } = useLms();
+    const { setAdminPage } = useLms();
+
+    const [courseRuns, setCourseRuns] = useState<any[]>([]);
+    const [search, setSearch] = useState('');
+    const [loadingRuns, setLoadingRuns] = useState(false);
+
+    const [availableTrainers, setAvailableTrainers] = useState<any[]>([]);
+    const [loadingTrainers, setLoadingTrainers] = useState(false);
+
+    const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
+    const [assignMode, setAssignMode] = useState<'dropdown' | 'manual'>('dropdown');
+    const [selectedTrainerId, setSelectedTrainerId] = useState('');
+    const [manualName, setManualName] = useState('');
+    const [manualEmail, setManualEmail] = useState('');
+    const [saving, setSaving] = useState(false);
+    const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+    // Track live assignments without refetching
+    const [localAssignments, setLocalAssignments] = useState<Record<string, { name: string; email: string }>>({});
+
+    const fetchCourseRuns = async (q: string) => {
+        setLoadingRuns(true);
+        try {
+            const params = q ? `?search=${encodeURIComponent(q)}` : '';
+            const res = await fetch(`/api/admin/all-course-runs${params}`);
+            const json = await res.json();
+            if (json.success) setCourseRuns(json.data);
+        } catch {
+            /* silent */
+        } finally {
+            setLoadingRuns(false);
+        }
+    };
+
+    const fetchTrainers = async () => {
+        setLoadingTrainers(true);
+        try {
+            const res = await fetch('/api/admin/trainers-detail');
+            const json = await res.json();
+            if (json.success) setAvailableTrainers(json.data.trainers);
+        } catch {
+            /* silent */
+        } finally {
+            setLoadingTrainers(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchCourseRuns('');
+        fetchTrainers();
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+    const handleSearch = (e: React.FormEvent) => {
+        e.preventDefault();
+        fetchCourseRuns(search);
+    };
+
+    const handleRemoveTrainer = async (run: any) => {
+        setMessage(null);
+        setSaving(true);
+        try {
+            const res = await fetch('/api/admin/remove-trainer', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ courseRunUuid: run.id }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Failed to remove trainer');
+            setLocalAssignments(prev => ({ ...prev, [run.id]: { name: '', email: '' } }));
+            setMessage({ type: 'success', text: `Trainer removed from "${run.courseTitle}".` });
+            setSelectedRunId(null);
+        } catch (err) {
+            setMessage({ type: 'error', text: err instanceof Error ? err.message : 'Failed to remove trainer' });
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handleAssign = async (run: any) => {
+        setMessage(null);
+        let trainerName = '';
+        let trainerEmail = '';
+        let trainerId = '';
+
+        if (assignMode === 'dropdown') {
+            const selected = availableTrainers.find(t => t.user_id === selectedTrainerId);
+            if (!selected) { setMessage({ type: 'error', text: 'Please select a trainer.' }); return; }
+            trainerName = selected.trainer_name;
+            trainerEmail = selected.email;
+            trainerId = selected.user_id;
+        } else {
+            if (!manualName.trim()) { setMessage({ type: 'error', text: 'Trainer name is required.' }); return; }
+            trainerName = manualName.trim();
+            trainerEmail = manualEmail.trim();
+        }
+
+        setSaving(true);
+        try {
+            const res = await fetch('/api/admin/update-trainer-info', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    courseRunUuid: run.id,
+                    courseRunId: run.courseRunId,
+                    trainerName,
+                    trainerEmail,
+                    trainerId: trainerId || undefined,
+                }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Failed to assign trainer');
+            setLocalAssignments(prev => ({ ...prev, [run.id]: { name: trainerName, email: trainerEmail } }));
+            setMessage({ type: 'success', text: `"${trainerName}" assigned to ${run.courseTitle}.` });
+            setSelectedRunId(null);
+            setSelectedTrainerId('');
+            setManualName('');
+            setManualEmail('');
+        } catch (err) {
+            setMessage({ type: 'error', text: err instanceof Error ? err.message : 'Failed to assign trainer' });
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const inputClasses = 'w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white';
 
     return (
         <div>
             <div className="flex justify-between items-center mb-6">
-                <h2 className="text-3xl font-bold">Assign Trainer</h2>
+                <h2 className="text-3xl font-bold dark:text-white">Assign Trainer</h2>
                 <Button variant="ghost" onClick={() => setAdminPage(AdminPage.Dashboard)}>
                     Back to Dashboard
                 </Button>
             </div>
 
-            <Card className="p-6">
-                <div className="text-center py-8">
-                    <h3 className="text-xl font-semibold text-gray-700 dark:text-gray-300 mb-2">Assign Trainer Feature</h3>
-                    <p className="text-gray-500 dark:text-gray-400">This feature will allow assignment of trainers to specific classes.</p>
-                    <p className="text-sm text-gray-400 mt-2">Coming soon...</p>
+            {/* Feedback banner */}
+            {message && (
+                <div className={`mb-4 p-3 rounded-md text-sm ${message.type === 'success' ? 'bg-green-50 border border-green-200 text-green-800' : 'bg-red-50 border border-red-200 text-red-800'}`}>
+                    {message.text}
                 </div>
+            )}
+
+            {/* Search */}
+            <Card className="p-4 mb-4 dark:bg-gray-800 dark:border-gray-700">
+                <form onSubmit={handleSearch} className="flex gap-2">
+                    <input
+                        type="text"
+                        value={search}
+                        onChange={e => setSearch(e.target.value)}
+                        placeholder="Search by course title, code or run ID..."
+                        className={`${inputClasses} flex-1`}
+                    />
+                    <Button type="submit" disabled={loadingRuns}>
+                        {loadingRuns ? 'Searching...' : 'Search'}
+                    </Button>
+                </form>
+            </Card>
+
+            {/* Course Runs List */}
+            <Card className="dark:bg-gray-800 dark:border-gray-700 overflow-hidden">
+                {loadingRuns ? (
+                    <div className="p-8 text-center text-sm text-gray-500">Loading course runs...</div>
+                ) : courseRuns.length === 0 ? (
+                    <div className="p-8 text-center text-sm text-gray-500">No course runs found.</div>
+                ) : (
+                    <div className="divide-y divide-gray-200 dark:divide-gray-700">
+                        {courseRuns.map(run => {
+                            const local = localAssignments[run.id];
+                            const currentName = local?.name ?? run.assignedTrainerName;
+                            const currentEmail = local?.email ?? run.assignedTrainerEmail;
+                            const isExpanded = selectedRunId === run.id;
+
+                            return (
+                                <div key={run.id}>
+                                    {/* Row */}
+                                    <div
+                                        className="flex items-center justify-between px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer"
+                                        onClick={() => {
+                                            setSelectedRunId(isExpanded ? null : run.id);
+                                            setMessage(null);
+                                        }}
+                                    >
+                                        <div className="flex-1 min-w-0 mr-4">
+                                            <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{run.courseTitle}</p>
+                                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                                                {run.courseCode}&nbsp;&nbsp;|&nbsp;&nbsp;Run: {run.courseRunId || '—'}&nbsp;&nbsp;|&nbsp;&nbsp;
+                                                {run.startDate ? new Date(run.startDate).toLocaleDateString() : '—'} – {run.endDate ? new Date(run.endDate).toLocaleDateString() : '—'}
+                                            </p>
+                                        </div>
+                                        <div className="flex items-center gap-3 shrink-0">
+                                            {currentName ? (
+                                                <span className="text-xs bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 px-2 py-0.5 rounded-full">
+                                                    {currentName}
+                                                </span>
+                                            ) : (
+                                                <span className="text-xs bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400 px-2 py-0.5 rounded-full">
+                                                    No trainer
+                                                </span>
+                                            )}
+                                            <span className="text-gray-400 text-xs">{isExpanded ? '▲' : '▼'}</span>
+                                        </div>
+                                    </div>
+
+                                    {/* Expanded assignment form */}
+                                    {isExpanded && (
+                                        <div className="bg-gray-50 dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 px-4 py-4 space-y-4">
+                                            {currentName && (
+                                                <p className="text-sm text-gray-600 dark:text-gray-300">
+                                                    <span className="font-medium">Currently assigned:</span> {currentName}{currentEmail ? ` (${currentEmail})` : ''}
+                                                </p>
+                                            )}
+
+                                            {/* Mode toggle */}
+                                            <div className="flex gap-2">
+                                                {(['dropdown', 'manual'] as const).map(mode => (
+                                                    <button
+                                                        key={mode}
+                                                        type="button"
+                                                        onClick={() => setAssignMode(mode)}
+                                                        className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${assignMode === mode ? 'bg-blue-600 text-white' : 'border border-gray-300 text-gray-600 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700'}`}
+                                                    >
+                                                        {mode === 'dropdown' ? 'Select from list' : 'Enter manually'}
+                                                    </button>
+                                                ))}
+                                            </div>
+
+                                            {assignMode === 'dropdown' ? (
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                        Trainer <span className="text-red-500">*</span>
+                                                    </label>
+                                                    {loadingTrainers ? (
+                                                        <p className="text-sm text-gray-500 italic">Loading trainers...</p>
+                                                    ) : (
+                                                        <select
+                                                            value={selectedTrainerId}
+                                                            onChange={e => setSelectedTrainerId(e.target.value)}
+                                                            className={inputClasses}
+                                                        >
+                                                            <option value="">— Select a trainer —</option>
+                                                            {availableTrainers.map(t => (
+                                                                <option key={t.user_id} value={t.user_id}>
+                                                                    {t.trainer_name} ({t.email})
+                                                                </option>
+                                                            ))}
+                                                        </select>
+                                                    )}
+                                                </div>
+                                            ) : (
+                                                <div className="space-y-2">
+                                                    <div>
+                                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                            Trainer Name <span className="text-red-500">*</span>
+                                                        </label>
+                                                        <input
+                                                            type="text"
+                                                            placeholder="Full name"
+                                                            value={manualName}
+                                                            onChange={e => setManualName(e.target.value)}
+                                                            className={inputClasses}
+                                                        />
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                            Trainer Email
+                                                        </label>
+                                                        <input
+                                                            type="email"
+                                                            placeholder="email@example.com"
+                                                            value={manualEmail}
+                                                            onChange={e => setManualEmail(e.target.value)}
+                                                            className={inputClasses}
+                                                        />
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            <div className="flex justify-between items-center">
+                                                {currentName ? (
+                                                    <Button
+                                                        onClick={() => handleRemoveTrainer(run)}
+                                                        disabled={saving}
+                                                        className="bg-red-600 hover:bg-red-700 text-white"
+                                                    >
+                                                        {saving ? 'Removing...' : 'Remove Trainer'}
+                                                    </Button>
+                                                ) : <span />}
+                                                <Button
+                                                    onClick={() => handleAssign(run)}
+                                                    disabled={saving}
+                                                    className="bg-green-600 hover:bg-green-700 text-white"
+                                                >
+                                                    {saving ? 'Saving...' : 'Assign Trainer'}
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
+            </Card>
+        </div>
+    );
+};
+
+export const AddCourseView: React.FC = () => {
+    const { setAdminPage } = useLms();
+    const [form, setForm] = useState({ title: '', courseCode: '', courseType: 'Non-WSQ', tscTitle: '', tscCode: '', trainingHours: '', assessmentHours: '' });
+    const [saving, setSaving] = useState(false);
+    const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+    const inputClasses = 'w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white';
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setSaving(true);
+        setMessage(null);
+        try {
+            const res = await fetch('/api/admin/add-course', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(form),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Failed to add course');
+            setMessage({ type: 'success', text: `Course "${form.title}" added successfully.` });
+            setForm({ title: '', courseCode: '', courseType: 'Non-WSQ', tscTitle: '', tscCode: '', trainingHours: '', assessmentHours: '' });
+        } catch (err) {
+            setMessage({ type: 'error', text: err instanceof Error ? err.message : 'Failed to add course' });
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    return (
+        <div>
+            <div className="flex justify-between items-center mb-6">
+                <h2 className="text-3xl font-bold dark:text-white">Add Course</h2>
+                <Button variant="ghost" onClick={() => setAdminPage(AdminPage.Dashboard)}>Back to Dashboard</Button>
+            </div>
+            {message && (
+                <div className={`mb-4 p-3 rounded-md text-sm ${message.type === 'success' ? 'bg-green-50 border border-green-200 text-green-800' : 'bg-red-50 border border-red-200 text-red-800'}`}>
+                    {message.text}
+                </div>
+            )}
+            <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
+                <form onSubmit={handleSubmit} className="space-y-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Title <span className="text-red-500">*</span></label>
+                            <input type="text" required value={form.title} onChange={e => setForm(p => ({ ...p, title: e.target.value }))} className={inputClasses} placeholder="Course title" />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Course Code <span className="text-red-500">*</span></label>
+                            <input type="text" required value={form.courseCode} onChange={e => setForm(p => ({ ...p, courseCode: e.target.value }))} className={inputClasses} placeholder="e.g. TGS-2025054613" />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Course Type</label>
+                            <select value={form.courseType} onChange={e => setForm(p => ({ ...p, courseType: e.target.value }))} className={inputClasses}>
+                                <option value="Non-WSQ">Non-WSQ</option>
+                                <option value="WSQ">WSQ</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">TSC Title</label>
+                            <input type="text" value={form.tscTitle} onChange={e => setForm(p => ({ ...p, tscTitle: e.target.value }))} className={inputClasses} placeholder="Optional" />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">TSC Code</label>
+                            <input type="text" value={form.tscCode} onChange={e => setForm(p => ({ ...p, tscCode: e.target.value }))} className={inputClasses} placeholder="Optional" />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Training Hours</label>
+                            <input type="number" min="0" step="0.5" value={form.trainingHours} onChange={e => setForm(p => ({ ...p, trainingHours: e.target.value }))} className={inputClasses} placeholder="0" />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Assessment Hours</label>
+                            <input type="number" min="0" step="0.5" value={form.assessmentHours} onChange={e => setForm(p => ({ ...p, assessmentHours: e.target.value }))} className={inputClasses} placeholder="0" />
+                        </div>
+                    </div>
+                    <div className="flex justify-end">
+                        <Button type="submit" disabled={saving} className="bg-blue-600 hover:bg-blue-700 text-white">
+                            {saving ? 'Saving...' : 'Add Course'}
+                        </Button>
+                    </div>
+                </form>
+            </Card>
+        </div>
+    );
+};
+
+export const AddCourseRunView: React.FC = () => {
+    const { setAdminPage } = useLms();
+    const emptyForm = { courseCode: '', courseRunId: '', startDate: '', endDate: '', classStatus: 'Confirmed', digitalAttendanceId: '' };
+    const [form, setForm] = useState(emptyForm);
+    const [saving, setSaving] = useState(false);
+    const [fetching, setFetching] = useState(false);
+    const [fetchedTitle, setFetchedTitle] = useState<string | null>(null);
+    const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+    const inputClasses = 'w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white';
+    const readonlyClasses = `${inputClasses} bg-gray-50 dark:bg-gray-600 cursor-default`;
+
+    const formatDateNum = (dateNum: number): string => {
+        const s = String(dateNum);
+        return `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`;
+    };
+
+    const handleFetch = async () => {
+        if (!form.courseRunId.trim()) {
+            setMessage({ type: 'error', text: 'Please enter a Course Run ID before fetching.' });
+            return;
+        }
+        setFetching(true);
+        setFetchedTitle(null);
+        setMessage(null);
+        try {
+            const res = await fetch('https://n8n.srv1231536.hstgr.cloud/webhook/7f2f5d21-beb6-47a9-8056-e1ccf79a3ea7', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ courseRunId: form.courseRunId.trim(), courseCode: form.courseCode.trim() }),
+            });
+            if (!res.ok) throw new Error(`Webhook returned ${res.status}`);
+            const data = await res.json();
+            const run = data?.course?.run;
+            if (!run) throw new Error('Invalid response from webhook');
+            const startDate = run.courseStartDate ? formatDateNum(run.courseStartDate) : '';
+            const endDate = run.courseEndDate ? formatDateNum(run.courseEndDate) : '';
+            const digitalAttendanceId = run.qrCodeLink ? (run.qrCodeLink.split('/').pop() || '') : '';
+            setForm(p => ({ ...p, startDate, endDate, digitalAttendanceId }));
+            setFetchedTitle(data?.course?.title || null);
+        } catch (err) {
+            setMessage({ type: 'error', text: 'Failed to fetch course run info: ' + (err instanceof Error ? err.message : 'Unknown error') });
+        } finally {
+            setFetching(false);
+        }
+    };
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setSaving(true);
+        setMessage(null);
+        try {
+            const res = await fetch('/api/admin/add-course-run', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(form),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Failed to add course run');
+            setMessage({ type: 'success', text: `Course run "${form.courseRunId}" added successfully.` });
+            setForm(emptyForm);
+            setFetchedTitle(null);
+        } catch (err) {
+            setMessage({ type: 'error', text: err instanceof Error ? err.message : 'Failed to add course run' });
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    return (
+        <div>
+            <div className="flex justify-between items-center mb-6">
+                <h2 className="text-3xl font-bold dark:text-white">Add Course Run</h2>
+                <Button variant="ghost" onClick={() => setAdminPage(AdminPage.Dashboard)}>Back to Dashboard</Button>
+            </div>
+            {message && (
+                <div className={`mb-4 p-3 rounded-md text-sm ${message.type === 'success' ? 'bg-green-50 border border-green-200 text-green-800' : 'bg-red-50 border border-red-200 text-red-800'}`}>
+                    {message.text}
+                </div>
+            )}
+            <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
+                <form onSubmit={handleSubmit} className="space-y-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Course Code <span className="text-red-500">*</span></label>
+                            <input type="text" required value={form.courseCode} onChange={e => setForm(p => ({ ...p, courseCode: e.target.value }))} className={inputClasses} placeholder="e.g. TGS-2025054613" />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Course Run ID <span className="text-red-500">*</span></label>
+                            <div className="flex gap-2">
+                                <input type="text" required value={form.courseRunId} onChange={e => { setForm(p => ({ ...p, courseRunId: e.target.value })); setFetchedTitle(null); }} className={inputClasses} placeholder="e.g. 1293908" />
+                                <Button type="button" onClick={handleFetch} disabled={fetching} className="shrink-0 bg-blue-600 hover:bg-blue-700 text-white text-sm px-3">
+                                    {fetching ? 'Fetching...' : 'Fetch'}
+                                </Button>
+                            </div>
+                        </div>
+                    </div>
+                    {fetchedTitle && (
+                        <div className="p-3 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 rounded-md text-sm text-blue-800 dark:text-blue-200">
+                            <span className="font-medium">Fetched:</span> {fetchedTitle}
+                        </div>
+                    )}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Start Date</label>
+                            <input type="date" readOnly value={form.startDate} className={readonlyClasses} />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">End Date</label>
+                            <input type="date" readOnly value={form.endDate} className={readonlyClasses} />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Digital Attendance ID</label>
+                            <input type="text" readOnly value={form.digitalAttendanceId} className={readonlyClasses} placeholder="Auto-filled from fetch" />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Class Status</label>
+                            <select value={form.classStatus} onChange={e => setForm(p => ({ ...p, classStatus: e.target.value }))} className={inputClasses}>
+                                <option value="Confirmed">Confirmed</option>
+                                <option value="Pending">Pending</option>
+                                <option value="Cancelled">Cancelled</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div className="flex justify-end">
+                        <Button type="submit" disabled={saving || !fetchedTitle} className="bg-indigo-600 hover:bg-indigo-700 text-white disabled:opacity-50">
+                            {saving ? 'Saving...' : 'Add Course Run'}
+                        </Button>
+                    </div>
+                </form>
             </Card>
         </div>
     );
