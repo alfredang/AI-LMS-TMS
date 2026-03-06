@@ -36,7 +36,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
       error: trainerError 
     });
     
-    const handleTrainerUpdate = async (updatedData: Partial<TrainerProfile>) => {
+    const handleTrainerUpdate = async (updatedData?: Partial<TrainerProfile>) => {
       // TrainerProfileCard already handles the database update via its own API
       // We just need to update the local state and refresh user profile
       console.log('🔄 ProfilePage: Trainer profile updated locally:', updatedData);
