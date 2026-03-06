@@ -32,35 +32,17 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       });
     }
 
-    // Set upload directory - ADMIN-SPECIFIC PATH
-    const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'admin');
-    
-    // Ensure upload directory exists
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
-
-    console.log(`📁 Admin Upload: Uploading ${fileType} to ${uploadDir}`);
-
+    // Parse form to system temp dir first (reliable across all environments)
     const form = new IncomingForm({
-      uploadDir,
       keepExtensions: true,
       maxFileSize: 10 * 1024 * 1024, // 10MB limit
-      filename: (name: string, ext: string, part: any) => {
-        // Create filename with timestamp_originalname.format
-        const timestamp = Date.now();
-        const originalName = part.originalFilename || 'unknown';
-        // Clean the original name (remove spaces and special characters for safety)
-        const cleanName = originalName.replace(/[^a-zA-Z0-9.-]/g, '_');
-        return `${timestamp}_${cleanName}${ext}`;
-      }
     });
 
     const [fields, files] = await form.parse(req);
-    
+
     // Get the uploaded file
     const uploadedFile = Array.isArray(files.file) ? files.file[0] : files.file;
-    
+
     if (!uploadedFile) {
       return res.status(400).json({ success: false, error: 'No file uploaded' });
     }
@@ -68,13 +50,28 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     // Validate file type (only images for profile pictures)
     const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
     if (!allowedTypes.includes(uploadedFile.mimetype || '')) {
-      // Delete the uploaded file
-      fs.unlinkSync(uploadedFile.filepath);
+      try { fs.unlinkSync(uploadedFile.filepath); } catch {}
       return res.status(400).json({
         success: false,
         error: 'Invalid file type. Only JPEG, PNG, GIF, and WebP images are allowed.'
       });
     }
+
+    // Ensure upload directory exists
+    const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'admin');
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+
+    // Build final filename and copy from temp to destination
+    const timestamp = Date.now();
+    const originalName = uploadedFile.originalFilename || 'unknown';
+    const cleanName = originalName.replace(/[^a-zA-Z0-9.-]/g, '_');
+    const fileName = `${timestamp}_${cleanName}`;
+    const destPath = path.join(uploadDir, fileName);
+
+    fs.writeFileSync(destPath, fs.readFileSync(uploadedFile.filepath));
+    try { fs.unlinkSync(uploadedFile.filepath); } catch {}
 
     // Delete old file if specified
     if (oldFileUrl && typeof oldFileUrl === 'string') {
@@ -89,21 +86,20 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       }
     }
 
-    // Generate relative URL path
-    const relativePath = `/uploads/admin/${path.basename(uploadedFile.filepath)}`;
+    const relativePath = `/uploads/admin/${fileName}`;
 
     console.log(`✅ Admin Upload: File uploaded successfully`);
-    console.log(`📁 File path: ${uploadedFile.filepath}`);
+    console.log(`📁 Saved to: ${destPath}`);
     console.log(`🔗 Relative path: ${relativePath}`);
 
     return res.status(200).json({
       success: true,
       message: 'Admin file uploaded successfully',
       data: {
-        fileName: path.basename(uploadedFile.filepath),
+        fileName,
         originalName: uploadedFile.originalFilename,
         fileUrl: relativePath,
-        relativePath: relativePath,
+        relativePath,
         size: uploadedFile.size,
         mimetype: uploadedFile.mimetype
       }

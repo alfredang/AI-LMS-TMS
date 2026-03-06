@@ -32,49 +32,11 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       });
     }
 
-    // Set upload directory based on file type - LEARNER-SPECIFIC PATH
-    const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'learner', fileType as string);
-    
-    // Ensure upload directory exists
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
-
-    console.log(`📁 Learner Upload: Uploading ${fileType} to ${uploadDir}`);
-
+    // Parse form to system temp dir first (reliable across all environments)
     const form = new IncomingForm({
-      uploadDir,
       keepExtensions: true,
       maxFileSize: 10 * 1024 * 1024, // 10MB limit
-      filename: (name: string, ext: string, part: any) => {
-        // Create unique filename with timestamp
-        const timestamp = Date.now();
-        const originalName = part.originalFilename || 'file';
-        const cleanName = originalName.replace(/[^a-zA-Z0-9.-]/g, '_');
-        return `${timestamp}_${cleanName}`;
-      }
     });
-
-    // Delete old file if specified (for profile picture replacement)
-    if (oldFileUrl && typeof oldFileUrl === 'string') {
-      try {
-        // Extract filename from URL and construct local path
-        const oldFileName = path.basename(oldFileUrl);
-        const oldFilePath = path.join(uploadDir, oldFileName);
-        
-        console.log(`🗑️ Learner Upload: Attempting to delete old file: ${oldFilePath}`);
-        
-        if (fs.existsSync(oldFilePath)) {
-          fs.unlinkSync(oldFilePath);
-          console.log(`✅ Learner Upload: Successfully deleted old file: ${oldFileName}`);
-        } else {
-          console.log(`⚠️ Learner Upload: Old file not found: ${oldFilePath}`);
-        }
-      } catch (deleteError) {
-        console.error('❌ Learner Upload: Error deleting old file:', deleteError);
-        // Continue with upload even if deletion fails
-      }
-    }
 
     const files = await new Promise<any>((resolve, reject) => {
       form.parse(req, (err, fields, files) => {
@@ -91,21 +53,14 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       });
     }
 
-    // Handle both single file and array of files
     const uploadedFile = Array.isArray(file) ? file[0] : file;
-    
+
     if (!uploadedFile || !uploadedFile.filepath) {
       return res.status(400).json({
         success: false,
         error: 'Invalid file upload'
       });
     }
-
-    const fileName = path.basename(uploadedFile.filepath);
-    const fileUrl = `/uploads/learner/${fileType}/${fileName}`;
-    
-    console.log(`✅ Learner Upload: File uploaded successfully: ${fileName}`);
-    console.log(`📁 Learner Upload: File URL: ${fileUrl}`);
 
     // Validate file type based on extension
     const allowedExtensions = {
@@ -116,15 +71,47 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
 
     const fileExtension = path.extname(uploadedFile.originalFilename || '').toLowerCase();
     const allowedExts = allowedExtensions[fileType as keyof typeof allowedExtensions];
-    
+
     if (!allowedExts.includes(fileExtension)) {
-      // Delete the uploaded file since it's invalid
-      fs.unlinkSync(uploadedFile.filepath);
+      try { fs.unlinkSync(uploadedFile.filepath); } catch {}
       return res.status(400).json({
         success: false,
         error: `Invalid file type for ${fileType}. Allowed: ${allowedExts.join(', ')}`
       });
     }
+
+    // Ensure upload directory exists
+    const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'learner', fileType as string);
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+
+    // Build final filename and copy from temp to destination
+    const timestamp = Date.now();
+    const originalName = uploadedFile.originalFilename || 'file';
+    const cleanName = originalName.replace(/[^a-zA-Z0-9.-]/g, '_');
+    const fileName = `${timestamp}_${cleanName}`;
+    const destPath = path.join(uploadDir, fileName);
+
+    fs.writeFileSync(destPath, fs.readFileSync(uploadedFile.filepath));
+    try { fs.unlinkSync(uploadedFile.filepath); } catch {}
+
+    // Delete old file if specified
+    if (oldFileUrl && typeof oldFileUrl === 'string') {
+      try {
+        const oldFilePath = path.join(process.cwd(), 'public', oldFileUrl.replace(/^\//, ''));
+        if (fs.existsSync(oldFilePath)) {
+          fs.unlinkSync(oldFilePath);
+          console.log(`🗑️ Learner Upload: Deleted old file: ${oldFilePath}`);
+        }
+      } catch (deleteError) {
+        console.error('❌ Learner Upload: Error deleting old file:', deleteError);
+      }
+    }
+
+    const fileUrl = `/uploads/learner/${fileType}/${fileName}`;
+
+    console.log(`✅ Learner Upload: File saved successfully: ${fileName}`);
 
     res.status(200).json({
       success: true,
