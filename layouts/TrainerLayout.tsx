@@ -12,6 +12,7 @@ import { ProfilePage } from '@components/ProfilePage';
 import { CourseDetail } from '../components/CourseDetail';
 import HelpAndSupportView from '../components/HelpAndSupportView';
 import { Icon, IconName } from '../components/ui/Icon';
+import TrainerAttendanceDashboard from '../components/trainer/TrainerAttendanceDashboard';
 
 const TrainerLayout: React.FC = () => {
   const { currentView, selectedCourse } = useLms();
@@ -39,7 +40,7 @@ const TrainerLayout: React.FC = () => {
     // Default views when no course is selected
     switch (currentView) {
       case View.Dashboard:
-        return <WelcomeDashboard />;
+        return <TrainerAttendanceDashboard />;
       case View.Courses:
         return <CourseList />;
       case View.Calendar:
@@ -47,7 +48,7 @@ const TrainerLayout: React.FC = () => {
       case View.Create:
         return <CreateView />;
       default:
-        return <WelcomeDashboard />;
+        return <TrainerAttendanceDashboard />;
     }
   };
 

@@ -1,20 +1,11 @@
 /**
  * Next.js API route for course sessions
- * GET /api/ssg/courses/runs/[runId]/sessions - View course sessions
+ * GET /api/ssg/courses/runs/[runId]/sessions - View course sessions via n8n webhook
  */
 
 import { NextApiRequest, NextApiResponse } from 'next';
-import { OptionalSelector } from '../../../../../../lib/ssg/models/course-runs';
-import { createSSGCourseAPI } from '../../../../../../lib/ssg/api/course-api';
-import { getSSGCredentialsService } from '../../../../../../lib/ssg/services/credentials-service';
 
-// Helper function to get optional selector from query
-const getOptionalSelector = (value: string | string[] | undefined): OptionalSelector => {
-  if (typeof value === 'string') {
-    return value.toLowerCase() === 'true' ? OptionalSelector.YES : OptionalSelector.NO;
-  }
-  return OptionalSelector.NO;
-};
+const WEBHOOK_URL = 'https://n8n.srv1231536.hstgr.cloud/webhook/117adf9a-7802-439c-aa2d-7d2e0d10fe13';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {
@@ -26,63 +17,60 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const { runId } = req.query;
     const { courseReferenceNumber, includeExpired, month, year } = req.query;
 
-    // Validate required parameters
+    console.log('📚 Course Sessions API - Request received:', {
+      runId,
+      courseReferenceNumber,
+      includeExpired,
+      month,
+      year,
+      timestamp: new Date().toISOString()
+    });
+
     if (!runId || typeof runId !== 'string') {
+      console.error('❌ Missing or invalid runId');
       return res.status(400).json({ error: 'runId is required' });
     }
 
     if (!courseReferenceNumber || typeof courseReferenceNumber !== 'string') {
+      console.error('❌ Missing or invalid courseReferenceNumber');
       return res.status(400).json({ error: 'courseReferenceNumber is required as a query parameter' });
     }
 
-    // Get SSG credentials from database (using the single training provider)
-    const credentialsService = getSSGCredentialsService();
-    const credentials = await credentialsService.getSSGCredentials();
+    const requestBody = {
+      runId,
+      courseReferenceNumber,
+      includeExpired: includeExpired || 'false',
+      ...(month && { month }),
+      ...(year && { year }),
+    };
 
-    if (!credentials) {
-      return res.status(404).json({ error: 'Training provider credentials not found' });
+    console.log('🔄 Sending request to webhook:', requestBody);
+
+    const webhookResponse = await fetch(WEBHOOK_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(requestBody),
+    });
+
+    const webhookData = await webhookResponse.json();
+
+    console.log('📥 Webhook response status:', webhookResponse.status);
+    console.log('📥 Webhook response data:', JSON.stringify(webhookData, null, 2));
+
+    if (!webhookResponse.ok) {
+      console.error('❌ Webhook error response:', webhookData);
+      return res.status(webhookResponse.status).json({ error: webhookData });
     }
 
-    // Validate credentials
-    const validationErrors = credentialsService.validateCredentials(credentials);
-    if (validationErrors.length > 0) {
-      return res.status(400).json({
-        error: 'Invalid SSG credentials',
-        message: `Credential validation failed: ${validationErrors.join(', ')}`
-      });
-    }
+    // Log session count if available
+    const sessionCount = webhookData?.result?.sessions?.length || 0;
+    console.log(`✅ Successfully retrieved ${sessionCount} sessions`);
 
-    // Get base URL from environment
-    const baseUrl = process.env.SSG_API_BASE_URL;
-    if (!baseUrl) {
-      return res.status(500).json({ 
-        error: 'SSG API base URL not configured',
-        message: 'Please add SSG_API_BASE_URL to your environment variables'
-      });
-    }
-
-    // Create SSG API client
-    const ssgAPI = createSSGCourseAPI(baseUrl, credentials);
-
-    const includeExpiredOption = getOptionalSelector(includeExpired);
-    
-    // Call the API method (pass month and year if provided)
-    const result = await ssgAPI.viewCourseSessions(
-      courseReferenceNumber, 
-      runId, 
-      includeExpiredOption,
-      month ? parseInt(month as string) : undefined,
-      year ? parseInt(year as string) : undefined
-    );
-
-    if (result.error) {
-      return res.status(result.status || 400).json(result);
-    }
-
-    res.status(200).json(result);
+    // Return as { data: webhookData } so frontend can access data.data.result.sessions
+    return res.status(200).json({ data: webhookData });
   } catch (error) {
-    console.error('Course Sessions API Error:', error);
-    res.status(500).json({ 
+    console.error('❌ Course Sessions API Error:', error);
+    res.status(500).json({
       error: 'Internal server error',
       message: error instanceof Error ? error.message : 'Unknown error'
     });

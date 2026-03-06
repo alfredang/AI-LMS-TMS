@@ -54,7 +54,9 @@ export enum AdminPage {
   CancelEnrolment = 'cancelEnrolment',
   UpdateEnrolment = 'updateEnrolment',
   DeleteCourseRun = 'deleteCourseRun',
-  UpdateEnrolmentFees = 'updateEnrolmentFees'
+  UpdateEnrolmentFees = 'updateEnrolmentFees',
+  CourseSessionAttendance = 'courseSessionAttendance',
+  CourseSessions = 'courseSessions'
 }
 
 // Course related interfaces

@@ -5087,3 +5087,736 @@ export const DeleteCourseRunView: React.FC = () => {
 
 // Export assessment views from separate file
 export { SearchAssessmentsView, ViewAssessmentView } from './AssessmentViews';
+
+// ─── Shared SSG error parser for n8n AxiosError responses ────────────────────
+
+const parseSsgErrorMessage = (errObj: any): string => {
+    // errObj.message format: "404 - \"{ escaped JSON }\""
+    const msg: string = errObj?.message || '';
+    const match = msg.match(/^\d+\s*-\s*"([\s\S]+)"$/);
+    if (match) {
+        try {
+            const inner = JSON.parse(match[1]);
+            const details = inner.error?.details;
+            if (Array.isArray(details) && details.length > 0) {
+                const msgs = details.map((d: any) => d.message).filter(Boolean);
+                if (msgs.length > 0) return msgs.join('. ');
+            }
+            const innerMsg: string = inner.error?.message || '';
+            if (innerMsg === 'Not Found') return 'Not Found — No record matches the provided details.';
+            if (innerMsg === 'Internal Server Error') return 'Internal Server Error — The service is temporarily unavailable. Please try again later.';
+            if (innerMsg === 'Bad Request') return 'Bad Request — The request was invalid. Please check your input and try again.';
+            if (innerMsg) return innerMsg;
+        } catch { /* fall through */ }
+    }
+    if (errObj?.status === 500 || msg.includes('500')) return 'Internal Server Error — The service is temporarily unavailable. Please try again later.';
+    if (errObj?.status === 400 || msg.includes('400')) return 'Bad Request — The request was invalid. Please check your input and try again.';
+    return msg || 'An unexpected error occurred. Please try again.';
+};
+
+// ─── Course Sessions View ─────────────────────────────────────────────────────
+
+export const CourseSessionsView: React.FC = () => {
+    const [uen, setUen] = useState<string>('201200696W');
+    const [courseCode, setCourseCode] = useState<string>('');
+    const [courseRunId, setCourseRunId] = useState<string>('');
+    const [isSearching, setIsSearching] = useState(false);
+    const [searchError, setSearchError] = useState<string | null>(null);
+    const [parsedData, setParsedData] = useState<any>(null);
+
+    const WEBHOOK_URL = 'https://n8n.srv1231536.hstgr.cloud/webhook/117adf9a-7802-439c-aa2d-7d2e0d10fe13';
+
+    const isFormValid = uen.trim() && courseCode.trim() && courseRunId.trim();
+
+    const handleSearch = async () => {
+        if (!isFormValid) {
+            setSearchError('Please fill in all fields.');
+            return;
+        }
+
+        setIsSearching(true);
+        setSearchError(null);
+        setParsedData(null);
+
+        try {
+            const payload = {
+                uen: uen.trim(),
+                courseCode: courseCode.trim(),
+                courseRunId: courseRunId.trim(),
+            };
+
+            const response = await fetch(WEBHOOK_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+         
+            const text = await response.text();
+               console.log('📤 Fetch sessions payload:', JSON.parse(text));
+            let data: any;
+            try {
+                data = text ? JSON.parse(text) : {};
+            } catch {
+                throw new Error('Invalid response from server.');
+            }
+
+            // Handle array wrapper from n8n
+            const item = Array.isArray(data) ? data[0] : data;
+
+            // n8n AxiosError — SSG returned a non-2xx response
+            if (item?.error && typeof item.error === 'object' && item.error.message) {
+                throw new Error(parseSsgErrorMessage(item.error));
+            }
+
+            // SSG returned a non-200 status inside its own envelope
+            if (item?.status && item.status !== 200) {
+                const details = item.error?.details;
+                if (Array.isArray(details) && details.length > 0) {
+                    const msgs = details.map((d: any) => d.message).filter(Boolean);
+                    if (msgs.length > 0) throw new Error(msgs.join('. '));
+                }
+                const statusMsg: string = item.error?.message || '';
+                if (statusMsg === 'Not Found') throw new Error('Not Found — No record matches the provided details.');
+                if (statusMsg === 'Internal Server Error') throw new Error('Internal Server Error — The service is temporarily unavailable. Please try again later.');
+                if (statusMsg === 'Bad Request') throw new Error('Bad Request — The request was invalid. Please check your input and try again.');
+                throw new Error(statusMsg || `Request failed with status ${item.status}.`);
+            }
+
+            if (!item?.result?.sessions) {
+                throw new Error('Not Found — No sessions were returned for the provided details.');
+            }
+
+            setParsedData(item);
+        } catch (err) {
+            setSearchError(err instanceof Error ? err.message : 'Failed to fetch course sessions.');
+        } finally {
+            setIsSearching(false);
+        }
+    };
+
+    const handleClear = () => {
+        setUen('201200696W');
+        setCourseCode('');
+        setCourseRunId('');
+        setSearchError(null);
+        setParsedData(null);
+    };
+
+    const sessions: any[] = parsedData?.result?.sessions ?? [];
+
+    return (
+        <div>
+            <h2 className="text-3xl font-bold mb-6 dark:text-white">Course Sessions</h2>
+
+            {/* Search Parameters Card */}
+            <Card className="p-6 mb-6">
+                <h3 className="text-lg font-bold text-gray-700 dark:text-gray-200 mb-4">Search Parameters</h3>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    <div>
+                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
+                            Company UEN <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                            type="text"
+                            value={uen}
+                            onChange={(e) => setUen(e.target.value)}
+                            placeholder="e.g. 201200696W"
+                            className={inputClasses}
+                            disabled={isSearching}
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
+                            Course Code <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                            type="text"
+                            value={courseCode}
+                            onChange={(e) => setCourseCode(e.target.value)}
+                            placeholder="e.g. TGS-2019503161"
+                            className={inputClasses}
+                            disabled={isSearching}
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
+                            Course Run ID <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                            type="text"
+                            value={courseRunId}
+                            onChange={(e) => setCourseRunId(e.target.value)}
+                            placeholder="e.g. 1289568"
+                            className={inputClasses}
+                            disabled={isSearching}
+                        />
+                    </div>
+                </div>
+
+                <div className="flex gap-3 justify-end">
+                    <Button
+                        onClick={handleClear}
+                        disabled={isSearching}
+                        className="bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600"
+                    >
+                        Clear
+                    </Button>
+                    <Button
+                        onClick={handleSearch}
+                        disabled={isSearching || !isFormValid}
+                    >
+                        {isSearching ? (
+                            <div className="flex items-center">
+                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                                Fetching...
+                            </div>
+                        ) : (
+                            <>
+                                <Icon name={IconName.Search} className="w-4 h-4 mr-2" />
+                                Fetch Sessions
+                            </>
+                        )}
+                    </Button>
+                </div>
+
+            </Card>
+
+            {/* Loading */}
+            {isSearching && (
+                <div className="flex justify-center py-10">
+                    <div className="text-center">
+                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
+                        <p className="mt-4 text-gray-600 dark:text-gray-400">Fetching course sessions...</p>
+                    </div>
+                </div>
+            )}
+
+            {/* Error Card */}
+            {searchError && !isSearching && (
+                <Card className="p-6 border-red-200 dark:border-red-700">
+                    <div className="flex items-start gap-3 mb-4">
+                        <div className="flex-shrink-0 w-10 h-10 rounded-full bg-red-100 dark:bg-red-900/40 flex items-center justify-center">
+                            <Icon name={IconName.Close} className="w-5 h-5 text-red-600 dark:text-red-400" />
+                        </div>
+                        <div>
+                            <h3 className="text-lg font-bold text-red-700 dark:text-red-400">Failed to Retrieve Sessions</h3>
+                            <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{searchError}</p>
+                        </div>
+                    </div>
+                    <div className="bg-red-50 dark:bg-red-900/20 rounded-lg p-4 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                        <div>
+                            <span className="font-medium text-gray-700 dark:text-gray-300">Company UEN: </span>
+                            <span className="font-mono text-red-700 dark:text-red-300">{uen}</span>
+                        </div>
+                        <div>
+                            <span className="font-medium text-gray-700 dark:text-gray-300">Course Code: </span>
+                            <span className="font-mono text-red-700 dark:text-red-300">{courseCode}</span>
+                        </div>
+                        <div>
+                            <span className="font-medium text-gray-700 dark:text-gray-300">Course Run ID: </span>
+                            <span className="font-mono text-red-700 dark:text-red-300">{courseRunId}</span>
+                        </div>
+                    </div>
+                </Card>
+            )}
+
+            {/* Success Results */}
+            {parsedData && !isSearching && (
+                <Card className="p-6">
+                    <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-lg font-bold text-gray-700 dark:text-gray-200">Sessions</h3>
+                        <span className="text-sm text-gray-500 dark:text-gray-400">
+                            {sessions.length} session{sessions.length !== 1 ? 's' : ''}
+                            {parsedData?.meta?.total != null && ` (total: ${parsedData.meta.total})`}
+                        </span>
+                    </div>
+
+                    {sessions.length === 0 ? (
+                        <div className="text-center py-10 text-gray-500 dark:text-gray-400">
+                            <p className="font-medium">No sessions found for this course run.</p>
+                        </div>
+                    ) : (
+                        <div className="overflow-x-auto">
+                            <table className="min-w-full text-sm">
+                                <thead>
+                                    <tr className="border-b border-gray-200 dark:border-gray-700 text-left">
+                                        <th className="pb-3 pr-4 font-semibold text-gray-600 dark:text-gray-300">#</th>
+                                        <th className="pb-3 pr-4 font-semibold text-gray-600 dark:text-gray-300">Session ID</th>
+                                        <th className="pb-3 pr-4 font-semibold text-gray-600 dark:text-gray-300">Date</th>
+                                        <th className="pb-3 pr-4 font-semibold text-gray-600 dark:text-gray-300">Time</th>
+                                        <th className="pb-3 pr-4 font-semibold text-gray-600 dark:text-gray-300">Mode</th>
+                                        <th className="pb-3 pr-4 font-semibold text-gray-600 dark:text-gray-300">Venue</th>
+                                        <th className="pb-3 pr-4 font-semibold text-gray-600 dark:text-gray-300">Attendance Taken</th>
+                                        <th className="pb-3 font-semibold text-gray-600 dark:text-gray-300">Deleted</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {sessions.map((session: any, idx: number) => (
+                                        <tr
+                                            key={session.id}
+                                            className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50 align-top"
+                                        >
+                                            <td className="py-3 pr-4 text-gray-500 dark:text-gray-400">{idx + 1}</td>
+                                            <td className="py-3 pr-4 font-mono text-xs text-gray-700 dark:text-gray-300">{session.id}</td>
+                                            <td className="py-3 pr-4 text-gray-900 dark:text-white whitespace-nowrap">
+                                                {formatDate(session.startDate)}
+                                                {session.startDate !== session.endDate && (
+                                                    <span className="text-gray-500"> – {formatDate(session.endDate)}</span>
+                                                )}
+                                            </td>
+                                            <td className="py-3 pr-4 text-gray-900 dark:text-white whitespace-nowrap">
+                                                {session.startTime} – {session.endTime}
+                                            </td>
+                                            <td className="py-3 pr-4 text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                                                {modeOfTrainingLabel(session.modeOfTraining)}
+                                            </td>
+                                            <td className="py-3 pr-4 text-gray-600 dark:text-gray-400 text-xs">
+                                                {session.venue ? (
+                                                    <>
+                                                        <p>{[session.venue.building, session.venue.block && `Blk ${session.venue.block}`].filter(Boolean).join(', ')}</p>
+                                                        <p>{[session.venue.street, session.venue.postalCode && `S(${session.venue.postalCode})`].filter(Boolean).join(', ')}</p>
+                                                    </>
+                                                ) : '—'}
+                                            </td>
+                                            <td className="py-3 pr-4">
+                                                <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border ${session.attendanceTaken
+                                                    ? 'bg-green-100 text-green-800 border-green-200'
+                                                    : 'bg-gray-100 text-gray-700 border-gray-200'
+                                                    }`}>
+                                                    {session.attendanceTaken ? 'Yes' : 'No'}
+                                                </span>
+                                            </td>
+                                            <td className="py-3">
+                                                <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border ${session.deleted
+                                                    ? 'bg-red-100 text-red-800 border-red-200'
+                                                    : 'bg-gray-100 text-gray-700 border-gray-200'
+                                                    }`}>
+                                                    {session.deleted ? 'Yes' : 'No'}
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                </Card>
+            )}
+        </div>
+    );
+};
+
+// ─── Course Session Attendance View ───────────────────────────────────────────
+
+const formatDate = (yyyymmdd: string): string => {
+    if (!yyyymmdd || yyyymmdd.length !== 8) return yyyymmdd;
+    return `${yyyymmdd.slice(6, 8)}/${yyyymmdd.slice(4, 6)}/${yyyymmdd.slice(0, 4)}`;
+};
+
+const modeOfTrainingLabel = (code: string): string => {
+    const map: Record<string, string> = {
+        '1': 'Classroom',
+        '2': 'Asynchronous eLearning',
+        '3': 'In-house',
+        '4': 'On-the-Job',
+        '5': 'Practical / Practicum',
+        '6': 'Supervised Field',
+        '7': 'Traineeship',
+        '8': 'Assessment',
+        '9': 'Synchronous eLearning',
+    };
+    return map[code] || code;
+};
+
+export const CourseSessionAttendanceView: React.FC = () => {
+    const [uen, setUen] = useState<string>('201200696W');
+    const [courseCode, setCourseCode] = useState<string>('');
+    const [sessionId, setSessionId] = useState<string>('');
+    const [courseRunId, setCourseRunId] = useState<string>('');
+    const [isSearching, setIsSearching] = useState(false);
+    const [searchError, setSearchError] = useState<string | null>(null);
+    const [notFound, setNotFound] = useState(false);
+    const [parsedData, setParsedData] = useState<any>(null);
+
+    const WEBHOOK_URL = 'https://n8n.srv1231536.hstgr.cloud/webhook/c0d24850-9317-4ccc-b4b8-111e4c114ed8';
+
+    const isFormValid = uen.trim() && courseCode.trim() && sessionId.trim() && courseRunId.trim();
+
+    const handleSearch = async () => {
+        if (!isFormValid) {
+            setSearchError('Please fill in all fields.');
+            return;
+        }
+
+        setIsSearching(true);
+        setSearchError(null);
+        setNotFound(false);
+        setParsedData(null);
+
+        try {
+            const payload = {
+                uen: uen.trim(),
+                courseCode: courseCode.trim(),
+                sessionId: sessionId.trim(),
+                courseRunId: courseRunId.trim(),
+            };
+
+            const response = await fetch(WEBHOOK_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+
+            const text = await response.text();
+            let data: any;
+            try {
+                data = text ? JSON.parse(text) : {};
+            } catch {
+                throw new Error('Invalid response from server.');
+            }
+
+            // Handle array wrapper from n8n
+            const item = Array.isArray(data) ? data[0] : data;
+
+            // n8n AxiosError — check HTTP status code to determine how to handle
+            if (item?.error && typeof item.error === 'object' && item.error.status) {
+                const httpStatus = item.error.status;
+                if (httpStatus === 404) {
+                    setNotFound(true);
+                    return;
+                }
+                if (httpStatus === 500) throw new Error('Internal Server Error — The service is temporarily unavailable. Please try again later.');
+                if (httpStatus === 400) throw new Error('Bad Request — The request was invalid. Please check your input and try again.');
+                throw new Error(`Request failed with status ${httpStatus}. Please try again.`);
+            }
+
+            const resultRaw = item?.result;
+
+            // Handle both formats:
+            // 1. n8n wraps SSG response: { "result": "{ JSON string }" }
+            // 2. n8n passes SSG response directly: { "data": { "courseRun": {...} }, ... }
+            let parsedPayload: any = null;
+            if (resultRaw && resultRaw !== '') {
+                parsedPayload = typeof resultRaw === 'string' ? JSON.parse(resultRaw) : resultRaw;
+            } else if (item?.data?.courseRun) {
+                parsedPayload = item;
+            }
+
+            if (!parsedPayload) {
+                setNotFound(true);
+                return;
+            }
+
+            setParsedData(parsedPayload);
+        } catch (err) {
+            setSearchError(err instanceof Error ? err.message : 'Failed to fetch attendance data.');
+        } finally {
+            setIsSearching(false);
+        }
+    };
+
+    const handleClear = () => {
+        setUen('201200696W');
+        setCourseCode('');
+        setSessionId('');
+        setCourseRunId('');
+        setSearchError(null);
+        setNotFound(false);
+        setParsedData(null);
+    };
+
+    const courseRun = parsedData?.data?.courseRun;
+    const session = courseRun?.sessions?.[0];
+    const attendance: any[] = session?.attendance ?? [];
+    const trainees = attendance.filter((a) => a.trainee?.attendeeType === 'Trainee');
+    const trainers = attendance.filter((a) => a.trainee?.attendeeType === 'Trainer');
+
+    return (
+        <div>
+            <h2 className="text-3xl font-bold mb-6 dark:text-white">Course Session Attendance</h2>
+
+            {/* Search Parameters Card */}
+            <Card className="p-6 mb-6">
+                <h3 className="text-lg font-bold text-gray-700 dark:text-gray-200 mb-4">Search Parameters</h3>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    <div>
+                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
+                            Company UEN <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                            type="text"
+                            value={uen}
+                            onChange={(e) => setUen(e.target.value)}
+                            placeholder="e.g. 201200696W"
+                            className={inputClasses}
+                            disabled={isSearching}
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
+                            Course Code <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                            type="text"
+                            value={courseCode}
+                            onChange={(e) => setCourseCode(e.target.value)}
+                            placeholder="e.g. TGS-2019503161"
+                            className={inputClasses}
+                            disabled={isSearching}
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
+                            Session ID <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                            type="text"
+                            value={sessionId}
+                            onChange={(e) => setSessionId(e.target.value)}
+                            placeholder="e.g. TGS-2019503161-1289568-S1"
+                            className={inputClasses}
+                            disabled={isSearching}
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
+                            Course Run ID <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                            type="text"
+                            value={courseRunId}
+                            onChange={(e) => setCourseRunId(e.target.value)}
+                            placeholder="e.g. 1289568"
+                            className={inputClasses}
+                            disabled={isSearching}
+                        />
+                    </div>
+                </div>
+
+                <div className="flex gap-3 justify-end">
+                    <Button
+                        onClick={handleClear}
+                        disabled={isSearching}
+                        className="bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600"
+                    >
+                        Clear
+                    </Button>
+                    <Button
+                        onClick={handleSearch}
+                        disabled={isSearching || !isFormValid}
+                    >
+                        {isSearching ? (
+                            <div className="flex items-center">
+                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                                Fetching...
+                            </div>
+                        ) : (
+                            <>
+                                <Icon name={IconName.Search} className="w-4 h-4 mr-2" />
+                                Fetch Attendance
+                            </>
+                        )}
+                    </Button>
+                </div>
+
+                {searchError && (
+                    <p className="text-red-500 text-sm mt-3">{searchError}</p>
+                )}
+            </Card>
+
+            {/* Loading */}
+            {isSearching && (
+                <div className="flex justify-center py-10">
+                    <div className="text-center">
+                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
+                        <p className="mt-4 text-gray-600 dark:text-gray-400">Fetching attendance data...</p>
+                    </div>
+                </div>
+            )}
+
+            {/* Not Found Error */}
+            {notFound && !parsedData && !isSearching && (
+                <Card className="p-6 border-red-200 dark:border-red-700">
+                    <div className="flex items-start gap-3 mb-4">
+                        <div className="flex-shrink-0 w-10 h-10 rounded-full bg-red-100 dark:bg-red-900/40 flex items-center justify-center">
+                            <Icon name={IconName.Close} className="w-5 h-5 text-red-600 dark:text-red-400" />
+                        </div>
+                        <div>
+                            <h3 className="text-lg font-bold text-red-700 dark:text-red-400">Attendance Not Found</h3>
+                            <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                                No course session attendance record could be found for the provided details.
+                            </p>
+                        </div>
+                    </div>
+                    <div className="bg-red-50 dark:bg-red-900/20 rounded-lg p-4 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                        <div>
+                            <span className="font-medium text-gray-700 dark:text-gray-300">Company UEN: </span>
+                            <span className="font-mono text-red-700 dark:text-red-300">{uen}</span>
+                        </div>
+                        <div>
+                            <span className="font-medium text-gray-700 dark:text-gray-300">Course Code: </span>
+                            <span className="font-mono text-red-700 dark:text-red-300">{courseCode}</span>
+                        </div>
+                        <div>
+                            <span className="font-medium text-gray-700 dark:text-gray-300">Session ID: </span>
+                            <span className="font-mono text-red-700 dark:text-red-300">{sessionId}</span>
+                        </div>
+                        <div>
+                            <span className="font-medium text-gray-700 dark:text-gray-300">Course Run ID: </span>
+                            <span className="font-mono text-red-700 dark:text-red-300">{courseRunId}</span>
+                        </div>
+                    </div>
+                </Card>
+            )}
+
+            {/* Success Results */}
+            {parsedData && !isSearching && (
+                <div className="space-y-6">
+                    {/* Course Run Info */}
+                    {courseRun && (
+                    <Card className="p-6">
+                        <h3 className="text-lg font-bold text-gray-700 dark:text-gray-200 mb-4">Course Run Details</h3>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+                            <div>
+                                <span className="font-medium text-gray-500 dark:text-gray-400">Title</span>
+                                <p className="text-gray-900 dark:text-white font-semibold mt-0.5">{courseRun.title}</p>
+                            </div>
+                            <div>
+                                <span className="font-medium text-gray-500 dark:text-gray-400">Reference Number</span>
+                                <p className="text-gray-900 dark:text-white font-mono mt-0.5">{courseRun.referenceNumber}</p>
+                            </div>
+                            <div>
+                                <span className="font-medium text-gray-500 dark:text-gray-400">Course Run ID</span>
+                                <p className="text-gray-900 dark:text-white font-mono mt-0.5">{courseRun.id}</p>
+                            </div>
+                            <div>
+                                <span className="font-medium text-gray-500 dark:text-gray-400">Mode of Training</span>
+                                <p className="text-gray-900 dark:text-white mt-0.5">{modeOfTrainingLabel(courseRun.modeOfTraining)}</p>
+                            </div>
+                            <div>
+                                <span className="font-medium text-gray-500 dark:text-gray-400">Course Start Date</span>
+                                <p className="text-gray-900 dark:text-white mt-0.5">{formatDate(courseRun.courseDates?.start)}</p>
+                            </div>
+                            <div>
+                                <span className="font-medium text-gray-500 dark:text-gray-400">Course End Date</span>
+                                <p className="text-gray-900 dark:text-white mt-0.5">{formatDate(courseRun.courseDates?.end)}</p>
+                            </div>
+                        </div>
+                    </Card>
+                    )}
+
+                    {/* Session Info */}
+                    {session && (
+                        <Card className="p-6">
+                            <h3 className="text-lg font-bold text-gray-700 dark:text-gray-200 mb-4">Session Details</h3>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm mb-4">
+                                <div>
+                                    <span className="font-medium text-gray-500 dark:text-gray-400">Session ID</span>
+                                    <p className="text-gray-900 dark:text-white font-mono mt-0.5">{session.id}</p>
+                                </div>
+                                <div>
+                                    <span className="font-medium text-gray-500 dark:text-gray-400">Date</span>
+                                    <p className="text-gray-900 dark:text-white mt-0.5">
+                                        {formatDate(session.startDate)}{session.startDate !== session.endDate ? ` – ${formatDate(session.endDate)}` : ''}
+                                    </p>
+                                </div>
+                                <div>
+                                    <span className="font-medium text-gray-500 dark:text-gray-400">Time</span>
+                                    <p className="text-gray-900 dark:text-white mt-0.5">{session.startTime} – {session.endTime}</p>
+                                </div>
+                                <div>
+                                    <span className="font-medium text-gray-500 dark:text-gray-400">Mode of Training</span>
+                                    <p className="text-gray-900 dark:text-white mt-0.5">{modeOfTrainingLabel(session.modeOfTraining)}</p>
+                                </div>
+                            </div>
+                            {session.venue && (
+                                <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 text-sm">
+                                    <p className="font-medium text-gray-600 dark:text-gray-300 mb-1">Venue</p>
+                                    <p className="text-gray-900 dark:text-white">
+                                        {[
+                                            session.venue.building,
+                                            session.venue.block && `Blk ${session.venue.block}`,
+                                            session.venue.floor && session.venue.floor !== '-' && `Floor ${session.venue.floor}`,
+                                            session.venue.unit && session.venue.unit !== '-' && `Unit ${session.venue.unit}`,
+                                            session.venue.room && session.venue.room !== '-' && session.venue.room,
+                                        ].filter(Boolean).join(', ')}
+                                    </p>
+                                    <p className="text-gray-600 dark:text-gray-400">
+                                        {[session.venue.street, session.venue.postalCode && `S(${session.venue.postalCode})`].filter(Boolean).join(', ')}
+                                    </p>
+                                    {session.venue.wheelChairAccess && (
+                                        <p className="text-green-600 dark:text-green-400 text-xs mt-1">Wheelchair accessible</p>
+                                    )}
+                                </div>
+                            )}
+                        </Card>
+                    )}
+
+                    {/* Attendance Table */}
+                    <Card className="p-6">
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-lg font-bold text-gray-700 dark:text-gray-200">
+                                Attendance Records
+                            </h3>
+                            <span className="text-sm text-gray-500 dark:text-gray-400">
+                                Total: {attendance.length} ({trainees.length} trainee{trainees.length !== 1 ? 's' : ''}, {trainers.length} trainer{trainers.length !== 1 ? 's' : ''})
+                            </span>
+                        </div>
+
+                        {attendance.length === 0 ? (
+                            <div className="text-center py-10 text-gray-500 dark:text-gray-400">
+                                <p className="font-medium">No attendance records yet.</p>
+                                <p className="text-sm mt-1">Attendance will appear here once participants have checked in.</p>
+                            </div>
+                        ) : (
+                            <div className="overflow-x-auto">
+                                <table className="min-w-full text-sm">
+                                    <thead>
+                                        <tr className="border-b border-gray-200 dark:border-gray-700 text-left">
+                                            <th className="pb-3 pr-4 font-semibold text-gray-600 dark:text-gray-300">#</th>
+                                            <th className="pb-3 pr-4 font-semibold text-gray-600 dark:text-gray-300">Name</th>
+                                            <th className="pb-3 pr-4 font-semibold text-gray-600 dark:text-gray-300">NRIC</th>
+                                            <th className="pb-3 pr-4 font-semibold text-gray-600 dark:text-gray-300">Type</th>
+                                            <th className="pb-3 pr-4 font-semibold text-gray-600 dark:text-gray-300">Status</th>
+                                            <th className="pb-3 pr-4 font-semibold text-gray-600 dark:text-gray-300">Entry Mode</th>
+                                            <th className="pb-3 font-semibold text-gray-600 dark:text-gray-300">TRAQOM</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {attendance.map((record: any, idx: number) => (
+                                            <tr
+                                                key={record.id}
+                                                className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50"
+                                            >
+                                                <td className="py-3 pr-4 text-gray-500 dark:text-gray-400">{idx + 1}</td>
+                                                <td className="py-3 pr-4 font-medium text-gray-900 dark:text-white">{record.trainee?.name ?? '—'}</td>
+                                                <td className="py-3 pr-4 font-mono text-gray-700 dark:text-gray-300">{record.nric}</td>
+                                                <td className="py-3 pr-4">
+                                                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border ${record.trainee?.attendeeType === 'Trainer'
+                                                        ? 'bg-purple-100 text-purple-800 border-purple-200'
+                                                        : 'bg-blue-100 text-blue-800 border-blue-200'
+                                                        }`}>
+                                                        {record.trainee?.attendeeType ?? '—'}
+                                                    </span>
+                                                </td>
+                                                <td className="py-3 pr-4">
+                                                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border ${getStatusColor(record.status)}`}>
+                                                        {record.status}
+                                                    </span>
+                                                </td>
+                                                <td className="py-3 pr-4 text-gray-600 dark:text-gray-400">{record.entryMode}</td>
+                                                <td className="py-3 text-gray-600 dark:text-gray-400 text-xs">{record.sentToTraqom}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+                    </Card>
+                </div>
+            )}
+        </div>
+    );
+};

@@ -18,7 +18,8 @@ class ApiClient {
   private baseURL: string;
 
   constructor(baseURL: string = API_BASE_URL) {
-    this.baseURL = baseURL;
+    // Strip trailing slash to prevent double-slash when joining with /api/... paths
+    this.baseURL = baseURL.replace(/\/$/, '');
   }
 
   private getAuthToken(): string | null {

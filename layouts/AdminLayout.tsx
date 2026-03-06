@@ -42,7 +42,9 @@ import {
   CancelEnrolmentView,
   UpdateEnrolmentView,
   DeleteCourseRunView,
-  UpdateEnrolmentFeesView
+  UpdateEnrolmentFeesView,
+  CourseSessionAttendanceView,
+  CourseSessionsView
 } from '../components/admin/GrantManagementViews';
 import { CourseRunView } from '../components/admin/CourseRunView';
 import { UploadDirectApplicationView, ViewDirectApplicationView, UpdateDirectApplicationView } from '../components/admin/DirectApplicationViews';
@@ -281,6 +283,10 @@ const AdminLayout: React.FC = () => {
         return <UpdateEnrolmentView />;
       case AdminPage.DeleteCourseRun:
         return <DeleteCourseRunView />;
+      case AdminPage.CourseSessionAttendance:
+        return <CourseSessionAttendanceView />;
+      case AdminPage.CourseSessions:
+        return <CourseSessionsView />;
       case AdminPage.ClassDetail:
         return <ClassDetailView courseRunId={selectedCourseRunId || undefined} />;
       case AdminPage.CourseRun:

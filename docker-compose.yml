@@ -34,9 +34,9 @@ services:
       - -c
       - app.admin_name=${ADMIN_FULL_NAME:-System Administrator}
       - -c
-      - app.company_name=${COMPANY_NAME:-My Company}
+      - app.company_name=${COMPANY_NAME:-Chelsea Academia Pte Ltd}
       - -c
-      - app.partner_uen=${TRAINING_PARTNER_UEN:-000000000A}
+      - app.partner_uen=${TRAINING_PARTNER_UEN:-201509271W}
     environment:
       POSTGRES_DB: ${DB_NAME:-lmsdb}
       POSTGRES_USER: postgres

@@ -539,23 +539,31 @@ export const ClassManagerView: React.FC<ClassManagerViewProps> = ({ courseToEdit
             });
 
             const data = await response.json();
-
-            if (response.status === 200 && data.data?.data?.sessions) {
+            console.log('Sessions API response:', data);
+            const sessions = data.data?.result?.sessions;
+            if (response.status === 200 && sessions && sessions.length > 0) {
+                console.log('✅ Successfully fetched sessions data:', sessions);
                 // Existing sessions found - process venue data
-                const processedSessions = data.data.data.sessions.map((session: any) => ({
+                const processedSessions = sessions.map((session: any) => ({
                     ...session,
                     venueString: formatVenueString(session.venue)
                 }));
                 setExistingSessions(processedSessions);
                 setHasExistingSessions(true);
                 console.log('✅ Found existing sessions:', processedSessions.length);
+            } else if (response.status === 200 && sessions && sessions.length === 0) {
+                setExistingSessions([]);
+                setHasExistingSessions(false);
+                console.log('📝 No sessions returned from API');
             } else if (response.status === 404) {
                 // No sessions found - show add new session form
                 setExistingSessions([]);
                 setHasExistingSessions(false);
                 console.log('📝 No existing sessions found - showing add new session form');
             } else {
-                throw new Error(`HTTP error! status: ${response.status}`);
+                console.error('Unexpected response:', response.status, data);
+                setExistingSessions([]);
+                setHasExistingSessions(false);
             }
         } catch (error) {
             console.error('Error fetching sessions:', error);
@@ -1969,6 +1977,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
 
     // Fetch existing sessions when Sessions tab is activated
     useEffect(() => {
+        console.log('[Sessions useEffect]', { isEditMode, activeTab, courseRunId, courseReferenceNumber });
         if (isEditMode && activeTab === 'sessions' && courseRunId && courseReferenceNumber) {
             fetchExistingSessions();
         }
