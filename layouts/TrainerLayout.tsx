@@ -63,7 +63,7 @@ const TrainerLayout: React.FC = () => {
             <h2 className="text-lg font-bold truncate">{selectedCourse.title}</h2>
         </div>
       )}
-      <main className="container mx-auto p-4 sm:p-6 lg:p-8 flex-grow">
+      <main className="w-full max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8 flex-grow">
         {renderContent()}
       </main>
       <Footer />
