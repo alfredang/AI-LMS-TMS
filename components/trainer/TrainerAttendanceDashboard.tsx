@@ -482,6 +482,18 @@ const TrainerAttendanceDashboard: React.FC = () => {
           title="Course Session Attendance"
           count={attendanceRecords.length > 0 ? attendanceRecords.length : undefined}
           loading={isLoadingAttendance}
+          right={
+            selectedSession ? (
+              <button
+                onClick={() => handleFetchAttendance(selectedSession)}
+                disabled={isLoadingAttendance}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-surface-elevated border border-default text-on-surface-secondary rounded text-xs font-medium hover:bg-surface-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <RefreshIcon className="w-3.5 h-3.5" />
+                Refetch Attendance
+              </button>
+            ) : undefined
+          }
         />
         <table className="w-full text-sm">
           <thead className="bg-surface-elevated border-b border-default">

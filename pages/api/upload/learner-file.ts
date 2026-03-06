@@ -103,7 +103,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     }
 
     const fileName = path.basename(uploadedFile.filepath);
-    const fileUrl = `${getBaseUrl()}/uploads/learner/${fileType}/${fileName}`;
+    const fileUrl = `${getBaseUrl().replace(/\/$/, '')}/uploads/learner/${fileType}/${fileName}`;
     
     console.log(`✅ Learner Upload: File uploaded successfully: ${fileName}`);
     console.log(`📁 Learner Upload: File URL: ${fileUrl}`);

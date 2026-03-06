@@ -96,13 +96,13 @@ const ProfileDropdown: React.FC<{ onClose: () => void }> = ({ onClose }) => {
               }
               onClose();
             }}
-            className="flex items-center space-x-3 px-3 py-2.5 text-sm font-semibold rounded-md text-on-surface hover:bg-surface">
+            className="flex items-center space-x-3 px-3 py-2.5 text-sm font-semibold rounded-md text-on-surface hover:bg-gray-100 dark:hover:bg-gray-700/60">
             <Icon name={item.icon} className="w-5 h-5" />
             <span>{item.label}</span>
           </a>
         ))}
         <div className="border-t border-default my-1"></div>
-        <button onClick={logout} className="w-full flex items-center space-x-3 px-3 py-2.5 text-sm font-semibold text-on-surface hover:bg-surface rounded-md">
+        <button onClick={logout} className="w-full flex items-center space-x-3 px-3 py-2.5 text-sm font-semibold text-on-surface hover:bg-gray-100 dark:hover:bg-gray-700/60 rounded-md">
           <Icon name={IconName.Logout} className="w-5 h-5" />
           <span>Logout</span>
         </button>

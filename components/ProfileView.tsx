@@ -93,10 +93,18 @@ const ProfileView: React.FC = () => {
 
 // Separate component for trainer profile to avoid hook rule violations
 const TrainerProfileView: React.FC = () => {
-    const { currentUser } = useLms();
-    const { profile: trainerProfile, loading: trainerLoading, updateProfile: updateTrainerProfile } = useTrainerProfile(currentUser?.id);
+    const { currentUser, updateCurrentUserProfile } = useLms();
+    const { profile: trainerProfile, loading: trainerLoading, refetchProfile } = useTrainerProfile(currentUser?.id);
 
-    if (trainerLoading) {
+    // Sync header avatar whenever trainer profile data refreshes from DB
+    useEffect(() => {
+        if (trainerProfile?.profilePictureUrl) {
+            updateCurrentUserProfile({ profilePictureUrl: trainerProfile.profilePictureUrl, name: trainerProfile.name });
+        }
+    }, [trainerProfile]);
+
+    // Only show full-page loading on initial load (no profile yet)
+    if (trainerLoading && !trainerProfile) {
         return (
             <div className="min-h-screen bg-gray-50 flex items-center justify-center">
                 <div className="text-center">
@@ -118,9 +126,10 @@ const TrainerProfileView: React.FC = () => {
         );
     }
 
-    const handleTrainerUpdate = async (updatedData: Partial<TrainerProfile>) => {
-        if (!currentUser?.id) return;
-        await updateTrainerProfile(currentUser.id, updatedData);
+    const handleTrainerUpdate = async () => {
+        // The actual save was already done in TrainerProfileCard.handleSave directly.
+        // Silently refresh from DB — useEffect above will sync the header avatar.
+        await refetchProfile();
     };
 
     return (

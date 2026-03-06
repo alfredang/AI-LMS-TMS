@@ -23,7 +23,7 @@ export function ensureAbsoluteImageUrl(url: string | undefined | null): string |
     return url;
   }
 
-  const baseUrl = getBaseUrl();
+  const baseUrl = getBaseUrl().replace(/\/$/, '');
 
   // If it's a relative URL, make it absolute pointing to API server
   if (url.startsWith('/uploads/')) {
@@ -56,7 +56,7 @@ export function getCourseImageUrl(imageUrl?: string, courseId?: string): string 
     return imageUrl;
   }
 
-  const baseUrl = getBaseUrl();
+  const baseUrl = getBaseUrl().replace(/\/$/, '');
 
   // If it starts with /uploads, it's a local file - prepend the server URL
   if (imageUrl.startsWith('/uploads/')) {

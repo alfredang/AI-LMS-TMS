@@ -92,7 +92,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
 
     // Generate relative URL path
     const relativePath = `/uploads/admin/${path.basename(uploadedFile.filepath)}`;
-    const fullUrl = `${getBaseUrl()}${relativePath}`;
+    const fullUrl = `${getBaseUrl().replace(/\/$/, '')}${relativePath}`;
 
     console.log(`✅ Admin Upload: File uploaded successfully`);
     console.log(`📁 File path: ${uploadedFile.filepath}`);

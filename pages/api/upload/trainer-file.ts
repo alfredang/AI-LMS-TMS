@@ -104,7 +104,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
 
     // Generate the public URL path
     const relativePath = path.relative(path.join(process.cwd(), 'public'), file.filepath);
-    const fileUrl = `${getBaseUrl()}/${relativePath.replace(/\\/g, '/')}`;
+    const fileUrl = `${getBaseUrl().replace(/\/$/, '')}/${relativePath.replace(/\\/g, '/')}`;
 
     console.log('✅ File uploaded successfully:', {
       originalName: file.originalFilename,

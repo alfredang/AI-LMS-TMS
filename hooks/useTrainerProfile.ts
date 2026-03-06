@@ -9,15 +9,15 @@ export const useTrainerProfile = (userId?: string) => {
 
   console.log('🔧 useTrainerProfile - Hook called with userId:', userId);
 
-  const fetchProfile = useCallback(async (userIdParam?: string) => {
+  const fetchProfile = useCallback(async (userIdParam?: string, silent = false) => {
     if (!userIdParam) {
       console.log('⚠️ useTrainerProfile - No userId provided');
       return;
     }
-    
-    setLoading(true);
+
+    if (!silent) setLoading(true);
     setError(null);
-    
+
     try {
       console.log('📞 useTrainerProfile - Fetching trainer profile for:', userIdParam);
       const trainerProfile = await ProfileService.getTrainerProfile(userIdParam);
@@ -28,7 +28,7 @@ export const useTrainerProfile = (userId?: string) => {
       console.error('❌ useTrainerProfile - Error:', err);
       setError(errorMessage);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, []);
 
@@ -62,7 +62,7 @@ export const useTrainerProfile = (userId?: string) => {
     profile,
     loading,
     error,
-    refetchProfile: () => fetchProfile(userId),
+    refetchProfile: () => fetchProfile(userId, true),
     updateProfile
   };
 };

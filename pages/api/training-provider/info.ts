@@ -17,7 +17,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const getAbsoluteImageUrl = (url: string | null) => {
       if (!url) return '/images/default-company-logo.png';
       if (url.startsWith('http') || url.startsWith('blob:')) return url;
-      return `${getBaseUrl()}${url}`;
+      const base = getBaseUrl().replace(/\/$/, '');
+      const path = url.startsWith('/') ? url : `/${url}`;
+      return `${base}${path}`;
     };
 
     // If userId is provided, get info for that specific user's organization
@@ -31,7 +33,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       result = await pool.query(`
         SELECT
           tp.id,
-          COALESCE(tp.company_logo_url, au.profile_picture_url) AS profile_picture_url,
+          tp.company_logo_url AS profile_picture_url,
           tp.company_name,
           tp.company_shortname,
           tp.enable_otp_login,
@@ -40,16 +42,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           tp.color_scheme
         FROM training_provider_member tpm
         JOIN training_provider tp ON tpm.provider_id = tp.id
-        LEFT JOIN app_user au ON au.id = $1
         WHERE tpm.user_id = $1
       `, [userId]);
-      
+
       // 2. If not found, check if user IS the training provider (direct ownership)
       if (result.rows.length === 0) {
         result = await pool.query(`
           SELECT
             tp.id,
-            COALESCE(tp.company_logo_url, au.profile_picture_url) AS profile_picture_url,
+            tp.company_logo_url AS profile_picture_url,
             tp.company_name,
             tp.company_shortname,
             tp.enable_otp_login,
@@ -57,17 +58,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             tp.default_otp,
             tp.color_scheme
           FROM training_provider tp
-          LEFT JOIN app_user au ON au.id = tp.id
           WHERE tp.id = $1
         `, [userId]);
       }
-      
+
       // 3. If still not found, check provider_admin_user (legacy)
       if (result.rows.length === 0) {
         result = await pool.query(`
           SELECT
             tp.id,
-            COALESCE(tp.company_logo_url, au.profile_picture_url) AS profile_picture_url,
+            tp.company_logo_url AS profile_picture_url,
             tp.company_name,
             tp.company_shortname,
             tp.enable_otp_login,
@@ -76,7 +76,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             tp.color_scheme
           FROM provider_admin_user pau
           JOIN training_provider tp ON pau.provider_id = tp.id
-          LEFT JOIN app_user au ON au.id = $1
           WHERE pau.user_id = $1
         `, [userId]);
       }
@@ -108,7 +107,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       result = await pool.query(`
         SELECT
           au.id AS user_id,
-          COALESCE(tp.company_logo_url, au.profile_picture_url) AS profile_picture_url,
+          tp.company_logo_url AS profile_picture_url,
           tp.company_name,
           tp.company_shortname,
           tp.enable_otp_login,

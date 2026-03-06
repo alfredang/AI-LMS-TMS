@@ -573,7 +573,7 @@ const DocumentSection: React.FC<{
 // Main Trainer Profile Card Component
 export const TrainerProfileCard: React.FC<{
     profile: TrainerProfile;
-    onUpdate: (updatedData: Partial<TrainerProfile>) => void;
+    onUpdate: (updatedData?: Partial<TrainerProfile>) => void;
     userId?: string;
     onProfileUpdate?: () => void;
 }> = ({ profile, onUpdate, userId, onProfileUpdate }) => {
@@ -1096,11 +1096,20 @@ export const TrainerProfileCard: React.FC<{
             setProfilePicturePreviewUrl(null);
             setUploadedProfilePicturePath(null);
 
+            // Update formData with the actual saved profile picture path so view mode shows correct picture
+            const savedProfilePicturePath = currentUploadedPath || uploadedProfilePicturePath;
+            if (savedProfilePicturePath) {
+                setFormData(prev => ({ ...prev, profilePictureUrl: savedProfilePicturePath }));
+            }
+
             setIsEditing(false);
             alert('Profile saved successfully!');
 
             // Call callbacks to refresh parent components
-            onUpdate(formData);
+            const updatedFormData = savedProfilePicturePath
+                ? { ...formData, profilePictureUrl: savedProfilePicturePath }
+                : formData;
+            onUpdate(updatedFormData);
             if (onProfileUpdate) {
                 onProfileUpdate();
             }
@@ -1132,11 +1141,8 @@ export const TrainerProfileCard: React.FC<{
                             )}
                         </div>
                         {isEditing && (
-                            <div className="mt-2 space-y-1">
+                            <div className="mt-2">
                                 <input type="file" id="photo-upload" accept="image/*" onChange={handlePhotoChange} className="hidden" />
-                                <Button variant="ghost" size="sm" onClick={handleGenerateAvatar} disabled={isGeneratingAvatar}>
-                                    {isGeneratingAvatar ? <Spinner size="sm" /> : 'Generate Avatar'}
-                                </Button>
                             </div>
                         )}
                     </div>
