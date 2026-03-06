@@ -3,7 +3,6 @@ import { IncomingForm } from 'formidable';
 import fs from 'fs';
 import path from 'path';
 import { cors } from '../../../lib/cors';
-import { getBaseUrl } from '../../../lib/config';
 
 // Disable body parser to handle multipart/form-data
 export const config = {
@@ -102,9 +101,8 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       }
     }
 
-    // Generate the public URL path
-    const relativePath = path.relative(path.join(process.cwd(), 'public'), file.filepath);
-    const fileUrl = `${getBaseUrl().replace(/\/$/, '')}/${relativePath.replace(/\\/g, '/')}`;
+    // Generate the relative URL path (stored in DB; client uses ensureAbsoluteImageUrl to resolve)
+    const fileUrl = '/' + path.relative(path.join(process.cwd(), 'public'), file.filepath).replace(/\\/g, '/');
 
     console.log('✅ File uploaded successfully:', {
       originalName: file.originalFilename,

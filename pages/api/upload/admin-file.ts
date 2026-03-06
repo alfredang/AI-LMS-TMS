@@ -3,7 +3,6 @@ import { IncomingForm } from 'formidable';
 import fs from 'fs';
 import path from 'path';
 import { cors } from '../../../lib/cors';
-import { getBaseUrl } from '../../../lib/config';
 
 // Disable body parser to handle multipart/form-data
 export const config = {
@@ -92,12 +91,10 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
 
     // Generate relative URL path
     const relativePath = `/uploads/admin/${path.basename(uploadedFile.filepath)}`;
-    const fullUrl = `${getBaseUrl().replace(/\/$/, '')}${relativePath}`;
 
     console.log(`✅ Admin Upload: File uploaded successfully`);
     console.log(`📁 File path: ${uploadedFile.filepath}`);
     console.log(`🔗 Relative path: ${relativePath}`);
-    console.log(`🌐 Full URL: ${fullUrl}`);
 
     return res.status(200).json({
       success: true,
@@ -105,7 +102,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       data: {
         fileName: path.basename(uploadedFile.filepath),
         originalName: uploadedFile.originalFilename,
-        fileUrl: fullUrl,
+        fileUrl: relativePath,
         relativePath: relativePath,
         size: uploadedFile.size,
         mimetype: uploadedFile.mimetype

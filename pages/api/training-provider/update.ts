@@ -634,7 +634,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // Fetch updated profile data to return
       const updatedProfileResult = await pool.query(`
         SELECT 
-          au.id, au.full_name as "companyName", au.email, COALESCE(tp.company_logo_url, au.profile_picture_url) as "companyLogoUrl",
+          au.id, au.full_name as "companyName", au.email, tp.company_logo_url as "companyLogoUrl",
           tp.company_name as "companyName", tp.company_shortname as "companyShortname", 
           tp.uen, tp.company_address as "companyAddress",
           tp.contact_person_name as "contactPersonName", tp.contact_tel as "contactPersonTel",

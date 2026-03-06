@@ -3,7 +3,6 @@ import { IncomingForm } from 'formidable';
 import fs from 'fs';
 import path from 'path';
 import { cors } from '../../../lib/cors';
-import { getBaseUrl } from '../../../lib/config';
 
 // Disable body parser to handle multipart/form-data
 export const config = {
@@ -103,7 +102,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     }
 
     const fileName = path.basename(uploadedFile.filepath);
-    const fileUrl = `${getBaseUrl().replace(/\/$/, '')}/uploads/developer/${fileType}/${fileName}`;
+    const fileUrl = `/uploads/developer/${fileType}/${fileName}`;
     
     console.log(`✅ Developer Upload: File uploaded successfully: ${fileName}`);
     console.log(`📁 Developer Upload: File URL: ${fileUrl}`);
