@@ -13,13 +13,19 @@ import { getBaseUrl } from '../lib/config';
 export function ensureAbsoluteImageUrl(url: string | undefined | null): string | undefined {
   if (!url) return undefined;
 
-  // If URL is already absolute, return as-is
-  if (url.startsWith('http://') || url.startsWith('https://')) {
+  // If it's a data URL (base64), return as-is
+  if (url.startsWith('data:')) {
     return url;
   }
 
-  // If it's a data URL (base64), return as-is
-  if (url.startsWith('data:')) {
+  // Strip localhost URLs — extract just the path so they can be re-resolved with the correct host.
+  // This handles old DB records that stored full http://localhost:PORT/... URLs.
+  if (/^https?:\/\/localhost(:\d+)?\//.test(url)) {
+    url = url.replace(/^https?:\/\/localhost(:\d+)?/, '');
+  }
+
+  // If URL is already absolute (non-localhost), return as-is
+  if (url.startsWith('http://') || url.startsWith('https://')) {
     return url;
   }
 
@@ -49,6 +55,11 @@ export function ensureAbsoluteImageUrl(url: string | undefined | null): string |
 export function getCourseImageUrl(imageUrl?: string, courseId?: string): string {
   if (!imageUrl) {
     return `https://picsum.photos/seed/${courseId || 'default'}/400/200`;
+  }
+
+  // Strip localhost URLs before further processing
+  if (/^https?:\/\/localhost(:\d+)?\//.test(imageUrl)) {
+    imageUrl = imageUrl.replace(/^https?:\/\/localhost(:\d+)?/, '');
   }
 
   // If it's already a full URL (http/https), use it as-is

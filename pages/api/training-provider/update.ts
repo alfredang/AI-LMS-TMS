@@ -478,20 +478,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     try {
       console.log('💾 Starting database transaction...');
 
-      // Update app_user table
+      // Update app_user table (do NOT write company logo to profile_picture_url —
+      // company logo goes to training_provider.company_logo_url only)
       const userUpdateResult = await pool.query(`
-        UPDATE app_user 
+        UPDATE app_user
         SET full_name = COALESCE($1, full_name),
             email = COALESCE($2, email),
-            profile_picture_url = COALESCE($3, profile_picture_url),
-            password = COALESCE($4, password),
+            password = COALESCE($3, password),
             updated_at = NOW()
-        WHERE id = $5
+        WHERE id = $4
         RETURNING *
       `, [
         profileData.name || profileData.companyName,
         profileData.contactPerson?.email || profileData.email,
-        filePaths.companyLogoUrl,
         profileData.password,
         userId
       ]);
