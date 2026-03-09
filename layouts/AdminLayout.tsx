@@ -1,11 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
 import AiChatbot from '../components/AiChatbot';
 import { useLms } from '../contexts/LmsContext';
 import { View, AdminPage } from '@app-types';
-import { AdminProfile } from '@app-types/profile';
-import { AdminProfileCard } from '../components/common/AdminProfileCard';
+import { ProfilePage } from '../components/ProfilePage';
 import HelpAndSupportView from '../components/HelpAndSupportView';
 import { AdminDashboard } from '../components/AdminDashboard';
 import CourseList from '../components/CourseList';
@@ -19,7 +18,6 @@ import AdminSidebar from '../components/admin/AdminSidebar';
 import ViewTrainers from '../components/admin/ViewTrainers';
 import OngoingClasses from '../components/admin/OngoingClasses';
 import CompletedClasses from '../components/admin/CompletedClasses';
-import { getApiUrl } from '@/lib/urlHelpers';
 import ClassDetailView from '../components/admin/ClassDetailView';
 import { UpcomingClassesTable } from '../components/UpcomingClassesTable';
 import { ClassManagerView, AssignTrainerView, AddCourseView, AddCourseRunView } from '../components/admin/ClassManagementViews';
@@ -96,106 +94,16 @@ const ManagementDashboard: React.FC<ManagementDashboardProps> = ({ type }) => {
 };
 
 const AdminLayout: React.FC = () => {
-  const { currentView, adminPage, currentUser, selectedCourse, editingCourse, selectedCourseRunId, editingCourseRun } = useLms();
-  const [adminProfile, setAdminProfile] = useState<AdminProfile | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { currentView, adminPage, selectedCourse, editingCourse, selectedCourseRunId, editingCourseRun } = useLms();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-
-  // Fetch admin profile data from database
-  useEffect(() => {
-    const fetchAdminProfile = async () => {
-      if (!currentUser?.id) {
-        setError('No authenticated user found');
-        setLoading(false);
-        return;
-      }
-
-      try {
-        setLoading(true);
-        const response = await fetch(getApiUrl(`/api/profile-new?userId=${currentUser.id}&role=admin`));
-
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
-        const result = await response.json();
-
-        if (result.success && result.data?.profile) {
-          setAdminProfile(result.data.profile);
-          setError(null);
-        } else {
-          throw new Error(result.error || 'Failed to fetch admin profile');
-        }
-      } catch (err) {
-        console.error('Error fetching admin profile:', err);
-        setError(err instanceof Error ? err.message : 'Unknown error occurred');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchAdminProfile();
-  }, [currentUser?.id]);
 
   // Handle full-width views (Profile and Help & Support only)
   if (currentView === View.Profile || currentView === View.HelpAndSupport) {
-    const FullWidthContent = () => {
-      if (currentView === View.Profile) {
-        if (loading) {
-          return (
-            <div className="flex items-center justify-center min-h-[400px]">
-              <div className="text-center">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
-                <p className="mt-4 text-gray-600">Loading admin profile...</p>
-              </div>
-            </div>
-          );
-        }
-
-        if (error) {
-          return (
-            <div className="flex items-center justify-center min-h-[400px]">
-              <div className="text-center">
-                <h2 className="text-xl font-bold text-red-600 mb-2">Error Loading Profile</h2>
-                <p className="text-gray-600 mb-4">{error}</p>
-                <button
-                  onClick={() => window.location.reload()}
-                  className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
-                >
-                  Retry
-                </button>
-              </div>
-            </div>
-          );
-        }
-
-        if (!adminProfile) {
-          return (
-            <div className="flex items-center justify-center min-h-[400px]">
-              <div className="text-center">
-                <h2 className="text-xl font-bold text-gray-800 mb-2">No Admin Profile Found</h2>
-                <p className="text-gray-600">Admin profile data is not available.</p>
-              </div>
-            </div>
-          );
-        }
-
-        return <AdminProfileCard profile={adminProfile} />;
-      }
-
-      if (currentView === View.HelpAndSupport) {
-        return <HelpAndSupportView />;
-      }
-
-      return null;
-    };
-
     return (
       <div className="min-h-screen flex flex-col bg-background font-sans text-on-surface">
         <Header />
         <main className="container mx-auto p-4 sm:p-6 lg:p-8 flex-grow">
-          <FullWidthContent />
+          {currentView === View.Profile ? <ProfilePage /> : <HelpAndSupportView />}
         </main>
         <Footer />
         <AiChatbot />

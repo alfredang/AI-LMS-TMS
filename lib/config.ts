@@ -11,11 +11,11 @@
 export function getBaseUrl(): string {
   // Client-side: use NEXT_PUBLIC_BASE_URL
   if (typeof window !== 'undefined') {
-    return process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
+    return process.env.NEXT_PUBLIC_BASE_URL || '';
   }
 
   // Server-side: use BASE_URL or NEXT_PUBLIC_BASE_URL
-  return process.env.BASE_URL || process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
+  return process.env.BASE_URL || process.env.NEXT_PUBLIC_BASE_URL || '';
 }
 
 /**

@@ -151,7 +151,10 @@ const TrainingProviderProfileView: React.FC = () => {
 
     // Fetch training provider profile from backend
     const fetchProfile = async () => {
-        if (!currentUser?.id) return;
+        if (!currentUser?.id) {
+            setLoading(false);
+            return;
+        }
 
         setLoading(true);
         setError(null);

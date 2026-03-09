@@ -15,6 +15,9 @@ services:
       # Internal URL — app talks to the db container within the Docker network
       # Public URL for external tools: postgresql://postgres:password123@76.13.180.29:6434/lmsdb?sslmode=disable
       DATABASE_URL: postgresql://postgres:${DB_PASSWORD:-password123}@db:5432/${DB_NAME:-lmsdb}?sslmode=disable
+    volumes:
+      # Persist uploaded files across container restarts and redeployments
+      - uploads_data:/app/public/uploads
     restart: unless-stopped
     depends_on:
       db:
@@ -61,3 +64,4 @@ services:
 
 volumes:
   postgres_data:
+  uploads_data:

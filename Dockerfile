@@ -23,6 +23,9 @@ COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 
+# Ensure the uploads directory exists and is writable at runtime
+RUN mkdir -p /app/public/uploads && chmod -R 755 /app/public/uploads
+
 # Copy seed/init scripts so they can be run inside the container if needed
 COPY --from=builder /app/scripts ./scripts
 COPY --from=builder /app/database ./database
