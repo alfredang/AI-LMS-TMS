@@ -40,6 +40,17 @@ const nextConfig = {
     return config;
   },
 
+  // Rewrite /uploads/* to the API file-serving route so dynamically-uploaded
+  // files in the Docker volume are served reliably in standalone mode.
+  async rewrites() {
+    return [
+      {
+        source: '/uploads/:path*',
+        destination: '/api/uploads/:path*',
+      },
+    ];
+  },
+
   // Only expose PUBLIC environment variables
   // NEVER expose database credentials or secrets here
   env: {

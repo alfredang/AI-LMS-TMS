@@ -31,18 +31,22 @@ export function ensureAbsoluteImageUrl(url: string | undefined | null): string |
 
   const baseUrl = getBaseUrl().replace(/\/$/, '');
 
+  // For locally-hosted uploads, use relative URLs when baseUrl is empty or localhost.
+  // This prevents baked-in localhost build-time values from breaking image URLs in production.
+  const isLocalhostBase = !baseUrl || /^https?:\/\/localhost(:\d+)?$/.test(baseUrl);
+
   // If it's a relative URL, make it absolute pointing to API server
   if (url.startsWith('/uploads/')) {
-    return `${baseUrl}${url}`;
+    return isLocalhostBase ? url : `${baseUrl}${url}`;
   }
 
   // If it doesn't start with /, add the leading slash and make absolute
   if (url.startsWith('uploads/')) {
-    return `${baseUrl}/${url}`;
+    return isLocalhostBase ? `/${url}` : `${baseUrl}/${url}`;
   }
 
   // For any other relative URL, assume it needs the API server prefix
-  return `${baseUrl}/${url}`;
+  return isLocalhostBase ? `/${url}` : `${baseUrl}/${url}`;
 }
 
 /**
@@ -68,10 +72,11 @@ export function getCourseImageUrl(imageUrl?: string, courseId?: string): string 
   }
 
   const baseUrl = getBaseUrl().replace(/\/$/, '');
+  const isLocalhostBase = !baseUrl || /^https?:\/\/localhost(:\d+)?$/.test(baseUrl);
 
   // If it starts with /uploads, it's a local file - prepend the server URL
   if (imageUrl.startsWith('/uploads/')) {
-    return `${baseUrl}${imageUrl}`;
+    return isLocalhostBase ? imageUrl : `${baseUrl}${imageUrl}`;
   }
 
   // If it's a blob URL (from file upload preview), return it as-is
