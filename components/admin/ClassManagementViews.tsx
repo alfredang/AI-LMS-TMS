@@ -3594,6 +3594,197 @@ export const AssignTrainerView: React.FC = () => {
     );
 };
 
+export const AssignStudentView: React.FC = () => {
+    const { setAdminPage } = useLms();
+
+    const [courseRuns, setCourseRuns] = useState<any[]>([]);
+    const [search, setSearch] = useState('');
+    const [loadingRuns, setLoadingRuns] = useState(false);
+
+    const [availableLearners, setAvailableLearners] = useState<any[]>([]);
+    const [loadingLearners, setLoadingLearners] = useState(false);
+
+    const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
+    const [selectedLearnerId, setSelectedLearnerId] = useState('');
+    const [saving, setSaving] = useState(false);
+    const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+    const fetchCourseRuns = async (q: string) => {
+        setLoadingRuns(true);
+        try {
+            const params = q ? `?search=${encodeURIComponent(q)}` : '';
+            const res = await fetch(`/api/admin/all-course-runs${params}`);
+            const json = await res.json();
+            if (json.success) setCourseRuns(json.data);
+        } catch {
+            /* silent */
+        } finally {
+            setLoadingRuns(false);
+        }
+    };
+
+    const fetchLearners = async () => {
+        setLoadingLearners(true);
+        try {
+            const res = await fetch('/api/admin/learners');
+            const json = await res.json();
+            if (json.success) setAvailableLearners(json.data);
+        } catch {
+            /* silent */
+        } finally {
+            setLoadingLearners(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchCourseRuns('');
+        fetchLearners();
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+    const handleSearch = (e: React.FormEvent) => {
+        e.preventDefault();
+        fetchCourseRuns(search);
+    };
+
+    const handleAssign = async (run: any) => {
+        setMessage(null);
+        if (!selectedLearnerId) {
+            setMessage({ type: 'error', text: 'Please select a student.' });
+            return;
+        }
+
+        setSaving(true);
+        try {
+            const res = await fetch('/api/admin/assign-student', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ courseRunUuid: run.id, userId: selectedLearnerId }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Failed to assign student');
+            const learner = availableLearners.find(l => l.user_id === selectedLearnerId);
+            setMessage({ type: 'success', text: `"${learner?.full_name || 'Student'}" enrolled in ${run.courseTitle}.` });
+            setSelectedRunId(null);
+            setSelectedLearnerId('');
+        } catch (err) {
+            setMessage({ type: 'error', text: err instanceof Error ? err.message : 'Failed to assign student' });
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const inputClasses = 'w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white';
+
+    return (
+        <div>
+            <div className="flex justify-between items-center mb-6">
+                <h2 className="text-3xl font-bold dark:text-white">Assign Student</h2>
+                <Button variant="ghost" onClick={() => setAdminPage(AdminPage.Dashboard)}>
+                    Back to Dashboard
+                </Button>
+            </div>
+
+            {/* Feedback banner */}
+            {message && (
+                <div className={`mb-4 p-3 rounded-md text-sm ${message.type === 'success' ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 text-green-800 dark:text-green-300' : 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 text-red-800 dark:text-red-300'}`}>
+                    {message.text}
+                </div>
+            )}
+
+            {/* Search */}
+            <Card className="p-4 mb-4 dark:bg-gray-800 dark:border-gray-700">
+                <form onSubmit={handleSearch} className="flex gap-2">
+                    <input
+                        type="text"
+                        value={search}
+                        onChange={e => setSearch(e.target.value)}
+                        placeholder="Search by course title, code or run ID..."
+                        className={`${inputClasses} flex-1`}
+                    />
+                    <Button type="submit" disabled={loadingRuns}>
+                        {loadingRuns ? 'Searching...' : 'Search'}
+                    </Button>
+                </form>
+            </Card>
+
+            {/* Course Runs List */}
+            <Card className="dark:bg-gray-800 dark:border-gray-700 overflow-hidden">
+                {loadingRuns ? (
+                    <div className="p-8 text-center text-sm text-gray-500">Loading course runs...</div>
+                ) : courseRuns.length === 0 ? (
+                    <div className="p-8 text-center text-sm text-gray-500">No course runs found.</div>
+                ) : (
+                    <div className="divide-y divide-gray-200 dark:divide-gray-700">
+                        {courseRuns.map(run => {
+                            const isExpanded = selectedRunId === run.id;
+
+                            return (
+                                <div key={run.id}>
+                                    {/* Row */}
+                                    <div
+                                        className="flex items-center justify-between px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer"
+                                        onClick={() => {
+                                            setSelectedRunId(isExpanded ? null : run.id);
+                                            setMessage(null);
+                                            setSelectedLearnerId('');
+                                        }}
+                                    >
+                                        <div className="flex-1 min-w-0 mr-4">
+                                            <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{run.courseTitle}</p>
+                                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                                                {run.courseCode}&nbsp;&nbsp;|&nbsp;&nbsp;Run: {run.courseRunId || '—'}&nbsp;&nbsp;|&nbsp;&nbsp;
+                                                {run.startDate ? new Date(run.startDate).toLocaleDateString() : '—'} – {run.endDate ? new Date(run.endDate).toLocaleDateString() : '—'}
+                                            </p>
+                                        </div>
+                                        <span className="text-gray-400 text-xs shrink-0">{isExpanded ? '▲' : '▼'}</span>
+                                    </div>
+
+                                    {/* Expanded assignment form */}
+                                    {isExpanded && (
+                                        <div className="bg-gray-50 dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 px-4 py-4 space-y-4">
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                    Student <span className="text-red-500">*</span>
+                                                </label>
+                                                {loadingLearners ? (
+                                                    <p className="text-sm text-gray-500 italic">Loading students...</p>
+                                                ) : (
+                                                    <select
+                                                        value={selectedLearnerId}
+                                                        onChange={e => setSelectedLearnerId(e.target.value)}
+                                                        className={inputClasses}
+                                                    >
+                                                        <option value="">— Select a student —</option>
+                                                        {availableLearners.map(l => (
+                                                            <option key={l.user_id} value={l.user_id}>
+                                                                {l.full_name} ({l.email})
+                                                            </option>
+                                                        ))}
+                                                    </select>
+                                                )}
+                                            </div>
+
+                                            <div className="flex justify-end">
+                                                <Button
+                                                    onClick={() => handleAssign(run)}
+                                                    disabled={saving}
+                                                    className="bg-green-600 hover:bg-green-700 text-white"
+                                                >
+                                                    {saving ? 'Enrolling...' : 'Assign Student'}
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
+            </Card>
+        </div>
+    );
+};
+
 export const AddCourseView: React.FC = () => {
     const { setAdminPage } = useLms();
     const [form, setForm] = useState({ title: '', courseCode: '', courseType: 'Non-WSQ', tscTitle: '', tscCode: '', trainingHours: '', assessmentHours: '' });

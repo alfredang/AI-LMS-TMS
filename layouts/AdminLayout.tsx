@@ -20,7 +20,7 @@ import OngoingClasses from '../components/admin/OngoingClasses';
 import CompletedClasses from '../components/admin/CompletedClasses';
 import ClassDetailView from '../components/admin/ClassDetailView';
 import { UpcomingClassesTable } from '../components/UpcomingClassesTable';
-import { ClassManagerView, AssignTrainerView, AddCourseView, AddCourseRunView } from '../components/admin/ClassManagementViews';
+import { ClassManagerView, AssignTrainerView, AssignStudentView, AddCourseView, AddCourseRunView } from '../components/admin/ClassManagementViews';
 import { CreateNewClassView } from '../components/admin/CreateNewClassView';
 import EnrollLearners from '../components/admin/EnrollLearners';
 import {
@@ -155,6 +155,8 @@ const AdminLayout: React.FC = () => {
         return <EnrollLearners />;
       case AdminPage.AssignTrainer:
         return <AssignTrainerView />;
+      case AdminPage.AssignStudent:
+        return <AssignStudentView />;
       case AdminPage.AddCourse:
         return <AddCourseView />;
       case AdminPage.AddCourseRun:
