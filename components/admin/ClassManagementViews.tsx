@@ -187,7 +187,8 @@ export const ClassManagerView: React.FC<ClassManagerViewProps> = ({ courseToEdit
     });
 
     // Constants for form options
-    const inputClasses = "block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-500";
+    const inputClasses = "block w-full px-3 py-2 text-gray-900 dark:text-white bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent";
+    const disabledInputClasses = "bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 cursor-not-allowed";
 
     const modeOfTrainingOptions = [
         { value: '1', label: '1 - Classroom' },
@@ -2090,35 +2091,21 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
             </div>
 
             {isEditMode && (
-                <div className="border-b border-gray-200 mb-6">
+                <div className="border-b border-gray-200 dark:border-gray-700 mb-6">
                     <nav className="-mb-px flex space-x-8">
-                        <button
-                            onClick={() => setActiveTab('courseRun')}
-                            className={`whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm ${activeTab === 'courseRun'
-                                    ? 'border-blue-500 text-blue-600'
-                                    : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300'
+                        {(['courseRun', 'sessions', 'trainer'] as const).map(tab => (
+                            <button
+                                key={tab}
+                                onClick={() => setActiveTab(tab)}
+                                className={`whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm transition-colors ${
+                                    activeTab === tab
+                                        ? 'border-blue-500 text-blue-500'
+                                        : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:border-gray-300 dark:hover:border-gray-500'
                                 }`}
-                        >
-                            Course Run
-                        </button>
-                        <button
-                            onClick={() => setActiveTab('sessions')}
-                            className={`whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm ${activeTab === 'sessions'
-                                    ? 'border-blue-500 text-blue-600'
-                                    : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300'
-                                }`}
-                        >
-                            Sessions
-                        </button>
-                        <button
-                            onClick={() => setActiveTab('trainer')}
-                            className={`whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm ${activeTab === 'trainer'
-                                    ? 'border-blue-500 text-blue-600'
-                                    : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300'
-                                }`}
-                        >
-                            Trainer
-                        </button>
+                            >
+                                {tab === 'courseRun' ? 'Course Run' : tab === 'sessions' ? 'Sessions' : 'Trainer'}
+                            </button>
+                        ))}
                     </nav>
                 </div>
             )}
@@ -2128,18 +2115,18 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                 {(!isEditMode || activeTab === 'courseRun') && (
                     <>
                         {isEditMode && ssgApiResponse && !ssgApiLoading && (
-                            <div className="bg-green-50 border border-green-200 rounded-md p-3 mb-4">
-                                <p className="text-sm text-green-800">
+                            <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-md p-3 mb-4">
+                                <p className="text-sm text-green-800 dark:text-green-300">
                                     <strong>✓ Form populated with SSG data</strong> - The form fields below have been automatically filled with data from the SSG API. You can modify any field as needed before updating.
                                 </p>
                             </div>
                         )}
 
                         {isEditMode && ssgApiLoading && (
-                            <div className="bg-blue-50 border border-blue-200 rounded-md p-3 mb-4">
+                            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-md p-3 mb-4">
                                 <div className="flex items-center">
                                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
-                                    <p className="text-sm text-blue-800">
+                                    <p className="text-sm text-blue-800 dark:text-blue-300">
                                         <strong>Loading SSG data...</strong> Form fields will be populated automatically when data is retrieved.
                                     </p>
                                 </div>
@@ -2156,7 +2143,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                         type="text"
                                         value={courseRunId}
                                         onChange={e => setCourseRunId(e.target.value)}
-                                        className={`${inputClasses} ${isEditMode ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                                        className={`${inputClasses} ${isEditMode ? disabledInputClasses : ''}`}
                                         placeholder="Enter course run ID"
                                         readOnly={isEditMode}
                                         disabled={isEditMode}
@@ -2171,7 +2158,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                             type="text"
                                             value={courseReferenceNumber}
                                             onChange={e => setCourseReferenceNumber(e.target.value)}
-                                            className={`${inputClasses} bg-gray-100 cursor-not-allowed`}
+                                            className={`${inputClasses} ${disabledInputClasses}`}
                                             placeholder="Enter course reference number"
                                             readOnly={isEditMode}
                                             disabled={isEditMode}
@@ -2415,7 +2402,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                     {hasExistingSessions ? (
                                         <div className="space-y-4">
                                             {existingSessions.map((session: any, index: number) => (
-                                                <Card key={session.id || index} className="p-4 bg-gray-50">
+                                                <Card key={session.id || index} className="p-4 bg-gray-50 dark:bg-gray-800/60">
                                                     {editingSessionIndex === index ? (
                                                         // Editing mode for existing session
                                                         <div className="space-y-3">
@@ -2427,7 +2414,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                                         type="text"
                                                                         value={session.id || ''}
                                                                         readOnly
-                                                                        className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-100 cursor-not-allowed"
+                                                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 cursor-not-allowed"
                                                                         placeholder="Session ID (Read Only)"
                                                                     />
                                                                 </div>
@@ -2440,7 +2427,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                                             updatedSessions[index] = handleSessionFieldUpdate(updatedSessions[index], 'modeOfTraining', e.target.value);
                                                                             setExistingSessions(updatedSessions);
                                                                         }}
-                                                                        className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                                                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                                     >
                                                                         <option value="">Select mode of training</option>
                                                                         <option value="1">1 - Classroom</option>
@@ -2464,7 +2451,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                                             updatedSessions[index] = handleSessionFieldUpdate(updatedSessions[index], 'startDate', e.target.value);
                                                                             setExistingSessions(updatedSessions);
                                                                         }}
-                                                                        className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                                                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                                     />
                                                                 </div>
                                                                 <div>
@@ -2477,7 +2464,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                                             updatedSessions[index] = { ...updatedSessions[index], endDate: e.target.value };
                                                                             setExistingSessions(updatedSessions);
                                                                         }}
-                                                                        className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                                                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                                         disabled={session.modeOfTraining === '2' || session.modeOfTraining === '4' ? false : false}
                                                                     />
                                                                     {(session.modeOfTraining && session.modeOfTraining !== '2' && session.modeOfTraining !== '4') && (
@@ -2494,7 +2481,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                                             updatedSessions[index] = { ...updatedSessions[index], startTime: e.target.value };
                                                                             setExistingSessions(updatedSessions);
                                                                         }}
-                                                                        className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                                                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                                         disabled={session.modeOfTraining === '2' || session.modeOfTraining === '4'}
                                                                     />
                                                                     {(session.modeOfTraining === '2' || session.modeOfTraining === '4') && (
@@ -2511,7 +2498,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                                             updatedSessions[index] = { ...updatedSessions[index], endTime: e.target.value };
                                                                             setExistingSessions(updatedSessions);
                                                                         }}
-                                                                        className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                                                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                                         disabled={session.modeOfTraining === '2' || session.modeOfTraining === '4'}
                                                                     />
                                                                     {(session.modeOfTraining === '2' || session.modeOfTraining === '4') && (
@@ -2537,7 +2524,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                                                 };
                                                                                 setExistingSessions(updatedSessions);
                                                                             }}
-                                                                            className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                                                                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                                             placeholder="Enter block"
                                                                         />
                                                                     </div>
@@ -2554,7 +2541,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                                                 };
                                                                                 setExistingSessions(updatedSessions);
                                                                             }}
-                                                                            className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                                                                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                                             placeholder="Enter street"
                                                                         />
                                                                     </div>
@@ -2571,7 +2558,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                                                 };
                                                                                 setExistingSessions(updatedSessions);
                                                                             }}
-                                                                            className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                                                                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                                             placeholder="Enter building"
                                                                         />
                                                                     </div>
@@ -2588,7 +2575,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                                                 };
                                                                                 setExistingSessions(updatedSessions);
                                                                             }}
-                                                                            className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                                                                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                                             placeholder="Enter floor"
                                                                         />
                                                                     </div>
@@ -2605,7 +2592,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                                                 };
                                                                                 setExistingSessions(updatedSessions);
                                                                             }}
-                                                                            className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                                                                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                                             placeholder="Enter unit"
                                                                         />
                                                                     </div>
@@ -2622,7 +2609,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                                                 };
                                                                                 setExistingSessions(updatedSessions);
                                                                             }}
-                                                                            className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                                                                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                                             placeholder="Enter postal code"
                                                                         />
                                                                     </div>
@@ -2639,7 +2626,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                                                 };
                                                                                 setExistingSessions(updatedSessions);
                                                                             }}
-                                                                            className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                                                                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                                             placeholder="Enter room"
                                                                         />
                                                                     </div>
@@ -2655,7 +2642,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                                                 };
                                                                                 setExistingSessions(updatedSessions);
                                                                             }}
-                                                                            className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                                                                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                                         >
                                                                             <option value="">Select wheelchair access</option>
                                                                             <option value="true">Yes</option>
@@ -2747,9 +2734,9 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                     {showNewSessionForm && (
                                         <div className="space-y-4">
                                             {newSessions.map((session, index) => (
-                                                <Card key={index} className="p-4 bg-green-50 space-y-3 border-green-200">
+                                                <Card key={index} className="p-4 bg-green-50 dark:bg-green-900/20 space-y-3 border-green-200 dark:border-green-700">
                                                     <div className="flex justify-between items-center">
-                                                        <h4 className="font-medium text-green-700">
+                                                        <h4 className="font-medium text-green-700 dark:text-green-400">
                                                             {index === 0 ? 'Add New Session' : `Add New Session ${index + 1}`}
                                                         </h4>
                                                         {index > 0 && (
@@ -2768,7 +2755,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                         <select
                                                             value={session.modeOfTraining}
                                                             onChange={(e) => updateNewSessionField(index, 'modeOfTraining', e.target.value)}
-                                                            className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                                                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                         >
                                                             <option value="">Select mode of training</option>
                                                             {modeOfTrainingOptions.map(option => (
@@ -2787,7 +2774,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                                 type="date"
                                                                 value={session.startDate}
                                                                 onChange={(e) => updateNewSessionField(index, 'startDate', e.target.value)}
-                                                                className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                                                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                             />
                                                         </div>
                                                         <div>
@@ -2796,7 +2783,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                                 type="date"
                                                                 value={session.endDate}
                                                                 onChange={(e) => updateNewSessionField(index, 'endDate', e.target.value)}
-                                                                className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                                                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                             />
                                                             {(session.modeOfTraining && session.modeOfTraining !== '2' && session.modeOfTraining !== '4') && (
                                                                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Auto-filled from start date for this mode</p>
@@ -2808,7 +2795,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                                 type="time"
                                                                 value={session.startTime}
                                                                 onChange={(e) => updateNewSessionField(index, 'startTime', e.target.value)}
-                                                                className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                                                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                                 disabled={session.modeOfTraining === '2' || session.modeOfTraining === '4'}
                                                             />
                                                             {(session.modeOfTraining === '2' || session.modeOfTraining === '4') && (
@@ -2821,7 +2808,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                                 type="time"
                                                                 value={session.endTime}
                                                                 onChange={(e) => updateNewSessionField(index, 'endTime', e.target.value)}
-                                                                className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                                                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                                 disabled={session.modeOfTraining === '2' || session.modeOfTraining === '4'}
                                                             />
                                                             {(session.modeOfTraining === '2' || session.modeOfTraining === '4') && (
@@ -2840,7 +2827,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                                     type="text"
                                                                     value={session.floor || ''}
                                                                     onChange={(e) => updateNewSessionField(index, 'floor', e.target.value)}
-                                                                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                                                                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                                     maxLength={3}
                                                                     placeholder="Enter floor"
                                                                 />
@@ -2851,7 +2838,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                                     type="text"
                                                                     value={session.unit || ''}
                                                                     onChange={(e) => updateNewSessionField(index, 'unit', e.target.value)}
-                                                                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                                                                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                                     maxLength={5}
                                                                     placeholder="Enter unit"
                                                                 />
@@ -2862,7 +2849,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                                     type="text"
                                                                     value={session.postalCode || ''}
                                                                     onChange={(e) => updateNewSessionField(index, 'postalCode', e.target.value)}
-                                                                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                                                                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                                     maxLength={6}
                                                                     placeholder="Enter postal code"
                                                                 />
@@ -2873,7 +2860,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                                     type="text"
                                                                     value={session.room || ''}
                                                                     onChange={(e) => updateNewSessionField(index, 'room', e.target.value)}
-                                                                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                                                                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                                     maxLength={255}
                                                                     placeholder="Enter room"
                                                                 />
@@ -2936,26 +2923,26 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                         <div className="space-y-6">
                             {/* Currently Assigned Local Trainer */}
                             {localAssignedTrainerName ? (
-                                <div className="bg-green-50 border border-green-200 rounded-md p-4">
-                                    <h4 className="text-sm font-semibold text-green-800 mb-2">Assigned Trainer (Local System)</h4>
+                                <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-md p-4">
+                                    <h4 className="text-sm font-semibold text-green-800 dark:text-green-300 mb-2">Assigned Trainer (Local System)</h4>
                                     <div className="flex flex-wrap gap-6 text-sm">
                                         <div>
-                                            <span className="font-bold text-gray-700">Name:</span>{' '}
-                                            <span className="text-gray-900">{localAssignedTrainerName}</span>
+                                            <span className="font-bold text-gray-700 dark:text-gray-300">Name:</span>{' '}
+                                            <span className="text-gray-900 dark:text-white">{localAssignedTrainerName}</span>
                                         </div>
                                         {localAssignedTrainerEmail && (
                                             <div>
-                                                <span className="font-bold text-gray-700">Email:</span>{' '}
-                                                <span className="text-gray-900">{localAssignedTrainerEmail}</span>
+                                                <span className="font-bold text-gray-700 dark:text-gray-300">Email:</span>{' '}
+                                                <span className="text-gray-900 dark:text-white">{localAssignedTrainerEmail}</span>
                                             </div>
                                         )}
                                     </div>
-                                    <p className="text-xs text-green-700 mt-2">
+                                    <p className="text-xs text-green-700 dark:text-green-400 mt-2">
                                         This trainer can view this class in their attendance dashboard.
                                     </p>
                                 </div>
                             ) : (
-                                <div className="bg-gray-50 border border-gray-200 rounded-md p-4 text-sm text-gray-500">
+                                <div className="bg-gray-50 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700 rounded-md p-4 text-sm text-gray-500 dark:text-gray-400">
                                     No trainer has been locally assigned to this course run yet. Use the form below to assign one.
                                 </div>
                             )}
@@ -2963,17 +2950,17 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                             {/* Display Assigned Trainer Information */}
                             {ssgApiResponse?.data?.data?.course?.run ? (
                                 <div>
-                                    <h4 className="text-lg font-medium text-gray-900 mb-4">Currently Assigned Trainer</h4>
+                                    <h4 className="text-lg font-medium text-gray-900 dark:text-white mb-4">Currently Assigned Trainer</h4>
                                     {ssgApiResponse.data.data.course.run.linkCourseRunTrainer &&
                                         ssgApiResponse.data.data.course.run.linkCourseRunTrainer.length > 0 ? (
                                         <div className="space-y-4">
                                             {ssgApiResponse.data.data.course.run.linkCourseRunTrainer.map((trainerLink: any, index: number) => {
                                                 const trainer = trainerLink.trainer;
                                                 return (
-                                                    <Card key={index} className="p-4 bg-blue-50 border-blue-200">
+                                                    <Card key={index} className="p-4 bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-700">
                                                         <div className="flex justify-between items-start">
                                                             <div className="flex-1">
-                                                                <h5 className="text-md font-semibold text-blue-800 mb-2">
+                                                                <h5 className="text-md font-semibold text-blue-800 dark:text-blue-300 mb-2">
                                                                     Trainer {index + 1}
                                                                 </h5>
                                                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
@@ -2997,12 +2984,12 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                             })}
                                         </div>
                                     ) : (
-                                        <Card className="p-6 bg-gray-50 border-gray-200 text-center">
+                                        <Card className="p-6 bg-gray-50 dark:bg-gray-800/60 border-gray-200 dark:border-gray-700 text-center">
                                             <div className="text-gray-600 dark:text-gray-300">
                                                 <svg className="mx-auto h-12 w-12 text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                                                 </svg>
-                                                <h5 className="text-lg font-medium text-gray-900 mb-2">No Trainer Assigned</h5>
+                                                <h5 className="text-lg font-medium text-gray-900 dark:text-white mb-2">No Trainer Assigned</h5>
                                                 <p className="text-sm text-gray-500 dark:text-gray-400">
                                                     No trainer has been assigned to this course run yet. Use the form below to assign a trainer.
                                                 </p>
@@ -3011,7 +2998,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                     )}
                                 </div>
                             ) : (
-                                <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4">
+                                <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-md p-4">
                                     <div className="flex">
                                         <div className="flex-shrink-0">
                                             <svg className="h-5 w-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
@@ -3019,10 +3006,10 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                             </svg>
                                         </div>
                                         <div className="ml-3">
-                                            <h3 className="text-sm font-medium text-yellow-800">
+                                            <h3 className="text-sm font-medium text-yellow-800 dark:text-yellow-300">
                                                 Course Run Data Required
                                             </h3>
-                                            <p className="text-sm text-yellow-700 mt-1">
+                                            <p className="text-sm text-yellow-700 dark:text-yellow-400 mt-1">
                                                 Please fetch SSG course run data first to view assigned trainer information.
                                             </p>
                                         </div>
@@ -3031,8 +3018,8 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                             )}
 
                             {/* Assign New Trainer Form */}
-                            <div className="border-t pt-6">
-                                <h4 className="text-lg font-medium text-gray-900 mb-4">Assign New Trainer</h4>
+                            <div className="border-t dark:border-gray-700 pt-6">
+                                <h4 className="text-lg font-medium text-gray-900 dark:text-white mb-4">Assign New Trainer</h4>
 
                                 {Array.from({ length: trainerCount }, (_, index) => {
                                     const trainerInfo = getTrainerData(index);
@@ -3045,7 +3032,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                     }
 
                                     return (
-                                        <Card key={index} className="p-4 bg-gray-50">
+                                        <Card key={index} className="p-4 bg-gray-50 dark:bg-gray-800/60">
                                             <div className="space-y-4">
                                                 {/* Hidden Trainer Type field - always set to "1" (Existing) for request body */}
                                                 <input
@@ -3091,9 +3078,9 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                             </div>
 
                             {/* Local DB Trainer Assignment */}
-                            <div className="border-t pt-6 mt-6">
-                                <h4 className="text-lg font-medium text-gray-900 mb-1">Assign Trainer (Local Database)</h4>
-                                <p className="text-sm text-gray-500 mb-4">
+                            <div className="border-t dark:border-gray-700 pt-6 mt-6">
+                                <h4 className="text-lg font-medium text-gray-900 dark:text-white mb-1">Assign Trainer (Local Database)</h4>
+                                <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
                                     Select a trainer from your system so they can view this class in their attendance dashboard.
                                 </p>
 
@@ -3105,7 +3092,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                         className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
                                             dbTrainerAssignMode === 'dropdown'
                                                 ? 'bg-blue-600 text-white'
-                                                : 'border border-gray-300 text-gray-600 hover:bg-gray-50'
+                                                : 'border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
                                         }`}
                                     >
                                         Select from list
@@ -3116,7 +3103,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                         className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
                                             dbTrainerAssignMode === 'manual'
                                                 ? 'bg-blue-600 text-white'
-                                                : 'border border-gray-300 text-gray-600 hover:bg-gray-50'
+                                                : 'border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
                                         }`}
                                     >
                                         Enter manually
@@ -3197,7 +3184,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
             {/* Popup Modal */}
             {showPopup && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                    <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-auto">
+                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-auto border dark:border-gray-700">
                         <div className="p-6">
                             <div className="flex items-center mb-4">
                                 <div className="w-8 h-8 rounded-full flex items-center justify-center mr-3">
@@ -3225,7 +3212,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{popupConfig.title}</h3>
                             </div>
 
-                            <p className="text-gray-600 mb-6">{popupConfig.message}</p>
+                            <p className="text-gray-600 dark:text-gray-300 mb-6">{popupConfig.message}</p>
 
                             <div className="flex justify-end space-x-3">
                                 {popupConfig.type === 'confirm' ? (
@@ -3437,7 +3424,7 @@ export const AssignTrainerView: React.FC = () => {
 
             {/* Feedback banner */}
             {message && (
-                <div className={`mb-4 p-3 rounded-md text-sm ${message.type === 'success' ? 'bg-green-50 border border-green-200 text-green-800' : 'bg-red-50 border border-red-200 text-red-800'}`}>
+                <div className={`mb-4 p-3 rounded-md text-sm ${message.type === 'success' ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 text-green-800 dark:text-green-300' : 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 text-red-800 dark:text-red-300'}`}>
                     {message.text}
                 </div>
             )}
@@ -3642,7 +3629,7 @@ export const AddCourseView: React.FC = () => {
                 <Button variant="ghost" onClick={() => setAdminPage(AdminPage.Dashboard)}>Back to Dashboard</Button>
             </div>
             {message && (
-                <div className={`mb-4 p-3 rounded-md text-sm ${message.type === 'success' ? 'bg-green-50 border border-green-200 text-green-800' : 'bg-red-50 border border-red-200 text-red-800'}`}>
+                <div className={`mb-4 p-3 rounded-md text-sm ${message.type === 'success' ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 text-green-800 dark:text-green-300' : 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 text-red-800 dark:text-red-300'}`}>
                     {message.text}
                 </div>
             )}
@@ -3767,7 +3754,7 @@ export const AddCourseRunView: React.FC = () => {
                 <Button variant="ghost" onClick={() => setAdminPage(AdminPage.Dashboard)}>Back to Dashboard</Button>
             </div>
             {message && (
-                <div className={`mb-4 p-3 rounded-md text-sm ${message.type === 'success' ? 'bg-green-50 border border-green-200 text-green-800' : 'bg-red-50 border border-red-200 text-red-800'}`}>
+                <div className={`mb-4 p-3 rounded-md text-sm ${message.type === 'success' ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 text-green-800 dark:text-green-300' : 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 text-red-800 dark:text-red-300'}`}>
                     {message.text}
                 </div>
             )}

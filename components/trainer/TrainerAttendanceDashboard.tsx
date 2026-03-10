@@ -81,7 +81,7 @@ const TrainerAttendanceDashboard: React.FC = () => {
   const [isFetchingSessions, setIsFetchingSessions]    = useState(false);
   const [fetchError, setFetchError]                    = useState<string | null>(null);
 
-  const [activeTab, setActiveTab]                      = useState<'qr' | 'elist'>('qr');
+  const [activeTab, setActiveTab]                      = useState<'qr' | 'elist' | 'traqom'>('qr');
 
   const [isLoadingAttendance, setIsLoadingAttendance]  = useState(false);
   const [showNric, setShowNric]                        = useState(false);
@@ -233,7 +233,7 @@ const TrainerAttendanceDashboard: React.FC = () => {
     }
   };
 
-  const attendanceLinkUrl = (type: 'qr' | 'elist') =>
+  const attendanceLinkUrl = (type: 'qr' | 'elist' | 'traqom') =>
     type === 'qr'
       ? `https://www.myskillsfuture.gov.sg/spface/splogin/select-session?course-run-code=${digitalAttendanceId}`
       : `https://www.myskillsfuture.gov.sg/api/take-attendance/${digitalAttendanceId}`;
@@ -404,11 +404,11 @@ const TrainerAttendanceDashboard: React.FC = () => {
 
       {/* ── Attendance Links ── */}
       <div className="bg-surface rounded-lg border border-default shadow-sm">
-        <SectionHeader title="Attendance Links" />
+        <SectionHeader title="Attendance / TRAQOM Links" />
         <div className="p-4">
           {/* Tab bar */}
           <div className="flex border-b border-default mb-4">
-            {(['qr', 'elist'] as const).map(tab => (
+            {(['qr', 'elist', 'traqom'] as const).map(tab => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
@@ -418,13 +418,34 @@ const TrainerAttendanceDashboard: React.FC = () => {
                     : 'border-transparent text-on-surface-secondary hover:text-on-surface'
                 }`}
               >
-                {tab === 'qr' ? 'QR Attendance' : 'E-Attendance List'}
+                {tab === 'qr' ? 'QR Attendance' : tab === 'elist' ? 'E-Attendance List' : 'TRAQOM Link'}
               </button>
             ))}
           </div>
 
-          {/* Tab content — shared pattern */}
-          {isFetchingDigitalId ? (
+          {/* TRAQOM tab — static link, no loading required */}
+          {activeTab === 'traqom' ? (
+            <div>
+              <p className="text-xs text-on-surface-secondary mb-1.5">TRAQOM Link</p>
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  readOnly
+                  value="https://ssgtraqom.qualtrics.com/jfe/form/SV_3K9i7rTJ9OLsauW?Q_CHL=qr"
+                  className="input-themed flex-1 border rounded px-3 py-2 text-sm bg-surface-elevated text-on-surface-secondary focus:outline-none"
+                />
+                <a
+                  href="https://ssgtraqom.qualtrics.com/jfe/form/SV_3K9i7rTJ9OLsauW?Q_CHL=qr"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 px-4 py-2 bg-primary text-white rounded text-sm font-medium hover:bg-primary-hover transition-colors whitespace-nowrap"
+                >
+                  <ExternalLinkIcon />
+                  Open
+                </a>
+              </div>
+            </div>
+          ) : isFetchingDigitalId ? (
             <div className="flex items-center gap-2 text-sm text-muted py-2">
               <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary" />
               Loading attendance link...
@@ -608,8 +629,8 @@ const TrainerAttendanceDashboard: React.FC = () => {
               <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Email</th>
               <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Sponsorship</th>
               <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Employer</th>
-              <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Status</th>
-              <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Payment</th>
+              <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Enrolment Status</th>
+              {/* <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Payment</th> */}
               <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Enrolment Date</th>
             </tr>
           </thead>
@@ -644,7 +665,7 @@ const TrainerAttendanceDashboard: React.FC = () => {
                     <td className="px-3 py-3 text-on-surface-secondary whitespace-nowrap">{trainee?.sponsorshipType || '—'}</td>
                     <td className="px-3 py-3 text-on-surface-secondary">{trainee?.employer?.name || '—'}</td>
                     <td className="px-3 py-3"><StatusBadge value={enrol?.status || enrol?.enrolmentStatus || '—'} /></td>
-                    <td className="px-3 py-3"><StatusBadge value={trainee?.fees?.collectionStatus || '—'} /></td>
+                    {/* <td className="px-3 py-3"><StatusBadge value={trainee?.fees?.collectionStatus || '—'} /></td> */}
                     <td className="px-3 py-3 text-on-surface-secondary whitespace-nowrap">{trainee?.enrolmentDate || '—'}</td>
                   </tr>
                 );

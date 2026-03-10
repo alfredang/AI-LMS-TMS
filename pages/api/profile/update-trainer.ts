@@ -17,12 +17,16 @@ interface UpdateTrainerProfileRequest {
     profilePictureUrl?: string;
     areasOfExpertise?: string[];
     qualifications?: string[];
-    education?: string; // Changed to single string
+    education?: string;
     workExperience?: any[];
     certifications?: any[];
     certificationsToDelete?: string[];
     newCertifications?: Array<{name: string, fileUrl: string, originalFilename?: string}>;
     password?: string;
+    commonName?: string;
+    country?: string;
+    cnPlusEmail?: string;
+    nric?: string;
   };
 }
 
@@ -142,7 +146,27 @@ export default async function handler(
 
       if (profileData.education !== undefined) {
         updateFields.push(`education = $${paramIndex++}`);
-        updateValues.push(profileData.education); // Store as string
+        updateValues.push(profileData.education);
+      }
+
+      if (profileData.commonName !== undefined) {
+        updateFields.push(`common_name = $${paramIndex++}`);
+        updateValues.push(profileData.commonName);
+      }
+
+      if (profileData.country !== undefined) {
+        updateFields.push(`country = $${paramIndex++}`);
+        updateValues.push(profileData.country);
+      }
+
+      if (profileData.cnPlusEmail !== undefined) {
+        updateFields.push(`cn_plus_email = $${paramIndex++}`);
+        updateValues.push(profileData.cnPlusEmail);
+      }
+
+      if (profileData.nric !== undefined) {
+        updateFields.push(`nric = $${paramIndex++}`);
+        updateValues.push(profileData.nric);
       }
 
       // Note: certifications are now handled in separate certification table
@@ -261,9 +285,13 @@ export default async function handler(
           t.cv_original_filename,
           t.qualifications,
           t.education,
-          t.areas_of_expertise
+          t.areas_of_expertise,
+          t.common_name,
+          t.country,
+          t.cn_plus_email,
+          t.nric
         FROM trainer_profile t
-        JOIN app_user u 
+        JOIN app_user u
           ON t.user_id = u.id
         WHERE t.user_id = $1
       `;
@@ -347,9 +375,13 @@ export default async function handler(
         qualifications: row.qualifications ? 
           (Array.isArray(row.qualifications) ? row.qualifications : JSON.parse(row.qualifications)) : [],
         education: row.education || '', // Return as string
-        areasOfExpertise: row.areas_of_expertise ? 
+        areasOfExpertise: row.areas_of_expertise ?
           (Array.isArray(row.areas_of_expertise) ? row.areas_of_expertise : JSON.parse(row.areas_of_expertise)) : [],
-        workExperience: workExperience
+        workExperience: workExperience,
+        commonName: row.common_name || '',
+        country: row.country || '',
+        cnPlusEmail: row.cn_plus_email || '',
+        nric: row.nric || ''
       };
 
       res.status(200).json({

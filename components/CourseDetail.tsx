@@ -604,7 +604,6 @@ const CourseSidebar: React.FC<CourseSidebarProps> = ({ userRole, onSetGradingVie
     };
 
     const learnerNavItems: NavItem[] = [
-        { type: 'link', label: "Digital Attendance", icon: IconName.Calendar },
         { type: 'link', label: "Lesson Plan", icon: IconName.BookOpen },
         { type: 'link', label: "Learner Guide", icon: IconName.FileText },
         { type: 'link', label: "Learner Slides", icon: IconName.FileText },
@@ -1097,7 +1096,7 @@ export const CourseDetail: React.FC = () => {
                             </div>
 
                             {/* Digital Attendance */}
-                            {(userRole === UserRole.Learner || userRole === UserRole.Trainer) && (
+                            {userRole === UserRole.Trainer && (
                                 <div id={toId("Digital Attendance")}>
                                     <Card className="p-0 overflow-hidden">
                                         <button

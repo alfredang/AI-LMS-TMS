@@ -11,7 +11,7 @@ import { getCourseImageUrl } from '@utils/imageUtils';
 import { getApiUrl } from '@/lib/urlHelpers';
 
 const inputGhostClasses = (isTitle: boolean) =>
-    `flex-grow border border-transparent hover:border-gray-300 focus:border-gray-300 rounded-md px-2 py-1 bg-transparent hover:bg-gray-50 focus:bg-gray-50 focus:outline-none w-full transition-colors ${isTitle ? 'font-bold text-xl' : 'text-base'}`;
+    `flex-grow border border-transparent hover:border-gray-300 dark:hover:border-gray-600 focus:border-gray-300 dark:focus:border-gray-600 rounded-md px-2 py-1 bg-transparent hover:bg-gray-50 dark:hover:bg-gray-800 focus:bg-gray-50 dark:focus:bg-gray-800 focus:outline-none w-full transition-colors dark:text-white ${isTitle ? 'font-bold text-xl' : 'text-base'}`;
 
 // Helper function to display original filename
 const getDisplayFilename = (existingUrl: string | undefined, filename?: string | undefined): string => {
@@ -50,9 +50,9 @@ const EditableTopicAccordion: React.FC<{
         const [isSubtopicsOpen, setSubtopicsOpen] = useState(true);
 
         return (
-            <Card className="p-0 overflow-hidden bg-white">
+            <Card className="p-0 overflow-hidden bg-white dark:bg-gray-800">
                 {/* Learning Unit Header */}
-                <div className="p-4 flex items-center justify-between gap-2 bg-gray-50 border-b">
+                <div className="p-4 flex items-center justify-between gap-2 bg-gray-50 dark:bg-gray-700 border-b dark:border-gray-600">
                     <div
                         draggable
                         onDragStart={onSelfDragStart}
@@ -69,10 +69,10 @@ const EditableTopicAccordion: React.FC<{
                         placeholder="Learning Unit Title"
                     />
                     <div className="flex items-center ml-auto flex-shrink-0">
-                        <button onClick={() => setSubtopicsOpen(!isSubtopicsOpen)} className="p-1.5 text-gray-500 hover:bg-gray-200 rounded-full">
+                        <button onClick={() => setSubtopicsOpen(!isSubtopicsOpen)} className="p-1.5 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-full">
                             <Icon name={IconName.ChevronDown} className={`w-5 h-5 transition-transform ${isSubtopicsOpen ? 'rotate-180' : ''}`} />
                         </button>
-                        <button onClick={() => onDelete(topic.id)} className="p-1.5 text-red-500 hover:bg-red-100 rounded-full">
+                        <button onClick={() => onDelete(topic.id)} className="p-1.5 text-red-500 hover:bg-red-100 dark:hover:bg-red-900/30 rounded-full">
                             <Icon name={IconName.Delete} className="w-5 h-5" />
                         </button>
                     </div>
@@ -88,7 +88,7 @@ const EditableTopicAccordion: React.FC<{
                                     onDragOver={(e) => onSubtopicDragOver(e, topic.id, subtopic.id)}
                                     onDragLeave={onSubtopicDragLeave}
                                     onDrop={(e) => onSubtopicDrop(e, topic.id, subtopic.id)}
-                                    className={`relative flex items-center justify-between p-1 rounded-md group transition-all duration-200 ${draggedSubtopic?.subtopicId === subtopic.id ? 'opacity-30' : 'hover:bg-gray-100/70'
+                                    className={`relative flex items-center justify-between p-1 rounded-md group transition-all duration-200 ${draggedSubtopic?.subtopicId === subtopic.id ? 'opacity-30' : 'hover:bg-gray-100/70 dark:hover:bg-gray-700/70'
                                         } ${dropTargetSubtopic?.subtopicId === subtopic.id ? 'pt-2 border-t-2 border-blue-500' : 'border-t-2 border-transparent'
                                         }`}
                                 >
@@ -108,13 +108,13 @@ const EditableTopicAccordion: React.FC<{
                                         className={inputGhostClasses(false)}
                                         placeholder="Topic title"
                                     />
-                                    <button onClick={() => onDeleteSubtopic(topic.id, subtopic.id)} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-100 rounded-full ml-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <button onClick={() => onDeleteSubtopic(topic.id, subtopic.id)} className="p-1.5 text-gray-400 dark:text-gray-500 hover:text-red-500 hover:bg-red-100 dark:hover:bg-red-900/30 rounded-full ml-2 opacity-0 group-hover:opacity-100 transition-opacity">
                                         <Icon name={IconName.Delete} className="w-4 h-4" />
                                     </button>
                                 </li>
                             ))}
                             <li className="pt-2">
-                                <Button size="sm" variant="ghost" onClick={() => onAddSubtopic(topic.id)} className="text-gray-600 hover:text-blue-600">
+                                <Button size="sm" variant="ghost" onClick={() => onAddSubtopic(topic.id)} className="text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400">
                                     <Icon name={IconName.Add} className="w-4 h-4 mr-2" />
                                     Add Topic
                                 </Button>
@@ -945,7 +945,7 @@ const CourseEditor: React.FC = () => {
                                 <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
                                     Duration <span className="text-red-500">*</span>
                                 </label>
-                                <div className="space-y-2 border border-gray-200 p-3 rounded-md bg-gray-50/50">
+                                <div className="space-y-2 border border-gray-200 dark:border-gray-700 p-3 rounded-md bg-gray-50/50 dark:bg-gray-800/50">
                                     <div className="grid grid-cols-2 gap-4">
                                         <div>
                                             <label htmlFor="trainingHours" className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
@@ -981,7 +981,7 @@ const CourseEditor: React.FC = () => {
                                                 value={mode}
                                                 checked={course.modeOfLearning.includes(mode)}
                                                 onChange={handleModeOfLearningChange}
-                                                className="h-4 w-4 text-primary focus:ring-primary border-gray-300"
+                                                className="h-4 w-4 text-primary focus:ring-primary border-gray-300 dark:border-gray-600"
                                             />
                                             <label htmlFor={`mode-${mode}`} className="ml-3 block text-sm text-gray-900 dark:text-gray-200">
                                                 {mode}
@@ -1022,7 +1022,7 @@ const CourseEditor: React.FC = () => {
                         <div>
                             <label htmlFor="lessonPlanUpload" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Upload Lesson Plan (PDF, DOC, DOCX, PPT, PPTX)</label>
                             <div className="flex items-center gap-2 p-2 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600">
-                                <Icon name={IconName.FilePdf} className="w-5 h-5 text-gray-500" />
+                                <Icon name={IconName.FilePdf} className="w-5 h-5 text-gray-500 dark:text-gray-400" />
                                 <span className="text-sm text-subtle flex-grow truncate">
                                     {getDisplayFilename(course.lessonPlanUrl, files.lessonPlan?.name) || 'No lesson plan uploaded.'}
                                 </span>
@@ -1048,7 +1048,7 @@ const CourseEditor: React.FC = () => {
                         <div>
                             <label htmlFor="learnerGuideUpload" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Upload Learner Guide (PDF, DOC, DOCX, PPT, PPTX)</label>
                             <div className="flex items-center gap-2 p-2 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600">
-                                <Icon name={IconName.FilePdf} className="w-5 h-5 text-gray-500" />
+                                <Icon name={IconName.FilePdf} className="w-5 h-5 text-gray-500 dark:text-gray-400" />
                                 <span className="text-sm text-subtle flex-grow truncate">
                                     {getDisplayFilename(course.learnerGuideUrl, files.learnerGuide?.name) || 'No learner guide uploaded.'}
                                 </span>
@@ -1074,7 +1074,7 @@ const CourseEditor: React.FC = () => {
                         <div>
                             <label htmlFor="facilitatorGuideUpload" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Upload Facilitator Guide (PDF, DOC, DOCX, PPT, PPTX)</label>
                             <div className="flex items-center gap-2 p-2 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600">
-                                <Icon name={IconName.FilePdf} className="w-5 h-5 text-gray-500" />
+                                <Icon name={IconName.FilePdf} className="w-5 h-5 text-gray-500 dark:text-gray-400" />
                                 <span className="text-sm text-subtle flex-grow truncate">
                                     {getDisplayFilename(course.facilitatorGuideUrl, files.facilitatorGuide?.name) || 'No facilitator guide uploaded.'}
                                 </span>
@@ -1100,7 +1100,7 @@ const CourseEditor: React.FC = () => {
                         <div>
                             <label htmlFor="assessmentPlanUpload" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Upload Assessment Plan (PDF, DOC, DOCX, PPT, PPTX)</label>
                             <div className="flex items-center gap-2 p-2 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600">
-                                <Icon name={IconName.FilePdf} className="w-5 h-5 text-gray-500" />
+                                <Icon name={IconName.FilePdf} className="w-5 h-5 text-gray-500 dark:text-gray-400" />
                                 <span className="text-sm text-subtle flex-grow truncate">
                                     {getDisplayFilename(course.assessmentPlanUrl, files.assessmentPlan?.name) || 'No assessment plan uploaded.'}
                                 </span>
@@ -1126,7 +1126,7 @@ const CourseEditor: React.FC = () => {
                         <div>
                             <label htmlFor="slidesUpload" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Upload Learner Slides (PDF, DOC, DOCX, PPT, PPTX)</label>
                             <div className="flex items-center gap-2 p-2 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600">
-                                <Icon name={IconName.FilePdf} className="w-5 h-5 text-gray-500" />
+                                <Icon name={IconName.FilePdf} className="w-5 h-5 text-gray-500 dark:text-gray-400" />
                                 <span className="text-sm text-subtle flex-grow truncate">
                                     {getDisplayFilename(course.slidesUrl, files.learnerSlides?.name) || 'No slides uploaded.'}
                                 </span>
@@ -1151,20 +1151,20 @@ const CourseEditor: React.FC = () => {
                         <h3 className="text-xl font-bold mb-4 dark:text-white">Trainer Slides</h3>
                         <div className="flex gap-6 mb-4">
                             <div className="flex items-center">
-                                <input type="radio" id="trainer-slide-upload" name="trainerSlideType" value="upload" checked={trainerSlideInputType === 'upload'} onChange={() => setTrainerSlideInputType('upload')} className="h-4 w-4 text-primary focus:ring-primary border-gray-300" />
-                                <label htmlFor="trainer-slide-upload" className="ml-2 block text-sm font-medium text-gray-700">Upload File</label>
+                                <input type="radio" id="trainer-slide-upload" name="trainerSlideType" value="upload" checked={trainerSlideInputType === 'upload'} onChange={() => setTrainerSlideInputType('upload')} className="h-4 w-4 text-primary focus:ring-primary border-gray-300 dark:border-gray-600" />
+                                <label htmlFor="trainer-slide-upload" className="ml-2 block text-sm font-medium text-gray-700 dark:text-gray-300">Upload File</label>
                             </div>
                             <div className="flex items-center">
-                                <input type="radio" id="trainer-slide-link" name="trainerSlideType" value="link" checked={trainerSlideInputType === 'link'} onChange={() => setTrainerSlideInputType('link')} className="h-4 w-4 text-primary focus:ring-primary border-gray-300" />
+                                <input type="radio" id="trainer-slide-link" name="trainerSlideType" value="link" checked={trainerSlideInputType === 'link'} onChange={() => setTrainerSlideInputType('link')} className="h-4 w-4 text-primary focus:ring-primary border-gray-300 dark:border-gray-600" />
                                 <label htmlFor="trainer-slide-link" className="ml-2 block text-sm font-medium text-gray-700 dark:text-gray-300">Link to Google Slides</label>
                             </div>
                         </div>
 
                         {trainerSlideInputType === 'upload' ? (
                             <div>
-                                <label htmlFor="trainerSlidesUpload" className="block text-sm font-bold text-gray-700 mb-1">Upload Trainer Slides - PPT/PPTX/PDF/DOC/DOCX</label>
-                                <div className="flex items-center gap-2 p-2 bg-gray-50 rounded-md border">
-                                    <Icon name={IconName.FilePdf} className="w-5 h-5 text-gray-500" />
+                                <label htmlFor="trainerSlidesUpload" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Upload Trainer Slides - PPT/PPTX/PDF/DOC/DOCX</label>
+                                <div className="flex items-center gap-2 p-2 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600">
+                                    <Icon name={IconName.FilePdf} className="w-5 h-5 text-gray-500 dark:text-gray-400" />
                                     <span className="text-sm text-subtle flex-grow truncate">
                                         {files.trainerSlides ? files.trainerSlides.name : (course.trainerSlidesUrl && !isTrainerSlidesUrl ? extractFilenameFromPath(course.trainerSlidesUrl) : 'No file uploaded.')}
                                     </span>
@@ -1186,7 +1186,7 @@ const CourseEditor: React.FC = () => {
                             </div>
                         ) : (
                             <div>
-                                <label htmlFor="trainerSlidesUrl" className="block text-sm font-bold text-gray-700 mb-1">Trainer Slides URL (Optional)</label>
+                                <label htmlFor="trainerSlidesUrl" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Trainer Slides URL (Optional)</label>
                                 <input
                                     type="url"
                                     id="trainerSlidesUrl"
@@ -1232,7 +1232,7 @@ const CourseEditor: React.FC = () => {
                                 />
                             </div>
                         ))}
-                        <Button variant="ghost" onClick={addTopic} className="w-full !py-3 !text-lg !font-semibold border-2 border-dashed !border-gray-300 hover:!border-primary !text-subtle hover:!text-primary">
+                        <Button variant="ghost" onClick={addTopic} className="w-full !py-3 !text-lg !font-semibold border-2 border-dashed !border-gray-300 dark:!border-gray-600 hover:!border-primary !text-subtle hover:!text-primary">
                             + Add Learning Unit
                         </Button>
                     </div>
@@ -1242,7 +1242,7 @@ const CourseEditor: React.FC = () => {
                         <div className="space-y-4">
                             {(course.assessments || []).map(assessment => (
                                 <Card key={assessment.id} className="p-4 relative group">
-                                    <button onClick={() => handleDeleteAssessment(assessment.id)} className="absolute top-2 right-2 p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-100 rounded-full opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                                    <button onClick={() => handleDeleteAssessment(assessment.id)} className="absolute top-2 right-2 p-1.5 text-gray-400 dark:text-gray-500 hover:text-red-500 hover:bg-red-100 dark:hover:bg-red-900/30 rounded-full opacity-0 group-hover:opacity-100 transition-opacity z-10">
                                         <Icon name={IconName.Delete} className="w-4 h-4" />
                                     </button>
                                     <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
@@ -1257,15 +1257,15 @@ const CourseEditor: React.FC = () => {
                                         <select
                                             value={assessment.category}
                                             onChange={(e) => handleUpdateAssessment(assessment.id, 'category', e.target.value)}
-                                            className="text-sm font-medium bg-indigo-100 text-indigo-800 px-3 py-1 rounded-full border-transparent focus:border-indigo-300 focus:ring-indigo-300 w-full sm:w-auto"
+                                            className="text-sm font-medium bg-indigo-100 dark:bg-indigo-900/30 text-indigo-800 dark:text-indigo-300 px-3 py-1 rounded-full border-transparent focus:border-indigo-300 focus:ring-indigo-300 w-full sm:w-auto"
                                         >
                                             {Object.values(AssessmentCategory).map(cat => <option key={cat} value={cat}>{cat}</option>)}
                                         </select>
                                     </div>
-                                    <div className="mt-4 pt-4 border-t">
-                                        <label htmlFor={`assessment-upload-${assessment.id}`} className="block text-sm font-bold text-gray-700 mb-1">Assessment File (PDF/DOC/DOCX)</label>
-                                        <div className="flex items-center gap-2 p-2 bg-gray-50 rounded-md border">
-                                            <Icon name={IconName.FilePdf} className="w-5 h-5 text-gray-500" />
+                                    <div className="mt-4 pt-4 border-t dark:border-gray-700">
+                                        <label htmlFor={`assessment-upload-${assessment.id}`} className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Assessment File (PDF/DOC/DOCX)</label>
+                                        <div className="flex items-center gap-2 p-2 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600">
+                                            <Icon name={IconName.FilePdf} className="w-5 h-5 text-gray-500 dark:text-gray-400" />
                                             <span className="text-sm text-subtle flex-grow truncate">{assessment.fileUrl ? getDisplayFilename(assessment.fileUrl) : 'No file uploaded.'}</span>
                                             <Button variant="ghost" size="sm" onClick={() => document.getElementById(`assessment-upload-${assessment.id}`)?.click()}>
                                                 <Icon name={IconName.Upload} className="w-4 h-4 mr-1" /> Upload
@@ -1286,22 +1286,22 @@ const CourseEditor: React.FC = () => {
                                 </Card>
                             ))}
                             {course.assessments?.length === 0 && <p className="text-subtle text-center py-4">No assessments added yet.</p>}
-                            <Button variant="ghost" onClick={handleAddAssessment} className="w-full !py-3 !text-lg !font-semibold border-2 border-dashed !border-gray-300 hover:!border-primary !text-subtle hover:!text-primary">
+                            <Button variant="ghost" onClick={handleAddAssessment} className="w-full !py-3 !text-lg !font-semibold border-2 border-dashed !border-gray-300 dark:!border-gray-600 hover:!border-primary !text-subtle hover:!text-primary">
                                 + Add Assessment
                             </Button>
                         </div>
                     </div>
 
                     {(role === UserRole.Admin) && (
-                        <Card className="p-6">
-                            <h3 className="text-xl font-bold mb-4">Pricing & Funding</h3>
+                        <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
+                            <h3 className="text-xl font-bold mb-4 dark:text-white">Pricing & Funding</h3>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div>
-                                    <label htmlFor="courseFee" className="block text-sm font-bold text-gray-700 mb-1">Course Fee ($)</label>
+                                    <label htmlFor="courseFee" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Course Fee ($)</label>
                                     <input type="number" id="courseFee" name="courseFee" value={course.courseFee} onChange={handleCourseChange} className={inputClasses} placeholder="e.g. 500" />
                                 </div>
                                 <div>
-                                    <label htmlFor="taxPercent" className="block text-sm font-bold text-gray-700 mb-1">Tax / GST (%)</label>
+                                    <label htmlFor="taxPercent" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Tax / GST (%)</label>
                                     <input
                                         type="number"
                                         id="taxPercent"
@@ -1324,16 +1324,16 @@ const CourseEditor: React.FC = () => {
                         </Card>
                     )}
 
-                    <Card className="p-6">
-                        <h3 className="text-xl font-bold mb-4">Course Settings</h3>
-                        <div className="flex justify-between items-center p-3 bg-gray-50 rounded-md border">
+                    <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
+                        <h3 className="text-xl font-bold mb-4 dark:text-white">Course Settings</h3>
+                        <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600">
                             <div>
                                 <p className="font-semibold text-sm">Enable Gaming Leaderboard</p>
                                 <p className="text-xs text-subtle">Allow learners to see a competitive leaderboard for this course.</p>
                             </div>
                             <button
                                 onClick={() => setCourse(prev => ({ ...prev, isLeaderboardEnabled: !(prev.isLeaderboardEnabled ?? false) }))}
-                                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${(course.isLeaderboardEnabled ?? false) ? 'bg-primary' : 'bg-gray-200'}`}
+                                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${(course.isLeaderboardEnabled ?? false) ? 'bg-primary' : 'bg-gray-200 dark:bg-gray-600'}`}
                                 aria-pressed={course.isLeaderboardEnabled ?? false}
                             >
                                 <span

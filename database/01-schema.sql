@@ -1015,7 +1015,11 @@ CREATE TABLE public.trainer_profile (
     qualifications jsonb DEFAULT '{}'::jsonb,
     education text,
     areas_of_expertise jsonb DEFAULT '{}'::jsonb,
-    cv_original_filename text
+    cv_original_filename text,
+    common_name text,
+    country text,
+    cn_plus_email text,
+    nric text
 );
 
 

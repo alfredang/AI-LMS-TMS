@@ -51,7 +51,7 @@ export const CourseRunView: React.FC = () => {
                     <input
                         type="text"
                         placeholder="Search Course Run (Press Enter)..."
-                        className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                        className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                         onKeyDown={handleSearch}
@@ -69,7 +69,7 @@ export const CourseRunView: React.FC = () => {
 
                 {error && (
                     <div className="text-center py-12">
-                        <div className="bg-red-50 text-red-600 p-4 rounded-md inline-block">
+                        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 text-red-600 dark:text-red-400 p-4 rounded-md inline-block">
                             <p className="font-semibold">Search Failed</p>
                             <p className="text-sm mt-1">{error}</p>
                         </div>
@@ -77,7 +77,7 @@ export const CourseRunView: React.FC = () => {
                 )}
 
                 {!loading && !error && !results && (
-                    <p className="text-gray-500 text-center py-12">
+                    <p className="text-gray-500 dark:text-gray-400 text-center py-12">
                         Enter a search term above to find Course Runs.
                     </p>
                 )}
@@ -95,18 +95,18 @@ export const CourseRunView: React.FC = () => {
                             </span>
                         </div>
 
-                        <div className="overflow-x-auto border rounded-lg">
-                            <table className="min-w-full divide-y divide-gray-200">
-                                <thead className="bg-gray-50">
+                        <div className="overflow-x-auto border border-gray-200 dark:border-gray-700 rounded-lg">
+                            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                                <thead className="bg-gray-50 dark:bg-gray-800">
                                     <tr>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Course Run ID</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Start Date</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">End Date</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Mode</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Course Run ID</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Start Date</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">End Date</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Mode</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status</th>
                                     </tr>
                                 </thead>
-                                <tbody className="bg-white divide-y divide-gray-200">
+                                <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
                                     {(Array.isArray(results?.data?.courses?.course?.runs) ? results.data.courses.course.runs : (Array.isArray(results) ? results : [])).map((run: any, index: number) => (
                                         <tr key={index}>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">{run.courseRunId || 'N/A'}</td>
@@ -114,7 +114,7 @@ export const CourseRunView: React.FC = () => {
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{run.endDateTime || run.endDate || 'N/A'}</td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{run.modeOfTraining || 'N/A'}</td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                                                <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${(run.runStatus || run.class_status) === 'Published' || (run.runStatus || run.class_status) === 'Confirmed' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                                                <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${(run.runStatus || run.class_status) === 'Published' || (run.runStatus || run.class_status) === 'Confirmed' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
                                                     }`}>
                                                     {run.runStatus || run.class_status || 'Unknown'}
                                                 </span>
@@ -136,7 +136,7 @@ export const CourseRunView: React.FC = () => {
                         <div className="mt-4">
                             <details className="text-xs text-gray-500 dark:text-gray-400">
                                 <summary className="cursor-pointer hover:text-blue-600 mb-2">View Raw API Response</summary>
-                                <div className="bg-gray-50 rounded-lg p-4 overflow-auto max-h-[200px] border border-gray-200 font-mono">
+                                <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 overflow-auto max-h-[200px] border border-gray-200 dark:border-gray-700 font-mono text-gray-800 dark:text-gray-200">
                                     <pre>{JSON.stringify(results, null, 2)}</pre>
                                 </div>
                             </details>

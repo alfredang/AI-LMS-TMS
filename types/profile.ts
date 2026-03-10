@@ -185,6 +185,10 @@ export interface TrainerProfile extends BaseProfile, ContactInfo, PersonalInfo {
   qualifications?: string[]; // Array of qualification strings
   education?: string; // Single education string (highest education)
   password?: string;
+  commonName?: string;
+  country?: string;
+  cnPlusEmail?: string;
+  nric?: string;
 }
 
 export interface DeveloperProfile extends BaseProfile, ContactInfo, PersonalInfo {

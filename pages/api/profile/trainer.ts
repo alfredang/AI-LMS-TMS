@@ -17,6 +17,10 @@ interface TrainerProfileRow {
   qualifications: any;
   education: string;
   areas_of_expertise: any;
+  common_name: string;
+  country: string;
+  cn_plus_email: string;
+  nric: string;
 }
 
 export default async function handler(
@@ -70,7 +74,11 @@ export default async function handler(
         t.cv_original_filename,
         t.qualifications,
         t.education,
-        t.areas_of_expertise
+        t.areas_of_expertise,
+        t.common_name,
+        t.country,
+        t.cn_plus_email,
+        t.nric
       FROM app_user u
       LEFT JOIN trainer_profile t
         ON t.user_id = u.id
@@ -209,6 +217,10 @@ export default async function handler(
         return [];
       })(),
       workExperience: workExperience, // Use data from work_experience table
+      commonName: row.common_name || '',
+      country: row.country || '',
+      cnPlusEmail: row.cn_plus_email || '',
+      nric: row.nric || '',
       // Additional fields for security (not exposed to frontend)
       password: row.password,
       passwordHash: row.password_hash

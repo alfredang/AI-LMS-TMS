@@ -18,13 +18,13 @@ const getStatusColor = (status: string) => {
     case 'Successful':
     case 'Full Payment':
     case 'Confirmed':
-      return 'bg-green-100 text-green-800';
+      return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300';
     case 'Processing':
     case 'Reschedule':
-      return 'bg-blue-100 text-blue-800';
+      return 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300';
     case 'Pending':
     case 'In Progress':
-      return 'bg-yellow-100 text-yellow-800';
+      return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300';
     case 'Overdue':
     case 'Rejected':
     case 'Unpaid':
@@ -32,9 +32,9 @@ const getStatusColor = (status: string) => {
     case 'Fail':
     case 'Failed':
     case 'Cancelled':
-      return 'bg-red-100 text-red-800';
+      return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300';
     default:
-      return 'bg-gray-100 text-gray-800';
+      return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
   }
 };
 
@@ -384,10 +384,10 @@ const ClassDetailView: React.FC<ClassDetailViewProps> = ({ courseRunId }) => {
                         {learner.assessment || 'Pending'}
                       </span>
                     </td>
-                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 font-mono">
+                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400 font-mono">
                       {learner.grantId || 'N/A'}
                     </td>
-                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 font-mono">
+                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400 font-mono">
                       {learner.claimId || 'N/A'}
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
@@ -408,42 +408,42 @@ const ClassDetailView: React.FC<ClassDetailViewProps> = ({ courseRunId }) => {
 
         {/* New table using Search Enrolment API data */}
         {enrolmentData && (enrolmentData.status === "200" || enrolmentData.status === 200) && enrolmentData.data && Array.isArray(enrolmentData.data) && enrolmentData.data.length > 0 ? (
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+          <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+            <thead className="bg-gray-50 dark:bg-gray-800">
               <tr>
-                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Learner
                 </th>
-                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Company
                 </th>
-                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Sponsorship
                 </th>
-                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   ID Type
                 </th>
-                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Age Group
                 </th>
-                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Payment Details
                 </th>
-                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Assessment
                 </th>
-                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Grant ID
                 </th>
-                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Claim ID
                 </th>
-                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Actions
                 </th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
               {enrolmentData.data.map((record: any, index: number) => {
                 const trainee = record.enrolment.trainee;
                 const ageGroup = getAgeGroup(trainee.dateOfBirth || '');
@@ -473,14 +473,14 @@ const ClassDetailView: React.FC<ClassDetailViewProps> = ({ courseRunId }) => {
                       </span>
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap text-sm">
-                      <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800 dark:text-white">
+                      <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300">
                         Pending
                       </span>
                     </td>
-                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 font-mono">
+                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400 font-mono">
                       N/A
                     </td>
-                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 font-mono">
+                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400 font-mono">
                       N/A
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
@@ -548,12 +548,12 @@ const ClassDetailView: React.FC<ClassDetailViewProps> = ({ courseRunId }) => {
         {showEnrolmentSearch && (
           <Card className="p-6">
             {enrolmentError && (
-              <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-md">
+              <div className="mb-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-md">
                 <div className="flex">
                   <Icon name={IconName.InfoCircle} className="w-5 h-5 text-red-400 mr-2 mt-0.5" />
                   <div>
-                    <h4 className="text-sm font-medium text-red-800">Error</h4>
-                    <p className="text-sm text-red-700 mt-1">{enrolmentError}</p>
+                    <h4 className="text-sm font-medium text-red-800 dark:text-red-300">Error</h4>
+                    <p className="text-sm text-red-700 dark:text-red-400 mt-1">{enrolmentError}</p>
                   </div>
                 </div>
               </div>
@@ -564,7 +564,7 @@ const ClassDetailView: React.FC<ClassDetailViewProps> = ({ courseRunId }) => {
                 {/* Request Details */}
                 <div>
                   <h4 className="text-lg font-semibold mb-3">Search Parameters</h4>
-                  <div className="bg-gray-50 p-4 rounded-md">
+                  <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-md">
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                       <div>
                         <span className="font-medium text-gray-600 dark:text-gray-300">Course Run ID:</span>
@@ -589,8 +589,8 @@ const ClassDetailView: React.FC<ClassDetailViewProps> = ({ courseRunId }) => {
                 {/* Response Data */}
                 <div>
                   <h4 className="text-lg font-semibold mb-3">Search Results</h4>
-                  <div className="bg-gray-50 p-4 rounded-md max-h-96 overflow-auto">
-                    <pre className="text-sm text-gray-800 whitespace-pre-wrap">
+                  <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-md max-h-96 overflow-auto">
+                    <pre className="text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap">
                       {JSON.stringify(enrolmentData.data, null, 2)}
                     </pre>
                   </div>
@@ -600,10 +600,10 @@ const ClassDetailView: React.FC<ClassDetailViewProps> = ({ courseRunId }) => {
                 {enrolmentData.data && (
                   <div>
                     <h4 className="text-lg font-semibold mb-3">Summary</h4>
-                    <div className="bg-blue-50 p-4 rounded-md">
+                    <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-md border border-blue-100 dark:border-blue-800">
                       <div className="flex items-center">
-                        <Icon name={IconName.InfoCircle} className="w-5 h-5 text-blue-400 mr-2" />
-                        <span className="text-blue-800">
+                        <Icon name={IconName.InfoCircle} className="w-5 h-5 text-blue-400 dark:text-blue-300 mr-2" />
+                        <span className="text-blue-800 dark:text-blue-300">
                           {enrolmentData.data.count !== undefined 
                             ? `Found ${enrolmentData.data.count} enrolment record(s)`
                             : 'Enrolment search completed'
