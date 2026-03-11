@@ -123,6 +123,8 @@ export interface CourseDetail {
   facilitatorGuideUrl?: string;
   trainerSlidesUrl?: string;
   assessmentPlanUrl?: string;
+  courseLink?: string;
+  assessmentRecordLink?: string;
   certificate: string;
 }
 
