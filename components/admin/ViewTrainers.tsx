@@ -1,9 +1,10 @@
-import { getApiUrl, getFileUrl } from '@/lib/urlHelpers';
+import { getApiUrl } from '@/lib/urlHelpers';
 import React, { useState, useEffect } from 'react';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Icon, IconName } from '../ui/Icon';
 import AddTrainerForm from './AddTrainerForm';
+import { BulkUploadTrainersView } from './BulkUploadTrainersView';
 
 interface Trainer {
   trainer_name: string;
@@ -12,21 +13,36 @@ interface Trainer {
   telephone: string | null;
   trainer_type: string | null;
   status: string | null;
+  account_status: string | null;
   linkedin_url: string | null;
   courses_taught: string | null;
-  user_id: string; // Add user_id for status updates
+  user_id: string;
 }
 
 const getStatusColor = (status: string | null) => {
   switch (status) {
     case 'Active':
-      return 'bg-green-100 text-green-800';
+      return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400';
     case 'Inactive':
-      return 'bg-gray-100 text-gray-800';
+      return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-400';
     default:
-      return 'bg-yellow-100 text-yellow-800';
+      return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400';
   }
 };
+
+const getAccountStatusColor = (status: string | null) => {
+  const normalised = (status || '').toLowerCase();
+  if (normalised === 'active') return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400';
+  if (normalised === 'inactive' || normalised === 'disabled' || normalised === 'suspended')
+    return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-400';
+  return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400';
+};
+
+const capitalise = (s: string | null) =>
+  s ? s.charAt(0).toUpperCase() + s.slice(1) : 'N/A';
+
+const TRAINER_STATUSES = ['Active', 'Inactive'];
+const ACCOUNT_STATUSES = ['Active', 'Inactive', 'Suspended'];
 
 const ViewTrainers: React.FC = () => {
   const [trainers, setTrainers] = useState<Trainer[]>([]);
@@ -34,10 +50,12 @@ const ViewTrainers: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [filterName, setFilterName] = useState('');
-  const [filterStatus, setFilterStatus] = useState<'All' | 'Active' | 'Inactive'>('All');
+  const [filterTrainerStatuses, setFilterTrainerStatuses] = useState<string[]>([]);
+  const [filterAccountStatuses, setFilterAccountStatuses] = useState<string[]>([]);
   const [filterCourse, setFilterCourse] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [showAddTrainerForm, setShowAddTrainerForm] = useState(false);
+  const [showBulkUpload, setShowBulkUpload] = useState(false);
 
   // Status update confirmation states
   const [showStatusConfirmation, setShowStatusConfirmation] = useState(false);
@@ -49,17 +67,28 @@ const ViewTrainers: React.FC = () => {
 
   const inputClasses = "w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400";
 
+  const toggleCheckbox = (
+    value: string,
+    _current: string[],
+    setSelected: React.Dispatch<React.SetStateAction<string[]>>
+  ) => {
+    setSelected(prev =>
+      prev.includes(value) ? prev.filter(v => v !== value) : [...prev, value]
+    );
+    setCurrentPage(1);
+  };
+
   const handleResetFilters = () => {
     setSearchQuery('');
     setFilterName('');
-    setFilterStatus('All');
+    setFilterTrainerStatuses([]);
+    setFilterAccountStatuses([]);
     setFilterCourse('');
     setCurrentPage(1);
   };
 
   const handleAddTrainerSuccess = () => {
     setShowAddTrainerForm(false);
-    // Refresh the trainers list
     fetchTrainers();
   };
 
@@ -77,13 +106,8 @@ const ViewTrainers: React.FC = () => {
 
       const response = await fetch('/api/admin/update-trainer-status', {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          userId: selectedTrainer.user_id,
-          newStatus: targetStatus
-        })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: selectedTrainer.user_id, newStatus: targetStatus })
       });
 
       const result = await response.json();
@@ -92,19 +116,13 @@ const ViewTrainers: React.FC = () => {
         throw new Error(result.message || 'Failed to update trainer status');
       }
 
-      console.log('✅ Trainer status updated successfully:', result);
       alert(`Trainer ${targetStatus.toLowerCase()} successfully!`);
-
-      // Refresh the trainers list
       await fetchTrainers();
-
-      // Reset confirmation dialog
       setShowStatusConfirmation(false);
       setSelectedTrainer(null);
       setTargetStatus(null);
 
     } catch (error) {
-      console.error('❌ Failed to update trainer status:', error);
       alert(`Failed to update trainer status: ${error instanceof Error ? error.message : 'Please try again.'}`);
     } finally {
       setIsUpdatingStatus(false);
@@ -116,12 +134,7 @@ const ViewTrainers: React.FC = () => {
       setLoading(true);
       const response = await fetch('/api/admin/trainers-detail');
       const data = await response.json();
-
-      if (data.success) {
-        setTrainers(data.data.trainers);
-      } else {
-        console.error('Failed to fetch trainers:', data.message);
-      }
+      if (data.success) setTrainers(data.data.trainers);
     } catch (error) {
       console.error('Error fetching trainers:', error);
     } finally {
@@ -129,26 +142,25 @@ const ViewTrainers: React.FC = () => {
     }
   };
 
-  useEffect(() => {
-    fetchTrainers();
-  }, []);
+  useEffect(() => { fetchTrainers(); }, []);
 
   const filteredTrainers = trainers.filter(trainer => {
-    // General search
-    const matchesGeneralSearch = !searchQuery ||
+    const matchesSearch = !searchQuery ||
       trainer.trainer_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       trainer.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (trainer.telephone && trainer.telephone.toLowerCase().includes(searchQuery.toLowerCase()));
 
-    // Advanced filters
     const matchesName = !filterName || trainer.trainer_name.toLowerCase().includes(filterName.toLowerCase());
 
-    const matchesStatus = filterStatus === 'All' || trainer.status === filterStatus;
+    const matchesTrainerStatus = filterTrainerStatuses.length === 0 || filterTrainerStatuses.includes(trainer.status || '');
+
+    const matchesAccountStatus = filterAccountStatuses.length === 0 ||
+      filterAccountStatuses.some(s => s.toLowerCase() === (trainer.account_status || '').toLowerCase());
 
     const matchesCourse = !filterCourse ||
       (trainer.courses_taught && trainer.courses_taught.toLowerCase().includes(filterCourse.toLowerCase()));
 
-    return matchesGeneralSearch && matchesName && matchesStatus && matchesCourse;
+    return matchesSearch && matchesName && matchesTrainerStatus && matchesAccountStatus && matchesCourse;
   });
 
   const totalPages = Math.ceil(filteredTrainers.length / itemsPerPage);
@@ -166,7 +178,6 @@ const ViewTrainers: React.FC = () => {
     );
   }
 
-  // Show Add Trainer Form if requested
   if (showAddTrainerForm) {
     return (
       <AddTrainerForm
@@ -176,15 +187,29 @@ const ViewTrainers: React.FC = () => {
     );
   }
 
+  if (showBulkUpload) {
+    return (
+      <BulkUploadTrainersView
+        onBack={() => { setShowBulkUpload(false); fetchTrainers(); }}
+      />
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white">View Trainers</h1>
-        <Button variant="primary" onClick={() => setShowAddTrainerForm(true)}>
-          <Icon name={IconName.Add} className="w-4 h-4 mr-2" />
-          Add New Trainer
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="ghost" onClick={() => setShowBulkUpload(true)} className="border border-blue-500 text-blue-600 hover:bg-blue-50 dark:border-blue-400 dark:text-blue-400 dark:hover:bg-blue-900/20">
+            <Icon name={IconName.Upload} className="w-4 h-4 mr-2" />
+            Bulk Upload Trainers
+          </Button>
+          <Button variant="primary" onClick={() => setShowAddTrainerForm(true)}>
+            <Icon name={IconName.Add} className="w-4 h-4 mr-2" />
+            Add New Trainer
+          </Button>
+        </div>
       </div>
 
       {/* Search and Filters */}
@@ -196,7 +221,14 @@ const ViewTrainers: React.FC = () => {
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                 <Icon name={IconName.User} className="w-5 h-5 text-gray-400" />
               </div>
-              <input type="text" id="general-search" placeholder="Search name, email..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className={`${inputClasses} pl-10`} />
+              <input
+                type="text"
+                id="general-search"
+                placeholder="Search name, email..."
+                value={searchQuery}
+                onChange={e => { setSearchQuery(e.target.value); setCurrentPage(1); }}
+                className={`${inputClasses} pl-10`}
+              />
             </div>
           </div>
           <div className="lg:col-span-2 flex justify-end gap-2">
@@ -208,22 +240,73 @@ const ViewTrainers: React.FC = () => {
         </div>
 
         {showAdvancedFilters && (
-          <div className="mt-4 pt-4 border-t grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-end dark:border-gray-700">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Trainer Name</label>
-              <input type="text" value={filterName} onChange={e => setFilterName(e.target.value)} className={`${inputClasses} mt-1`} placeholder="Filter by trainer name..." />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Status</label>
-              <select value={filterStatus} onChange={e => setFilterStatus(e.target.value as 'All' | 'Active' | 'Inactive')} className={`${inputClasses} mt-1`}>
-                <option value="All">All Statuses</option>
-                <option value="Active">Active</option>
-                <option value="Inactive">Inactive</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Associated Course</label>
-              <input type="text" value={filterCourse} onChange={e => setFilterCourse(e.target.value)} className={`${inputClasses} mt-1`} placeholder="Search by course keywords..." />
+          <div className="mt-4 pt-4 border-t dark:border-gray-700 space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-start">
+              {/* Trainer Name */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Trainer Name</label>
+                <input
+                  type="text"
+                  value={filterName}
+                  onChange={e => { setFilterName(e.target.value); setCurrentPage(1); }}
+                  className={inputClasses}
+                  placeholder="Filter by trainer name..."
+                />
+              </div>
+
+              {/* Trainer Status checkboxes */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Trainer Status</label>
+                <div className="flex flex-wrap gap-3">
+                  {TRAINER_STATUSES.map(s => (
+                    <label key={s} className="flex items-center gap-2 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={filterTrainerStatuses.includes(s)}
+                        onChange={() => toggleCheckbox(s, filterTrainerStatuses, setFilterTrainerStatuses)}
+                        className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700"
+                      />
+                      <span className="text-sm text-gray-700 dark:text-gray-300">{s}</span>
+                    </label>
+                  ))}
+                </div>
+                {filterTrainerStatuses.length > 0 && (
+                  <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">Showing: {filterTrainerStatuses.join(', ')}</p>
+                )}
+              </div>
+
+              {/* Account Status checkboxes */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Account Status</label>
+                <div className="flex flex-wrap gap-3">
+                  {ACCOUNT_STATUSES.map(s => (
+                    <label key={s} className="flex items-center gap-2 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={filterAccountStatuses.includes(s)}
+                        onChange={() => toggleCheckbox(s, filterAccountStatuses, setFilterAccountStatuses)}
+                        className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700"
+                      />
+                      <span className="text-sm text-gray-700 dark:text-gray-300">{s}</span>
+                    </label>
+                  ))}
+                </div>
+                {filterAccountStatuses.length > 0 && (
+                  <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">Showing: {filterAccountStatuses.join(', ')}</p>
+                )}
+              </div>
+
+              {/* Associated Course */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Associated Course</label>
+                <input
+                  type="text"
+                  value={filterCourse}
+                  onChange={e => { setFilterCourse(e.target.value); setCurrentPage(1); }}
+                  className={inputClasses}
+                  placeholder="Search by course keywords..."
+                />
+              </div>
             </div>
           </div>
         )}
@@ -239,7 +322,8 @@ const ViewTrainers: React.FC = () => {
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Trainer Name</th>
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Contact</th>
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Trainer Type</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Status</th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Trainer Status</th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Account Status</th>
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">LinkedIn Profile</th>
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Associated Courses</th>
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Action</th>
@@ -260,20 +344,17 @@ const ViewTrainers: React.FC = () => {
                               }
                               alt={trainer.trainer_name}
                               onError={(e) => {
-                                console.log('❌ Failed to load image:', trainer.profile_picture);
-                                // Set fallback to default user icon on error
                                 e.currentTarget.style.display = 'none';
                                 e.currentTarget.nextElementSibling?.classList.remove('hidden');
                               }}
                             />
                           ) : (
-                            <div className="h-10 w-10 bg-gray-200 rounded-full flex items-center justify-center">
-                              <Icon name={IconName.User} className="w-5 h-5 text-gray-500" />
+                            <div className="h-10 w-10 bg-gray-200 dark:bg-gray-600 rounded-full flex items-center justify-center">
+                              <Icon name={IconName.User} className="w-5 h-5 text-gray-500 dark:text-gray-400" />
                             </div>
                           )}
-                          {/* Fallback icon (hidden by default, shown on image load error) */}
-                          <div className="h-10 w-10 bg-gray-200 rounded-full flex items-center justify-center hidden">
-                            <Icon name={IconName.User} className="w-5 h-5 text-gray-500" />
+                          <div className="h-10 w-10 bg-gray-200 dark:bg-gray-600 rounded-full flex items-center justify-center hidden">
+                            <Icon name={IconName.User} className="w-5 h-5 text-gray-500 dark:text-gray-400" />
                           </div>
                         </div>
                         <div className="ml-4">
@@ -288,7 +369,12 @@ const ViewTrainers: React.FC = () => {
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{trainer.trainer_type || 'N/A'}</td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(trainer.status)}`}>
-                        {trainer.status}
+                        {trainer.status || 'N/A'}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getAccountStatusColor(trainer.account_status)}`}>
+                        {capitalise(trainer.account_status)}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
@@ -322,19 +408,19 @@ const ViewTrainers: React.FC = () => {
                         <Button
                           variant="ghost"
                           onClick={() => handleStatusChange(trainer, 'Inactive')}
-                          className="text-red-600 hover:text-red-800 hover:bg-red-50"
+                          className="text-red-600 hover:text-red-800 hover:bg-red-50 dark:hover:bg-red-900/20"
                         >
                           <Icon name={IconName.Close} className="w-4 h-4 mr-1" />
-                          Deactivate Trainer
+                          Deactivate
                         </Button>
                       ) : (
                         <Button
                           variant="ghost"
                           onClick={() => handleStatusChange(trainer, 'Active')}
-                          className="text-green-600 hover:text-green-800 hover:bg-green-50"
+                          className="text-green-600 hover:text-green-800 hover:bg-green-50 dark:hover:bg-green-900/20"
                         >
                           <Icon name={IconName.Check} className="w-4 h-4 mr-1" />
-                          Activate Trainer
+                          Activate
                         </Button>
                       )}
                     </td>
@@ -343,22 +429,14 @@ const ViewTrainers: React.FC = () => {
               </tbody>
             </table>
             {totalPages > 1 && (
-              <div className="p-4 flex justify-between items-center border-t">
-                <Button
-                  variant="ghost"
-                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                  disabled={currentPage === 1}
-                >
+              <div className="p-4 flex justify-between items-center border-t dark:border-gray-700">
+                <Button variant="ghost" onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))} disabled={currentPage === 1}>
                   Previous
                 </Button>
                 <span className="text-sm text-gray-500 dark:text-gray-400">
                   Page {currentPage} of {totalPages}
                 </span>
-                <Button
-                  variant="ghost"
-                  onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                  disabled={currentPage === totalPages}
-                >
+                <Button variant="ghost" onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))} disabled={currentPage === totalPages}>
                   Next
                 </Button>
               </div>
@@ -366,7 +444,7 @@ const ViewTrainers: React.FC = () => {
           </>
         ) : (
           <div className="text-center py-12">
-            <Icon name={IconName.User} className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+            <Icon name={IconName.User} className="w-16 h-16 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-gray-900 mb-2 dark:text-white">No trainers found</h3>
             <p className="text-gray-500 mb-6 dark:text-gray-400">
               {trainers.length === 0
@@ -380,38 +458,27 @@ const ViewTrainers: React.FC = () => {
       {/* Status Update Confirmation Dialog */}
       {showStatusConfirmation && selectedTrainer && targetStatus && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-auto">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full mx-auto">
             <div className="p-6">
               <div className="flex items-center gap-4 mb-4">
-                <div className={`w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0 ${targetStatus === 'Active' ? 'bg-green-100' : 'bg-red-100'
-                  }`}>
+                <div className={`w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0 ${targetStatus === 'Active' ? 'bg-green-100 dark:bg-green-900/30' : 'bg-red-100 dark:bg-red-900/30'}`}>
                   <Icon
                     name={targetStatus === 'Active' ? IconName.Check : IconName.Close}
-                    className={`w-6 h-6 ${targetStatus === 'Active' ? 'text-green-600' : 'text-red-600'}`}
+                    className={`w-6 h-6 ${targetStatus === 'Active' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}
                   />
                 </div>
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-1">
-                    {targetStatus === 'Active' ? 'Activate' : 'Deactivate'} Trainer
-                  </h3>
-                </div>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  {targetStatus === 'Active' ? 'Activate' : 'Deactivate'} Trainer
+                </h3>
               </div>
-
-              <div className="mb-6">
-                <p className="text-gray-700 dark:text-gray-300 mb-4">
-                  Are you sure you want to {targetStatus.toLowerCase()} the trainer{' '}
-                  <strong>"{selectedTrainer.trainer_name}"</strong>?
-                </p>
-              </div>
-
+              <p className="text-gray-700 dark:text-gray-300 mb-6">
+                Are you sure you want to {targetStatus.toLowerCase()} the trainer{' '}
+                <strong>"{selectedTrainer.trainer_name}"</strong>?
+              </p>
               <div className="flex gap-3 justify-end">
                 <Button
                   variant="ghost"
-                  onClick={() => {
-                    setShowStatusConfirmation(false);
-                    setSelectedTrainer(null);
-                    setTargetStatus(null);
-                  }}
+                  onClick={() => { setShowStatusConfirmation(false); setSelectedTrainer(null); setTargetStatus(null); }}
                   disabled={isUpdatingStatus}
                 >
                   Cancel
@@ -419,10 +486,7 @@ const ViewTrainers: React.FC = () => {
                 <Button
                   onClick={confirmStatusUpdate}
                   disabled={isUpdatingStatus}
-                  className={`${targetStatus === 'Active'
-                    ? 'bg-green-600 hover:bg-green-700 text-white'
-                    : 'bg-red-600 hover:bg-red-700 text-white'
-                    }`}
+                  className={`${targetStatus === 'Active' ? 'bg-green-600 hover:bg-green-700 text-white' : 'bg-red-600 hover:bg-red-700 text-white'}`}
                 >
                   {isUpdatingStatus ? (
                     <>

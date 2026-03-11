@@ -26,16 +26,31 @@ const getStatusColor = (status: string) => {
     }
 };
 
+type DaFilterCategory = 'all' | 'inserted' | 'updated' | 'skipped' | 'failed';
+
+interface DaResultRow {
+    action: 'inserted' | 'updated' | 'skipped' | 'failed';
+    application_id: string;
+    trainee_name: string;
+    trainee_id: string;
+    message: string;
+}
+
+const RESULTS_PER_PAGE = 10;
+const BATCH_SIZE_DA = 20;
+
 export const UploadDirectApplicationView: React.FC = () => {
     const [file, setFile] = useState<File | null>(null);
-    const [isUploading, setIsUploading] = useState(false);
-    const [uploadResult, setUploadResult] = useState<any>(null);
+    const [viewState, setViewState] = useState<'upload' | 'processing' | 'results'>('upload');
+    const [allResults, setAllResults] = useState<DaResultRow[]>([]);
+    const [summary, setSummary] = useState({ inserted: 0, updated: 0, skipped: 0, failed: 0 });
+    const [filterCategory, setFilterCategory] = useState<DaFilterCategory>('all');
+    const [resultsPage, setResultsPage] = useState(1);
     const [error, setError] = useState<string | null>(null);
     const [isDragOver, setIsDragOver] = useState(false);
     const [showTraineeId, setShowTraineeId] = useState(false);
-    const [newRecordsPage, setNewRecordsPage] = useState(1);
-    const [updatedRecordsPage, setUpdatedRecordsPage] = useState(1);
-    const resultsPerPage = 10;
+    const [progressCurrent, setProgressCurrent] = useState(0);
+    const [progressTotal, setProgressTotal] = useState(0);
 
     const maskTraineeId = (id: string | null) => {
         if (!id) return 'N/A';
@@ -179,59 +194,282 @@ export const UploadDirectApplicationView: React.FC = () => {
     const handleUpload = async () => {
         if (!file) return;
 
-        setIsUploading(true);
-        setUploadResult(null);
+        setViewState('processing');
+        setAllResults([]);
+        setSummary({ inserted: 0, updated: 0, skipped: 0, failed: 0 });
+        setFilterCategory('all');
+        setResultsPage(1);
         setError(null);
+        setProgressCurrent(0);
+        setProgressTotal(0);
 
         try {
-            // Parse Excel file
             console.log('📊 Parsing Excel file:', file.name);
             const excelData = await parseExcelFile(file);
             console.log('✅ Parsed Excel data:', excelData.length, 'rows');
 
-            // Send data to database API
-            console.log('🔄 Sending data to database API...');
-            const response = await fetch('/api/admin/upload-da-applications', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    data: excelData
-                })
-            });
+            const total = excelData.length;
+            setProgressTotal(total);
 
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => ({}));
-                if (response.status === 500) {
-                    throw new Error(errorData.error || 'Server error. The service may be temporarily unavailable. Please try again later.');
+            const flat: DaResultRow[] = [];
+            let ins = 0, upd = 0, skip = 0, fail = 0;
+
+            for (let i = 0; i < total; i += BATCH_SIZE_DA) {
+                const batch = excelData.slice(i, i + BATCH_SIZE_DA);
+
+                const response = await fetch('/api/admin/upload-da-applications', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ data: batch }),
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}));
+                    throw new Error(
+                        errorData.error ||
+                        (response.status === 500
+                            ? 'Server error. The service may be temporarily unavailable. Please try again later.'
+                            : `Unable to process request (Error ${response.status}). Please try again.`)
+                    );
                 }
-                throw new Error(errorData.error || `Unable to process request (Error ${response.status}). Please try again.`);
+
+                const result = await response.json();
+
+                (result.newRecords ?? []).forEach((r: any) => {
+                    flat.push({ action: 'inserted', application_id: r.application_id ?? '', trainee_name: r.trainee_name ?? '', trainee_id: r.trainee_id ?? '', message: 'Inserted successfully.' });
+                    ins++;
+                });
+                (result.updatedRecords ?? []).forEach((r: any) => {
+                    flat.push({ action: 'updated', application_id: r.application_id ?? '', trainee_name: r.trainee_name ?? '', trainee_id: r.trainee_id ?? '', message: `Status updated${r.old_status ? ` from "${r.old_status}"` : ''} to "${r.application_status ?? ''}"` });
+                    upd++;
+                });
+                (result.errors ?? []).forEach((e: any) => {
+                    flat.push({ action: 'failed', application_id: e.application_id ?? `Row ${e.row ?? '?'}`, trainee_name: '', trainee_id: '', message: e.error ?? 'Unknown error' });
+                    fail++;
+                });
+
+                // Skipped (duplicates — already up to date, no status change needed)
+                const skipCount: number = result.duplicates ?? 0;
+                const skipIds: string[] = result.duplicateIds ?? [];
+                skipIds.forEach((id: string) => {
+                    flat.push({ action: 'skipped', application_id: id, trainee_name: '', trainee_id: '', message: `Application ID "${id}" already exists and is already up to date — no status change required.` });
+                });
+                // If API capped the list, add a placeholder for the remainder
+                if (skipCount > skipIds.length) {
+                    flat.push({ action: 'skipped', application_id: `(${skipCount - skipIds.length} more)`, trainee_name: '', trainee_id: '', message: `${skipCount - skipIds.length} additional application(s) already exist and are already up to date.` });
+                }
+                skip += skipCount;
+
+                setProgressCurrent(Math.min(i + BATCH_SIZE_DA, total));
             }
 
-            const result = await response.json();
-            console.log('✅ Upload result:', result);
-            setUploadResult(result);
+            setAllResults(flat);
+            setSummary({ inserted: ins, updated: upd, skipped: skip, failed: fail });
+            setViewState('results');
+            console.log('✅ Upload complete — inserted:', ins, 'updated:', upd, 'failed:', fail);
 
         } catch (err) {
             console.error('❌ Upload error:', err);
             setError(err instanceof Error ? err.message : 'Failed to upload file');
-        } finally {
-            setIsUploading(false);
+            setViewState('upload');
         }
     };
 
     const resetView = () => {
         setFile(null);
-        setUploadResult(null);
+        setAllResults([]);
+        setSummary({ inserted: 0, updated: 0, skipped: 0, failed: 0 });
+        setFilterCategory('all');
+        setResultsPage(1);
         setError(null);
         setShowTraineeId(false);
-        setNewRecordsPage(1);
-        setUpdatedRecordsPage(1);
+        setProgressCurrent(0);
+        setProgressTotal(0);
+        setViewState('upload');
     };
 
+    // ── Derived state ────────────────────────────────────────────────────────
+
+    const filteredResults = filterCategory === 'all'
+        ? allResults
+        : allResults.filter(r => r.action === filterCategory);
+
+    const totalResultPages = Math.ceil(filteredResults.length / RESULTS_PER_PAGE);
+    const paginatedResults = filteredResults.slice(
+        (resultsPage - 1) * RESULTS_PER_PAGE,
+        resultsPage * RESULTS_PER_PAGE
+    );
+
+    const progressPct = progressTotal > 0 ? Math.round((progressCurrent / progressTotal) * 100) : 0;
+
+    const categoryCards: { key: DaFilterCategory; label: string; count: number; color: string; activeColor: string; textColor: string }[] = [
+        { key: 'all',      label: 'All',      count: allResults.length, color: 'bg-gray-50 dark:bg-gray-700/50 border-gray-200 dark:border-gray-600',     activeColor: 'bg-gray-200 dark:bg-gray-600 border-gray-400 dark:border-gray-400',         textColor: 'text-gray-800 dark:text-gray-200' },
+        { key: 'inserted', label: 'Inserted', count: summary.inserted,  color: 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800', activeColor: 'bg-green-100 dark:bg-green-900/40 border-green-500 dark:border-green-500', textColor: 'text-green-700 dark:text-green-400' },
+        { key: 'updated',  label: 'Updated',  count: summary.updated,   color: 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800',     activeColor: 'bg-blue-100 dark:bg-blue-900/40 border-blue-500 dark:border-blue-500',   textColor: 'text-blue-700 dark:text-blue-400' },
+        { key: 'failed',   label: 'Failed',   count: summary.failed,    color: 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800',         activeColor: 'bg-red-100 dark:bg-red-900/40 border-red-500 dark:border-red-500',       textColor: 'text-red-700 dark:text-red-400' },
+    ];
+
+    // ── Header row (shared across states) ────────────────────────────────────
+
+    const headerRow = (
+        <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+                {viewState === 'results' && (
+                    <Button variant="ghost" onClick={resetView}>
+                        <Icon name={IconName.Back} className="w-4 h-4 mr-1" />
+                        Back
+                    </Button>
+                )}
+                <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Upload Direct Applications</h1>
+            </div>
+            {viewState === 'results' && (
+                <Button variant="ghost" onClick={resetView} className="border border-blue-500 text-blue-600 hover:bg-blue-50 dark:border-blue-400 dark:text-blue-400 dark:hover:bg-blue-900/20">
+                    <Icon name={IconName.Upload} className="w-4 h-4 mr-2" />
+                    New Upload
+                </Button>
+            )}
+        </div>
+    );
+
+    // ── Processing view ───────────────────────────────────────────────────────
+
+    if (viewState === 'processing') {
+        return (
+            <div className="space-y-6">
+                {headerRow}
+                <Card className="p-10 dark:bg-gray-800 dark:border-gray-700 flex flex-col items-center justify-center min-h-[360px]">
+                    <div className="w-full max-w-md text-center space-y-6">
+                        <div className="animate-spin rounded-full h-14 w-14 border-4 border-blue-200 border-t-blue-600 mx-auto" />
+                        <div>
+                            <p className="text-lg font-semibold text-gray-900 dark:text-white">Uploading Applications...</p>
+                            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Please do not close this page.</p>
+                        </div>
+                        <div className="space-y-2">
+                            <div className="flex justify-between text-sm font-medium text-gray-700 dark:text-gray-300">
+                                <span>Progress</span>
+                                <span>{Math.min(progressCurrent, progressTotal)} / {progressTotal}</span>
+                            </div>
+                            <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3 overflow-hidden">
+                                <div className="h-3 bg-blue-600 rounded-full transition-all duration-300" style={{ width: `${progressPct}%` }} />
+                            </div>
+                            <p className="text-xs text-gray-500 dark:text-gray-400 text-right">{progressPct}%</p>
+                        </div>
+                    </div>
+                </Card>
+            </div>
+        );
+    }
+
+    // ── Results view ──────────────────────────────────────────────────────────
+
+    if (viewState === 'results') {
+        return (
+            <div className="space-y-6">
+                {headerRow}
+
+                {/* Summary cards */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    {categoryCards.map(({ key, label, count, color, activeColor, textColor }) => (
+                        <button
+                            key={key}
+                            onClick={() => { setFilterCategory(key); setResultsPage(1); }}
+                            className={`rounded-lg p-4 text-center border-2 transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 ${filterCategory === key ? activeColor : `${color} hover:opacity-80`}`}
+                        >
+                            <p className={`text-3xl font-bold ${textColor}`}>{count}</p>
+                            <p className={`text-sm font-medium mt-1 ${textColor}`}>{label}</p>
+                            {filterCategory === key && (
+                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Showing this filter</p>
+                            )}
+                        </button>
+                    ))}
+                </div>
+
+                {/* Detail table */}
+                <Card className="p-0 overflow-x-auto dark:bg-gray-800 dark:border-gray-700">
+                    <div className="px-6 py-4 border-b dark:border-gray-700 flex justify-between items-center">
+                        <h2 className="text-base font-semibold text-gray-900 dark:text-white">
+                            {filterCategory === 'all' ? 'All Results' : `${filterCategory.charAt(0).toUpperCase() + filterCategory.slice(1)} (${filteredResults.length})`}
+                        </h2>
+                        <span className="text-sm text-gray-500 dark:text-gray-400">{filteredResults.length} record{filteredResults.length !== 1 ? 's' : ''}</span>
+                    </div>
+
+                    {filteredResults.length === 0 ? (
+                        <div className="text-center py-12 text-gray-500 dark:text-gray-400 text-sm">No records in this category.</div>
+                    ) : (
+                        <>
+                            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                                <thead className="bg-gray-50 dark:bg-gray-700/50">
+                                    <tr>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">#</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Application ID</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Trainee Name</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Trainee ID</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Action</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Message</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                                    {paginatedResults.map((r, i) => (
+                                        <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                                            <td className="px-4 py-3 text-xs text-gray-400 dark:text-gray-500">
+                                                {(resultsPage - 1) * RESULTS_PER_PAGE + i + 1}
+                                            </td>
+                                            <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-white">{r.application_id || 'N/A'}</td>
+                                            <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">{r.trainee_name || '—'}</td>
+                                            <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
+                                                <div className="flex items-center gap-1.5">
+                                                    <span className="font-mono">{maskTraineeId(r.trainee_id || null)}</span>
+                                                    {r.trainee_id && (
+                                                        <button
+                                                            onClick={() => setShowTraineeId(v => !v)}
+                                                            className="p-0.5 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 rounded transition-colors"
+                                                            title={showTraineeId ? 'Hide Trainee ID' : 'Show Trainee ID'}
+                                                        >
+                                                            <Icon name={showTraineeId ? IconName.EyeOff : IconName.Eye} className="w-4 h-4" />
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </td>
+                                            <td className="px-4 py-3">
+                                                <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${
+                                                    r.action === 'inserted' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+                                                    : r.action === 'updated' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400'
+                                                    : r.action === 'skipped' ? 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
+                                                    : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
+                                                }`}>
+                                                    {r.action.charAt(0).toUpperCase() + r.action.slice(1)}
+                                                </span>
+                                            </td>
+                                            <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">{r.message}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+
+                            {totalResultPages > 1 && (
+                                <div className="p-4 flex justify-between items-center border-t dark:border-gray-700">
+                                    <Button variant="ghost" onClick={() => setResultsPage(p => Math.max(1, p - 1))} disabled={resultsPage === 1}>
+                                        Previous
+                                    </Button>
+                                    <span className="text-sm text-gray-500 dark:text-gray-400">
+                                        Page {resultsPage} of {totalResultPages}
+                                    </span>
+                                    <Button variant="ghost" onClick={() => setResultsPage(p => Math.min(totalResultPages, p + 1))} disabled={resultsPage === totalResultPages}>
+                                        Next
+                                    </Button>
+                                </div>
+                            )}
+                        </>
+                    )}
+                </Card>
+            </div>
+        );
+    }
+
+    // ── Upload view (default) ─────────────────────────────────────────────────
+
     const UploadStep = () => (
-        <Card className="p-6">
+        <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
             {/* Protected View Note - at top for visibility */}
             <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4">
                 <h4 className="font-semibold text-amber-800 mb-2">⚠️ Important: For Direct Application File</h4>
@@ -294,395 +532,18 @@ export const UploadDirectApplicationView: React.FC = () => {
             )}
 
             <div className="flex justify-end items-center mt-6">
-                <Button onClick={handleUpload} disabled={!file || isUploading}>
-                    {isUploading ? (
-                        <div className="flex items-center">
-                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                            Processing...
-                        </div>
-                    ) : 'Upload & Process'}
+                <Button onClick={handleUpload} disabled={!file}>
+                    Upload &amp; Process
                 </Button>
             </div>
         </Card>
     );
 
-    const ResultsStep = () => (
-        <Card>
-            <div className="p-6 border-b dark:border-gray-700">
-                <h3 className="text-xl font-bold dark:text-white">Upload Results</h3>
-                <p className="text-gray-500 dark:text-gray-400 mt-1">The following results were returned from processing.</p>
-            </div>
-            <div className="p-6">
-                {uploadResult?.success && (uploadResult?.inserted > 0 || uploadResult?.updated > 0) ? (
-                    <div className="space-y-6">
-                        <div className="bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-lg p-4">
-                            <h4 className="font-bold text-green-800 dark:text-green-300">
-                                {uploadResult.inserted} New Record(s) Inserted
-                                {uploadResult.updated > 0 && `, ${uploadResult.updated} Record(s) Updated`}
-                            </h4>
-                            <p className="text-sm text-green-700 dark:text-green-400">
-                                {uploadResult.duplicates || 0} duplicate(s) were skipped
-                            </p>
-                            {uploadResult.errors?.length > 0 && (
-                                <p className="text-sm text-amber-700 dark:text-amber-400 mt-1">
-                                    {uploadResult.errors.length} row(s) had errors
-                                </p>
-                            )}
-                        </div>
-
-                        {uploadResult.newRecords && uploadResult.newRecords.length > 0 && (
-                            <div className="border border-green-200 dark:border-green-800 rounded-lg overflow-hidden">
-                                <div className="bg-green-100 dark:bg-green-900/50 px-4 py-3 flex items-center gap-2">
-                                    <span className="inline-flex items-center justify-center w-6 h-6 bg-green-500 text-white text-xs font-bold rounded-full">+</span>
-                                    <h4 className="font-semibold text-green-800 dark:text-green-300">Inserted Records ({uploadResult.newRecords.length})</h4>
-                                </div>
-                                <div className="overflow-x-auto">
-                                    <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-600">
-                                        <thead className="bg-gray-50 dark:bg-gray-800">
-                                            <tr>
-                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Application ID</th>
-                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Trainee ID Type</th>
-                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Trainee ID</th>
-                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">DOB</th>
-                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Trainee Name</th>
-                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Email</th>
-                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Phone</th>
-                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Course Title</th>
-                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Course Ref No.</th>
-                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Course Run ID</th>
-                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Sponsorship</th>
-                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Application Date</th>
-                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Full Course Fee</th>
-                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">GST</th>
-                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">SF Subsidy</th>
-                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">SF Credit</th>
-                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Payable Fee</th>
-                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">SF Credit Claim ID</th>
-                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Highest Qualification</th>
-                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Highest Certification</th>
-                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Application Status</th>
-                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Cancelled By</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="bg-white dark:bg-gray-700 divide-y divide-gray-200 dark:divide-gray-600">
-                                            {uploadResult.newRecords
-                                                .slice((newRecordsPage - 1) * resultsPerPage, newRecordsPage * resultsPerPage)
-                                                .map((record: any, index: number) => (
-                                                    <tr key={index} className="hover:bg-gray-50 dark:hover:bg-gray-600">
-                                                        <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
-                                                            {record.application_id || 'N/A'}
-                                                        </td>
-                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
-                                                            {record.trainee_id_type || 'N/A'}
-                                                        </td>
-                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
-                                                            <div className="flex items-center gap-1.5">
-                                                                <span className="font-mono">{maskTraineeId(record.trainee_id)}</span>
-                                                                <button
-                                                                    onClick={() => setShowTraineeId(!showTraineeId)}
-                                                                    className="p-0.5 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 rounded transition-colors"
-                                                                    title={showTraineeId ? 'Hide Trainee ID' : 'Show Trainee ID'}
-                                                                >
-                                                                    <Icon name={showTraineeId ? IconName.EyeOff : IconName.Eye} className="w-4 h-4" />
-                                                                </button>
-                                                            </div>
-                                                        </td>
-                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
-                                                            {record.date_of_birth ? new Date(record.date_of_birth).toLocaleDateString('en-GB') : 'N/A'}
-                                                        </td>
-                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
-                                                            {record.trainee_name || 'N/A'}
-                                                        </td>
-                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
-                                                            {record.trainee_email || 'N/A'}
-                                                        </td>
-                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
-                                                            {record.trainee_phone_country_code && record.trainee_phone
-                                                                ? `+${record.trainee_phone_country_code} ${record.trainee_phone}`
-                                                                : record.trainee_phone || 'N/A'}
-                                                        </td>
-                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
-                                                            {record.course_title || 'N/A'}
-                                                        </td>
-                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
-                                                            {record.course_reference_number || 'N/A'}
-                                                        </td>
-                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
-                                                            {record.course_run_id || 'N/A'}
-                                                        </td>
-                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
-                                                            {record.sponsorship_type || 'N/A'}
-                                                        </td>
-                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
-                                                            {record.application_date ? new Date(record.application_date).toLocaleDateString('en-GB') : 'N/A'}
-                                                        </td>
-                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
-                                                            {record.full_course_fee != null ? `$${parseFloat(record.full_course_fee || 0).toFixed(2)}` : 'N/A'}
-                                                        </td>
-                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
-                                                            {record.gst != null ? `$${parseFloat(record.gst || 0).toFixed(2)}` : 'N/A'}
-                                                        </td>
-                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
-                                                            {record.skillsfuture_subsidy != null ? `$${parseFloat(record.skillsfuture_subsidy || 0).toFixed(2)}` : 'N/A'}
-                                                        </td>
-                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
-                                                            {record.skillsfuture_credit != null ? `$${parseFloat(record.skillsfuture_credit || 0).toFixed(2)}` : 'N/A'}
-                                                        </td>
-                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
-                                                            ${parseFloat(record.payable_fee || 0).toFixed(2)}
-                                                        </td>
-                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
-                                                            {record.skillsfuture_credit_claim_id || 'N/A'}
-                                                        </td>
-                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
-                                                            {record.highest_qualification || 'N/A'}
-                                                        </td>
-                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
-                                                            {record.highest_relevant_certification || 'N/A'}
-                                                        </td>
-                                                        <td className="px-4 py-3 whitespace-nowrap">
-                                                            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full border ${getStatusColor(record.application_status || 'Inserted')}`}>
-                                                                {record.application_status || 'Inserted'}
-                                                            </span>
-                                                        </td>
-                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
-                                                            {record.application_cancelled_by || '-'}
-                                                        </td>
-                                                    </tr>
-                                                ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                                {uploadResult.newRecords.length > resultsPerPage && (
-                                    <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 border-t dark:border-gray-700">
-                                        <p className="text-sm text-gray-500 dark:text-gray-400">
-                                            Showing {(newRecordsPage - 1) * resultsPerPage + 1}-{Math.min(newRecordsPage * resultsPerPage, uploadResult.newRecords.length)} of {uploadResult.newRecords.length}
-                                        </p>
-                                        <div className="flex items-center gap-1">
-                                            <button
-                                                onClick={() => setNewRecordsPage(p => Math.max(1, p - 1))}
-                                                disabled={newRecordsPage === 1}
-                                                className="px-3 py-1 text-sm border dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                                            >
-                                                Previous
-                                            </button>
-                                            {Array.from({ length: Math.ceil(uploadResult.newRecords.length / resultsPerPage) }, (_, i) => i + 1).map(page => (
-                                                <button
-                                                    key={page}
-                                                    onClick={() => setNewRecordsPage(page)}
-                                                    className={`px-3 py-1 text-sm border rounded ${newRecordsPage === page ? 'bg-blue-500 text-white border-blue-500' : 'hover:bg-gray-100 dark:hover:bg-gray-700 dark:border-gray-600 dark:text-gray-200'}`}
-                                                >
-                                                    {page}
-                                                </button>
-                                            ))}
-                                            <button
-                                                onClick={() => setNewRecordsPage(p => Math.min(Math.ceil(uploadResult.newRecords.length / resultsPerPage), p + 1))}
-                                                disabled={newRecordsPage === Math.ceil(uploadResult.newRecords.length / resultsPerPage)}
-                                                className="px-3 py-1 text-sm border dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                                            >
-                                                Next
-                                            </button>
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                        )}
-
-                        {uploadResult.updatedRecords && uploadResult.updatedRecords.length > 0 && (
-                            <div className="border border-blue-200 dark:border-blue-800 rounded-lg overflow-hidden">
-                                <div className="bg-blue-100 dark:bg-blue-900/50 px-4 py-3 flex items-center gap-2">
-                                    <span className="inline-flex items-center justify-center w-6 h-6 bg-blue-500 text-white text-xs font-bold rounded-full">~</span>
-                                    <h4 className="font-semibold text-blue-800 dark:text-blue-300">Updated Records ({uploadResult.updatedRecords.length})</h4>
-                                </div>
-                                <div className="overflow-x-auto">
-                                    <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-600">
-                                        <thead className="bg-gray-50 dark:bg-gray-800">
-                                            <tr>
-                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Application ID</th>
-                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Trainee ID Type</th>
-                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Trainee ID</th>
-                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">DOB</th>
-                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Trainee Name</th>
-                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Email</th>
-                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Phone</th>
-                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Course Title</th>
-                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Course Ref No.</th>
-                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Course Run ID</th>
-                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Sponsorship</th>
-                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Application Date</th>
-                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Full Course Fee</th>
-                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">GST</th>
-                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">SF Subsidy</th>
-                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">SF Credit</th>
-                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Payable Fee</th>
-                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">SF Credit Claim ID</th>
-                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Highest Qualification</th>
-                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Highest Certification</th>
-                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Old Status</th>
-                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">New Status</th>
-                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Cancelled By</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="bg-white dark:bg-gray-700 divide-y divide-gray-200 dark:divide-gray-600">
-                                            {uploadResult.updatedRecords
-                                                .slice((updatedRecordsPage - 1) * resultsPerPage, updatedRecordsPage * resultsPerPage)
-                                                .map((record: any, index: number) => (
-                                                    <tr key={index} className="hover:bg-gray-50 dark:hover:bg-gray-600">
-                                                        <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
-                                                            {record.application_id || 'N/A'}
-                                                        </td>
-                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
-                                                            {record.trainee_id_type || 'N/A'}
-                                                        </td>
-                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
-                                                            <div className="flex items-center gap-1.5">
-                                                                <span className="font-mono">{maskTraineeId(record.trainee_id)}</span>
-                                                                <button
-                                                                    onClick={() => setShowTraineeId(!showTraineeId)}
-                                                                    className="p-0.5 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 rounded transition-colors"
-                                                                    title={showTraineeId ? 'Hide Trainee ID' : 'Show Trainee ID'}
-                                                                >
-                                                                    <Icon name={showTraineeId ? IconName.EyeOff : IconName.Eye} className="w-4 h-4" />
-                                                                </button>
-                                                            </div>
-                                                        </td>
-                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
-                                                            {record.date_of_birth ? new Date(record.date_of_birth).toLocaleDateString('en-GB') : 'N/A'}
-                                                        </td>
-                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
-                                                            {record.trainee_name || 'N/A'}
-                                                        </td>
-                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
-                                                            {record.trainee_email || 'N/A'}
-                                                        </td>
-                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
-                                                            {record.trainee_phone_country_code && record.trainee_phone
-                                                                ? `+${record.trainee_phone_country_code} ${record.trainee_phone}`
-                                                                : record.trainee_phone || 'N/A'}
-                                                        </td>
-                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
-                                                            {record.course_title || 'N/A'}
-                                                        </td>
-                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
-                                                            {record.course_reference_number || 'N/A'}
-                                                        </td>
-                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
-                                                            {record.course_run_id || 'N/A'}
-                                                        </td>
-                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
-                                                            {record.sponsorship_type || 'N/A'}
-                                                        </td>
-                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
-                                                            {record.application_date ? new Date(record.application_date).toLocaleDateString('en-GB') : 'N/A'}
-                                                        </td>
-                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
-                                                            {record.full_course_fee != null ? `$${parseFloat(record.full_course_fee || 0).toFixed(2)}` : 'N/A'}
-                                                        </td>
-                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
-                                                            {record.gst != null ? `$${parseFloat(record.gst || 0).toFixed(2)}` : 'N/A'}
-                                                        </td>
-                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
-                                                            {record.skillsfuture_subsidy != null ? `$${parseFloat(record.skillsfuture_subsidy || 0).toFixed(2)}` : 'N/A'}
-                                                        </td>
-                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
-                                                            {record.skillsfuture_credit != null ? `$${parseFloat(record.skillsfuture_credit || 0).toFixed(2)}` : 'N/A'}
-                                                        </td>
-                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
-                                                            ${parseFloat(record.payable_fee || 0).toFixed(2)}
-                                                        </td>
-                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
-                                                            {record.skillsfuture_credit_claim_id || 'N/A'}
-                                                        </td>
-                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
-                                                            {record.highest_qualification || 'N/A'}
-                                                        </td>
-                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
-                                                            {record.highest_relevant_certification || 'N/A'}
-                                                        </td>
-                                                        <td className="px-4 py-3 whitespace-nowrap">
-                                                            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full border ${getStatusColor(record.old_status || '')}`}>
-                                                                {record.old_status || 'N/A'}
-                                                            </span>
-                                                        </td>
-                                                        <td className="px-4 py-3 whitespace-nowrap">
-                                                            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full border ${getStatusColor(record.application_status || '')}`}>
-                                                                {record.application_status || 'N/A'}
-                                                            </span>
-                                                        </td>
-                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
-                                                            {record.application_cancelled_by || '-'}
-                                                        </td>
-                                                    </tr>
-                                                ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                                {uploadResult.updatedRecords.length > resultsPerPage && (
-                                    <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 border-t dark:border-gray-700">
-                                        <p className="text-sm text-gray-500 dark:text-gray-400">
-                                            Showing {(updatedRecordsPage - 1) * resultsPerPage + 1}-{Math.min(updatedRecordsPage * resultsPerPage, uploadResult.updatedRecords.length)} of {uploadResult.updatedRecords.length}
-                                        </p>
-                                        <div className="flex items-center gap-1">
-                                            <button
-                                                onClick={() => setUpdatedRecordsPage(p => Math.max(1, p - 1))}
-                                                disabled={updatedRecordsPage === 1}
-                                                className="px-3 py-1 text-sm border dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                                            >
-                                                Previous
-                                            </button>
-                                            {Array.from({ length: Math.ceil(uploadResult.updatedRecords.length / resultsPerPage) }, (_, i) => i + 1).map(page => (
-                                                <button
-                                                    key={page}
-                                                    onClick={() => setUpdatedRecordsPage(page)}
-                                                    className={`px-3 py-1 text-sm border rounded ${updatedRecordsPage === page ? 'bg-blue-500 text-white border-blue-500' : 'hover:bg-gray-100 dark:hover:bg-gray-700 dark:border-gray-600 dark:text-gray-200'}`}
-                                                >
-                                                    {page}
-                                                </button>
-                                            ))}
-                                            <button
-                                                onClick={() => setUpdatedRecordsPage(p => Math.min(Math.ceil(uploadResult.updatedRecords.length / resultsPerPage), p + 1))}
-                                                disabled={updatedRecordsPage === Math.ceil(uploadResult.updatedRecords.length / resultsPerPage)}
-                                                className="px-3 py-1 text-sm border dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                                            >
-                                                Next
-                                            </button>
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                        )}
-                    </div>
-                ) : (
-                    <div className="bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-800 rounded-lg p-8 text-center">
-                        <Icon name={IconName.InfoCircle} className="w-12 h-12 mx-auto text-yellow-500 dark:text-yellow-400 mb-3" />
-                        <h4 className="text-lg font-bold text-yellow-800 dark:text-yellow-300 mb-2">No New Records</h4>
-                        <p className="text-yellow-700 dark:text-yellow-400">
-                            All {uploadResult?.duplicates || 0} record(s) in the uploaded file already exist in the database.
-                        </p>
-                    </div>
-                )}
-            </div>
-            <div className="p-4 border-t dark:border-gray-700 text-right">
-                <Button onClick={resetView}>Start a New Upload</Button>
-            </div>
-        </Card>
-    );
 
     return (
-        <div>
-            <h2 className="text-3xl font-bold mb-6">Upload And Check Duplicate Direct Application</h2>
-            {isUploading ? (
-                <div className="flex justify-center py-20">
-                    <div className="text-center">
-                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
-                        <p className="mt-4 text-gray-600 dark:text-gray-300">Uploading to database...</p>
-                    </div>
-                </div>
-            ) : uploadResult ? (
-                <ResultsStep />
-            ) : (
-                <UploadStep />
-            )}
+        <div className="space-y-6">
+            {headerRow}
+            <UploadStep />
         </div>
     );
 };

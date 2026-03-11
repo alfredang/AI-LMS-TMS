@@ -7,10 +7,11 @@ import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { EmptyState } from '../components/ui/EmptyState';
 import { Icon, IconName } from '../components/ui/Icon';
-import { UserRole } from '@app-types';
+import { UserRole, AdminPage } from '@app-types';
 import EnrolledCourseListItem from './EnrolledCourseListItem';
 import { CourseDetail } from './CourseDetail';
 import { getCourseImageUrl } from '@utils/imageUtils';
+import { BulkUploadCoursesView } from './admin/BulkUploadCoursesView';
 
 const getTypeColor = (courseType: string) => {
     switch (courseType) {
@@ -28,7 +29,7 @@ const DetailRow: React.FC<{ label: string; value: React.ReactNode }> = ({ label,
 );
 
 const ManagementCourseList: React.FC = () => {
-    const { role, currentUser, setSelectedCourse: setContextSelectedCourse, setEditingCourse, setCourseEditMode, loadCourseData } = useLms();
+    const { role, currentUser, setSelectedCourse: setContextSelectedCourse, setEditingCourse, setCourseEditMode, loadCourseData, setAdminPage } = useLms();
 
     // Hooks for different user roles
     const { courses: learnerCourses, loading: learnerLoading, error: learnerError } = useCourses(
@@ -772,17 +773,35 @@ const LearnerCourseList: React.FC = () => {
 }
 
 const CourseList: React.FC = () => {
-    const { role } = useLms();
+    const { role, setAdminPage } = useLms();
+    const [showBulkUpload, setShowBulkUpload] = useState(false);
 
     if (role === UserRole.Learner) {
         return <LearnerCourseList />;
+    }
+
+    if (showBulkUpload) {
+        return <BulkUploadCoursesView onBack={() => setShowBulkUpload(false)} />;
     }
 
     // Trainer, Developer, Admin, and TrainingProvider view
     const title = role === UserRole.Trainer ? "My Assigned Classes" : "Course Management";
     return (
         <div>
-            <h2 className="text-3xl font-bold mb-6">{title}</h2>
+            <div className="flex items-center justify-between mb-6">
+                <h2 className="text-3xl font-bold dark:text-white">{title}</h2>
+                {role === UserRole.Admin && (
+                    <div className="flex items-center gap-3">
+                        <Button variant="ghost" onClick={() => setShowBulkUpload(true)} className="border border-blue-500 text-blue-600 hover:bg-blue-50 dark:border-blue-400 dark:text-blue-400 dark:hover:bg-blue-900/20">
+                            <Icon name={IconName.Upload} className="w-4 h-4 mr-2" />
+                            Bulk Upload Courses
+                        </Button>
+                        <Button onClick={() => setAdminPage(AdminPage.AddCourse)} leftIcon={<Icon name={IconName.Add} className="w-4 h-4" />}>
+                            Add Course
+                        </Button>
+                    </div>
+                )}
+            </div>
             <ManagementCourseList />
         </div>
     );

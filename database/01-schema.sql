@@ -530,8 +530,12 @@ CREATE TABLE public.app_user (
     auth_provider text,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT email_valid CHECK ((POSITION(('@'::text) IN (email)) > 1))
+    CONSTRAINT email_valid CHECK ((POSITION(('@'::text) IN (email)) > 1)),
+    CONSTRAINT app_user_supabase_user_id_unique UNIQUE (supabase_user_id)
 );
+
+CREATE INDEX IF NOT EXISTS idx_app_user_auth_provider ON public.app_user(auth_provider);
+CREATE INDEX IF NOT EXISTS idx_app_user_supabase_user_id ON public.app_user(supabase_user_id);
 
 
 -- Ownership managed by Supabase
@@ -701,6 +705,29 @@ CREATE TABLE public.course (
     facilitator_guide_url text,
     trainer_slides_url text,
     is_gamified boolean DEFAULT false,
+    assessment_record_link text,
+    courseware_link text,
+    domain text,
+    schedule_id text,
+    funding_validity text,
+    course_fees_exclude_gst text,
+    after_normal_funding numeric(12,2),
+    after_mces_funding numeric(12,2),
+    num_of_days integer,
+    num_of_trainers integer,
+    course_link text,
+    brochure_link text,
+    google_classroom text,
+    google_classroom_code text,
+    skillsfuture_link text,
+    sf_for_business_link text,
+    skills_framework text,
+    da boolean DEFAULT false,
+    average_score numeric(5,2),
+    star_rating numeric(3,1),
+    num_responders integer,
+    description text,
+    course_outline text,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT course_assessment_hours_check CHECK ((assessment_hours >= (0)::numeric)),
@@ -794,8 +821,15 @@ CREATE TABLE public.enrollment (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     certificate text,
+    enrolment_id text,
+    enrolment_status text,
+    nric text,
+    email text,
     CONSTRAINT enrollment_progress_percent_check CHECK (((progress_percent >= (0)::numeric) AND (progress_percent <= (100)::numeric)))
 );
+
+CREATE INDEX IF NOT EXISTS idx_enrollment_enrolment_id ON public.enrollment(enrolment_id);
+CREATE INDEX IF NOT EXISTS idx_enrollment_nric ON public.enrollment(nric);
 
 
 -- Ownership managed by Supabase
@@ -2076,6 +2110,59 @@ ALTER TABLE ONLY public.user_subtopic_bookmark
 ALTER TABLE ONLY public.work_experience
     ADD CONSTRAINT work_experience_developer_id_fkey FOREIGN KEY (developer_id) REFERENCES public.developer_profile(user_id);
 
+
+-- ── Migrations integrated below ───────────────────────────────────────────────
+
+-- From: add-attendance-tables.sql
+-- course_session: one row per session within a course run
+CREATE TABLE IF NOT EXISTS public.course_session (
+    id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+    course_run_id uuid NOT NULL REFERENCES public.course_run(id) ON DELETE CASCADE,
+    session_number text,
+    ssg_session_id text,
+    title text,
+    start_date text,
+    end_date text,
+    start_time text,
+    end_time text,
+    mode_of_training text,
+    attendance_taken boolean DEFAULT false,
+    deleted boolean DEFAULT false,
+    venue jsonb,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    UNIQUE(course_run_id, ssg_session_id)
+);
+
+-- course_attendance: one row per (session × student)
+-- user_id is nullable to support SSG trainees without a local account
+-- Uniqueness enforced on (session_id, nric)
+CREATE TABLE IF NOT EXISTS public.course_attendance (
+    id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+    session_id uuid NOT NULL REFERENCES public.course_session(id) ON DELETE CASCADE,
+    user_id uuid REFERENCES public.app_user(id) ON DELETE CASCADE,
+    is_present boolean DEFAULT false NOT NULL,
+    reason_of_absence text,
+    nric text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT course_attendance_session_id_nric_key UNIQUE (session_id, nric)
+);
+
+CREATE INDEX IF NOT EXISTS idx_course_session_course_run ON public.course_session(course_run_id);
+CREATE INDEX IF NOT EXISTS idx_course_attendance_session ON public.course_attendance(session_id);
+CREATE INDEX IF NOT EXISTS idx_course_attendance_nric ON public.course_attendance(nric);
+
+-- course_trainer: many-to-many between course and trainer (app_user)
+-- Populated by bulk upload when the Trainers column is present.
+CREATE TABLE IF NOT EXISTS public.course_trainer (
+    course_id  uuid NOT NULL REFERENCES public.course(id) ON DELETE CASCADE,
+    trainer_id uuid NOT NULL REFERENCES public.app_user(id) ON DELETE CASCADE,
+    PRIMARY KEY (course_id, trainer_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_course_trainer_course   ON public.course_trainer(course_id);
+CREATE INDEX IF NOT EXISTS idx_course_trainer_trainer  ON public.course_trainer(trainer_id);
 
 -- Completed on 2026-01-21 00:30:37
 

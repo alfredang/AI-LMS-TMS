@@ -50,10 +50,25 @@ const ExternalLinkIcon: React.FC = () => (
   </svg>
 );
 
-const SectionHeader: React.FC<{ title: string; count?: number; right?: React.ReactNode; loading?: boolean }> = ({ title, count, right, loading }) => (
+const Tooltip: React.FC<{ text: string; children: React.ReactNode; width?: string }> = ({ text, children, width = 'w-56' }) => (
+  <div className="relative inline-flex group/tip">
+    {children}
+    <div className={`absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover/tip:block z-50 ${width} px-3 py-2 bg-gray-900 dark:bg-gray-700 text-white text-xs rounded-lg shadow-xl pointer-events-none leading-relaxed`}>
+      {text}
+      <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900 dark:border-t-gray-700" />
+    </div>
+  </div>
+);
+
+const SectionHeader: React.FC<{ title: string; count?: number; right?: React.ReactNode; loading?: boolean; info?: string }> = ({ title, count, right, loading, info }) => (
   <div className="flex items-center justify-between px-4 py-3 border-b border-default">
     <div className="flex items-center gap-2">
       <h2 className="text-sm font-semibold text-on-surface">{title}</h2>
+      {info && (
+        <Tooltip text={info} width="w-64">
+          <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-surface-elevated border border-default text-on-surface-secondary text-xs cursor-help hover:bg-surface-hover transition-colors select-none">?</span>
+        </Tooltip>
+      )}
       {count !== undefined && (
         <span className="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-primary/10 text-primary text-xs font-semibold">
           {count}
@@ -81,7 +96,7 @@ const TrainerAttendanceDashboard: React.FC = () => {
   const [isFetchingSessions, setIsFetchingSessions]    = useState(false);
   const [fetchError, setFetchError]                    = useState<string | null>(null);
 
-  const [activeTab, setActiveTab]                      = useState<'qr' | 'elist' | 'traqom'>('qr');
+  const [activeTab, setActiveTab]                      = useState<'qr' | 'elist' | 'traqom' | 'cert'>('qr');
 
   const [isLoadingAttendance, setIsLoadingAttendance]  = useState(false);
   const [showNric, setShowNric]                        = useState(false);
@@ -99,6 +114,20 @@ const TrainerAttendanceDashboard: React.FC = () => {
   const [enrolmentError, setEnrolmentError]            = useState<string | null>(null);
   const [showEnrolNric, setShowEnrolNric]              = useState(false);
 
+  // Manual Attendance state
+  const [manualSessions, setManualSessions]            = useState<any[]>([]);
+  const [selectedManualSession, setSelectedManualSession] = useState('');
+  const [manualAttendance, setManualAttendance]        = useState<any[]>([]);
+  // Raw DB attendance map keyed by NRIC — merged with enrolmentRecords to build manualAttendance
+  const [manualAttendanceDbMap, setManualAttendanceDbMap] = useState<Record<string, { isPresent: boolean; reasonOfAbsence: string }>>({});
+  const [loadingManualSessions, setLoadingManualSessions] = useState(false);
+  const [loadingManualAttendance, setLoadingManualAttendance] = useState(false);
+  const [savingAttendance, setSavingAttendance]        = useState(false);
+  const [manualAttendanceMsg, setManualAttendanceMsg]  = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [showManualNric, setShowManualNric]            = useState(false);
+  const [manualPage, setManualPage]                    = useState(1);
+  const MANUAL_PAGE_SIZE = 5;
+
   const selectedCourse = courses.find(c => c.courseRunId === selectedCourseRunId) ?? null;
 
   useEffect(() => {
@@ -107,6 +136,187 @@ const TrainerAttendanceDashboard: React.FC = () => {
       .then(d => { if (d.uen) setUen(d.uen); })
       .catch(() => {});
   }, []);
+
+  // ── Manual Attendance handlers ──
+
+  // Helper: resolve a single trainee's attendance from SSG + DB sources
+  const resolveAttendance = (nric: string, ssgPresentNrics: Set<string>, dbMap: Record<string, { isPresent: boolean; reasonOfAbsence: string }>) => {
+    const ssgPresent = ssgPresentNrics.has(nric);
+    const db = dbMap[nric];
+    if (ssgPresent) {
+      // SSG is source of truth — present; preserve DB reason only if manually absent
+      return { isPresent: true, reasonOfAbsence: '' };
+    }
+    if (db?.reasonOfAbsence && !db?.isPresent) {
+      // Manual absence with reason — respect over SSG absent
+      return { isPresent: false, reasonOfAbsence: db.reasonOfAbsence };
+    }
+    if (db?.isPresent) {
+      // Manually marked present in DB
+      return { isPresent: true, reasonOfAbsence: '' };
+    }
+    if (db) {
+      // DB has a record but no special flags — use it
+      return { isPresent: db.isPresent, reasonOfAbsence: db.reasonOfAbsence || '' };
+    }
+    // No data at all — default absent
+    return { isPresent: false, reasonOfAbsence: '' };
+  };
+
+  // Auto-save SSG-confirmed trainees to DB whenever SSG attendance loads
+  useEffect(() => {
+    if (!selectedManualSession || attendanceRecords.length === 0) return;
+    const records = attendanceRecords
+      .map(r => ({ nric: r.nric || r.trainee?.id || '', isPresent: (() => { const s = (r.status || '').toLowerCase(); return s === 'confirmed' || s === 'present' || s === 'attended'; })(), reasonOfAbsence: '' }))
+      .filter(r => r.nric && r.isPresent);
+    if (records.length === 0) return;
+    fetch('/api/trainer/attendance-records', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId: selectedManualSession, records }),
+    })
+      .then(r => r.json())
+      .then(json => {
+        if (json.success) {
+          // Update DB map so display reflects auto-saved values
+          setManualAttendanceDbMap(prev => {
+            const updated = { ...prev };
+            for (const r of records) updated[r.nric] = { isPresent: true, reasonOfAbsence: '' };
+            return updated;
+          });
+        }
+      })
+      .catch(() => {});
+  }, [attendanceRecords, selectedManualSession]);
+
+  // Rebuild manualAttendance whenever enrolmentRecords, DB map, or SSG attendance change
+  useEffect(() => {
+    if (!selectedManualSession || enrolmentRecords.length === 0) return;
+    const ssgPresentNrics = new Set(
+      attendanceRecords
+        .filter(r => { const s = (r.status || '').toLowerCase(); return s === 'confirmed' || s === 'present' || s === 'attended'; })
+        .map(r => r.nric || r.trainee?.id || '')
+        .filter(Boolean)
+    );
+    const merged = enrolmentRecords.map((item: any) => {
+      const enrol = item?.enrolment ?? item;
+      const trainee = enrol?.trainee ?? {};
+      const nric: string = trainee?.id || trainee?.nric || '';
+      const name: string = trainee?.fullName || trainee?.name || '';
+      const { isPresent, reasonOfAbsence } = resolveAttendance(nric, ssgPresentNrics, manualAttendanceDbMap);
+      return { nric, fullName: name, isPresent, reasonOfAbsence };
+    });
+    setManualAttendance(merged);
+  }, [enrolmentRecords, manualAttendanceDbMap, selectedManualSession, attendanceRecords]);
+
+  // Sync selectedManualSession whenever the top SSG session or manualSessions list changes
+  useEffect(() => {
+    if (!selectedSession || manualSessions.length === 0) return;
+    const matched = manualSessions.find(s => s.ssg_session_id === selectedSession);
+    if (matched && matched.id !== selectedManualSession) {
+      setSelectedManualSession(matched.id);
+      setManualAttendanceMsg(null);
+      setManualPage(1);
+      fetchManualAttendance(matched.id);
+    }
+  }, [selectedSession, manualSessions]);
+
+  const fetchManualSessions = async (courseRunId: string) => {
+    setLoadingManualSessions(true);
+    setManualSessions([]);
+    setSelectedManualSession('');
+    setManualAttendance([]);
+    setManualAttendanceDbMap({});
+    setManualAttendanceMsg(null);
+    try {
+      const res = await fetch(`/api/trainer/attendance-sessions?courseRunId=${courseRunId}`);
+      const json = await res.json();
+      if (json.success && json.data.length > 0) {
+        setManualSessions(json.data);
+        // selectedManualSession is driven by the top session dropdown via the useEffect above
+      }
+    } catch { /* silent */ }
+    finally { setLoadingManualSessions(false); }
+  };
+
+  const fetchManualAttendance = async (sessionId: string) => {
+    setLoadingManualAttendance(true);
+    setManualAttendanceDbMap({});
+    setManualAttendance([]);
+    try {
+      const res = await fetch(`/api/trainer/attendance-records?sessionId=${sessionId}`);
+      const json = await res.json();
+      if (json.success) {
+        // Build NRIC-keyed map from DB records
+        const dbMap: Record<string, { isPresent: boolean; reasonOfAbsence: string }> = {};
+        for (const rec of json.data) {
+          if (rec.nric) dbMap[rec.nric] = { isPresent: rec.isPresent, reasonOfAbsence: rec.reasonOfAbsence };
+        }
+        setManualAttendanceDbMap(dbMap);
+        // If enrolmentRecords already loaded, merge immediately (otherwise useEffect handles it)
+        setEnrolmentRecords(prev => {
+          if (prev.length > 0) {
+            const ssgPresentNrics = new Set(
+              attendanceRecords
+                .filter(r => { const s = (r.status || '').toLowerCase(); return s === 'confirmed' || s === 'present' || s === 'attended'; })
+                .map(r => r.nric || r.trainee?.id || '')
+                .filter(Boolean)
+            );
+            const merged = prev.map((item: any) => {
+              const enrol = item?.enrolment ?? item;
+              const trainee = enrol?.trainee ?? {};
+              const nric: string = trainee?.id || trainee?.nric || '';
+              const name: string = trainee?.fullName || trainee?.name || '';
+              const { isPresent, reasonOfAbsence } = resolveAttendance(nric, ssgPresentNrics, dbMap);
+              return { nric, fullName: name, isPresent, reasonOfAbsence };
+            });
+            setManualAttendance(merged);
+          }
+          return prev;
+        });
+      }
+    } catch { /* silent */ }
+    finally { setLoadingManualAttendance(false); }
+  };
+
+  const handleTogglePresent = (nric: string) => {
+    setManualAttendance(prev => prev.map(r =>
+      r.nric === nric
+        ? { ...r, isPresent: !r.isPresent, reasonOfAbsence: !r.isPresent ? '' : r.reasonOfAbsence }
+        : r
+    ));
+  };
+
+  const handleReasonChange = (nric: string, value: string) => {
+    setManualAttendance(prev => prev.map(r => r.nric === nric ? { ...r, reasonOfAbsence: value } : r));
+  };
+
+  const handleSaveAttendance = async () => {
+    if (!selectedManualSession || manualAttendance.length === 0) return;
+    setSavingAttendance(true);
+    setManualAttendanceMsg(null);
+    try {
+      const res = await fetch('/api/trainer/attendance-records', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId: selectedManualSession,
+          records: manualAttendance.map(r => ({
+            nric: r.nric,
+            isPresent: r.isPresent,
+            reasonOfAbsence: r.reasonOfAbsence || '',
+          })),
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Failed to save');
+      setManualAttendanceMsg({ type: 'success', text: json.message || 'Attendance saved successfully.' });
+    } catch (err) {
+      setManualAttendanceMsg({ type: 'error', text: err instanceof Error ? err.message : 'Failed to save attendance' });
+    } finally {
+      setSavingAttendance(false);
+    }
+  };
 
   const handleFetchSessions = async (ssgRunId: string, courseRefNumber: string, courseObj?: typeof selectedCourse) => {
     setIsFetchingSessions(true);
@@ -126,6 +336,20 @@ const TrainerAttendanceDashboard: React.FC = () => {
         setSessions(fetched);
         setSelectedSession(fetched[0].id);
         handleFetchAttendance(fetched[0].id, courseObj);
+        // Sync SSG sessions into course_session table
+        const courseRunUuid = courseObj?.courseRunId;
+        if (courseRunUuid) {
+          fetch('/api/trainer/attendance-sessions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ courseRunId: courseRunUuid, ssgSessions: fetched }),
+          })
+            .then(r => r.json())
+            .then(result => {
+              if (result.success) fetchManualSessions(courseRunUuid);
+            })
+            .catch(() => {});
+        }
       }
     } catch (err) {
       setFetchError(err instanceof Error ? err.message : 'Failed to fetch sessions.');
@@ -233,7 +457,7 @@ const TrainerAttendanceDashboard: React.FC = () => {
     }
   };
 
-  const attendanceLinkUrl = (type: 'qr' | 'elist' | 'traqom') =>
+  const attendanceLinkUrl = (type: 'qr' | 'elist' | 'traqom' | 'cert') =>
     type === 'qr'
       ? `https://www.myskillsfuture.gov.sg/spface/splogin/select-session?course-run-code=${digitalAttendanceId}`
       : `https://www.myskillsfuture.gov.sg/api/take-attendance/${digitalAttendanceId}`;
@@ -290,6 +514,11 @@ const TrainerAttendanceDashboard: React.FC = () => {
                       setAttendanceSuccess(null);
                       setAttendanceError(null);
                       setDigitalIdError(null);
+                      setManualSessions([]);
+                      setSelectedManualSession('');
+                      setManualAttendance([]);
+                      setManualAttendanceDbMap({});
+                      setManualAttendanceMsg(null);
                       if (course?.digitalAttendanceId) {
                         setDigitalAttendanceId(course.digitalAttendanceId);
                       } else {
@@ -302,6 +531,7 @@ const TrainerAttendanceDashboard: React.FC = () => {
                         handleFetchSessions(course.courseRunCode, course.courseCode, course);
                         fetchEnrolments(course.courseRunCode);
                       }
+                      if (val) fetchManualSessions(val);
                     }}
                     className="input-themed w-full border rounded px-3 py-2 text-sm pr-8 appearance-none focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
                     disabled={isFetchingSessions}
@@ -404,11 +634,11 @@ const TrainerAttendanceDashboard: React.FC = () => {
 
       {/* ── Attendance Links ── */}
       <div className="bg-surface rounded-lg border border-default shadow-sm">
-        <SectionHeader title="Attendance / TRAQOM Links" />
+        <SectionHeader title="Attendance / TRAQOM / Certificate Survey Links" />
         <div className="p-4">
           {/* Tab bar */}
           <div className="flex border-b border-default mb-4">
-            {(['qr', 'elist', 'traqom'] as const).map(tab => (
+            {(['qr', 'elist', 'traqom', 'cert'] as const).map(tab => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
@@ -418,7 +648,7 @@ const TrainerAttendanceDashboard: React.FC = () => {
                     : 'border-transparent text-on-surface-secondary hover:text-on-surface'
                 }`}
               >
-                {tab === 'qr' ? 'QR Attendance' : tab === 'elist' ? 'E-Attendance List' : 'TRAQOM Link'}
+                {tab === 'qr' ? 'QR Attendance' : tab === 'elist' ? 'E-Attendance List' : tab === 'traqom' ? 'TRAQOM Link' : 'Certificate Survey Link'}
               </button>
             ))}
           </div>
@@ -436,6 +666,27 @@ const TrainerAttendanceDashboard: React.FC = () => {
                 />
                 <a
                   href="https://ssgtraqom.qualtrics.com/jfe/form/SV_3K9i7rTJ9OLsauW?Q_CHL=qr"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 px-4 py-2 bg-primary text-white rounded text-sm font-medium hover:bg-primary-hover transition-colors whitespace-nowrap"
+                >
+                  <ExternalLinkIcon />
+                  Open
+                </a>
+              </div>
+            </div>
+          ) : activeTab === 'cert' ? (
+            <div>
+              <p className="text-xs text-on-surface-secondary mb-1.5">Certificate Survey Link</p>
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  readOnly
+                  value="https://goo.gl/R2eumq"
+                  className="input-themed flex-1 border rounded px-3 py-2 text-sm bg-surface-elevated text-on-surface-secondary focus:outline-none"
+                />
+                <a
+                  href="https://goo.gl/R2eumq"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center gap-1.5 px-4 py-2 bg-primary text-white rounded text-sm font-medium hover:bg-primary-hover transition-colors whitespace-nowrap"
@@ -679,6 +930,145 @@ const TrainerAttendanceDashboard: React.FC = () => {
             )}
           </tbody>
         </table>
+      </div>
+
+      {/* ── Manual Attendance Taking ── */}
+      <div className="bg-surface rounded-lg border border-default shadow-sm overflow-hidden">
+        <SectionHeader
+          title="Manual Attendance Taking (Optional)"
+          loading={loadingManualSessions || loadingManualAttendance || isLoadingEnrolments || isLoadingAttendance}
+        />
+
+        {/* Feedback banner */}
+        {manualAttendanceMsg && (
+          <div className={`px-4 py-2 text-xs border-b border-default ${manualAttendanceMsg.type === 'success' ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300' : 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400'}`}>
+            {manualAttendanceMsg.text}
+          </div>
+        )}
+
+        {/* Attendance table */}
+        <table className="w-full text-sm">
+          <thead className="bg-surface-elevated border-b border-default">
+            <tr>
+              <th className="px-3 py-3 text-center font-semibold text-on-surface-secondary w-10 whitespace-nowrap">No.</th>
+              <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Name</th>
+              <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">
+                <div className="flex items-center gap-2">
+                  NRIC
+                  <button onClick={() => setShowManualNric(v => !v)} className="text-xs font-normal text-primary hover:underline">
+                    {showManualNric ? 'Hide' : 'Show'}
+                  </button>
+                </div>
+              </th>
+              <th className="px-3 py-3 text-center font-semibold text-on-surface-secondary whitespace-nowrap">Attendance Marking</th>
+              <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Reason of Absence</th>
+            </tr>
+          </thead>
+          <tbody>
+            {!selectedCourseRunId ? (
+              <tr><td colSpan={5} className="px-3 py-10 text-center text-sm text-muted italic">Select a class to take attendance.</td></tr>
+            ) : !selectedManualSession ? (
+              <tr><td colSpan={5} className="px-3 py-10 text-center text-sm text-muted italic">{manualSessions.length === 0 ? 'No sessions found for this class.' : 'Select a session in the Class Selection above.'}</td></tr>
+            ) : loadingManualAttendance || isLoadingEnrolments || isLoadingAttendance ? (
+              Array.from({ length: 4 }).map((_, idx) => (
+                <tr key={idx} className="border-b border-default">
+                  {Array.from({ length: 5 }).map((__, col) => (
+                    <td key={col} className="px-3 py-3">
+                      <div className="h-3 rounded bg-surface-elevated animate-pulse" style={{ width: col === 1 ? '60%' : '40%' }} />
+                    </td>
+                  ))}
+                </tr>
+              ))
+            ) : manualAttendance.length === 0 ? (
+              <tr><td colSpan={5} className="px-3 py-10 text-center text-sm text-muted italic">No enrolment records found for this class.</td></tr>
+            ) : (
+              manualAttendance.slice((manualPage - 1) * MANUAL_PAGE_SIZE, manualPage * MANUAL_PAGE_SIZE).map((record, idx) => {
+                const globalIdx = (manualPage - 1) * MANUAL_PAGE_SIZE + idx;
+                const nric: string = record.nric || '';
+                const maskedNric = nric.length >= 5 ? `${nric[0]}XXXX${nric.slice(-4)}` : nric || '—';
+                return (
+                  <tr key={nric || globalIdx} className="border-b border-default hover:bg-surface-elevated transition-colors">
+                    <td className="px-3 py-3 text-center text-on-surface-secondary">{globalIdx + 1}</td>
+                    <td className="px-3 py-3 font-medium text-on-surface whitespace-nowrap">{record.fullName || '—'}</td>
+                    <td className="px-3 py-3 text-on-surface-secondary font-mono whitespace-nowrap">{showManualNric ? (nric || '—') : maskedNric}</td>
+                    <td className="px-3 py-3 text-center">
+                      <label className="inline-flex items-center gap-2 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={record.isPresent}
+                          onChange={() => handleTogglePresent(nric)}
+                          className="w-4 h-4 rounded border-default accent-primary cursor-pointer"
+                        />
+                        <span className={`text-xs font-medium ${record.isPresent ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'}`}>
+                          {record.isPresent ? 'Present' : 'Absent'}
+                        </span>
+                      </label>
+                    </td>
+                    <td className="px-3 py-3">
+                      {!record.isPresent && (
+                        <input
+                          type="text"
+                          value={record.reasonOfAbsence}
+                          onChange={e => handleReasonChange(nric, e.target.value)}
+                          placeholder="Enter reason..."
+                          className="input-themed w-full border rounded px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                        />
+                      )}
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
+
+        {/* Pagination + Save button */}
+        {manualAttendance.length > 0 && selectedManualSession && (
+          <div className="px-4 py-3 border-t border-default flex items-center justify-between gap-4">
+            {/* Pagination — bottom left */}
+            {(() => {
+              const totalPages = Math.ceil(manualAttendance.length / MANUAL_PAGE_SIZE);
+              const start = (manualPage - 1) * MANUAL_PAGE_SIZE + 1;
+              const end = Math.min(manualPage * MANUAL_PAGE_SIZE, manualAttendance.length);
+              return (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted">{start}–{end} of {manualAttendance.length}</span>
+                  <button
+                    onClick={() => setManualPage(p => Math.max(1, p - 1))}
+                    disabled={manualPage === 1}
+                    className="px-2 py-1 text-xs border border-default rounded text-on-surface-secondary hover:bg-surface-elevated transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    ‹ Prev
+                  </button>
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
+                    <button
+                      key={p}
+                      onClick={() => setManualPage(p)}
+                      className={`px-2.5 py-1 text-xs border rounded transition-colors ${p === manualPage ? 'bg-primary text-white border-primary' : 'border-default text-on-surface-secondary hover:bg-surface-elevated'}`}
+                    >
+                      {p}
+                    </button>
+                  ))}
+                  <button
+                    onClick={() => setManualPage(p => Math.min(totalPages, p + 1))}
+                    disabled={manualPage === totalPages}
+                    className="px-2 py-1 text-xs border border-default rounded text-on-surface-secondary hover:bg-surface-elevated transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    Next ›
+                  </button>
+                </div>
+              );
+            })()}
+            {/* Save button — bottom right */}
+            <button
+              onClick={handleSaveAttendance}
+              disabled={savingAttendance}
+              className="px-4 py-2 bg-primary text-white rounded text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
+            >
+              {savingAttendance ? 'Saving...' : 'Save Attendance'}
+            </button>
+          </div>
+        )}
       </div>
 
     </div>

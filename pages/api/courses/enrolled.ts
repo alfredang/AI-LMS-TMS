@@ -21,6 +21,10 @@ interface CourseRow {
   start_date: string;
   end_date: string;
   class_status: string;
+  enrolment_id: string;
+  enrolment_status: string;
+  nric: string;
+  email: string;
 }
 
 export default async function handler(
@@ -67,6 +71,10 @@ export default async function handler(
         e.payment_status,
         e.assessment_status,
         e.enrolment_date,
+        e.enrolment_id,
+        e.enrolment_status,
+        e.nric,
+        e.email,
         cr.start_date,
         cr.end_date,
         cr.class_status
@@ -108,6 +116,10 @@ export default async function handler(
       startDate: row.start_date,
       endDate: row.end_date,
       classStatus: row.class_status,
+      enrolmentId: row.enrolment_id || null,
+      enrolmentStatus: row.enrolment_status || null,
+      nric: row.nric || null,
+      email: row.email || null,
       enrollmentStatus: 'enrolled' // Hardcoded as all these are enrolled courses
     }));
 

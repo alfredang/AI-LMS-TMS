@@ -36,11 +36,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(409).json({ success: false, error: 'Student is already enrolled in this course run' });
     }
 
+    // Fetch email and NRIC for denormalisation
+    const userInfoResult = await client.query(
+      `SELECT au.email, COALESCE(lp.nric, '') AS nric
+       FROM app_user au
+       LEFT JOIN learner_profile lp ON lp.user_id = au.id
+       WHERE au.id = $1`,
+      [userId]
+    );
+    const { email: userEmail, nric: userNric } = userInfoResult.rows[0] ?? {};
+
     // Create enrollment
     await client.query(
-      `INSERT INTO enrollment (id, user_id, course_id, course_run_id, progress_percent, payment_status, assessment_status, enrolment_date, created_at, updated_at)
-       VALUES (gen_random_uuid(), $1, $2, $3, 0, 'Unpaid', 'Pending', CURRENT_DATE, NOW(), NOW())`,
-      [userId, courseId, courseRunUuid]
+      `INSERT INTO enrollment (id, user_id, course_id, course_run_id, progress_percent, payment_status, assessment_status, enrolment_date, email, nric, created_at, updated_at)
+       VALUES (gen_random_uuid(), $1, $2, $3, 0, 'Unpaid', 'Pending', CURRENT_DATE, $4, $5, NOW(), NOW())`,
+      [userId, courseId, courseRunUuid, userEmail || null, userNric || null]
     );
 
     res.status(200).json({ success: true, message: 'Student enrolled successfully' });

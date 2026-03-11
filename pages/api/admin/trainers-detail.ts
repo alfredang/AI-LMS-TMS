@@ -22,10 +22,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         try {
             // SQL query to get detailed trainer information
             const query = `
-                SELECT 
+                SELECT
                     au.full_name AS trainer_name,
                     au.email,
                     au.profile_picture_url AS profile_picture,
+                    au.account_status,
                     tp.tel AS telephone,
                     tp.trainer_type,
                     tp.status,
@@ -33,14 +34,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                     tp.user_id,
                     STRING_AGG(DISTINCT c.title, ', ') AS courses_taught
                 FROM trainer_profile tp
-                JOIN app_user au 
+                JOIN app_user au
                     ON tp.user_id = au.id
-                LEFT JOIN course_run cr 
+                LEFT JOIN course_run cr
                     ON cr.assigned_trainer_email = au.email
-                LEFT JOIN course c 
+                LEFT JOIN course c
                     ON c.id = cr.course_id
-                GROUP BY 
-                    au.full_name, au.email, au.profile_picture_url, 
+                GROUP BY
+                    au.full_name, au.email, au.profile_picture_url, au.account_status,
                     tp.tel, tp.trainer_type, tp.status, tp.linkedin_url, tp.user_id
                 ORDER BY au.full_name;
             `;

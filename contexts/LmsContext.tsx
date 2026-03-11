@@ -502,6 +502,15 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }, undefined, { shallow: true });
   }, [router]);
 
+  // Wrapped setAdminPage that clears courseId from URL and resets selected course
+  const navigateAdminPage = useCallback((page: AdminPage) => {
+    setAdminPage(page);
+    setSelectedCourse(null);
+    const newQuery: any = { ...router.query };
+    delete newQuery.courseId;
+    router.replace({ pathname: router.pathname, query: newQuery }, undefined, { shallow: true });
+  }, [router]);
+
   // Login function
   const login = useCallback(async (userRole: UserRole, user: User) => {
     console.log('🔐 LmsContext: Login called with user:', user);
@@ -1319,7 +1328,7 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     currentView,
     setCurrentView,
     adminPage,
-    setAdminPage,
+    setAdminPage: navigateAdminPage,
     selectedCourseRunId,
     setSelectedCourseRunId,
     isAuthenticated,

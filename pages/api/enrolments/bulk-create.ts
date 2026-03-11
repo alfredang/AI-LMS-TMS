@@ -140,11 +140,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const enrolmentUuid = crypto.randomUUID();
     await client.query(
       `INSERT INTO enrollment (
-        id, user_id, course_id, course_run_id, 
-        course_sponsorship, enrolment_date, 
+        id, user_id, course_id, course_run_id,
+        course_sponsorship, enrolment_date,
         progress_percent, payment_status, assessment_status,
+        enrolment_id, enrolment_status,
+        nric, email,
         created_at, updated_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, 0, $7, $8, NOW(), NOW())`,
+      ) VALUES ($1, $2, $3, $4, $5, $6, 0, $7, $8, $9, $10, $11, $12, NOW(), NOW())`,
       [
         enrolmentUuid,
         userId,
@@ -152,8 +154,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         courseRunUuid,
         sponsorshipType || 'Self-Funded',
         enrolmentDate || new Date().toISOString().split('T')[0],
+        'Unpaid',
         'Pending',
-        'Pending'
+        enrolmentId || null,
+        enrolmentStatus || null,
+        traineeNric || null,
+        traineeEmail || null,
       ]
     );
 

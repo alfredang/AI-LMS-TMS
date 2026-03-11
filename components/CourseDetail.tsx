@@ -3,7 +3,7 @@ import { useLms } from '@contexts/LmsContext';
 import { Button } from './ui/Button';
 import { Icon, IconName } from './ui/Icon';
 import { Card } from './ui/Card';
-import { UserRole, CourseAssessment } from '@app-types';
+import { UserRole, CourseAssessment, AdminPage } from '@app-types';
 import GradingView from './GradingView';
 import { extractFilenameFromPath } from '@utils/fileUtils';
 import { courseService } from '@lib/services/courseService';
@@ -614,7 +614,8 @@ const CourseSidebar: React.FC<CourseSidebarProps> = ({ userRole, onSetGradingVie
     ];
 
     let trainerNavItems: NavItem[] = [
-        { type: 'link', label: "Digital Attendance", icon: IconName.Calendar },
+        { type: 'link', label: "Course Link", icon: IconName.Link },
+        { type: 'link', label: "Assessment Record Link", icon: IconName.ClipboardCheck },
         { type: 'link', label: "Lesson Plan", icon: IconName.BookOpen },
         { type: 'link', label: "Assessment Plan", icon: IconName.ClipboardCheck },
         { type: 'link', label: "Facilitator Guide", icon: IconName.FileText },
@@ -630,7 +631,7 @@ const CourseSidebar: React.FC<CourseSidebarProps> = ({ userRole, onSetGradingVie
     if (userRole === UserRole.Developer || userRole === UserRole.TrainingProvider || userRole === UserRole.Admin) {
         trainerNavItems = trainerNavItems.filter(item =>
             item.type === 'separator' ||
-            (item.label !== "Digital Attendance" && item.label !== "TRAQOM Survey" && item.label !== "Grading")
+            (item.label !== "Course Link" && item.label !== "Assessment Record Link" && item.label !== "TRAQOM Survey" && item.label !== "Grading")
         );
     } else if (userRole === UserRole.Trainer) {
         trainerNavItems = trainerNavItems.filter(item =>
@@ -759,6 +760,7 @@ export const CourseDetail: React.FC = () => {
         toggleBookmark,
         toggleCompletion,
         setEditingCourse,
+        setAdminPage,
         currentUser,
         role
     } = useLms();
@@ -879,6 +881,8 @@ export const CourseDetail: React.FC = () => {
         facilitatorGuideUrl: effectiveDetail?.facilitatorGuideUrl,
         trainerSlidesUrl: effectiveDetail?.trainerSlidesUrl,
         assessmentPlanUrl: effectiveDetail?.assessmentPlanUrl,
+        courseLink: effectiveDetail?.courseLink,
+        assessmentRecordLink: effectiveDetail?.assessmentRecordLink,
         topics: effectiveUnits?.map((unit, index) => ({
             id: unit.id || `topic-${index}`,
             title: unit.title,
@@ -1082,6 +1086,11 @@ export const CourseDetail: React.FC = () => {
                                     Back to Dashboard
                                 </button>
                                 <div className="ml-auto flex gap-3">
+                                    {userRole === UserRole.Admin && (
+                                        <Button onClick={() => setAdminPage(AdminPage.AddCourseRun)} leftIcon={<Icon name={IconName.Add} className="w-4 h-4" />}>
+                                            Add Course Run
+                                        </Button>
+                                    )}
                                     {(userRole === UserRole.Developer || userRole === UserRole.Admin) && (
                                         <Button onClick={handleEditCourse} leftIcon={<Icon name={IconName.Edit} className="w-4 h-4" />}>
                                             Edit Course
@@ -1095,103 +1104,61 @@ export const CourseDetail: React.FC = () => {
                                 </div>
                             </div>
 
-                            {/* Digital Attendance */}
+                            {/* Course Link */}
                             {userRole === UserRole.Trainer && (
-                                <div id={toId("Digital Attendance")}>
-                                    <Card className="p-0 overflow-hidden">
-                                        <button
-                                            className="w-full text-left p-6 flex justify-between items-center"
-                                            onClick={() => setIsAttendanceOpen(!isAttendanceOpen)}
-                                            aria-expanded={isAttendanceOpen}
-                                        >
-                                            <h3 className="text-xl font-bold text-gray-900 dark:text-white">Digital Attendance</h3>
-                                            <Icon name={isAttendanceOpen ? IconName.Minus : IconName.Plus} className="w-6 h-6 text-blue-600 flex-shrink-0" />
-                                        </button>
-                                        {isAttendanceOpen && (
-                                            <div className="px-6 pb-6 border-t">
-                                                <div className="pt-4">
-                                                    {attendanceLink ? (
-                                                        <div className="flex flex-col gap-5 w-full">
-                                                            {/* Instructions Card */}
-                                                            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/30 dark:to-indigo-900/30 rounded-lg p-5 border border-blue-100 dark:border-blue-800">
-                                                                <p className="text-gray-800 dark:text-gray-200 font-semibold mb-3 flex items-center gap-2">
-                                                                    <span className="w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center text-xs">?</span>
-                                                                    How to Take Attendance
-                                                                </p>
-                                                                <ol className="text-gray-600 space-y-2 text-sm ml-1">
-                                                                    <li className="flex items-start gap-3 text-gray-600 dark:text-gray-300">
-                                                                        <span className="w-5 h-5 bg-blue-600 text-white rounded-full flex items-center justify-center text-xs flex-shrink-0 mt-0.5">1</span>
-                                                                        <span>Click on the attendance link below</span>
-                                                                    </li>
-                                                                    <li className="flex items-start gap-3 text-gray-600 dark:text-gray-300">
-                                                                        <span className="w-5 h-5 bg-blue-600 text-white rounded-full flex items-center justify-center text-xs flex-shrink-0 mt-0.5">2</span>
-                                                                        <span>Select <strong>"Trainees"</strong></span>
-                                                                    </li>
-                                                                    <li className="flex items-start gap-3 text-gray-600 dark:text-gray-300">
-                                                                        <span className="w-5 h-5 bg-blue-600 text-white rounded-full flex items-center justify-center text-xs flex-shrink-0 mt-0.5">3</span>
-                                                                        <span>Select <strong>Click The "Next" Button</strong></span>
-                                                                    </li>
-                                                                    <li className="flex items-start gap-3 text-gray-600 dark:text-gray-300">
-                                                                        <span className="w-5 h-5 bg-blue-600 text-white rounded-full flex items-center justify-center text-xs flex-shrink-0 mt-0.5">4</span>
-                                                                        <span>Scan the QR Code displayed on screen</span>
-                                                                    </li>
-                                                                    <li className="flex items-start gap-3 text-gray-600 dark:text-gray-300">
-                                                                        <span className="w-5 h-5 bg-blue-600 text-white rounded-full flex items-center justify-center text-xs flex-shrink-0 mt-0.5">5</span>
-                                                                        <span>Click <strong>"Retrieve Myinfo With Singpass"</strong></span>
-                                                                    </li>
-                                                                </ol>
-                                                            </div>
-
-                                                            {/* Note */}
-                                                            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4 flex items-start gap-3">
-                                                                <span className="text-amber-500 text-lg flex-shrink-0">!</span>
-                                                                <p className="text-sm text-amber-700 dark:text-amber-400">
-                                                                    <strong>Note:</strong> If you see the message "Please enable location settings in your browser before submitting your attendance", please follow the SkillsFuture link guide on how to activate the location settings.
-                                                                </p>
-                                                            </div>
-
-                                                            {/* QR Code temporarily disabled
-                                                            <img
-                                                                src={attendanceQrCodeUrl}
-                                                                alt="Digital Attendance QR Code"
-                                                                className="rounded-lg shadow-md"
-                                                            />
-                                                            */}
-
-                                                            {/* Link Section */}
-                                                            <div className="w-full">
-                                                                <p className="text-sm text-gray-600 dark:text-gray-400 mb-2 font-medium">Attendance Link:</p>
-                                                                <div className="p-3 bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-between gap-3">
-                                                                    <a
-                                                                        href={attendanceLink}
-                                                                        target="_blank"
-                                                                        rel="noopener noreferrer"
-                                                                        className="text-sm text-blue-600 dark:text-blue-400 hover:underline truncate flex-1"
-                                                                    >
-                                                                        {attendanceLink}
-                                                                    </a>
-                                                                    <Button
-                                                                        onClick={() => {
-                                                                            navigator.clipboard.writeText(attendanceLink);
-                                                                            alert('Link copied to clipboard!');
-                                                                        }}
-                                                                        className="flex-shrink-0"
-                                                                    >
-                                                                        Copy Link
-                                                                    </Button>
-                                                                </div>
-                                                                <p className="text-sm text-gray-500 dark:text-gray-400 mt-3">
-                                                                    DA ID: <span className="font-semibold text-gray-700 dark:text-gray-300">{convertedCourse.daId}</span>
-                                                                </p>
-                                                            </div>
-                                                        </div>
-                                                    ) : (
-                                                        <p className="text-gray-500 text-center">Digital Attendance ID not available for this class.</p>
-                                                    )}
-                                                </div>
+                                <div id={toId("Course Link")}>
+                                    <ContentSection title="Course Link">
+                                        {convertedCourse.courseLink ? (
+                                            <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded-lg flex items-center justify-between gap-3 border dark:border-gray-600">
+                                                <a
+                                                    href={convertedCourse.courseLink}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="text-sm text-blue-600 dark:text-blue-400 hover:underline truncate flex-1"
+                                                >
+                                                    {convertedCourse.courseLink}
+                                                </a>
+                                                <Button
+                                                    variant="ghost"
+                                                    onClick={() => window.open(convertedCourse.courseLink!, '_blank')}
+                                                >
+                                                    <Icon name={IconName.ExternalLink} className="w-4 h-4 mr-1" />
+                                                    Open
+                                                </Button>
                                             </div>
+                                        ) : (
+                                            <p className="text-gray-500 dark:text-gray-400 text-sm">No course link available.</p>
                                         )}
-                                    </Card>
+                                    </ContentSection>
+                                </div>
+                            )}
+
+                            {/* Assessment Record Link */}
+                            {userRole === UserRole.Trainer && (
+                                <div id={toId("Assessment Record Link")}>
+                                    <ContentSection title="Assessment Record Link">
+                                        {convertedCourse.assessmentRecordLink ? (
+                                            <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded-lg flex items-center justify-between gap-3 border dark:border-gray-600">
+                                                <a
+                                                    href={convertedCourse.assessmentRecordLink}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="text-sm text-blue-600 dark:text-blue-400 hover:underline truncate flex-1"
+                                                >
+                                                    {convertedCourse.assessmentRecordLink}
+                                                </a>
+                                                <Button
+                                                    variant="ghost"
+                                                    onClick={() => window.open(convertedCourse.assessmentRecordLink!, '_blank')}
+                                                >
+                                                    <Icon name={IconName.ExternalLink} className="w-4 h-4 mr-1" />
+                                                    Open
+                                                </Button>
+                                            </div>
+                                        ) : (
+                                            <p className="text-gray-500 dark:text-gray-400 text-sm">No assessment record link available.</p>
+                                        )}
+                                    </ContentSection>
                                 </div>
                             )}
 
