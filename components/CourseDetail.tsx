@@ -67,6 +67,8 @@ interface Course {
     slidesUrl?: string;
     trainerSlidesUrl?: string;
     assessmentPlanUrl?: string;
+    courseLink?: string;
+    assessmentRecordLink?: string;
 }
 
 // --- Utility Functions ---
