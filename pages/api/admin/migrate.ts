@@ -22,12 +22,20 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
 
   try {
     console.log('🔄 Running migration: Add file_url to submission table...');
-    
+
     // Add file_url column to submission table if it doesn't exist
     await pool.query(`
-      ALTER TABLE public.submission 
+      ALTER TABLE public.submission
       ADD COLUMN IF NOT EXISTS file_url text;
     `);
+
+    // Add secondary_email column to app_user if it doesn't exist
+    console.log('🔄 Running migration: Add secondary_email to app_user table...');
+    await pool.query(`
+      ALTER TABLE public.app_user
+      ADD COLUMN IF NOT EXISTS secondary_email text;
+    `);
+    console.log('✅ Added secondary_email column');
     
     console.log('✅ Added file_url column');
     

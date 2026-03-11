@@ -74,14 +74,21 @@ async function handler(req: NextApiRequest, res: NextApiResponse<LoginResponse>)
       });
     }
 
+    // Check once whether secondary_email column exists (safety net before migration is run)
+    const colCheck = await pool.query(`
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'app_user' AND column_name = 'secondary_email'
+    `);
+    const hasSecondaryEmail = colCheck.rows.length > 0;
+
     // Handle different login types
     if (loginType === 'password') {
       // For password login, user MUST exist
-      const userQuery = `
-        SELECT id, email, password_hash as password, full_name, profile_picture_url, account_status
-        FROM public.app_user
-        WHERE LOWER(email) = LOWER($1) OR LOWER(secondary_email) = LOWER($1)
-      `;
+      const userQuery = hasSecondaryEmail
+        ? `SELECT id, email, password_hash as password, full_name, profile_picture_url, account_status
+           FROM public.app_user WHERE LOWER(email) = LOWER($1) OR LOWER(secondary_email) = LOWER($1)`
+        : `SELECT id, email, password_hash as password, full_name, profile_picture_url, account_status
+           FROM public.app_user WHERE LOWER(email) = LOWER($1)`;
       const userResult = await pool.query(userQuery, [email]);
 
       if (userResult.rows.length === 0) {
@@ -187,12 +194,12 @@ async function handler(req: NextApiRequest, res: NextApiResponse<LoginResponse>)
     }
 
     // After authentication, check if user exists (or create for OTP login)
-    const userQuery = `
-      SELECT id, email, password_hash as password, full_name, profile_picture_url, account_status
-      FROM public.app_user
-      WHERE LOWER(email) = LOWER($1) OR LOWER(secondary_email) = LOWER($1)
-    `;
-    const userResult = await pool.query(userQuery, [email]);
+    const userQuery2 = hasSecondaryEmail
+      ? `SELECT id, email, password_hash as password, full_name, profile_picture_url, account_status
+         FROM public.app_user WHERE LOWER(email) = LOWER($1) OR LOWER(secondary_email) = LOWER($1)`
+      : `SELECT id, email, password_hash as password, full_name, profile_picture_url, account_status
+         FROM public.app_user WHERE LOWER(email) = LOWER($1)`;
+    const userResult = await pool.query(userQuery2, [email]);
 
     let user: any;
 
