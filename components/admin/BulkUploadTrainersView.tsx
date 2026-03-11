@@ -98,7 +98,7 @@ export const BulkUploadTrainersView: React.FC<BulkUploadTrainersViewProps> = ({ 
           );
           const trainers: TrainerRow[] = rows.map((row) => ({
             full_name: String(row['Full Name'] || row['full_name'] || '').trim(),
-            email: String(row['Email'] || row['email'] || '').trim().toLowerCase(),
+            email: String(row['Email'] || row['email'] || '').trim(),
             telephone: String(row['Contact'] || row['contact'] || row['Telephone'] || row['telephone'] || '').trim(),
             trainer_type: (() => {
               const raw = String(row['ACLP'] ?? row['aclp'] ?? row['Trainer Type'] ?? row['trainer_type'] ?? '').trim();

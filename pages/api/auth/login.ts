@@ -80,7 +80,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse<LoginResponse>)
       const userQuery = `
         SELECT id, email, password_hash as password, full_name, profile_picture_url, account_status
         FROM public.app_user
-        WHERE LOWER(email) = LOWER($1)
+        WHERE LOWER(email) = LOWER($1) OR LOWER(secondary_email) = LOWER($1)
       `;
       const userResult = await pool.query(userQuery, [email]);
 
@@ -190,7 +190,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse<LoginResponse>)
     const userQuery = `
       SELECT id, email, password_hash as password, full_name, profile_picture_url, account_status
       FROM public.app_user
-      WHERE LOWER(email) = LOWER($1)
+      WHERE LOWER(email) = LOWER($1) OR LOWER(secondary_email) = LOWER($1)
     `;
     const userResult = await pool.query(userQuery, [email]);
 

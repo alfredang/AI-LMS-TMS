@@ -520,6 +520,7 @@ CREATE TABLE public.admin_profile (
 CREATE TABLE public.app_user (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     email text NOT NULL,
+    secondary_email text,
     password text,
     password_hash text,
     full_name text NOT NULL,

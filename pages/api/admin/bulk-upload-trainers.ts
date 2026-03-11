@@ -46,7 +46,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     for (const trainer of trainers) {
-      const { email, full_name, telephone, trainer_type, gender, status, linkedin_url, common_name, country, cn_plus_email, nric } = trainer;
+      const { full_name, telephone, trainer_type, gender, status, linkedin_url, common_name, country, cn_plus_email, nric } = trainer;
+      // If the email cell contains multiple semicolon-separated addresses, use only the first one as the login email
+      const emailParts = trainer.email ? trainer.email.split(';').map(e => e.trim().toLowerCase()).filter(Boolean) : [];
+      const email = emailParts[0] || '';
+      const secondaryEmail = emailParts[1] || null;
 
       // Basic validation — telephone, trainer_type can be empty from the template
       if (!email || !full_name) {
@@ -63,19 +67,33 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       try {
         await client.query('BEGIN');
 
-        // Check if user already exists
-        const existingUser = await client.query(
-          'SELECT id FROM app_user WHERE email = $1',
-          [email]
-        );
+        // Check if user already exists by matching any of the emails from the spreadsheet
+        // against both email and secondary_email columns in app_user
+        const existingUser = secondaryEmail
+          ? await client.query(
+              `SELECT id, email, secondary_email FROM app_user
+               WHERE LOWER(email) = $1 OR LOWER(email) = $2
+                  OR LOWER(secondary_email) = $1 OR LOWER(secondary_email) = $2`,
+              [email, secondaryEmail]
+            )
+          : await client.query(
+              `SELECT id, email, secondary_email FROM app_user
+               WHERE LOWER(email) = $1 OR LOWER(secondary_email) = $1`,
+              [email]
+            );
 
         if (existingUser.rows.length > 0) {
           // UPDATE existing trainer
           const userId = existingUser.rows[0].id;
+          const dbEmail = existingUser.rows[0].email.toLowerCase();
+          const dbSecondary = existingUser.rows[0].secondary_email?.toLowerCase() || null;
+
+          // Determine which email from the spreadsheet is not yet stored, and set it as secondary
+          const resolvedSecondary = emailParts.find(e => e !== dbEmail && e !== dbSecondary) || dbSecondary;
 
           await client.query(
-            `UPDATE app_user SET full_name = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2`,
-            [full_name, userId]
+            `UPDATE app_user SET full_name = $1, secondary_email = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3`,
+            [full_name, resolvedSecondary, userId]
           );
 
           // Upsert trainer_profile
@@ -91,14 +109,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                    common_name = $6, country = $7, cn_plus_email = $8, nric = $9
                WHERE user_id = $10`,
               [telephone || '', trainer_type || 'ACLP', status || 'Active', linkedin_url || null,
-               gender || 'Other', common_name || null, country || null, cn_plus_email || null, nric || null, userId]
+               gender || 'Prefer not to say', common_name || null, country || null, cn_plus_email || null, nric || null, userId]
             );
           } else {
             await client.query(
               `INSERT INTO trainer_profile (user_id, tel, trainer_type, status, linkedin_url, gender, common_name, country, cn_plus_email, nric)
                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
               [userId, telephone || '', trainer_type || 'ACLP', status || 'Active', linkedin_url || null,
-               gender || 'Other', common_name || null, country || null, cn_plus_email || null, nric || null]
+               gender || 'Prefer not to say', common_name || null, country || null, cn_plus_email || null, nric || null]
             );
           }
 
@@ -108,10 +126,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         } else {
           // CREATE new trainer
           const userResult = await client.query(
-            `INSERT INTO app_user (email, password, password_hash, full_name, created_at, updated_at)
-             VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            `INSERT INTO app_user (email, secondary_email, password, password_hash, full_name, created_at, updated_at)
+             VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
              RETURNING id`,
-            [email, DEFAULT_PASSWORD, hashedPassword, full_name]
+            [email, secondaryEmail, DEFAULT_PASSWORD, hashedPassword, full_name]
           );
 
           const userId = userResult.rows[0].id;
@@ -125,7 +143,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             `INSERT INTO trainer_profile (user_id, tel, trainer_type, status, linkedin_url, gender, common_name, country, cn_plus_email, nric)
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
             [userId, telephone || '', trainer_type || 'ACLP', status || 'Active', linkedin_url || null,
-             gender || 'Other', common_name || null, country || null, cn_plus_email || null, nric || null]
+             gender || 'Prefer not to say', common_name || null, country || null, cn_plus_email || null, nric || null]
           );
 
           await client.query('COMMIT');

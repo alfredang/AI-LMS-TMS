@@ -270,7 +270,7 @@ export default async function handler(
 
       // Fetch updated profile with work experience and certifications
       const fetchUpdatedProfileQuery = `
-        SELECT 
+        SELECT
           u.full_name AS name,
           u.profile_picture_url AS picture,
           t.tel AS telephone,
@@ -290,10 +290,10 @@ export default async function handler(
           t.country,
           t.cn_plus_email,
           t.nric
-        FROM trainer_profile t
-        JOIN app_user u
+        FROM app_user u
+        LEFT JOIN trainer_profile t
           ON t.user_id = u.id
-        WHERE t.user_id = $1
+        WHERE u.id = $1
       `;
 
       // Get work experience separately
@@ -333,7 +333,7 @@ export default async function handler(
       ]);
 
       if (profileResult.rows.length === 0) {
-        throw new Error('Trainer profile not found after update');
+        throw new Error('User not found');
       }
 
       const row = profileResult.rows[0];
