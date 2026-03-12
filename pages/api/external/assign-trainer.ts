@@ -181,12 +181,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const lookupEmail   = primary_email.trim().toLowerCase();
     const lookupEmail2  = secondary_email?.trim().toLowerCase() || null;
     const trainerResult = await client.query(
-      `SELECT au.id, au.full_name, au.email
+      `SELECT au.id, au.full_name, au.email, au.secondary_email
        FROM app_user au
        JOIN trainer_profile tp ON tp.user_id = au.id
        WHERE LOWER(au.email)           = $1
           OR LOWER(au.secondary_email) = $1
-          OR ($2 IS NOT NULL AND (
+          OR ($2::text IS NOT NULL AND (
                 LOWER(au.email)           = $2
              OR LOWER(au.secondary_email) = $2
           ))
@@ -202,6 +202,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     const trainer = trainerResult.rows[0];
+
+    // ── Sync secondary_email into DB if not already set ─────────────────────
+    if (lookupEmail2 && !trainer.secondary_email) {
+      await client.query(
+        `UPDATE app_user SET secondary_email = $1 WHERE id = $2`,
+        [lookupEmail2, trainer.id]
+      );
+      console.log(`📧 Saved secondary_email for ${trainer.email}: ${lookupEmail2}`);
+    }
 
     await client.query('BEGIN');
 
