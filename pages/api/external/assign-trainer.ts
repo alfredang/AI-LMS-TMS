@@ -134,8 +134,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (webhookRes.ok) {
         const ssgData = await webhookRes.json();
         console.log('📦 Webhook raw response:', JSON.stringify(ssgData, null, 2));
-        const run        = ssgData?.data?.course?.run;
-        const courseInfo = ssgData?.data?.course;
+        const run        = ssgData?.result?.course?.run;
+        const courseInfo = ssgData?.result?.course;
 
         if (run && courseInfo) {
           courseCode     = courseInfo.referenceNumber as string;
@@ -214,9 +214,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     await client.query('BEGIN');
 
-    // ── Ensure ra_code column exists ────────────────────────────────────────
-    await client.query(`ALTER TABLE course_run ADD COLUMN IF NOT EXISTS ra_code TEXT`);
-
     // ── Resolve mode of training ────────────────────────────────────────────
     // If webhook/fallback provided a mode, use it; otherwise derive from course title
     let resolvedMode = modeOfTraining;
@@ -258,7 +255,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                end_date              = COALESCE($2, end_date),
                mode_of_learning      = COALESCE($3, mode_of_learning),
                digital_attendance_id = COALESCE($4, digital_attendance_id),
-               ra_code               = COALESCE($4, ra_code),
                class_status          = 'Confirmed',
                updated_at            = NOW()
            WHERE id = $5`,
@@ -287,8 +283,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       const insertResult = await client.query(
         `INSERT INTO course_run
-           (course_id, course_run_id, start_date, end_date, mode_of_learning, digital_attendance_id, ra_code, class_status, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $6, 'Confirmed', NOW(), NOW())
+           (course_id, course_run_id, start_date, end_date, mode_of_learning, digital_attendance_id, class_status, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, 'Confirmed', NOW(), NOW())
          RETURNING id`,
         [courseId, String(course_run_id), startDateISO, endDateISO, resolvedMode, raCode]
       );

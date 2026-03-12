@@ -38,3 +38,9 @@ END$$;
 -- ============================================================
 CREATE INDEX IF NOT EXISTS idx_submission_user_course
   ON public.submission (enrollment_id, assessment_id);
+
+-- ============================================================
+-- Migration: Drop ra_code column from course_run
+-- ra_code is the same as digital_attendance_id — use that instead
+-- ============================================================
+ALTER TABLE public.course_run DROP COLUMN IF EXISTS ra_code;
