@@ -11,8 +11,14 @@ import pool from '../../../lib/db';
  *
  * Body (JSON):
  *   {
- *     "course_run_id": "1303232",          // SSG run ID
- *     "trainer_email": "trainer@email.com"
+ *     "course_run_id":    "1303232",
+ *     "primary_email":    "trainer@email.com",
+ *     "secondary_email":  "",               // empty string if none
+ *     "course_code":      "TGS-...",        // fallback
+ *     "course_title":     "...",            // fallback + mode derivation
+ *     "start_date":       "12 Mar 2026",    // fallback
+ *     "end_date":         "12 Mar 2026",    // fallback
+ *     "ra_code":          "RA741642"        // fallback
  *   }
  *
  * Flow:
@@ -87,20 +93,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   // ── Input Validation ────────────────────────────────────────────────────────
   const {
     course_run_id,
-    trainer_email,
+    primary_email,
+    secondary_email,
     // Fallback fields — used if n8n webhook fails
-    course_code:      fallback_course_code,
-    start_date:       fallback_start_date,
-    end_date:         fallback_end_date,
-    mode_of_training: fallback_mode,
-    qr_code_link:     fallback_qr_code_link,
-    course_title:     fallback_course_title,
+    course_code:  fallback_course_code,
+    start_date:   fallback_start_date,
+    end_date:     fallback_end_date,
+    ra_code:      fallback_ra_code,
+    course_title: fallback_course_title,
   } = req.body ?? {};
 
-  if (!course_run_id || !trainer_email) {
+  if (!course_run_id || !primary_email) {
     return res.status(400).json({
       success: false,
-      error: 'Missing required fields: course_run_id, trainer_email',
+      error: 'Missing required fields: course_run_id, primary_email',
     });
   }
 
@@ -136,7 +142,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           startDateISO   = parseToISO(run.courseStartDate);
           endDateISO     = parseToISO(run.courseEndDate);
           modeOfTraining = String(run.modeOfTraining ?? '');
-          raCode         = extractRaCode(run.qrCodeLink);
+          raCode         = extractRaCode(run.qrCodeLink) ?? fallback_ra_code ?? null;
           courseTitle    = (courseInfo.title as string) ?? '';
           dataSource     = 'webhook';
           webhookSuccess = true;
@@ -163,8 +169,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     courseCode     = fallback_course_code;
     startDateISO   = parseToISO(fallback_start_date);
     endDateISO     = parseToISO(fallback_end_date);
-    modeOfTraining = fallback_mode ?? '';
-    raCode         = extractRaCode(fallback_qr_code_link) ?? fallback_qr_code_link ?? null;
+    raCode         = fallback_ra_code ?? null;
     courseTitle    = fallback_course_title ?? '';
     dataSource     = 'fallback';
     console.log(`⚠️ Using fallback data: ${courseCode} | ${startDateISO} → ${endDateISO}`);
@@ -172,21 +177,27 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const client = await pool.connect();
   try {
-    // ── Look up trainer ─────────────────────────────────────────────────────
+    // ── Look up trainer by primary_email, then secondary_email ─────────────
+    const lookupEmail   = primary_email.trim().toLowerCase();
+    const lookupEmail2  = secondary_email?.trim().toLowerCase() || null;
     const trainerResult = await client.query(
       `SELECT au.id, au.full_name, au.email
        FROM app_user au
        JOIN trainer_profile tp ON tp.user_id = au.id
-       WHERE LOWER(au.email) = LOWER($1)
-          OR LOWER(au.secondary_email) = LOWER($1)
+       WHERE LOWER(au.email)           = $1
+          OR LOWER(au.secondary_email) = $1
+          OR ($2 IS NOT NULL AND (
+                LOWER(au.email)           = $2
+             OR LOWER(au.secondary_email) = $2
+          ))
        LIMIT 1`,
-      [trainer_email]
+      [lookupEmail, lookupEmail2]
     );
 
     if (trainerResult.rows.length === 0) {
       return res.status(404).json({
         success: false,
-        error: `Trainer not found or has no trainer profile: ${trainer_email}`,
+        error: `Trainer not found or has no trainer profile: ${primary_email}`,
       });
     }
 
