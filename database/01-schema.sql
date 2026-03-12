@@ -386,7 +386,8 @@ CREATE TYPE public.learner_payment_status AS ENUM (
 CREATE TYPE public.mode_of_learning AS ENUM (
     'Physical',
     'Virtual',
-    'Hybrid'
+    'Hybrid',
+    'External'
 );
 
 

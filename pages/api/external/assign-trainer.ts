@@ -114,7 +114,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   let courseCode     = '';
   let startDateISO: string | null = null;
   let endDateISO: string | null   = null;
-  let modeOfTraining = '';
   let raCode: string | null       = null;
   let courseTitle    = '';
   let dataSource: 'webhook' | 'fallback' = 'fallback';
@@ -141,12 +140,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           courseCode     = courseInfo.referenceNumber as string;
           startDateISO   = parseToISO(run.courseStartDate);
           endDateISO     = parseToISO(run.courseEndDate);
-          modeOfTraining = String(run.modeOfTraining ?? '');
           raCode         = extractRaCode(run.qrCodeLink) ?? fallback_ra_code ?? null;
           courseTitle    = (courseInfo.title as string) ?? '';
           dataSource     = 'webhook';
           webhookSuccess = true;
-          console.log(`✅ SSG data via webhook: ${courseCode} | ${startDateISO} → ${endDateISO} | mode: ${modeOfTraining} | RA: ${raCode} | title: ${courseTitle}`);
+          console.log(`✅ SSG data via webhook: ${courseCode} | ${startDateISO} → ${endDateISO} | RA: ${raCode} | title: ${courseTitle}`);
         } else {
           console.warn('⚠️ Webhook returned unexpected structure, falling back to request body data');
         }
@@ -214,15 +212,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     await client.query('BEGIN');
 
-    // ── Resolve mode of training ────────────────────────────────────────────
-    // If webhook/fallback provided a mode, use it; otherwise derive from course title
-    let resolvedMode = modeOfTraining;
-    if (!resolvedMode) {
-      const titleLower = courseTitle.toLowerCase();
-      if (titleLower.includes('virtual'))  resolvedMode = 'Virtual';
-      else if (titleLower.includes('external')) resolvedMode = 'External';
-      else resolvedMode = 'Physical';
-    }
+    // ── Resolve mode of learning from course title ──────────────────────────
+    const titleLower = courseTitle.toLowerCase();
+    let resolvedMode: string;
+    if (titleLower.includes('virtual'))        resolvedMode = 'Virtual';
+    else if (titleLower.includes('external'))  resolvedMode = 'External';
+    else if (titleLower.includes('hybrid'))    resolvedMode = 'Hybrid';
+    else resolvedMode = 'Physical';
 
     // ── Check if course run already exists in DB ────────────────────────────
     const existingRun = await client.query(
