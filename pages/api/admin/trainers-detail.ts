@@ -25,6 +25,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 SELECT
                     au.full_name AS trainer_name,
                     au.email,
+                    au.secondary_email,
                     au.profile_picture_url AS profile_picture,
                     au.account_status,
                     tp.tel AS telephone,
@@ -36,12 +37,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 FROM trainer_profile tp
                 JOIN app_user au
                     ON tp.user_id = au.id
-                LEFT JOIN course_run cr
-                    ON cr.assigned_trainer_email = au.email
+                LEFT JOIN course_trainer ct
+                    ON ct.trainer_id = au.id
                 LEFT JOIN course c
-                    ON c.id = cr.course_id
+                    ON c.id = ct.course_id
                 GROUP BY
-                    au.full_name, au.email, au.profile_picture_url, au.account_status,
+                    au.full_name, au.email, au.secondary_email, au.profile_picture_url, au.account_status,
                     tp.tel, tp.trainer_type, tp.status, tp.linkedin_url, tp.user_id
                 ORDER BY au.full_name;
             `;

@@ -37,7 +37,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       JOIN course c ON cr.course_id = c.id
       LEFT JOIN app_user au ON cr.assigned_trainer_id = au.id
       WHERE tp.user_id = $1
-      ORDER BY cr.start_date DESC
+      ORDER BY
+        CASE WHEN cr.end_date >= CURRENT_DATE THEN 0 ELSE 1 END,
+        cr.start_date ASC
     `;
 
     const result = await pool.query(sqlQuery, [trainerId]);

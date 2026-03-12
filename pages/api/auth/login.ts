@@ -251,11 +251,11 @@ async function handler(req: NextApiRequest, res: NextApiResponse<LoginResponse>)
       WHERE user_id = $1
       ORDER BY
         CASE role
-          WHEN 'Admin' THEN 1
-          WHEN 'Training Provider' THEN 2
+          WHEN 'Learner' THEN 1
+          WHEN 'Trainer' THEN 2
           WHEN 'Developer' THEN 3
-          WHEN 'Trainer' THEN 4
-          WHEN 'Learner' THEN 5
+          WHEN 'Admin' THEN 4
+          WHEN 'Training Provider' THEN 5
           ELSE 6
         END
     `;

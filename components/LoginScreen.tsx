@@ -352,13 +352,6 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
       </form>
       <div className="mt-4 text-center text-sm">
         <button
-          onClick={() => { setStep('email'); setError(null); setSuccessMessage(null); setOtp(''); }}
-          className="font-medium text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
-        >
-          Change Email
-        </button>
-        <span className="mx-2 text-gray-500 dark:text-gray-400">|</span>
-        <button
           onClick={handleResendOtp}
           disabled={isResending}
           className="font-medium text-blue-600 hover:text-blue-800 disabled:text-gray-400 disabled:cursor-not-allowed dark:text-blue-400 dark:hover:text-blue-300 dark:disabled:text-gray-600"

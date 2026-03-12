@@ -36,6 +36,15 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       ADD COLUMN IF NOT EXISTS secondary_email text;
     `);
     console.log('✅ Added secondary_email column');
+
+    // Add new course columns
+    console.log('🔄 Running migration: Add course_fees_include_gst, renewed_status to course table...');
+    await pool.query(`
+      ALTER TABLE public.course
+      ADD COLUMN IF NOT EXISTS course_fees_include_gst text,
+      ADD COLUMN IF NOT EXISTS renewed_status text;
+    `);
+    console.log('✅ Added course_fees_include_gst and renewed_status columns');
     
     console.log('✅ Added file_url column');
     

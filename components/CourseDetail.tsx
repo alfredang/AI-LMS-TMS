@@ -616,13 +616,13 @@ const CourseSidebar: React.FC<CourseSidebarProps> = ({ userRole, onSetGradingVie
     ];
 
     let trainerNavItems: NavItem[] = [
-        { type: 'link', label: "Course Link", icon: IconName.Link },
+        { type: 'link', label: "Courseware Link", icon: IconName.Link },
         { type: 'link', label: "Assessment Record Link", icon: IconName.ClipboardCheck },
         { type: 'link', label: "Lesson Plan", icon: IconName.BookOpen },
-        { type: 'link', label: "Assessment Plan", icon: IconName.ClipboardCheck },
         { type: 'link', label: "Facilitator Guide", icon: IconName.FileText },
         { type: 'link', label: "Learner Slides", icon: IconName.FileText },
         { type: 'link', label: "Trainer Slides", icon: IconName.FileText },
+        { type: 'link', label: "Assessment Plan", icon: IconName.ClipboardCheck },
         { type: 'separator' },
         { type: 'link', label: "Lesson", icon: IconName.BookOpen },
         { type: 'link', label: "TRAQOM Survey", icon: IconName.Edit },
@@ -633,7 +633,7 @@ const CourseSidebar: React.FC<CourseSidebarProps> = ({ userRole, onSetGradingVie
     if (userRole === UserRole.Developer || userRole === UserRole.TrainingProvider || userRole === UserRole.Admin) {
         trainerNavItems = trainerNavItems.filter(item =>
             item.type === 'separator' ||
-            (item.label !== "Course Link" && item.label !== "Assessment Record Link" && item.label !== "TRAQOM Survey" && item.label !== "Grading")
+            (item.label !== "Courseware Link" && item.label !== "Assessment Record Link" && item.label !== "TRAQOM Survey" && item.label !== "Grading")
         );
     } else if (userRole === UserRole.Trainer) {
         trainerNavItems = trainerNavItems.filter(item =>
@@ -1106,10 +1106,10 @@ export const CourseDetail: React.FC = () => {
                                 </div>
                             </div>
 
-                            {/* Course Link */}
+                            {/* Courseware Link */}
                             {userRole === UserRole.Trainer && (
-                                <div id={toId("Course Link")}>
-                                    <ContentSection title="Course Link">
+                                <div id={toId("Courseware Link")}>
+                                    <ContentSection title="Courseware Link">
                                         {convertedCourse.courseLink ? (
                                             <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded-lg flex items-center justify-between gap-3 border dark:border-gray-600">
                                                 <a
@@ -1187,7 +1187,9 @@ export const CourseDetail: React.FC = () => {
                             {/* Learner Guide */}
                             <div id={toId("Learner Guide")}>
                                 <ContentSection title="Learner Guide">
-                                    {convertedCourse.learnerGuideUrl ? (
+                                    {(userRole === UserRole.Learner || userRole === UserRole.Trainer) ? (
+                                        null
+                                    ) : convertedCourse.learnerGuideUrl ? (
                                         <div
                                             onClick={(e) => handleFileDownload(convertedCourse.learnerGuideUrl!, e)}
                                             className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors cursor-pointer"
@@ -1282,6 +1284,28 @@ export const CourseDetail: React.FC = () => {
                                 </div>
                             )}
 
+                            {/* Assessment Plan */}
+                            {(userRole === UserRole.Trainer || userRole === UserRole.Developer || userRole === UserRole.TrainingProvider || userRole === UserRole.Admin) && (
+                                <div id={toId("Assessment Plan")}>
+                                    <ContentSection title="Assessment Plan">
+                                        {convertedCourse.assessmentPlanUrl ? (
+                                            <div
+                                                onClick={(e) => handleFileDownload(convertedCourse.assessmentPlanUrl!, e)}
+                                                className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors cursor-pointer"
+                                            >
+                                                <Icon name={IconName.FileText} className="w-8 h-8 text-red-600 flex-shrink-0" />
+                                                <div>
+                                                    <p className="font-semibold text-gray-900 dark:text-white">{extractFilenameFromPath(convertedCourse.assessmentPlanUrl)}</p>
+                                                    <p className="text-xs text-gray-500 dark:text-gray-400">Click to download the assessment plan</p>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <p className="text-gray-500 dark:text-gray-400">The assessment plan for this course will be displayed here.</p>
+                                        )}
+                                    </ContentSection>
+                                </div>
+                            )}
+
                             {/* Lessons */}
                             <div id="lessons">
                                 <Card className="p-0 overflow-hidden">
@@ -1365,28 +1389,6 @@ export const CourseDetail: React.FC = () => {
                                             </div>
                                         )}
                                     </Card>
-                                </div>
-                            )}
-
-                            {/* Assessment Plan */}
-                            {(userRole === UserRole.Trainer || userRole === UserRole.Developer || userRole === UserRole.TrainingProvider || userRole === UserRole.Admin) && (
-                                <div id={toId("Assessment Plan")}>
-                                    <ContentSection title="Assessment Plan">
-                                        {convertedCourse.assessmentPlanUrl ? (
-                                            <div
-                                                onClick={(e) => handleFileDownload(convertedCourse.assessmentPlanUrl!, e)}
-                                                className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors cursor-pointer"
-                                            >
-                                                <Icon name={IconName.FileText} className="w-8 h-8 text-red-600 flex-shrink-0" />
-                                                <div>
-                                                    <p className="font-semibold text-gray-900 dark:text-white">{extractFilenameFromPath(convertedCourse.assessmentPlanUrl)}</p>
-                                                    <p className="text-xs text-gray-500 dark:text-gray-400">Click to download the assessment plan</p>
-                                                </div>
-                                            </div>
-                                        ) : (
-                                            <p className="text-gray-500 dark:text-gray-400">The assessment plan for this course will be displayed here.</p>
-                                        )}
-                                    </ContentSection>
                                 </div>
                             )}
 

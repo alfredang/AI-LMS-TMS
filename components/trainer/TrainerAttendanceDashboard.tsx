@@ -128,6 +128,12 @@ const TrainerAttendanceDashboard: React.FC = () => {
   const [manualPage, setManualPage]                    = useState(1);
   const MANUAL_PAGE_SIZE = 5;
 
+  const [showCompletedCourses, setShowCompletedCourses] = useState(false);
+
+  const today = new Date(new Date().toDateString());
+  const activeCourses    = courses.filter(c => !c.endDate || new Date(c.endDate) >= today);
+  const completedCourses = courses.filter(c => c.endDate && new Date(c.endDate) < today);
+
   const selectedCourse = courses.find(c => c.courseRunId === selectedCourseRunId) ?? null;
 
   useEffect(() => {
@@ -467,7 +473,7 @@ const TrainerAttendanceDashboard: React.FC = () => {
 
       {/* Page Header */}
       <div>
-        <h1 className="text-2xl font-bold text-on-surface">Attendance Taking / Checking</h1>
+        <h1 className="text-2xl font-bold text-on-surface">E-Attendance</h1>
         <p className="text-sm text-on-surface-secondary mt-0.5">Select an assigned class to manage sessions and view enrolments.</p>
       </div>
 
@@ -486,18 +492,18 @@ const TrainerAttendanceDashboard: React.FC = () => {
 
         <div className="p-4 space-y-4">
           {/* Class dropdown row */}
-          <div className="flex flex-wrap items-end gap-3">
-            <div className="flex-1 min-w-[260px]">
-              <label className="block text-xs font-medium text-on-surface-secondary mb-1">
-                Assigned Class <span className="text-red-500">*</span>
-              </label>
+          <div>
+            <label className="block text-xs font-medium text-on-surface-secondary mb-1">
+              Assigned Class <span className="text-red-500">*</span>
+            </label>
+            <div className="flex flex-wrap items-center gap-3">
               {coursesLoading ? (
-                <div className="flex items-center gap-2 px-3 py-2 border border-default rounded text-sm text-muted">
+                <div className="flex items-center gap-2 px-3 py-2 border border-default rounded text-sm text-muted flex-1 min-w-[260px]">
                   <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary" />
                   Loading classes...
                 </div>
               ) : (
-                <div className="relative">
+                <div className="relative flex-1 min-w-[260px]">
                   <select
                     value={selectedCourseRunId}
                     onChange={e => {
@@ -537,35 +543,60 @@ const TrainerAttendanceDashboard: React.FC = () => {
                     disabled={isFetchingSessions}
                   >
                     <option value="" disabled>— Select a class —</option>
-                    {courses.map(c => (
-                      <option key={c.courseRunId} value={c.courseRunId}>
-                        {c.title} | Run: {c.courseRunCode} | {c.courseCode}
-                      </option>
-                    ))}
+                    {activeCourses.length > 0 && (
+                      <optgroup label="── Active ──">
+                        {activeCourses.map(c => (
+                          <option key={c.courseRunId} value={c.courseRunId}>
+                            {c.title} | Run: {c.courseRunCode} | {c.courseCode}
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
+                    {showCompletedCourses && completedCourses.length > 0 && (
+                      <optgroup label="── Completed ──">
+                        {completedCourses.map(c => (
+                          <option key={c.courseRunId} value={c.courseRunId}>
+                            {c.title} | Run: {c.courseRunCode} | {c.courseCode} | Completed Class
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
                   </select>
                   <span className="absolute right-2 top-1/2 -translate-y-1/2 text-muted pointer-events-none text-xs">▼</span>
                 </div>
               )}
+              {selectedCourse && (
+                <button
+                  onClick={() => handleFetchSessions(selectedCourse.courseRunCode!, selectedCourse.courseCode)}
+                  disabled={!canFetch}
+                  className="flex items-center gap-2 px-3 py-2 bg-surface-elevated border border-default text-on-surface-secondary rounded text-sm font-medium hover:bg-surface-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isFetchingSessions ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary" />
+                      Fetching...
+                    </>
+                  ) : (
+                    <>
+                      <RefreshIcon />
+                      Refresh Sessions
+                    </>
+                  )}
+                </button>
+              )}
             </div>
-
-            {selectedCourse && (
-              <button
-                onClick={() => handleFetchSessions(selectedCourse.courseRunCode!, selectedCourse.courseCode)}
-                disabled={!canFetch}
-                className="flex items-center gap-2 px-3 py-2 bg-surface-elevated border border-default text-on-surface-secondary rounded text-sm font-medium hover:bg-surface-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isFetchingSessions ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary" />
-                    Fetching...
-                  </>
-                ) : (
-                  <>
-                    <RefreshIcon />
-                    Refresh Sessions
-                  </>
-                )}
-              </button>
+            {completedCourses.length > 0 && (
+              <label className="flex items-center gap-1.5 mt-1.5 cursor-pointer w-fit">
+                <input
+                  type="checkbox"
+                  checked={showCompletedCourses}
+                  onChange={e => setShowCompletedCourses(e.target.checked)}
+                  className="w-3.5 h-3.5 accent-primary"
+                />
+                <span className="text-xs text-on-surface-secondary">
+                  Show completed classes ({completedCourses.length})
+                </span>
+              </label>
             )}
           </div>
 

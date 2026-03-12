@@ -16,6 +16,9 @@ interface CourseRow {
   schedule_id?: string;
   funding_validity?: string;
   course_fees_exclude_gst?: string;
+  tax_percent?: number | string;
+  course_fees_include_gst?: string;
+  renewed_status?: string;
   after_normal_funding?: number | string;
   after_mces_funding?: number | string;
   num_of_days?: number | string;
@@ -141,6 +144,9 @@ export const BulkUploadCoursesView: React.FC<BulkUploadCoursesViewProps> = ({ on
             schedule_id: str(['Schedule ID', 'schedule_id']),
             funding_validity: str(['Funding Validty', 'Funding Validity', 'funding_validity']),
             course_fees_exclude_gst: str(['Course Fee (exl GST)', 'course_fees_exclude_gst']),
+            tax_percent: row['GST'] || row['tax_percent'],
+            course_fees_include_gst: str(['Course Fee (inc GST)', 'course_fees_include_gst']),
+            renewed_status: str(['Course Renewed Status', 'renewed_status']),
             after_normal_funding: row['After Normal Funding'] || row['after_normal_funding'],
             after_mces_funding: row['After MCES Funding'] || row['after_mces_funding'],
             num_of_days: row['Days'] || row['num_of_days'],
@@ -304,7 +310,7 @@ export const BulkUploadCoursesView: React.FC<BulkUploadCoursesViewProps> = ({ on
           <div className="w-full max-w-md text-center space-y-6">
             <div className="animate-spin rounded-full h-14 w-14 border-4 border-blue-200 border-t-blue-600 mx-auto" />
             <div>
-              <p className="text-lg font-semibold text-gray-900 dark:text-white">Uploading Courses...</p>
+              <p className="text-lg font-semibold text-gray-900 dark:text-white">Uploading courses and assigning trainers to their associated courses...</p>
               <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Please do not close this page.</p>
             </div>
             <div className="space-y-2">
@@ -393,12 +399,13 @@ export const BulkUploadCoursesView: React.FC<BulkUploadCoursesViewProps> = ({ on
                         <span>{r.message}</span>
                         {r.unmatchedTrainers && r.unmatchedTrainers.length > 0 && (
                           <div className="mt-1.5 p-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded text-xs text-amber-700 dark:text-amber-400">
-                            <span className="font-semibold">⚠ {r.unmatchedTrainers.length} trainer(s) not found — add them first:</span>
+                            <span className="font-semibold">⚠ {r.unmatchedTrainers.length} trainer(s) not found in system (email not registered):</span>
                             <ul className="mt-1 space-y-0.5 list-disc list-inside">
                               {r.unmatchedTrainers.map((email, i) => (
-                                <li key={i} className="font-mono">{email}</li>
+                                <li key={i} className="font-mono">Searched: {email}</li>
                               ))}
                             </ul>
+                            <p className="mt-1.5 italic">Or Go to the Excel sheet, find the Trainers column to make an amendment — usually missing a bracket around the email. Correct format: <span className="font-mono not-italic">[email]</span> or <span className="font-mono not-italic">[email1;email2]</span>, not <span className="font-mono not-italic">[email1,email2]</span>.</p>
                           </div>
                         )}
                       </td>

@@ -9,6 +9,7 @@ import { BulkUploadTrainersView } from './BulkUploadTrainersView';
 interface Trainer {
   trainer_name: string;
   email: string;
+  secondary_email: string | null;
   profile_picture: string | null;
   telephone: string | null;
   trainer_type: string | null;
@@ -64,6 +65,9 @@ const ViewTrainers: React.FC = () => {
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
 
   const itemsPerPage = 10;
+  const [expandedCourses, setExpandedCourses] = useState<Set<string>>(new Set());
+  const toggleCourses = (userId: string) =>
+    setExpandedCourses(prev => { const s = new Set(prev); s.has(userId) ? s.delete(userId) : s.add(userId); return s; });
 
   const inputClasses = "w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400";
 
@@ -148,6 +152,7 @@ const ViewTrainers: React.FC = () => {
     const matchesSearch = !searchQuery ||
       trainer.trainer_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       trainer.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (trainer.secondary_email && trainer.secondary_email.toLowerCase().includes(searchQuery.toLowerCase())) ||
       (trainer.telephone && trainer.telephone.toLowerCase().includes(searchQuery.toLowerCase()));
 
     const matchesName = !filterName || trainer.trainer_name.toLowerCase().includes(filterName.toLowerCase());
@@ -364,6 +369,9 @@ const ViewTrainers: React.FC = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm text-gray-900 dark:text-white">{trainer.email}</div>
+                      {trainer.secondary_email && (
+                        <div className="text-sm text-gray-500 dark:text-gray-400">{trainer.secondary_email}</div>
+                      )}
                       <div className="text-sm text-gray-500 dark:text-gray-400">{trainer.telephone || 'N/A'}</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{trainer.trainer_type || 'N/A'}</td>
@@ -392,15 +400,33 @@ const ViewTrainers: React.FC = () => {
                         'N/A'
                       )}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                      {trainer.courses_taught ? (
-                        <ul className="list-disc list-inside space-y-1">
-                          {trainer.courses_taught.split(', ').map((course, courseIndex) => (
-                            <li key={courseIndex}>{course}</li>
-                          ))}
-                        </ul>
-                      ) : (
-                        'None'
+                    <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">
+                      {trainer.courses_taught ? (() => {
+                        const courses = trainer.courses_taught.split(', ');
+                        const isExpanded = expandedCourses.has(trainer.user_id);
+                        const visible = isExpanded ? courses : courses.slice(0, 2);
+                        const hidden = courses.length - 2;
+                        return (
+                          <div className="flex flex-wrap gap-1">
+                            {visible.map((course, i) => (
+                              <span key={i} className="inline-block px-2 py-0.5 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-700 rounded text-xs max-w-[160px] truncate" title={course}>
+                                {course}
+                              </span>
+                            ))}
+                            {!isExpanded && hidden > 0 && (
+                              <button onClick={() => toggleCourses(trainer.user_id)} className="inline-block px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded text-xs hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">
+                                +{hidden} more
+                              </button>
+                            )}
+                            {isExpanded && courses.length > 2 && (
+                              <button onClick={() => toggleCourses(trainer.user_id)} className="inline-block px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded text-xs hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">
+                                Show less
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })() : (
+                        <span className="text-gray-400 dark:text-gray-500">None</span>
                       )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">

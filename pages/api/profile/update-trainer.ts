@@ -136,12 +136,16 @@ export default async function handler(
 
       if (profileData.areasOfExpertise) {
         updateFields.push(`areas_of_expertise = $${paramIndex++}`);
-        updateValues.push(JSON.stringify(profileData.areasOfExpertise));
+        updateValues.push(typeof profileData.areasOfExpertise === 'string'
+          ? profileData.areasOfExpertise
+          : JSON.stringify(profileData.areasOfExpertise));
       }
 
       if (profileData.qualifications) {
         updateFields.push(`qualifications = $${paramIndex++}`);
-        updateValues.push(JSON.stringify(profileData.qualifications));
+        updateValues.push(typeof profileData.qualifications === 'string'
+          ? profileData.qualifications
+          : JSON.stringify(profileData.qualifications));
       }
 
       if (profileData.education !== undefined) {
@@ -372,11 +376,17 @@ export default async function handler(
         cvUrl: row.cv_url,
         cvOriginalFilename: row.cv_original_filename,
         certifications: certifications, // Use data from certification table
-        qualifications: row.qualifications ? 
-          (Array.isArray(row.qualifications) ? row.qualifications : JSON.parse(row.qualifications)) : [],
-        education: row.education || '', // Return as string
-        areasOfExpertise: row.areas_of_expertise ?
-          (Array.isArray(row.areas_of_expertise) ? row.areas_of_expertise : JSON.parse(row.areas_of_expertise)) : [],
+        qualifications: (() => {
+          if (!row.qualifications) return [];
+          if (Array.isArray(row.qualifications)) return row.qualifications;
+          try { return JSON.parse(row.qualifications); } catch { return []; }
+        })(),
+        education: row.education || '',
+        areasOfExpertise: (() => {
+          if (!row.areas_of_expertise) return [];
+          if (Array.isArray(row.areas_of_expertise)) return row.areas_of_expertise;
+          try { return JSON.parse(row.areas_of_expertise); } catch { return []; }
+        })(),
         workExperience: workExperience,
         commonName: row.common_name || '',
         country: row.country || '',

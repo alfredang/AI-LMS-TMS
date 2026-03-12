@@ -712,6 +712,8 @@ CREATE TABLE public.course (
     schedule_id text,
     funding_validity text,
     course_fees_exclude_gst text,
+    course_fees_include_gst text,
+    renewed_status text,
     after_normal_funding numeric(12,2),
     after_mces_funding numeric(12,2),
     num_of_days integer,
