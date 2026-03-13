@@ -13,36 +13,34 @@ import pool from '../../../lib/db';
  *   {
  *     "course_run_id":    "1303232",
  *     "primary_email":    "trainer@email.com",
- *     "secondary_email":  "",               // empty string if none
- *     "course_code":      "TGS-...",        // fallback
- *     "course_title":     "...",            // fallback + mode derivation
- *     "start_date":       "12 Mar 2026",    // fallback
- *     "end_date":         "12 Mar 2026",    // fallback
- *     "ra_code":          "RA741642"        // fallback
+ *     "secondary_email":  "",             // empty string if none
+ *     "course_code":      "TGS-...",      // required
+ *     "course_title":     "...",          // mode derivation
+ *     "start_date":       "12 Mar 2026",  // required
+ *     "end_date":         "12 Mar 2026",  // required
+ *     "ra_code":          "RA741642"      // optional
  *   }
  *
  * Flow:
  *   1. Validate API key
- *   2. Call n8n webhook (N8N_WEBHOOK_COURSE_RUN_DETAIL) to fetch live SSG course run data
- *   3. Upsert course_run in DB using fetched data (create if not exists, update if exists)
+ *   2. Use data provided in request body directly (n8n webhook disabled)
+ *   3. Upsert course_run in DB (create if not exists, update if exists)
  *   4. Assign the trainer
- *
- * Rate limit: minimum 1.5s between webhook calls (module-level)
  */
 
-// ── Rate limiter ──────────────────────────────────────────────────────────────
-let lastWebhookCallAt = 0;
-const RATE_LIMIT_MS   = 1500;
-
-async function rateLimitedFetch(url: string, options: RequestInit): Promise<Response> {
-  const now     = Date.now();
-  const elapsed = now - lastWebhookCallAt;
-  if (elapsed < RATE_LIMIT_MS) {
-    await new Promise(r => setTimeout(r, RATE_LIMIT_MS - elapsed));
-  }
-  lastWebhookCallAt = Date.now();
-  return fetch(url, options);
-}
+// ── Rate limiter (commented out — webhook disabled) ───────────────────────────
+// let lastWebhookCallAt = 0;
+// const RATE_LIMIT_MS   = 3000;
+//
+// async function rateLimitedFetch(url: string, options: RequestInit): Promise<Response> {
+//   const now     = Date.now();
+//   const elapsed = now - lastWebhookCallAt;
+//   if (elapsed < RATE_LIMIT_MS) {
+//     await new Promise(r => setTimeout(r, RATE_LIMIT_MS - elapsed));
+//   }
+//   lastWebhookCallAt = Date.now();
+//   return fetch(url, options);
+// }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -65,12 +63,13 @@ function parseToISO(d: number | string | undefined): string | null {
   return null;
 }
 
+// ── extractRaCode (commented out — was used by n8n webhook response) ──────────
 // Extract RA code from qrCodeLink e.g. ".../take-attendance/RA741642" → "RA741642"
-function extractRaCode(qrCodeLink: string | undefined): string | null {
-  if (!qrCodeLink) return null;
-  const parts = qrCodeLink.split('/');
-  return parts[parts.length - 1] || null;
-}
+// function extractRaCode(qrCodeLink: string | undefined): string | null {
+//   if (!qrCodeLink) return null;
+//   const parts = qrCodeLink.split('/');
+//   return parts[parts.length - 1] || null;
+// }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -95,83 +94,55 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     course_run_id,
     primary_email,
     secondary_email,
-    // Fallback fields — used if n8n webhook fails
-    course_code:  fallback_course_code,
-    start_date:   fallback_start_date,
-    end_date:     fallback_end_date,
-    ra_code:      fallback_ra_code,
-    course_title: fallback_course_title,
+    course_code,
+    start_date,
+    end_date,
+    ra_code,
+    course_title,
   } = req.body ?? {};
 
-  if (!course_run_id || !primary_email) {
+  if (!course_run_id || !primary_email || !course_code) {
     return res.status(400).json({
       success: false,
-      error: 'Missing required fields: course_run_id, primary_email',
+      error: 'Missing required fields: course_run_id, primary_email, course_code',
     });
   }
 
-  // ── Fetch course run data from SSG via n8n webhook (with fallback) ──────────
-  let courseCode     = '';
-  let startDateISO: string | null = null;
-  let endDateISO: string | null   = null;
-  let raCode: string | null       = null;
-  let courseTitle    = '';
-  let dataSource: 'webhook' | 'fallback' = 'fallback';
+  // ── Use request body data directly ──────────────────────────────────────────
+  const courseCode    = course_code;
+  const startDateISO  = parseToISO(start_date);
+  const endDateISO    = parseToISO(end_date);
+  const raCode        = ra_code ?? null;
+  const courseTitle   = course_title ?? '';
 
-  const webhookUrl = "https://n8n.srv1231536.hstgr.cloud/webhook/7f2f5d21-beb6-47a9-8056-e1ccf79a3ea7";
-  let webhookSuccess = false;
-
-  if (webhookUrl) {
-    try {
-      console.log(`📡 Fetching SSG data for course run ${course_run_id}...`);
-      const webhookRes = await rateLimitedFetch(webhookUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ courseRunId: String(course_run_id) }),
-      });
-
-      if (webhookRes.ok) {
-        const ssgData = await webhookRes.json();
-        console.log('📦 Webhook raw response:', JSON.stringify(ssgData, null, 2));
-        const run        = ssgData?.result?.course?.run;
-        const courseInfo = ssgData?.result?.course;
-
-        if (run && courseInfo) {
-          courseCode     = courseInfo.referenceNumber as string;
-          startDateISO   = parseToISO(run.courseStartDate);
-          endDateISO     = parseToISO(run.courseEndDate);
-          raCode         = extractRaCode(run.qrCodeLink) ?? fallback_ra_code ?? null;
-          courseTitle    = (courseInfo.title as string) ?? '';
-          dataSource     = 'webhook';
-          webhookSuccess = true;
-          console.log(`✅ SSG data via webhook: ${courseCode} | ${startDateISO} → ${endDateISO} | RA: ${raCode} | title: ${courseTitle}`);
-        } else {
-          console.warn('⚠️ Webhook returned unexpected structure, falling back to request body data');
-        }
-      } else {
-        console.warn(`⚠️ Webhook returned ${webhookRes.status}, falling back to request body data`);
-      }
-    } catch (err) {
-      console.warn('⚠️ Webhook unreachable, falling back to request body data:', (err as Error).message);
-    }
-  }
-
-  if (!webhookSuccess) {
-    // ── Fallback: use data provided in the request body ─────────────────────
-    if (!fallback_course_code) {
-      return res.status(400).json({
-        success: false,
-        error: 'n8n webhook unavailable and no fallback course_code provided in request body',
-      });
-    }
-    courseCode     = fallback_course_code;
-    startDateISO   = parseToISO(fallback_start_date);
-    endDateISO     = parseToISO(fallback_end_date);
-    raCode         = fallback_ra_code ?? null;
-    courseTitle    = fallback_course_title ?? '';
-    dataSource     = 'fallback';
-    console.log(`⚠️ Using fallback data: ${courseCode} | ${startDateISO} → ${endDateISO}`);
-  }
+  // ── n8n webhook (disabled — trusting caller data directly) ──────────────────
+  // const webhookUrl = "https://n8n.srv1231536.hstgr.cloud/webhook/7f2f5d21-beb6-47a9-8056-e1ccf79a3ea7";
+  // let webhookSuccess = false;
+  // if (webhookUrl) {
+  //   try {
+  //     console.log(`📡 Fetching SSG data for course run ${course_run_id}...`);
+  //     const webhookRes = await rateLimitedFetch(webhookUrl, {
+  //       method: 'POST',
+  //       headers: { 'Content-Type': 'application/json' },
+  //       body: JSON.stringify({ courseRunId: String(course_run_id) }),
+  //     });
+  //     if (webhookRes.ok) {
+  //       const ssgData    = await webhookRes.json();
+  //       const run        = ssgData?.result?.course?.run;
+  //       const courseInfo = ssgData?.result?.course;
+  //       if (run && courseInfo) {
+  //         courseCode     = courseInfo.referenceNumber as string;
+  //         startDateISO   = parseToISO(run.courseStartDate);
+  //         endDateISO     = parseToISO(run.courseEndDate);
+  //         raCode         = extractRaCode(run.qrCodeLink) ?? ra_code ?? null;
+  //         courseTitle    = (courseInfo.title as string) ?? '';
+  //         webhookSuccess = true;
+  //       }
+  //     }
+  //   } catch (err) {
+  //     console.warn('⚠️ Webhook unreachable:', (err as Error).message);
+  //   }
+  // }
 
   const client = await pool.connect();
   try {
@@ -214,11 +185,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // ── Resolve mode of learning from course title ──────────────────────────
     const titleLower = courseTitle.toLowerCase();
-    let resolvedMode: string;
-    if (titleLower.includes('virtual'))        resolvedMode = 'Virtual';
-    else if (titleLower.includes('external'))  resolvedMode = 'External';
-    else if (titleLower.includes('hybrid'))    resolvedMode = 'Hybrid';
-    else resolvedMode = 'Physical';
+    let mode_of_learning: string;
+    if (titleLower.includes('virtual'))        mode_of_learning = 'Virtual';
+    else if (titleLower.includes('external'))  mode_of_learning = 'External';
+    else if (titleLower.includes('hybrid'))    mode_of_learning = 'Hybrid';
+    else mode_of_learning = 'Physical';
 
     // ── Check if course run already exists in DB ────────────────────────────
     const existingRun = await client.query(
@@ -254,7 +225,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                class_status          = 'Confirmed',
                updated_at            = NOW()
            WHERE id = $5`,
-          [startDateISO, endDateISO, resolvedMode, raCode, courseRunUuid]
+          [startDateISO, endDateISO, mode_of_learning, raCode, courseRunUuid]
         );
         console.log(`✏️ Updated course run ${course_run_id} data`);
       }
@@ -282,7 +253,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
            (course_id, course_run_id, start_date, end_date, mode_of_learning, digital_attendance_id, class_status, created_at, updated_at)
          VALUES ($1, $2, $3, $4, $5, $6, 'Confirmed', NOW(), NOW())
          RETURNING id`,
-        [courseId, String(course_run_id), startDateISO, endDateISO, resolvedMode, raCode]
+        [courseId, String(course_run_id), startDateISO, endDateISO, mode_of_learning, raCode]
       );
 
       courseRunUuid = insertResult.rows[0].id;
@@ -313,9 +284,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     return res.status(200).json({
       success: true,
-      message: `Trainer assigned successfully (course run ${action === 'skipped' ? 'exists — data unchanged' : action}, data from ${dataSource})`,
+      message: `Trainer assigned successfully (course run ${action === 'skipped' ? 'exists — data unchanged' : action})`,
       action,
-      dataSource,
       data: {
         courseRunId:  String(course_run_id),
         courseCode,

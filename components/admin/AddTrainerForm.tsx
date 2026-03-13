@@ -260,21 +260,12 @@ const AddTrainerForm: React.FC<AddTrainerFormProps> = ({ onCancel, onSuccess }) 
             <div className="flex items-center space-x-6">
               <div className="flex-shrink-0">
                 <div className="w-20 h-20 rounded-full bg-gray-300 dark:bg-gray-600 flex items-center justify-center overflow-hidden">
-                  {profilePicturePreview ? (
-                    <img 
-                      src={profilePicturePreview} 
-                      alt="Profile Preview" 
-                      className="w-full h-full object-cover" 
-                    />
-                  ) : formData.profilePictureUrl ? (
-                    <img 
-                      src={formData.profilePictureUrl} 
-                      alt="Profile Picture" 
-                      className="w-full h-full object-cover" 
-                    />
-                  ) : (
-                    <Icon name={IconName.User} className="w-8 h-8 text-gray-400" />
-                  )}
+                  <img
+                    src={profilePicturePreview || formData.profilePictureUrl || 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMjAiIGN5PSIyMCIgcj0iMjAiIGZpbGw9IiM5Q0EzQUYiLz4KPGNpcmNsZSBjeD0iMjAiIGN5PSIxNSIgcj0iNiIgZmlsbD0id2hpdGUiLz4KPHBhdGggZD0iTTMwIDMzQzMwIDI3LjQ3NzIgMjUuNTIyOCAyMyAyMCAyM0MxNC40NzcyIDIzIDEwIDI3LjQ3NzIgMTAgMzNIMzBaIiBmaWxsPSJ3aGl0ZSIvPgo8L3N2Zz4K'}
+                    alt="Profile Picture"
+                    className="w-full h-full object-cover"
+                    onError={(e) => { e.currentTarget.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMjAiIGN5PSIyMCIgcj0iMjAiIGZpbGw9IiM5Q0EzQUYiLz4KPGNpcmNsZSBjeD0iMjAiIGN5PSIxNSIgcj0iNiIgZmlsbD0id2hpdGUiLz4KPHBhdGggZD0iTTMwIDMzQzMwIDI3LjQ3NzIgMjUuNTIyOCAyMyAyMCAyM0MxNC40NzcyIDIzIDEwIDI3LjQ3NzIgMTAgMzNIMzBaIiBmaWxsPSJ3aGl0ZSIvPgo8L3N2Zz4K'; }}
+                  />
                 </div>
               </div>
               <div className="flex-1">

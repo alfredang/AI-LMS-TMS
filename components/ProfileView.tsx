@@ -17,7 +17,7 @@ import { ThemeMode, getCurrentTheme, applyTheme } from '@utils/colorUtils';
 
 
 // Constants
-const inputClasses = "block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent";
+const inputClasses = "block w-full px-3 py-2 text-on-surface bg-surface border border-default rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent";
 
 // Profile data hook
 const useProfileData = () => {

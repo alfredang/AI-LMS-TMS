@@ -128,11 +128,10 @@ const TrainerAttendanceDashboard: React.FC = () => {
   const [manualPage, setManualPage]                    = useState(1);
   const MANUAL_PAGE_SIZE = 5;
 
-  const [showCompletedCourses, setShowCompletedCourses] = useState(false);
-
   const today = new Date(new Date().toDateString());
-  const activeCourses    = courses.filter(c => !c.endDate || new Date(c.endDate) >= today);
-  const completedCourses = courses.filter(c => c.endDate && new Date(c.endDate) < today);
+  const activeCourses = courses
+    .filter(c => !c.endDate || new Date(c.endDate) >= today)
+    .sort((a, b) => new Date(a.startDate ?? '').getTime() - new Date(b.startDate ?? '').getTime());
 
   const selectedCourse = courses.find(c => c.courseRunId === selectedCourseRunId) ?? null;
 
@@ -543,24 +542,11 @@ const TrainerAttendanceDashboard: React.FC = () => {
                     disabled={isFetchingSessions}
                   >
                     <option value="" disabled>— Select a class —</option>
-                    {activeCourses.length > 0 && (
-                      <optgroup label="── Active ──">
-                        {activeCourses.map(c => (
-                          <option key={c.courseRunId} value={c.courseRunId}>
-                            {c.title} | Run: {c.courseRunCode} | {c.courseCode}
-                          </option>
-                        ))}
-                      </optgroup>
-                    )}
-                    {showCompletedCourses && completedCourses.length > 0 && (
-                      <optgroup label="── Completed ──">
-                        {completedCourses.map(c => (
-                          <option key={c.courseRunId} value={c.courseRunId}>
-                            {c.title} | Run: {c.courseRunCode} | {c.courseCode} | Completed Class
-                          </option>
-                        ))}
-                      </optgroup>
-                    )}
+                    {activeCourses.map(c => (
+                      <option key={c.courseRunId} value={c.courseRunId}>
+                        {c.title} | Run: {c.courseRunCode} | {c.courseCode}
+                      </option>
+                    ))}
                   </select>
                   <span className="absolute right-2 top-1/2 -translate-y-1/2 text-muted pointer-events-none text-xs">▼</span>
                 </div>
@@ -585,19 +571,6 @@ const TrainerAttendanceDashboard: React.FC = () => {
                 </button>
               )}
             </div>
-            {completedCourses.length > 0 && (
-              <label className="flex items-center gap-1.5 mt-1.5 cursor-pointer w-fit">
-                <input
-                  type="checkbox"
-                  checked={showCompletedCourses}
-                  onChange={e => setShowCompletedCourses(e.target.checked)}
-                  className="w-3.5 h-3.5 accent-primary"
-                />
-                <span className="text-xs text-on-surface-secondary">
-                  Show completed classes ({completedCourses.length})
-                </span>
-              </label>
-            )}
           </div>
 
           {/* Session dropdown — shown after sessions load */}
@@ -945,7 +918,7 @@ const TrainerAttendanceDashboard: React.FC = () => {
                     <td className="px-3 py-3 text-on-surface-secondary font-mono whitespace-nowrap">{nric ? (showEnrolNric ? nric : maskedNric) : '—'}</td>
                     <td className="px-3 py-3 text-on-surface-secondary">{trainee?.email?.full || '—'}</td>
                     <td className="px-3 py-3 text-on-surface-secondary whitespace-nowrap">{trainee?.sponsorshipType || '—'}</td>
-                    <td className="px-3 py-3 text-on-surface-secondary">{trainee?.employer?.name || '—'}</td>
+                    <td className="px-3 py-3 text-on-surface-secondary whitespace-nowrap">{trainee?.employer?.name || '—'}</td>
                     <td className="px-3 py-3"><StatusBadge value={enrol?.status || enrol?.enrolmentStatus || '—'} /></td>
                     {/* <td className="px-3 py-3"><StatusBadge value={trainee?.fees?.collectionStatus || '—'} /></td> */}
                     <td className="px-3 py-3 text-on-surface-secondary whitespace-nowrap">{trainee?.enrolmentDate || '—'}</td>

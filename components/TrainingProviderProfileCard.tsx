@@ -627,20 +627,30 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
             setSsgCertFile(null);
             setSsgPrivateKeyFile(null);
 
-            // Update the profile with response data to get correct file URLs
+            // Update only the file URL fields from the server response — do NOT replace the
+            // entire formData, as the server only returns a partial set of fields and would
+            // wipe out colorScheme, apiKeys, etc., and cause the logo to flicker or reset.
             if (result.data && result.data.profile) {
-                setFormData(result.data.profile);
+                const serverProfile = result.data.profile;
+                setFormData(prev => ({
+                    ...prev,
+                    companyLogoUrl:            serverProfile.companyLogoUrl            ?? prev.companyLogoUrl,
+                    invoiceTemplateUrl:        serverProfile.invoiceTemplateUrl        ?? prev.invoiceTemplateUrl,
+                    receiptTemplateUrl:        serverProfile.receiptTemplateUrl        ?? prev.receiptTemplateUrl,
+                    certificateTemplateUrl:    serverProfile.certificateTemplateUrl    ?? prev.certificateTemplateUrl,
+                    proFormaInvoiceTemplateUrl: serverProfile.proFormaInvoiceTemplateUrl ?? prev.proFormaInvoiceTemplateUrl,
+                }));
 
                 // Update the training provider profile in the LMS context for header logo
                 updateTrainingProviderProfile({
-                    companyLogoUrl: result.data.profile.companyLogoUrl,
-                    companyShortname: result.data.profile.companyShortname || result.data.profile.companyName
+                    companyLogoUrl: serverProfile.companyLogoUrl,
+                    companyShortname: serverProfile.companyShortname || serverProfile.companyName
                 });
 
                 // Update the current user profile so the profile dropdown shows the same image
                 updateCurrentUserProfile({
-                    profilePictureUrl: result.data.profile.companyLogoUrl,
-                    name: result.data.profile.companyName
+                    profilePictureUrl: serverProfile.companyLogoUrl,
+                    name: serverProfile.companyName
                 });
 
                 // Re-apply the color scheme after successful save
@@ -651,7 +661,8 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
             }
 
             // Update the profile with new data and exit edit mode
-            onUpdate(profile.id, formData);
+            // Note: pass the merged result so the parent gets the server-confirmed file URLs
+            onUpdate(profile.id, { ...formData, ...(result.data?.profile ?? {}) });
             setIsEditing(false);
 
             // Show success message (you can add toast notification here)

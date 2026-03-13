@@ -6,7 +6,7 @@ import { getApiUrl, getUploadUrl, getDeleteFileUrl, stripBaseUrl, getFileUrl } f
 import { ThemeMode, getCurrentTheme, applyTheme } from '@utils/colorUtils';
 
 // CSS classes for inputs
-const inputClasses = "block w-full px-3 py-2 text-gray-900 bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-500";
+const inputClasses = "block w-full px-3 py-2 text-on-surface bg-surface border border-default rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent";
 
 const ProfileBioItem: React.FC<{ label: string; value: React.ReactNode }> = ({ label, value }) => (
     <div>
