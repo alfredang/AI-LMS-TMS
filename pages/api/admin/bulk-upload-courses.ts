@@ -37,40 +37,7 @@ interface CourseRow {
   description?: string;
   course_outline?: string;
   is_utap_eligible?: boolean | string | number;
-  trainers?: string;
 }
-
-// Parse trainer data from mixed formats, e.g.:
-//   "Name [email1;email2], Name [email3], bare@email.com, Name [unclosed@email.com"
-// Returns an array of email groups — one group per trainer.
-// Emails inside the same [...] are grouped (same trainer with multiple emails).
-// Bare emails (no brackets) each become their own single-email group.
-// Handles unclosed brackets too.
-const parseTrainerEmailGroups = (raw: string | undefined): string[][] => {
-  if (!raw) return [];
-
-  const groups: string[][] = [];
-
-  // Remove all bracket blocks (closed and unclosed), collecting their email groups.
-  // \[([^\]]*)\]? matches "[" + content + optional "]"
-  const withoutBrackets = raw.replace(/\[([^\]]*)\]?/g, (_match, inner) => {
-    const emails = inner
-      .split(';')
-      .map((e: string) => e.trim().toLowerCase())
-      .filter((e: string) => e.includes('@'));
-    if (emails.length > 0) groups.push(emails);
-    return ' '; // replace with space so surrounding text doesn't merge
-  });
-
-  // Extract any remaining bare emails not inside brackets
-  const emailRegex = /[\w.+\-]+@[\w.\-]+\.\w+/g;
-  let m;
-  while ((m = emailRegex.exec(withoutBrackets)) !== null) {
-    groups.push([m[0].toLowerCase()]);
-  }
-
-  return groups;
-};
 
 const toFloat = (v: any): number | null => {
   const n = parseFloat(String(v ?? ''));
@@ -96,60 +63,6 @@ const toText = (v: any): string | null => {
   return s || null;
 };
 
-// Associate trainers with a course by email lookup.
-// Replaces existing associations for this course, returns unmatched emails.
-// hasSecondaryEmail: pass result of one-time column check done before the main loop.
-async function associateTrainers(
-  client: any,
-  courseId: string | undefined,
-  trainerRaw: string | undefined,
-  hasSecondaryEmail: boolean
-): Promise<string[]> {
-  if (!courseId || !trainerRaw) return [];
-
-  const emailGroups = parseTrainerEmailGroups(trainerRaw);
-  if (emailGroups.length === 0) return [];
-
-  // For each trainer (group of emails), try each email until a match is found.
-  // If ANY email in the group matches (primary or secondary), the trainer is found.
-  const unmatched: string[] = [];
-  const matchedIds: string[] = [];
-
-  for (const emailGroup of emailGroups) {
-    let foundId: string | null = null;
-
-    for (const email of emailGroup) {
-      const query = hasSecondaryEmail
-        ? 'SELECT id FROM app_user WHERE LOWER(email) = $1 OR LOWER(secondary_email) = $1'
-        : 'SELECT id FROM app_user WHERE LOWER(email) = $1';
-      const res = await client.query(query, [email]);
-      if (res.rows.length > 0) {
-        foundId = res.rows[0].id;
-        break;
-      }
-    }
-
-    if (foundId) {
-      matchedIds.push(foundId);
-    } else {
-      // Show all emails that were tried so the admin knows exactly what was searched
-      unmatched.push(emailGroup.join(' / '));
-    }
-  }
-
-  if (matchedIds.length > 0) {
-    // Delete old associations then bulk-insert new ones in a single query
-    await client.query('DELETE FROM course_trainer WHERE course_id = $1', [courseId]);
-    const placeholders = matchedIds.map((_, i) => `($1, $${i + 2})`).join(', ');
-    await client.query(
-      `INSERT INTO course_trainer (course_id, trainer_id) VALUES ${placeholders} ON CONFLICT DO NOTHING`,
-      [courseId, ...matchedIds]
-    );
-  }
-
-  return unmatched;
-}
-
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ success: false, message: 'Method not allowed' });
@@ -166,7 +79,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     title: string;
     action: 'created' | 'updated' | 'failed';
     message: string;
-    unmatchedTrainers?: string[];
   }> = [];
 
   let created = 0;
@@ -174,16 +86,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   let failed = 0;
 
   const client = await pool.connect();
-
-  // Check once whether secondary_email column exists (safe fallback if migration not yet run)
-  let hasSecondaryEmail = false;
-  try {
-    const colCheck = await client.query(`
-      SELECT 1 FROM information_schema.columns
-      WHERE table_schema = 'public' AND table_name = 'app_user' AND column_name = 'secondary_email'
-    `);
-    hasSecondaryEmail = colCheck.rows.length > 0;
-  } catch (_) { /* ignore */ }
 
   try {
     for (const course of courses) {
@@ -273,16 +175,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             [...values, course_code.trim()]
           );
 
-          const courseId = existing.rows[0]?.id;
-
           await client.query('COMMIT');
 
-          const unmatched = await associateTrainers(client, courseId, course.trainers, hasSecondaryEmail);
-          results.push({
-            course_code, title, action: 'updated',
-            message: 'Course updated successfully.',
-            unmatchedTrainers: unmatched.length ? unmatched : undefined,
-          });
+          results.push({ course_code, title, action: 'updated', message: 'Course updated successfully.' });
           updated++;
         } else {
           const insertResult = await client.query(
@@ -308,16 +203,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             [...values, course_code.trim()]
           );
 
-          const courseId = insertResult.rows[0]?.id;
-
           await client.query('COMMIT');
 
-          const unmatched = await associateTrainers(client, courseId, course.trainers, hasSecondaryEmail);
-          results.push({
-            course_code, title, action: 'created',
-            message: 'Course created successfully.',
-            unmatchedTrainers: unmatched.length ? unmatched : undefined,
-          });
+          results.push({ course_code, title, action: 'created', message: 'Course created successfully.' });
           created++;
         }
       } catch (rowError) {

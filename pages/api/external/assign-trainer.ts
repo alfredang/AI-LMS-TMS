@@ -270,14 +270,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       [trainer.id, trainer.full_name, trainer.email, courseRunUuid]
     );
 
-    // ── Upsert course_trainer (many-to-many) ────────────────────────────────
-    await client.query(
-      `INSERT INTO course_trainer (course_id, trainer_id)
-       VALUES ($1, $2)
-       ON CONFLICT DO NOTHING`,
-      [courseId, trainer.id]
-    );
-
     await client.query('COMMIT');
 
     console.log(`✅ [${action}] ${trainer.email} → run ${course_run_id}${raCode ? ` (RA: ${raCode})` : ''}`);

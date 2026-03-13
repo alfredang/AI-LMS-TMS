@@ -40,7 +40,6 @@ interface CourseRow {
   description?: string;
   course_outline?: string;
   is_utap_eligible?: boolean | string | number;
-  trainers?: string;
 }
 
 type ResultEntry = {
@@ -48,7 +47,6 @@ type ResultEntry = {
   title: string;
   action: 'created' | 'updated' | 'failed';
   message: string;
-  unmatchedTrainers?: string[];
 };
 
 type ViewState = 'upload' | 'processing' | 'results';
@@ -151,7 +149,6 @@ export const BulkUploadCoursesView: React.FC<BulkUploadCoursesViewProps> = ({ on
             after_mces_funding: row['After MCES Funding'] || row['after_mces_funding'],
             num_of_days: row['Days'] || row['num_of_days'],
             num_of_trainers: row['Number of Trainers'] || row['# of Trainers'] || row['num_of_trainers'],
-            trainers: str(['Trainers', 'trainers']),
             course_link: str(['Course Link', 'course_link']),
             assessment_record_link: str(['Assessment Record Link', 'assessment_record_link']),
             courseware_link: str(['Courseware', 'Courseware Link', 'courseware_link']),
@@ -310,7 +307,7 @@ export const BulkUploadCoursesView: React.FC<BulkUploadCoursesViewProps> = ({ on
           <div className="w-full max-w-md text-center space-y-6">
             <div className="animate-spin rounded-full h-14 w-14 border-4 border-blue-200 border-t-blue-600 mx-auto" />
             <div>
-              <p className="text-lg font-semibold text-gray-900 dark:text-white">Uploading courses and assigning trainers to their associated courses...</p>
+              <p className="text-lg font-semibold text-gray-900 dark:text-white">Uploading courses...</p>
               <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Please do not close this page.</p>
             </div>
             <div className="space-y-2">
@@ -397,17 +394,6 @@ export const BulkUploadCoursesView: React.FC<BulkUploadCoursesViewProps> = ({ on
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
                         <span>{r.message}</span>
-                        {r.unmatchedTrainers && r.unmatchedTrainers.length > 0 && (
-                          <div className="mt-1.5 p-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded text-xs text-amber-700 dark:text-amber-400">
-                            <span className="font-semibold">⚠ {r.unmatchedTrainers.length} trainer(s) not found in system (email not registered):</span>
-                            <ul className="mt-1 space-y-0.5 list-disc list-inside">
-                              {r.unmatchedTrainers.map((email, i) => (
-                                <li key={i} className="font-mono">Searched: {email}</li>
-                              ))}
-                            </ul>
-                            <p className="mt-1.5 italic">Or Go to the Excel sheet, find the Trainers column to make an amendment — usually missing a bracket around the email. Correct format: <span className="font-mono not-italic">[email]</span> or <span className="font-mono not-italic">[email1;email2]</span>, not <span className="font-mono not-italic">[email1,email2]</span>.</p>
-                          </div>
-                        )}
                       </td>
                     </tr>
                   ))}

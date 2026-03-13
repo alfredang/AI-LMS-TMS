@@ -14,6 +14,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       SELECT
         u.id,
         u.email,
+        u.secondary_email,
         u.full_name,
         u.account_status,
         COALESCE(
@@ -31,8 +32,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         ) AS roles
       FROM public.app_user u
       LEFT JOIN public.user_role_map urm ON u.id = urm.user_id
-      WHERE u.account_status = 'active'
-      GROUP BY u.id, u.email, u.full_name, u.account_status
+      GROUP BY u.id, u.email, u.secondary_email, u.full_name, u.account_status
       ORDER BY u.full_name ASC
     `;
 

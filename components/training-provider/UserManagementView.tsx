@@ -4,31 +4,35 @@ import { Button } from '../ui/Button';
 import { Icon, IconName } from '../ui/Icon';
 import { authService } from '@lib/services/authService';
 
-const inputClasses = "block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-500";
+const inputClasses = "block w-full px-3 py-2 text-on-surface bg-surface border border-default rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent";
 
 const ALL_ROLES = ['Learner', 'Trainer', 'Developer', 'Admin', 'Training Provider'] as const;
 
-// Role badge colors
-const getRoleBadgeColor = (role: string) => {
+// Role badge config
+const getRoleBadge = (role: string): { classes: string; dot: string } => {
     switch (role) {
         case 'Admin':
-            return 'bg-red-100 text-red-800 border-red-200';
+            return { classes: 'bg-red-50 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-300 dark:border-red-700', dot: 'bg-red-500' };
         case 'Training Provider':
-            return 'bg-purple-100 text-purple-800 border-purple-200';
+            return { classes: 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-900/30 dark:text-purple-300 dark:border-purple-700', dot: 'bg-purple-500' };
         case 'Developer':
-            return 'bg-blue-100 text-blue-800 border-blue-200';
+            return { classes: 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-700', dot: 'bg-blue-500' };
         case 'Trainer':
-            return 'bg-green-100 text-green-800 border-green-200';
+            return { classes: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-700', dot: 'bg-emerald-500' };
         case 'Learner':
-            return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+            return { classes: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-700', dot: 'bg-amber-500' };
         default:
-            return 'bg-gray-100 text-gray-800 border-gray-200';
+            return { classes: 'bg-gray-100 text-gray-700 border-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600', dot: 'bg-gray-400' };
     }
 };
+
+// Legacy helper for places that only need className string
+const getRoleBadgeColor = (role: string) => getRoleBadge(role).classes;
 
 interface UserData {
     id: string;
     email: string;
+    secondary_email?: string;
     full_name: string;
     account_status: string;
     roles: string[];
@@ -54,10 +58,19 @@ const UserManagementView: React.FC = () => {
     const [sortColumn, setSortColumn] = useState('');
     const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
 
+    // Role filter state
+    const [showRoleFilterDropdown, setShowRoleFilterDropdown] = useState(false);
+    const [selectedRoleFilters, setSelectedRoleFilters] = useState<string[]>([]);
+
+    // Account status filter checkboxes
+    const [showActive, setShowActive] = useState(true);
+    const [showDisabled, setShowDisabled] = useState(false);
+
     // Edit role modal state
     const [editingUser, setEditingUser] = useState<UserData | null>(null);
     const [editRoles, setEditRoles] = useState<string[]>([]);
     const [editAccountStatus, setEditAccountStatus] = useState<string>('active');
+    const [editFullName, setEditFullName] = useState<string>('');
     const [isSaving, setIsSaving] = useState(false);
 
     // Add User Modal State
@@ -70,27 +83,7 @@ const UserManagementView: React.FC = () => {
     });
     const [isAddingUser, setIsAddingUser] = useState(false);
 
-    // Add Training Provider Modal State
-    const [isAddProviderModalOpen, setIsAddProviderModalOpen] = useState(false);
-    const [newProvider, setNewProvider] = useState({
-        ownerName: '',
-        ownerEmail: '',
-        ownerPassword: 'password123',
-        ownerPhone: '',
-        companyName: '',
-        companyShortname: '',
-        uen: '',
-        companyAddress: '',
-        contactPersonName: '',
-        contactTel: '',
-        colorScheme: '#3B82F6'
-    });
-    const [isAddingProvider, setIsAddingProvider] = useState(false);
-    const [showPassword, setShowPassword] = useState(false);
-    const [companyLogoFile, setCompanyLogoFile] = useState<File | null>(null);
-    const [companyLogoPreview, setCompanyLogoPreview] = useState<string | null>(null);
-
-    // Delete User State
+    // Disable User State
     const [deletingUser, setDeletingUser] = useState<UserData | null>(null);
     const [isDeletingUser, setIsDeletingUser] = useState(false);
     const [deletingUserOrgInfo, setDeletingUserOrgInfo] = useState<{
@@ -98,6 +91,10 @@ const UserManagementView: React.FC = () => {
         companyName: string;
         uen: string;
     } | null>(null);
+
+    // Hard Delete User State
+    const [hardDeletingUser, setHardDeletingUser] = useState<UserData | null>(null);
+    const [isHardDeletingUser, setIsHardDeletingUser] = useState(false);
 
     const filterableColumns = [
         { value: 'full_name', label: 'Full Name' },
@@ -153,6 +150,16 @@ const UserManagementView: React.FC = () => {
 
     // Filter users
     const filteredUsers = users.filter(user => {
+        // Apply account status checkboxes
+        const isActive = user.account_status === 'active';
+        if (isActive && !showActive) return false;
+        if (!isActive && !showDisabled) return false;
+
+        // Apply role filter checkboxes
+        if (selectedRoleFilters.length > 0) {
+            if (!user.roles.some(r => selectedRoleFilters.includes(r))) return false;
+        }
+
         // Apply column-based filter
         if (activeFilter) {
             if (activeFilter.column === 'roles') {
@@ -174,6 +181,7 @@ const UserManagementView: React.FC = () => {
         return (
             (user.full_name || '').toLowerCase().includes(query) ||
             (user.email || '').toLowerCase().includes(query) ||
+            (user.secondary_email || '').toLowerCase().includes(query) ||
             (user.roles || []).join(', ').toLowerCase().includes(query)
         );
     });
@@ -254,6 +262,7 @@ const UserManagementView: React.FC = () => {
         setEditingUser(user);
         setEditRoles([...user.roles]);
         setEditAccountStatus(user.account_status);
+        setEditFullName(user.full_name || '');
     };
 
     // Toggle a role in the edit list
@@ -288,6 +297,7 @@ const UserManagementView: React.FC = () => {
                     roles: editRoles,
                     accountStatus: editAccountStatus,
                     currentUserId: currentUserId,
+                    full_name: editFullName,
                 }),
             });
 
@@ -296,7 +306,7 @@ const UserManagementView: React.FC = () => {
                 // Update local state
                 setUsers(prev =>
                     prev.map(u =>
-                        u.id === editingUser.id ? { ...u, roles: editRoles, account_status: editAccountStatus } : u
+                        u.id === editingUser.id ? { ...u, roles: editRoles, account_status: editAccountStatus, full_name: editFullName.trim() || u.full_name } : u
                     )
                 );
                 setEditingUser(null);
@@ -310,77 +320,25 @@ const UserManagementView: React.FC = () => {
         }
     };
 
-    // Handle Add Training Provider
-    const handleAddProvider = async () => {
-        // Validate required fields
-        if (!newProvider.ownerName || !newProvider.ownerEmail || !newProvider.ownerPassword ||
-            !newProvider.companyName || !newProvider.uen || !newProvider.companyAddress ||
-            !newProvider.contactPersonName || !newProvider.contactTel) {
-            alert('Please fill in all required fields');
-            return;
-        }
-
-        // Validate email format
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!emailRegex.test(newProvider.ownerEmail)) {
-            alert('Please enter a valid email address');
-            return;
-        }
-
-        setIsAddingProvider(true);
+    // Handle Hard Delete User
+    const handleHardDeleteUser = async () => {
+        if (!hardDeletingUser) return;
+        setIsHardDeletingUser(true);
         try {
-            // Use FormData if logo file is present
-            let response;
-            if (companyLogoFile) {
-                const formData = new FormData();
-                formData.append('companyLogo', companyLogoFile);
-                formData.append('data', JSON.stringify(newProvider));
-
-                response = await fetch('/api/training-provider/add-organization', {
-                    method: 'POST',
-                    body: formData
-                });
-            } else {
-                response = await fetch('/api/training-provider/add-organization', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(newProvider)
-                });
-            }
-
-            const result = await response.json();
-
-            if (!response.ok || !result.success) {
-                throw new Error(result.error || 'Failed to add training provider');
-            }
-
-            alert(`Training provider organization created successfully!\n\nOwner Account:\nEmail: ${newProvider.ownerEmail}\nPassword: ${newProvider.ownerPassword}\n\nPlease save these credentials.`);
-
-            // Reset form
-            setNewProvider({
-                ownerName: '',
-                ownerEmail: '',
-                ownerPassword: 'password123',
-                ownerPhone: '',
-                companyName: '',
-                companyShortname: '',
-                uen: '',
-                companyAddress: '',
-                contactPersonName: '',
-                contactTel: '',
-                colorScheme: '#3B82F6'
+            const response = await fetch('/api/training-provider/hard-delete-user', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: hardDeletingUser.id }),
             });
-            setCompanyLogoFile(null);
-            setCompanyLogoPreview(null);
-            setIsAddProviderModalOpen(false);
-
-            // Refresh users list
-            fetchUsers();
+            const result = await response.json();
+            if (!result.success) throw new Error(result.message || 'Failed to delete user');
+            await fetchUsers();
+            setHardDeletingUser(null);
+            alert('User permanently deleted.');
         } catch (err) {
-            console.error('Error adding training provider:', err);
-            alert(`Failed to add training provider: ${err instanceof Error ? err.message : 'Unknown error'}`);
+            alert(`Failed to delete user: ${err instanceof Error ? err.message : 'Unknown error'}`);
         } finally {
-            setIsAddingProvider(false);
+            setIsHardDeletingUser(false);
         }
     };
 
@@ -475,6 +433,27 @@ const UserManagementView: React.FC = () => {
         }
     };
 
+    // Handle Enable User (re-activate a disabled account)
+    const handleEnableUser = async (user: UserData) => {
+        try {
+            const response = await fetch('/api/training-provider/update-user-roles', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    userId: user.id,
+                    roles: user.roles,
+                    accountStatus: 'active',
+                    currentUserId,
+                }),
+            });
+            const result = await response.json();
+            if (!result.success) throw new Error(result.message || 'Failed to enable user');
+            setUsers(prev => prev.map(u => u.id === user.id ? { ...u, account_status: 'active' } : u));
+        } catch (err) {
+            alert(`Failed to enable user: ${err instanceof Error ? err.message : 'Unknown error'}`);
+        }
+    };
+
     // Handle Delete User
     const handleDeleteUser = async () => {
         if (!deletingUser) return;
@@ -534,7 +513,7 @@ const UserManagementView: React.FC = () => {
                             className={inputClasses}
                         />
                     </div>
-                    <div className="flex flex-col sm:flex-row gap-3">
+                    <div className="flex flex-col sm:flex-row gap-3 items-center flex-wrap">
                         <Button onClick={fetchUsers} disabled={isLoading} className="w-full sm:w-auto">
                             {isLoading ? (
                                 <div className="flex items-center justify-center">
@@ -552,10 +531,24 @@ const UserManagementView: React.FC = () => {
                             <Icon name={IconName.Plus} className="w-4 h-4 mr-2" />
                             Add User
                         </Button>
-                        <Button onClick={() => setIsAddProviderModalOpen(true)} className="bg-purple-600 hover:bg-purple-700 w-full sm:w-auto">
-                            <Icon name={IconName.Plus} className="w-4 h-4 mr-2" />
-                            Add Training Provider
-                        </Button>
+                        <label className="flex items-center gap-2 text-sm font-medium text-on-surface cursor-pointer">
+                            <input
+                                type="checkbox"
+                                checked={showActive}
+                                onChange={(e) => { setShowActive(e.target.checked); setCurrentPage(1); }}
+                                className="w-4 h-4 rounded border-default text-primary focus:ring-primary"
+                            />
+                            Active accounts
+                        </label>
+                        <label className="flex items-center gap-2 text-sm font-medium text-on-surface cursor-pointer">
+                            <input
+                                type="checkbox"
+                                checked={showDisabled}
+                                onChange={(e) => { setShowDisabled(e.target.checked); setCurrentPage(1); }}
+                                className="w-4 h-4 rounded border-default text-primary focus:ring-primary"
+                            />
+                            Disabled accounts
+                        </label>
                     </div>
                 </div>
                 {error && <p className="text-red-500 text-sm mt-3">{error}</p>}
@@ -589,7 +582,7 @@ const UserManagementView: React.FC = () => {
                         {/* Filter Button */}
                         <div className="relative">
                             <button
-                                onClick={() => { setShowFilterDropdown(!showFilterDropdown); setShowSortDropdown(false); }}
+                                onClick={() => { setShowFilterDropdown(!showFilterDropdown); setShowSortDropdown(false); setShowRoleFilterDropdown(false); }}
                                 className="inline-flex items-center px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200"
                             >
                                 <Icon name={IconName.Eye} className="w-4 h-4 mr-1.5" />
@@ -633,10 +626,64 @@ const UserManagementView: React.FC = () => {
                             )}
                         </div>
 
+                        {/* Role Filter Button */}
+                        <div className="relative">
+                            <button
+                                onClick={() => { setShowRoleFilterDropdown(!showRoleFilterDropdown); setShowFilterDropdown(false); setShowSortDropdown(false); }}
+                                className={`inline-flex items-center px-3 py-1.5 text-sm border rounded bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors ${selectedRoleFilters.length > 0 ? 'border-blue-400 text-blue-700 dark:text-blue-300' : 'border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200'}`}
+                            >
+                                <Icon name={IconName.Users} className="w-4 h-4 mr-1.5" />
+                                Roles
+                                {selectedRoleFilters.length > 0 && (
+                                    <span className="ml-1.5 inline-flex items-center justify-center w-4 h-4 text-xs font-bold bg-blue-500 text-white rounded-full">
+                                        {selectedRoleFilters.length}
+                                    </span>
+                                )}
+                            </button>
+                            {showRoleFilterDropdown && (
+                                <div className="absolute left-0 top-full mt-1 w-52 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg z-50 p-3">
+                                    <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">Filter by Role</p>
+                                    <div className="space-y-1">
+                                        {ALL_ROLES.map(role => {
+                                            const badge = getRoleBadge(role);
+                                            const checked = selectedRoleFilters.includes(role);
+                                            return (
+                                                <label key={role} className="flex items-center gap-2.5 px-2 py-1.5 rounded-md cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={checked}
+                                                        onChange={() => {
+                                                            setSelectedRoleFilters(prev =>
+                                                                checked ? prev.filter(r => r !== role) : [...prev, role]
+                                                            );
+                                                            setCurrentPage(1);
+                                                        }}
+                                                        className="w-3.5 h-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                                    />
+                                                    <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 text-xs font-medium rounded-md border ${badge.classes}`}>
+                                                        <span className={`w-1.5 h-1.5 rounded-full ${badge.dot}`} />
+                                                        {role}
+                                                    </span>
+                                                </label>
+                                            );
+                                        })}
+                                    </div>
+                                    {selectedRoleFilters.length > 0 && (
+                                        <button
+                                            onClick={() => { setSelectedRoleFilters([]); setCurrentPage(1); }}
+                                            className="mt-2 w-full px-2 py-1 text-xs text-gray-500 hover:text-red-600 dark:text-gray-400 dark:hover:text-red-400 border border-dashed border-gray-300 dark:border-gray-600 rounded hover:border-red-300 transition-colors"
+                                        >
+                                            Clear role filter
+                                        </button>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+
                         {/* Sort Button */}
                         <div className="relative">
                             <button
-                                onClick={() => { setShowSortDropdown(!showSortDropdown); setShowFilterDropdown(false); }}
+                                onClick={() => { setShowSortDropdown(!showSortDropdown); setShowFilterDropdown(false); setShowRoleFilterDropdown(false); }}
                                 className="inline-flex items-center px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200"
                             >
                                 <Icon name={IconName.ChevronDown} className="w-4 h-4 mr-1.5" />
@@ -711,25 +758,33 @@ const UserManagementView: React.FC = () => {
                                                         </span>
                                                     )}
                                                 </td>
-                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
-                                                    {user.email || 'N/A'}
+                                                <td className="px-4 py-3 text-sm text-gray-500 dark:text-gray-200">
+                                                    <div>{user.email || 'N/A'}</div>
+                                                    {user.secondary_email && (
+                                                        <div className="text-xs text-gray-400 dark:text-gray-400 mt-0.5">{user.secondary_email}</div>
+                                                    )}
                                                 </td>
                                                 <td className="px-4 py-3">
-                                                    <div className="flex flex-wrap gap-1">
+                                                    <div className="flex flex-wrap gap-1.5">
                                                         {user.roles && user.roles.length > 0 ? (
                                                             user.roles.length === ALL_ROLES.length ? (
-                                                                <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full border bg-indigo-100 text-indigo-800 border-indigo-200">
+                                                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md border bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-900/30 dark:text-indigo-300 dark:border-indigo-700">
+                                                                    <span className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
                                                                     All Roles
                                                                 </span>
                                                             ) : (
-                                                                user.roles.map((role) => (
-                                                                    <span
-                                                                        key={role}
-                                                                        className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full border ${getRoleBadgeColor(role)}`}
-                                                                    >
-                                                                        {role}
-                                                                    </span>
-                                                                ))
+                                                                user.roles.map((role) => {
+                                                                    const badge = getRoleBadge(role);
+                                                                    return (
+                                                                        <span
+                                                                            key={role}
+                                                                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md border ${badge.classes}`}
+                                                                        >
+                                                                            <span className={`w-1.5 h-1.5 rounded-full ${badge.dot}`} />
+                                                                            {role}
+                                                                        </span>
+                                                                    );
+                                                                })
                                                             )
                                                         ) : (
                                                             <span className="text-gray-400 text-sm">No roles</span>
@@ -746,21 +801,38 @@ const UserManagementView: React.FC = () => {
                                                 </td>
                                                 <td className="px-4 py-3 whitespace-nowrap">
                                                     {user.id === currentUserId ? (
-                                                        <span className="text-xs text-gray-400 italic">Cannot edit own roles</span>
+                                                        <span className="text-xs text-gray-400 italic">Cannot edit self</span>
                                                     ) : (
-                                                        <div className="flex gap-2">
+                                                        <div className="flex items-center gap-2">
                                                             <button
                                                                 onClick={() => openEditModal(user)}
-                                                                className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 border border-blue-300 dark:border-blue-600 rounded hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors"
+                                                                className="inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 border border-blue-300 dark:border-blue-600 rounded-md hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors"
                                                             >
-                                                                <Icon name={IconName.Edit} className="w-4 h-4 mr-1" />
+                                                                <Icon name={IconName.Edit} className="w-3.5 h-3.5" />
                                                                 Edit
                                                             </button>
+                                                            {user.account_status === 'active' ? (
+                                                                <button
+                                                                    onClick={() => handleOpenDeleteModal(user)}
+                                                                    className="inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium text-yellow-700 hover:text-yellow-900 dark:text-yellow-400 dark:hover:text-yellow-300 border border-yellow-400 dark:border-yellow-600 rounded-md hover:bg-yellow-50 dark:hover:bg-yellow-900/30 transition-colors"
+                                                                >
+                                                                    <Icon name={IconName.Delete} className="w-3.5 h-3.5" />
+                                                                    Disable
+                                                                </button>
+                                                            ) : (
+                                                                <button
+                                                                    onClick={() => handleEnableUser(user)}
+                                                                    className="inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium text-green-700 hover:text-green-900 dark:text-green-400 dark:hover:text-green-300 border border-green-400 dark:border-green-600 rounded-md hover:bg-green-50 dark:hover:bg-green-900/30 transition-colors"
+                                                                >
+                                                                    <Icon name={IconName.Check} className="w-3.5 h-3.5" />
+                                                                    Enable
+                                                                </button>
+                                                            )}
                                                             <button
-                                                                onClick={() => handleOpenDeleteModal(user)}
-                                                                className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 border border-red-300 dark:border-red-600 rounded hover:bg-red-50 dark:hover:bg-red-900/30 transition-colors"
+                                                                onClick={() => setHardDeletingUser(user)}
+                                                                className="inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 border border-red-300 dark:border-red-600 rounded-md hover:bg-red-50 dark:hover:bg-red-900/30 transition-colors"
                                                             >
-                                                                <Icon name={IconName.Delete} className="w-4 h-4 mr-1" />
+                                                                <Icon name={IconName.Delete} className="w-3.5 h-3.5" />
                                                                 Delete
                                                             </button>
                                                         </div>
@@ -829,18 +901,31 @@ const UserManagementView: React.FC = () => {
 
             {/* Edit Role Modal */}
             {editingUser && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-2xl w-full max-w-md mx-4">
-                        <div className="p-6 border-b border-gray-200 dark:border-gray-700">
-                            <h3 className="text-lg font-bold text-gray-900 dark:text-white">Edit User Roles</h3>
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-start sm:items-center justify-center z-50 overflow-y-auto p-4">
+                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-2xl w-full max-w-md mx-auto my-auto">
+                        <div className="p-6 border-b border-gray-200 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-800 rounded-t-lg z-10">
+                            <h3 className="text-lg font-bold text-gray-900 dark:text-white">Edit User</h3>
                             <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                                {editingUser.full_name} ({editingUser.email})
+                                {editingUser.email}
                             </p>
                         </div>
-                        <div className="p-6">
+                        <div className="p-6 overflow-y-auto max-h-[60vh]">
+                            {/* Full Name */}
+                            <div className="mb-4">
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Full Name</label>
+                                <input
+                                    type="text"
+                                    value={editFullName}
+                                    onChange={(e) => setEditFullName(e.target.value)}
+                                    className={inputClasses}
+                                    placeholder="Enter full name"
+                                />
+                            </div>
                             <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Select roles for this user:</p>
                             <div className="space-y-2">
-                                {ALL_ROLES.map((role) => (
+                                {ALL_ROLES.map((role) => {
+                                    const badge = getRoleBadge(role);
+                                    return (
                                     <label
                                         key={role}
                                         className={`flex items-center p-3 rounded-lg border cursor-pointer transition-colors ${editRoles.includes(role)
@@ -854,11 +939,13 @@ const UserManagementView: React.FC = () => {
                                             onChange={() => toggleEditRole(role)}
                                             className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
                                         />
-                                        <span className={`ml-3 inline-flex px-2 py-0.5 text-xs font-semibold rounded-full border ${getRoleBadgeColor(role)}`}>
+                                        <span className={`ml-3 inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md border ${badge.classes}`}>
+                                            <span className={`w-1.5 h-1.5 rounded-full ${badge.dot}`} />
                                             {role}
                                         </span>
                                     </label>
-                                ))}
+                                    );
+                                })}
                             </div>
 
                             {/* All Roles shortcut */}
@@ -907,7 +994,7 @@ const UserManagementView: React.FC = () => {
                                 </div>
                             </div>
                         </div>
-                        <div className="p-6 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3">
+                        <div className="p-6 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3 sticky bottom-0 bg-white dark:bg-gray-800 rounded-b-lg">
                             <button
                                 onClick={() => setEditingUser(null)}
                                 className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
@@ -991,8 +1078,10 @@ const UserManagementView: React.FC = () => {
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                                     Roles <span className="text-red-500">*</span>
                                 </label>
-                                <div className="space-y-2 max-h-40 overflow-y-auto border border-gray-200 dark:border-gray-700 rounded-md p-3">
-                                    {ALL_ROLES.map((role) => (
+                                <div className="space-y-1.5 max-h-40 overflow-y-auto border border-gray-200 dark:border-gray-700 rounded-md p-3">
+                                    {ALL_ROLES.map((role) => {
+                                        const badge = getRoleBadge(role);
+                                        return (
                                         <label
                                             key={role}
                                             className={`flex items-center p-2 rounded-lg cursor-pointer transition-colors ${newUser.roles.includes(role)
@@ -1006,11 +1095,13 @@ const UserManagementView: React.FC = () => {
                                                 onChange={() => toggleNewUserRole(role)}
                                                 className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
                                             />
-                                            <span className={`ml-3 inline-flex px-2 py-0.5 text-xs font-semibold rounded-full border ${getRoleBadgeColor(role)}`}>
+                                            <span className={`ml-3 inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md border ${badge.classes}`}>
+                                                <span className={`w-1.5 h-1.5 rounded-full ${badge.dot}`} />
                                                 {role}
                                             </span>
                                         </label>
-                                    ))}
+                                        );
+                                    })}
                                 </div>
                             </div>
                         </div>
@@ -1041,298 +1132,26 @@ const UserManagementView: React.FC = () => {
                 </div>
             )}
 
-            {/* Add Training Provider Modal */}
-            {isAddProviderModalOpen && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 overflow-y-auto">
-                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-2xl w-full max-w-2xl mx-4 my-8 max-h-[90vh] overflow-y-auto">
-                        <div className="p-6 border-b border-gray-200 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-800">
-                            <h3 className="text-xl font-bold text-gray-900 dark:text-white">Add New Training Provider Organization</h3>
-                            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                                Create a new training provider company with an owner account (All roles assigned)
-                            </p>
-                        </div>
-                        <div className="p-6 space-y-6">
-                            {/* Owner Account Section */}
-                            <div className="space-y-4">
-                                <h4 className="text-lg font-semibold text-gray-900 dark:text-white border-b pb-2">Owner Account Details</h4>
-
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                            Owner Full Name <span className="text-red-500">*</span>
-                                        </label>
-                                        <input
-                                            type="text"
-                                            value={newProvider.ownerName}
-                                            onChange={(e) => setNewProvider({ ...newProvider, ownerName: e.target.value })}
-                                            className={inputClasses}
-                                            placeholder="John Doe"
-                                        />
-                                    </div>
-
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                            Owner Email <span className="text-red-500">*</span>
-                                        </label>
-                                        <input
-                                            type="email"
-                                            value={newProvider.ownerEmail}
-                                            onChange={(e) => setNewProvider({ ...newProvider, ownerEmail: e.target.value })}
-                                            className={inputClasses}
-                                            placeholder="owner@company.com"
-                                        />
-                                    </div>
-
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                            Owner Password <span className="text-red-500">*</span>
-                                        </label>
-                                        <div className="relative">
-                                            <input
-                                                type={showPassword ? "text" : "password"}
-                                                value={newProvider.ownerPassword}
-                                                onChange={(e) => setNewProvider({ ...newProvider, ownerPassword: e.target.value })}
-                                                className={inputClasses + " pr-10"}
-                                                placeholder="Default: password123"
-                                            />
-                                            <button
-                                                type="button"
-                                                onClick={() => setShowPassword(!showPassword)}
-                                                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-                                            >
-                                                {showPassword ? (
-                                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
-                                                    </svg>
-                                                ) : (
-                                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                                                    </svg>
-                                                )}
-                                            </button>
-                                        </div>
-                                    </div>
-
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                            Owner Phone
-                                        </label>
-                                        <input
-                                            type="tel"
-                                            value={newProvider.ownerPhone}
-                                            onChange={(e) => setNewProvider({ ...newProvider, ownerPhone: e.target.value })}
-                                            className={inputClasses}
-                                            placeholder="1234 5678"
-                                        />
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Company Information Section */}
-                            <div className="space-y-4">
-                                <h4 className="text-lg font-semibold text-gray-900 dark:text-white border-b pb-2">Company Information</h4>
-
-                                {/* Company Logo Upload */}
-                                <div className="col-span-full">
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                        Company Logo (Optional)
-                                    </label>
-                                    <div className="flex items-center gap-4">
-                                        {companyLogoPreview && (
-                                            <div className="relative">
-                                                <img
-                                                    src={companyLogoPreview}
-                                                    alt="Logo preview"
-                                                    className="w-20 h-20 object-contain rounded-lg border border-gray-300 dark:border-gray-600"
-                                                />
-                                                <button
-                                                    type="button"
-                                                    onClick={() => {
-                                                        setCompanyLogoFile(null);
-                                                        setCompanyLogoPreview(null);
-                                                    }}
-                                                    className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center hover:bg-red-600"
-                                                >
-                                                    ×
-                                                </button>
-                                            </div>
-                                        )}
-                                        <input
-                                            type="file"
-                                            accept="image/*"
-                                            onChange={(e) => {
-                                                const file = e.target.files?.[0];
-                                                if (file) {
-                                                    setCompanyLogoFile(file);
-                                                    const reader = new FileReader();
-                                                    reader.onloadend = () => {
-                                                        setCompanyLogoPreview(reader.result as string);
-                                                    };
-                                                    reader.readAsDataURL(file);
-                                                }
-                                            }}
-                                            className="text-sm text-gray-500 dark:text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 dark:file:bg-blue-900/20 dark:file:text-blue-400"
-                                        />
-                                    </div>
-                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                        Recommended: Square image, max 5MB
-                                    </p>
-                                </div>
-
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                            Company Name <span className="text-red-500">*</span>
-                                        </label>
-                                        <input
-                                            type="text"
-                                            value={newProvider.companyName}
-                                            onChange={(e) => setNewProvider({ ...newProvider, companyName: e.target.value })}
-                                            className={inputClasses}
-                                            placeholder="ABC Training Centre Pte Ltd"
-                                        />
-                                    </div>
-
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                            Company Short Name
-                                        </label>
-                                        <input
-                                            type="text"
-                                            value={newProvider.companyShortname}
-                                            onChange={(e) => setNewProvider({ ...newProvider, companyShortname: e.target.value })}
-                                            className={inputClasses}
-                                            placeholder="ABC"
-                                        />
-                                    </div>
-
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                            UEN (Unique Entity Number) <span className="text-red-500">*</span>
-                                        </label>
-                                        <input
-                                            type="text"
-                                            value={newProvider.uen}
-                                            onChange={(e) => setNewProvider({ ...newProvider, uen: e.target.value })}
-                                            className={inputClasses}
-                                            placeholder="202012345A"
-                                        />
-                                    </div>
-
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                            Color Scheme
-                                        </label>
-                                        <input
-                                            type="color"
-                                            value={newProvider.colorScheme}
-                                            onChange={(e) => setNewProvider({ ...newProvider, colorScheme: e.target.value })}
-                                            className="h-10 w-full rounded-md border border-gray-300 dark:border-gray-600 cursor-pointer"
-                                        />
-                                    </div>
-
-                                    <div className="md:col-span-2">
-                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                            Company Address <span className="text-red-500">*</span>
-                                        </label>
-                                        <textarea
-                                            value={newProvider.companyAddress}
-                                            onChange={(e) => setNewProvider({ ...newProvider, companyAddress: e.target.value })}
-                                            className={inputClasses}
-                                            placeholder="123 Business Street #01-01, Singapore 123456"
-                                            rows={3}
-                                        />
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Contact Information Section */}
-                            <div className="space-y-4">
-                                <h4 className="text-lg font-semibold text-gray-900 dark:text-white border-b pb-2">Contact Information</h4>
-
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                            Contact Person Name <span className="text-red-500">*</span>
-                                        </label>
-                                        <input
-                                            type="text"
-                                            value={newProvider.contactPersonName}
-                                            onChange={(e) => setNewProvider({ ...newProvider, contactPersonName: e.target.value })}
-                                            className={inputClasses}
-                                            placeholder="Jane Smith"
-                                        />
-                                    </div>
-
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                            Contact Telephone <span className="text-red-500">*</span>
-                                        </label>
-                                        <input
-                                            type="tel"
-                                            value={newProvider.contactTel}
-                                            onChange={(e) => setNewProvider({ ...newProvider, contactTel: e.target.value })}
-                                            className={inputClasses}
-                                            placeholder="6789 0123"
-                                        />
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-                                <p className="text-sm text-blue-800 dark:text-blue-200">
-                                    <strong>Note:</strong> The owner account will be created with ALL roles (Training Provider, Trainer, Developer, Learner, Admin) and full access to manage the organization.
-                                </p>
-                            </div>
-                        </div>
-
-                        <div className="p-6 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3 sticky bottom-0 bg-white dark:bg-gray-800">
-                            <button
-                                onClick={() => setIsAddProviderModalOpen(false)}
-                                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                onClick={handleAddProvider}
-                                disabled={isAddingProvider}
-                                className="px-4 py-2 text-sm font-medium text-white bg-purple-600 rounded-lg hover:bg-purple-700 disabled:bg-purple-400 disabled:cursor-not-allowed transition-colors"
-                            >
-                                {isAddingProvider ? (
-                                    <div className="flex items-center">
-                                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                                        Creating...
-                                    </div>
-                                ) : (
-                                    'Create Training Provider'
-                                )}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Delete User Confirmation Modal */}
+            {/* Disable User Confirmation Modal */}
             {deletingUser && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
                     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-2xl w-full max-w-md mx-4">
                         <div className="p-6 border-b border-gray-200 dark:border-gray-700">
-                            <h3 className="text-lg font-bold text-gray-900 dark:text-white">Delete User</h3>
+                            <h3 className="text-lg font-bold text-gray-900 dark:text-white">Disable User</h3>
                             <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                                Are you sure you want to delete this user?
+                                This will prevent the user from logging in.
                             </p>
                         </div>
                         <div className="p-6">
-                            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 mb-4">
+                            <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4 mb-4">
                                 <div className="flex items-start gap-3">
-                                    <Icon name={IconName.InfoCircle} className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+                                    <Icon name={IconName.InfoCircle} className="w-5 h-5 text-yellow-600 dark:text-yellow-400 flex-shrink-0 mt-0.5" />
                                     <div>
-                                        <p className="text-sm font-semibold text-red-800 dark:text-red-300">
-                                            This action cannot be undone
+                                        <p className="text-sm font-semibold text-yellow-800 dark:text-yellow-300">
+                                            Account will be disabled
                                         </p>
-                                        <p className="text-sm text-red-700 dark:text-red-400 mt-1">
-                                            All data associated with <strong>{deletingUser.full_name}</strong> ({deletingUser.email}) will be permanently deleted.
+                                        <p className="text-sm text-yellow-700 dark:text-yellow-400 mt-1">
+                                            <strong>{deletingUser.full_name}</strong> ({deletingUser.email}) will no longer be able to log in. Their data is preserved and can be re-enabled via Edit.
                                         </p>
                                         {deletingUserOrgInfo?.isLastMember && (
                                             <div className="mt-3 pt-3 border-t border-red-300 dark:border-red-700">
@@ -1361,9 +1180,61 @@ const UserManagementView: React.FC = () => {
                             <button
                                 onClick={handleDeleteUser}
                                 disabled={isDeletingUser}
-                                className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:bg-red-400 disabled:cursor-not-allowed transition-colors"
+                                className="px-4 py-2 text-sm font-medium text-white bg-yellow-600 rounded-lg hover:bg-yellow-700 disabled:bg-yellow-400 disabled:cursor-not-allowed transition-colors"
                             >
                                 {isDeletingUser ? (
+                                    <div className="flex items-center">
+                                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                                        Disabling...
+                                    </div>
+                                ) : (
+                                    'Disable User'
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Hard Delete User Confirmation Modal */}
+            {hardDeletingUser && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-2xl w-full max-w-md mx-4">
+                        <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+                            <h3 className="text-lg font-bold text-gray-900 dark:text-white">Permanently Delete User</h3>
+                            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                                This cannot be undone.
+                            </p>
+                        </div>
+                        <div className="p-6">
+                            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
+                                <div className="flex items-start gap-3">
+                                    <Icon name={IconName.InfoCircle} className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+                                    <div>
+                                        <p className="text-sm font-semibold text-red-800 dark:text-red-300">
+                                            All data will be permanently erased
+                                        </p>
+                                        <p className="text-sm text-red-700 dark:text-red-400 mt-1">
+                                            <strong>{hardDeletingUser.full_name}</strong> ({hardDeletingUser.email}) and all associated records (roles, profiles, enrollments) will be deleted from the database.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="p-6 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3">
+                            <button
+                                onClick={() => setHardDeletingUser(null)}
+                                disabled={isHardDeletingUser}
+                                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleHardDeleteUser}
+                                disabled={isHardDeletingUser}
+                                className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:bg-red-400 disabled:cursor-not-allowed transition-colors"
+                            >
+                                {isHardDeletingUser ? (
                                     <div className="flex items-center">
                                         <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
                                         Deleting...
@@ -1371,7 +1242,7 @@ const UserManagementView: React.FC = () => {
                                 ) : (
                                     <>
                                         <Icon name={IconName.Delete} className="w-4 h-4 inline mr-2" />
-                                        Delete User
+                                        Permanently Delete
                                     </>
                                 )}
                             </button>

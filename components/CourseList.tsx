@@ -23,8 +23,8 @@ const getTypeColor = (courseType: string) => {
 
 const DetailRow: React.FC<{ label: string; value: React.ReactNode }> = ({ label, value }) => (
     <div className="flex justify-between items-start gap-2">
-        <p className="font-semibold text-gray-600 flex-shrink-0 dark:text-gray-400">{label}:</p>
-        <div className="text-right text-gray-800 dark:text-gray-200">{value}</div>
+        <p className="font-semibold text-on-surface-secondary flex-shrink-0">{label}:</p>
+        <div className="text-right text-on-surface">{value}</div>
     </div>
 );
 
@@ -138,17 +138,7 @@ const ManagementCourseList: React.FC = () => {
     const totalPages = Math.ceil(filteredCourses.length / itemsPerPage);
     const paginatedCourses = useMemo(() => {
         const startIndex = (currentPage - 1) * itemsPerPage;
-        const endIndex = startIndex + itemsPerPage;
-        const result = filteredCourses.slice(startIndex, endIndex);
-        console.log('📄 Pagination:', {
-            totalCourses: filteredCourses.length,
-            currentPage,
-            itemsPerPage,
-            startIndex,
-            endIndex,
-            displayedCount: result.length
-        });
-        return result;
+        return filteredCourses.slice(startIndex, startIndex + itemsPerPage);
     }, [filteredCourses, currentPage, itemsPerPage]);
 
     // Reset page when filters change
@@ -189,7 +179,7 @@ const ManagementCourseList: React.FC = () => {
         }
     };
 
-    const inputClasses = "block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-500";
+    const inputClasses = "block w-full px-3 py-2 text-on-surface bg-surface border border-default rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent";
 
     // Use effect to set course in context when selectedCourse changes
     React.useEffect(() => {
@@ -200,8 +190,6 @@ const ManagementCourseList: React.FC = () => {
 
     // If a course is selected, show course detail
     if (selectedCourse) {
-        console.log('Selected course for detail view:', selectedCourse);
-        console.log('Course run ID:', selectedCourse.courseRunId);
 
         return (
             <div>
@@ -223,9 +211,8 @@ const ManagementCourseList: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {paginatedCourses.map(course => {
                 const totalHours = Number(course.trainingHours) + Number(course.assessmentHours);
-                console.log('course run info,', course);
                 return (
-                    <Card key={course.id} className="flex flex-col dark:bg-gray-800 dark:border-gray-700">
+                    <Card key={course.id} className="flex flex-col bg-surface border-default">
                         <div className="aspect-[16/9] w-full overflow-hidden">
                             <img
                                 src={getCourseImageUrl(course.imageUrl, course.id)}
@@ -276,18 +263,10 @@ const ManagementCourseList: React.FC = () => {
 
                             <div className="flex justify-between items-center mt-auto pt-4 border-t">
                                 <Button onClick={() => {
-                                    console.log('🔍 CourseList: View Course clicked for:', {
-                                        id: course.id,
-                                        title: course.title,
-                                        courseCode: course.courseCode,
-                                        tscTitle: course.tscTitle,
-                                        tscCode: course.tscCode,
-                                        courseRunId: course.courseRunId
-                                    });
                                     setSelectedCourse(course);
                                     loadCourseData(course);
                                 }}>
-                                    {role === UserRole.Trainer ? 'View Course' : 'View Course'}
+                                    View Course
                                 </Button>
                                 {(role === UserRole.Developer || role === UserRole.Admin) && (
                                     <button onClick={() => handleEditCourse(course)} className="flex items-center text-subtle font-semibold hover:text-primary transition-colors">
@@ -304,27 +283,27 @@ const ManagementCourseList: React.FC = () => {
     );
 
     const CourseTableView = () => (
-        <Card className="p-0 overflow-x-auto dark:bg-gray-800 dark:border-gray-700">
-            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                <thead className="bg-gray-50 dark:bg-gray-700/50">
+        <Card className="p-0 overflow-x-auto bg-surface border-default">
+            <table className="min-w-full divide-y divide-default">
+                <thead className="bg-surface-elevated">
                     <tr>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Course</th>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Details</th>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Duration</th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-on-surface-secondary uppercase tracking-wider">Course</th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-on-surface-secondary uppercase tracking-wider">Details</th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-on-surface-secondary uppercase tracking-wider">Duration</th>
                         {role === UserRole.Trainer && (
-                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Course Run ID</th>
+                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-on-surface-secondary uppercase tracking-wider">Course Run ID</th>
                         )}
                         {(role !== UserRole.Developer && role !== UserRole.Admin && role !== UserRole.TrainingProvider) && (
-                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Start Date</th>
+                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-on-surface-secondary uppercase tracking-wider">Start Date</th>
                         )}
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Actions</th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-on-surface-secondary uppercase tracking-wider">Actions</th>
                     </tr>
                 </thead>
-                <tbody className="bg-white divide-y divide-gray-200 dark:bg-gray-800 dark:divide-gray-700">
+                <tbody className="bg-surface divide-y divide-default">
                     {paginatedCourses.map(course => {
                         const totalHours = Number(course.trainingHours) + Number(course.assessmentHours);
                         return (
-                            <tr key={course.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                            <tr key={course.id} className="hover:bg-surface-elevated transition-colors">
                                 <td className="px-6 py-4 whitespace-nowrap">
                                     <div className="flex items-center">
                                         <div className="flex-shrink-0 h-10 w-10">
@@ -339,26 +318,26 @@ const ManagementCourseList: React.FC = () => {
                                             />
                                         </div>
                                         <div className="ml-4">
-                                            <div className="text-sm font-medium text-gray-900 dark:text-white">{course.title}</div>
-                                            <div className="text-sm text-gray-500 dark:text-gray-400">{course.courseCode}</div>
+                                            <div className="text-sm font-medium text-on-surface">{course.title}</div>
+                                            <div className="text-sm text-on-surface-secondary">{course.courseCode}</div>
                                         </div>
                                     </div>
                                 </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-on-surface-secondary">
                                     <span className={`font-semibold px-2 py-0.5 rounded-full text-xs ${getTypeColor(course.courseType)}`}>{course.courseType}</span>
                                     <div className="mt-1">{course.modeOfLearning.join(', ')}</div>
                                 </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-on-surface-secondary">
                                     <div>{totalHours} Hours</div>
                                     <div className="text-xs">({course.trainingHours}T + {course.assessmentHours}A)</div>
                                 </td>
                                 {role === UserRole.Trainer && (
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-on-surface-secondary">
                                         {course.courseRunCode || 'N/A'}
                                     </td>
                                 )}
                                 {(role !== UserRole.Developer && role !== UserRole.Admin && role !== UserRole.TrainingProvider) && (
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-on-surface-secondary">
                                         {course.startDate ? (
                                             new Date(course.startDate).toLocaleDateString('en-SG', {
                                                 year: 'numeric',
@@ -373,21 +352,13 @@ const ManagementCourseList: React.FC = () => {
                                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                                     <div className="flex items-center space-x-2">
                                         <Button size="sm" onClick={() => {
-                                            console.log('🔍 CourseList: View Course clicked for:', {
-                                                id: course.id,
-                                                title: course.title,
-                                                courseCode: course.courseCode,
-                                                tscTitle: course.tscTitle,
-                                                tscCode: course.tscCode,
-                                                courseRunId: course.courseRunId
-                                            });
                                             setSelectedCourse(course);
                                             loadCourseData(course);
                                         }}>
-                                            {role === UserRole.Trainer ? 'View Course' : 'View Course'}
+                                            View Course
                                         </Button>
                                         {(role === UserRole.Developer || role === UserRole.Admin) && (
-                                            <Button size="sm" variant="ghost" onClick={() => handleEditCourse(course)} className="!text-blue-600 hover:!bg-blue-50">
+                                            <Button size="sm" variant="ghost" onClick={() => handleEditCourse(course)}>
                                                 <Icon name={IconName.Edit} className="w-4 h-4 mr-1" />
                                                 Edit
                                             </Button>
@@ -406,8 +377,8 @@ const ManagementCourseList: React.FC = () => {
         return (
             <div className="flex items-center justify-center min-h-64">
                 <div className="text-center">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto"></div>
-                    <p className="mt-2 text-gray-600">Loading courses...</p>
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+                    <p className="mt-2 text-on-surface-secondary">Loading courses...</p>
                 </div>
             </div>
         );
@@ -419,7 +390,7 @@ const ManagementCourseList: React.FC = () => {
                 <p className="text-red-600 mb-4">Error loading courses: {currentError}</p>
                 <button
                     onClick={() => window.location.reload()}
-                    className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+                    className="px-4 py-2 bg-primary text-white rounded hover:opacity-90"
                 >
                     Retry
                 </button>
@@ -430,10 +401,10 @@ const ManagementCourseList: React.FC = () => {
     return (
         <div>
             {/* Search and Filter Controls Card */}
-            <Card className="p-6 mb-8 dark:bg-gray-800 dark:border-gray-700">
+            <Card className="p-6 mb-8 bg-surface border-default">
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
                     <div className="md:col-span-2">
-                        <label htmlFor="general-search-courses" className="block text-sm font-medium text-gray-700 dark:text-gray-300">General Search</label>
+                        <label htmlFor="general-search-courses" className="block text-sm font-medium text-on-surface-secondary">General Search</label>
                         <div className="relative mt-1">
                             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                                 <Icon name={IconName.Eye} className="w-5 h-5 text-gray-400" />
@@ -450,8 +421,8 @@ const ManagementCourseList: React.FC = () => {
                     </div>
                     <div className="md:col-span-2 flex justify-end items-center gap-4">
                         <div className="flex items-center gap-2">
-                            <label className="text-sm font-medium text-gray-700 hidden sm:block dark:text-gray-300">View:</label>
-                            <div className="flex items-center rounded-md bg-gray-100 p-0.5 border dark:bg-gray-700 dark:border-gray-600">
+                            <label className="text-sm font-medium text-on-surface-secondary hidden sm:block">View:</label>
+                            <div className="flex items-center rounded-md bg-surface-elevated p-0.5 border border-default">
                                 <button
                                     onClick={() => setViewMode('block')}
                                     className={`p-1.5 rounded-md transition-colors ${viewMode === 'block' ? 'bg-white shadow text-primary dark:bg-gray-600 dark:text-blue-400' : 'text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200'}`}
@@ -478,9 +449,9 @@ const ManagementCourseList: React.FC = () => {
                 </div>
 
                 {showAdvancedFilters && (
-                    <div className="mt-4 pt-4 border-t grid grid-cols-1 md:grid-cols-3 gap-4 items-end dark:border-gray-700">
+                    <div className="mt-4 pt-4 border-t border-default grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Course Type</label>
+                            <label className="block text-sm font-medium text-on-surface-secondary">Course Type</label>
                             <select value={filterCourseType} onChange={e => setFilterCourseType(e.target.value as 'WSQ' | 'IBF' | 'Non-WSQ' | 'All')} className={`${inputClasses} mt-1`}>
                                 <option value="All">All Types</option>
                                 <option value="WSQ">WSQ</option>
@@ -489,7 +460,7 @@ const ManagementCourseList: React.FC = () => {
                             </select>
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Mode of Training</label>
+                            <label className="block text-sm font-medium text-on-surface-secondary">Mode of Training</label>
                             <select value={filterMode} onChange={e => setFilterMode(e.target.value)} className={`${inputClasses} mt-1`}>
                                 <option value="All">All Modes</option>
                                 <option value="Hybrid">Hybrid</option>
@@ -499,7 +470,7 @@ const ManagementCourseList: React.FC = () => {
                         </div>
                         {role === UserRole.Trainer && (
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Start Date</label>
+                                <label className="block text-sm font-medium text-on-surface-secondary">Start Date</label>
                                 <select value={filterStartDate} onChange={e => setFilterStartDate(e.target.value as 'All' | 'This Month' | 'Next Month' | 'Last Month' | 'Earlier' | 'Later')} className={`${inputClasses} mt-1`}>
                                     <option value="All">All Dates</option>
                                     <option value="This Month">This Month</option>

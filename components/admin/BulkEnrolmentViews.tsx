@@ -340,68 +340,81 @@ export const BulkUploadEnrolmentView: React.FC = () => {
 
             console.log('✅ Bulk enrolment result:', result);
 
-            // Process successful enrolments and save to database
-            if (result?.results && Array.isArray(result.results)) {
-                console.log('💾 Processing successful enrolments for database insertion...');
+            // Normalize results from any response shape into a flat array of items
+            let allItems: any[] = [];
+            if (Array.isArray(result) && result[0]?.results) {
+                allItems = result[0].results;
+            } else if (result?.results && Array.isArray(result.results)) {
+                allItems = result.results;
+            } else if (result?.result && Array.isArray(result.result)) {
+                allItems = result.result;
+            } else if (Array.isArray(result)) {
+                allItems = result;
+            }
 
-                for (const item of result.results) {
-                    // Parse the result to check if it was successful
-                    let parsedResult;
-                    if (item?.result && typeof item.result === 'string') {
+            // Process successful enrolments and save to database
+            if (allItems.length > 0) {
+                console.log('💾 Processing', allItems.length, 'enrolments for database insertion...');
+
+                for (const item of allItems) {
+                    // Parse the SSG result for this item
+                    let parsedResult = item.parsedResult;
+                    if (!parsedResult && item?.result && typeof item.result === 'string') {
                         try {
                             parsedResult = JSON.parse(item.result);
-                            // Attach parsedResult to item for status display
                             item.parsedResult = parsedResult;
                         } catch (e) {
-                            console.log('⚠️ Could not parse result for database insertion:', item);
+                            console.log('⚠️ Could not parse result:', item);
                             continue;
                         }
-                    } else if (item?.result && typeof item.result === 'object') {
-                        // If result is already an object, use it directly
+                    } else if (!parsedResult && item?.result && typeof item.result === 'object') {
                         parsedResult = item.result;
                         item.parsedResult = parsedResult;
                     }
 
-                    // Check if the SSG submission was successful (status 200-299)
-                    const isSuccess = parsedResult?.status && parsedResult.status >= 200 && parsedResult.status < 300;
+                    // Check if SSG submission was successful
+                    const hasError = (parsedResult?.error?.details?.length > 0) ||
+                        parsedResult?.error?.message ||
+                        (parsedResult?.status >= 400);
+                    const isSuccess = !hasError && (
+                        (parsedResult?.status >= 200 && parsedResult?.status < 300) ||
+                        parsedResult?.success === true ||
+                        (parsedResult?.data && Object.keys(parsedResult.data).length > 0)
+                    );
 
-                    if (isSuccess && parsedResult?.data) {
+                    if (isSuccess) {
                         console.log('✅ SSG enrolment successful, inserting to database:', item.traineeEmail);
 
                         try {
-                            // Call our local API to insert the enrolment into database
                             const dbResponse = await fetch('/api/enrolments/bulk-create', {
                                 method: 'POST',
-                                headers: {
-                                    'Content-Type': 'application/json',
-                                },
+                                headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({
                                     enrolment: {
                                         traineeEmail: item.traineeEmail,
                                         traineeName: item.traineeName,
-                                        traineeNric: item.traineeId, // Using traineeId as NRIC
+                                        traineeNric: item.traineeId,
                                         courseCode: item.courseReferenceNumber,
-                                        courseTitle: '', // Will be fetched from SSG if needed
+                                        courseTitle: '',
                                         courseRunId: item.courseRunId,
                                         courseReferenceNumber: item.courseReferenceNumber,
                                         sponsorshipType: item.sponsorshipType,
                                         enrolmentDate: new Date().toISOString().split('T')[0],
-                                        enrolmentStatus: parsedResult.data?.enrolment?.status || 'Confirmed',
-                                        enrolmentId: parsedResult.data?.enrolment?.referenceNumber || `ENR-${Date.now()}`
+                                        enrolmentStatus: parsedResult?.data?.enrolment?.status || 'Confirmed',
+                                        enrolmentId: parsedResult?.data?.enrolment?.referenceNumber || `ENR-${Date.now()}`
                                     }
                                 })
                             });
 
                             if (dbResponse.ok) {
                                 const dbResult = await dbResponse.json();
-                                console.log('✅ Successfully inserted to database:', dbResult);
+                                console.log('✅ Inserted to database:', dbResult);
                             } else {
                                 const dbError = await dbResponse.json().catch(() => ({}));
                                 console.error('❌ Database insertion failed:', dbError);
                             }
                         } catch (dbErr) {
                             console.error('❌ Error inserting to database:', dbErr);
-                            // Don't throw - continue processing other enrolments
                         }
                     }
                 }
@@ -543,13 +556,29 @@ export const BulkUploadEnrolmentView: React.FC = () => {
         } else if (uploadResult?.result && Array.isArray(uploadResult.result)) {
             results = uploadResult.result;
         } else if (Array.isArray(uploadResult)) {
-            results = uploadResult;
+            results = uploadResult.map((item: any) => {
+                if (item?.result && typeof item.result === 'string') {
+                    try {
+                        const parsed = JSON.parse(item.result);
+                        return { ...item, parsedResult: parsed };
+                    } catch {
+                        return item;
+                    }
+                } else if (item?.result && typeof item.result === 'object') {
+                    return { ...item, parsedResult: item.result };
+                }
+                return item;
+            });
         } else if (uploadResult) {
             results = [uploadResult];
         }
 
         const isRecordSuccess = (r: any) => {
-            const pr = r.parsedResult;
+            let pr = r.parsedResult;
+            // Fallback: try to parse r.result if parsedResult wasn't set
+            if (!pr && r.result && typeof r.result === 'string') {
+                try { pr = JSON.parse(r.result); } catch { /* ignore */ }
+            }
             const isStatusSuccess = pr?.status && pr.status >= 200 && pr.status < 300;
             const hasData = pr?.data && Object.keys(pr.data).length > 0;
             const hasSuccessFlag = pr?.success === true;
@@ -651,9 +680,13 @@ export const BulkUploadEnrolmentView: React.FC = () => {
                                                                         (record.parsedResult?.status >= 400);
 
                                                                     if (isSuccess) {
-                                                                        // Success case
-                                                                        const enrolmentRef = record.parsedResult?.data?.enrolment?.referenceNumber || 'N/A';
-                                                                        const enrolmentStatus = record.parsedResult?.data?.enrolment?.status || 'Confirmed';
+                                                                        // Success case — resolve parsedResult with same fallback as isRecordSuccess
+                                                                        let pr = record.parsedResult;
+                                                                        if (!pr && record.result && typeof record.result === 'string') {
+                                                                            try { pr = JSON.parse(record.result); } catch { /* ignore */ }
+                                                                        }
+                                                                        const enrolmentRef = pr?.data?.enrolment?.referenceNumber || 'N/A';
+                                                                        const enrolmentStatus = pr?.data?.enrolment?.status || 'Confirmed';
                                                                         return (
                                                                             <div className="space-y-2 p-4 bg-green-50 dark:bg-green-900/20 border-l-4 border-green-500 dark:border-green-600 rounded-r-lg shadow-sm">
                                                                                 <div className="flex items-center gap-2">

@@ -11,7 +11,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     return res.status(405).json({ success: false, error: 'Method not allowed' });
   }
 
-  const { userId, roles, accountStatus, currentUserId } = req.body;
+  const { userId, roles, accountStatus, currentUserId, full_name } = req.body;
 
   if (!userId || typeof userId !== 'string') {
     return res.status(400).json({ success: false, error: 'userId is required' });
@@ -156,11 +156,17 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       console.log(`🗑️ Removed user ${userId} from training_provider_member (role removed)`);
     }
 
-    // Update account_status if provided
+    // Update account_status and/or full_name if provided
     if (accountStatus && (accountStatus === 'active' || accountStatus === 'disabled')) {
       await client.query(
         'UPDATE public.app_user SET account_status = $1, updated_at = NOW() WHERE id = $2',
         [accountStatus, userId]
+      );
+    }
+    if (full_name && typeof full_name === 'string' && full_name.trim()) {
+      await client.query(
+        'UPDATE public.app_user SET full_name = $1, updated_at = NOW() WHERE id = $2',
+        [full_name.trim(), userId]
       );
     }
 
@@ -168,7 +174,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
 
     return res.status(200).json({
       success: true,
-      data: { userId, roles, accountStatus },
+      data: { userId, roles, accountStatus, full_name: full_name?.trim() ?? null },
     });
   } catch (error) {
     await client.query('ROLLBACK');

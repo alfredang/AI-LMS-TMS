@@ -27,11 +27,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       courseTitle,
       courseRunId,
       courseReferenceNumber,
+      trainingPartnerCode,
       sponsorshipType,
       enrolmentDate,
       enrolmentStatus,
       enrolmentId,
+      completionDate,
     } = enrolment;
+
+    // Map sponsorship type to valid DB enum values
+    const mapSponsorship = (type: string | undefined): 'Self-Sponsored' | 'Employer-Sponsored' | 'N/A' => {
+      if (!type) return 'Self-Sponsored';
+      const t = type.toUpperCase();
+      if (t === 'EMPLOYER' || t === 'EMPLOYER-SPONSORED' || t === 'EMPLOYER SPONSORED') return 'Employer-Sponsored';
+      if (t === 'INDIVIDUAL' || t === 'SELF-SPONSORED' || t === 'SELF SPONSORED' || t === 'SELF-FUNDED' || t === 'SELF FUNDED') return 'Self-Sponsored';
+      return 'Self-Sponsored';
+    };
 
     // 1. Check if course exists by course_code
     let courseResult = await client.query(
@@ -67,21 +78,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (userResult.rows.length === 0) {
       // Create learner account
       userId = crypto.randomUUID();
-      const tempPassword = crypto.randomBytes(8).toString('hex'); // Temporary password
-      
+
       await client.query(
         `INSERT INTO app_user (
-          id, email, name, password_hash, role, created_at
-        ) VALUES ($1, $2, $3, $4, $5, NOW())`,
-        [userId, traineeEmail, traineeName, tempPassword, 'learner']
+          id, email, full_name, password, password_hash, account_status, created_at
+        ) VALUES ($1, $2, $3, $4, $4, 'active', NOW())`,
+        [userId, traineeEmail, traineeName || traineeEmail, 'password123']
+      );
+
+      // Assign Learner role
+      await client.query(
+        `INSERT INTO user_role_map (user_id, role) VALUES ($1, 'Learner') ON CONFLICT DO NOTHING`,
+        [userId]
       );
 
       // Create learner profile
       await client.query(
-        `INSERT INTO learner_profile (
-          user_id, nric, tel, company_name, gender, date_of_birth, created_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, NOW())`,
-        [userId, traineeNric || '', '', '', '', null]
+        `INSERT INTO learner_profile (user_id, nric, tel) VALUES ($1, $2, '')`,
+        [userId, traineeNric || null]
       );
 
       console.log(`✅ Created new learner account: ${traineeEmail}`);
@@ -145,14 +159,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         progress_percent, payment_status, assessment_status,
         enrolment_id, enrolment_status,
         nric, email,
+        course_reference, training_partner_code,
+        completion_date, raw_data,
         created_at, updated_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, 0, $7, $8, $9, $10, $11, $12, NOW(), NOW())`,
+      ) VALUES ($1, $2, $3, $4, $5, $6, 0, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, NOW(), NOW())`,
       [
         enrolmentUuid,
         userId,
         courseId,
         courseRunUuid,
-        sponsorshipType || 'Self-Funded',
+        mapSponsorship(sponsorshipType),
         enrolmentDate || new Date().toISOString().split('T')[0],
         'Unpaid',
         'Pending',
@@ -160,28 +176,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         enrolmentStatus || null,
         traineeNric || null,
         traineeEmail || null,
-      ]
-    );
-
-    // 6. Insert into ssg_enrolments table for tracking
-    await client.query(
-      `INSERT INTO ssg_enrolments (
-        enrolment_id, trainee_name, trainee_nric, 
-        course_title, course_reference, course_run_id,
-        enrolment_status, sponsorship_type, enrolment_date,
-        created_date, imported_at, raw_data
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW(), $10)`,
-      [
-        enrolmentId || `ENR-${Date.now()}`,
-        traineeName,
-        traineeNric,
-        courseTitle,
-        courseReferenceNumber,
-        courseRunId,
-        enrolmentStatus || 'Confirmed',
-        sponsorshipType,
-        enrolmentDate,
-        JSON.stringify(enrolment)
+        courseReferenceNumber || null,
+        trainingPartnerCode || null,
+        completionDate || null,
+        enrolment ? JSON.stringify(enrolment) : null,
       ]
     );
 

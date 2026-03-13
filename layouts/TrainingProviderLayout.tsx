@@ -16,7 +16,16 @@ import { Card } from '../components/ui/Card';
 
 const TrainingProviderLayout: React.FC = () => {
   const { currentView, selectedCourse } = useLms();
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const [isDesktopSidebarCollapsed, setIsDesktopSidebarCollapsed] = useState(false);
+
+  const handleToggleSidebar = () => {
+    if (typeof window !== 'undefined' && window.innerWidth >= 768) {
+      setIsDesktopSidebarCollapsed(prev => !prev);
+    } else {
+      setIsMobileSidebarOpen(true);
+    }
+  };
 
   const renderContent = () => {
     // If a course is selected, show course detail
@@ -59,34 +68,34 @@ const TrainingProviderLayout: React.FC = () => {
 
       {/* Mobile header and sidebar toggle */}
       <div className="flex items-center gap-4 px-4 sm:px-6 py-3 border-b border-gray-200 dark:border-gray-700">
-        <button onClick={() => setIsSidebarOpen(true)} className="p-2 -ml-2 text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white">
+        <button onClick={handleToggleSidebar} className="p-2 -ml-2 text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white">
           <Icon name={IconName.Menu} className="w-6 h-6" />
         </button>
         <h2 className="text-lg font-bold truncate">{getPageTitle()}</h2>
       </div>
 
       {/* Mobile Sidebar Overlay */}
-      {isSidebarOpen && (
+      {isMobileSidebarOpen && (
         <div className="fixed inset-0 z-40 md:hidden" role="dialog" aria-modal="true">
           {/* Backdrop */}
           <div
             className="absolute inset-0 bg-black/50"
             aria-hidden="true"
-            onClick={() => setIsSidebarOpen(false)}
+            onClick={() => setIsMobileSidebarOpen(false)}
           />
           {/* Sidebar Panel */}
           <div className="relative flex flex-col w-72 max-w-[calc(100%-3rem)] h-full bg-surface shadow-xl">
             <div className="p-4 flex justify-between items-center border-b dark:border-gray-700">
               <h3 className="font-bold">Menu</h3>
               <button
-                onClick={() => setIsSidebarOpen(false)}
+                onClick={() => setIsMobileSidebarOpen(false)}
                 className="p-2 -mr-2 text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white"
               >
                 <Icon name={IconName.Close} className="w-6 h-6" />
               </button>
             </div>
             <div className="flex-1 overflow-y-auto">
-              <TrainingProviderSidebar onNavigate={() => setIsSidebarOpen(false)} />
+              <TrainingProviderSidebar onNavigate={() => setIsMobileSidebarOpen(false)} />
             </div>
           </div>
         </div>
@@ -94,12 +103,14 @@ const TrainingProviderLayout: React.FC = () => {
 
       {/* Main Layout Container */}
       <div className="flex flex-1">
-        {/* Desktop Sidebar - Fixed on left */}
-        <aside className="hidden md:flex w-64 flex-shrink-0 bg-white dark:bg-slate-800 border-r border-gray-200 dark:border-slate-700">
-          <div className="w-full">
-            <TrainingProviderSidebar />
-          </div>
-        </aside>
+        {/* Desktop Sidebar - collapsible */}
+        {!isDesktopSidebarCollapsed && (
+          <aside className="hidden md:flex w-64 flex-shrink-0 bg-white dark:bg-slate-800 border-r border-gray-200 dark:border-slate-700">
+            <div className="w-full">
+              <TrainingProviderSidebar />
+            </div>
+          </aside>
+        )}
 
         {/* Main Content Area */}
         <main className="flex-1 overflow-x-hidden">

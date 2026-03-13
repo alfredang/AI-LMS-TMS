@@ -16,7 +16,6 @@ interface Trainer {
   status: string | null;
   account_status: string | null;
   linkedin_url: string | null;
-  courses_taught: string | null;
   user_id: string;
 }
 
@@ -53,7 +52,6 @@ const ViewTrainers: React.FC = () => {
   const [filterName, setFilterName] = useState('');
   const [filterTrainerStatuses, setFilterTrainerStatuses] = useState<string[]>([]);
   const [filterAccountStatuses, setFilterAccountStatuses] = useState<string[]>([]);
-  const [filterCourse, setFilterCourse] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [showAddTrainerForm, setShowAddTrainerForm] = useState(false);
   const [showBulkUpload, setShowBulkUpload] = useState(false);
@@ -65,10 +63,6 @@ const ViewTrainers: React.FC = () => {
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
 
   const itemsPerPage = 10;
-  const [expandedCourses, setExpandedCourses] = useState<Set<string>>(new Set());
-  const toggleCourses = (userId: string) =>
-    setExpandedCourses(prev => { const s = new Set(prev); s.has(userId) ? s.delete(userId) : s.add(userId); return s; });
-
   const inputClasses = "w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400";
 
   const toggleCheckbox = (
@@ -162,10 +156,7 @@ const ViewTrainers: React.FC = () => {
     const matchesAccountStatus = filterAccountStatuses.length === 0 ||
       filterAccountStatuses.some(s => s.toLowerCase() === (trainer.account_status || '').toLowerCase());
 
-    const matchesCourse = !filterCourse ||
-      (trainer.courses_taught && trainer.courses_taught.toLowerCase().includes(filterCourse.toLowerCase()));
-
-    return matchesSearch && matchesName && matchesTrainerStatus && matchesAccountStatus && matchesCourse;
+    return matchesSearch && matchesName && matchesTrainerStatus && matchesAccountStatus;
   });
 
   const totalPages = Math.ceil(filteredTrainers.length / itemsPerPage);
@@ -301,17 +292,6 @@ const ViewTrainers: React.FC = () => {
                 )}
               </div>
 
-              {/* Associated Course */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Associated Course</label>
-                <input
-                  type="text"
-                  value={filterCourse}
-                  onChange={e => { setFilterCourse(e.target.value); setCurrentPage(1); }}
-                  className={inputClasses}
-                  placeholder="Search by course keywords..."
-                />
-              </div>
             </div>
           </div>
         )}
@@ -330,7 +310,6 @@ const ViewTrainers: React.FC = () => {
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Trainer Status</th>
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Account Status</th>
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">LinkedIn Profile</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Associated Courses</th>
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Action</th>
                 </tr>
               </thead>
@@ -390,35 +369,6 @@ const ViewTrainers: React.FC = () => {
                         </a>
                       ) : (
                         'N/A'
-                      )}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">
-                      {trainer.courses_taught ? (() => {
-                        const courses = trainer.courses_taught.split(', ');
-                        const isExpanded = expandedCourses.has(trainer.user_id);
-                        const visible = isExpanded ? courses : courses.slice(0, 2);
-                        const hidden = courses.length - 2;
-                        return (
-                          <div className="flex flex-wrap gap-1">
-                            {visible.map((course, i) => (
-                              <span key={i} className="inline-block px-2 py-0.5 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-700 rounded text-xs max-w-[160px] truncate" title={course}>
-                                {course}
-                              </span>
-                            ))}
-                            {!isExpanded && hidden > 0 && (
-                              <button onClick={() => toggleCourses(trainer.user_id)} className="inline-block px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded text-xs hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">
-                                +{hidden} more
-                              </button>
-                            )}
-                            {isExpanded && courses.length > 2 && (
-                              <button onClick={() => toggleCourses(trainer.user_id)} className="inline-block px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded text-xs hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">
-                                Show less
-                              </button>
-                            )}
-                          </div>
-                        );
-                      })() : (
-                        <span className="text-gray-400 dark:text-gray-500">None</span>
                       )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">

@@ -111,7 +111,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse<ClassDetailsRes
     // 3. Get overall grant status - using your exact working SQL pattern
     console.log('🔍 Executing grant status query with string courseRunId:', basicData.course_run_id);
     const grantStatusQuery = `
-      SELECT 
+      SELECT
         cr.course_run_id,
         CONCAT(
           COUNT(*) FILTER (WHERE LOWER(sg.status) = 'approved'),
@@ -119,10 +119,10 @@ async function handler(req: NextApiRequest, res: NextApiResponse<ClassDetailsRes
           COUNT(*)
         ) AS overall_grant_status
       FROM ssg_grants sg
-      JOIN ssg_enrolments se 
-        ON sg.enrollment_id = se.enrolment_id
-      JOIN course_run cr 
-        ON se.course_run_id = cr.course_run_id
+      JOIN enrollment e
+        ON sg.enrollment_id = e.enrolment_id
+      JOIN course_run cr
+        ON e.course_run_id = cr.id
       WHERE cr.course_run_id = $1
       GROUP BY cr.course_run_id
     `;
@@ -134,7 +134,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse<ClassDetailsRes
     // 4. Get overall claim status - using your exact working SQL pattern
     console.log('🔍 Executing claim status query with string courseRunId:', basicData.course_run_id);
     const claimStatusQuery = `
-      SELECT 
+      SELECT
         cr.course_run_id,
         CONCAT(
           COUNT(*) FILTER (WHERE LOWER(sc.claim_status) = 'approved'),
@@ -142,10 +142,10 @@ async function handler(req: NextApiRequest, res: NextApiResponse<ClassDetailsRes
           COUNT(*)
         ) AS overall_claim_status
       FROM ssg_claims sc
-      JOIN ssg_enrolments se 
-        ON sc.enrollment_id = se.enrolment_id
-      JOIN course_run cr 
-        ON se.course_run_id = cr.course_run_id
+      JOIN enrollment e
+        ON sc.enrollment_id = e.enrolment_id
+      JOIN course_run cr
+        ON e.course_run_id = cr.id
       WHERE cr.course_run_id = $1
       GROUP BY cr.course_run_id
     `;
@@ -174,12 +174,10 @@ async function handler(req: NextApiRequest, res: NextApiResponse<ClassDetailsRes
         ON e.user_id = au.id
       JOIN learner_profile lp 
         ON e.user_id = lp.user_id
-      LEFT JOIN ssg_enrolments se 
-        ON se.trainee_name = au.full_name
-      LEFT JOIN ssg_grants sg 
-        ON sg.enrollment_id = se.enrolment_id
-      LEFT JOIN ssg_claims sc 
-        ON sc.enrollment_id = se.enrolment_id
+      LEFT JOIN ssg_grants sg
+        ON sg.enrollment_id = e.enrolment_id
+      LEFT JOIN ssg_claims sc
+        ON sc.enrollment_id = e.enrolment_id
       WHERE e.course_run_id = $1
       ORDER BY au.full_name
     `;

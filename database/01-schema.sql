@@ -829,6 +829,10 @@ CREATE TABLE public.enrollment (
     enrolment_status text,
     nric text,
     email text,
+    course_reference text,
+    training_partner_code text,
+    completion_date timestamp with time zone,
+    raw_data jsonb,
     CONSTRAINT enrollment_progress_percent_check CHECK (((progress_percent >= (0)::numeric) AND (progress_percent <= (100)::numeric)))
 );
 
