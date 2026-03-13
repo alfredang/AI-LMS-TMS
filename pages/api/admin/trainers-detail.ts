@@ -20,7 +20,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const client = await pool.connect();
 
         try {
-            // SQL query to get detailed trainer information
+            // SQL query to get detailed trainer information for all users with Trainer role
             const query = `
                 SELECT
                     au.full_name AS trainer_name,
@@ -28,22 +28,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                     au.secondary_email,
                     au.profile_picture_url AS profile_picture,
                     au.account_status,
+                    au.id AS user_id,
                     tp.tel AS telephone,
                     tp.trainer_type,
                     tp.status,
-                    tp.linkedin_url,
-                    tp.user_id,
-                    STRING_AGG(DISTINCT c.title, ', ') AS courses_taught
-                FROM trainer_profile tp
-                JOIN app_user au
-                    ON tp.user_id = au.id
-                LEFT JOIN course_trainer ct
-                    ON ct.trainer_id = au.id
-                LEFT JOIN course c
-                    ON c.id = ct.course_id
-                GROUP BY
-                    au.full_name, au.email, au.secondary_email, au.profile_picture_url, au.account_status,
-                    tp.tel, tp.trainer_type, tp.status, tp.linkedin_url, tp.user_id
+                    tp.linkedin_url
+                FROM app_user au
+                LEFT JOIN trainer_profile tp ON tp.user_id = au.id
+                WHERE au.id IN (
+                    SELECT user_id FROM trainer_profile
+                    UNION
+                    SELECT user_id FROM user_role_map WHERE role = 'Trainer'
+                )
                 ORDER BY au.full_name;
             `;
 

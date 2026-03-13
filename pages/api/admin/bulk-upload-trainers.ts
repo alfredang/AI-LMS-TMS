@@ -64,6 +64,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         continue;
       }
 
+      // Normalise enum values so invalid spreadsheet data never causes a DB error
+      const VALID_TRAINER_TYPES = ['ACLP', 'non-ACLP', 'DACE'];
+      const VALID_STATUSES = ['Active', 'Inactive'];
+      const VALID_GENDERS = ['Male', 'Female', 'Prefer not to say'];
+      const safeTrainerType = VALID_TRAINER_TYPES.includes(trainer_type) ? trainer_type : 'non-ACLP';
+      const safeStatus = VALID_STATUSES.includes(status) ? status : 'Active';
+      const safeGender = VALID_GENDERS.includes(gender) ? gender : 'Prefer not to say';
+      // Only override an existing gender if the spreadsheet explicitly provides Male or Female
+      const explicitGender = (gender === 'Male' || gender === 'Female') ? gender : null;
+
       try {
         await client.query('BEGIN');
 
@@ -105,20 +115,27 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           if (existingProfile.rows.length > 0) {
             await client.query(
               `UPDATE trainer_profile
-               SET tel = $1, trainer_type = $2, status = $3, linkedin_url = $4, gender = $5,
+               SET tel = $1, trainer_type = $2, status = $3, linkedin_url = $4,
+                   gender = COALESCE($5, gender),
                    common_name = $6, country = $7, cn_plus_email = $8, nric = $9
                WHERE user_id = $10`,
-              [telephone || '', trainer_type || 'ACLP', status || 'Active', linkedin_url || null,
-               gender || 'Prefer not to say', common_name || null, country || null, cn_plus_email || null, nric || null, userId]
+              [telephone || '', safeTrainerType, safeStatus, linkedin_url || null,
+               explicitGender, common_name || null, country || null, cn_plus_email || null, nric || null, userId]
             );
           } else {
             await client.query(
               `INSERT INTO trainer_profile (user_id, tel, trainer_type, status, linkedin_url, gender, common_name, country, cn_plus_email, nric)
                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-              [userId, telephone || '', trainer_type || 'ACLP', status || 'Active', linkedin_url || null,
-               gender || 'Prefer not to say', common_name || null, country || null, cn_plus_email || null, nric || null]
+              [userId, telephone || '', safeTrainerType, safeStatus, linkedin_url || null,
+               safeGender, common_name || null, country || null, cn_plus_email || null, nric || null]
             );
           }
+
+          // Ensure Trainer role exists
+          await client.query(
+            `INSERT INTO user_role_map (user_id, role) VALUES ($1, 'Trainer') ON CONFLICT DO NOTHING`,
+            [userId]
+          );
 
           await client.query('COMMIT');
           results.push({ email, full_name, action: 'updated', message: 'Trainer information updated successfully.' });
@@ -135,15 +152,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           const userId = userResult.rows[0].id;
 
           await client.query(
-            `INSERT INTO user_role_map (user_id, role) VALUES ($1, 'Trainer')`,
+            `INSERT INTO user_role_map (user_id, role) VALUES ($1, 'Trainer') ON CONFLICT DO NOTHING`,
             [userId]
           );
 
           await client.query(
             `INSERT INTO trainer_profile (user_id, tel, trainer_type, status, linkedin_url, gender, common_name, country, cn_plus_email, nric)
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-            [userId, telephone || '', trainer_type || 'ACLP', status || 'Active', linkedin_url || null,
-             gender || 'Prefer not to say', common_name || null, country || null, cn_plus_email || null, nric || null]
+            [userId, telephone || '', safeTrainerType, safeStatus, linkedin_url || null,
+             safeGender, common_name || null, country || null, cn_plus_email || null, nric || null]
           );
 
           await client.query('COMMIT');
