@@ -57,6 +57,22 @@ const ErrorMessageDisplay: React.FC<{ error: any }> = ({ error }) => {
     return <span>An error occurred during enrolment</span>;
 };
 
+// Excel template column name constants (must match Enrolment_Upload_Template.xlsx headers after trimming)
+const COL = {
+    traineeIdType:    'Trainee ID Type *',
+    traineeId:        'Trainee ID *',
+    traineeDob:       'Date of Birth (DD-MM-YYYY or DD/MM/YYYY format) *',
+    traineeName:      'Trainee Name (as on government ID)',
+    courseRefCode:    'Course Reference Code*',
+    courseRun:        'Course Run*',
+    traineeEmail:     'Trainee Email *',
+    phoneCountryCode: 'Trainee Phone Country Code (+xx) *',
+    phoneAreaCode:    'Trainee Phone Area Code',
+    traineePhone:     'Trainee Phone *',
+    sponsorshipType:  'Sponsorship Type *',
+    employerUen:      'Employer UEN (mandatory if sponsorship type = employer)',
+} as const;
+
 export const BulkUploadEnrolmentView: React.FC = () => {
     const [file, setFile] = useState<File | null>(null);
     const [isUploading, setIsUploading] = useState(false);
@@ -64,6 +80,7 @@ export const BulkUploadEnrolmentView: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
     const [isDragOver, setIsDragOver] = useState(false);
     const [resultsPage, setResultsPage] = useState(1);
+    const [dbInsertErrors, setDbInsertErrors] = useState<{ row: number; email: string; error: string }[]>([]);
     const resultsPerPage = 10;
 
     const handleFileChange = (selectedFile: File | undefined | null) => {
@@ -353,73 +370,97 @@ export const BulkUploadEnrolmentView: React.FC = () => {
             }
 
             // Process successful enrolments and save to database
-            if (allItems.length > 0) {
-                console.log('💾 Processing', allItems.length, 'enrolments for database insertion...');
+            // Use normalizedData (original Excel rows) for trainee fields — the n8n response
+            // items use the raw Excel column names (e.g. "Trainee Email *"), not camelCase.
+            console.log('💾 Processing', normalizedData.length, 'enrolments for database insertion...');
+            console.log('🔑 COL keys used for mapping:', COL);
+            if (normalizedData.length > 0) {
+                console.log('📋 Row 0 actual keys:', Object.keys(normalizedData[0] as object));
+                console.log('📋 Row 0 email value:', (normalizedData[0] as any)[COL.traineeEmail]);
+                console.log('📋 Row 0 courseRun value:', (normalizedData[0] as any)[COL.courseRun]);
+            }
 
-                for (const item of allItems) {
-                    // Parse the SSG result for this item
-                    let parsedResult = item.parsedResult;
-                    if (!parsedResult && item?.result && typeof item.result === 'string') {
-                        try {
-                            parsedResult = JSON.parse(item.result);
-                            item.parsedResult = parsedResult;
-                        } catch (e) {
-                            console.log('⚠️ Could not parse result:', item);
-                            continue;
-                        }
-                    } else if (!parsedResult && item?.result && typeof item.result === 'object') {
+            const rowDbErrors: { row: number; email: string; error: string }[] = [];
+
+            for (let i = 0; i < normalizedData.length; i++) {
+                const row = normalizedData[i] as any;
+                const item = allItems[i]; // corresponding n8n result (may be undefined)
+
+                // Parse the SSG result for this row
+                let parsedResult = item?.parsedResult;
+                if (!parsedResult && item?.result) {
+                    if (typeof item.result === 'string') {
+                        try { parsedResult = JSON.parse(item.result); item.parsedResult = parsedResult; } catch { /* ignore */ }
+                    } else if (typeof item.result === 'object') {
                         parsedResult = item.result;
-                        item.parsedResult = parsedResult;
-                    }
-
-                    // Check if SSG submission was successful
-                    const hasError = (parsedResult?.error?.details?.length > 0) ||
-                        parsedResult?.error?.message ||
-                        (parsedResult?.status >= 400);
-                    const isSuccess = !hasError && (
-                        (parsedResult?.status >= 200 && parsedResult?.status < 300) ||
-                        parsedResult?.success === true ||
-                        (parsedResult?.data && Object.keys(parsedResult.data).length > 0)
-                    );
-
-                    if (isSuccess) {
-                        console.log('✅ SSG enrolment successful, inserting to database:', item.traineeEmail);
-
-                        try {
-                            const dbResponse = await fetch('/api/enrolments/bulk-create', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({
-                                    enrolment: {
-                                        traineeEmail: item.traineeEmail,
-                                        traineeName: item.traineeName,
-                                        traineeNric: item.traineeId,
-                                        courseCode: item.courseReferenceNumber,
-                                        courseTitle: '',
-                                        courseRunId: item.courseRunId,
-                                        courseReferenceNumber: item.courseReferenceNumber,
-                                        sponsorshipType: item.sponsorshipType,
-                                        enrolmentDate: new Date().toISOString().split('T')[0],
-                                        enrolmentStatus: parsedResult?.data?.enrolment?.status || 'Confirmed',
-                                        enrolmentId: parsedResult?.data?.enrolment?.referenceNumber || `ENR-${Date.now()}`
-                                    }
-                                })
-                            });
-
-                            if (dbResponse.ok) {
-                                const dbResult = await dbResponse.json();
-                                console.log('✅ Inserted to database:', dbResult);
-                            } else {
-                                const dbError = await dbResponse.json().catch(() => ({}));
-                                console.error('❌ Database insertion failed:', dbError);
-                            }
-                        } catch (dbErr) {
-                            console.error('❌ Error inserting to database:', dbErr);
-                        }
+                        if (item) item.parsedResult = parsedResult;
                     }
                 }
-                console.log('✅ Database insertion process completed');
+
+                // Determine SSG enrolment status and reference number
+                const ssgStatus = parsedResult?.data?.enrolment?.status;
+                const ssgRefNumber = parsedResult?.data?.enrolment?.referenceNumber;
+                const ssgHardError = (parsedResult?.status >= 400) &&
+                    (parsedResult?.error?.details?.length > 0 || parsedResult?.error?.message);
+
+                // Skip DB insert only if SSG returned a definitive hard error (4xx/5xx with error body)
+                if (!ssgHardError) {
+                    // Map Excel column names to API fields using COL constants
+                    const traineeEmail = row[COL.traineeEmail] || '';
+                    const traineeName = row[COL.traineeName] || '';
+                    const traineeNric = row[COL.traineeId] || '';
+                    const courseCode = row[COL.courseRefCode] || '';
+                    const courseRunId = String(row[COL.courseRun] || '');
+                    const sponsorshipType = row[COL.sponsorshipType] || '';
+                    const enrolmentStatus = ssgStatus || 'Pending';
+
+                    console.log(`💾 Row ${i + 1}: email="${traineeEmail}" courseRun="${courseRunId}" status="${enrolmentStatus}" enrolmentId="${ssgRefNumber || ''}"`);
+
+                    try {
+                        const dbResponse = await fetch('/api/enrolments/bulk-create', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                enrolment: {
+                                    traineeEmail,
+                                    traineeName,
+                                    traineeNric,
+                                    courseCode,
+                                    courseTitle: '',
+                                    courseRunId,
+                                    courseReferenceNumber: courseCode,
+                                    sponsorshipType,
+                                    enrolmentDate: new Date().toISOString().split('T')[0],
+                                    enrolmentStatus,
+                                    enrolmentId: ssgRefNumber || ''
+                                }
+                            })
+                        });
+
+                        if (dbResponse.ok) {
+                            const dbResult = await dbResponse.json();
+                            console.log(`✅ Row ${i + 1} inserted to database:`, dbResult);
+                        } else {
+                            const dbError = await dbResponse.json().catch(() => ({}));
+                            const errMsg = dbError?.error?.message || dbError?.error || JSON.stringify(dbError);
+                            console.error(`❌ Row ${i + 1} DB insert failed (${dbResponse.status}):`, dbError);
+                            rowDbErrors.push({ row: i + 1, email: traineeEmail, error: errMsg });
+                        }
+                    } catch (dbErr) {
+                        const errMsg = dbErr instanceof Error ? dbErr.message : 'Network error';
+                        console.error(`❌ Row ${i + 1} DB insert exception:`, dbErr);
+                        rowDbErrors.push({ row: i + 1, email: traineeEmail, error: errMsg });
+                    }
+                } else {
+                    console.warn('⚠️ Skipping DB insert due to hard SSG error for:', row[COL.traineeEmail] || 'unknown', parsedResult?.error);
+                }
             }
+
+            if (rowDbErrors.length > 0) {
+                setDbInsertErrors(rowDbErrors);
+                console.warn(`⚠️ ${rowDbErrors.length} row(s) failed to insert into database:`, rowDbErrors);
+            }
+            console.log('✅ Database insertion process completed');
 
             setUploadResult(result);
 
@@ -436,6 +477,7 @@ export const BulkUploadEnrolmentView: React.FC = () => {
         setUploadResult(null);
         setError(null);
         setResultsPage(1);
+        setDbInsertErrors([]);
     };
 
     const UploadStep = () => (
@@ -601,6 +643,20 @@ export const BulkUploadEnrolmentView: React.FC = () => {
                     <p className="text-gray-500 dark:text-gray-400 mt-1">SSG response for each enrolment record.</p>
                 </div>
                 <div className="p-6">
+                    {dbInsertErrors.length > 0 && (
+                        <div className="mb-4 p-4 bg-orange-50 dark:bg-orange-900/20 border border-orange-300 dark:border-orange-700 rounded-lg">
+                            <div className="font-semibold text-orange-900 dark:text-orange-200 mb-2">
+                                ⚠️ {dbInsertErrors.length} row(s) failed to save to database
+                            </div>
+                            <div className="space-y-1">
+                                {dbInsertErrors.map((e, idx) => (
+                                    <div key={idx} className="text-sm text-orange-800 dark:text-orange-300">
+                                        Row {e.row} ({e.email || 'unknown email'}): {e.error}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
                     {results.length > 0 ? (
                         <div className="space-y-6">
                             <div className={`border rounded-lg p-4 ${successCount > 0 && failedCount === 0 ? 'bg-green-50 dark:bg-green-900/30 border-green-200 dark:border-green-800' : failedCount > 0 && successCount === 0 ? 'bg-red-50 dark:bg-red-900/30 border-red-200 dark:border-red-800' : 'bg-yellow-50 dark:bg-yellow-900/30 border-yellow-200 dark:border-yellow-800'}`}>

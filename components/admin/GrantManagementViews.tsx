@@ -4354,6 +4354,32 @@ export const CancelEnrolmentView: React.FC = () => {
                 setError(errorMessage);
             }
 
+            // If SSG cancellation succeeded, update the enrollment table in our DB
+            const ssgStatus = parsedResult?.status;
+            const enrolmentRefFromSSG = parsedResult?.data?.enrolment?.referenceNumber;
+            const enrolmentStatusFromSSG = parsedResult?.data?.enrolment?.status;
+            const cancelSucceeded = !hasError &&
+                (ssgStatus === 200 || ssgStatus === '200') &&
+                (enrolmentStatusFromSSG === 'Cancelled' || enrolmentStatusFromSSG === 'cancelled');
+
+            if (cancelSucceeded) {
+                const refToUpdate = enrolmentRefFromSSG || enrolmentId.trim();
+                try {
+                    const dbRes = await fetch('/api/enrolments/cancel', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ enrolmentId: refToUpdate }),
+                    });
+                    if (dbRes.ok) {
+                        console.log('✅ enrollment table updated to Cancelled for enrolment_id:', refToUpdate);
+                    } else {
+                        console.error('❌ Failed to update enrollment table:', await dbRes.json().catch(() => ({})));
+                    }
+                } catch (dbErr) {
+                    console.error('❌ Error updating enrollment table:', dbErr);
+                }
+            }
+
             setResult(parsedResult);
         } catch (err) {
             console.error('❌ Error cancelling enrolment:', err);

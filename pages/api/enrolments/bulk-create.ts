@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import crypto from 'crypto';
+import bcrypt from 'bcryptjs';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -79,11 +80,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // Create learner account
       userId = crypto.randomUUID();
 
+      const DEFAULT_PASSWORD = 'password123';
+      const salt = await bcrypt.genSalt(10);
+      const hashedPassword = await bcrypt.hash(DEFAULT_PASSWORD, salt);
+
       await client.query(
         `INSERT INTO app_user (
           id, email, full_name, password, password_hash, account_status, created_at
-        ) VALUES ($1, $2, $3, $4, $4, 'active', NOW())`,
-        [userId, traineeEmail, traineeName || traineeEmail, 'password123']
+        ) VALUES ($1, $2, $3, $4, $5, 'active', NOW())`,
+        [userId, traineeEmail, traineeName || traineeEmail, DEFAULT_PASSWORD, hashedPassword]
       );
 
       // Assign Learner role
@@ -196,13 +201,38 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
 
   } catch (error: any) {
-    await client.query('ROLLBACK');
+    await client.query('ROLLBACK').catch(() => {});
     console.error('❌ Error creating enrolment:', error);
-    
+
+    // Unique constraint violations → 400 instead of 500
+    const isUniqueViolation = error.code === '23505'; // PostgreSQL unique_violation
+    const isCheckViolation = error.code === '23514';  // PostgreSQL check_violation
+    const isNotNullViolation = error.code === '23502'; // PostgreSQL not_null_violation
+
+    if (isUniqueViolation) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          message: 'Duplicate enrolment — trainee is already enrolled in this course run',
+          details: [{ field: 'enrolment', message: error.detail || 'Duplicate record' }]
+        }
+      });
+    }
+
+    if (isCheckViolation || isNotNullViolation) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          message: `Invalid data: ${error.message}`,
+          details: [{ field: error.column || 'unknown', message: error.message }]
+        }
+      });
+    }
+
     return res.status(500).json({
       success: false,
       error: {
-        message: 'Failed to create enrolment',
+        message: error.message || 'Failed to create enrolment',
         details: [
           {
             field: 'server',

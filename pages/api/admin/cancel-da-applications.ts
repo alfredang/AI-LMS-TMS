@@ -230,6 +230,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             );
             cancelledCount = updateResult.rows.length;
             console.log(`✅ Updated ${cancelledCount} applications to Cancelled in DB`);
+
+            // Also update the enrollment table matching on enrolment_id
+            const succeededRefs = succeeded.map(s => s.enrolment_ref).filter(Boolean);
+            if (succeededRefs.length > 0) {
+                const enrolmentUpdateResult = await pool.query(
+                    `UPDATE enrollment
+                     SET enrolment_status = 'Cancelled',
+                         updated_at = NOW()
+                     WHERE enrolment_id = ANY($1::text[])
+                       AND enrolment_status != 'Cancelled'
+                     RETURNING id`,
+                    [succeededRefs]
+                );
+                console.log(`✅ Updated ${enrolmentUpdateResult.rows.length} enrollment record(s) to Cancelled`);
+            }
         }
 
         if (failed.length > 0) {

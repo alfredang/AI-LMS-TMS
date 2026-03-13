@@ -81,7 +81,6 @@ const ViewTrainers: React.FC = () => {
     setFilterName('');
     setFilterTrainerStatuses([]);
     setFilterAccountStatuses([]);
-    setFilterCourse('');
     setCurrentPage(1);
   };
 
