@@ -167,8 +167,8 @@ const AssessmentsSection: React.FC<{
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [selectedFiles, setSelectedFiles] = useState<Record<string, File | null>>({});
     const [isResubmitting, setIsResubmitting] = useState<Record<string, boolean>>({});
-    const [awaitingVerification, setAwaitingVerification] = useState<Record<string, boolean>>({});
-    const [isVerifying, setIsVerifying] = useState<Record<string, boolean>>({});
+    const [isUploading, setIsUploading] = useState<Record<string, boolean>>({});
+    const [uploadProgress, setUploadProgress] = useState<Record<string, number>>({});
     const [currentEnrollmentId, setCurrentEnrollmentId] = useState<string | null>(null);
 
     // Fetch current user's enrollment ID for this course run
@@ -282,95 +282,77 @@ const AssessmentsSection: React.FC<{
     };
 
 
-    const handleOpenFolder = async (assessmentId: string) => {
-        // Step 1: Just open the folder. Do NOT submit to the database yet.
-        const popup = window.open('', '_blank');
-        
-        try {
-            const courseCode = course?.courseCode || '';
-            const courseName = course?.title || '';
-            const studentName = currentUser?.fullName || 'Unknown Student';
-            
-            let fetchUrl = `/api/upload/google-drive`;
-            if (courseCode || courseName) {
-                fetchUrl += `?courseCode=${encodeURIComponent(courseCode)}&courseName=${encodeURIComponent(courseName)}&studentName=${encodeURIComponent(studentName)}`;
-            }
-
-            const response = await fetch(fetchUrl, { method: 'GET' });
-            
-            if (!response.ok) {
-                const errBody = await response.json().catch(() => ({}));
-                throw new Error(errBody.error || 'Failed to locate the Google Drive folder.');
-            }
-
-            const data = await response.json();
-            if (!data.success || !data.link) {
-                throw new Error(data.error || 'Failed to retrieve the folder link.');
-            }
-
-            // Open the folder
-            if (popup) {
-                popup.location.href = data.link;
-            } else {
-                const wantToOpen = window.confirm('The browser blocked the pop-up to Google Drive. Click OK to try opening it again.');
-                if (wantToOpen) {
-                    window.location.href = data.link;
-                }
-            }
-
-            // Mark this assessment as waiting for the user to upload and verify
-            setAwaitingVerification(prev => ({ ...prev, [assessmentId]: true }));
-
-        } catch (error: any) {
-            if (popup) popup.close();
-            alert(`Failed: ${error.message || 'Please try again.'}`);
-            console.error('Folder generation error:', error);
+    const handleFileChange = (assessmentId: string, event: React.ChangeEvent<HTMLInputElement>) => {
+        if (event.target.files && event.target.files.length > 0) {
+            setSelectedFiles(prev => ({
+                ...prev,
+                [assessmentId]: event.target.files![0]
+            }));
         }
     };
 
-    const handleVerifySubmission = async (assessmentId: string) => {
-        setIsVerifying(prev => ({ ...prev, [assessmentId]: true }));
-        
+    const handleSubmit = async (assessmentId: string) => {
+        const file = selectedFiles[assessmentId];
+        if (!file) {
+            alert('Please select a file to submit.');
+            return;
+        }
+
+        setIsUploading(prev => ({ ...prev, [assessmentId]: true }));
+        setUploadProgress(prev => ({ ...prev, [assessmentId]: 10 })); // Start progress
+
         try {
             const courseCode = course?.courseCode || '';
             const courseName = course?.title || '';
             const studentName = currentUser?.fullName || 'Unknown Student';
-            
-            let fetchUrl = `/api/upload/verify-drive-submission?studentName=${encodeURIComponent(studentName)}`;
-            if (courseCode || courseName) {
-                fetchUrl += `&courseCode=${encodeURIComponent(courseCode)}&courseName=${encodeURIComponent(courseName)}`;
-            }
+            const tgsRefMatch = courseName.match(/(TGS-\d+)/) || courseCode.match(/(TGS-\d+)/);
+            const tgsRef = tgsRefMatch ? tgsRefMatch[1] : courseCode;
 
-            const response = await fetch(fetchUrl, { method: 'GET' });
+            const formData = new FormData();
+            formData.append('file', file);
+
+            // Adding query parameters for the backend to build the folder structure
+            let fetchUrl = `/api/upload/google-drive?studentName=${encodeURIComponent(studentName)}`;
+            if (tgsRef) fetchUrl += `&courseCode=${encodeURIComponent(tgsRef)}`;
+            if (courseName) fetchUrl += `&courseName=${encodeURIComponent(courseName)}`;
+
+            setUploadProgress(prev => ({ ...prev, [assessmentId]: 40 })); // Updating progress
+
+            const response = await fetch(fetchUrl, {
+                method: 'POST',
+                body: formData,
+            });
+
+            setUploadProgress(prev => ({ ...prev, [assessmentId]: 80 })); // Almost done
+
             const data = await response.json();
-            
+
             if (!response.ok || !data.success) {
-                alert(`Cannot verify submission: ${data.error || 'Folder is missing or no files were found.'}`);
-                setIsVerifying(prev => ({ ...prev, [assessmentId]: false }));
-                return;
+                throw new Error(data.error || 'Failed to upload file to Google Drive.');
             }
 
-            // Verification succeeded! A file was found.
-            // Mark as submitted in the LMS database
-            const uploadedFileName = data.latestFile?.name || `Submitted via Google Drive`;
-            const fileLink = data.latestFile?.link || '';
-            
-            // Only update DB now that we are certain the file exists
-            await submitAssessment(assessmentId, uploadedFileName, fileLink);
-            console.log('✅ Assessment successfully verified and recorded as submitted');
+            setUploadProgress(prev => ({ ...prev, [assessmentId]: 100 })); // Upload complete
 
+            // Mark as submitted in the LMS database using the returned Google Drive link
+            await submitAssessment(assessmentId, file.name, data.data.fileUrl);
+            
+            console.log('✅ Assessment successfully uploaded and recorded');
             await loadSubmissions();
 
-            // Reset states
-            setAwaitingVerification(prev => ({ ...prev, [assessmentId]: false }));
+            // Reset UI state
+            setSelectedFiles(prev => ({ ...prev, [assessmentId]: null }));
             setIsResubmitting(prev => ({ ...prev, [assessmentId]: false }));
-            alert(`Verified automatically! Found file: ${uploadedFileName}`);
+
+            // Reset the file input visually
+            const fileInput = document.getElementById(`file-upload-${assessmentId}`) as HTMLInputElement;
+            if (fileInput) fileInput.value = '';
 
         } catch (error: any) {
-            alert(`Failed to verify: ${error.message || 'An unexpected error occurred.'}`);
-            console.error('Verification error:', error);
+            alert(`Upload failed: ${error.message || 'Please try again.'}`);
+            console.error('Submission error:', error);
         } finally {
-            setIsVerifying(prev => ({ ...prev, [assessmentId]: false }));
+            setIsUploading(prev => ({ ...prev, [assessmentId]: false }));
+            setUploadProgress(prev => ({ ...prev, [assessmentId]: 0 }));
         }
     };
 
@@ -444,41 +426,45 @@ const AssessmentsSection: React.FC<{
                         </div>
                     </div>
                 )}
-                {/* Step 1: Open the Folder */}
-                {!awaitingVerification[assessment.id] && (
-                    <>
-                        <p className="mb-2 text-gray-500 dark:text-gray-400">
-                            {canResubmit ? "Select a new file to replace your previous submission." : "The assessment is now available. Click below to open your submission folder in Google Drive."}
-                        </p>
-                        <div className="flex items-center gap-2 mt-4">
-                            <Button onClick={() => handleOpenFolder(assessment.id)}>
-                                Open Submission Folder
-                            </Button>
-                        </div>
-                    </>
-                )}
+                {/* Step 1: File Upload Input */}
+                <div className="mt-4">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        {canResubmit ? "Upload a new file to replace your previous submission" : "Upload your completed assessment file"}
+                    </label>
+                    <input
+                        type="file"
+                        id={`file-upload-${assessment.id}`}
+                        onChange={(e) => handleFileChange(assessment.id, e)}
+                        className="block w-full text-sm text-gray-500 dark:text-gray-400
+                            file:mr-4 file:py-2 file:px-4
+                            file:rounded-md file:border-0
+                            file:text-sm file:font-semibold
+                            file:bg-blue-50 file:text-blue-700
+                            hover:file:bg-blue-100
+                            dark:file:bg-blue-900/20 dark:file:text-blue-300
+                            dark:hover:file:bg-blue-900/40"
+                    />
+                </div>
 
-                {/* Step 2: Verify the Upload */}
-                {awaitingVerification[assessment.id] && (
-                    <div className="bg-yellow-50 dark:bg-yellow-900/20 p-4 rounded-md border border-yellow-200 dark:border-yellow-800 mt-4">
-                        <p className="text-sm font-semibold text-yellow-800 dark:text-yellow-300 mb-2">
-                            Folder Opened!
-                        </p>
-                        <p className="text-xs text-yellow-700 dark:text-yellow-400 mb-4">
-                            Please upload your document into the Google Drive folder that just opened. Once you have uploaded the file, return here and click "Verify Submission".
-                        </p>
-                        <div className="flex items-center gap-2">
-                            <Button 
-                                onClick={() => handleVerifySubmission(assessment.id)}
-                                disabled={isVerifying[assessment.id]}
-                                className={isVerifying[assessment.id] ? "opacity-75 cursor-not-allowed" : ""}
-                            >
-                                {isVerifying[assessment.id] ? "Checking folder..." : "Verify Submission"}
-                            </Button>
-                            <Button variant="ghost" size="sm" onClick={() => handleOpenFolder(assessment.id)}>
-                                Re-open Folder
-                            </Button>
-                        </div>
+                {/* Step 2: Submit Button & Progress */}
+                {selectedFiles[assessment.id] && (
+                    <div className="mt-4 space-y-3">
+                        <Button 
+                            onClick={() => handleSubmit(assessment.id)}
+                            disabled={isUploading[assessment.id]}
+                            className="w-full"
+                        >
+                            {isUploading[assessment.id] ? "Uploading..." : "Submit Assessment"}
+                        </Button>
+                        
+                        {isUploading[assessment.id] && (
+                            <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5">
+                                <div 
+                                    className="bg-blue-600 h-2.5 rounded-full transition-all duration-300" 
+                                    style={{ width: `${uploadProgress[assessment.id] || 0}%` }}
+                                ></div>
+                            </div>
+                        )}
                     </div>
                 )}
             </div>

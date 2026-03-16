@@ -115,56 +115,69 @@ async function getOrCreateStudentFolder(
     return newId;
 }
 
+/**
+ * Robust hierarchy builder: Ensures Course Folder -> 'Assessment Records' -> Learner Folder exists
+ */
+async function ensureStudentUploadPath(
+    drive: drive_v3.Drive,
+    rootFolderId: string,
+    courseCode: string,
+    courseName: string,
+    studentIdentifier: string
+): Promise<string> {
+    // 1. Course Folder (Search by TGS Ref, create if missing)
+    let courseFolderId = null;
+    let tgsRef = courseCode;
+    if (!tgsRef) {
+        const tgsMatch = courseName.match(/(TGS-\d+)/);
+        if (tgsMatch) {
+            tgsRef = tgsMatch[1];
+        }
+    }
+
+    const expectedCourseFolderName = tgsRef && courseName && !courseName.includes(tgsRef)
+        ? `${tgsRef} ${courseName}`.trim()
+        : (`${courseCode} ${courseName}`).trim() || 'Unknown Course';
+
+    if (tgsRef) {
+        // Search by TGS Ref (most reliable)
+        const safeTgsRef = tgsRef.replace(/'/g, "\\'");
+        const tgsResponse = await drive.files.list({
+            q: `'${rootFolderId}' in parents and name contains '${safeTgsRef}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
+            fields: 'files(id, name)',
+            spaces: 'drive',
+        });
+        if (tgsResponse.data.files && tgsResponse.data.files.length > 0) {
+            courseFolderId = tgsResponse.data.files[0].id!;
+        }
+    } else {
+        // Search by exact name
+        courseFolderId = await findSubfolder(drive, rootFolderId, expectedCourseFolderName);
+    }
+
+    if (!courseFolderId) {
+        // Auto-create Course folder if completely missing
+        courseFolderId = await createSubfolder(drive, rootFolderId, expectedCourseFolderName);
+        console.log(`📁 Created new Course folder: ${expectedCourseFolderName}`);
+    }
+
+    // 2. Assessment Records Subfolder
+    let assessmentRecordsId = await findSubfolder(drive, courseFolderId, 'Assessment Records');
+    if (!assessmentRecordsId) {
+        assessmentRecordsId = await createSubfolder(drive, courseFolderId, 'Assessment Records');
+        console.log(`📁 Created 'Assessment Records' inside Course folder`);
+    }
+
+    // 3. Learner Date Subfolder
+    const studentFolderId = await getOrCreateStudentFolder(drive, assessmentRecordsId, studentIdentifier);
+    return studentFolderId;
+}
+
 async function handler(req: NextApiRequest, res: NextApiResponse) {
     if (cors(req, res)) return;
 
     if (req.method === 'GET') {
-        const parentFolderId = process.env.GOOGLE_DRIVE_FOLDER_ID;
-        if (!parentFolderId) {
-            return res.status(500).json({ success: false, error: 'GOOGLE_DRIVE_FOLDER_ID is not configured.' });
-        }
-
-        const courseCode = (req.query.courseCode as string) || '';
-        
-        if (!courseCode) {
-            return res.status(400).json({ success: false, error: 'Course code (TGS ref) is required.' });
-        }
-
-        try {
-            const drive = getDriveClient();
-            
-            // Search for the folder by checking if its name contains the TGS ref
-            const safeCode = courseCode.replace(/'/g, "\\'");
-            const response = await drive.files.list({
-                q: `'${parentFolderId}' in parents and name contains '${safeCode}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
-                fields: 'files(id, name, webViewLink)',
-                spaces: 'drive',
-            });
-
-            const files = response.data.files;
-            if (!files || files.length === 0) {
-                return res.status(404).json({ success: false, error: `Course folder containing TGS ref '${courseCode}' not found in Google Drive.` });
-            }
-
-            const courseFolderId = files[0].id;
-
-            // Now search for the "Assessment Records" folder inside the course folder
-            const assessmentRecordsResponse = await drive.files.list({
-                q: `'${courseFolderId}' in parents and name = 'Assessment Records' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
-                fields: 'files(id, name, webViewLink)',
-                spaces: 'drive',
-            });
-
-            const assessmentFiles = assessmentRecordsResponse.data.files;
-            if (assessmentFiles && assessmentFiles.length > 0) {
-                return res.status(200).json({ success: true, link: assessmentFiles[0].webViewLink });
-            } else {
-                return res.status(404).json({ success: false, error: `The 'Assessment Records' folder was not found inside the course folder.` });
-            }
-        } catch (error: any) {
-            console.error('Drive API Error:', error);
-            return res.status(500).json({ success: false, error: error.message || 'Failed to communicate with Google Drive API' });
-        }
+        return res.status(405).json({ success: false, error: 'Method not allowed. Use POST for file uploads.' });
     }
 
     if (req.method !== 'POST') {
@@ -207,34 +220,24 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
 
         const drive = getDriveClient();
 
-        // 1. Get Course Folder (e.g., "CRS-123 Intro to AI")
-        const courseFolderName = courseCode && courseName 
-            ? `${courseCode} ${courseName}`.trim()
-            : (courseName || courseCode || 'Unknown Course');
-        const courseFolderId = await findSubfolder(drive, parentFolderId, courseFolderName);
-        
-        if (!courseFolderId) {
-            try { fs.unlinkSync(uploadedFile.filepath); } catch { /* ignore */ }
-            return res.status(404).json({ success: false, error: `Course folder '${courseFolderName}' not found in Google Drive.` });
-        }
-
-        // 2. Get Student Submission Folder (e.g., "25-10-2023 John Doe")
-        // Format date as DD-MM-YYYY
+        // Build Learner Identifier (e.g., "16-03-2026 John Doe")
         const today = new Date();
         const dd = String(today.getDate()).padStart(2, '0');
-        const mm = String(today.getMonth() + 1).padStart(2, '0'); // January is 0!
+        const mm = String(today.getMonth() + 1).padStart(2, '0');
         const yyyy = today.getFullYear();
         const dateStr = `${dd}-${mm}-${yyyy}`;
+        const studentIdentifier = `${dateStr} ${studentName}`;
 
-        const studentFolderName = `${dateStr} ${studentName}`;
-        const studentFolderId = await findSubfolder(drive, courseFolderId, studentFolderName);
+        // 1 & 2 & 3. Ensure the full path exists (Course -> Assessment Records -> Learner Name)
+        const studentFolderId = await ensureStudentUploadPath(
+            drive, 
+            parentFolderId, 
+            courseCode, 
+            courseName, 
+            studentIdentifier
+        );
 
-        if (!studentFolderId) {
-            try { fs.unlinkSync(uploadedFile.filepath); } catch { /* ignore */ }
-            return res.status(404).json({ success: false, error: `Student folder '${studentFolderName}' not found inside course folder.` });
-        }
-
-        // 3. Upload file into the student's subfolder
+        // 4. Upload file into the student's subfolder
         const driveResponse = await drive.files.create({
             requestBody: {
                 name: originalName,
