@@ -119,3 +119,4 @@ public/uploads/training_provider/self_signing_cert/*
 # Uncomment these after verifying migration success:
 # client/
 # server/
+GOOGLE_KEY_B64.txt
