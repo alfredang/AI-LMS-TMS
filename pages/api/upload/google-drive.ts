@@ -26,11 +26,14 @@ function getDriveClient(): drive_v3.Drive {
         );
     }
 
-    // Fix formatting for private key based on how different hosting providers (like Coolify/Vercel) inject it
-    // 1. Remove wrapping quotes if they exist
-    let formattedPrivateKey = privateKey.replace(/^"|"$/g, '');
-    // 2. Replace escaped literal \n with actual newlines
-    formattedPrivateKey = formattedPrivateKey.replace(/\\n/g, '\n');
+    // EXTREMELY ROBUST KEY PARSING FOR CLOUD HOSTING
+    // Some providers (like Coolify, Vercel, Docker) inject multi-line secrets in weird ways.
+    // This handles literal "\n" strings, actual newlines, and accidental wrapping quotes.
+    const formattedPrivateKey = privateKey
+        .replace(/^"|"$/g, '') // Strip wrapping double quotes
+        .replace(/^'|'$/g, '') // Strip wrapping single quotes
+        .split(String.raw`\n`).join('\n') // Convert literal "\n" escape sequences to true newlines
+        .replace(/\\n/g, '\n'); // Convert any standard escaped newlines
 
     const auth = new google.auth.JWT({
         email: serviceAccountEmail,
