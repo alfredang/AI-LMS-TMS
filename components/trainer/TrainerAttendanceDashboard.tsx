@@ -116,6 +116,7 @@ const TrainerAttendanceDashboard: React.FC = () => {
   const [enrolmentError, setEnrolmentError]            = useState<string | null>(null);
   const [showEnrolNric, setShowEnrolNric]              = useState(false);
   const [showEnrolContact, setShowEnrolContact]        = useState(false);
+  const [learnerAccountMap, setLearnerAccountMap]      = useState<Record<string, 'exists' | 'missing' | 'creating' | 'done' | 'error'>>({});
 
   // Manual Attendance state
   const [manualSessions, setManualSessions]            = useState<any[]>([]);
@@ -387,7 +388,7 @@ const TrainerAttendanceDashboard: React.FC = () => {
     }
   };
 
-  const fetchEnrolments = async (courseRunCode: string) => {
+  const fetchEnrolments = async (courseRunCode: string, courseOverride?: typeof selectedCourse) => {
     setIsLoadingEnrolments(true);
     setEnrolmentError(null);
     setEnrolmentRecords([]);
@@ -416,10 +417,74 @@ const TrainerAttendanceDashboard: React.FC = () => {
         records = raw.enrolments;
       }
       setEnrolmentRecords(records);
+      if (records.length > 0) checkLearnerAccounts(records, courseOverride ?? selectedCourse);
     } catch (err) {
       setEnrolmentError(err instanceof Error ? err.message : 'Failed to fetch enrolments.');
     } finally {
       setIsLoadingEnrolments(false);
+    }
+  };
+
+  const checkLearnerAccounts = async (records: any[], courseOverride?: typeof selectedCourse) => {
+    const emails: string[] = records
+      .map((item: any) => {
+        const enrol = item?.enrolment ?? item;
+        const trainee = enrol?.trainee ?? {};
+        return trainee?.email?.full || trainee?.email || '';
+      })
+      .filter(Boolean);
+    if (emails.length === 0) return;
+    try {
+      const res = await fetch('/api/admin/check-learner-accounts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ emails }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        const map: Record<string, 'exists' | 'missing'> = {};
+        for (const item of json.data) {
+          map[item.email.toLowerCase()] = item.exists ? 'exists' : 'missing';
+        }
+        setLearnerAccountMap(map);
+
+        // Auto-create accounts for all missing learners
+        const course = courseOverride ?? selectedCourse;
+        for (const item of records) {
+          const enrol = item?.enrolment ?? item;
+          const trainee = enrol?.trainee ?? {};
+          const email: string = trainee?.email?.full || trainee?.email || '';
+          if (!email) continue;
+          if (map[email.toLowerCase()] !== 'missing') continue;
+          const nric: string = trainee?.id || trainee?.nric || enrol?.nric || '';
+          const enrolRef: string = enrol?.referenceNumber || enrol?.enrolmentReferenceNumber || '';
+          await handleCreateLearnerAccount(email, trainee?.fullName || trainee?.name || '', nric, enrolRef, course);
+        }
+      }
+    } catch { /* silent */ }
+  };
+
+  const handleCreateLearnerAccount = async (email: string, fullName: string, nric?: string, enrolmentId?: string, courseOverride?: typeof selectedCourse) => {
+    const course = courseOverride ?? selectedCourse;
+    const key = email.toLowerCase();
+    setLearnerAccountMap(prev => ({ ...prev, [key]: 'creating' }));
+    try {
+      const res = await fetch('/api/admin/create-learner-account', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email,
+          fullName,
+          nric,
+          courseRunId: course?.courseRunId,
+          courseId: course?.id,
+          enrolmentId,
+        }),
+      });
+      const json = await res.json();
+      setLearnerAccountMap(prev => ({ ...prev, [key]: json.success ? 'done' : 'error' }));
+    } catch {
+      setLearnerAccountMap(prev => ({ ...prev, [key]: 'error' }));
     }
   };
 
@@ -527,6 +592,7 @@ const TrainerAttendanceDashboard: React.FC = () => {
                       setManualAttendance([]);
                       setManualAttendanceDbMap({});
                       setManualAttendanceMsg(null);
+                      setLearnerAccountMap({});
                       if (course?.digitalAttendanceId) {
                         setDigitalAttendanceId(course.digitalAttendanceId);
                       } else {
@@ -537,7 +603,7 @@ const TrainerAttendanceDashboard: React.FC = () => {
                       }
                       if (course?.courseRunCode && course?.courseCode) {
                         handleFetchSessions(course.courseRunCode, course.courseCode, course);
-                        fetchEnrolments(course.courseRunCode);
+                        fetchEnrolments(course.courseRunCode, course);
                       }
                       if (val) fetchManualSessions(val);
                     }}
@@ -904,13 +970,14 @@ const TrainerAttendanceDashboard: React.FC = () => {
               <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Enrolment Status</th>
               {/* <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Payment</th> */}
               <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Enrolment Date</th>
+              <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Account</th>
             </tr>
           </thead>
           <tbody>
             {isLoadingEnrolments ? (
               Array.from({ length: 5 }).map((_, idx) => (
                 <tr key={idx} className="border-b border-default">
-                  {Array.from({ length: 14 }).map((__, col) => (
+                  {Array.from({ length: 15 }).map((__, col) => (
                     <td key={col} className="px-3 py-3">
                       <div className="h-3 rounded bg-surface-elevated animate-pulse" style={{ width: col === 5 ? '70%' : '50%' }} />
                     </td>
@@ -954,12 +1021,47 @@ const TrainerAttendanceDashboard: React.FC = () => {
                     <td className="px-3 py-3"><StatusBadge value={enrol?.status || enrol?.enrolmentStatus || '—'} /></td>
                     {/* <td className="px-3 py-3"><StatusBadge value={trainee?.fees?.collectionStatus || '—'} /></td> */}
                     <td className="px-3 py-3 text-on-surface-secondary whitespace-nowrap">{trainee?.enrolmentDate || '—'}</td>
+                    <td className="px-3 py-3 whitespace-nowrap">{(() => {
+                      const email: string = trainee?.email?.full || trainee?.email || '';
+                      if (!email) return <span className="text-muted text-xs">—</span>;
+                      const status = learnerAccountMap[email.toLowerCase()];
+                      if (status === 'exists') return (
+                        <span className="inline-flex items-center gap-1 text-xs font-medium text-green-600 dark:text-green-400">
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
+                          Active
+                        </span>
+                      );
+                      if (status === 'done') return (
+                        <span className="inline-flex items-center gap-1 text-xs font-medium text-green-600 dark:text-green-400">
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
+                          Created
+                        </span>
+                      );
+                      if (status === 'creating') return (
+                        <span className="inline-flex items-center gap-1 text-xs text-muted">
+                          <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-primary" />
+                          Creating...
+                        </span>
+                      );
+                      const enrolRef: string = enrol?.referenceNumber || enrol?.enrolmentReferenceNumber || '';
+                      if (status === 'error') return (
+                        <button onClick={() => handleCreateLearnerAccount(email, trainee?.fullName || trainee?.name || '', nric, enrolRef)} className="text-xs text-red-500 hover:underline">
+                          Retry
+                        </button>
+                      );
+                      if (status === 'missing') return (
+                        <button onClick={() => handleCreateLearnerAccount(email, trainee?.fullName || trainee?.name || '', nric, enrolRef)} className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium bg-primary text-white rounded hover:bg-primary-hover transition-colors">
+                          Create Account
+                        </button>
+                      );
+                      return <div className="h-3 w-20 rounded bg-surface-elevated animate-pulse" />;
+                    })()}</td>
                   </tr>
                 );
               })
             ) : (
               <tr>
-                <td colSpan={14} className="px-3 py-10 text-center text-sm text-muted italic">
+                <td colSpan={15} className="px-3 py-10 text-center text-sm text-muted italic">
                   {selectedCourseRunId ? 'No enrolment records found.' : 'Select a class to load enrolments.'}
                 </td>
               </tr>
