@@ -26,8 +26,11 @@ function getDriveClient(): drive_v3.Drive {
         );
     }
 
-    // Fix formatting for private key if it's passed as a single line with \n
-    const formattedPrivateKey = privateKey.replace(/\\n/g, '\n');
+    // Fix formatting for private key based on how different hosting providers (like Coolify/Vercel) inject it
+    // 1. Remove wrapping quotes if they exist
+    let formattedPrivateKey = privateKey.replace(/^"|"$/g, '');
+    // 2. Replace escaped literal \n with actual newlines
+    formattedPrivateKey = formattedPrivateKey.replace(/\\n/g, '\n');
 
     const auth = new google.auth.JWT({
         email: serviceAccountEmail,
