@@ -32,11 +32,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           cr.start_date,
           cr.end_date,
           cr.mode_of_learning
-      FROM trainer_profile tp
-      JOIN course_run cr ON tp.user_id = cr.assigned_trainer_id
+      FROM course_run cr
       JOIN course c ON cr.course_id = c.id
       LEFT JOIN app_user au ON cr.assigned_trainer_id = au.id
-      WHERE tp.user_id = $1
+      WHERE cr.assigned_trainer_id = $1
       ORDER BY
         CASE WHEN cr.end_date >= CURRENT_DATE THEN 0 ELSE 1 END,
         cr.start_date ASC

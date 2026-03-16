@@ -732,6 +732,8 @@ CREATE TABLE public.course (
     num_responders integer,
     description text,
     course_outline text,
+    practical_performance_assessment_link text,
+    written_assessment_link text,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT course_assessment_hours_check CHECK ((assessment_hours >= (0)::numeric)),

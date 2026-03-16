@@ -164,6 +164,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     );
 
     if (trainerResult.rows.length === 0) {
+      console.warn(`⚠️ assign-trainer 404: trainer not found — primary=${primary_email}, secondary=${secondary_email ?? 'none'}, run=${course_run_id}`);
       return res.status(404).json({
         success: false,
         error: `Trainer not found or has no trainer profile: ${primary_email}`,
@@ -239,9 +240,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       if (courseResult.rows.length === 0) {
         await client.query('ROLLBACK');
+        console.warn(`⚠️ assign-trainer 400: course not found — course_code=${courseCode}, run=${course_run_id}`);
         return res.status(400).json({
           success: false,
-          error: `Course not found for course_code: ${courseCode}. Add the course first before assigning a run.`,
+          error: `Course run ${course_run_id} does not exist in the database yet. To fix this:\n1. Log in with an Admin account.\n2. Go to Class Management > Upcoming Classes.\n3. Click "Import Course Run" and enter Course Run ID: ${course_run_id}.\n4. Once imported successfully, retry assigning the trainer.`,
         });
       }
 

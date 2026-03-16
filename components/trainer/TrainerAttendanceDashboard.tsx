@@ -17,7 +17,9 @@ const formatSessionLabel = (session: Session): string => {
   const formatted = d.length === 8
     ? `${d.slice(6, 8)} ${months[parseInt(d.slice(4, 6), 10) - 1]} ${d.slice(0, 4)}`
     : d;
-  return `${session.id} — ${formatted} ${session.startTime}–${session.endTime}`;
+  // Extract just the session suffix (e.g. "S1") from the full session ID
+  const sessionSuffix = session.id.split('-').pop() || '';
+  return `${sessionSuffix} · ${formatted} ${session.startTime}–${session.endTime}`;
 };
 
 const StatusBadge: React.FC<{ value: string }> = ({ value }) => {
@@ -113,6 +115,7 @@ const TrainerAttendanceDashboard: React.FC = () => {
   const [isLoadingEnrolments, setIsLoadingEnrolments]  = useState(false);
   const [enrolmentError, setEnrolmentError]            = useState<string | null>(null);
   const [showEnrolNric, setShowEnrolNric]              = useState(false);
+  const [showEnrolContact, setShowEnrolContact]        = useState(false);
 
   // Manual Attendance state
   const [manualSessions, setManualSessions]            = useState<any[]>([]);
@@ -544,7 +547,7 @@ const TrainerAttendanceDashboard: React.FC = () => {
                     <option value="" disabled>— Select a class —</option>
                     {activeCourses.map(c => (
                       <option key={c.courseRunId} value={c.courseRunId}>
-                        {c.title} | Run: {c.courseRunCode} | {c.courseCode}
+                        {c.title}
                       </option>
                     ))}
                   </select>
@@ -573,6 +576,20 @@ const TrainerAttendanceDashboard: React.FC = () => {
             </div>
           </div>
 
+          {/* Course Run ID + Course Code pills — appear right after class is selected */}
+          {selectedCourse && (
+            <div className="flex flex-wrap gap-2">
+              <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-surface-elevated border border-default text-sm">
+                <span className="font-medium text-on-surface-secondary">Course Run ID</span>
+                <span className="font-bold text-primary">{selectedCourse.courseRunCode}</span>
+              </span>
+              <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-surface-elevated border border-default text-sm">
+                <span className="font-medium text-on-surface-secondary">Course Code</span>
+                <span className="font-bold text-on-surface">{selectedCourse.courseCode}</span>
+              </span>
+            </div>
+          )}
+
           {/* Session dropdown — shown after sessions load */}
           {sessions.length > 0 && (
             <div className="relative">
@@ -590,20 +607,12 @@ const TrainerAttendanceDashboard: React.FC = () => {
             </div>
           )}
 
-          {/* Course run info chips */}
-          {selectedCourse && sessions.length > 0 && (
-            <div className="flex flex-wrap gap-2 pt-1">
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-surface-elevated border border-default text-xs">
-                <span className="font-medium text-on-surface">Course Run ID</span>
-                <span className="font-semibold text-primary">{selectedCourse.courseRunCode}</span>
-              </span>
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-surface-elevated border border-default text-xs">
-                <span className="font-medium text-on-surface">Course Reference Code</span>
-                <span className="font-semibold text-on-surface">{selectedCourse.courseCode}</span>
-              </span>
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-surface-elevated border border-default text-xs">
-                <span className="font-medium text-on-surface">Total Sessions</span>
-                <span className="font-semibold text-on-surface">{sessions.length}</span>
+          {/* Total Sessions pill — appears below session dropdown once sessions are loaded */}
+          {sessions.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-surface-elevated border border-default text-sm">
+                <span className="font-medium text-on-surface-secondary">Total Sessions</span>
+                <span className="font-bold text-on-surface">{sessions.length}</span>
               </span>
             </div>
           )}
@@ -881,6 +890,14 @@ const TrainerAttendanceDashboard: React.FC = () => {
                   </button>
                 </div>
               </th>
+              <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">
+                <div className="flex items-center gap-2">
+                  Contact No.
+                  <button onClick={() => setShowEnrolContact(v => !v)} className="text-xs font-normal text-primary hover:underline">
+                    {showEnrolContact ? 'Hide' : 'Show'}
+                  </button>
+                </div>
+              </th>
               <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Email</th>
               <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Sponsorship</th>
               <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Employer</th>
@@ -893,7 +910,7 @@ const TrainerAttendanceDashboard: React.FC = () => {
             {isLoadingEnrolments ? (
               Array.from({ length: 5 }).map((_, idx) => (
                 <tr key={idx} className="border-b border-default">
-                  {Array.from({ length: 13 }).map((__, col) => (
+                  {Array.from({ length: 14 }).map((__, col) => (
                     <td key={col} className="px-3 py-3">
                       <div className="h-3 rounded bg-surface-elevated animate-pulse" style={{ width: col === 5 ? '70%' : '50%' }} />
                     </td>
@@ -916,6 +933,21 @@ const TrainerAttendanceDashboard: React.FC = () => {
                     <td className="px-3 py-3 text-on-surface-secondary whitespace-nowrap">{enrol?.referenceNumber || enrol?.enrolmentReferenceNumber || '—'}</td>
                     <td className="px-3 py-3 font-medium text-on-surface whitespace-nowrap">{trainee?.fullName || trainee?.name || '—'}</td>
                     <td className="px-3 py-3 text-on-surface-secondary font-mono whitespace-nowrap">{nric ? (showEnrolNric ? nric : maskedNric) : '—'}</td>
+                    <td className="px-3 py-3 text-on-surface-secondary whitespace-nowrap">{(() => {
+                      const c = trainee?.contactNumber || trainee?.phone || trainee?.mobileNumber || trainee?.mobile;
+                      if (!c) return '—';
+                      let full: string;
+                      if (typeof c === 'object') {
+                        const parts = [c.countryCode, c.areaCode, c.phoneNumber].filter(Boolean);
+                        full = parts.join(' ') || '—';
+                      } else {
+                        full = String(c);
+                      }
+                      if (!showEnrolContact) {
+                        return full.length > 4 ? `${'•'.repeat(full.length - 4)}${full.slice(-4)}` : '••••';
+                      }
+                      return full;
+                    })()}</td>
                     <td className="px-3 py-3 text-on-surface-secondary">{trainee?.email?.full || '—'}</td>
                     <td className="px-3 py-3 text-on-surface-secondary whitespace-nowrap">{trainee?.sponsorshipType || '—'}</td>
                     <td className="px-3 py-3 text-on-surface-secondary whitespace-nowrap">{trainee?.employer?.name || '—'}</td>
@@ -927,7 +959,7 @@ const TrainerAttendanceDashboard: React.FC = () => {
               })
             ) : (
               <tr>
-                <td colSpan={13} className="px-3 py-10 text-center text-sm text-muted italic">
+                <td colSpan={14} className="px-3 py-10 text-center text-sm text-muted italic">
                   {selectedCourseRunId ? 'No enrolment records found.' : 'Select a class to load enrolments.'}
                 </td>
               </tr>

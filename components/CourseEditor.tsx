@@ -138,7 +138,7 @@ const CourseEditor: React.FC = () => {
         ...editingCourse,
         topics: editingCourse.topics || [],
         assessments: editingCourse.assessments || [],
-        modeOfLearning: editingCourse.modeOfLearning || [],
+        modeOfLearning: editingCourse.modeOfLearning?.length ? editingCourse.modeOfLearning : [ModeOfLearning.Physical],
         // Ensure imageUrl is set - use existing or generate default
         imageUrl: editingCourse.imageUrl || `https://picsum.photos/seed/${editingCourse.id || 'new'}/400/225`
     });
@@ -386,22 +386,17 @@ const CourseEditor: React.FC = () => {
 
         const missingFields = requiredFields.filter(({ field }) => !field || field === '').map(({ name }) => name);
 
-        // Special validation for Mode of Learning - check if it's selected and valid
-        const selectedMode = course.modeOfLearning?.[0];
-        const validModes = Object.values(ModeOfLearning) as string[];
+        // Mode of Learning — default to Physical if somehow unset
+        const selectedMode = course.modeOfLearning?.[0] || ModeOfLearning.Physical;
 
-        if (!selectedMode || !validModes.includes(selectedMode)) {
-            missingFields.push('Mode of Learning');
-        }
-
-        // Validate training and assessment hours are greater than 0
+        // Validate training hours > 0; assessment hours can be 0
         if (course.trainingHours <= 0) {
             alert('Training Hours must be greater than 0');
             return;
         }
 
-        if (course.assessmentHours <= 0) {
-            alert('Assessment Hours must be greater than 0');
+        if (course.assessmentHours < 0) {
+            alert('Assessment Hours cannot be negative');
             return;
         }
 
@@ -825,9 +820,14 @@ const CourseEditor: React.FC = () => {
     return (
         <div>
             {/* Header */}
-            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6">
-                <h2 className="text-2xl sm:text-3xl font-bold dark:text-white">Edit Course</h2>
-                <div className="flex items-center gap-2 self-end sm:self-center">
+            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-6 pb-4 border-b border-gray-200 dark:border-gray-700">
+                <div>
+                    <h2 className="text-2xl font-bold dark:text-white">{isNewCourse ? 'Create Course' : 'Edit Course'}</h2>
+                    {!isNewCourse && course.courseCode && (
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">{course.courseCode}</p>
+                    )}
+                </div>
+                <div className="flex items-center gap-2 self-end sm:self-auto">
                     <Button variant="ghost" onClick={() => {
                         setEditingCourse(null);
                         setCourseEditMode(null);
@@ -839,21 +839,22 @@ const CourseEditor: React.FC = () => {
             </div>
 
             {/* Main two-column layout */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 items-start">
                 {/* Left Column: Course Details */}
-                <div className="lg:col-span-1 space-y-6 lg:sticky lg:top-24">
+                <div className="md:col-span-1 xl:col-span-1 space-y-6 xl:sticky xl:top-6">
                     <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
                         <h3 className="text-xl font-bold mb-4 dark:text-white">Course Details</h3>
                         <div className="space-y-4">
                             <div>
                                 <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Course Image</label>
-                                <div className="relative aspect-video bg-gray-200 rounded-md overflow-hidden">
+
+                                {/* Image preview */}
+                                <div className="relative aspect-video bg-gray-100 dark:bg-gray-700 rounded-xl overflow-hidden border border-gray-200 dark:border-gray-600 mb-3 shadow-sm">
                                     <img
                                         src={getCourseImageUrl(course.imageUrl, course.id)}
                                         alt={course.title}
                                         className="w-full h-full object-cover"
                                         onError={(e) => {
-                                            // If image fails to load (e.g., invalid blob URL), fall back to placeholder
                                             const target = e.target as HTMLImageElement;
                                             if (target.src !== `https://picsum.photos/seed/${course.id || 'default'}/400/200`) {
                                                 target.src = `https://picsum.photos/seed/${course.id || 'default'}/400/200`;
@@ -861,12 +862,42 @@ const CourseEditor: React.FC = () => {
                                         }}
                                     />
                                     {isGeneratingImage && (
-                                        <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
-                                            <Spinner text="Generating..." />
+                                        <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center gap-2">
+                                            <Spinner text="Generating image..." />
                                         </div>
                                     )}
                                 </div>
-                                <div className="flex gap-2 mt-2">
+
+                                {/* Image URL input */}
+                                <div className="mb-3">
+                                    <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">
+                                        Image URL Link
+                                    </label>
+                                    <div className="relative">
+                                        <Icon name={IconName.Link} className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                                        <input
+                                            type="url"
+                                            placeholder="https://example.com/image.jpg"
+                                            value={course.imageUrl && !course.imageUrl.startsWith('blob:') ? course.imageUrl : ''}
+                                            onChange={(e) => {
+                                                const url = e.target.value.trim();
+                                                setCourse(prev => ({ ...prev, imageUrl: url || undefined }));
+                                            }}
+                                            className={`${inputClasses} pl-9 text-sm`}
+                                        />
+                                    </div>
+                                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">Paste a direct image URL, or use the options below.</p>
+                                </div>
+
+                                {/* Divider */}
+                                <div className="flex items-center gap-2 mb-3">
+                                    <div className="flex-1 h-px bg-gray-200 dark:bg-gray-600" />
+                                    <span className="text-xs text-gray-400 dark:text-gray-500 font-medium">or</span>
+                                    <div className="flex-1 h-px bg-gray-200 dark:bg-gray-600" />
+                                </div>
+
+                                {/* Upload & AI buttons */}
+                                <div className="flex flex-col gap-2">
                                     <input
                                         type="file"
                                         id="courseImageUpload"
@@ -874,22 +905,14 @@ const CourseEditor: React.FC = () => {
                                         onChange={(e) => {
                                             if (e.target.files && e.target.files[0]) {
                                                 const file = e.target.files[0];
-
-                                                // Validate image file type
                                                 if (!validateImageFile(file)) {
-                                                    e.target.value = ''; // Clear the input
+                                                    e.target.value = '';
                                                     return;
                                                 }
-
-                                                // Clean up previous preview URL if it exists
                                                 if (previewImageUrl) {
                                                     URL.revokeObjectURL(previewImageUrl);
                                                 }
-
                                                 handleFileSelect('courseImage', file);
-                                                // Create a preview URL for immediate display
-                                                // Note: This blob URL is only for preview - the actual file path
-                                                // will be set by the backend after successful upload
                                                 const newPreviewUrl = URL.createObjectURL(file);
                                                 setPreviewImageUrl(newPreviewUrl);
                                                 setCourse(prev => ({ ...prev, imageUrl: newPreviewUrl }));
@@ -900,19 +923,23 @@ const CourseEditor: React.FC = () => {
                                     <Button
                                         variant="ghost"
                                         size="sm"
-                                        className="flex-1"
+                                        className="flex items-center gap-2 justify-center w-full"
                                         onClick={() => document.getElementById('courseImageUpload')?.click()}
                                     >
-                                        Upload Custom Image
+                                        <Icon name={IconName.Upload} className="w-4 h-4 flex-shrink-0" />
+                                        <span>Upload Custom Image</span>
                                     </Button>
                                     <Button
                                         variant="ghost"
                                         size="sm"
-                                        className="flex-1"
+                                        className="flex items-center gap-2 justify-center w-full"
                                         onClick={handleRegenerateImage}
                                         disabled={isGeneratingImage}
                                     >
-                                        {isGeneratingImage ? 'Generating...' : 'Generate with AI'}
+                                        <svg className="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
+                                        </svg>
+                                        <span>{isGeneratingImage ? 'Generating...' : 'Generate with AI'}</span>
                                     </Button>
                                 </div>
                             </div>
@@ -969,7 +996,7 @@ const CourseEditor: React.FC = () => {
                             </div>
                             <div>
                                 <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">
-                                    Mode of Learning <span className="text-red-500">*</span>
+                                    Mode of Learning
                                 </label>
                                 <div className="flex flex-col space-y-2">
                                     {(Object.values(ModeOfLearning)).map((mode) => (
@@ -1011,7 +1038,7 @@ const CourseEditor: React.FC = () => {
                 </div>
 
                 {/* Right Column: Content Sections */}
-                <div className="lg:col-span-2 space-y-8">
+                <div className="md:col-span-1 xl:col-span-2 space-y-6">
                     <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
                         <h3 className="text-xl font-bold mb-4 dark:text-white">Learning Outcomes</h3>
                         <textarea id="learningOutcomes" name="learningOutcomes" value={course.learningOutcomes} onChange={handleCourseChange} className={`${inputClasses} h-32`} placeholder="Describe the key learning outcomes..." />

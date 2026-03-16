@@ -86,6 +86,12 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
     const [totalCount, setTotalCount] = useState(0);
     const [totalPages, setTotalPages] = useState(0);
 
+    // Import Run modal states
+    const [showImportModal, setShowImportModal] = useState(false);
+    const [importRunId, setImportRunId] = useState('');
+    const [importLoading, setImportLoading] = useState(false);
+    const [importResult, setImportResult] = useState<{ success: boolean; message: string; detail?: string } | null>(null);
+
     const ITEMS_PER_PAGE = 20;
 
     // Fetch trainers from API
@@ -215,11 +221,48 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
         return new Date(dateString).toLocaleDateString();
     };
 
+    const handleImportRun = async () => {
+        if (!importRunId.trim()) return;
+        setImportLoading(true);
+        setImportResult(null);
+        try {
+            const response = await fetch(getApiUrl('/api/admin/import-course-run'), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ course_run_id: importRunId.trim() }),
+            });
+            const result = await response.json();
+            if (result.success) {
+                const { courseTitle, courseRunId: runId, startDate, endDate, action } = result.data;
+                setImportResult({
+                    success: true,
+                    message: `Course run ${action === 'created' ? 'added' : 'updated'} successfully.`,
+                    detail: `${courseTitle} (Run ID: ${runId}, ${startDate ?? 'N/A'} → ${endDate ?? 'N/A'})`,
+                });
+                fetchUpcomingClasses();
+            } else {
+                setImportResult({ success: false, message: result.error || 'Import failed.' });
+            }
+        } catch {
+            setImportResult({ success: false, message: 'Network error. Please try again.' });
+        } finally {
+            setImportLoading(false);
+        }
+    };
+
     return (
         <div>
             {showTitle && (
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-                    <h3 className="text-2xl font-semibold dark:text-white">Upcoming Classes</h3>
+                    <h3 className="text-3xl font-bold dark:text-white">Upcoming Classes</h3>
+                    <Button
+                        variant="primary"
+                        size="sm"
+                        onClick={() => { setShowImportModal(true); setImportResult(null); setImportRunId(''); }}
+                    >
+                        <Icon name={IconName.Add} className="w-4 h-4 mr-2" />
+                        Import Course Run
+                    </Button>
                 </div>
             )}
 
@@ -467,6 +510,62 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                     </>
                 )}
             </Card>
+        {/* Import Run Modal */}
+        {showImportModal && (
+            <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+                <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md">
+                    <div className="p-6">
+                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">Import Course Run</h3>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                            Enter a Course Run ID to fetch its details from SSG and save it to the database.
+                        </p>
+
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Course Run ID
+                        </label>
+                        <input
+                            type="text"
+                            value={importRunId}
+                            onChange={e => { setImportRunId(e.target.value); setImportResult(null); }}
+                            onKeyDown={e => e.key === 'Enter' && !importLoading && handleImportRun()}
+                            placeholder="e.g. 1067907"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400 mb-4"
+                            autoFocus
+                        />
+
+                        {/* Result banner */}
+                        {importResult && (
+                            <div className={`rounded-md p-3 mb-4 text-sm ${importResult.success ? 'bg-green-50 border border-green-200 text-green-800 dark:bg-green-900/20 dark:border-green-700 dark:text-green-300' : 'bg-red-50 border border-red-200 text-red-800 dark:bg-red-900/20 dark:border-red-700 dark:text-red-300'}`}>
+                                <p className="font-medium">{importResult.message}</p>
+                                {importResult.detail && <p className="mt-1 text-xs opacity-80">{importResult.detail}</p>}
+                            </div>
+                        )}
+
+                        <div className="flex gap-3 justify-end">
+                            <Button
+                                variant="ghost"
+                                onClick={() => { setShowImportModal(false); setImportRunId(''); setImportResult(null); }}
+                                disabled={importLoading}
+                            >
+                                {importResult?.success ? 'Close' : 'Cancel'}
+                            </Button>
+                            <Button
+                                variant="primary"
+                                onClick={handleImportRun}
+                                disabled={importLoading || !importRunId.trim()}
+                            >
+                                {importLoading ? (
+                                    <>
+                                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
+                                        Fetching...
+                                    </>
+                                ) : 'Import'}
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        )}
         </div>
     );
 };
