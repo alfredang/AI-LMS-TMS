@@ -280,49 +280,60 @@ const AssessmentsSection: React.FC<{
     };
 
 
-    const handleFileChange = (assessmentId: string, e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files && e.target.files[0]) {
-            setSelectedFiles(prev => ({ ...prev, [assessmentId]: e.target.files![0] }));
-        }
-    };
-
     const handleSubmit = async (assessmentId: string) => {
-        const file = selectedFiles[assessmentId];
-        if (file) {
-            try {
-                // First upload the file to get the file URL
-                const formData = new FormData();
-                formData.append('file', file);
-
-                const uploadResponse = await fetch('/api/upload/file', {
-                    method: 'POST',
-                    body: formData,
-                });
-
-                if (!uploadResponse.ok) {
-                    throw new Error('Failed to upload file');
-                }
-
-                const uploadResult = await uploadResponse.json();
-                if (!uploadResult.success) {
-                    throw new Error(uploadResult.error || 'Failed to upload file');
-                }
-
-                // Then submit the assessment with the file URL
-                await submitAssessment(assessmentId, file.name, uploadResult.data.fileUrl);
-                console.log('✅ Assessment submitted successfully, refreshing submissions...');
-
-                // Refresh submissions to show the newly submitted file
-                await loadSubmissions();
-                console.log('✅ Submissions refreshed after successful submission');
-
-                alert(`Submitted '${file.name}' for assessment.`);
-                setIsResubmitting(prev => ({ ...prev, [assessmentId]: false }));
-                setSelectedFiles(prev => ({ ...prev, [assessmentId]: null }));
-            } catch (error) {
-                alert('Failed to submit assessment. Please try again.');
-                console.error('Submission error:', error);
+        // Open a blank window immediately *before* any async operations. 
+        // Browsers block window.open if it isn't directly triggered by a user click event (like waiting for a fetch).
+        const popup = window.open('', '_blank');
+        
+        try {
+            // Get course code and name for the nested folder structure
+            const courseCode = course?.courseCode || '';
+            const courseName = course?.title || '';
+            
+            let fetchUrl = `/api/upload/google-drive`;
+            if (courseCode || courseName) {
+                fetchUrl += `?courseCode=${encodeURIComponent(courseCode)}&courseName=${encodeURIComponent(courseName)}`;
             }
+
+            // 1. Fetch the Google Drive folder link
+            const response = await fetch(fetchUrl, { method: 'GET' });
+            
+            if (!response.ok) {
+                const errBody = await response.json().catch(() => ({}));
+                throw new Error(errBody.error || 'Failed to locate the Google Drive folder.');
+            }
+
+            const data = await response.json();
+            if (!data.success || !data.link) {
+                throw new Error(data.error || 'Failed to retrieve the folder link.');
+            }
+
+            // 2. Open the folder in the pre-opened tab
+            if (popup) {
+                popup.location.href = data.link;
+            } else {
+                // Fallback just in case the initial popup was entirely blocked
+                const wantToOpen = window.confirm('The browser blocked the pop-up to Google Drive. Click OK to try opening it again.');
+                if (wantToOpen) {
+                    window.location.href = data.link;
+                }
+            }
+
+            // 3. Mark as submitted in the LMS database
+            const placeholderFileName = `Submitted externally via Google Drive`;
+            await submitAssessment(assessmentId, placeholderFileName, data.link);
+            console.log('✅ Assessment recorded as submitted via Google Drive redirect');
+
+            // 4. Refresh submissions to show the newly submitted file
+            await loadSubmissions();
+
+            // Replace standard alert with a notification or nothing, since they're already moving to visual Drive page
+            setIsResubmitting(prev => ({ ...prev, [assessmentId]: false }));
+        } catch (error: any) {
+            // If the process failed, close the blank popup so it doesn't just sit there empty
+            if (popup) popup.close();
+            alert(`Failed: ${error.message || 'Please try again.'}`);
+            console.error('Submission error:', error);
         }
     };
 
@@ -396,16 +407,10 @@ const AssessmentsSection: React.FC<{
                         </div>
                     </div>
                 )}
-                <p className="mb-2 text-gray-500 dark:text-gray-400">{canResubmit ? "Select a new file to replace your previous submission." : "The assessment is now available. Please upload your submission."}</p>
-                <div className="flex items-center gap-2">
-                    <input
-                        type="file"
-                        onChange={(e) => handleFileChange(assessment.id, e)}
-                        className="flex-grow text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-blue-600 hover:file:bg-indigo-100"
-                        accept=".doc,.docx,.pdf"
-                    />
-                    <Button onClick={() => handleSubmit(assessment.id)} disabled={!selectedFiles[assessment.id]}>
-                        {canResubmit ? 'Submit Again' : 'Submit'}
+                <p className="mb-2 text-gray-500 dark:text-gray-400">The assessment is now available. Click below to open your submission folder in Google Drive.</p>
+                <div className="flex items-center gap-2 mt-4">
+                    <Button onClick={() => handleSubmit(assessment.id)}>
+                        Open Submission Folder
                     </Button>
                 </div>
             </div>
