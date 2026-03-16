@@ -18,22 +18,33 @@ export const config = {
  */
 function getDriveClient(): drive_v3.Drive {
     const serviceAccountEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
-    const privateKey = process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY;
+    let privateKey = process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY;
+    const privateKeyB64 = process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY_B64;
 
-    if (!serviceAccountEmail || !privateKey) {
-        throw new Error(
-            'Missing GOOGLE_SERVICE_ACCOUNT_EMAIL or GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY in environment variables.'
-        );
+    if (!serviceAccountEmail) {
+        throw new Error('Missing GOOGLE_SERVICE_ACCOUNT_EMAIL in environment variables.');
     }
 
-    // EXTREMELY ROBUST KEY PARSING FOR CLOUD HOSTING
-    // Some providers (like Coolify, Vercel, Docker) inject multi-line secrets in weird ways.
-    // This handles literal "\n" strings, actual newlines, and accidental wrapping quotes.
-    const formattedPrivateKey = privateKey
-        .replace(/^"|"$/g, '') // Strip wrapping double quotes
-        .replace(/^'|'$/g, '') // Strip wrapping single quotes
-        .split(String.raw`\n`).join('\n') // Convert literal "\n" escape sequences to true newlines
-        .replace(/\\n/g, '\n'); // Convert any standard escaped newlines
+    if (!privateKey && !privateKeyB64) {
+        throw new Error('Missing GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY or GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY_B64 in environment variables.');
+    }
+
+    let formattedPrivateKey = '';
+
+    if (privateKeyB64) {
+        // The bulletproof method: decode from Base64
+        console.log('🔐 Using Base64 encoded Google Service Account Private Key');
+        formattedPrivateKey = Buffer.from(privateKeyB64, 'base64').toString('utf8');
+    } else if (privateKey) {
+        // EXTREMELY ROBUST KEY PARSING FOR CLOUD HOSTING
+        // Some providers (like Coolify, Vercel, Docker) inject multi-line secrets in weird ways.
+        // This handles literal "\n" strings, actual newlines, and accidental wrapping quotes.
+        formattedPrivateKey = privateKey
+            .replace(/^"|"$/g, '') // Strip wrapping double quotes
+            .replace(/^'|'$/g, '') // Strip wrapping single quotes
+            .split(String.raw`\n`).join('\n') // Convert literal "\n" escape sequences to true newlines
+            .replace(/\\n/g, '\n'); // Convert any standard escaped newlines
+    }
 
     const auth = new google.auth.JWT({
         email: serviceAccountEmail,
