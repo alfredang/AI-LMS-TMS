@@ -222,6 +222,12 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     const studentName = (req.query.studentName as string) || 'Unknown Student';
     const courseRunId = (req.query.courseRunId as string) || '';
 
+    console.log('📤 Upload request received:');
+    console.log(`   courseCode: "${courseCode}"`);
+    console.log(`   courseName: "${courseName}"`);
+    console.log(`   studentName: "${studentName}"`);
+    console.log(`   courseRunId: "${courseRunId}"`);
+
     try {
         const form = new IncomingForm({
             keepExtensions: true,
@@ -253,12 +259,13 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
 
         if (courseRunId) {
             const runDetails = await getCourseRunDetails(courseRunId);
+            console.log(`🔍 DB lookup for courseRunId "${courseRunId}":`, runDetails ? 'FOUND' : 'NOT FOUND');
             if (runDetails) {
                 const startDate = new Date(runDetails.start_date);
                 const endDate = new Date(runDetails.end_date);
                 const trainerName = runDetails.assigned_trainer_name || 'Unknown Trainer';
                 sessionFolderName = buildSessionFolderName(startDate, endDate, trainerName);
-                console.log(`📋 Course Run ${courseRunId}: ${sessionFolderName}`);
+                console.log(`📋 Course Run ${courseRunId}: session folder = "${sessionFolderName}"`);
 
                 // Use DB values for course code/name if not provided
                 if (!effectiveCourseCode && runDetails.course_code) {
@@ -270,6 +277,8 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
             } else {
                 console.warn(`⚠️ Course Run ID '${courseRunId}' not found in database`);
             }
+        } else {
+            console.warn('⚠️ No courseRunId provided — folder will be placed directly in Assessment Records');
         }
 
         // Ensure the full path exists:
