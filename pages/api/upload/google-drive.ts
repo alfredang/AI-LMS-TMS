@@ -3,6 +3,7 @@ import { IncomingForm } from 'formidable';
 import fs from 'fs';
 import { google, drive_v3 } from 'googleapis';
 import { cors } from '../../../lib/cors';
+import pool from '../../../lib/db';
 
 // Disable body parser to handle multipart/form-data
 export const config = {
@@ -98,14 +99,48 @@ async function getOrCreateStudentFolder(
 }
 
 /**
- * Robust hierarchy builder: Ensures Course Folder -> 'Assessment Records' -> Learner Folder exists
+ * Query the database for course run details using the course_run_id string.
+ */
+async function getCourseRunDetails(courseRunId: string) {
+    const result = await pool.query(
+        `SELECT cr.start_date, cr.end_date, cr.assigned_trainer_name,
+                c.course_code, c.title as course_title
+         FROM course_run cr
+         JOIN course c ON cr.course_id = c.id
+         WHERE cr.course_run_id = $1
+         LIMIT 1`,
+        [courseRunId]
+    );
+    if (result.rows.length === 0) {
+        return null;
+    }
+    return result.rows[0];
+}
+
+/**
+ * Build the expected subfolder name inside Assessment Records.
+ * Format: YYYY_MM_DD/DD_NAME
+ * e.g., "2026_03_17/19_John Doe"
+ */
+function buildSessionFolderName(startDate: Date, endDate: Date, trainerName: string): string {
+    const yyyy = startDate.getFullYear();
+    const mm = String(startDate.getMonth() + 1).padStart(2, '0');
+    const startDD = String(startDate.getDate()).padStart(2, '0');
+    const endDD = String(endDate.getDate()).padStart(2, '0');
+    return `${yyyy}_${mm}_${startDD}/${endDD}_${trainerName}`;
+}
+
+/**
+ * Robust hierarchy builder:
+ * Course Folder -> 'Assessment Records' -> Session Subfolder (matched by dates/trainer) -> Learner Folder
  */
 async function ensureStudentUploadPath(
     drive: drive_v3.Drive,
     rootFolderId: string,
     courseCode: string,
     courseName: string,
-    studentIdentifier: string
+    studentName: string,
+    sessionFolderName: string | null
 ): Promise<string> {
     // 1. Course Folder (Search by TGS Ref, create if missing)
     let courseFolderId = null;
@@ -122,7 +157,6 @@ async function ensureStudentUploadPath(
         : (`${courseCode} ${courseName}`).trim() || 'Unknown Course';
 
     if (tgsRef) {
-        // Search by TGS Ref (most reliable)
         const safeTgsRef = tgsRef.replace(/'/g, "\\'");
         const tgsResponse = await drive.files.list({
             q: `'${rootFolderId}' in parents and name contains '${safeTgsRef}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
@@ -133,12 +167,10 @@ async function ensureStudentUploadPath(
             courseFolderId = tgsResponse.data.files[0].id!;
         }
     } else {
-        // Search by exact name
         courseFolderId = await findSubfolder(drive, rootFolderId, expectedCourseFolderName);
     }
 
     if (!courseFolderId) {
-        // Auto-create Course folder if completely missing
         courseFolderId = await createSubfolder(drive, rootFolderId, expectedCourseFolderName);
         console.log(`📁 Created new Course folder: ${expectedCourseFolderName}`);
     }
@@ -150,8 +182,19 @@ async function ensureStudentUploadPath(
         console.log(`📁 Created 'Assessment Records' inside Course folder`);
     }
 
-    // 3. Learner Date Subfolder
-    const studentFolderId = await getOrCreateStudentFolder(drive, assessmentRecordsId, studentIdentifier);
+    // 3. Session Subfolder (matched by dates + trainer name)
+    let targetParentId = assessmentRecordsId;
+    if (sessionFolderName) {
+        let sessionFolderId = await findSubfolder(drive, assessmentRecordsId, sessionFolderName);
+        if (!sessionFolderId) {
+            sessionFolderId = await createSubfolder(drive, assessmentRecordsId, sessionFolderName);
+            console.log(`📁 Created session folder: ${sessionFolderName}`);
+        }
+        targetParentId = sessionFolderId;
+    }
+
+    // 4. Learner Folder (just the learner name, no date)
+    const studentFolderId = await getOrCreateStudentFolder(drive, targetParentId, studentName);
     return studentFolderId;
 }
 
@@ -177,6 +220,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     const courseCode = (req.query.courseCode as string) || '';
     const courseName = (req.query.courseName as string) || '';
     const studentName = (req.query.studentName as string) || 'Unknown Student';
+    const courseRunId = (req.query.courseRunId as string) || '';
 
     try {
         const form = new IncomingForm({
@@ -202,21 +246,41 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
 
         const drive = getDriveClient();
 
-        // Build Learner Identifier (e.g., "16-03-2026 John Doe")
-        const today = new Date();
-        const dd = String(today.getDate()).padStart(2, '0');
-        const mm = String(today.getMonth() + 1).padStart(2, '0');
-        const yyyy = today.getFullYear();
-        const dateStr = `${dd}-${mm}-${yyyy}`;
-        const studentIdentifier = `${dateStr} ${studentName}`;
+        // Look up course run details from the database for folder matching
+        let sessionFolderName: string | null = null;
+        let effectiveCourseCode = courseCode;
+        let effectiveCourseName = courseName;
 
-        // 1 & 2 & 3. Ensure the full path exists (Course -> Assessment Records -> Learner Name)
+        if (courseRunId) {
+            const runDetails = await getCourseRunDetails(courseRunId);
+            if (runDetails) {
+                const startDate = new Date(runDetails.start_date);
+                const endDate = new Date(runDetails.end_date);
+                const trainerName = runDetails.assigned_trainer_name || 'Unknown Trainer';
+                sessionFolderName = buildSessionFolderName(startDate, endDate, trainerName);
+                console.log(`📋 Course Run ${courseRunId}: ${sessionFolderName}`);
+
+                // Use DB values for course code/name if not provided
+                if (!effectiveCourseCode && runDetails.course_code) {
+                    effectiveCourseCode = runDetails.course_code;
+                }
+                if (!effectiveCourseName && runDetails.course_title) {
+                    effectiveCourseName = runDetails.course_title;
+                }
+            } else {
+                console.warn(`⚠️ Course Run ID '${courseRunId}' not found in database`);
+            }
+        }
+
+        // Ensure the full path exists:
+        // Course -> Assessment Records -> Session Folder (dates/trainer) -> Learner Name
         const studentFolderId = await ensureStudentUploadPath(
             drive, 
             parentFolderId, 
-            courseCode, 
-            courseName, 
-            studentIdentifier
+            effectiveCourseCode, 
+            effectiveCourseName, 
+            studentName,
+            sessionFolderName
         );
 
         // 4. Upload file into the student's subfolder

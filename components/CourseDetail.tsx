@@ -315,6 +315,7 @@ const AssessmentsSection: React.FC<{
             let fetchUrl = `/api/upload/google-drive?studentName=${encodeURIComponent(studentName)}`;
             if (tgsRef) fetchUrl += `&courseCode=${encodeURIComponent(tgsRef)}`;
             if (courseName) fetchUrl += `&courseName=${encodeURIComponent(courseName)}`;
+            if (courseRunId) fetchUrl += `&courseRunId=${encodeURIComponent(courseRunId)}`;
 
             setUploadProgress(prev => ({ ...prev, [assessmentId]: 40 })); // Updating progress
 
@@ -335,7 +336,7 @@ const AssessmentsSection: React.FC<{
 
             // Mark as submitted in the LMS database using the returned Google Drive link
             await submitAssessment(assessmentId, file.name, data.data.fileUrl);
-            
+
             console.log('✅ Assessment successfully uploaded and recorded');
             await loadSubmissions();
 
@@ -449,18 +450,18 @@ const AssessmentsSection: React.FC<{
                 {/* Step 2: Submit Button & Progress */}
                 {selectedFiles[assessment.id] && (
                     <div className="mt-4 space-y-3">
-                        <Button 
+                        <Button
                             onClick={() => handleSubmit(assessment.id)}
                             disabled={isUploading[assessment.id]}
                             className="w-full"
                         >
                             {isUploading[assessment.id] ? "Uploading..." : "Submit Assessment"}
                         </Button>
-                        
+
                         {isUploading[assessment.id] && (
                             <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5">
-                                <div 
-                                    className="bg-blue-600 h-2.5 rounded-full transition-all duration-300" 
+                                <div
+                                    className="bg-blue-600 h-2.5 rounded-full transition-all duration-300"
                                     style={{ width: `${uploadProgress[assessment.id] || 0}%` }}
                                 ></div>
                             </div>
@@ -1044,10 +1045,10 @@ export const CourseDetail: React.FC = () => {
     const attendanceLink = convertedCourse.daId ? `https://www.myskillsfuture.gov.sg/api/take-attendance/${convertedCourse.daId}` : null;
     // const attendanceQrCodeUrl = attendanceLink ? `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(attendanceLink)}` : null;
 
-    const isTrainerSlidesExternal    = convertedCourse.trainerSlidesUrl?.startsWith('http');
-    const isLearnerGuideExternal     = convertedCourse.learnerGuideUrl?.startsWith('http');
+    const isTrainerSlidesExternal = convertedCourse.trainerSlidesUrl?.startsWith('http');
+    const isLearnerGuideExternal = convertedCourse.learnerGuideUrl?.startsWith('http');
     const isFacilitatorGuideExternal = convertedCourse.facilitatorGuideUrl?.startsWith('http');
-    const isAssessmentPlanExternal   = convertedCourse.assessmentPlanUrl?.startsWith('http');
+    const isAssessmentPlanExternal = convertedCourse.assessmentPlanUrl?.startsWith('http');
 
     return (
         <div className="relative">
