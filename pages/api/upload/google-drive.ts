@@ -92,8 +92,32 @@ async function createSubfolder(
             parents: [parentFolderId],
         },
         fields: 'id',
+        supportsAllDrives: true,
     });
+    
+    // Auto-transfer ownership to main account so we don't hit the 0-byte Service Account quota
+    await transferOwnership(drive, response.data.id!);
+    
     return response.data.id!;
+}
+
+/**
+ * Transfer ownership of a file to the main tertiary account to avoid Service Account quota limits
+ */
+async function transferOwnership(drive: drive_v3.Drive, fileId: string) {
+    try {
+        await drive.permissions.create({
+            fileId: fileId,
+            transferOwnership: true,
+            requestBody: {
+                role: 'owner',
+                type: 'user',
+                emailAddress: 'agenticai.tertiaryrobotics@gmail.com'
+            },
+        });
+    } catch (err) {
+        console.warn(`⚠️ Could not transfer ownership for ${fileId} - it may fail if it exceeds quota`, err);
+    }
 }
 
 /**
@@ -248,12 +272,16 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
                 body: fs.createReadStream(uploadedFile.filepath),
             },
             fields: 'id, name, webViewLink, webContentLink',
+            supportsAllDrives: true,
         });
 
         // Clean up temporary file
         try { fs.unlinkSync(uploadedFile.filepath); } catch { /* ignore */ }
 
         const driveFile = driveResponse.data;
+
+        // 5. Instantly transfer ownership of the specific File to the main account
+        await transferOwnership(drive, driveFile.id!);
 
         // Make the file viewable by anyone with the link
         await drive.permissions.create({
