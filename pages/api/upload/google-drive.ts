@@ -201,12 +201,14 @@ async function ensureStudentUploadPath(
 async function handler(req: NextApiRequest, res: NextApiResponse) {
     if (cors(req, res)) return;
 
-    if (req.method === 'GET') {
-        return res.status(405).json({ success: false, error: 'Method not allowed. Use POST for file uploads.' });
+    // Explicitly handle OPTIONS preflight (cors helper might return true or false depending on setup)
+    if (req.method === 'OPTIONS') {
+        res.status(200).end();
+        return;
     }
 
     if (req.method !== 'POST') {
-        return res.status(405).json({ success: false, error: 'Method not allowed' });
+        return res.status(405).json({ success: false, error: `Method ${req.method} not allowed. Use POST for file uploads.` });
     }
 
     const parentFolderId = process.env.GOOGLE_DRIVE_FOLDER_ID;
