@@ -64,6 +64,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         c.assessment_plan_url,
         c.courseware_link,
         c.assessment_record_link,
+        c.slides_url,
         c.id AS course_id,
         c.course_code,
         cr.course_run_id AS external_course_run_id
@@ -167,6 +168,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           assessmentPlanUrl: courseDetail.assessment_plan_url,
           courseLink: courseDetail.courseware_link,
           assessmentRecordLink: courseDetail.assessment_record_link,
+          slidesUrl: courseDetail.slides_url,
           courseId: courseDetail.course_id,
           courseCode: courseDetail.course_code
         },

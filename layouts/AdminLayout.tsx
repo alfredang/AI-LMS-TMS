@@ -93,9 +93,44 @@ const ManagementDashboard: React.FC<ManagementDashboardProps> = ({ type }) => {
   );
 };
 
+// Convert camelCase enum value → "Title Case" readable label
+const formatAdminPageTitle = (page: string): string =>
+  page.replace(/([A-Z])/g, ' $1').replace(/^(.)/, c => c.toUpperCase());
+
+const PAGE_LABELS: Partial<Record<AdminPage, string>> = {
+  [AdminPage.Dashboard]: 'Admin Dashboard',
+  [AdminPage.ClassManagement]: 'Class Management',
+  [AdminPage.TpgManagement]: 'TPG Management',
+  [AdminPage.ViewCourses]: 'View Courses',
+  [AdminPage.ViewTrainers]: 'View Trainers',
+  [AdminPage.UpcomingClasses]: 'Upcoming Classes',
+  [AdminPage.OngoingClasses]: 'Ongoing Classes',
+  [AdminPage.CompletedClasses]: 'Completed Classes',
+  [AdminPage.CreateNewClass]: 'Create New Class',
+  [AdminPage.EditClass]: 'Edit Class',
+  [AdminPage.EnrollLearners]: 'Enroll Learners',
+  [AdminPage.AssignTrainer]: 'Assign Trainer',
+  [AdminPage.AddCourse]: 'Add Course',
+  [AdminPage.ApplyNewGrant]: 'Apply New Grant',
+  [AdminPage.ViewGrantStatus]: 'View Grant Status',
+  [AdminPage.SubmitAssessment]: 'Submit Assessment',
+  [AdminPage.ApplyNewClaim]: 'Apply New Claim',
+  [AdminPage.UploadCourseRuns]: 'Upload Course Runs',
+  [AdminPage.UploadEnrolments]: 'Upload Enrolments',
+  [AdminPage.SearchGrant]: 'Search Grant',
+  [AdminPage.SearchCourseRuns]: 'Search Course Runs',
+  [AdminPage.SearchAssessments]: 'Search Assessments',
+  [AdminPage.CourseRun]: 'Course Run',
+  [AdminPage.CancelEnrolment]: 'Cancel Enrolment',
+  [AdminPage.UpdateEnrolment]: 'Update Enrolment',
+  [AdminPage.DeleteCourseRun]: 'Delete Course Run',
+  [AdminPage.ClassDetail]: 'Class Detail',
+};
+
 const AdminLayout: React.FC = () => {
-  const { currentView, adminPage, selectedCourse, editingCourse, selectedCourseRunId, editingCourseRun } = useLms();
+  const { currentView, adminPage, selectedCourse, editingCourse, courseEditMode, selectedCourseRunId, editingCourseRun } = useLms();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isDesktopSidebarOpen, setIsDesktopSidebarOpen] = useState(true);
 
   // Handle full-width views (Profile and Help & Support only)
   if (currentView === View.Profile || currentView === View.HelpAndSupport) {
@@ -137,12 +172,7 @@ const AdminLayout: React.FC = () => {
       case AdminPage.ViewTrainers:
         return <ViewTrainers />;
       case AdminPage.UpcomingClasses:
-        return (
-          <div>
-            <h2 className="text-3xl font-bold mb-6 dark:text-white">Upcoming Classes</h2>
-            <UpcomingClassesTable showTitle={false} showFilters={true} />
-          </div>
-        );
+        return <UpcomingClassesTable showTitle={true} showFilters={true} />;
       case AdminPage.OngoingClasses:
         return <OngoingClasses />;
       case AdminPage.CompletedClasses:
@@ -220,12 +250,25 @@ const AdminLayout: React.FC = () => {
     <div className="min-h-screen flex flex-col bg-background font-sans text-on-surface">
       <Header />
 
-      {/* Mobile header and sidebar toggle */}
-      <div className="flex items-center gap-4 px-4 sm:px-6 py-3 border-b border-gray-200">
-        <button onClick={() => setIsSidebarOpen(true)} className="p-2 -ml-2 text-gray-600 hover:text-gray-900">
-          <Icon name={IconName.Menu} className="w-6 h-6" />
+      {/* Sub-header: sidebar toggle + current page breadcrumb */}
+      <div className="flex items-center gap-3 px-4 sm:px-6 py-2.5 border-b border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800">
+        <button
+          onClick={() => {
+            setIsSidebarOpen(prev => !prev);
+            setIsDesktopSidebarOpen(prev => !prev);
+          }}
+          className="p-1.5 rounded-md text-gray-500 hover:text-gray-900 hover:bg-gray-100 dark:hover:bg-slate-700 dark:text-slate-400 dark:hover:text-white transition-colors"
+          title="Toggle sidebar"
+        >
+          <Icon name={IconName.Menu} className="w-5 h-5" />
         </button>
-        <h2 className="text-lg font-bold truncate">{adminPage}</h2>
+        <span className="text-sm font-semibold text-gray-700 dark:text-gray-200 truncate">
+          {editingCourse
+            ? (courseEditMode === 'create' ? 'Create Course' : 'Edit Course')
+            : (selectedCourse && adminPage === AdminPage.ViewCourses
+                ? 'Course Detail'
+                : (PAGE_LABELS[adminPage] ?? formatAdminPageTitle(adminPage)))}
+        </span>
       </div>
 
       {/* Mobile Sidebar Overlay */}
@@ -262,8 +305,8 @@ const AdminLayout: React.FC = () => {
 
       {/* Main Layout Container */}
       <div className="flex flex-1">
-        {/* Desktop Sidebar - Fixed on left */}
-        <aside className="hidden md:flex w-64 flex-shrink-0 bg-white dark:bg-slate-800 border-r border-gray-200 dark:border-slate-700">
+        {/* Desktop Sidebar - toggled by hamburger button */}
+        <aside className={`${isDesktopSidebarOpen ? 'hidden md:flex' : 'hidden'} w-64 flex-shrink-0 bg-white dark:bg-slate-800 border-r border-gray-200 dark:border-slate-700 transition-all`}>
           <div className="w-full">
             <AdminSidebar />
           </div>

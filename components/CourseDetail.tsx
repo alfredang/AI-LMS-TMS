@@ -678,6 +678,7 @@ const CourseSidebar: React.FC<CourseSidebarProps> = ({ userRole, onSetGradingVie
         { type: 'link', label: "Courseware Link", icon: IconName.Link },
         { type: 'link', label: "Assessment Record Link", icon: IconName.ClipboardCheck },
         { type: 'link', label: "Lesson Plan", icon: IconName.BookOpen },
+        { type: 'link', label: "Learner Guide", icon: IconName.FileText },
         { type: 'link', label: "Facilitator Guide", icon: IconName.FileText },
         { type: 'link', label: "Learner Slides", icon: IconName.FileText },
         { type: 'link', label: "Trainer Slides", icon: IconName.FileText },
@@ -1043,7 +1044,10 @@ export const CourseDetail: React.FC = () => {
     const attendanceLink = convertedCourse.daId ? `https://www.myskillsfuture.gov.sg/api/take-attendance/${convertedCourse.daId}` : null;
     // const attendanceQrCodeUrl = attendanceLink ? `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(attendanceLink)}` : null;
 
-    const isTrainerSlidesExternal = convertedCourse.trainerSlidesUrl?.startsWith('http');
+    const isTrainerSlidesExternal    = convertedCourse.trainerSlidesUrl?.startsWith('http');
+    const isLearnerGuideExternal     = convertedCourse.learnerGuideUrl?.startsWith('http');
+    const isFacilitatorGuideExternal = convertedCourse.facilitatorGuideUrl?.startsWith('http');
+    const isAssessmentPlanExternal   = convertedCourse.assessmentPlanUrl?.startsWith('http');
 
     return (
         <div className="relative">
@@ -1246,19 +1250,29 @@ export const CourseDetail: React.FC = () => {
                             {/* Learner Guide */}
                             <div id={toId("Learner Guide")}>
                                 <ContentSection title="Learner Guide">
-                                    {(userRole === UserRole.Learner || userRole === UserRole.Trainer) ? (
+                                    {userRole === UserRole.Learner ? (
                                         null
                                     ) : convertedCourse.learnerGuideUrl ? (
-                                        <div
-                                            onClick={(e) => handleFileDownload(convertedCourse.learnerGuideUrl!, e)}
-                                            className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors cursor-pointer"
-                                        >
-                                            <Icon name={IconName.FileText} className="w-8 h-8 text-red-600 flex-shrink-0" />
-                                            <div className="min-w-0">
-                                                <p className="font-semibold text-gray-900 dark:text-white break-all">{extractFilenameFromPath(convertedCourse.learnerGuideUrl)}</p>
-                                                <p className="text-xs text-gray-500 dark:text-gray-400">Click to download the guide</p>
+                                        isLearnerGuideExternal ? (
+                                            <a href={convertedCourse.learnerGuideUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
+                                                <Icon name={IconName.ExternalLink} className="w-8 h-8 text-blue-600 flex-shrink-0" />
+                                                <div>
+                                                    <p className="font-semibold text-gray-900 dark:text-white">Learner Guide</p>
+                                                    <p className="text-xs text-gray-500 dark:text-gray-400">Click to open</p>
+                                                </div>
+                                            </a>
+                                        ) : (
+                                            <div
+                                                onClick={(e) => handleFileDownload(convertedCourse.learnerGuideUrl!, e)}
+                                                className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors cursor-pointer"
+                                            >
+                                                <Icon name={IconName.FileText} className="w-8 h-8 text-red-600 flex-shrink-0" />
+                                                <div className="min-w-0">
+                                                    <p className="font-semibold text-gray-900 dark:text-white break-all">{extractFilenameFromPath(convertedCourse.learnerGuideUrl)}</p>
+                                                    <p className="text-xs text-gray-500 dark:text-gray-400">Click to download the guide</p>
+                                                </div>
                                             </div>
-                                        </div>
+                                        )
                                     ) : (
                                         <p className="text-gray-500 dark:text-gray-400">The learner guide for this course will be displayed here.</p>
                                     )}
@@ -1270,16 +1284,26 @@ export const CourseDetail: React.FC = () => {
                                 <div id={toId("Facilitator Guide")}>
                                     <ContentSection title="Facilitator Guide">
                                         {convertedCourse.facilitatorGuideUrl ? (
-                                            <div
-                                                onClick={(e) => handleFileDownload(convertedCourse.facilitatorGuideUrl!, e)}
-                                                className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors cursor-pointer"
-                                            >
-                                                <Icon name={IconName.FileText} className="w-8 h-8 text-red-600 flex-shrink-0" />
-                                                <div className="min-w-0">
-                                                    <p className="font-semibold text-gray-900 dark:text-white break-all">{extractFilenameFromPath(convertedCourse.facilitatorGuideUrl)}</p>
-                                                    <p className="text-xs text-gray-500 dark:text-gray-400">Click to download the guide</p>
+                                            isFacilitatorGuideExternal ? (
+                                                <a href={convertedCourse.facilitatorGuideUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
+                                                    <Icon name={IconName.ExternalLink} className="w-8 h-8 text-blue-600 flex-shrink-0" />
+                                                    <div>
+                                                        <p className="font-semibold text-gray-900 dark:text-white">Facilitator Guide</p>
+                                                        <p className="text-xs text-gray-500 dark:text-gray-400">Click to open</p>
+                                                    </div>
+                                                </a>
+                                            ) : (
+                                                <div
+                                                    onClick={(e) => handleFileDownload(convertedCourse.facilitatorGuideUrl!, e)}
+                                                    className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors cursor-pointer"
+                                                >
+                                                    <Icon name={IconName.FileText} className="w-8 h-8 text-red-600 flex-shrink-0" />
+                                                    <div className="min-w-0">
+                                                        <p className="font-semibold text-gray-900 dark:text-white break-all">{extractFilenameFromPath(convertedCourse.facilitatorGuideUrl)}</p>
+                                                        <p className="text-xs text-gray-500 dark:text-gray-400">Click to download the guide</p>
+                                                    </div>
                                                 </div>
-                                            </div>
+                                            )
                                         ) : (
                                             <p className="text-gray-500 dark:text-gray-400">The facilitator guide for this course will be displayed here.</p>
                                         )}
@@ -1348,16 +1372,26 @@ export const CourseDetail: React.FC = () => {
                                 <div id={toId("Assessment Plan")}>
                                     <ContentSection title="Assessment Plan">
                                         {convertedCourse.assessmentPlanUrl ? (
-                                            <div
-                                                onClick={(e) => handleFileDownload(convertedCourse.assessmentPlanUrl!, e)}
-                                                className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors cursor-pointer"
-                                            >
-                                                <Icon name={IconName.FileText} className="w-8 h-8 text-red-600 flex-shrink-0" />
-                                                <div>
-                                                    <p className="font-semibold text-gray-900 dark:text-white">{extractFilenameFromPath(convertedCourse.assessmentPlanUrl)}</p>
-                                                    <p className="text-xs text-gray-500 dark:text-gray-400">Click to download the assessment plan</p>
+                                            isAssessmentPlanExternal ? (
+                                                <a href={convertedCourse.assessmentPlanUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
+                                                    <Icon name={IconName.ExternalLink} className="w-8 h-8 text-blue-600 flex-shrink-0" />
+                                                    <div>
+                                                        <p className="font-semibold text-gray-900 dark:text-white">Assessment Plan</p>
+                                                        <p className="text-xs text-gray-500 dark:text-gray-400">Click to open</p>
+                                                    </div>
+                                                </a>
+                                            ) : (
+                                                <div
+                                                    onClick={(e) => handleFileDownload(convertedCourse.assessmentPlanUrl!, e)}
+                                                    className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors cursor-pointer"
+                                                >
+                                                    <Icon name={IconName.FileText} className="w-8 h-8 text-red-600 flex-shrink-0" />
+                                                    <div>
+                                                        <p className="font-semibold text-gray-900 dark:text-white">{extractFilenameFromPath(convertedCourse.assessmentPlanUrl)}</p>
+                                                        <p className="text-xs text-gray-500 dark:text-gray-400">Click to download the assessment plan</p>
+                                                    </div>
                                                 </div>
-                                            </div>
+                                            )
                                         ) : (
                                             <p className="text-gray-500 dark:text-gray-400">The assessment plan for this course will be displayed here.</p>
                                         )}

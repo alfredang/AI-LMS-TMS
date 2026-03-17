@@ -155,7 +155,14 @@ export const BulkUploadCoursesView: React.FC<BulkUploadCoursesViewProps> = ({ on
             brochure_link: str(['Brochure Link', 'brochure_link']),
             google_classroom: str(['Google Classrooms', 'Google Classroom', 'google_classroom']),
             google_classroom_code: str(['Google Classroom Code', 'google_classroom_code']),
-            learner_guide_url: str(['Learner Slides PDF Links', 'Learner Guide URL', 'learner_guide_url']),
+            learner_guide_url: str(['Learner Guide Link', 'Learner Guide URL', 'learner_guide_url']),
+            slides_url: str(['Learner Slides PDF Links', 'slides_url']),
+            lesson_plan_url: str(['Lesson Plan Link', 'lesson_plan_url']),
+            facilitator_guide_url: str(['Facilitator Guide Link', 'facilitator_guide_url']),
+            trainer_slides_url: str(['Trainer Slides Link', 'trainer_slides_url']),
+            assessment_plan_url: str(['Assessment Plan Link', 'assessment_plan_url']),
+            practical_performance_assessment_link: str(['Practical Performance Assessment Link', 'practical_performance_assessment_link']),
+            written_assessment_link: str(['Written Assessment Link', 'written_assessment_link']),
             skillsfuture_link: str(['SkillsFuture Link', 'skillsfuture_link']),
             sf_for_business_link: str(['SF for Business Link', 'sf_for_business_link']),
             skills_framework: str(['Skills Framework', 'skills_framework']),
@@ -429,7 +436,7 @@ export const BulkUploadCoursesView: React.FC<BulkUploadCoursesViewProps> = ({ on
         <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Instructions</h2>
         <ol className="list-decimal list-inside space-y-2 text-sm text-gray-600 dark:text-gray-400">
           <li>Download the template file and fill in course details.</li>
-          <li>Template columns: <strong className="text-gray-800 dark:text-gray-200">Course Title, Course Code, Domain, Type, Courseware, Schedule ID, Funding Validty, Course Fee (exl GST), GST, After Normal Funding, After MCES Funding, Duration (hrs), Days, Course Link, Assessment Record Link, Brochure Link, Google Classrooms, Google Classroom Code, Learner Slides PDF Links, SkillsFuture Link, SF for Business Link, TSC Code, TSC Title, Skills Framework, DA, Average Score, Star Rating, Num of Responders, Description, Course Outline, UTAP, Course Renewed Status</strong>.</li>
+          <li>Template columns: <strong className="text-gray-800 dark:text-gray-200">Course Title, Course Code, Domain, Type, Courseware, Schedule ID, Funding Validty, Course Fee (exl GST), GST, After Normal Funding, After MCES Funding, Duration (hrs), Days, Course Link, Assessment Record Link, Brochure Link, Google Classrooms, Google Classroom Code, Learner Slides PDF Links, Lesson Plan Link, Learner Guide Link, Facilitator Guide Link, Trainer Slides Link, Assessment Plan Link, Practical Performance Assessment Link, Written Assessment Link, SkillsFuture Link, SF for Business Link, TSC Code, TSC Title, Skills Framework, DA, Average Score, Star Rating, Num of Responders, Description, Course Outline, UTAP, Course Renewed Status</strong>.</li>
           <li>Required columns: <strong className="text-gray-800 dark:text-gray-200">Course Code, Course Title</strong>.</li>
           <li><strong className="text-gray-800 dark:text-gray-200">Type</strong>: <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">WSQ</code>, <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">IBF</code>, or <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">Non-WSQ</code> (default).</li>
           <li>If the course code already exists, the course information will be updated.</li>
