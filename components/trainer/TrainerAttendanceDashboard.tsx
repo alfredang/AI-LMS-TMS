@@ -62,20 +62,28 @@ const Tooltip: React.FC<{ text: string; children: React.ReactNode; width?: strin
   </div>
 );
 
-const SectionHeader: React.FC<{ title: string; count?: number; right?: React.ReactNode; loading?: boolean; info?: string }> = ({ title, count, right, loading, info }) => (
+const SectionHeader: React.FC<{ title: string; count?: number; right?: React.ReactNode; loading?: boolean; info?: string; infoContent?: React.ReactNode }> = ({ title, count, right, loading, info, infoContent }) => (
   <div className="flex items-center justify-between px-4 py-3 border-b border-default">
     <div className="flex items-center gap-2">
       <h2 className="text-sm font-semibold text-on-surface">{title}</h2>
-      {info && (
-        <Tooltip text={info} width="w-64">
-          <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-surface-elevated border border-default text-on-surface-secondary text-xs cursor-help hover:bg-surface-hover transition-colors select-none">?</span>
-        </Tooltip>
-      )}
       {count !== undefined && (
         <span className="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-primary/10 text-primary text-xs font-semibold">
           {count}
         </span>
       )}
+      {infoContent ? (
+        <div className="relative inline-flex items-center group/sinfo">
+          <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-surface-elevated border border-default text-on-surface-secondary text-xs cursor-help hover:bg-surface-hover transition-colors select-none">?</span>
+          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover/sinfo:block z-50 pointer-events-none" style={{ width: '268px' }}>
+            {infoContent}
+            <div className="flex justify-center"><div className="border-[5px] border-transparent border-t-gray-900 dark:border-t-gray-800" /></div>
+          </div>
+        </div>
+      ) : info ? (
+        <Tooltip text={info} width="w-72">
+          <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-surface-elevated border border-default text-on-surface-secondary text-xs cursor-help hover:bg-surface-hover transition-colors select-none">?</span>
+        </Tooltip>
+      ) : null}
       {loading && (
         <div className="flex items-center gap-1.5 text-xs text-muted ml-1">
           <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-primary" />
@@ -87,9 +95,15 @@ const SectionHeader: React.FC<{ title: string; count?: number; right?: React.Rea
   </div>
 );
 
-const TrainerAttendanceDashboard: React.FC = () => {
+const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdminMode = false }) => {
   const { currentUser } = useLms();
-  const { courses, loading: coursesLoading } = useTrainerCourses(currentUser?.id);
+  const { courses, loading: coursesLoading } = useTrainerCourses(isAdminMode ? null : currentUser?.id);
+
+  // Admin-mode course run lookup
+  const [adminInput, setAdminInput]             = useState('');
+  const [isSearching, setIsSearching]           = useState(false);
+  const [searchError, setSearchError]           = useState<string | null>(null);
+  const [adminCourse, setAdminCourse]           = useState<any | null>(null);
 
   const [uen, setUen] = useState('');
   const [selectedCourseRunId, setSelectedCourseRunId] = useState('');
@@ -110,6 +124,9 @@ const TrainerAttendanceDashboard: React.FC = () => {
   const [digitalAttendanceId, setDigitalAttendanceId]  = useState('');
   const [isFetchingDigitalId, setIsFetchingDigitalId]  = useState(false);
   const [digitalIdError, setDigitalIdError]            = useState<string | null>(null);
+  const [manualDaIdInput, setManualDaIdInput]          = useState('');
+  const [isSavingManualDaId, setIsSavingManualDaId]    = useState(false);
+  const [manualDaIdError, setManualDaIdError]          = useState<string | null>(null);
 
   const [enrolmentRecords, setEnrolmentRecords]        = useState<any[]>([]);
   const [isLoadingEnrolments, setIsLoadingEnrolments]  = useState(false);
@@ -128,7 +145,7 @@ const TrainerAttendanceDashboard: React.FC = () => {
   const [loadingManualAttendance, setLoadingManualAttendance] = useState(false);
   const [savingAttendance, setSavingAttendance]        = useState(false);
   const [manualAttendanceMsg, setManualAttendanceMsg]  = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const [showManualNric, setShowManualNric]            = useState(false);
+  const [showManualNric, setShowManualNric]             = useState(false);
   const [manualPage, setManualPage]                    = useState(1);
   const MANUAL_PAGE_SIZE = 5;
 
@@ -137,7 +154,9 @@ const TrainerAttendanceDashboard: React.FC = () => {
     .filter(c => !c.endDate || new Date(c.endDate) >= today)
     .sort((a, b) => new Date(a.startDate ?? '').getTime() - new Date(b.startDate ?? '').getTime());
 
-  const selectedCourse = courses.find(c => c.courseRunId === selectedCourseRunId) ?? null;
+  const selectedCourse = isAdminMode
+    ? adminCourse
+    : (courses.find(c => c.courseRunId === selectedCourseRunId) ?? null);
 
   useEffect(() => {
     fetch('/api/training-provider/uen')
@@ -145,6 +164,54 @@ const TrainerAttendanceDashboard: React.FC = () => {
       .then(d => { if (d.uen) setUen(d.uen); })
       .catch(() => {});
   }, []);
+
+  const handleAdminSearch = async () => {
+    const code = adminInput.trim();
+    if (!code) return;
+    setIsSearching(true);
+    setSearchError(null);
+    setAdminCourse(null);
+    // Reset all dependent state
+    setSessions([]);
+    setSelectedSession('');
+    setFetchError(null);
+    setAttendanceRecords([]);
+    setAttendanceCourseRun(null);
+    setEnrolmentRecords([]);
+    setEnrolmentError(null);
+    setAttendanceSuccess(null);
+    setAttendanceError(null);
+    setDigitalAttendanceId('');
+    setDigitalIdError(null);
+    setManualSessions([]);
+    setSelectedManualSession('');
+    setManualAttendance([]);
+    setManualAttendanceDbMap({});
+    setManualAttendanceMsg(null);
+    setLearnerAccountMap({});
+    try {
+      const res = await fetch(`/api/admin/lookup-course-run?courseRunCode=${encodeURIComponent(code)}`);
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Course run not found');
+      const course = json.data;
+      setAdminCourse(course);
+      setSelectedCourseRunId(course.courseRunId);
+      if (course.digitalAttendanceId) {
+        setDigitalAttendanceId(course.digitalAttendanceId);
+      } else if (course.courseRunId && course.courseRunCode) {
+        fetchDigitalAttendanceId(course.courseRunId, course.courseRunCode);
+      }
+      if (course.courseRunCode && course.courseCode) {
+        handleFetchSessions(course.courseRunCode, course.courseCode, course);
+        fetchEnrolments(course.courseRunCode, course);
+      }
+      if (course.courseRunId) fetchManualSessions(course.courseRunId);
+    } catch (err) {
+      setSearchError(err instanceof Error ? err.message : 'Lookup failed');
+    } finally {
+      setIsSearching(false);
+    }
+  };
 
   // ── Manual Attendance handlers ──
 
@@ -388,6 +455,28 @@ const TrainerAttendanceDashboard: React.FC = () => {
     }
   };
 
+  const saveManualDaId = async () => {
+    if (!selectedCourse?.courseRunId || !manualDaIdInput.trim()) return;
+    setIsSavingManualDaId(true);
+    setManualDaIdError(null);
+    try {
+      const res = await fetch('/api/trainer/digital-attendance-id', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ courseRunUuid: selectedCourse.courseRunId, digitalAttendanceId: manualDaIdInput.trim() }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Failed to save');
+      setDigitalAttendanceId(json.digitalAttendanceId);
+      setDigitalIdError(null);
+      setManualDaIdInput('');
+    } catch (err) {
+      setManualDaIdError(err instanceof Error ? err.message : 'Failed to save');
+    } finally {
+      setIsSavingManualDaId(false);
+    }
+  };
+
   const fetchEnrolments = async (courseRunCode: string, courseOverride?: typeof selectedCourse) => {
     setIsLoadingEnrolments(true);
     setEnrolmentError(null);
@@ -541,7 +630,9 @@ const TrainerAttendanceDashboard: React.FC = () => {
       {/* Page Header */}
       <div>
         <h1 className="text-2xl font-bold text-on-surface">E-Attendance</h1>
-        <p className="text-sm text-on-surface-secondary mt-0.5">Select an assigned class to manage sessions and view enrolments.</p>
+        <p className="text-sm text-on-surface-secondary mt-0.5">
+          {isAdminMode ? 'Enter a Course Run ID to look up attendance.' : 'Select an assigned class to manage sessions and view enrolments.'}
+        </p>
       </div>
 
       {/* ── Class & Session Selection ── */}
@@ -558,13 +649,54 @@ const TrainerAttendanceDashboard: React.FC = () => {
         </div>
 
         <div className="p-4 space-y-4">
-          {/* Class dropdown row */}
+          {/* Class selection row — admin gets a text input, trainer gets a dropdown */}
           <div>
             <label className="block text-xs font-medium text-on-surface-secondary mb-1">
-              Assigned Class <span className="text-red-500">*</span>
+              {isAdminMode ? 'Course Run ID' : 'Assigned Class'} <span className="text-red-500">*</span>
             </label>
             <div className="flex flex-wrap items-center gap-3">
-              {coursesLoading ? (
+              {isAdminMode ? (
+                <>
+                  <div className="flex-1 min-w-[260px]">
+                    <input
+                      type="text"
+                      value={adminInput}
+                      onChange={e => { setAdminInput(e.target.value); setSearchError(null); }}
+                      onKeyDown={e => { if (e.key === 'Enter') handleAdminSearch(); }}
+                      placeholder="e.g. 1069549"
+                      className="input-themed w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                      disabled={isSearching}
+                    />
+                    {searchError && (
+                      <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
+                        <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        {searchError}
+                      </p>
+                    )}
+                  </div>
+                  <button
+                    onClick={handleAdminSearch}
+                    disabled={isSearching || !adminInput.trim()}
+                    className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded text-sm font-medium hover:bg-primary-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isSearching ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
+                        Searching...
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                        Search
+                      </>
+                    )}
+                  </button>
+                </>
+              ) : coursesLoading ? (
                 <div className="flex items-center gap-2 px-3 py-2 border border-default rounded text-sm text-muted flex-1 min-w-[260px]">
                   <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary" />
                   Loading classes...
@@ -620,7 +752,7 @@ const TrainerAttendanceDashboard: React.FC = () => {
                   <span className="absolute right-2 top-1/2 -translate-y-1/2 text-muted pointer-events-none text-xs">▼</span>
                 </div>
               )}
-              {selectedCourse && (
+              {!isAdminMode && selectedCourse && (
                 <button
                   onClick={() => handleFetchSessions(selectedCourse.courseRunCode!, selectedCourse.courseCode)}
                   disabled={!canFetch}
@@ -804,7 +936,7 @@ const TrainerAttendanceDashboard: React.FC = () => {
               </div>
             </div>
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-3">
               {digitalIdError && (
                 <p className="text-xs text-red-500 flex items-center gap-1">
                   <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -822,6 +954,33 @@ const TrainerAttendanceDashboard: React.FC = () => {
                 <RefreshIcon className="w-3.5 h-3.5" />
                 Load Attendance Link
               </button>
+              {digitalIdError && (
+                <div className="border-t border-default pt-3">
+                  <p className="text-xs text-on-surface-secondary mb-2">Or enter the RA code manually:</p>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={manualDaIdInput}
+                      onChange={e => { setManualDaIdInput(e.target.value); setManualDaIdError(null); }}
+                      placeholder="e.g. RA740761"
+                      className="input-themed flex-1 border rounded px-3 py-1.5 text-sm bg-surface focus:outline-none focus:ring-1 focus:ring-primary"
+                    />
+                    <button
+                      onClick={saveManualDaId}
+                      disabled={isSavingManualDaId || !manualDaIdInput.trim()}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-white rounded text-sm font-medium hover:bg-primary-hover transition-colors disabled:opacity-50"
+                    >
+                      {isSavingManualDaId ? (
+                        <div className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-white" />
+                      ) : null}
+                      Save
+                    </button>
+                  </div>
+                  {manualDaIdError && (
+                    <p className="text-xs text-red-500 mt-1">{manualDaIdError}</p>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -854,9 +1013,11 @@ const TrainerAttendanceDashboard: React.FC = () => {
               <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">
                 <div className="flex items-center gap-2">
                   NRIC
-                  <button onClick={() => setShowNric(v => !v)} className="text-xs font-normal text-primary hover:underline">
-                    {showNric ? 'Hide' : 'Show'}
-                  </button>
+                  {isAdminMode && (
+                    <button onClick={() => setShowNric(v => !v)} className="text-xs font-normal text-primary hover:underline">
+                      {showNric ? 'Hide' : 'Show'}
+                    </button>
+                  )}
                 </div>
               </th>
               <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Type</th>
@@ -913,7 +1074,7 @@ const TrainerAttendanceDashboard: React.FC = () => {
       </div>
 
       {/* ── Class Enrolments ── */}
-      <div className="bg-surface rounded-lg border border-default shadow-sm overflow-x-auto">
+      <div className="bg-surface rounded-lg border border-default shadow-sm">
         <SectionHeader
           title="Class Enrolments"
           count={enrolmentRecords.length > 0 ? enrolmentRecords.length : undefined}
@@ -939,6 +1100,7 @@ const TrainerAttendanceDashboard: React.FC = () => {
             {enrolmentError}
           </p>
         )}
+        <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-surface-elevated border-b border-default">
             <tr>
@@ -951,14 +1113,16 @@ const TrainerAttendanceDashboard: React.FC = () => {
               <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">
                 <div className="flex items-center gap-2">
                   NRIC
-                  <button onClick={() => setShowEnrolNric(v => !v)} className="text-xs font-normal text-primary hover:underline">
-                    {showEnrolNric ? 'Hide' : 'Show'}
-                  </button>
+                  {isAdminMode && (
+                    <button onClick={() => setShowEnrolNric(v => !v)} className="text-xs font-normal text-primary hover:underline">
+                      {showEnrolNric ? 'Hide' : 'Show'}
+                    </button>
+                  )}
                 </div>
               </th>
               <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">
                 <div className="flex items-center gap-2">
-                  Contact No.
+                  Contact Number
                   <button onClick={() => setShowEnrolContact(v => !v)} className="text-xs font-normal text-primary hover:underline">
                     {showEnrolContact ? 'Hide' : 'Show'}
                   </button>
@@ -1068,10 +1232,11 @@ const TrainerAttendanceDashboard: React.FC = () => {
             )}
           </tbody>
         </table>
+        </div>{/* end overflow-x-auto */}
       </div>
 
       {/* ── Manual Attendance Taking ── */}
-      <div className="bg-surface rounded-lg border border-default shadow-sm overflow-hidden">
+      {!isAdminMode && <div className="bg-surface rounded-lg border border-default shadow-sm overflow-hidden">
         <SectionHeader
           title="Manual Attendance Taking (Optional)"
           loading={loadingManualSessions || loadingManualAttendance || isLoadingEnrolments || isLoadingAttendance}
@@ -1093,9 +1258,11 @@ const TrainerAttendanceDashboard: React.FC = () => {
               <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">
                 <div className="flex items-center gap-2">
                   NRIC
-                  <button onClick={() => setShowManualNric(v => !v)} className="text-xs font-normal text-primary hover:underline">
-                    {showManualNric ? 'Hide' : 'Show'}
-                  </button>
+                  {isAdminMode && (
+                    <button onClick={() => setShowManualNric(v => !v)} className="text-xs font-normal text-primary hover:underline">
+                      {showManualNric ? 'Hide' : 'Show'}
+                    </button>
+                  )}
                 </div>
               </th>
               <th className="px-3 py-3 text-center font-semibold text-on-surface-secondary whitespace-nowrap">Attendance Marking</th>
@@ -1207,7 +1374,7 @@ const TrainerAttendanceDashboard: React.FC = () => {
             </button>
           </div>
         )}
-      </div>
+      </div>}
 
     </div>
   );

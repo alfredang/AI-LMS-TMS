@@ -47,6 +47,7 @@ import {
 import { CourseRunView } from '../components/admin/CourseRunView';
 import { UploadDirectApplicationView, ViewDirectApplicationView, UpdateDirectApplicationView } from '../components/admin/DirectApplicationViews';
 import { BulkUploadEnrolmentView } from '../components/admin/BulkEnrolmentViews';
+import TrainerAttendanceDashboard from '../components/trainer/TrainerAttendanceDashboard';
 
 // Management Dashboard Component
 interface ManagementDashboardProps {
@@ -68,6 +69,7 @@ const ManagementDashboard: React.FC<ManagementDashboardProps> = ({ type }) => {
   ];
 
   const tpgManagementLinks: NavBoxProps[] = [
+    { title: "Check Attendance", description: "View and manage e-attendance for all course runs.", icon: IconName.ClipboardCheck, onClick: () => setAdminPage(AdminPage.CheckAttendance) },
     { title: "Apply New Grant", description: "Submit new grant applications to SSG for learners.", icon: IconName.Send, onClick: () => setAdminPage(AdminPage.ApplyNewGrant) },
     { title: "Search Grant", description: "Search for grant details using Reference ID.", icon: IconName.Search, onClick: () => setAdminPage(AdminPage.SearchGrant) },
     { title: "View Grant Status", description: "Check the status of submitted grant applications.", icon: IconName.Eye, onClick: () => setAdminPage(AdminPage.ViewGrantStatus) },
@@ -125,6 +127,7 @@ const PAGE_LABELS: Partial<Record<AdminPage, string>> = {
   [AdminPage.UpdateEnrolment]: 'Update Enrolment',
   [AdminPage.DeleteCourseRun]: 'Delete Course Run',
   [AdminPage.ClassDetail]: 'Class Detail',
+  [AdminPage.CheckAttendance]: 'Check Attendance',
 };
 
 const AdminLayout: React.FC = () => {
@@ -241,6 +244,12 @@ const AdminLayout: React.FC = () => {
         return <ViewDirectApplicationView />;
       case AdminPage.UpdateDirectApplication:
         return <UpdateDirectApplicationView />;
+      case AdminPage.CheckAttendance:
+        return (
+          <div className="max-w-4xl mx-auto">
+            <TrainerAttendanceDashboard isAdminMode />
+          </div>
+        );
       default:
         return <AdminDashboard />;
     }

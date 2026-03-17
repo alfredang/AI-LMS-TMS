@@ -10,7 +10,47 @@ function extractRaCode(qrCodeLink: string): string | null {
   return match ? match[1] : null;
 }
 
+// Recursively search any JSON object for a "qrCodeLink" field or a URL/string containing an RA code
+function findQrCodeLinkOrRaCode(obj: any, depth = 0): string | undefined {
+  if (depth > 10 || !obj || typeof obj !== 'object') return undefined;
+  for (const key of Object.keys(obj)) {
+    const val = obj[key];
+    if (key === 'qrCodeLink' && typeof val === 'string' && val) return val;
+    // If any string value looks like an RA take-attendance URL, return it
+    if (typeof val === 'string' && val.includes('take-attendance/RA')) return val;
+    // If any string value is just an RA code
+    if (typeof val === 'string' && /^RA\w{4,}$/.test(val)) return val;
+    if (val && typeof val === 'object') {
+      const found = findQrCodeLinkOrRaCode(val, depth + 1);
+      if (found) return found;
+    }
+  }
+  return undefined;
+}
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  // PUT: manually save a digitalAttendanceId provided by the user
+  if (req.method === 'PUT') {
+    const { courseRunUuid, digitalAttendanceId } = req.body;
+    if (!courseRunUuid || !digitalAttendanceId) {
+      return res.status(400).json({ error: 'courseRunUuid and digitalAttendanceId are required' });
+    }
+    const raCode = digitalAttendanceId.trim().startsWith('RA') ? digitalAttendanceId.trim() : null;
+    if (!raCode) {
+      return res.status(422).json({ error: 'digitalAttendanceId must start with RA' });
+    }
+    try {
+      await pool.query(
+        `UPDATE course_run SET digital_attendance_id = $1 WHERE id = $2`,
+        [raCode, courseRunUuid]
+      );
+      return res.status(200).json({ digitalAttendanceId: raCode });
+    } catch (error) {
+      console.error('Error saving digital attendance ID:', error);
+      return res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -49,13 +89,30 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     const webhookData = await webhookRes.json();
-    const qrCodeLink: string | undefined = webhookData?.data?.course?.run?.qrCodeLink;
+
+    console.log('[digital-attendance-id] Raw webhook response:', JSON.stringify(webhookData).slice(0, 2000));
+
+    // Try multiple known paths for qrCodeLink
+    const qrCodeLink: string | undefined =
+      webhookData?.data?.course?.run?.qrCodeLink ??
+      webhookData?.data?.courseRun?.qrCodeLink ??
+      webhookData?.data?.run?.qrCodeLink ??
+      webhookData?.result?.data?.course?.run?.qrCodeLink ??
+      webhookData?.qrCodeLink ??
+      findQrCodeLinkOrRaCode(webhookData);
 
     if (!qrCodeLink) {
-      return res.status(404).json({ error: 'qrCodeLink not found in webhook response' });
+      console.error('[digital-attendance-id] qrCodeLink not found. Full response keys:', Object.keys(webhookData || {}));
+      return res.status(404).json({
+        error: 'qrCodeLink not found in webhook response',
+        hint: 'Check server logs for the raw webhook response structure',
+      });
     }
 
-    const digitalAttendanceId = extractRaCode(qrCodeLink);
+    // If the value is already just an RA code, use it directly
+    const digitalAttendanceId = qrCodeLink.startsWith('RA')
+      ? qrCodeLink
+      : extractRaCode(qrCodeLink);
     if (!digitalAttendanceId) {
       return res.status(422).json({ error: `Could not parse RA code from: ${qrCodeLink}` });
     }

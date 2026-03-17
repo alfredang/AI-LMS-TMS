@@ -59,7 +59,8 @@ export enum AdminPage {
   UpdateEnrolmentFees = 'updateEnrolmentFees',
   CourseSessionAttendance = 'courseSessionAttendance',
   CourseSessions = 'courseSessions',
-  AssignStudent = 'assignStudent'
+  AssignStudent = 'assignStudent',
+  CheckAttendance = 'checkAttendance'
 }
 
 // Course related interfaces
