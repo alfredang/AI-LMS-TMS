@@ -28,7 +28,7 @@ function getDriveClient(): drive_v3.Drive {
     const oauth2Client = new google.auth.OAuth2(
         clientId,
         clientSecret,
-        'http://localhost:3000/api/auth/callback/google-drive'
+        'http://localhost:9876'
     );
 
     oauth2Client.setCredentials({ refresh_token: refreshToken });
