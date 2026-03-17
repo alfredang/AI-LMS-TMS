@@ -28,7 +28,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           c.facilitator_guide_url AS facilitator_guide,
           c.slides_url           AS learner_slides,
           c.trainer_slides_url   AS trainer_slides,
-          c.assessment_plan_url  AS assessment_plan
+          c.assessment_plan_url  AS assessment_plan,
+          c.written_assessment_link,
+          c.practical_performance_assessment_link
       FROM course c
       WHERE c.id = $1
     `;
@@ -63,6 +65,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         facilitatorGuideUrl: courseDetail.facilitator_guide,
         trainerSlidesUrl: courseDetail.trainer_slides,
         assessmentPlanUrl: courseDetail.assessment_plan,
+        writtenAssessmentLink: courseDetail.written_assessment_link,
+        practicalPerformanceAssessmentLink: courseDetail.practical_performance_assessment_link,
         certificate: ''
       }
     });

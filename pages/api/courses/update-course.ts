@@ -44,6 +44,8 @@ interface CourseData {
   courseFee?: number;
   taxPercent?: number;
   trainerSlidesUrl?: string; // For Google Slides links
+  writtenAssessmentLink?: string;
+  practicalPerformanceAssessmentLink?: string;
   learningUnits: {
     id?: string;
     title: string;
@@ -412,6 +414,20 @@ export default async function handler(
       }
     }
 
+    if (files.writtenAssessment) {
+      const file = Array.isArray(files.writtenAssessment) ? files.writtenAssessment[0] : files.writtenAssessment;
+      if (file.size > 0) {
+        fileUrls.writtenAssessmentLink = await saveUploadedFile(file, 'assessments');
+      }
+    }
+
+    if (files.practicalPerformanceAssessment) {
+      const file = Array.isArray(files.practicalPerformanceAssessment) ? files.practicalPerformanceAssessment[0] : files.practicalPerformanceAssessment;
+      if (file.size > 0) {
+        fileUrls.practicalPerformanceAssessmentLink = await saveUploadedFile(file, 'assessments');
+      }
+    }
+
     // Handle assessment files
     const assessmentFiles = files.assessmentFiles;
     const assessmentFileUrls: string[] = [];
@@ -455,8 +471,10 @@ export default async function handler(
           is_gamified = $17,
           course_fee = $18,
           tax_percent = $19,
+          written_assessment_link = COALESCE($20, written_assessment_link),
+          practical_performance_assessment_link = COALESCE($21, practical_performance_assessment_link),
           updated_at = now()
-        WHERE id = $20
+        WHERE id = $22
         RETURNING id
       `;
 
@@ -480,6 +498,8 @@ export default async function handler(
         courseData.isGamified,
         courseData.courseFee || null,
         courseData.taxPercent || null,
+        fileUrls.writtenAssessmentLink || courseData.writtenAssessmentLink || null,
+        fileUrls.practicalPerformanceAssessmentLink || courseData.practicalPerformanceAssessmentLink || null,
         courseId
       ]);
 

@@ -164,6 +164,8 @@ const CourseEditor: React.FC = () => {
         assessmentPlan?: File;
         learnerSlides?: File;
         trainerSlides?: File;
+        writtenAssessment?: File;
+        practicalPerformanceAssessment?: File;
         assessmentFiles: File[];
         // NEW: map uploaded assessment file by assessmentId
         assessmentFilesById?: Record<string, File>;
@@ -187,6 +189,12 @@ const CourseEditor: React.FC = () => {
 
     const isTrainerSlidesUrl = course.trainerSlidesUrl && (course.trainerSlidesUrl.startsWith('http://') || course.trainerSlidesUrl.startsWith('https://'));
     const [trainerSlideInputType, setTrainerSlideInputType] = useState<'upload' | 'link'>(isTrainerSlidesUrl ? 'link' : 'upload');
+
+    const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAssessmentLink.startsWith('http://') || course.writtenAssessmentLink.startsWith('https://');
+    const [writtenAssessmentInputType, setWrittenAssessmentInputType] = useState<'link' | 'upload'>(isWrittenAssessmentUrl ? 'link' : 'upload');
+
+    const isPracticalPerformanceUrl = !course.practicalPerformanceAssessmentLink || course.practicalPerformanceAssessmentLink.startsWith('http://') || course.practicalPerformanceAssessmentLink.startsWith('https://');
+    const [practicalPerformanceInputType, setPracticalPerformanceInputType] = useState<'link' | 'upload'>(isPracticalPerformanceUrl ? 'link' : 'upload');
 
     // Debug logging for mode
     useEffect(() => {
@@ -450,6 +458,8 @@ const CourseEditor: React.FC = () => {
                 taxPercent: (course.taxPercent || 0) / 100, // Divide by 100 to convert percentage to decimal
                 // Include trainer slides URL if it's a link (not upload)
                 trainerSlidesUrl: trainerSlideInputType === 'link' ? course.trainerSlidesUrl : undefined,
+                writtenAssessmentLink: writtenAssessmentInputType === 'link' ? (course.writtenAssessmentLink || undefined) : undefined,
+                practicalPerformanceAssessmentLink: practicalPerformanceInputType === 'link' ? (course.practicalPerformanceAssessmentLink || undefined) : undefined,
                 // Convert topics to learning units with position
                 learningUnits: course.topics.map((topic, index) => ({
                     id: topic.id,
@@ -549,6 +559,22 @@ const CourseEditor: React.FC = () => {
             } else if (trainerSlideInputType === 'link' && editingCourse?.trainerSlidesUrl && editingCourse.trainerSlidesUrl.includes('uploads/')) {
                 // Special case: user changed from file to link, delete the old file
                 oldFileUrls.trainerSlides = editingCourse.trainerSlidesUrl;
+            }
+            if (files.writtenAssessment && writtenAssessmentInputType === 'upload') {
+                formData.append('writtenAssessment', files.writtenAssessment);
+                if (editingCourse?.writtenAssessmentLink && editingCourse.writtenAssessmentLink.includes('uploads/')) {
+                    oldFileUrls.writtenAssessment = editingCourse.writtenAssessmentLink;
+                }
+            } else if (writtenAssessmentInputType === 'link' && editingCourse?.writtenAssessmentLink && editingCourse.writtenAssessmentLink.includes('uploads/')) {
+                oldFileUrls.writtenAssessment = editingCourse.writtenAssessmentLink;
+            }
+            if (files.practicalPerformanceAssessment && practicalPerformanceInputType === 'upload') {
+                formData.append('practicalPerformanceAssessment', files.practicalPerformanceAssessment);
+                if (editingCourse?.practicalPerformanceAssessmentLink && editingCourse.practicalPerformanceAssessmentLink.includes('uploads/')) {
+                    oldFileUrls.practicalPerformanceAssessment = editingCourse.practicalPerformanceAssessmentLink;
+                }
+            } else if (practicalPerformanceInputType === 'link' && editingCourse?.practicalPerformanceAssessmentLink && editingCourse.practicalPerformanceAssessmentLink.includes('uploads/')) {
+                oldFileUrls.practicalPerformanceAssessment = editingCourse.practicalPerformanceAssessmentLink;
             }
 
             // Include old file URLs for deletion
@@ -735,6 +761,12 @@ const CourseEditor: React.FC = () => {
                     break;
                 case 'trainerSlides':
                     isValid = validateTrainerSlidesFile(file);
+                    break;
+                case 'writtenAssessment':
+                    isValid = validateDocumentFile(file, 'Written Assessment');
+                    break;
+                case 'practicalPerformanceAssessment':
+                    isValid = validateDocumentFile(file, 'Practical Performance Assessment');
                     break;
                 default:
                     break;
@@ -1266,6 +1298,89 @@ const CourseEditor: React.FC = () => {
 
                     <div className="space-y-4">
                         <h3 className="text-xl font-bold px-1">Assessment</h3>
+
+                        {/* Written Assessment */}
+                        <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
+                            <h3 className="text-xl font-bold mb-4 dark:text-white">Written Assessment</h3>
+                            <div className="flex gap-6 mb-4">
+                                <div className="flex items-center">
+                                    <input type="radio" id="written-assessment-link" name="writtenAssessmentType" value="link" checked={writtenAssessmentInputType === 'link'} onChange={() => setWrittenAssessmentInputType('link')} className="h-4 w-4 text-primary focus:ring-primary border-gray-300 dark:border-gray-600" />
+                                    <label htmlFor="written-assessment-link" className="ml-2 block text-sm font-medium text-gray-700 dark:text-gray-300">Enter URL</label>
+                                </div>
+                                <div className="flex items-center">
+                                    <input type="radio" id="written-assessment-upload" name="writtenAssessmentType" value="upload" checked={writtenAssessmentInputType === 'upload'} onChange={() => setWrittenAssessmentInputType('upload')} className="h-4 w-4 text-primary focus:ring-primary border-gray-300 dark:border-gray-600" />
+                                    <label htmlFor="written-assessment-upload" className="ml-2 block text-sm font-medium text-gray-700 dark:text-gray-300">Upload File</label>
+                                </div>
+                            </div>
+                            {writtenAssessmentInputType === 'link' ? (
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Written Assessment URL (Optional)</label>
+                                    <input
+                                        type="url"
+                                        value={course.writtenAssessmentLink || ''}
+                                        onChange={(e) => setCourse(prev => ({ ...prev, writtenAssessmentLink: e.target.value }))}
+                                        className={inputClasses}
+                                        placeholder="https://..."
+                                    />
+                                </div>
+                            ) : (
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Upload Written Assessment (PDF/DOC/DOCX)</label>
+                                    <div className="flex items-center gap-2 p-2 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600">
+                                        <Icon name={IconName.FilePdf} className="w-5 h-5 text-gray-500 dark:text-gray-400" />
+                                        <span className="text-sm text-subtle flex-grow truncate">
+                                            {files.writtenAssessment ? files.writtenAssessment.name : (course.writtenAssessmentLink && !isWrittenAssessmentUrl ? extractFilenameFromPath(course.writtenAssessmentLink) : 'No file uploaded.')}
+                                        </span>
+                                        <Button variant="ghost" size="sm" onClick={() => document.getElementById('writtenAssessmentUpload')?.click()}>
+                                            <Icon name={IconName.Upload} className="w-4 h-4 mr-1" /> Upload
+                                        </Button>
+                                        <input type="file" id="writtenAssessmentUpload" className="hidden" accept=".pdf,.doc,.docx" onChange={(e) => { if (e.target.files?.[0]) handleFileSelect('writtenAssessment', e.target.files[0]); }} />
+                                    </div>
+                                </div>
+                            )}
+                        </Card>
+
+                        {/* Practical Performance Assessment */}
+                        <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
+                            <h3 className="text-xl font-bold mb-4 dark:text-white">Practical Performance Assessment</h3>
+                            <div className="flex gap-6 mb-4">
+                                <div className="flex items-center">
+                                    <input type="radio" id="practical-assessment-link" name="practicalAssessmentType" value="link" checked={practicalPerformanceInputType === 'link'} onChange={() => setPracticalPerformanceInputType('link')} className="h-4 w-4 text-primary focus:ring-primary border-gray-300 dark:border-gray-600" />
+                                    <label htmlFor="practical-assessment-link" className="ml-2 block text-sm font-medium text-gray-700 dark:text-gray-300">Enter URL</label>
+                                </div>
+                                <div className="flex items-center">
+                                    <input type="radio" id="practical-assessment-upload" name="practicalAssessmentType" value="upload" checked={practicalPerformanceInputType === 'upload'} onChange={() => setPracticalPerformanceInputType('upload')} className="h-4 w-4 text-primary focus:ring-primary border-gray-300 dark:border-gray-600" />
+                                    <label htmlFor="practical-assessment-upload" className="ml-2 block text-sm font-medium text-gray-700 dark:text-gray-300">Upload File</label>
+                                </div>
+                            </div>
+                            {practicalPerformanceInputType === 'link' ? (
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Practical Performance Assessment URL (Optional)</label>
+                                    <input
+                                        type="url"
+                                        value={course.practicalPerformanceAssessmentLink || ''}
+                                        onChange={(e) => setCourse(prev => ({ ...prev, practicalPerformanceAssessmentLink: e.target.value }))}
+                                        className={inputClasses}
+                                        placeholder="https://..."
+                                    />
+                                </div>
+                            ) : (
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Upload Practical Performance Assessment (PDF/DOC/DOCX)</label>
+                                    <div className="flex items-center gap-2 p-2 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600">
+                                        <Icon name={IconName.FilePdf} className="w-5 h-5 text-gray-500 dark:text-gray-400" />
+                                        <span className="text-sm text-subtle flex-grow truncate">
+                                            {files.practicalPerformanceAssessment ? files.practicalPerformanceAssessment.name : (course.practicalPerformanceAssessmentLink && !isPracticalPerformanceUrl ? extractFilenameFromPath(course.practicalPerformanceAssessmentLink) : 'No file uploaded.')}
+                                        </span>
+                                        <Button variant="ghost" size="sm" onClick={() => document.getElementById('practicalAssessmentUpload')?.click()}>
+                                            <Icon name={IconName.Upload} className="w-4 h-4 mr-1" /> Upload
+                                        </Button>
+                                        <input type="file" id="practicalAssessmentUpload" className="hidden" accept=".pdf,.doc,.docx" onChange={(e) => { if (e.target.files?.[0]) handleFileSelect('practicalPerformanceAssessment', e.target.files[0]); }} />
+                                    </div>
+                                </div>
+                            )}
+                        </Card>
+
                         <div className="space-y-4">
                             {(course.assessments || []).map(assessment => (
                                 <Card key={assessment.id} className="p-4 relative group">

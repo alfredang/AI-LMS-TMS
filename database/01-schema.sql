@@ -2174,6 +2174,31 @@ CREATE TABLE IF NOT EXISTS public.course_trainer (
 CREATE INDEX IF NOT EXISTS idx_course_trainer_course   ON public.course_trainer(course_id);
 CREATE INDEX IF NOT EXISTS idx_course_trainer_trainer  ON public.course_trainer(trainer_id);
 
+-- From: add-link-assessment-columns.sql
+-- Add columns for link-based assessment publish status to course_run
+ALTER TABLE public.course_run ADD COLUMN IF NOT EXISTS written_assessment_published boolean DEFAULT false;
+ALTER TABLE public.course_run ADD COLUMN IF NOT EXISTS practical_assessment_published boolean DEFAULT false;
+
+-- link_assessment_submission: tracks submissions for link-based assessments (Written Assessment / Practical Performance Assessment)
+-- These assessments are external links (e.g., Google Forms) stored in the course table, not the assessment table
+-- This table is separate from the 'submission' table which tracks file-based assessment submissions
+CREATE TABLE IF NOT EXISTS public.link_assessment_submission (
+    id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+    user_id uuid NOT NULL REFERENCES public.app_user(id) ON DELETE CASCADE,
+    course_run_id uuid NOT NULL REFERENCES public.course_run(id) ON DELETE CASCADE,
+    assessment_type VARCHAR(20) NOT NULL CHECK (assessment_type IN ('written', 'practical')),
+    file_name VARCHAR(255) NOT NULL,
+    file_url TEXT NOT NULL,
+    submitted_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(user_id, course_run_id, assessment_type)
+);
+
+CREATE INDEX IF NOT EXISTS idx_link_assessment_submission_user ON public.link_assessment_submission(user_id);
+CREATE INDEX IF NOT EXISTS idx_link_assessment_submission_course_run ON public.link_assessment_submission(course_run_id);
+
+COMMENT ON TABLE public.link_assessment_submission IS 'Tracks file submissions for link-based assessments (Written/Practical). Separate from the submission table which handles file-based assessments.';
+COMMENT ON COLUMN public.link_assessment_submission.assessment_type IS 'Type of link-based assessment: written or practical';
+
 -- Completed on 2026-01-21 00:30:37
 
 --

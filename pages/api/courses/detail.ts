@@ -14,6 +14,10 @@ interface CourseDetailRow {
   lesson_plan_url: string;
   learner_guide_url: string;
   slides_url: string;
+  written_assessment_link: string;
+  practical_performance_assessment_link: string;
+  written_assessment_published: boolean;
+  practical_assessment_published: boolean;
   certificate: string;
 }
 
@@ -64,6 +68,10 @@ export default async function handler(
           c.lesson_plan_url,
           c.learner_guide_url,
           c.slides_url,
+          c.written_assessment_link,
+          c.practical_performance_assessment_link,
+          cr.written_assessment_published,
+          cr.practical_assessment_published,
           e.certificate
         FROM enrollment e
         JOIN course_run cr
@@ -90,6 +98,10 @@ export default async function handler(
           c.lesson_plan_url,
           c.learner_guide_url,
           c.slides_url,
+          c.written_assessment_link,
+          c.practical_performance_assessment_link,
+          cr.written_assessment_published,
+          cr.practical_assessment_published,
           e.certificate
         FROM enrollment e
         JOIN course_run cr
@@ -134,6 +146,10 @@ export default async function handler(
         lessonPlanUrl: courseDetail.lesson_plan_url,
         learnerGuideUrl: courseDetail.learner_guide_url,
         slidesUrl: courseDetail.slides_url,
+        writtenAssessmentLink: courseDetail.written_assessment_link,
+        practicalPerformanceAssessmentLink: courseDetail.practical_performance_assessment_link,
+        writtenAssessmentPublished: courseDetail.written_assessment_published ?? false,
+        practicalAssessmentPublished: courseDetail.practical_assessment_published ?? false,
         certificate: courseDetail.certificate
       }
     });

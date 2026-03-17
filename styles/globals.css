@@ -372,3 +372,23 @@ body {
 .no-transitions * {
   transition: none !important;
 }
+
+/* Indeterminate progress bar animation */
+@keyframes indeterminate {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* Shimmer loading animation */
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}

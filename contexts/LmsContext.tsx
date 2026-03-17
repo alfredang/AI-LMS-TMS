@@ -811,6 +811,10 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           assessmentPlanUrl: trainerData.data.courseDetail.assessmentPlanUrl,
           courseLink: trainerData.data.courseDetail.courseLink,
           assessmentRecordLink: trainerData.data.courseDetail.assessmentRecordLink,
+          writtenAssessmentLink: trainerData.data.courseDetail.writtenAssessmentLink,
+          practicalPerformanceAssessmentLink: trainerData.data.courseDetail.practicalPerformanceAssessmentLink,
+          writtenAssessmentPublished: trainerData.data.courseDetail.writtenAssessmentPublished ?? false,
+          practicalAssessmentPublished: trainerData.data.courseDetail.practicalAssessmentPublished ?? false,
           certificate: ''
         });
 

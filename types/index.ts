@@ -100,6 +100,10 @@ export interface Course {
   facilitatorGuideUrl?: string;
   assessmentPlanUrl?: string;
   trainerSlidesUrl?: string;
+  writtenAssessmentLink?: string;
+  practicalPerformanceAssessmentLink?: string;
+  writtenAssessmentPublished?: boolean;
+  practicalAssessmentPublished?: boolean;
   courseFee?: number;
   taxPercent?: number;
   isLeaderboardEnabled?: boolean;
@@ -126,6 +130,10 @@ export interface CourseDetail {
   assessmentPlanUrl?: string;
   courseLink?: string;
   assessmentRecordLink?: string;
+  writtenAssessmentLink?: string;
+  practicalPerformanceAssessmentLink?: string;
+  writtenAssessmentPublished?: boolean;
+  practicalAssessmentPublished?: boolean;
   certificate: string;
 }
 

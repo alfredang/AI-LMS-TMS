@@ -3,6 +3,7 @@ import { useLms } from '@contexts/LmsContext';
 import { Button } from './ui/Button';
 import { Icon, IconName } from './ui/Icon';
 import { Card } from './ui/Card';
+import Spinner from './ui/Spinner';
 import { UserRole, CourseAssessment, AdminPage } from '@app-types';
 import GradingView from './GradingView';
 import { extractFilenameFromPath } from '@utils/fileUtils';
@@ -69,15 +70,19 @@ interface Course {
     assessmentPlanUrl?: string;
     courseLink?: string;
     assessmentRecordLink?: string;
+    writtenAssessmentLink?: string;
+    practicalPerformanceAssessmentLink?: string;
+    writtenAssessmentPublished?: boolean;
+    practicalAssessmentPublished?: boolean;
 }
 
 // --- Utility Functions ---
 const toId = (label: string) => label.toLowerCase().replace(/ /g, '-');
 
 // --- Reusable Components ---
-const ContentSection: React.FC<{ title: string; children: React.ReactNode; className?: string }> = ({ title, children, className }) => (
+const ContentSection: React.FC<{ title?: string; children: React.ReactNode; className?: string }> = ({ title, children, className }) => (
     <Card className={`p-6 ${className}`}>
-        <h3 className="text-xl font-bold mb-4 text-gray-900 dark:text-white">{title}</h3>
+        {title && <h3 className="text-xl font-bold mb-4 text-gray-900 dark:text-white">{title}</h3>}
         {children}
     </Card>
 );
@@ -231,14 +236,206 @@ const AssessmentsSection: React.FC<{
     // Use developer assessments for developers and training providers, otherwise use context assessments
     const effectiveAssessments = (userRole === UserRole.Developer || userRole === UserRole.TrainingProvider || userRole === UserRole.Admin) && developerAssessments ? developerAssessments : courseAssessments;
 
-    if (!effectiveAssessments || effectiveAssessments.length === 0) {
+    const [writtenPublished, setWrittenPublished] = useState<boolean>(course.writtenAssessmentPublished ?? false);
+    const [practicalPublished, setPracticalPublished] = useState<boolean>(course.practicalAssessmentPublished ?? false);
+
+    // Filter out file-based assessments that match the link-based types (Written/Practical)
+    // Only show URL/link-based assessments for these types
+    const filteredFileAssessments = effectiveAssessments?.filter(assessment => {
+        const category = assessment.category?.toLowerCase() || '';
+        const isWrittenType = category.includes('written') || category === 'written exam';
+        const isPracticalType = category.includes('practical') || category === 'practical exam';
+
+        // Hide file-based Written/Practical assessments when link versions exist
+        if (isWrittenType && course.writtenAssessmentLink) return false;
+        if (isPracticalType && course.practicalPerformanceAssessmentLink) return false;
+
+        return true;
+    }) || [];
+
+    // State for link-based assessment submissions (Written/Practical)
+    interface LinkSubmission {
+        id: string;
+        user_id: string;
+        course_run_id: string;
+        assessment_type: 'written' | 'practical';
+        file_name: string;
+        file_url: string;
+        submitted_at: string;
+    }
+    const [linkSubmissions, setLinkSubmissions] = useState<LinkSubmission[]>([]);
+    const [selectedLinkFiles, setSelectedLinkFiles] = useState<Record<string, File | null>>({});
+    const [isLinkUploading, setIsLinkUploading] = useState<Record<string, boolean>>({});
+    const [linkUploadProgress, setLinkUploadProgress] = useState<Record<string, number>>({});
+    const [isLinkResubmitting, setIsLinkResubmitting] = useState<Record<string, boolean>>({});
+
+    // Fetch link-based assessment submissions for learners
+    useEffect(() => {
+        const fetchLinkSubmissions = async () => {
+            if (!currentUser?.id || !courseRunId || userRole !== UserRole.Learner) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/assessments/submit-link?userId=${currentUser.id}&courseRunId=${courseRunId}`);
+                if (!response.ok) {
+                    // Don't throw - just log and continue (table might not exist yet)
+                    console.warn('⚠️ Could not fetch link assessment submissions - table may not exist yet');
+                    return;
+                }
+
+                const result = await response.json();
+                if (result.success) {
+                    setLinkSubmissions(result.data || []);
+                    console.log('✅ Link assessment submissions fetched:', result.data);
+                }
+            } catch (error) {
+                // Silently handle - this is not critical if the table doesn't exist yet
+                console.warn('⚠️ Failed to fetch link assessment submissions:', error);
+            }
+        };
+
+        fetchLinkSubmissions();
+    }, [currentUser?.id, courseRunId, userRole]);
+
+    // Handlers for link-based assessment file upload
+    const handleLinkFileChange = (assessmentType: string, event: React.ChangeEvent<HTMLInputElement>) => {
+        if (event.target.files && event.target.files.length > 0) {
+            setSelectedLinkFiles(prev => ({
+                ...prev,
+                [assessmentType]: event.target.files![0]
+            }));
+        }
+    };
+
+    const handleLinkSubmit = async (assessmentType: 'written' | 'practical') => {
+        const file = selectedLinkFiles[assessmentType];
+        if (!file) {
+            alert('Please select a file to submit.');
+            return;
+        }
+
+        setIsLinkUploading(prev => ({ ...prev, [assessmentType]: true }));
+        setLinkUploadProgress(prev => ({ ...prev, [assessmentType]: 10 }));
+
+        try {
+            const courseCode = course?.courseCode || '';
+            const courseName = course?.title || '';
+            const studentName = currentUser?.fullName || 'Unknown Student';
+            const tgsRefMatch = courseName.match(/(TGS-\d+)/) || courseCode.match(/(TGS-\d+)/);
+            const tgsRef = tgsRefMatch ? tgsRefMatch[1] : courseCode;
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            // Adding query parameters for the backend to build the folder structure
+            let fetchUrl = `/api/upload/google-drive?studentName=${encodeURIComponent(studentName)}`;
+            if (tgsRef) fetchUrl += `&courseCode=${encodeURIComponent(tgsRef)}`;
+            if (courseName) fetchUrl += `&courseName=${encodeURIComponent(courseName)}`;
+            if (courseRunId) fetchUrl += `&courseRunId=${encodeURIComponent(courseRunId)}`;
+
+            setLinkUploadProgress(prev => ({ ...prev, [assessmentType]: 40 }));
+
+            const uploadResponse = await fetch(fetchUrl, {
+                method: 'POST',
+                body: formData,
+            });
+
+            setLinkUploadProgress(prev => ({ ...prev, [assessmentType]: 80 }));
+
+            const uploadData = await uploadResponse.json();
+
+            if (!uploadResponse.ok || !uploadData.success) {
+                throw new Error(uploadData.error || 'Failed to upload file to Google Drive.');
+            }
+
+            // Record the submission in the database
+            const submitResponse = await fetch('/api/assessments/submit-link', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    userId: currentUser?.id,
+                    courseRunId,
+                    assessmentType,
+                    fileName: file.name,
+                    fileUrl: uploadData.data.fileUrl
+                }),
+            });
+
+            const submitResult = await submitResponse.json();
+
+            if (!submitResponse.ok || !submitResult.success) {
+                throw new Error(submitResult.error || 'Failed to record submission.');
+            }
+
+            setLinkUploadProgress(prev => ({ ...prev, [assessmentType]: 100 }));
+
+            console.log('✅ Link assessment successfully uploaded and recorded');
+
+            // Update local state with the new submission
+            const newSubmission: LinkSubmission = {
+                id: submitResult.id || `temp-${Date.now()}`,
+                user_id: currentUser?.id || '',
+                course_run_id: courseRunId || '',
+                assessment_type: assessmentType,
+                file_name: file.name,
+                file_url: uploadData.data.fileUrl,
+                submitted_at: new Date().toISOString()
+            };
+
+            setLinkSubmissions(prev => {
+                // Remove any existing submission for this assessment type and add the new one
+                const filtered = prev.filter(s => s.assessment_type !== assessmentType);
+                return [...filtered, newSubmission];
+            });
+
+            // Reset UI state
+            setSelectedLinkFiles(prev => ({ ...prev, [assessmentType]: null }));
+            setIsLinkResubmitting(prev => ({ ...prev, [assessmentType]: false }));
+
+            // Reset the file input visually
+            const fileInput = document.getElementById(`link-file-upload-${assessmentType}`) as HTMLInputElement;
+            if (fileInput) fileInput.value = '';
+
+        } catch (error: any) {
+            alert(`Upload failed: ${error.message || 'Please try again.'}`);
+            console.error('Link submission error:', error);
+        } finally {
+            setIsLinkUploading(prev => ({ ...prev, [assessmentType]: false }));
+            setLinkUploadProgress(prev => ({ ...prev, [assessmentType]: 0 }));
+        }
+    };
+
+    const handlePublishLink = async (field: 'written' | 'practical', published: boolean) => {
+        if (!courseRunId) return;
+        try {
+            const response = await fetch('/api/assessments/publish-link', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ courseRunId, field, published }),
+            });
+            if (!response.ok) throw new Error('Failed to update publish status');
+
+            if (field === 'written') {
+                setWrittenPublished(published);
+            } else {
+                setPracticalPublished(published);
+            }
+        } catch (error) {
+            console.error('❌ Failed to publish link assessment:', error);
+            alert('Failed to update publish status. Please try again.');
+        }
+    };
+
+    // Show "No Assessments" message if there are no assessments and no links
+    if ((!effectiveAssessments || effectiveAssessments.length === 0) && !course.writtenAssessmentLink && !course.practicalPerformanceAssessmentLink) {
         return (
             <ContentSection title="Assessment">
                 <div className="text-center p-6 bg-gray-50 dark:bg-gray-800 rounded-lg border dark:border-gray-700">
                     <Icon name={IconName.ClipboardCheck} className="w-16 h-16 text-gray-400 mx-auto mb-4" />
                     <h4 className="text-lg font-medium text-gray-600 dark:text-gray-300 mb-2">No Assessments Available</h4>
                     <p className="text-gray-500 dark:text-gray-400">
-                        {userRole === UserRole.Developer || userRole === UserRole.Trainer || userRole === UserRole.TrainingProvider || userRole === UserRole.Admin
+                        {userRole === UserRole.Developer || userRole === UserRole.TrainingProvider || userRole === UserRole.Admin
                             ? "No assessments have been created for this course yet."
                             : "No assessments are currently published for this course."
                         }
@@ -257,8 +454,22 @@ const AssessmentsSection: React.FC<{
                 return;
             }
 
+            // Find the assessment to check its category
+            const assessment = effectiveAssessments?.find(a => a.id === assessmentId);
+            const category = assessment?.category?.toLowerCase() || '';
+
             // Use standard LMS context for trainer and other roles
             await publishAssessment(assessmentId, true);
+
+            // If publishing file-based written assessment, unpublish link-based written
+            if ((category.includes('written') || category === 'written exam') && course.writtenAssessmentLink && writtenPublished) {
+                await handlePublishLink('written', false);
+            }
+
+            // If publishing file-based practical assessment, unpublish link-based practical
+            if ((category.includes('practical') || category === 'practical exam') && course.practicalPerformanceAssessmentLink && practicalPublished) {
+                await handlePublishLink('practical', false);
+            }
         } catch (error) {
             console.error('❌ Failed to publish assessment:', error);
             alert('Failed to publish assessment. Please try again.');
@@ -448,24 +659,23 @@ const AssessmentsSection: React.FC<{
                 </div>
 
                 {/* Step 2: Submit Button & Progress */}
-                {selectedFiles[assessment.id] && (
-                    <div className="mt-4 space-y-3">
+                {selectedFiles[assessment.id] && !isUploading[assessment.id] && (
+                    <div className="mt-4">
                         <Button
                             onClick={() => handleSubmit(assessment.id)}
-                            disabled={isUploading[assessment.id]}
                             className="w-full"
                         >
-                            {isUploading[assessment.id] ? "Uploading..." : "Submit Assessment"}
+                            Submit Assessment
                         </Button>
-
-                        {isUploading[assessment.id] && (
-                            <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5">
-                                <div
-                                    className="bg-blue-600 h-2.5 rounded-full transition-all duration-300"
-                                    style={{ width: `${uploadProgress[assessment.id] || 0}%` }}
-                                ></div>
-                            </div>
-                        )}
+                    </div>
+                )}
+                {isUploading[assessment.id] && (
+                    <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                        <div className="flex flex-col items-center justify-center space-y-3">
+                            <Spinner size="md" />
+                            <p className="text-sm font-medium text-blue-700 dark:text-blue-300">Uploading your assessment...</p>
+                            <p className="text-xs text-blue-600 dark:text-blue-400">Please wait while we upload your file...</p>
+                        </div>
                     </div>
                 )}
             </div>
@@ -515,26 +725,251 @@ const AssessmentsSection: React.FC<{
 
     return (
         <ContentSection title="Assessment">
-            <ul className="space-y-4">
-                {effectiveAssessments.map(assessment => (
-                    <li key={assessment.id} className="p-4 bg-gray-100/60 dark:bg-gray-800/60 rounded-lg">
-                        <div className="flex items-center justify-between mb-3">
-                            <div className="flex items-center">
-                                <Icon name={IconName.ClipboardCheck} className="w-5 h-5 text-blue-600 mr-3" />
-                                <span className="font-semibold text-gray-900 dark:text-white">{assessment.title}</span>
+            {/* Other file-based assessments (excluding Written/Practical which are shown separately with toggle) */}
+            {filteredFileAssessments && filteredFileAssessments.length > 0 && (
+                <ul className="space-y-4">
+                    {filteredFileAssessments.map(assessment => (
+                        <li key={assessment.id} className="p-4 bg-gray-100/60 dark:bg-gray-800/60 rounded-lg">
+                            <div className="flex items-center justify-between mb-3">
+                                <div className="flex items-center">
+                                    <Icon name={IconName.ClipboardCheck} className="w-5 h-5 text-blue-600 mr-3" />
+                                    <span className="font-semibold text-gray-900 dark:text-white">{assessment.title}</span>
+                                </div>
+                                <span className="text-sm font-medium bg-indigo-100 text-indigo-800 px-3 py-1 rounded-full">{assessment.category}</span>
                             </div>
-                            <span className="text-sm font-medium bg-indigo-100 text-indigo-800 px-3 py-1 rounded-full">{assessment.category}</span>
-                        </div>
-                        {/* Learners see assessment submission interface, trainers and developers can view/download files, trainers can also publish/unpublish */}
-                        {userRole === UserRole.Learner ?
-                            renderLearnerAssessment(assessment) :
-                            (userRole === UserRole.Trainer || userRole === UserRole.Developer || userRole === UserRole.TrainingProvider || userRole === UserRole.Admin) ?
-                                renderTrainerAssessment(assessment) :
-                                null
+                            {/* Learners see assessment submission interface, trainers and developers can view/download files, trainers can also publish/unpublish */}
+                            {userRole === UserRole.Learner ?
+                                renderLearnerAssessment(assessment) :
+                                (userRole === UserRole.Trainer || userRole === UserRole.Developer || userRole === UserRole.TrainingProvider || userRole === UserRole.Admin) ?
+                                    renderTrainerAssessment(assessment) :
+                                    null
+                            }
+                        </li>
+                    ))}
+                </ul>
+            )}
+
+            {/* Written Assessment - Show only when link exists */}
+            {course.writtenAssessmentLink && (userRole === UserRole.Trainer || userRole === UserRole.Admin || userRole === UserRole.Developer || userRole === UserRole.TrainingProvider || writtenPublished) && (
+                <div className="mt-4 p-4 bg-gray-100/60 dark:bg-gray-800/60 rounded-lg">
+                    <div className="flex items-center justify-between mb-3">
+                        <h4 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                            <Icon name={IconName.ClipboardCheck} className="w-5 h-5 text-blue-600" />
+                            Written Assessment
+                        </h4>
+                        {writtenPublished && (
+                            <span className="text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 px-2 py-1 rounded-full">Published</span>
+                        )}
+                    </div>
+
+                    {/* Show Link-based assessment */}
+                    {course.writtenAssessmentLink && (
+                        <>
+                            <a
+                                href={course.writtenAssessmentLink}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors mb-3"
+                            >
+                                <Icon name={IconName.ExternalLink} className="w-6 h-6 text-blue-600 flex-shrink-0" />
+                                <div className="flex-1 min-w-0">
+                                    <p className="font-medium text-gray-900 dark:text-white">Open Assessment Link</p>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400">Click to open external form</p>
+                                </div>
+                            </a>
+
+                            {/* Publish/Unpublish buttons for trainer */}
+                            {userRole === UserRole.Trainer && (
+                                writtenPublished ? (
+                                    <div className="space-y-2">
+                                        <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-md border border-blue-200 dark:border-blue-800 text-center">
+                                            <p className="text-sm font-semibold text-blue-800 dark:text-blue-300">Assessment is Live</p>
+                                        </div>
+                                        <Button onClick={() => handlePublishLink('written', false)} variant="secondary" className="w-full">
+                                            Unpublish
+                                        </Button>
+                                    </div>
+                                ) : (
+                                    <Button onClick={() => handlePublishLink('written', true)} className="w-full">Publish Assessment</Button>
+                                )
+                            )}
+                        </>
+                    )}
+
+                    {/* Learner file submission for Written Assessment */}
+                    {userRole === UserRole.Learner && writtenPublished && (() => {
+                        const writtenSubmission = linkSubmissions.find(s => s.assessment_type === 'written');
+                        const canResubmit = isLinkResubmitting['written'];
+
+                        if (writtenSubmission && !canResubmit) {
+                            return (
+                                <div className="bg-green-50 dark:bg-green-900/20 p-3 rounded-md border border-green-200 dark:border-green-800">
+                                    <div className="flex justify-between items-center">
+                                        <div>
+                                            <p className="font-semibold text-green-800 dark:text-green-300">Submitted: {writtenSubmission.file_name}</p>
+                                            <p className="text-xs text-green-600 dark:text-green-400">On: {new Date(writtenSubmission.submitted_at).toLocaleString()}</p>
+                                        </div>
+                                        <Button variant="ghost" size="sm" onClick={() => setIsLinkResubmitting(prev => ({ ...prev, written: true }))}>
+                                            Resubmit
+                                        </Button>
+                                    </div>
+                                </div>
+                            );
                         }
-                    </li>
-                ))}
-            </ul>
+
+                        return (
+                            <div className="mt-3">
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                    {canResubmit ? "Upload a new file to replace your previous submission" : "Upload your completed assessment file"}
+                                </label>
+                                <input
+                                    type="file"
+                                    id="link-file-upload-written"
+                                    onChange={(e) => handleLinkFileChange('written', e)}
+                                    className="block w-full text-sm text-gray-500 dark:text-gray-400
+                                        file:mr-4 file:py-2 file:px-4
+                                        file:rounded-md file:border-0
+                                        file:text-sm file:font-semibold
+                                        file:bg-blue-50 file:text-blue-700
+                                        hover:file:bg-blue-100
+                                        dark:file:bg-blue-900/20 dark:file:text-blue-300
+                                        dark:hover:file:bg-blue-900/40"
+                                />
+                                {selectedLinkFiles['written'] && !isLinkUploading['written'] && (
+                                    <div className="mt-3">
+                                        <Button
+                                            onClick={() => handleLinkSubmit('written')}
+                                            className="w-full"
+                                        >
+                                            Submit Assessment
+                                        </Button>
+                                    </div>
+                                )}
+                                {isLinkUploading['written'] && (
+                                    <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                                        <div className="flex flex-col items-center justify-center space-y-3">
+                                            <Spinner size="md" />
+                                            <p className="text-sm font-medium text-blue-700 dark:text-blue-300">Uploading your assessment...</p>
+                                            <p className="text-xs text-blue-600 dark:text-blue-400">Please wait while we upload your file...</p>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })()}
+                </div>
+            )}
+
+            {/* Practical Performance Assessment - Show only when link exists */}
+            {course.practicalPerformanceAssessmentLink && (userRole === UserRole.Trainer || userRole === UserRole.Admin || userRole === UserRole.Developer || userRole === UserRole.TrainingProvider || practicalPublished) && (
+                <div className="mt-4 p-4 bg-gray-100/60 dark:bg-gray-800/60 rounded-lg">
+                    <div className="flex items-center justify-between mb-3">
+                        <h4 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                            <Icon name={IconName.ClipboardCheck} className="w-5 h-5 text-blue-600" />
+                            Practical Performance Assessment
+                        </h4>
+                        {practicalPublished && (
+                            <span className="text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 px-2 py-1 rounded-full">Published</span>
+                        )}
+                    </div>
+
+                    {/* Show Link-based assessment */}
+                    {course.practicalPerformanceAssessmentLink && (
+                        <>
+                            <a
+                                href={course.practicalPerformanceAssessmentLink}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors mb-3"
+                            >
+                                <Icon name={IconName.ExternalLink} className="w-6 h-6 text-blue-600 flex-shrink-0" />
+                                <div className="flex-1 min-w-0">
+                                    <p className="font-medium text-gray-900 dark:text-white">Open Assessment Link</p>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400">Click to open external form</p>
+                                </div>
+                            </a>
+
+                            {/* Publish/Unpublish buttons for trainer */}
+                            {userRole === UserRole.Trainer && (
+                                practicalPublished ? (
+                                    <div className="space-y-2">
+                                        <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-md border border-blue-200 dark:border-blue-800 text-center">
+                                            <p className="text-sm font-semibold text-blue-800 dark:text-blue-300">Assessment is Live</p>
+                                        </div>
+                                        <Button onClick={() => handlePublishLink('practical', false)} variant="secondary" className="w-full">
+                                            Unpublish
+                                        </Button>
+                                    </div>
+                                ) : (
+                                    <Button onClick={() => handlePublishLink('practical', true)} className="w-full">Publish Assessment</Button>
+                                )
+                            )}
+                        </>
+                    )}
+
+                    {/* Learner file submission for Practical Performance Assessment */}
+                    {userRole === UserRole.Learner && practicalPublished && (() => {
+                        const practicalSubmission = linkSubmissions.find(s => s.assessment_type === 'practical');
+                        const canResubmit = isLinkResubmitting['practical'];
+
+                        if (practicalSubmission && !canResubmit) {
+                            return (
+                                <div className="bg-green-50 dark:bg-green-900/20 p-3 rounded-md border border-green-200 dark:border-green-800">
+                                    <div className="flex justify-between items-center">
+                                        <div>
+                                            <p className="font-semibold text-green-800 dark:text-green-300">Submitted: {practicalSubmission.file_name}</p>
+                                            <p className="text-xs text-green-600 dark:text-green-400">On: {new Date(practicalSubmission.submitted_at).toLocaleString()}</p>
+                                        </div>
+                                        <Button variant="ghost" size="sm" onClick={() => setIsLinkResubmitting(prev => ({ ...prev, practical: true }))}>
+                                            Resubmit
+                                        </Button>
+                                    </div>
+                                </div>
+                            );
+                        }
+
+                        return (
+                            <div className="mt-3">
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                    {canResubmit ? "Upload a new file to replace your previous submission" : "Upload your completed assessment file"}
+                                </label>
+                                <input
+                                    type="file"
+                                    id="link-file-upload-practical"
+                                    onChange={(e) => handleLinkFileChange('practical', e)}
+                                    className="block w-full text-sm text-gray-500 dark:text-gray-400
+                                        file:mr-4 file:py-2 file:px-4
+                                        file:rounded-md file:border-0
+                                        file:text-sm file:font-semibold
+                                        file:bg-blue-50 file:text-blue-700
+                                        hover:file:bg-blue-100
+                                        dark:file:bg-blue-900/20 dark:file:text-blue-300
+                                        dark:hover:file:bg-blue-900/40"
+                                />
+                                {selectedLinkFiles['practical'] && !isLinkUploading['practical'] && (
+                                    <div className="mt-3">
+                                        <Button
+                                            onClick={() => handleLinkSubmit('practical')}
+                                            className="w-full"
+                                        >
+                                            Submit Assessment
+                                        </Button>
+                                    </div>
+                                )}
+                                {isLinkUploading['practical'] && (
+                                    <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                                        <div className="flex flex-col items-center justify-center space-y-3">
+                                            <Spinner size="md" />
+                                            <p className="text-sm font-medium text-blue-700 dark:text-blue-300">Uploading your assessment...</p>
+                                            <p className="text-xs text-blue-600 dark:text-blue-400">Please wait while we upload your file...</p>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })()}
+                </div>
+            )}
         </ContentSection>
     );
 };
@@ -862,6 +1297,9 @@ export const CourseDetail: React.FC = () => {
     const [isCourseMenuOpen, setIsCourseMenuOpen] = useState(false);
     const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
 
+    // Loading state
+    const [isLoading, setIsLoading] = useState(true);
+
     // Developer-specific state
     const [developerCourseDetail, setDeveloperCourseDetail] = useState<any>(null);
     const [developerLearningUnits, setDeveloperLearningUnits] = useState<any[]>([]);
@@ -873,6 +1311,7 @@ export const CourseDetail: React.FC = () => {
     // Load developer-specific data
     useEffect(() => {
         const loadDeveloperData = async () => {
+            setIsLoading(true);
             if ((userRole === UserRole.Developer || userRole === UserRole.TrainingProvider || userRole === UserRole.Admin) && selectedCourse?.id) {
                 try {
                     // Load developer course detail (use courseId instead of courseRunId)
@@ -902,14 +1341,62 @@ export const CourseDetail: React.FC = () => {
                     console.error('❌ CourseDetail: Failed to load developer data:', error);
                 }
             }
+            setIsLoading(false);
         };
 
         loadDeveloperData();
     }, [userRole, selectedCourse?.id]);
 
+    // For non-developer roles, track when courseDetail from context is loaded
+    useEffect(() => {
+        if (userRole === UserRole.Learner || userRole === UserRole.Trainer) {
+            if (courseDetail) {
+                setIsLoading(false);
+            } else {
+                setIsLoading(true);
+            }
+        }
+    }, [userRole, courseDetail]);
+
     if (!selectedCourse) {
         return null;
     }
+
+    // Loading Skeleton Component
+    const LoadingSkeleton = () => (
+        <div className="animate-pulse space-y-6">
+            {/* Back button skeleton */}
+            <div className="flex justify-between items-center mb-6">
+                <div className="h-10 w-40 bg-gray-200 dark:bg-gray-700 rounded-lg"></div>
+                <div className="flex gap-3">
+                    <div className="h-10 w-32 bg-gray-200 dark:bg-gray-700 rounded-lg"></div>
+                </div>
+            </div>
+
+            {/* Content sections skeleton */}
+            {[1, 2, 3, 4].map((i) => (
+                <Card key={i} className="p-6">
+                    <div className="h-6 w-48 bg-gray-200 dark:bg-gray-700 rounded mb-4"></div>
+                    <div className="space-y-3">
+                        <div className="h-16 bg-gray-100 dark:bg-gray-800 rounded-md"></div>
+                    </div>
+                </Card>
+            ))}
+
+            {/* Lessons skeleton */}
+            <Card className="p-6">
+                <div className="h-6 w-24 bg-gray-200 dark:bg-gray-700 rounded mb-4"></div>
+                <div className="space-y-4">
+                    {[1, 2, 3].map((i) => (
+                        <div key={i} className="p-4 bg-gray-100 dark:bg-gray-800 rounded-lg">
+                            <div className="h-5 w-64 bg-gray-200 dark:bg-gray-700 rounded mb-2"></div>
+                            <div className="h-2 w-full bg-gray-200 dark:bg-gray-700 rounded"></div>
+                        </div>
+                    ))}
+                </div>
+            </Card>
+        </div>
+    );
 
     // Convert your existing data structure to match the old component's expectations
     // Use developer data if available, otherwise fall back to context data
@@ -946,6 +1433,14 @@ export const CourseDetail: React.FC = () => {
         assessmentPlanUrl: effectiveDetail?.assessmentPlanUrl,
         courseLink: effectiveDetail?.courseLink,
         assessmentRecordLink: effectiveDetail?.assessmentRecordLink,
+        writtenAssessmentLink: effectiveDetail?.writtenAssessmentLink,
+        practicalPerformanceAssessmentLink: effectiveDetail?.practicalPerformanceAssessmentLink,
+        writtenAssessmentPublished: userRole === UserRole.Admin || userRole === UserRole.Developer || userRole === UserRole.TrainingProvider
+            ? true
+            : effectiveDetail?.writtenAssessmentPublished ?? false,
+        practicalAssessmentPublished: userRole === UserRole.Admin || userRole === UserRole.Developer || userRole === UserRole.TrainingProvider
+            ? true
+            : effectiveDetail?.practicalAssessmentPublished ?? false,
         topics: effectiveUnits?.map((unit, index) => ({
             id: unit.id || `topic-${index}`,
             title: unit.title,
@@ -1045,10 +1540,15 @@ export const CourseDetail: React.FC = () => {
     const attendanceLink = convertedCourse.daId ? `https://www.myskillsfuture.gov.sg/api/take-attendance/${convertedCourse.daId}` : null;
     // const attendanceQrCodeUrl = attendanceLink ? `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(attendanceLink)}` : null;
 
-    const isTrainerSlidesExternal = convertedCourse.trainerSlidesUrl?.startsWith('http');
-    const isLearnerGuideExternal = convertedCourse.learnerGuideUrl?.startsWith('http');
-    const isFacilitatorGuideExternal = convertedCourse.facilitatorGuideUrl?.startsWith('http');
-    const isAssessmentPlanExternal = convertedCourse.assessmentPlanUrl?.startsWith('http');
+    // Helper to check if URL is external (Google Drive, etc.)
+    const isExternalUrl = (url?: string) => url?.startsWith('http');
+
+    const isLessonPlanExternal = isExternalUrl(convertedCourse.lessonPlanUrl);
+    const isLearnerGuideExternal = isExternalUrl(convertedCourse.learnerGuideUrl);
+    const isLearnerSlidesExternal = isExternalUrl(convertedCourse.slidesUrl);
+    const isTrainerSlidesExternal = isExternalUrl(convertedCourse.trainerSlidesUrl);
+    const isFacilitatorGuideExternal = isExternalUrl(convertedCourse.facilitatorGuideUrl);
+    const isAssessmentPlanExternal = isExternalUrl(convertedCourse.assessmentPlanUrl);
 
     return (
         <div className="relative">
@@ -1151,6 +1651,7 @@ export const CourseDetail: React.FC = () => {
                                 >
                                     Back to Dashboard
                                 </button>
+                                {!isLoading && (
                                 <div className="ml-auto flex gap-3">
                                     {userRole === UserRole.Admin && (
                                         <Button onClick={() => setAdminPage(AdminPage.AddCourseRun)} leftIcon={<Icon name={IconName.Add} className="w-4 h-4" />}>
@@ -1168,30 +1669,31 @@ export const CourseDetail: React.FC = () => {
                                         </Button>
                                     )}
                                 </div>
+                                )}
                             </div>
 
+                            {/* Show loading skeleton while data is being fetched */}
+                            {isLoading ? (
+                                <LoadingSkeleton />
+                            ) : (
+                            <>
                             {/* Courseware Link */}
                             {userRole === UserRole.Trainer && (
                                 <div id={toId("Courseware Link")}>
-                                    <ContentSection title="Courseware Link">
+                                    <ContentSection>
                                         {convertedCourse.courseLink ? (
-                                            <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded-lg flex items-center justify-between gap-3 border dark:border-gray-600">
-                                                <a
-                                                    href={convertedCourse.courseLink}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    className="text-sm text-blue-600 dark:text-blue-400 hover:underline truncate flex-1"
-                                                >
-                                                    {convertedCourse.courseLink}
-                                                </a>
-                                                <Button
-                                                    variant="ghost"
-                                                    onClick={() => window.open(convertedCourse.courseLink!, '_blank')}
-                                                >
-                                                    <Icon name={IconName.ExternalLink} className="w-4 h-4 mr-1" />
-                                                    Open
-                                                </Button>
-                                            </div>
+                                            <a
+                                                href={convertedCourse.courseLink}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+                                            >
+                                                <Icon name={IconName.ExternalLink} className="w-6 h-6 text-blue-600 flex-shrink-0" />
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="font-semibold text-gray-900 dark:text-white">Courseware Link</p>
+                                                    <p className="text-xs text-gray-500 dark:text-gray-400">Click to open</p>
+                                                </div>
+                                            </a>
                                         ) : (
                                             <p className="text-gray-500 dark:text-gray-400 text-sm">No course link available.</p>
                                         )}
@@ -1202,25 +1704,20 @@ export const CourseDetail: React.FC = () => {
                             {/* Assessment Record Link */}
                             {userRole === UserRole.Trainer && (
                                 <div id={toId("Assessment Record Link")}>
-                                    <ContentSection title="Assessment Record Link">
+                                    <ContentSection>
                                         {convertedCourse.assessmentRecordLink ? (
-                                            <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded-lg flex items-center justify-between gap-3 border dark:border-gray-600">
-                                                <a
-                                                    href={convertedCourse.assessmentRecordLink}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    className="text-sm text-blue-600 dark:text-blue-400 hover:underline truncate flex-1"
-                                                >
-                                                    {convertedCourse.assessmentRecordLink}
-                                                </a>
-                                                <Button
-                                                    variant="ghost"
-                                                    onClick={() => window.open(convertedCourse.assessmentRecordLink!, '_blank')}
-                                                >
-                                                    <Icon name={IconName.ExternalLink} className="w-4 h-4 mr-1" />
-                                                    Open
-                                                </Button>
-                                            </div>
+                                            <a
+                                                href={convertedCourse.assessmentRecordLink}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+                                            >
+                                                <Icon name={IconName.ExternalLink} className="w-6 h-6 text-blue-600 flex-shrink-0" />
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="font-semibold text-gray-900 dark:text-white">Assessment Record Link</p>
+                                                    <p className="text-xs text-gray-500 dark:text-gray-400">Click to open</p>
+                                                </div>
+                                            </a>
                                         ) : (
                                             <p className="text-gray-500 dark:text-gray-400 text-sm">No assessment record link available.</p>
                                         )}
@@ -1230,34 +1727,52 @@ export const CourseDetail: React.FC = () => {
 
                             {/* Lesson Plan */}
                             <div id={toId("Lesson Plan")}>
-                                <ContentSection title="Lesson Plan">
+                                <ContentSection>
                                     {convertedCourse.lessonPlanUrl ? (
-                                        <div
-                                            onClick={(e) => handleFileDownload(convertedCourse.lessonPlanUrl!, e)}
-                                            className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors cursor-pointer"
-                                        >
-                                            <Icon name={IconName.FileText} className="w-8 h-8 text-red-600 flex-shrink-0" />
-                                            <div className="min-w-0">
-                                                <p className="font-semibold text-gray-900 dark:text-white break-all">{extractFilenameFromPath(convertedCourse.lessonPlanUrl)}</p>
-                                                <p className="text-xs text-gray-500 dark:text-gray-400">Click to download the lesson plan</p>
+                                        isLessonPlanExternal ? (
+                                            <a
+                                                href={convertedCourse.lessonPlanUrl}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+                                            >
+                                                <Icon name={IconName.ExternalLink} className="w-6 h-6 text-blue-600 flex-shrink-0" />
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="font-semibold text-gray-900 dark:text-white">Lesson Plan</p>
+                                                    <p className="text-xs text-gray-500 dark:text-gray-400">Click to open</p>
+                                                </div>
+                                            </a>
+                                        ) : (
+                                            <div
+                                                onClick={(e) => handleFileDownload(convertedCourse.lessonPlanUrl!, e)}
+                                                className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors cursor-pointer"
+                                            >
+                                                <Icon name={IconName.FileText} className="w-6 h-6 text-red-600 flex-shrink-0" />
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="font-semibold text-gray-900 dark:text-white">Lesson Plan</p>
+                                                    <p className="text-xs text-gray-500 dark:text-gray-400">Click to download</p>
+                                                </div>
                                             </div>
-                                        </div>
+                                        )
                                     ) : (
-                                        <p className="text-gray-500 dark:text-gray-400">The lesson plan for this course will be displayed here.</p>
+                                        <p className="text-gray-500 dark:text-gray-400">No lesson plan available for this course.</p>
                                     )}
                                 </ContentSection>
                             </div>
 
                             {/* Learner Guide */}
                             <div id={toId("Learner Guide")}>
-                                <ContentSection title="Learner Guide">
-                                    {userRole === UserRole.Learner ? (
-                                        null
-                                    ) : convertedCourse.learnerGuideUrl ? (
+                                <ContentSection>
+                                    {convertedCourse.learnerGuideUrl ? (
                                         isLearnerGuideExternal ? (
-                                            <a href={convertedCourse.learnerGuideUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
-                                                <Icon name={IconName.ExternalLink} className="w-8 h-8 text-blue-600 flex-shrink-0" />
-                                                <div>
+                                            <a
+                                                href={convertedCourse.learnerGuideUrl}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+                                            >
+                                                <Icon name={IconName.ExternalLink} className="w-6 h-6 text-blue-600 flex-shrink-0" />
+                                                <div className="flex-1 min-w-0">
                                                     <p className="font-semibold text-gray-900 dark:text-white">Learner Guide</p>
                                                     <p className="text-xs text-gray-500 dark:text-gray-400">Click to open</p>
                                                 </div>
@@ -1267,28 +1782,33 @@ export const CourseDetail: React.FC = () => {
                                                 onClick={(e) => handleFileDownload(convertedCourse.learnerGuideUrl!, e)}
                                                 className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors cursor-pointer"
                                             >
-                                                <Icon name={IconName.FileText} className="w-8 h-8 text-red-600 flex-shrink-0" />
-                                                <div className="min-w-0">
-                                                    <p className="font-semibold text-gray-900 dark:text-white break-all">{extractFilenameFromPath(convertedCourse.learnerGuideUrl)}</p>
-                                                    <p className="text-xs text-gray-500 dark:text-gray-400">Click to download the guide</p>
+                                                <Icon name={IconName.FileText} className="w-6 h-6 text-red-600 flex-shrink-0" />
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="font-semibold text-gray-900 dark:text-white">Learner Guide</p>
+                                                    <p className="text-xs text-gray-500 dark:text-gray-400">Click to download</p>
                                                 </div>
                                             </div>
                                         )
                                     ) : (
-                                        <p className="text-gray-500 dark:text-gray-400">The learner guide for this course will be displayed here.</p>
+                                        <p className="text-gray-500 dark:text-gray-400">No learner guide available for this course.</p>
                                     )}
                                 </ContentSection>
                             </div>
 
-                            {/* Facilitator/Learner Guide */}
+                            {/* Facilitator Guide */}
                             {(userRole === UserRole.Trainer || userRole === UserRole.Developer || userRole === UserRole.TrainingProvider || userRole === UserRole.Admin) && (
                                 <div id={toId("Facilitator Guide")}>
                                     <ContentSection title="Facilitator Guide">
                                         {convertedCourse.facilitatorGuideUrl ? (
                                             isFacilitatorGuideExternal ? (
-                                                <a href={convertedCourse.facilitatorGuideUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
-                                                    <Icon name={IconName.ExternalLink} className="w-8 h-8 text-blue-600 flex-shrink-0" />
-                                                    <div>
+                                                <a
+                                                    href={convertedCourse.facilitatorGuideUrl}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+                                                >
+                                                    <Icon name={IconName.ExternalLink} className="w-6 h-6 text-blue-600 flex-shrink-0" />
+                                                    <div className="flex-1 min-w-0">
                                                         <p className="font-semibold text-gray-900 dark:text-white">Facilitator Guide</p>
                                                         <p className="text-xs text-gray-500 dark:text-gray-400">Click to open</p>
                                                     </div>
@@ -1298,15 +1818,15 @@ export const CourseDetail: React.FC = () => {
                                                     onClick={(e) => handleFileDownload(convertedCourse.facilitatorGuideUrl!, e)}
                                                     className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors cursor-pointer"
                                                 >
-                                                    <Icon name={IconName.FileText} className="w-8 h-8 text-red-600 flex-shrink-0" />
-                                                    <div className="min-w-0">
-                                                        <p className="font-semibold text-gray-900 dark:text-white break-all">{extractFilenameFromPath(convertedCourse.facilitatorGuideUrl)}</p>
-                                                        <p className="text-xs text-gray-500 dark:text-gray-400">Click to download the guide</p>
+                                                    <Icon name={IconName.FileText} className="w-6 h-6 text-red-600 flex-shrink-0" />
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="font-semibold text-gray-900 dark:text-white">Facilitator Guide</p>
+                                                        <p className="text-xs text-gray-500 dark:text-gray-400">Click to download</p>
                                                     </div>
                                                 </div>
                                             )
                                         ) : (
-                                            <p className="text-gray-500 dark:text-gray-400">The facilitator guide for this course will be displayed here.</p>
+                                            <p className="text-gray-500 dark:text-gray-400">No facilitator guide available for this course.</p>
                                         )}
                                     </ContentSection>
                                 </div>
@@ -1317,18 +1837,33 @@ export const CourseDetail: React.FC = () => {
                                 <div id={toId("Learner Slides")}>
                                     <ContentSection title="Learner Slides">
                                         {convertedCourse.slidesUrl ? (
-                                            <div
-                                                onClick={(e) => handleFileDownload(convertedCourse.slidesUrl!, e)}
-                                                className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors cursor-pointer"
-                                            >
-                                                <Icon name={IconName.FileText} className="w-8 h-8 text-red-600 flex-shrink-0" />
-                                                <div className="min-w-0">
-                                                    <p className="font-semibold text-gray-900 dark:text-white break-all">{extractFilenameFromPath(convertedCourse.slidesUrl)}</p>
-                                                    <p className="text-xs text-gray-500 dark:text-gray-400">Click to download the slides</p>
+                                            isLearnerSlidesExternal ? (
+                                                <a
+                                                    href={convertedCourse.slidesUrl}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+                                                >
+                                                    <Icon name={IconName.ExternalLink} className="w-6 h-6 text-blue-600 flex-shrink-0" />
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="font-semibold text-gray-900 dark:text-white">Learner Slides</p>
+                                                        <p className="text-xs text-gray-500 dark:text-gray-400">Click to open</p>
+                                                    </div>
+                                                </a>
+                                            ) : (
+                                                <div
+                                                    onClick={(e) => handleFileDownload(convertedCourse.slidesUrl!, e)}
+                                                    className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors cursor-pointer"
+                                                >
+                                                    <Icon name={IconName.FileText} className="w-6 h-6 text-red-600 flex-shrink-0" />
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="font-semibold text-gray-900 dark:text-white">Learner Slides</p>
+                                                        <p className="text-xs text-gray-500 dark:text-gray-400">Click to download</p>
+                                                    </div>
                                                 </div>
-                                            </div>
+                                            )
                                         ) : (
-                                            <p className="text-gray-500 dark:text-gray-400">The learner slides for this course will be displayed here.</p>
+                                            <p className="text-gray-500 dark:text-gray-400">No learner slides available for this course.</p>
                                         )}
                                     </ContentSection>
                                 </div>
@@ -1340,29 +1875,32 @@ export const CourseDetail: React.FC = () => {
                                     <ContentSection title="Trainer Slides">
                                         {convertedCourse.trainerSlidesUrl ? (
                                             isTrainerSlidesExternal ? (
-                                                // External URL (Google Slides) - open in new tab
-                                                <a href={convertedCourse.trainerSlidesUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
-                                                    <Icon name={IconName.ExternalLink} className="w-8 h-8 text-orange-600 flex-shrink-0" />
-                                                    <div>
-                                                        <p className="font-semibold text-gray-900 dark:text-white">Trainer Slide</p>
-                                                        <p className="text-xs text-gray-500 dark:text-gray-400">Click to view presentation online</p>
+                                                <a
+                                                    href={convertedCourse.trainerSlidesUrl}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+                                                >
+                                                    <Icon name={IconName.ExternalLink} className="w-6 h-6 text-blue-600 flex-shrink-0" />
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="font-semibold text-gray-900 dark:text-white">Trainer Slides</p>
+                                                        <p className="text-xs text-gray-500 dark:text-gray-400">Click to open</p>
                                                     </div>
                                                 </a>
                                             ) : (
-                                                // Local file - download
                                                 <div
                                                     onClick={(e) => handleFileDownload(convertedCourse.trainerSlidesUrl!, e)}
                                                     className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors cursor-pointer"
                                                 >
-                                                    <Icon name={IconName.FileText} className="w-8 h-8 text-orange-600 flex-shrink-0" />
-                                                    <div className="min-w-0">
-                                                        <p className="font-semibold text-gray-900 dark:text-white break-all">{extractFilenameFromPath(convertedCourse.trainerSlidesUrl)}</p>
-                                                        <p className="text-xs text-gray-500 dark:text-gray-400">Click to download the trainer slides</p>
+                                                    <Icon name={IconName.FileText} className="w-6 h-6 text-orange-600 flex-shrink-0" />
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="font-semibold text-gray-900 dark:text-white">Trainer Slides</p>
+                                                        <p className="text-xs text-gray-500 dark:text-gray-400">Click to download</p>
                                                     </div>
                                                 </div>
                                             )
                                         ) : (
-                                            <p className="text-gray-500 dark:text-gray-400">The trainer slides for this course will be displayed here.</p>
+                                            <p className="text-gray-500 dark:text-gray-400">No trainer slides available for this course.</p>
                                         )}
                                     </ContentSection>
                                 </div>
@@ -1374,9 +1912,14 @@ export const CourseDetail: React.FC = () => {
                                     <ContentSection title="Assessment Plan">
                                         {convertedCourse.assessmentPlanUrl ? (
                                             isAssessmentPlanExternal ? (
-                                                <a href={convertedCourse.assessmentPlanUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
-                                                    <Icon name={IconName.ExternalLink} className="w-8 h-8 text-blue-600 flex-shrink-0" />
-                                                    <div>
+                                                <a
+                                                    href={convertedCourse.assessmentPlanUrl}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+                                                >
+                                                    <Icon name={IconName.ExternalLink} className="w-6 h-6 text-blue-600 flex-shrink-0" />
+                                                    <div className="flex-1 min-w-0">
                                                         <p className="font-semibold text-gray-900 dark:text-white">Assessment Plan</p>
                                                         <p className="text-xs text-gray-500 dark:text-gray-400">Click to open</p>
                                                     </div>
@@ -1386,15 +1929,15 @@ export const CourseDetail: React.FC = () => {
                                                     onClick={(e) => handleFileDownload(convertedCourse.assessmentPlanUrl!, e)}
                                                     className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors cursor-pointer"
                                                 >
-                                                    <Icon name={IconName.FileText} className="w-8 h-8 text-red-600 flex-shrink-0" />
-                                                    <div>
-                                                        <p className="font-semibold text-gray-900 dark:text-white">{extractFilenameFromPath(convertedCourse.assessmentPlanUrl)}</p>
-                                                        <p className="text-xs text-gray-500 dark:text-gray-400">Click to download the assessment plan</p>
+                                                    <Icon name={IconName.FileText} className="w-6 h-6 text-red-600 flex-shrink-0" />
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="font-semibold text-gray-900 dark:text-white">Assessment Plan</p>
+                                                        <p className="text-xs text-gray-500 dark:text-gray-400">Click to download</p>
                                                     </div>
                                                 </div>
                                             )
                                         ) : (
-                                            <p className="text-gray-500 dark:text-gray-400">The assessment plan for this course will be displayed here.</p>
+                                            <p className="text-gray-500 dark:text-gray-400">No assessment plan available for this course.</p>
                                         )}
                                     </ContentSection>
                                 </div>
@@ -1508,6 +2051,8 @@ export const CourseDetail: React.FC = () => {
                             {/* {userRole === UserRole.Learner && (
                         <Leaderboard course={convertedCourse} />
                     )} */}
+                            </>
+                            )}
                         </main>
                     </div>
                 </>

@@ -27,6 +27,8 @@ const storage: StorageEngine = multer.diskStorage({
       case 'trainerSlides':
         uploadPath = 'public/uploads/slides';
         break;
+      case 'writtenAssessment':
+      case 'practicalPerformanceAssessment':
       case 'assessmentFiles':
         uploadPath = 'public/uploads/assessments';
         break;
@@ -85,6 +87,8 @@ interface CourseData {
   courseType: string;
   learningOutcomes: string;
   trainerSlidesUrl?: string;
+  writtenAssessmentLink?: string;
+  practicalPerformanceAssessmentLink?: string;
   isGamified: boolean;
   learningUnits: Array<{
     title: string;
@@ -174,8 +178,9 @@ export default function handler(req: NextApiRequest & { files?: any }, res: Next
             title, image_url, course_code, tsc_title, tsc_code,
             training_hours, assessment_hours, mode_of_learning, course_type,
             learning_outcomes, is_gamified, learner_guide_url, slides_url,
-            lesson_plan_url, assessment_plan_url, facilitator_guide_url, trainer_slides_url
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+            lesson_plan_url, assessment_plan_url, facilitator_guide_url, trainer_slides_url,
+            written_assessment_link, practical_performance_assessment_link
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
           RETURNING id
         `;
 
@@ -197,6 +202,8 @@ export default function handler(req: NextApiRequest & { files?: any }, res: Next
           filesByFieldname?.assessmentPlan ? `/uploads/plans/${filesByFieldname.assessmentPlan[0].filename}` : null,
           filesByFieldname?.facilitatorGuide ? `/uploads/guides/${filesByFieldname.facilitatorGuide[0].filename}` : null,
           filesByFieldname?.trainerSlides ? `/uploads/slides/${filesByFieldname.trainerSlides[0].filename}` : courseData.trainerSlidesUrl || null,
+          filesByFieldname?.writtenAssessment ? `/uploads/assessments/${filesByFieldname.writtenAssessment[0].filename}` : courseData.writtenAssessmentLink || null,
+          filesByFieldname?.practicalPerformanceAssessment ? `/uploads/assessments/${filesByFieldname.practicalPerformanceAssessment[0].filename}` : courseData.practicalPerformanceAssessmentLink || null,
         ];
 
         console.log('🔍 About to execute course insert with values:', courseValues);
