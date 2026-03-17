@@ -12,47 +12,28 @@ export const config = {
 };
 
 /**
- * Authenticate using a Service Account.
- * Files will be uploaded using the Service Account's identity.
- * Ensure the target Google Drive folder is shared with the Service Account email.
+ * Authenticate using OAuth2.
+ * Files will be uploaded directly as the `agenticai.tertiaryrobotics@gmail.com` user,
+ * utilizing the account's 15GB free storage quota.
  */
 function getDriveClient(): drive_v3.Drive {
-    const serviceAccountEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
-    let privateKey = process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY;
-    const privateKeyB64 = process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY_B64;
+    const clientId = process.env.GOOGLE_OAUTH_CLIENT_ID;
+    const clientSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET;
+    const refreshToken = process.env.GOOGLE_OAUTH_REFRESH_TOKEN;
 
-    if (!serviceAccountEmail) {
-        throw new Error('Missing GOOGLE_SERVICE_ACCOUNT_EMAIL in environment variables.');
+    if (!clientId || !clientSecret || !refreshToken) {
+        throw new Error('Missing Google OAuth credentials. Ensure GOOGLE_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET, and GOOGLE_OAUTH_REFRESH_TOKEN are set.');
     }
 
-    if (!privateKey && !privateKeyB64) {
-        throw new Error('Missing GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY or GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY_B64 in environment variables.');
-    }
+    const oauth2Client = new google.auth.OAuth2(
+        clientId,
+        clientSecret,
+        'http://localhost:3000/api/auth/callback/google-drive'
+    );
 
-    let formattedPrivateKey = '';
+    oauth2Client.setCredentials({ refresh_token: refreshToken });
 
-    if (privateKeyB64) {
-        // The bulletproof method: decode from Base64
-        console.log('🔐 Using Base64 encoded Google Service Account Private Key');
-        formattedPrivateKey = Buffer.from(privateKeyB64, 'base64').toString('utf8');
-    } else if (privateKey) {
-        // EXTREMELY ROBUST KEY PARSING FOR CLOUD HOSTING
-        // Some providers (like Coolify, Vercel, Docker) inject multi-line secrets in weird ways.
-        // This handles literal "\n" strings, actual newlines, and accidental wrapping quotes.
-        formattedPrivateKey = privateKey
-            .replace(/^"|"$/g, '') // Strip wrapping double quotes
-            .replace(/^'|'$/g, '') // Strip wrapping single quotes
-            .split(String.raw`\n`).join('\n') // Convert literal "\n" escape sequences to true newlines
-            .replace(/\\n/g, '\n'); // Convert any standard escaped newlines
-    }
-
-    const auth = new google.auth.JWT({
-        email: serviceAccountEmail,
-        key: formattedPrivateKey,
-        scopes: ['https://www.googleapis.com/auth/drive.file', 'https://www.googleapis.com/auth/drive'],
-    });
-
-    return google.drive({ version: 'v3', auth });
+    return google.drive({ version: 'v3', auth: oauth2Client });
 }
 
 /**
@@ -92,32 +73,9 @@ async function createSubfolder(
             parents: [parentFolderId],
         },
         fields: 'id',
-        supportsAllDrives: true,
     });
     
-    // Auto-transfer ownership to main account so we don't hit the 0-byte Service Account quota
-    await transferOwnership(drive, response.data.id!);
-    
     return response.data.id!;
-}
-
-/**
- * Transfer ownership of a file to the main tertiary account to avoid Service Account quota limits
- */
-async function transferOwnership(drive: drive_v3.Drive, fileId: string) {
-    try {
-        await drive.permissions.create({
-            fileId: fileId,
-            transferOwnership: true,
-            requestBody: {
-                role: 'owner',
-                type: 'user',
-                emailAddress: 'agenticai.tertiaryrobotics@gmail.com'
-            },
-        });
-    } catch (err) {
-        console.warn(`⚠️ Could not transfer ownership for ${fileId} - it may fail if it exceeds quota`, err);
-    }
 }
 
 /**
@@ -272,16 +230,12 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
                 body: fs.createReadStream(uploadedFile.filepath),
             },
             fields: 'id, name, webViewLink, webContentLink',
-            supportsAllDrives: true,
         });
 
         // Clean up temporary file
         try { fs.unlinkSync(uploadedFile.filepath); } catch { /* ignore */ }
 
         const driveFile = driveResponse.data;
-
-        // 5. Instantly transfer ownership of the specific File to the main account
-        await transferOwnership(drive, driveFile.id!);
 
         // Make the file viewable by anyone with the link
         await drive.permissions.create({
