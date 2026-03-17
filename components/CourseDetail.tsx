@@ -1492,7 +1492,7 @@ export const CourseDetail: React.FC = () => {
                                     course={convertedCourse}
                                     userRole={userRole}
                                     developerAssessments={developerAssessments}
-                                    courseRunId={convertedCourse.courseRunId}
+                                    courseRunId={selectedCourse?.courseRunId}
                                     courseId={selectedCourse?.id}
                                     setDeveloperAssessments={setDeveloperAssessments}
                                     handleFileDownload={handleFileDownload}

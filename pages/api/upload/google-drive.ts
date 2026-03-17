@@ -107,7 +107,7 @@ async function getCourseRunDetails(courseRunId: string) {
                 c.course_code, c.title as course_title
          FROM course_run cr
          JOIN course c ON cr.course_id = c.id
-         WHERE cr.course_run_id = $1
+         WHERE cr.id::text = $1 OR cr.course_run_id = $1
          LIMIT 1`,
         [courseRunId]
     );
