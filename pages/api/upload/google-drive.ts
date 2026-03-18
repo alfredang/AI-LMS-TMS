@@ -60,6 +60,29 @@ async function findSubfolder(
 }
 
 /**
+ * Find a session subfolder by prefix name inside a parent folder.
+ */
+async function findSessionFolderByPrefix(
+    drive: drive_v3.Drive,
+    parentFolderId: string,
+    prefix: string
+): Promise<string | null> {
+    const response = await drive.files.list({
+        // Fetch all folders to check prefix manually since Drive API lacks a native startsWith operator
+        q: `'${parentFolderId}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
+        fields: 'files(id, name)',
+        spaces: 'drive',
+    });
+
+    const files = response.data.files;
+    if (files && files.length > 0) {
+        const matched = files.find(f => f.name?.startsWith(prefix));
+        if (matched) return matched.id!;
+    }
+    return null;
+}
+
+/**
  * Create a subfolder inside a parent folder and return its ID.
  */
 async function createSubfolder(
@@ -131,6 +154,19 @@ function buildSessionFolderName(startDate: Date, endDate: Date, trainerName: str
 }
 
 /**
+ * Build the expected subfolder prefix inside Assessment Records (dates only).
+ * Format: YYYY_MM_DD/DD_
+ * e.g., "2026_03_17/19_"
+ */
+function buildSessionFolderPrefix(startDate: Date, endDate: Date): string {
+    const yyyy = startDate.getFullYear();
+    const mm = String(startDate.getMonth() + 1).padStart(2, '0');
+    const startDD = String(startDate.getDate()).padStart(2, '0');
+    const endDD = String(endDate.getDate()).padStart(2, '0');
+    return `${yyyy}_${mm}_${startDD}/${endDD}_`;
+}
+
+/**
  * Robust hierarchy builder:
  * Course Folder -> 'Assessment Records' -> Session Subfolder (matched by dates/trainer) -> Learner Folder
  */
@@ -140,7 +176,8 @@ async function ensureStudentUploadPath(
     courseCode: string,
     courseName: string,
     studentName: string,
-    sessionFolderName: string | null
+    sessionFolderName: string | null,
+    sessionFolderPrefix: string | null
 ): Promise<string> {
     // 1. Course Folder (Search by TGS Ref, create if missing)
     let courseFolderId = null;
@@ -182,13 +219,15 @@ async function ensureStudentUploadPath(
         console.log(`📁 Created 'Assessment Records' inside Course folder`);
     }
 
-    // 3. Session Subfolder (matched by dates + trainer name)
+    // 3. Session Subfolder (matched by dates only prefix)
     let targetParentId = assessmentRecordsId;
-    if (sessionFolderName) {
-        let sessionFolderId = await findSubfolder(drive, assessmentRecordsId, sessionFolderName);
-        if (!sessionFolderId) {
+    if (sessionFolderPrefix && sessionFolderName) {
+        let sessionFolderId = await findSessionFolderByPrefix(drive, assessmentRecordsId, sessionFolderPrefix);
+        if (sessionFolderId) {
+            console.log(`📁 Found existing session folder matching dates prefix "${sessionFolderPrefix}": ${sessionFolderId}`);
+        } else {
             sessionFolderId = await createSubfolder(drive, assessmentRecordsId, sessionFolderName);
-            console.log(`📁 Created session folder: ${sessionFolderName}`);
+            console.log(`📁 Created new session folder: ${sessionFolderName}`);
         }
         targetParentId = sessionFolderId;
     }
@@ -256,6 +295,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
 
         // Look up course run details from the database for folder matching
         let sessionFolderName: string | null = null;
+        let sessionFolderPrefix: string | null = null;
         let effectiveCourseCode = courseCode;
         let effectiveCourseName = courseName;
 
@@ -267,7 +307,8 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
                 const endDate = new Date(runDetails.end_date);
                 const trainerName = runDetails.assigned_trainer_name || 'Unknown Trainer';
                 sessionFolderName = buildSessionFolderName(startDate, endDate, trainerName);
-                console.log(`📋 Course Run ${courseRunId}: session folder = "${sessionFolderName}"`);
+                sessionFolderPrefix = buildSessionFolderPrefix(startDate, endDate);
+                console.log(`📋 Course Run ${courseRunId}: new session folder = "${sessionFolderName}", prefix search = "${sessionFolderPrefix}"`);
 
                 // Use DB values for course code/name if not provided
                 if (!effectiveCourseCode && runDetails.course_code) {
@@ -291,7 +332,8 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
             effectiveCourseCode, 
             effectiveCourseName, 
             studentName,
-            sessionFolderName
+            sessionFolderName,
+            sessionFolderPrefix
         );
 
         // 4. Upload file into the student's subfolder
