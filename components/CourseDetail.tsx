@@ -174,6 +174,7 @@ const AssessmentsSection: React.FC<{
     const [isResubmitting, setIsResubmitting] = useState<Record<string, boolean>>({});
     const [isUploading, setIsUploading] = useState<Record<string, boolean>>({});
     const [uploadProgress, setUploadProgress] = useState<Record<string, number>>({});
+    const [verificationStatus, setVerificationStatus] = useState<Record<string, { loading: boolean, exists?: boolean, count?: number, error?: string }>>({});
     const [currentEnrollmentId, setCurrentEnrollmentId] = useState<string | null>(null);
 
     // Fetch current user's enrollment ID for this course run
@@ -568,6 +569,46 @@ const AssessmentsSection: React.FC<{
         }
     };
 
+    const handleVerifyDrive = async (assessmentId: string) => {
+        setVerificationStatus(prev => ({ ...prev, [assessmentId]: { loading: true } }));
+        try {
+            const courseCode = course?.courseCode || '';
+            const courseName = course?.title || '';
+            const studentName = currentUser?.fullName || 'Unknown Student';
+            const tgsRefMatch = courseName.match(/(TGS-\d+)/) || courseCode.match(/(TGS-\d+)/);
+            const tgsRef = tgsRefMatch ? tgsRefMatch[1] : courseCode;
+
+            let fetchUrl = `/api/upload/verify-drive?studentName=${encodeURIComponent(studentName)}`;
+            if (tgsRef) fetchUrl += `&courseCode=${encodeURIComponent(tgsRef)}`;
+            if (courseName) fetchUrl += `&courseName=${encodeURIComponent(courseName)}`;
+            if (courseRunId) fetchUrl += `&courseRunId=${encodeURIComponent(courseRunId)}`;
+
+            const response = await fetch(fetchUrl);
+            const data = await response.json();
+
+            if (!response.ok || !data.success) {
+                throw new Error(data.error || data.reason || 'Verification failed');
+            }
+
+            setVerificationStatus(prev => ({ 
+                ...prev, 
+                [assessmentId]: { 
+                    loading: false, 
+                    exists: data.exists, 
+                    count: data.count 
+                } 
+            }));
+        } catch (error: any) {
+            setVerificationStatus(prev => ({ 
+                ...prev, 
+                [assessmentId]: { 
+                    loading: false, 
+                    error: error.message 
+                } 
+            }));
+        }
+    };
+
     const renderLearnerAssessment = (assessment: CourseAssessment) => {
         const canResubmit = isResubmitting[assessment.id];
 
@@ -607,17 +648,34 @@ const AssessmentsSection: React.FC<{
         }
 
         if (submission && !canResubmit) {
+            const vStatus = verificationStatus[assessment.id];
+            
             return (
-                <div className="bg-green-50 dark:bg-green-900/20 p-3 rounded-md border border-green-200 dark:border-green-800">
+                <div className="bg-green-50 dark:bg-green-900/20 p-3 rounded-md border border-green-200 dark:border-green-800 space-y-3">
                     <div className="flex justify-between items-center">
                         <div>
                             <p className="font-semibold text-green-800 dark:text-green-300">Submitted: {submission.file_name}</p>
                             <p className="text-xs text-green-600 dark:text-green-400">On: {new Date(submission.submitted_at).toLocaleString()}</p>
                         </div>
-                        <Button variant="ghost" size="sm" onClick={() => setIsResubmitting(prev => ({ ...prev, [assessment.id]: true }))}>
-                            Resubmit
-                        </Button>
+                        <div className="flex gap-2">
+                            <Button 
+                                variant="outline" 
+                                size="sm" 
+                                onClick={() => handleVerifyDrive(assessment.id)}
+                                disabled={vStatus?.loading}
+                            >
+                                {vStatus?.loading ? 'Checking...' : 'Verify in Drive'}
+                            </Button>
+                            <Button variant="ghost" size="sm" onClick={() => setIsResubmitting(prev => ({ ...prev, [assessment.id]: true }))}>
+                                Resubmit
+                            </Button>
+                        </div>
                     </div>
+                    {vStatus && !vStatus.loading && (
+                        <div className={`text-sm p-2 rounded-md ${vStatus.exists ? 'bg-green-100 text-green-800 dark:bg-green-800/40 dark:text-green-200' : 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200'}`}>
+                            {vStatus.exists ? `✅ Verified: ${vStatus.count} file(s) found in Drive folder` : `⚠️ File missing from Google Drive! (${vStatus.error || 'Folder empty or deleted'})`}
+                        </div>
+                    )}
                 </div>
             );
         }
