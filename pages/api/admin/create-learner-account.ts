@@ -43,12 +43,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Check if user already exists
     const existing = await client.query(
-      'SELECT id FROM app_user WHERE email = $1',
+      'SELECT id, full_name FROM app_user WHERE email = $1',
       [email.trim().toLowerCase()]
     );
 
     if (existing.rows.length > 0) {
       const userId = existing.rows[0].id;
+      const existingName = existing.rows[0].full_name || fullName.trim();
       // Ensure Learner role is assigned
       await client.query(
         `INSERT INTO user_role_map (user_id, role) VALUES ($1, 'Learner') ON CONFLICT DO NOTHING`,
@@ -60,6 +61,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         success: true,
         message: 'Account already exists — Learner role and enrolment ensured.',
         userId,
+        fullName: existingName,
         created: false,
       });
     }
@@ -94,6 +96,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       success: true,
       message: `Learner account created and enrolled. Default password: password123`,
       userId,
+      fullName: fullName.trim(),
       created: true,
     });
   } catch (error) {

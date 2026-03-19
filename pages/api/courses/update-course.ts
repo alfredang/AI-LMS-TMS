@@ -44,6 +44,11 @@ interface CourseData {
   courseFee?: number;
   taxPercent?: number;
   trainerSlidesUrl?: string; // For Google Slides links
+  lessonPlanUrl?: string;
+  learnerGuideUrl?: string;
+  facilitatorGuideUrl?: string;
+  assessmentPlanUrl?: string;
+  slidesUrl?: string;
   writtenAssessmentLink?: string;
   practicalPerformanceAssessmentLink?: string;
   learningUnits: {
@@ -489,11 +494,11 @@ export default async function handler(
         modeOfLearning, // Use converted value
         courseData.courseType,
         courseData.learningOutcomes,
-        fileUrls.lessonPlanUrl || null,
-        fileUrls.learnerGuideUrl || null,
-        fileUrls.facilitatorGuideUrl || null,
-        fileUrls.assessmentPlanUrl || null,
-        fileUrls.slidesUrl || null,
+        fileUrls.lessonPlanUrl || courseData.lessonPlanUrl || null,
+        fileUrls.learnerGuideUrl || courseData.learnerGuideUrl || null,
+        fileUrls.facilitatorGuideUrl || courseData.facilitatorGuideUrl || null,
+        fileUrls.assessmentPlanUrl || courseData.assessmentPlanUrl || null,
+        fileUrls.slidesUrl || courseData.slidesUrl || null,
         fileUrls.trainerSlidesUrl || courseData.trainerSlidesUrl || null, // Use uploaded file or URL
         courseData.isGamified,
         courseData.courseFee || null,

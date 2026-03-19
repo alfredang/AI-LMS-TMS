@@ -40,10 +40,10 @@ const Home: NextPage = () => {
   // Show loading spinner while checking authentication
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-50">
-        <div className="text-center">
+      <div className="flex items-center justify-center h-screen bg-gray-50 dark:bg-gray-900">
+        <div className="flex flex-col items-center gap-4">
           <Spinner size="lg" />
-          <p className="mt-4 text-gray-600">Loading your dashboard...</p>
+          <p className="text-gray-600 dark:text-gray-400">Checking your session...</p>
         </div>
       </div>
     );

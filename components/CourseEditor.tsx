@@ -1,27 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { useLms } from '@contexts/LmsContext';
-import { Course, Topic, Subtopic, Assessment, AssessmentCategory, ModeOfLearning, UserRole } from '@app-types';
+import { Course, Topic, Subtopic, ModeOfLearning, UserRole } from '@app-types';
 import { Button } from './ui/Button';
 import { Card } from './ui/Card';
 import { Icon, IconName } from './ui/Icon';
 import Spinner from './ui/Spinner';
 import { generateCourseImage } from '@lib/services/geminiService';
-import { extractFilenameFromPath } from '@utils/fileUtils';
 import { getCourseImageUrl } from '@utils/imageUtils';
 import { getApiUrl } from '@/lib/urlHelpers';
 
 const inputGhostClasses = (isTitle: boolean) =>
     `flex-grow border border-transparent hover:border-gray-300 dark:hover:border-gray-600 focus:border-gray-300 dark:focus:border-gray-600 rounded-md px-2 py-1 bg-transparent hover:bg-gray-50 dark:hover:bg-gray-800 focus:bg-gray-50 dark:focus:bg-gray-800 focus:outline-none w-full transition-colors dark:text-white ${isTitle ? 'font-bold text-xl' : 'text-base'}`;
 
-// Helper function to display original filename
-const getDisplayFilename = (existingUrl: string | undefined, filename?: string | undefined): string => {
-    console.log('🔍 getDisplayFilename called with existingUrl:', existingUrl);
-    if (existingUrl) {
-        return extractFilenameFromPath(existingUrl);
-    } else {
-        return filename || 'No file uploaded.';
-    }
-};
 
 // Sub-component for an editable Learning Unit (Topic)
 const EditableTopicAccordion: React.FC<{
@@ -187,10 +177,7 @@ const CourseEditor: React.FC = () => {
     const hasRealId = course.id && !course.id.startsWith('course_');
     const isNewCourse = hasRealId ? false : (courseEditMode === 'create' || !course.id || course.id.startsWith('course_'));
 
-    const isTrainerSlidesUrl = course.trainerSlidesUrl && (course.trainerSlidesUrl.startsWith('http://') || course.trainerSlidesUrl.startsWith('https://'));
-    const [trainerSlideInputType, setTrainerSlideInputType] = useState<'upload' | 'link'>(isTrainerSlidesUrl ? 'link' : 'upload');
-
-    const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAssessmentLink.startsWith('http://') || course.writtenAssessmentLink.startsWith('https://');
+const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAssessmentLink.startsWith('http://') || course.writtenAssessmentLink.startsWith('https://');
     const [writtenAssessmentInputType, setWrittenAssessmentInputType] = useState<'link' | 'upload'>(isWrittenAssessmentUrl ? 'link' : 'upload');
 
     const isPracticalPerformanceUrl = !course.practicalPerformanceAssessmentLink || course.practicalPerformanceAssessmentLink.startsWith('http://') || course.practicalPerformanceAssessmentLink.startsWith('https://');
@@ -428,7 +415,7 @@ const CourseEditor: React.FC = () => {
         }
 
         // Validate trainer slides URL if link option is selected (optional validation)
-        if (trainerSlideInputType === 'link' && course.trainerSlidesUrl && course.trainerSlidesUrl.trim() !== '') {
+        if (course.trainerSlidesUrl && course.trainerSlidesUrl.trim() !== '') {
             // Basic URL validation - only validate if URL is provided
             try {
                 new URL(course.trainerSlidesUrl);
@@ -457,7 +444,12 @@ const CourseEditor: React.FC = () => {
                 courseFee: course.courseFee,
                 taxPercent: (course.taxPercent || 0) / 100, // Divide by 100 to convert percentage to decimal
                 // Include trainer slides URL if it's a link (not upload)
-                trainerSlidesUrl: trainerSlideInputType === 'link' ? course.trainerSlidesUrl : undefined,
+                trainerSlidesUrl: course.trainerSlidesUrl,
+                lessonPlanUrl: course.lessonPlanUrl || undefined,
+                learnerGuideUrl: course.learnerGuideUrl || undefined,
+                facilitatorGuideUrl: course.facilitatorGuideUrl || undefined,
+                assessmentPlanUrl: course.assessmentPlanUrl || undefined,
+                slidesUrl: course.slidesUrl || undefined,
                 writtenAssessmentLink: writtenAssessmentInputType === 'link' ? (course.writtenAssessmentLink || undefined) : undefined,
                 practicalPerformanceAssessmentLink: practicalPerformanceInputType === 'link' ? (course.practicalPerformanceAssessmentLink || undefined) : undefined,
                 // Convert topics to learning units with position
@@ -551,13 +543,8 @@ const CourseEditor: React.FC = () => {
                     oldFileUrls.learnerSlides = editingCourse.slidesUrl;
                 }
             }
-            if (files.trainerSlides && trainerSlideInputType === 'upload') {
-                formData.append('trainerSlides', files.trainerSlides);
-                if (editingCourse?.trainerSlidesUrl && editingCourse.trainerSlidesUrl.includes('uploads/')) {
-                    oldFileUrls.trainerSlides = editingCourse.trainerSlidesUrl;
-                }
-            } else if (trainerSlideInputType === 'link' && editingCourse?.trainerSlidesUrl && editingCourse.trainerSlidesUrl.includes('uploads/')) {
-                // Special case: user changed from file to link, delete the old file
+            if (editingCourse?.trainerSlidesUrl && editingCourse.trainerSlidesUrl.includes('uploads/')) {
+                // Clean up any old uploaded trainer slides file since we now use links only
                 oldFileUrls.trainerSlides = editingCourse.trainerSlidesUrl;
             }
             if (files.writtenAssessment && writtenAssessmentInputType === 'upload') {
@@ -607,7 +594,7 @@ const CourseEditor: React.FC = () => {
             console.log('📤 Saving course data:', courseData);
             console.log('🖼️ Image URL being saved:', courseData.imageUrl);
             console.log('🎥 Trainer slides info:', {
-                inputType: trainerSlideInputType,
+                inputType: 'link',
                 hasFile: !!files.trainerSlides,
                 trainerSlidesUrl: courseData.trainerSlidesUrl,
                 courseTrainerSlidesUrl: course.trainerSlidesUrl
@@ -699,33 +686,9 @@ const CourseEditor: React.FC = () => {
         }));
     };
 
-    const handleAddAssessment = () => {
-        const newAssessment: Assessment = { id: `asm_${Date.now()}`, title: 'New Assessment', category: AssessmentCategory.PracticalExam, status: 'Draft' };
-        setCourse(prev => ({ ...prev, assessments: [...(prev.assessments || []), newAssessment] }));
-    };
-
     const handleUpdateAssessment = (id: string, field: 'title' | 'category' | 'fileUrl', value: string) => {
         setCourse(prev => ({ ...prev, assessments: prev.assessments?.map(a => a.id === id ? { ...a, [field]: value } : a) }));
     }
-
-    const handleDeleteAssessment = (assessmentId: string) => {
-        // Find the assessment being deleted
-        const assessmentToDelete = course.assessments?.find(a => a.id === assessmentId);
-
-        // If the assessment has a file URL that points to an uploaded file, mark it for deletion
-        if (assessmentToDelete?.fileUrl &&
-            assessmentToDelete.fileUrl.includes('/uploads/') &&
-            !assessmentToDelete.fileUrl.startsWith('http')) {
-            setFilesToDelete(prev => [...prev, assessmentToDelete.fileUrl!]);
-            console.log('📁 Marking assessment file for deletion:', assessmentToDelete.fileUrl);
-        }
-
-        // If it's an existing assessment (not a temp ID), track it for deletion
-        if (!assessmentId.startsWith('asm_') && !isNewCourse) {
-            setDeletedAssessments(prev => [...prev, assessmentId]);
-        }
-        setCourse(prev => ({ ...prev, assessments: prev.assessments?.filter(a => a.id !== assessmentId) }));
-    };
 
     const handleAssessmentFileChange = (e: React.ChangeEvent<HTMLInputElement>, assessmentId: string) => {
         if (e.target.files && e.target.files[0]) {
@@ -1072,197 +1035,113 @@ const CourseEditor: React.FC = () => {
                 {/* Right Column: Content Sections */}
                 <div className="md:col-span-1 xl:col-span-2 space-y-6">
                     <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
-                        <h3 className="text-xl font-bold mb-4 dark:text-white">Learning Outcomes</h3>
-                        <textarea id="learningOutcomes" name="learningOutcomes" value={course.learningOutcomes} onChange={handleCourseChange} className={`${inputClasses} h-32`} placeholder="Describe the key learning outcomes..." />
+                        <label htmlFor="lessonPlanUrl" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Lesson Plan URL</label>
+                        <input
+                            type="url"
+                            id="lessonPlanUrl"
+                            value={course.lessonPlanUrl || ''}
+                            onChange={(e) => setCourse(prev => ({ ...prev, lessonPlanUrl: e.target.value }))}
+                            className={inputClasses}
+                            placeholder="https://docs.google.com/..."
+                        />
+                    </Card>
+                    <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
+                        <label htmlFor="learnerGuideUrl" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Learner Guide URL</label>
+                        <input
+                            type="url"
+                            id="learnerGuideUrl"
+                            value={course.learnerGuideUrl || ''}
+                            onChange={(e) => setCourse(prev => ({ ...prev, learnerGuideUrl: e.target.value }))}
+                            className={inputClasses}
+                            placeholder="https://docs.google.com/..."
+                        />
+                    </Card>
+                    <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
+                        <label htmlFor="facilitatorGuideUrl" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Facilitator Guide URL</label>
+                        <input
+                            type="url"
+                            id="facilitatorGuideUrl"
+                            value={course.facilitatorGuideUrl || ''}
+                            onChange={(e) => setCourse(prev => ({ ...prev, facilitatorGuideUrl: e.target.value }))}
+                            className={inputClasses}
+                            placeholder="https://docs.google.com/..."
+                        />
+                    </Card>
+                    <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
+                        <label htmlFor="assessmentPlanUrl" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Assessment Plan URL</label>
+                        <input
+                            type="url"
+                            id="assessmentPlanUrl"
+                            value={course.assessmentPlanUrl || ''}
+                            onChange={(e) => setCourse(prev => ({ ...prev, assessmentPlanUrl: e.target.value }))}
+                            className={inputClasses}
+                            placeholder="https://docs.google.com/..."
+                        />
+                    </Card>
+                    <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
+                        <label htmlFor="learnerSlidesUrl" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Learner Slides URL</label>
+                        <input
+                            type="url"
+                            id="learnerSlidesUrl"
+                            value={course.slidesUrl || ''}
+                            onChange={(e) => setCourse(prev => ({ ...prev, slidesUrl: e.target.value }))}
+                            className={inputClasses}
+                            placeholder="https://docs.google.com/..."
+                        />
+                    </Card>
+                    <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
+                        <label htmlFor="trainerSlidesUrl" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Trainer Slides URL</label>
+                        <input
+                            type="url"
+                            id="trainerSlidesUrl"
+                            name="trainerSlidesUrl"
+                            value={course.trainerSlidesUrl || ''}
+                            onChange={(e) => setCourse(prev => ({ ...prev, trainerSlidesUrl: e.target.value }))}
+                            className={inputClasses}
+                            placeholder="https://docs.google.com/presentation/..."
+                        />
                     </Card>
 
-                    <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
-                        <h3 className="text-xl font-bold mb-4 dark:text-white">Lesson Plan</h3>
-                        <div>
-                            <label htmlFor="lessonPlanUpload" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Upload Lesson Plan (PDF, DOC, DOCX, PPT, PPTX)</label>
-                            <div className="flex items-center gap-2 p-2 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600">
-                                <Icon name={IconName.FilePdf} className="w-5 h-5 text-gray-500 dark:text-gray-400" />
-                                <span className="text-sm text-subtle flex-grow truncate">
-                                    {getDisplayFilename(course.lessonPlanUrl, files.lessonPlan?.name) || 'No lesson plan uploaded.'}
-                                </span>
-                                <Button variant="ghost" size="sm" onClick={() => document.getElementById('lessonPlanUpload')?.click()}>
-                                    <Icon name={IconName.Upload} className="w-4 h-4 mr-1" /> Upload
-                                </Button>
-                                <input
-                                    type="file"
-                                    id="lessonPlanUpload"
-                                    className="hidden"
-                                    accept=".pdf .doc .docx .ppt .pptx"
-                                    onChange={(e) => {
-                                        if (e.target.files?.[0]) {
-                                            handleFileSelect('lessonPlan', e.target.files[0]);
-                                        }
-                                    }}
-                                />
-                            </div>
-                        </div>
-                    </Card>
-                    <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
-                        <h3 className="text-xl font-bold mb-4 dark:text-white">Learner Guide</h3>
-                        <div>
-                            <label htmlFor="learnerGuideUpload" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Upload Learner Guide (PDF, DOC, DOCX, PPT, PPTX)</label>
-                            <div className="flex items-center gap-2 p-2 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600">
-                                <Icon name={IconName.FilePdf} className="w-5 h-5 text-gray-500 dark:text-gray-400" />
-                                <span className="text-sm text-subtle flex-grow truncate">
-                                    {getDisplayFilename(course.learnerGuideUrl, files.learnerGuide?.name) || 'No learner guide uploaded.'}
-                                </span>
-                                <Button variant="ghost" size="sm" onClick={() => document.getElementById('learnerGuideUpload')?.click()}>
-                                    <Icon name={IconName.Upload} className="w-4 h-4 mr-1" /> Upload
-                                </Button>
-                                <input
-                                    type="file"
-                                    id="learnerGuideUpload"
-                                    className="hidden"
-                                    accept=".pdf .doc .docx .ppt .pptx"
-                                    onChange={(e) => {
-                                        if (e.target.files?.[0]) {
-                                            handleFileSelect('learnerGuide', e.target.files[0]);
-                                        }
-                                    }}
-                                />
-                            </div>
-                        </div>
-                    </Card>
-                    <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
-                        <h3 className="text-xl font-bold mb-4 dark:text-white">Facilitator Guide</h3>
-                        <div>
-                            <label htmlFor="facilitatorGuideUpload" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Upload Facilitator Guide (PDF, DOC, DOCX, PPT, PPTX)</label>
-                            <div className="flex items-center gap-2 p-2 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600">
-                                <Icon name={IconName.FilePdf} className="w-5 h-5 text-gray-500 dark:text-gray-400" />
-                                <span className="text-sm text-subtle flex-grow truncate">
-                                    {getDisplayFilename(course.facilitatorGuideUrl, files.facilitatorGuide?.name) || 'No facilitator guide uploaded.'}
-                                </span>
-                                <Button variant="ghost" size="sm" onClick={() => document.getElementById('facilitatorGuideUpload')?.click()}>
-                                    <Icon name={IconName.Upload} className="w-4 h-4 mr-1" /> Upload
-                                </Button>
-                                <input
-                                    type="file"
-                                    id="facilitatorGuideUpload"
-                                    className="hidden"
-                                    accept=".pdf .doc .docx .ppt .pptx"
-                                    onChange={(e) => {
-                                        if (e.target.files?.[0]) {
-                                            handleFileSelect('facilitatorGuide', e.target.files[0]);
-                                        }
-                                    }}
-                                />
-                            </div>
-                        </div>
-                    </Card>
-                    <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
-                        <h3 className="text-xl font-bold mb-4 dark:text-white">Assessment Plan</h3>
-                        <div>
-                            <label htmlFor="assessmentPlanUpload" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Upload Assessment Plan (PDF, DOC, DOCX, PPT, PPTX)</label>
-                            <div className="flex items-center gap-2 p-2 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600">
-                                <Icon name={IconName.FilePdf} className="w-5 h-5 text-gray-500 dark:text-gray-400" />
-                                <span className="text-sm text-subtle flex-grow truncate">
-                                    {getDisplayFilename(course.assessmentPlanUrl, files.assessmentPlan?.name) || 'No assessment plan uploaded.'}
-                                </span>
-                                <Button variant="ghost" size="sm" onClick={() => document.getElementById('assessmentPlanUpload')?.click()}>
-                                    <Icon name={IconName.Upload} className="w-4 h-4 mr-1" /> Upload
-                                </Button>
-                                <input
-                                    type="file"
-                                    id="assessmentPlanUpload"
-                                    className="hidden"
-                                    accept=".pdf .doc .docx .ppt .pptx"
-                                    onChange={(e) => {
-                                        if (e.target.files?.[0]) {
-                                            handleFileSelect('assessmentPlan', e.target.files[0]);
-                                        }
-                                    }}
-                                />
-                            </div>
-                        </div>
-                    </Card>
-                    <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
-                        <h3 className="text-xl font-bold mb-4 dark:text-white">Learner Slides</h3>
-                        <div>
-                            <label htmlFor="slidesUpload" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Upload Learner Slides (PDF, DOC, DOCX, PPT, PPTX)</label>
-                            <div className="flex items-center gap-2 p-2 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600">
-                                <Icon name={IconName.FilePdf} className="w-5 h-5 text-gray-500 dark:text-gray-400" />
-                                <span className="text-sm text-subtle flex-grow truncate">
-                                    {getDisplayFilename(course.slidesUrl, files.learnerSlides?.name) || 'No slides uploaded.'}
-                                </span>
-                                <Button variant="ghost" size="sm" onClick={() => document.getElementById('slidesUpload')?.click()}>
-                                    <Icon name={IconName.Upload} className="w-4 h-4 mr-1" /> Upload
-                                </Button>
-                                <input
-                                    type="file"
-                                    id="slidesUpload"
-                                    className="hidden"
-                                    accept=".pdf .doc .docx .ppt .pptx"
-                                    onChange={(e) => {
-                                        if (e.target.files?.[0]) {
-                                            handleFileSelect('learnerSlides', e.target.files[0]);
-                                        }
-                                    }}
-                                />
-                            </div>
-                        </div>
-                    </Card>
-                    <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
-                        <h3 className="text-xl font-bold mb-4 dark:text-white">Trainer Slides</h3>
-                        <div className="flex gap-6 mb-4">
-                            <div className="flex items-center">
-                                <input type="radio" id="trainer-slide-upload" name="trainerSlideType" value="upload" checked={trainerSlideInputType === 'upload'} onChange={() => setTrainerSlideInputType('upload')} className="h-4 w-4 text-primary focus:ring-primary border-gray-300 dark:border-gray-600" />
-                                <label htmlFor="trainer-slide-upload" className="ml-2 block text-sm font-medium text-gray-700 dark:text-gray-300">Upload File</label>
-                            </div>
-                            <div className="flex items-center">
-                                <input type="radio" id="trainer-slide-link" name="trainerSlideType" value="link" checked={trainerSlideInputType === 'link'} onChange={() => setTrainerSlideInputType('link')} className="h-4 w-4 text-primary focus:ring-primary border-gray-300 dark:border-gray-600" />
-                                <label htmlFor="trainer-slide-link" className="ml-2 block text-sm font-medium text-gray-700 dark:text-gray-300">Link to Google Slides</label>
-                            </div>
-                        </div>
+                    {(role === UserRole.Trainer || role === UserRole.Developer) && (
+                    <div className="space-y-4">
+                        <h3 className="text-xl font-bold px-1">Assessment</h3>
 
-                        {trainerSlideInputType === 'upload' ? (
-                            <div>
-                                <label htmlFor="trainerSlidesUpload" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Upload Trainer Slides - PPT/PPTX/PDF/DOC/DOCX</label>
-                                <div className="flex items-center gap-2 p-2 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600">
-                                    <Icon name={IconName.FilePdf} className="w-5 h-5 text-gray-500 dark:text-gray-400" />
-                                    <span className="text-sm text-subtle flex-grow truncate">
-                                        {files.trainerSlides ? files.trainerSlides.name : (course.trainerSlidesUrl && !isTrainerSlidesUrl ? extractFilenameFromPath(course.trainerSlidesUrl) : 'No file uploaded.')}
-                                    </span>
-                                    <Button variant="ghost" size="sm" onClick={() => document.getElementById('trainerSlidesUpload')?.click()}>
-                                        <Icon name={IconName.Upload} className="w-4 h-4 mr-1" /> Upload
-                                    </Button>
-                                    <input
-                                        type="file"
-                                        id="trainerSlidesUpload"
-                                        className="hidden"
-                                        accept=".ppt,.pptx,.pdf,.doc,.docx"
-                                        onChange={(e) => {
-                                            if (e.target.files?.[0]) {
-                                                handleFileSelect('trainerSlides', e.target.files[0]);
-                                            }
-                                        }}
-                                    />
-                                </div>
-                            </div>
-                        ) : (
-                            <div>
-                                <label htmlFor="trainerSlidesUrl" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Trainer Slides URL (Optional)</label>
-                                <input
-                                    type="url"
-                                    id="trainerSlidesUrl"
-                                    name="trainerSlidesUrl"
-                                    value={course.trainerSlidesUrl || ''}
-                                    onChange={(e) => {
-                                        setCourse(prev => ({ ...prev, trainerSlidesUrl: e.target.value }));
-                                    }}
-                                    className={inputClasses}
-                                    placeholder="https://docs.google.com/presentation/..."
-                                />
-                            </div>
-                        )}
-                    </Card>
+                        {/* Written Assessment */}
+                        <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
+                            <label htmlFor="writtenAssessmentLink" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Written Assessment URL</label>
+                            <input
+                                type="url"
+                                id="writtenAssessmentLink"
+                                value={course.writtenAssessmentLink || ''}
+                                onChange={(e) => setCourse(prev => ({ ...prev, writtenAssessmentLink: e.target.value }))}
+                                className={inputClasses}
+                                placeholder="https://..."
+                            />
+                        </Card>
+
+                        {/* Practical Performance Assessment */}
+                        <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
+                            <label htmlFor="practicalPerformanceAssessmentLink" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Practical Performance Assessment URL</label>
+                            <input
+                                type="url"
+                                id="practicalPerformanceAssessmentLink"
+                                value={course.practicalPerformanceAssessmentLink || ''}
+                                onChange={(e) => setCourse(prev => ({ ...prev, practicalPerformanceAssessmentLink: e.target.value }))}
+                                className={inputClasses}
+                                placeholder="https://..."
+                            />
+                        </Card>
+
+                        {/* Learning Outcomes Description */}
+                        <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
+                            <label htmlFor="learningOutcomes" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Learning Outcomes Description</label>
+                            <textarea id="learningOutcomes" name="learningOutcomes" value={course.learningOutcomes} onChange={handleCourseChange} className={`${inputClasses} h-32`} placeholder="Describe the key learning outcomes..." />
+                        </Card>
+                    </div>
+                    )}
 
                     <div className="space-y-4">
-                        <h3 className="text-xl font-bold px-1">Lesson</h3>
+                        <h3 className="text-xl font-bold px-1">Learning Outcomes</h3>
                         {course.topics.map(topic => (
                             <div
                                 key={topic.id}
@@ -1294,144 +1173,6 @@ const CourseEditor: React.FC = () => {
                         <Button variant="ghost" onClick={addTopic} className="w-full !py-3 !text-lg !font-semibold border-2 border-dashed !border-gray-300 dark:!border-gray-600 hover:!border-primary !text-subtle hover:!text-primary">
                             + Add Learning Unit
                         </Button>
-                    </div>
-
-                    <div className="space-y-4">
-                        <h3 className="text-xl font-bold px-1">Assessment</h3>
-
-                        {/* Written Assessment */}
-                        <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
-                            <h3 className="text-xl font-bold mb-4 dark:text-white">Written Assessment</h3>
-                            <div className="flex gap-6 mb-4">
-                                <div className="flex items-center">
-                                    <input type="radio" id="written-assessment-link" name="writtenAssessmentType" value="link" checked={writtenAssessmentInputType === 'link'} onChange={() => setWrittenAssessmentInputType('link')} className="h-4 w-4 text-primary focus:ring-primary border-gray-300 dark:border-gray-600" />
-                                    <label htmlFor="written-assessment-link" className="ml-2 block text-sm font-medium text-gray-700 dark:text-gray-300">Enter URL</label>
-                                </div>
-                                <div className="flex items-center">
-                                    <input type="radio" id="written-assessment-upload" name="writtenAssessmentType" value="upload" checked={writtenAssessmentInputType === 'upload'} onChange={() => setWrittenAssessmentInputType('upload')} className="h-4 w-4 text-primary focus:ring-primary border-gray-300 dark:border-gray-600" />
-                                    <label htmlFor="written-assessment-upload" className="ml-2 block text-sm font-medium text-gray-700 dark:text-gray-300">Upload File</label>
-                                </div>
-                            </div>
-                            {writtenAssessmentInputType === 'link' ? (
-                                <div>
-                                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Written Assessment URL (Optional)</label>
-                                    <input
-                                        type="url"
-                                        value={course.writtenAssessmentLink || ''}
-                                        onChange={(e) => setCourse(prev => ({ ...prev, writtenAssessmentLink: e.target.value }))}
-                                        className={inputClasses}
-                                        placeholder="https://..."
-                                    />
-                                </div>
-                            ) : (
-                                <div>
-                                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Upload Written Assessment (PDF/DOC/DOCX)</label>
-                                    <div className="flex items-center gap-2 p-2 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600">
-                                        <Icon name={IconName.FilePdf} className="w-5 h-5 text-gray-500 dark:text-gray-400" />
-                                        <span className="text-sm text-subtle flex-grow truncate">
-                                            {files.writtenAssessment ? files.writtenAssessment.name : (course.writtenAssessmentLink && !isWrittenAssessmentUrl ? extractFilenameFromPath(course.writtenAssessmentLink) : 'No file uploaded.')}
-                                        </span>
-                                        <Button variant="ghost" size="sm" onClick={() => document.getElementById('writtenAssessmentUpload')?.click()}>
-                                            <Icon name={IconName.Upload} className="w-4 h-4 mr-1" /> Upload
-                                        </Button>
-                                        <input type="file" id="writtenAssessmentUpload" className="hidden" accept=".pdf,.doc,.docx" onChange={(e) => { if (e.target.files?.[0]) handleFileSelect('writtenAssessment', e.target.files[0]); }} />
-                                    </div>
-                                </div>
-                            )}
-                        </Card>
-
-                        {/* Practical Performance Assessment */}
-                        <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
-                            <h3 className="text-xl font-bold mb-4 dark:text-white">Practical Performance Assessment</h3>
-                            <div className="flex gap-6 mb-4">
-                                <div className="flex items-center">
-                                    <input type="radio" id="practical-assessment-link" name="practicalAssessmentType" value="link" checked={practicalPerformanceInputType === 'link'} onChange={() => setPracticalPerformanceInputType('link')} className="h-4 w-4 text-primary focus:ring-primary border-gray-300 dark:border-gray-600" />
-                                    <label htmlFor="practical-assessment-link" className="ml-2 block text-sm font-medium text-gray-700 dark:text-gray-300">Enter URL</label>
-                                </div>
-                                <div className="flex items-center">
-                                    <input type="radio" id="practical-assessment-upload" name="practicalAssessmentType" value="upload" checked={practicalPerformanceInputType === 'upload'} onChange={() => setPracticalPerformanceInputType('upload')} className="h-4 w-4 text-primary focus:ring-primary border-gray-300 dark:border-gray-600" />
-                                    <label htmlFor="practical-assessment-upload" className="ml-2 block text-sm font-medium text-gray-700 dark:text-gray-300">Upload File</label>
-                                </div>
-                            </div>
-                            {practicalPerformanceInputType === 'link' ? (
-                                <div>
-                                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Practical Performance Assessment URL (Optional)</label>
-                                    <input
-                                        type="url"
-                                        value={course.practicalPerformanceAssessmentLink || ''}
-                                        onChange={(e) => setCourse(prev => ({ ...prev, practicalPerformanceAssessmentLink: e.target.value }))}
-                                        className={inputClasses}
-                                        placeholder="https://..."
-                                    />
-                                </div>
-                            ) : (
-                                <div>
-                                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Upload Practical Performance Assessment (PDF/DOC/DOCX)</label>
-                                    <div className="flex items-center gap-2 p-2 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600">
-                                        <Icon name={IconName.FilePdf} className="w-5 h-5 text-gray-500 dark:text-gray-400" />
-                                        <span className="text-sm text-subtle flex-grow truncate">
-                                            {files.practicalPerformanceAssessment ? files.practicalPerformanceAssessment.name : (course.practicalPerformanceAssessmentLink && !isPracticalPerformanceUrl ? extractFilenameFromPath(course.practicalPerformanceAssessmentLink) : 'No file uploaded.')}
-                                        </span>
-                                        <Button variant="ghost" size="sm" onClick={() => document.getElementById('practicalAssessmentUpload')?.click()}>
-                                            <Icon name={IconName.Upload} className="w-4 h-4 mr-1" /> Upload
-                                        </Button>
-                                        <input type="file" id="practicalAssessmentUpload" className="hidden" accept=".pdf,.doc,.docx" onChange={(e) => { if (e.target.files?.[0]) handleFileSelect('practicalPerformanceAssessment', e.target.files[0]); }} />
-                                    </div>
-                                </div>
-                            )}
-                        </Card>
-
-                        <div className="space-y-4">
-                            {(course.assessments || []).map(assessment => (
-                                <Card key={assessment.id} className="p-4 relative group">
-                                    <button onClick={() => handleDeleteAssessment(assessment.id)} className="absolute top-2 right-2 p-1.5 text-gray-400 dark:text-gray-500 hover:text-red-500 hover:bg-red-100 dark:hover:bg-red-900/30 rounded-full opacity-0 group-hover:opacity-100 transition-opacity z-10">
-                                        <Icon name={IconName.Delete} className="w-4 h-4" />
-                                    </button>
-                                    <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-                                        <Icon name={IconName.ClipboardCheck} className="w-5 h-5 text-primary flex-shrink-0 hidden sm:block" />
-                                        <input
-                                            type="text"
-                                            value={assessment.title}
-                                            onChange={(e) => handleUpdateAssessment(assessment.id, 'title', e.target.value)}
-                                            className={`${inputGhostClasses(false)} !font-semibold flex-grow`}
-                                            placeholder="Assessment Title"
-                                        />
-                                        <select
-                                            value={assessment.category}
-                                            onChange={(e) => handleUpdateAssessment(assessment.id, 'category', e.target.value)}
-                                            className="text-sm font-medium bg-indigo-100 dark:bg-indigo-900/30 text-indigo-800 dark:text-indigo-300 px-3 py-1 rounded-full border-transparent focus:border-indigo-300 focus:ring-indigo-300 w-full sm:w-auto"
-                                        >
-                                            {Object.values(AssessmentCategory).map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                                        </select>
-                                    </div>
-                                    <div className="mt-4 pt-4 border-t dark:border-gray-700">
-                                        <label htmlFor={`assessment-upload-${assessment.id}`} className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Assessment File (PDF/DOC/DOCX)</label>
-                                        <div className="flex items-center gap-2 p-2 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600">
-                                            <Icon name={IconName.FilePdf} className="w-5 h-5 text-gray-500 dark:text-gray-400" />
-                                            <span className="text-sm text-subtle flex-grow truncate">{assessment.fileUrl ? getDisplayFilename(assessment.fileUrl) : 'No file uploaded.'}</span>
-                                            <Button variant="ghost" size="sm" onClick={() => document.getElementById(`assessment-upload-${assessment.id}`)?.click()}>
-                                                <Icon name={IconName.Upload} className="w-4 h-4 mr-1" /> Upload
-                                            </Button>
-                                            <input
-                                                type="file"
-                                                id={`assessment-upload-${assessment.id}`}
-                                                className="hidden"
-                                                accept=".doc,.docx,.pdf"
-                                                onChange={(e) => {
-                                                    if (e.target.files?.[0]) {
-                                                        handleAssessmentFileUpload(assessment.id, e.target.files[0]);
-                                                    }
-                                                }}
-                                            />
-                                        </div>
-                                    </div>
-                                </Card>
-                            ))}
-                            {course.assessments?.length === 0 && <p className="text-subtle text-center py-4">No assessments added yet.</p>}
-                            <Button variant="ghost" onClick={handleAddAssessment} className="w-full !py-3 !text-lg !font-semibold border-2 border-dashed !border-gray-300 dark:!border-gray-600 hover:!border-primary !text-subtle hover:!text-primary">
-                                + Add Assessment
-                            </Button>
-                        </div>
                     </div>
 
                     {(role === UserRole.Admin) && (

@@ -45,6 +45,7 @@ const ManagementCourseList: React.FC = () => {
     const [filterCourseType, setFilterCourseType] = useState<'WSQ' | 'IBF' | 'Non-WSQ' | 'All'>('All');
     const [filterMode, setFilterMode] = useState<string>('All');
     const [filterStartDate, setFilterStartDate] = useState<'All' | 'This Month' | 'Next Month' | 'Last Month' | 'Earlier' | 'Later'>('All');
+    const [filterCourseCode, setFilterCourseCode] = useState('');
     const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
     const [viewMode, setViewMode] = useState<'block' | 'table'>('block');
     const [selectedCourse, setSelectedCourse] = useState<any>(null);
@@ -124,15 +125,18 @@ const ManagementCourseList: React.FC = () => {
                 course.tscTitle?.toLowerCase().includes(searchLower) ||
                 course.tscCode?.toLowerCase().includes(searchLower);
 
+            const matchesCourseCode = filterCourseCode === '' ||
+                course.courseCode?.toLowerCase().includes(filterCourseCode.toLowerCase());
+
             const matchesType = filterCourseType === 'All' || course.courseType === filterCourseType;
             const matchesMode = filterMode === 'All' || (course.modeOfLearning && course.modeOfLearning.includes(filterMode));
 
             // Apply date filtering only for trainers (not for developers)
             const matchesStartDate = (role !== UserRole.Trainer) || isDateInRange(course.startDate, filterStartDate);
 
-            return matchesSearch && matchesType && matchesMode && matchesStartDate;
+            return matchesSearch && matchesCourseCode && matchesType && matchesMode && matchesStartDate;
         });
-    }, [relevantCourses, searchQuery, filterCourseType, filterMode, filterStartDate, role]);
+    }, [relevantCourses, searchQuery, filterCourseCode, filterCourseType, filterMode, filterStartDate, role]);
 
     // Pagination calculations
     const totalPages = Math.ceil(filteredCourses.length / itemsPerPage);
@@ -144,16 +148,18 @@ const ManagementCourseList: React.FC = () => {
     // Reset page when filters change
     React.useEffect(() => {
         setCurrentPage(1);
-    }, [searchQuery, filterCourseType, filterMode, filterStartDate]);
+    }, [searchQuery, filterCourseCode, filterCourseType, filterMode, filterStartDate]);
 
     // Handle clear filters
     const handleClearFilters = () => {
         setSearchQuery('');
+        setFilterCourseCode('');
         setFilterCourseType('All');
         setFilterMode('All');
         setFilterStartDate('All');
         setCurrentPage(1);
     };
+
 
     // Handle edit course
     const handleEditCourse = async (course: any) => {
@@ -400,6 +406,7 @@ const ManagementCourseList: React.FC = () => {
 
     return (
         <div>
+
             {/* Search and Filter Controls Card */}
             <Card className="p-6 mb-8 bg-surface border-default">
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
@@ -450,6 +457,18 @@ const ManagementCourseList: React.FC = () => {
 
                 {showAdvancedFilters && (
                     <div className="mt-4 pt-4 border-t border-default grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                        {role === UserRole.Trainer && (
+                            <div>
+                                <label className="block text-sm font-medium text-on-surface-secondary">Course Code</label>
+                                <input
+                                    type="text"
+                                    placeholder="e.g. TGS-2022015368"
+                                    value={filterCourseCode}
+                                    onChange={e => setFilterCourseCode(e.target.value)}
+                                    className={`${inputClasses} mt-1`}
+                                />
+                            </div>
+                        )}
                         <div>
                             <label className="block text-sm font-medium text-on-surface-secondary">Course Type</label>
                             <select value={filterCourseType} onChange={e => setFilterCourseType(e.target.value as 'WSQ' | 'IBF' | 'Non-WSQ' | 'All')} className={`${inputClasses} mt-1`}>

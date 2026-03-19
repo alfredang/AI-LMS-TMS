@@ -10,11 +10,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return res.status(400).json({ success: false, error: 'sessionId is required' });
       }
 
-      // Return attendance records for this session — nric is now stored directly on the row
+      // Return attendance records — join app_user to get name/email for manually added learners
       const result = await client.query(
-        `SELECT nric, user_id, is_present, reason_of_absence
-         FROM course_attendance
-         WHERE session_id = $1`,
+        `SELECT ca.nric, ca.user_id, ca.is_present, ca.reason_of_absence,
+                au.full_name, au.email
+         FROM course_attendance ca
+         LEFT JOIN app_user au ON au.id = ca.user_id
+         WHERE ca.session_id = $1`,
         [sessionId]
       );
 
@@ -23,6 +25,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         userId: row.user_id,
         isPresent: row.is_present,
         reasonOfAbsence: row.reason_of_absence || '',
+        fullName: row.full_name || '',
+        email: row.email || '',
       }));
 
       return res.status(200).json({ success: true, data: records });
@@ -48,12 +52,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           continue;
         }
 
-        // Optionally look up user_id by NRIC for future joins (non-blocking)
-        const lookup = await client.query(
-          `SELECT user_id FROM learner_profile WHERE nric = $1 LIMIT 1`,
-          [r.nric]
-        );
-        const userId = lookup.rows[0]?.user_id ?? null;
+        // Resolve user_id: extract from _uid_ prefix (manually added learners) or look up by NRIC
+        let userId: string | null = null;
+        if (r.nric.startsWith('_uid_')) {
+          userId = r.nric.slice(5);
+        } else {
+          const lookup = await client.query(
+            `SELECT user_id FROM learner_profile WHERE nric = $1 LIMIT 1`,
+            [r.nric]
+          );
+          userId = lookup.rows[0]?.user_id ?? null;
+        }
 
         await client.query(
           `INSERT INTO course_attendance (session_id, nric, user_id, is_present, reason_of_absence, updated_at)

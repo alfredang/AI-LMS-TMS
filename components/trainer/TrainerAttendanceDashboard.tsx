@@ -40,6 +40,66 @@ const StatusBadge: React.FC<{ value: string }> = ({ value }) => {
   return <span className={cls}>{value}</span>;
 };
 
+const QrCodePanel: React.FC<{ title: string; description: string; imageSrc: string }> = ({ title, description, imageSrc }) => {
+  const [open, setOpen] = React.useState(false);
+  return (
+    <>
+      <div className="flex flex-col items-start gap-3">
+        <p className="text-xs text-on-surface-secondary">{description}</p>
+        <button
+          onClick={() => setOpen(true)}
+          className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded text-sm font-medium hover:bg-primary-hover transition-colors shadow-sm"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <rect x="3" y="3" width="7" height="7" rx="1" strokeWidth={2} />
+            <rect x="14" y="3" width="7" height="7" rx="1" strokeWidth={2} />
+            <rect x="3" y="14" width="7" height="7" rx="1" strokeWidth={2} />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 14h.01M14 17h3M17 14v3M20 14h.01M20 17h.01" />
+          </svg>
+          Show QR Code
+        </button>
+      </div>
+
+      {/* Modal overlay */}
+      {open && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+          onClick={() => setOpen(false)}
+        >
+          <div
+            className="relative bg-white dark:bg-gray-900 rounded-2xl shadow-2xl p-8 flex flex-col items-center gap-5 max-w-sm w-full mx-4"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Close button */}
+            <button
+              onClick={() => setOpen(false)}
+              className="absolute top-3 right-3 p-1.5 rounded-full text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+              aria-label="Close"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+
+            <h3 className="text-lg font-bold text-gray-900 dark:text-white">{title}</h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400 text-center -mt-2">{description}</p>
+
+            <div className="bg-white p-3 rounded-xl border border-gray-200 shadow-inner">
+              <img
+                src={imageSrc}
+                alt={`${title} QR Code`}
+                className="w-64 h-64 object-contain"
+              />
+            </div>
+
+            <p className="text-xs text-gray-400 dark:text-gray-500">Tap outside or press × to close</p>
+          </div>
+        </div>
+      )}
+    </>
+  );
+};
+
 const RefreshIcon: React.FC<{ className?: string }> = ({ className = 'w-4 h-4' }) => (
   <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -148,6 +208,14 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
   const [showManualNric, setShowManualNric]             = useState(false);
   const [manualPage, setManualPage]                    = useState(1);
   const MANUAL_PAGE_SIZE = 5;
+  // Manually added learners (not in SSG enrolments)
+  const [extraAttendees, setExtraAttendees]            = useState<Array<{ nric: string; fullName: string; email: string; isPresent: boolean; reasonOfAbsence: string }>>([]);
+  const [showAddLearnerModal, setShowAddLearnerModal]  = useState(false);
+  const [addLearnerForm, setAddLearnerForm]            = useState({ fullName: '', email: '', nric: '' });
+  const [isAddingLearner, setIsAddingLearner]          = useState(false);
+  const [addLearnerError, setAddLearnerError]          = useState<string | null>(null);
+  const [confirmRemoveNric, setConfirmRemoveNric]      = useState<string | null>(null);
+  const [removingNric, setRemovingNric]                = useState<string | null>(null);
 
   const today = new Date(new Date().toDateString());
   const activeCourses = courses
@@ -187,6 +255,7 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
     setSelectedManualSession('');
     setManualAttendance([]);
     setManualAttendanceDbMap({});
+    setExtraAttendees([]);
     setManualAttendanceMsg(null);
     setLearnerAccountMap({});
     try {
@@ -265,7 +334,7 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
       .catch(() => {});
   }, [attendanceRecords, selectedManualSession]);
 
-  // Rebuild manualAttendance whenever enrolmentRecords, DB map, or SSG attendance change
+  // Rebuild manualAttendance + re-filter extraAttendees whenever data changes
   useEffect(() => {
     if (!selectedManualSession || enrolmentRecords.length === 0) return;
     const ssgPresentNrics = new Set(
@@ -273,6 +342,13 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
         .filter(r => { const s = (r.status || '').toLowerCase(); return s === 'confirmed' || s === 'present' || s === 'attended'; })
         .map(r => r.nric || r.trainee?.id || '')
         .filter(Boolean)
+    );
+    const enrolNrics = new Set(
+      enrolmentRecords.map((item: any) => {
+        const enrol = item?.enrolment ?? item;
+        const trainee = enrol?.trainee ?? {};
+        return (trainee?.id || trainee?.nric || '').trim();
+      }).filter(Boolean)
     );
     const merged = enrolmentRecords.map((item: any) => {
       const enrol = item?.enrolment ?? item;
@@ -283,6 +359,8 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
       return { nric, fullName: name, isPresent, reasonOfAbsence };
     });
     setManualAttendance(merged);
+    // Keep only extras whose NRIC is not covered by enrolments
+    setExtraAttendees(prev => prev.filter(e => !enrolNrics.has(e.nric)));
   }, [enrolmentRecords, manualAttendanceDbMap, selectedManualSession, attendanceRecords]);
 
   // Sync selectedManualSession whenever the top SSG session or manualSessions list changes
@@ -303,6 +381,7 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
     setSelectedManualSession('');
     setManualAttendance([]);
     setManualAttendanceDbMap({});
+    setExtraAttendees([]);
     setManualAttendanceMsg(null);
     try {
       const res = await fetch(`/api/trainer/attendance-sessions?courseRunId=${courseRunId}`);
@@ -319,6 +398,7 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
     setLoadingManualAttendance(true);
     setManualAttendanceDbMap({});
     setManualAttendance([]);
+    setExtraAttendees([]);
     try {
       const res = await fetch(`/api/trainer/attendance-records?sessionId=${sessionId}`);
       const json = await res.json();
@@ -331,6 +411,25 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
         setManualAttendanceDbMap(dbMap);
         // If enrolmentRecords already loaded, merge immediately (otherwise useEffect handles it)
         setEnrolmentRecords(prev => {
+          const enrolNrics = new Set(
+            prev.map((item: any) => {
+              const enrol = item?.enrolment ?? item;
+              const trainee = enrol?.trainee ?? {};
+              return (trainee?.id || trainee?.nric || '').trim();
+            }).filter(Boolean)
+          );
+          // Extract extra attendees: DB records with names not matching any enrolment NRIC
+          const extras = json.data.filter((rec: any) =>
+            rec.fullName && rec.nric && !enrolNrics.has(rec.nric)
+          ).map((rec: any) => ({
+            nric: rec.nric,
+            fullName: rec.fullName,
+            email: rec.email,
+            isPresent: rec.isPresent,
+            reasonOfAbsence: rec.reasonOfAbsence,
+          }));
+          setExtraAttendees(extras);
+
           if (prev.length > 0) {
             const ssgPresentNrics = new Set(
               attendanceRecords
@@ -356,33 +455,42 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
   };
 
   const handleTogglePresent = (nric: string) => {
-    setManualAttendance(prev => prev.map(r =>
-      r.nric === nric
-        ? { ...r, isPresent: !r.isPresent, reasonOfAbsence: !r.isPresent ? '' : r.reasonOfAbsence }
-        : r
-    ));
+    if (manualAttendance.some(r => r.nric === nric)) {
+      setManualAttendance(prev => prev.map(r =>
+        r.nric === nric
+          ? { ...r, isPresent: !r.isPresent, reasonOfAbsence: !r.isPresent ? '' : r.reasonOfAbsence }
+          : r
+      ));
+    } else {
+      setExtraAttendees(prev => prev.map(r =>
+        r.nric === nric
+          ? { ...r, isPresent: !r.isPresent, reasonOfAbsence: !r.isPresent ? '' : r.reasonOfAbsence }
+          : r
+      ));
+    }
   };
 
   const handleReasonChange = (nric: string, value: string) => {
-    setManualAttendance(prev => prev.map(r => r.nric === nric ? { ...r, reasonOfAbsence: value } : r));
+    if (manualAttendance.some(r => r.nric === nric)) {
+      setManualAttendance(prev => prev.map(r => r.nric === nric ? { ...r, reasonOfAbsence: value } : r));
+    } else {
+      setExtraAttendees(prev => prev.map(r => r.nric === nric ? { ...r, reasonOfAbsence: value } : r));
+    }
   };
 
   const handleSaveAttendance = async () => {
-    if (!selectedManualSession || manualAttendance.length === 0) return;
+    if (!selectedManualSession || (manualAttendance.length === 0 && extraAttendees.length === 0)) return;
     setSavingAttendance(true);
     setManualAttendanceMsg(null);
     try {
+      const combined = [
+        ...manualAttendance.map(r => ({ nric: r.nric, isPresent: r.isPresent, reasonOfAbsence: r.reasonOfAbsence || '' })),
+        ...extraAttendees.map(r => ({ nric: r.nric, isPresent: r.isPresent, reasonOfAbsence: r.reasonOfAbsence || '' })),
+      ];
       const res = await fetch('/api/trainer/attendance-records', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sessionId: selectedManualSession,
-          records: manualAttendance.map(r => ({
-            nric: r.nric,
-            isPresent: r.isPresent,
-            reasonOfAbsence: r.reasonOfAbsence || '',
-          })),
-        }),
+        body: JSON.stringify({ sessionId: selectedManualSession, records: combined }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Failed to save');
@@ -391,6 +499,96 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
       setManualAttendanceMsg({ type: 'error', text: err instanceof Error ? err.message : 'Failed to save attendance' });
     } finally {
       setSavingAttendance(false);
+    }
+  };
+
+  const handleAddManualLearner = async () => {
+    const { fullName, email, nric } = addLearnerForm;
+    if (!fullName.trim() || !email.trim()) {
+      setAddLearnerError('Name and email are required.');
+      return;
+    }
+    if (!email.trim().includes('@')) {
+      setAddLearnerError('Please enter a valid email address.');
+      return;
+    }
+    // Check for duplicate in current session before doing anything
+    const emailLower = email.trim().toLowerCase();
+    const alreadyAdded = extraAttendees.some(r => r.email.toLowerCase() === emailLower);
+    if (alreadyAdded) {
+      setAddLearnerError('This learner has already been added to this session.');
+      return;
+    }
+    setIsAddingLearner(true);
+    setAddLearnerError(null);
+    const course = selectedCourse;
+    try {
+      // 1. Create or ensure learner account (handles both new and existing — no duplicate created)
+      const accountRes = await fetch('/api/admin/create-learner-account', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: email.trim(),
+          fullName: fullName.trim(),
+          nric: nric.trim() || undefined,
+          courseRunId: course?.courseRunId,
+          courseId: course?.id,
+        }),
+      });
+      const accountJson = await accountRes.json();
+      if (!accountRes.ok) throw new Error(accountJson.message || 'Failed to create account');
+
+      // Use NRIC if provided; otherwise use _uid_ prefix with userId as unique attendance key
+      const identifier = nric.trim() || `_uid_${accountJson.userId}`;
+
+      // 2. Add to ALL sessions for this course run (default absent)
+      for (const session of manualSessions) {
+        await fetch('/api/trainer/attendance-records', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sessionId: session.id,
+            records: [{ nric: identifier, isPresent: false, reasonOfAbsence: '' }],
+          }),
+        });
+      }
+
+      // 3. Add to extraAttendees — use DB name if account already existed
+      const displayName = accountJson.fullName || fullName.trim();
+      setExtraAttendees(prev => {
+        if (prev.some(r => r.nric === identifier)) return prev;
+        return [...prev, { nric: identifier, fullName: displayName, email: email.trim(), isPresent: false, reasonOfAbsence: '' }];
+      });
+
+      setShowAddLearnerModal(false);
+      setAddLearnerForm({ fullName: '', email: '', nric: '' });
+      setManualPage(1);
+    } catch (err) {
+      setAddLearnerError(err instanceof Error ? err.message : 'Failed to add learner.');
+    } finally {
+      setIsAddingLearner(false);
+    }
+  };
+
+  const handleRemoveLearner = async (nric: string) => {
+    const course = selectedCourse;
+    if (!course?.courseRunId) return;
+    setRemovingNric(nric);
+    setConfirmRemoveNric(null);
+    try {
+      const res = await fetch('/api/trainer/manual-learner', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nric, courseRunId: course.courseRunId }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Failed to remove learner');
+      setExtraAttendees(prev => prev.filter(r => r.nric !== nric));
+      setManualPage(1);
+    } catch (err) {
+      setManualAttendanceMsg({ type: 'error', text: err instanceof Error ? err.message : 'Failed to remove learner.' });
+    } finally {
+      setRemovingNric(null);
     }
   };
 
@@ -537,7 +735,7 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
         }
         setLearnerAccountMap(map);
 
-        // Auto-create accounts for all missing learners
+        // Auto-create accounts for all missing learners (skip cancelled enrolments)
         const course = courseOverride ?? selectedCourse;
         for (const item of records) {
           const enrol = item?.enrolment ?? item;
@@ -545,6 +743,8 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
           const email: string = trainee?.email?.full || trainee?.email || '';
           if (!email) continue;
           if (map[email.toLowerCase()] !== 'missing') continue;
+          const enrolStatus: string = (enrol?.status || enrol?.enrolmentStatus || '').toLowerCase();
+          if (enrolStatus === 'cancelled') continue;
           const nric: string = trainee?.id || trainee?.nric || enrol?.nric || '';
           const enrolRef: string = enrol?.referenceNumber || enrol?.enrolmentReferenceNumber || '';
           await handleCreateLearnerAccount(email, trainee?.fullName || trainee?.name || '', nric, enrolRef, course);
@@ -723,6 +923,7 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
                       setSelectedManualSession('');
                       setManualAttendance([]);
                       setManualAttendanceDbMap({});
+                      setExtraAttendees([]);
                       setManualAttendanceMsg(null);
                       setLearnerAccountMap({});
                       if (course?.digitalAttendanceId) {
@@ -845,7 +1046,7 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
 
       {/* ── Attendance Links ── */}
       <div className="bg-surface rounded-lg border border-default shadow-sm">
-        <SectionHeader title="Attendance / TRAQOM / Certificate Survey Links" />
+        <SectionHeader title="Attendance / TRAQOM / Cert QR Codes" />
         <div className="p-4">
           {/* Tab bar */}
           <div className="flex border-b border-default mb-4">
@@ -859,54 +1060,24 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
                     : 'border-transparent text-on-surface-secondary hover:text-on-surface'
                 }`}
               >
-                {tab === 'qr' ? 'QR Attendance' : tab === 'elist' ? 'E-Attendance List' : tab === 'traqom' ? 'TRAQOM Link' : 'Certificate Survey Link'}
+                {tab === 'qr' ? 'QR Attendance' : tab === 'elist' ? 'E-Attendance List' : tab === 'traqom' ? 'TRAQOM QR Code' : 'Cert QR Code'}
               </button>
             ))}
           </div>
 
-          {/* TRAQOM tab — static link, no loading required */}
+          {/* TRAQOM tab — QR code */}
           {activeTab === 'traqom' ? (
-            <div>
-              <p className="text-xs text-on-surface-secondary mb-1.5">TRAQOM Link</p>
-              <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  readOnly
-                  value="https://ssgtraqom.qualtrics.com/jfe/form/SV_3K9i7rTJ9OLsauW?Q_CHL=qr"
-                  className="input-themed flex-1 border rounded px-3 py-2 text-sm bg-surface-elevated text-on-surface-secondary focus:outline-none"
-                />
-                <a
-                  href="https://ssgtraqom.qualtrics.com/jfe/form/SV_3K9i7rTJ9OLsauW?Q_CHL=qr"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-1.5 px-4 py-2 bg-primary text-white rounded text-sm font-medium hover:bg-primary-hover transition-colors whitespace-nowrap"
-                >
-                  <ExternalLinkIcon />
-                  Open
-                </a>
-              </div>
-            </div>
+            <QrCodePanel
+              title="TRAQOM Survey"
+              description="Show this QR code to learners to complete the TRAQOM survey."
+              imageSrc="/qr_codes/traqom_survey_qr_code.png"
+            />
           ) : activeTab === 'cert' ? (
-            <div>
-              <p className="text-xs text-on-surface-secondary mb-1.5">Certificate Survey Link</p>
-              <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  readOnly
-                  value="https://goo.gl/R2eumq"
-                  className="input-themed flex-1 border rounded px-3 py-2 text-sm bg-surface-elevated text-on-surface-secondary focus:outline-none"
-                />
-                <a
-                  href="https://goo.gl/R2eumq"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-1.5 px-4 py-2 bg-primary text-white rounded text-sm font-medium hover:bg-primary-hover transition-colors whitespace-nowrap"
-                >
-                  <ExternalLinkIcon />
-                  Open
-                </a>
-              </div>
-            </div>
+            <QrCodePanel
+              title="Certificate Survey"
+              description="Show this QR code to learners to complete the certificate delivery survey."
+              imageSrc="/qr_codes/cert_delivery_qr_code.png"
+            />
           ) : isFetchingDigitalId ? (
             <div className="flex items-center gap-2 text-sm text-muted py-2">
               <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary" />
@@ -1188,6 +1359,8 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
                     <td className="px-3 py-3 whitespace-nowrap">{(() => {
                       const email: string = trainee?.email?.full || trainee?.email || '';
                       if (!email) return <span className="text-muted text-xs">—</span>;
+                      const enrolStatus: string = (enrol?.status || enrol?.enrolmentStatus || '').toLowerCase();
+                      if (enrolStatus === 'cancelled') return <span className="text-muted text-xs">—</span>;
                       const status = learnerAccountMap[email.toLowerCase()];
                       if (status === 'exists') return (
                         <span className="inline-flex items-center gap-1 text-xs font-medium text-green-600 dark:text-green-400">
@@ -1237,10 +1410,89 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
 
       {/* ── Manual Attendance Taking ── */}
       {!isAdminMode && <div className="bg-surface rounded-lg border border-default shadow-sm overflow-hidden">
-        <SectionHeader
-          title="Manual Attendance Taking (Optional)"
-          loading={loadingManualSessions || loadingManualAttendance || isLoadingEnrolments || isLoadingAttendance}
-        />
+        <div className="flex items-center justify-between px-4 py-3 border-b border-default">
+          <div className="flex items-center gap-2">
+            <h2 className="text-sm font-semibold text-on-surface">Manual Attendance Taking (Optional)</h2>
+            {(loadingManualSessions || loadingManualAttendance || isLoadingEnrolments || isLoadingAttendance) && (
+              <div className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-primary" />
+            )}
+          </div>
+          <button
+            onClick={() => { setShowAddLearnerModal(true); setAddLearnerError(null); setAddLearnerForm({ fullName: '', email: '', nric: '' }); }}
+            disabled={!selectedManualSession || loadingManualAttendance || isLoadingEnrolments || isLoadingAttendance}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-white rounded text-xs font-medium hover:bg-primary-hover transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            Add Learner
+          </button>
+        </div>
+
+        {/* Add Learner Modal */}
+        {showAddLearnerModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setShowAddLearnerModal(false)}>
+            <div className="relative bg-white dark:bg-gray-900 rounded-2xl shadow-2xl p-6 w-full max-w-sm mx-4" onClick={e => e.stopPropagation()}>
+              <button onClick={() => setShowAddLearnerModal(false)} className="absolute top-3 right-3 p-1.5 rounded-full text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+              <h3 className="text-base font-bold text-gray-900 dark:text-white mb-1">Add Learner Manually</h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">For learners who are <span className="font-semibold text-gray-700 dark:text-gray-300">not enrolled</span> in this class but are physically present.</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">An account will be created (if needed) and the learner will be added to all sessions for manual attendance tracking.</p>
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Full Name <span className="text-red-500">*</span></label>
+                  <input
+                    type="text"
+                    value={addLearnerForm.fullName}
+                    onChange={e => setAddLearnerForm(f => ({ ...f, fullName: e.target.value }))}
+                    placeholder="e.g. John Tan"
+                    className="w-full border border-gray-300 dark:border-gray-600 rounded px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Email Address <span className="text-red-500">*</span></label>
+                  <input
+                    type="email"
+                    value={addLearnerForm.email}
+                    onChange={e => setAddLearnerForm(f => ({ ...f, email: e.target.value }))}
+                    placeholder="e.g. john@example.com"
+                    className="w-full border border-gray-300 dark:border-gray-600 rounded px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">NRIC <span className="text-gray-400 font-normal">(optional)</span></label>
+                  <input
+                    type="text"
+                    value={addLearnerForm.nric}
+                    onChange={e => setAddLearnerForm(f => ({ ...f, nric: e.target.value }))}
+                    placeholder="e.g. S1234567A"
+                    className="w-full border border-gray-300 dark:border-gray-600 rounded px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                  />
+                  <p className="text-xs text-gray-400 mt-1">Leave blank if NRIC is not available.</p>
+                </div>
+                {addLearnerError && (
+                  <p className="text-xs text-red-500 flex items-center gap-1">
+                    <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    {addLearnerError}
+                  </p>
+                )}
+              </div>
+              <div className="flex gap-2 mt-5">
+                <button onClick={() => setShowAddLearnerModal(false)} className="flex-1 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                  Cancel
+                </button>
+                <button
+                  onClick={handleAddManualLearner}
+                  disabled={isAddingLearner}
+                  className="flex-1 px-3 py-2 text-sm bg-primary text-white rounded font-medium hover:bg-primary-hover transition-colors disabled:opacity-50"
+                >
+                  {isAddingLearner ? 'Adding...' : 'Add Learner'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Feedback banner */}
         {manualAttendanceMsg && (
@@ -1267,77 +1519,120 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
               </th>
               <th className="px-3 py-3 text-center font-semibold text-on-surface-secondary whitespace-nowrap">Attendance Marking</th>
               <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Reason of Absence</th>
+              <th className="px-3 py-3 w-10"></th>
             </tr>
           </thead>
           <tbody>
             {!selectedCourseRunId ? (
-              <tr><td colSpan={5} className="px-3 py-10 text-center text-sm text-muted italic">Select a class to take attendance.</td></tr>
+              <tr><td colSpan={6} className="px-3 py-10 text-center text-sm text-muted italic">Select a class to take attendance.</td></tr>
             ) : !selectedManualSession ? (
-              <tr><td colSpan={5} className="px-3 py-10 text-center text-sm text-muted italic">{manualSessions.length === 0 ? 'No sessions found for this class.' : 'Select a session in the Class Selection above.'}</td></tr>
+              <tr><td colSpan={6} className="px-3 py-10 text-center text-sm text-muted italic">{manualSessions.length === 0 ? 'No sessions found for this class.' : 'Select a session in the Class Selection above.'}</td></tr>
             ) : loadingManualAttendance || isLoadingEnrolments || isLoadingAttendance ? (
               Array.from({ length: 4 }).map((_, idx) => (
                 <tr key={idx} className="border-b border-default">
-                  {Array.from({ length: 5 }).map((__, col) => (
+                  {Array.from({ length: 6 }).map((__, col) => (
                     <td key={col} className="px-3 py-3">
                       <div className="h-3 rounded bg-surface-elevated animate-pulse" style={{ width: col === 1 ? '60%' : '40%' }} />
                     </td>
                   ))}
                 </tr>
               ))
-            ) : manualAttendance.length === 0 ? (
-              <tr><td colSpan={5} className="px-3 py-10 text-center text-sm text-muted italic">No enrolment records found for this class.</td></tr>
+            ) : manualAttendance.length === 0 && extraAttendees.length === 0 ? (
+              <tr><td colSpan={6} className="px-3 py-10 text-center text-sm text-muted italic">No enrolment records found. Use "Add Learner" to add someone manually.</td></tr>
             ) : (
-              manualAttendance.slice((manualPage - 1) * MANUAL_PAGE_SIZE, manualPage * MANUAL_PAGE_SIZE).map((record, idx) => {
-                const globalIdx = (manualPage - 1) * MANUAL_PAGE_SIZE + idx;
-                const nric: string = record.nric || '';
-                const maskedNric = nric.length >= 5 ? `${nric[0]}XXXX${nric.slice(-4)}` : nric || '—';
-                return (
-                  <tr key={nric || globalIdx} className="border-b border-default hover:bg-surface-elevated transition-colors">
-                    <td className="px-3 py-3 text-center text-on-surface-secondary">{globalIdx + 1}</td>
-                    <td className="px-3 py-3 font-medium text-on-surface whitespace-nowrap">{record.fullName || '—'}</td>
-                    <td className="px-3 py-3 text-on-surface-secondary font-mono whitespace-nowrap">{showManualNric ? (nric || '—') : maskedNric}</td>
-                    <td className="px-3 py-3 text-center">
-                      <label className="inline-flex items-center gap-2 cursor-pointer select-none">
-                        <input
-                          type="checkbox"
-                          checked={record.isPresent}
-                          onChange={() => handleTogglePresent(nric)}
-                          className="w-4 h-4 rounded border-default accent-primary cursor-pointer"
-                        />
-                        <span className={`text-xs font-medium ${record.isPresent ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'}`}>
-                          {record.isPresent ? 'Present' : 'Absent'}
-                        </span>
-                      </label>
-                    </td>
-                    <td className="px-3 py-3">
-                      {!record.isPresent && (
-                        <input
-                          type="text"
-                          value={record.reasonOfAbsence}
-                          onChange={e => handleReasonChange(nric, e.target.value)}
-                          placeholder="Enter reason..."
-                          className="input-themed w-full border rounded px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                        />
-                      )}
-                    </td>
-                  </tr>
-                );
-              })
+              (() => {
+                const combined = [...manualAttendance, ...extraAttendees];
+                return combined.slice((manualPage - 1) * MANUAL_PAGE_SIZE, manualPage * MANUAL_PAGE_SIZE).map((record, idx) => {
+                  const globalIdx = (manualPage - 1) * MANUAL_PAGE_SIZE + idx;
+                  const nric: string = record.nric || '';
+                  const isExtra = !manualAttendance.some(r => r.nric === nric);
+                  const isUidKey = nric.startsWith('_uid_');
+                  const maskedNric = isUidKey ? '—' : (nric.length >= 5 ? `${nric[0]}XXXX${nric.slice(-4)}` : nric || '—');
+                  return (
+                    <tr key={nric || globalIdx} className={`border-b border-default hover:bg-surface-elevated transition-colors ${isExtra ? 'bg-blue-50/40 dark:bg-blue-900/10' : ''}`}>
+                      <td className="px-3 py-3 text-center text-on-surface-secondary">{globalIdx + 1}</td>
+                      <td className="px-3 py-3 font-medium text-on-surface whitespace-nowrap">
+                        <div className="flex items-center gap-1.5">
+                          {record.fullName || '—'}
+                          {isExtra && <span className="text-xs px-1.5 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 font-medium">Manual</span>}
+                        </div>
+                      </td>
+                      <td className="px-3 py-3 text-on-surface-secondary font-mono whitespace-nowrap">{isUidKey ? '—' : (showManualNric ? (nric || '—') : maskedNric)}</td>
+                      <td className="px-3 py-3 text-center">
+                        <label className="inline-flex items-center gap-2 cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={record.isPresent}
+                            onChange={() => handleTogglePresent(nric)}
+                            className="w-4 h-4 rounded border-default accent-primary cursor-pointer"
+                          />
+                          <span className={`text-xs font-medium ${record.isPresent ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'}`}>
+                            {record.isPresent ? 'Present' : 'Absent'}
+                          </span>
+                        </label>
+                      </td>
+                      <td className="px-3 py-3">
+                        {!record.isPresent && (
+                          <input
+                            type="text"
+                            value={record.reasonOfAbsence}
+                            onChange={e => handleReasonChange(nric, e.target.value)}
+                            placeholder="Enter reason..."
+                            className="input-themed w-full border rounded px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                          />
+                        )}
+                      </td>
+                      <td className="px-3 py-3 text-center">
+                        {isExtra && (
+                          confirmRemoveNric === nric ? (
+                            <div className="flex items-center gap-1 justify-center">
+                              <button
+                                onClick={() => handleRemoveLearner(nric)}
+                                disabled={removingNric === nric}
+                                className="text-xs px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600 transition-colors disabled:opacity-50"
+                              >
+                                {removingNric === nric ? '...' : 'Confirm'}
+                              </button>
+                              <button
+                                onClick={() => setConfirmRemoveNric(null)}
+                                className="text-xs px-2 py-1 border border-default rounded text-on-surface-secondary hover:bg-surface-elevated transition-colors"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => setConfirmRemoveNric(nric)}
+                              title="Remove learner"
+                              className="p-1.5 rounded text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </button>
+                          )
+                        )}
+                      </td>
+                    </tr>
+                  );
+                });
+              })()
             )}
           </tbody>
         </table>
 
         {/* Pagination + Save button */}
-        {manualAttendance.length > 0 && selectedManualSession && (
+        {(manualAttendance.length > 0 || extraAttendees.length > 0) && selectedManualSession && (
           <div className="px-4 py-3 border-t border-default flex items-center justify-between gap-4">
             {/* Pagination — bottom left */}
             {(() => {
-              const totalPages = Math.ceil(manualAttendance.length / MANUAL_PAGE_SIZE);
+              const combinedTotal = manualAttendance.length + extraAttendees.length;
+              const totalPages = Math.ceil(combinedTotal / MANUAL_PAGE_SIZE);
               const start = (manualPage - 1) * MANUAL_PAGE_SIZE + 1;
-              const end = Math.min(manualPage * MANUAL_PAGE_SIZE, manualAttendance.length);
+              const end = Math.min(manualPage * MANUAL_PAGE_SIZE, combinedTotal);
               return (
                 <div className="flex items-center gap-2">
-                  <span className="text-xs text-muted">{start}–{end} of {manualAttendance.length}</span>
+                  <span className="text-xs text-muted">{start}–{end} of {combinedTotal}</span>
                   <button
                     onClick={() => setManualPage(p => Math.max(1, p - 1))}
                     disabled={manualPage === 1}
@@ -1367,8 +1662,8 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
             {/* Save button — bottom right */}
             <button
               onClick={handleSaveAttendance}
-              disabled={savingAttendance}
-              className="px-4 py-2 bg-primary text-white rounded text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
+              disabled={savingAttendance || loadingManualAttendance || isLoadingEnrolments || isLoadingAttendance}
+              className="px-4 py-2 bg-primary text-white rounded text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {savingAttendance ? 'Saving...' : 'Save Attendance'}
             </button>
