@@ -175,6 +175,7 @@ const AssessmentsSection: React.FC<{
     const [isUploading, setIsUploading] = useState<Record<string, boolean>>({});
     const [uploadProgress, setUploadProgress] = useState<Record<string, number>>({});
     const [verificationStatus, setVerificationStatus] = useState<Record<string, { loading: boolean, exists?: boolean, count?: number, error?: string }>>({});
+    const [hasTriggeredVerification, setHasTriggeredVerification] = useState<Record<string, boolean>>({});
     const [currentEnrollmentId, setCurrentEnrollmentId] = useState<string | null>(null);
 
     // Fetch current user's enrollment ID for this course run
@@ -390,6 +391,9 @@ const AssessmentsSection: React.FC<{
                 return [...filtered, newSubmission];
             });
 
+            // Auto-verify the uploaded file using the string identifier ('written' or 'practical')
+            handleVerifyDrive(assessmentType);
+
             // Reset UI state
             setSelectedLinkFiles(prev => ({ ...prev, [assessmentType]: null }));
             setIsLinkResubmitting(prev => ({ ...prev, [assessmentType]: false }));
@@ -552,6 +556,9 @@ const AssessmentsSection: React.FC<{
             console.log('✅ Assessment successfully uploaded and recorded');
             await loadSubmissions();
 
+            // Auto-verify the uploaded file
+            handleVerifyDrive(assessmentId);
+
             // Reset UI state
             setSelectedFiles(prev => ({ ...prev, [assessmentId]: null }));
             setIsResubmitting(prev => ({ ...prev, [assessmentId]: false }));
@@ -609,6 +616,27 @@ const AssessmentsSection: React.FC<{
         }
     };
 
+    // Automatically trigger verification on load for existing submissions
+    useEffect(() => {
+        if (submissions && submissions.length > 0) {
+            submissions.forEach(sub => {
+                if (!hasTriggeredVerification[sub.assessment_id]) {
+                    setHasTriggeredVerification(prev => ({ ...prev, [sub.assessment_id]: true }));
+                    handleVerifyDrive(sub.assessment_id);
+                }
+            });
+        }
+        
+        if (linkSubmissions && linkSubmissions.length > 0) {
+            linkSubmissions.forEach(sub => {
+                if (!hasTriggeredVerification[sub.assessment_type]) {
+                    setHasTriggeredVerification(prev => ({ ...prev, [sub.assessment_type]: true }));
+                    handleVerifyDrive(sub.assessment_type);
+                }
+            });
+        }
+    }, [submissions, linkSubmissions, hasTriggeredVerification]);
+
     const renderLearnerAssessment = (assessment: CourseAssessment) => {
         const canResubmit = isResubmitting[assessment.id];
 
@@ -657,23 +685,15 @@ const AssessmentsSection: React.FC<{
                             <p className="font-semibold text-green-800 dark:text-green-300">Submitted: {submission.file_name}</p>
                             <p className="text-xs text-green-600 dark:text-green-400">On: {new Date(submission.submitted_at).toLocaleString()}</p>
                         </div>
-                        <div className="flex gap-2">
-                            <Button 
-                                variant="outline" 
-                                size="sm" 
-                                onClick={() => handleVerifyDrive(assessment.id)}
-                                disabled={vStatus?.loading}
-                            >
-                                {vStatus?.loading ? 'Checking...' : 'Verify in Drive'}
-                            </Button>
-                            <Button variant="ghost" size="sm" onClick={() => setIsResubmitting(prev => ({ ...prev, [assessment.id]: true }))}>
-                                Resubmit
-                            </Button>
-                        </div>
+                        <Button variant="ghost" size="sm" onClick={() => setIsResubmitting(prev => ({ ...prev, [assessment.id]: true }))}>
+                            Resubmit
+                        </Button>
                     </div>
-                    {vStatus && !vStatus.loading && (
-                        <div className={`text-sm p-2 rounded-md ${vStatus.exists ? 'bg-green-100 text-green-800 dark:bg-green-800/40 dark:text-green-200' : 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200'}`}>
-                            {vStatus.exists ? `✅ Verified: ${vStatus.count} file(s) found in Drive folder` : `⚠️ File missing from Google Drive! (${vStatus.error || 'Folder empty or deleted'})`}
+                    {vStatus && (
+                        <div className={`text-sm p-2 rounded-md ${vStatus.loading ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30' : vStatus.exists ? 'bg-green-100 text-green-800 dark:bg-green-800/40 dark:text-green-200' : 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200'}`}>
+                            {vStatus.loading && <span className="flex items-center gap-2"><div className="w-3 h-3 rounded-full border-2 border-blue-600 border-t-transparent animate-spin"></div> Checking Google Drive...</span>}
+                            {!vStatus.loading && vStatus.exists && `✅ Verified: Found in Drive`}
+                            {!vStatus.loading && !vStatus.exists && `⚠️ File missing from Google Drive! (${vStatus.error || 'Folder empty or deleted'})`}
                         </div>
                     )}
                 </div>
@@ -860,8 +880,9 @@ const AssessmentsSection: React.FC<{
                         const canResubmit = isLinkResubmitting['written'];
 
                         if (writtenSubmission && !canResubmit) {
+                            const vStatus = verificationStatus['written'];
                             return (
-                                <div className="bg-green-50 dark:bg-green-900/20 p-3 rounded-md border border-green-200 dark:border-green-800">
+                                <div className="bg-green-50 dark:bg-green-900/20 p-3 rounded-md border border-green-200 dark:border-green-800 space-y-3">
                                     <div className="flex justify-between items-center">
                                         <div>
                                             <p className="font-semibold text-green-800 dark:text-green-300">Submitted: {writtenSubmission.file_name}</p>
@@ -871,6 +892,13 @@ const AssessmentsSection: React.FC<{
                                             Resubmit
                                         </Button>
                                     </div>
+                                    {vStatus && (
+                                        <div className={`text-sm p-2 rounded-md ${vStatus.loading ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30' : vStatus.exists ? 'bg-green-100 text-green-800 dark:bg-green-800/40 dark:text-green-200' : 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200'}`}>
+                                            {vStatus.loading && <span className="flex items-center gap-2"><div className="w-3 h-3 rounded-full border-2 border-blue-600 border-t-transparent animate-spin"></div> Checking Google Drive...</span>}
+                                            {!vStatus.loading && vStatus.exists && `✅ Verified: Found in Drive`}
+                                            {!vStatus.loading && !vStatus.exists && `⚠️ File missing from Google Drive! (${vStatus.error || 'Folder empty or deleted'})`}
+                                        </div>
+                                    )}
                                 </div>
                             );
                         }
@@ -971,8 +999,9 @@ const AssessmentsSection: React.FC<{
                         const canResubmit = isLinkResubmitting['practical'];
 
                         if (practicalSubmission && !canResubmit) {
+                            const vStatus = verificationStatus['practical'];
                             return (
-                                <div className="bg-green-50 dark:bg-green-900/20 p-3 rounded-md border border-green-200 dark:border-green-800">
+                                <div className="bg-green-50 dark:bg-green-900/20 p-3 rounded-md border border-green-200 dark:border-green-800 space-y-3">
                                     <div className="flex justify-between items-center">
                                         <div>
                                             <p className="font-semibold text-green-800 dark:text-green-300">Submitted: {practicalSubmission.file_name}</p>
@@ -982,6 +1011,13 @@ const AssessmentsSection: React.FC<{
                                             Resubmit
                                         </Button>
                                     </div>
+                                    {vStatus && (
+                                        <div className={`text-sm p-2 rounded-md ${vStatus.loading ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30' : vStatus.exists ? 'bg-green-100 text-green-800 dark:bg-green-800/40 dark:text-green-200' : 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200'}`}>
+                                            {vStatus.loading && <span className="flex items-center gap-2"><div className="w-3 h-3 rounded-full border-2 border-blue-600 border-t-transparent animate-spin"></div> Checking Google Drive...</span>}
+                                            {!vStatus.loading && vStatus.exists && `✅ Verified: Found in Drive`}
+                                            {!vStatus.loading && !vStatus.exists && `⚠️ File missing from Google Drive! (${vStatus.error || 'Folder empty or deleted'})`}
+                                        </div>
+                                    )}
                                 </div>
                             );
                         }
