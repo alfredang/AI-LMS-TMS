@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useLms } from '../../contexts/LmsContext';
 import { useTrainerCourses } from '../../hooks/useTrainerCourses';
 
@@ -208,6 +208,7 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
   const [showManualNric, setShowManualNric]             = useState(false);
   const [manualPage, setManualPage]                    = useState(1);
   const MANUAL_PAGE_SIZE = 5;
+  const manualAttendanceFetchRef = useRef<AbortController | null>(null);
   // Manually added learners (not in SSG enrolments)
   const [extraAttendees, setExtraAttendees]            = useState<Array<{ nric: string; fullName: string; email: string; isPresent: boolean; reasonOfAbsence: string }>>([]);
   const [showAddLearnerModal, setShowAddLearnerModal]  = useState(false);
@@ -216,6 +217,10 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
   const [addLearnerError, setAddLearnerError]          = useState<string | null>(null);
   const [confirmRemoveNric, setConfirmRemoveNric]      = useState<string | null>(null);
   const [removingNric, setRemovingNric]                = useState<string | null>(null);
+  const [showDeleteLearnerModal, setShowDeleteLearnerModal] = useState(false);
+  const [deleteLearnerNric, setDeleteLearnerNric]      = useState('');
+  const [isDeletingFromClass, setIsDeletingFromClass]  = useState(false);
+  const [deleteLearnerError, setDeleteLearnerError]    = useState<string | null>(null);
 
   const today = new Date(new Date().toDateString());
   const activeCourses = courses
@@ -350,14 +355,26 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
         return (trainee?.id || trainee?.nric || '').trim();
       }).filter(Boolean)
     );
-    const merged = enrolmentRecords.map((item: any) => {
-      const enrol = item?.enrolment ?? item;
-      const trainee = enrol?.trainee ?? {};
-      const nric: string = trainee?.id || trainee?.nric || '';
-      const name: string = trainee?.fullName || trainee?.name || '';
-      const { isPresent, reasonOfAbsence } = resolveAttendance(nric, ssgPresentNrics, manualAttendanceDbMap);
-      return { nric, fullName: name, isPresent, reasonOfAbsence };
-    });
+    const seenNrics = new Set<string>();
+    const merged = enrolmentRecords
+      .filter((item: any) => {
+        const enrol = item?.enrolment ?? item;
+        const status = (enrol?.status || enrol?.enrolmentStatus || '').toLowerCase();
+        return status !== 'cancelled';
+      })
+      .map((item: any) => {
+        const enrol = item?.enrolment ?? item;
+        const trainee = enrol?.trainee ?? {};
+        const nric: string = trainee?.id || trainee?.nric || '';
+        const name: string = trainee?.fullName || trainee?.name || '';
+        const { isPresent, reasonOfAbsence } = resolveAttendance(nric, ssgPresentNrics, manualAttendanceDbMap);
+        return { nric, fullName: name, isPresent, reasonOfAbsence };
+      })
+      .filter(r => {
+        if (!r.nric || seenNrics.has(r.nric)) return false;
+        seenNrics.add(r.nric);
+        return true;
+      });
     setManualAttendance(merged);
     // Keep only extras whose NRIC is not covered by enrolments
     setExtraAttendees(prev => prev.filter(e => !enrolNrics.has(e.nric)));
@@ -395,12 +412,19 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
   };
 
   const fetchManualAttendance = async (sessionId: string) => {
+    // Cancel any in-flight request from a previous class/session
+    if (manualAttendanceFetchRef.current) {
+      manualAttendanceFetchRef.current.abort();
+    }
+    const controller = new AbortController();
+    manualAttendanceFetchRef.current = controller;
+
     setLoadingManualAttendance(true);
     setManualAttendanceDbMap({});
     setManualAttendance([]);
     setExtraAttendees([]);
     try {
-      const res = await fetch(`/api/trainer/attendance-records?sessionId=${sessionId}`);
+      const res = await fetch(`/api/trainer/attendance-records?sessionId=${sessionId}`, { signal: controller.signal });
       const json = await res.json();
       if (json.success) {
         // Build NRIC-keyed map from DB records
@@ -437,21 +461,36 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
                 .map(r => r.nric || r.trainee?.id || '')
                 .filter(Boolean)
             );
-            const merged = prev.map((item: any) => {
-              const enrol = item?.enrolment ?? item;
-              const trainee = enrol?.trainee ?? {};
-              const nric: string = trainee?.id || trainee?.nric || '';
-              const name: string = trainee?.fullName || trainee?.name || '';
-              const { isPresent, reasonOfAbsence } = resolveAttendance(nric, ssgPresentNrics, dbMap);
-              return { nric, fullName: name, isPresent, reasonOfAbsence };
-            });
+            const seenNrics = new Set<string>();
+            const merged = prev
+              .filter((item: any) => {
+                const enrol = item?.enrolment ?? item;
+                const status = (enrol?.status || enrol?.enrolmentStatus || '').toLowerCase();
+                return status !== 'cancelled';
+              })
+              .map((item: any) => {
+                const enrol = item?.enrolment ?? item;
+                const trainee = enrol?.trainee ?? {};
+                const nric: string = trainee?.id || trainee?.nric || '';
+                const name: string = trainee?.fullName || trainee?.name || '';
+                const { isPresent, reasonOfAbsence } = resolveAttendance(nric, ssgPresentNrics, dbMap);
+                return { nric, fullName: name, isPresent, reasonOfAbsence };
+              })
+              .filter(r => {
+                if (!r.nric || seenNrics.has(r.nric)) return false;
+                seenNrics.add(r.nric);
+                return true;
+              });
             setManualAttendance(merged);
           }
           return prev;
         });
       }
-    } catch { /* silent */ }
-    finally { setLoadingManualAttendance(false); }
+    } catch (err: any) {
+      if (err?.name !== 'AbortError') console.error('fetchManualAttendance error:', err);
+    } finally {
+      setLoadingManualAttendance(false);
+    }
   };
 
   const handleTogglePresent = (nric: string) => {
@@ -571,24 +610,49 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
   };
 
   const handleRemoveLearner = async (nric: string) => {
-    const course = selectedCourse;
-    if (!course?.courseRunId) return;
+    if (!selectedManualSession) return;
     setRemovingNric(nric);
     setConfirmRemoveNric(null);
     try {
       const res = await fetch('/api/trainer/manual-learner', {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nric, courseRunId: course.courseRunId }),
+        body: JSON.stringify({ nric, sessionId: selectedManualSession }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Failed to remove learner');
+      // Remove from current session view only
       setExtraAttendees(prev => prev.filter(r => r.nric !== nric));
-      setManualPage(1);
+      setManualAttendance(prev => prev.filter(r => r.nric !== nric));
     } catch (err) {
-      setManualAttendanceMsg({ type: 'error', text: err instanceof Error ? err.message : 'Failed to remove learner.' });
+      setManualAttendanceMsg({ type: 'error', text: err instanceof Error ? err.message : 'Failed to remove.' });
     } finally {
       setRemovingNric(null);
+    }
+  };
+
+  const handleDeleteLearnerFromClass = async () => {
+    const course = selectedCourse;
+    if (!deleteLearnerNric || !course?.courseRunId) return;
+    setIsDeletingFromClass(true);
+    setDeleteLearnerError(null);
+    try {
+      const res = await fetch('/api/trainer/remove-learner-from-class', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nric: deleteLearnerNric, courseRunId: course.courseRunId }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Failed to remove learner');
+      setExtraAttendees(prev => prev.filter(r => r.nric !== deleteLearnerNric));
+      setManualAttendance(prev => prev.filter(r => r.nric !== deleteLearnerNric));
+      setShowDeleteLearnerModal(false);
+      setDeleteLearnerNric('');
+      setManualPage(1);
+    } catch (err) {
+      setDeleteLearnerError(err instanceof Error ? err.message : 'Failed to remove learner from class.');
+    } finally {
+      setIsDeletingFromClass(false);
     }
   };
 
@@ -1417,16 +1481,30 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
               <div className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-primary" />
             )}
           </div>
-          <button
-            onClick={() => { setShowAddLearnerModal(true); setAddLearnerError(null); setAddLearnerForm({ fullName: '', email: '', nric: '' }); }}
-            disabled={!selectedManualSession || loadingManualAttendance || isLoadingEnrolments || isLoadingAttendance}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-white rounded text-xs font-medium hover:bg-primary-hover transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            Add Learner
-          </button>
+          <div className="flex items-center gap-2">
+            {extraAttendees.length > 0 && (
+            <button
+              onClick={() => { setShowDeleteLearnerModal(true); setDeleteLearnerNric(''); setDeleteLearnerError(null); }}
+              disabled={!selectedManualSession || loadingManualAttendance || isLoadingEnrolments || isLoadingAttendance}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-red-500 text-white rounded text-xs font-medium hover:bg-red-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+              Remove Learner
+            </button>
+            )}
+            <button
+              onClick={() => { setShowAddLearnerModal(true); setAddLearnerError(null); setAddLearnerForm({ fullName: '', email: '', nric: '' }); }}
+              disabled={!selectedManualSession || loadingManualAttendance || isLoadingEnrolments || isLoadingAttendance}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-white rounded text-xs font-medium hover:bg-primary-hover transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              Add Learner
+            </button>
+          </div>
         </div>
 
         {/* Add Learner Modal */}
@@ -1494,6 +1572,59 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
           </div>
         )}
 
+        {/* Remove Learner from Class Modal */}
+        {showDeleteLearnerModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setShowDeleteLearnerModal(false)}>
+            <div className="relative bg-white dark:bg-gray-900 rounded-2xl shadow-2xl p-6 w-full max-w-sm mx-4" onClick={e => e.stopPropagation()}>
+              <button onClick={() => setShowDeleteLearnerModal(false)} className="absolute top-3 right-3 p-1.5 rounded-full text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+              <h3 className="text-base font-bold text-gray-900 dark:text-white mb-1">Remove Learner from Class</h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+                Removes the learner's attendance across <span className="font-semibold text-gray-700 dark:text-gray-300">all sessions</span> and their enrolment for this class. Their account will not be deleted.
+              </p>
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Select Learner <span className="text-red-500">*</span></label>
+                  <select
+                    value={deleteLearnerNric}
+                    onChange={e => setDeleteLearnerNric(e.target.value)}
+                    className="w-full border border-gray-300 dark:border-gray-600 rounded px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-red-400/30 focus:border-red-400"
+                  >
+                    <option value="">— Select a learner —</option>
+                    {extraAttendees.map(r => (
+                      <option key={r.nric} value={r.nric}>
+                        {r.fullName || r.nric}
+                      </option>
+                    ))}
+                    {extraAttendees.length === 0 && (
+                      <option disabled value="">No manually added learners</option>
+                    )}
+                  </select>
+                </div>
+                {deleteLearnerError && (
+                  <p className="text-xs text-red-500 flex items-center gap-1">
+                    <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    {deleteLearnerError}
+                  </p>
+                )}
+              </div>
+              <div className="flex gap-2 mt-5">
+                <button onClick={() => setShowDeleteLearnerModal(false)} className="flex-1 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                  Cancel
+                </button>
+                <button
+                  onClick={handleDeleteLearnerFromClass}
+                  disabled={!deleteLearnerNric || isDeletingFromClass}
+                  className="flex-1 px-3 py-2 text-sm bg-red-500 text-white rounded font-medium hover:bg-red-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isDeletingFromClass ? 'Removing...' : 'Remove from Class'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Feedback banner */}
         {manualAttendanceMsg && (
           <div className={`px-4 py-2 text-xs border-b border-default ${manualAttendanceMsg.type === 'success' ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300' : 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400'}`}>
@@ -1541,7 +1672,18 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
               <tr><td colSpan={6} className="px-3 py-10 text-center text-sm text-muted italic">No enrolment records found. Use "Add Learner" to add someone manually.</td></tr>
             ) : (
               (() => {
-                const combined = [...manualAttendance, ...extraAttendees];
+                // All enrolled NRICs (including cancelled) — extras must not overlap with these
+                const allEnrolNrics = new Set(
+                  enrolmentRecords.map((item: any) => {
+                    const enrol = item?.enrolment ?? item;
+                    const trainee = enrol?.trainee ?? {};
+                    return (trainee?.id || trainee?.nric || '').trim();
+                  }).filter(Boolean)
+                );
+                const combined = [
+                  ...manualAttendance,
+                  ...extraAttendees.filter(e => !allEnrolNrics.has(e.nric)),
+                ];
                 return combined.slice((manualPage - 1) * MANUAL_PAGE_SIZE, manualPage * MANUAL_PAGE_SIZE).map((record, idx) => {
                   const globalIdx = (manualPage - 1) * MANUAL_PAGE_SIZE + idx;
                   const nric: string = record.nric || '';
@@ -1603,7 +1745,7 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
                           ) : (
                             <button
                               onClick={() => setConfirmRemoveNric(nric)}
-                              title="Remove learner"
+                              title="Remove from this session"
                               className="p-1.5 rounded text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
                             >
                               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1626,7 +1768,14 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
           <div className="px-4 py-3 border-t border-default flex items-center justify-between gap-4">
             {/* Pagination — bottom left */}
             {(() => {
-              const combinedTotal = manualAttendance.length + extraAttendees.length;
+              const allEnrolNricsForCount = new Set(
+                enrolmentRecords.map((item: any) => {
+                  const enrol = item?.enrolment ?? item;
+                  const trainee = enrol?.trainee ?? {};
+                  return (trainee?.id || trainee?.nric || '').trim();
+                }).filter(Boolean)
+              );
+              const combinedTotal = manualAttendance.length + extraAttendees.filter(e => !allEnrolNricsForCount.has(e.nric)).length;
               const totalPages = Math.ceil(combinedTotal / MANUAL_PAGE_SIZE);
               const start = (manualPage - 1) * MANUAL_PAGE_SIZE + 1;
               const end = Math.min(manualPage * MANUAL_PAGE_SIZE, combinedTotal);

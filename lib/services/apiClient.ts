@@ -54,12 +54,16 @@ class ApiClient {
     });
 
     if (!response.ok) {
-      // If token is invalid (401), redirect to login
-      if (response.status === 401 && token) {
-        localStorage.removeItem('auth_token');
-        localStorage.removeItem('user_data');
-        window.location.href = '/';
-        return Promise.reject(new Error('Authentication expired'));
+      // Clear session and redirect to login on auth failure or missing resource
+      if (response.status === 401 || response.status === 404) {
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('auth_token');
+          localStorage.removeItem('user_data');
+          window.location.href = '/';
+        }
+        return Promise.reject(new Error(
+          response.status === 401 ? 'Authentication expired' : 'Resource not found'
+        ));
       }
       throw new Error(`HTTP error! status: ${response.status}`);
     }
