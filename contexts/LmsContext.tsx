@@ -443,13 +443,19 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Function to restore state from URL parameters
   const restoreStateFromURL = useCallback(async () => {
-    console.log('🔄 LmsContext: Restoring state from URL...');
+    console.log('🔄 LmsContext: Restoring state from URL...', { query: router.query, isReady: router.isReady });
+
+    // Wait for router to be ready (query params are empty on first SSR render)
+    if (!router.isReady) {
+      console.log('⏳ LmsContext: Router not ready yet, skipping URL restore');
+      return;
+    }
 
     const { view, courseId } = router.query;
 
-    // Restore current view
+    // Restore current view - View enum values are lowercase, URL values are lowercase
     if (view && typeof view === 'string') {
-      const viewValue = view.charAt(0).toUpperCase() + view.slice(1) as View;
+      const viewValue = view.toLowerCase() as View;
       if (Object.values(View).includes(viewValue)) {
         console.log(`📍 LmsContext: Restored view from URL: ${viewValue}`);
         setCurrentView(viewValue);
@@ -477,6 +483,14 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [router.query]);
 
+  // Re-run URL restoration when router becomes ready (handles timing where checkAuth runs before query params are available)
+  useEffect(() => {
+    if (router.isReady && isAuthenticated) {
+      console.log('🔄 LmsContext: Router is ready and user is authenticated, restoring state from URL...');
+      restoreStateFromURL();
+    }
+  }, [router.isReady, isAuthenticated]);
+
   // Function to update URL when state changes
   const updateURL = useCallback((view?: View, courseId?: string) => {
     const newQuery: any = { ...router.query };
@@ -495,12 +509,72 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       delete newQuery.courseId;
     }
 
-    // Update URL without page reload
-    router.replace({
+    // Update URL with a new history entry so browser back/forward works
+    router.push({
       pathname: router.pathname,
       query: newQuery
     }, undefined, { shallow: true });
   }, [router]);
+
+  // Listen for route changes (browser back/forward) and sync React state from URL
+  useEffect(() => {
+    const handleRouteChange = (url: string) => {
+      try {
+        const urlObj = new URL(url, window.location.origin);
+        const viewParam = urlObj.searchParams.get('view');
+        const courseIdParam = urlObj.searchParams.get('courseId');
+
+        console.log(`🔙 LmsContext: Route changed (back/forward) - view=${viewParam}, courseId=${courseIdParam}`);
+
+        // Sync the view state - View enum values are lowercase
+        if (viewParam) {
+          const viewValue = viewParam.toLowerCase() as View;
+          if (Object.values(View).includes(viewValue)) {
+            setCurrentView(viewValue);
+          }
+        } else {
+          setCurrentView(View.Dashboard);
+        }
+
+        // Sync the selected course state
+        if (!courseIdParam) {
+          // No courseId in URL — clear selected course (user went back to a non-course page)
+          setSelectedCourse(null);
+        }
+        // If courseIdParam is present, loadCourseData will be triggered separately
+        // We only need to restore it if the user navigated back TO a course page
+        if (courseIdParam && (!selectedCourse || selectedCourse.id !== courseIdParam)) {
+          // Fetch the course and reload it
+          const restoreCourse = async () => {
+            try {
+              const userId = getCurrentUserId();
+              const response = await fetch(`/api/courses/enrolled?userId=${userId}`);
+              if (response.ok) {
+                const result = await response.json();
+                if (result.success && Array.isArray(result.data)) {
+                  const course = result.data.find((c: Course) => c.id === courseIdParam);
+                  if (course) {
+                    // Load course data WITHOUT updating URL again (avoid infinite loop)
+                    setSelectedCourse(course);
+                  }
+                }
+              }
+            } catch (error) {
+              console.error('❌ LmsContext: Failed to restore course from back/forward:', error);
+            }
+          };
+          restoreCourse();
+        }
+      } catch (error) {
+        console.error('❌ LmsContext: Failed to parse route change URL:', error);
+      }
+    };
+
+    router.events.on('routeChangeComplete', handleRouteChange);
+    return () => {
+      router.events.off('routeChangeComplete', handleRouteChange);
+    };
+  }, [router, selectedCourse]);
 
   // Wrapped setAdminPage that clears courseId from URL and resets selected course
   const navigateAdminPage = useCallback((page: AdminPage) => {
@@ -753,7 +827,7 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
     console.log('🔄 Full course object:', course);
     setSelectedCourse(course);
-    updateURL(undefined, course.id); // Update URL with course ID
+    updateURL(currentView || View.Courses, course.id); // Update URL with both view and course ID
 
     if (!currentUser?.id) {
       console.error('❌ No authenticated user found for course data loading');
@@ -1013,7 +1087,7 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } catch (error) {
       console.error('❌ LmsContext: Failed to load course data:', error);
     }
-  }, [role, updateURL, currentUser, bookmarkedSubtopics]);
+  }, [role, updateURL, currentUser, bookmarkedSubtopics, currentView]);
 
   const toggleBookmark = useCallback(async (subtopicId: string) => {
     if (!selectedCourse?.id || !currentUser?.id) {

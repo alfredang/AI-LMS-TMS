@@ -155,8 +155,6 @@ const Header: React.FC = () => {
     [UserRole.Learner]: [
       { view: View.Dashboard, label: 'Home', icon: IconName.Dashboard },
       { view: View.Courses, label: 'Courses', icon: IconName.Courses },
-      { view: View.Calendar, label: 'Task List', icon: IconName.Calendar },
-      // { view: View.JobSearch, label: 'Job Search', icon: IconName.Jobs },
     ],
     [UserRole.Trainer]: [
       { view: View.Dashboard, label: 'Home', icon: IconName.Dashboard },

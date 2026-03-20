@@ -2,7 +2,7 @@ import React from 'react';
 import { Course, UserRole } from '@app-types';
 import { Card } from './ui/Card';
 import { useLms } from '@contexts/LmsContext';
-import CircularProgressBar from './CircularProgressBar';
+
 import { getCourseImageUrl } from '@utils/imageUtils';
 
 interface DashboardCourseCardProps {
@@ -11,7 +11,7 @@ interface DashboardCourseCardProps {
 
 const DashboardCourseCard: React.FC<DashboardCourseCardProps> = ({ course }) => {
   const { role, loadCourseData } = useLms();
-  const progress = course.progressPercent ?? 0;
+
   const totalHours = Number(course.trainingHours) + Number(course.assessmentHours);
 
   const getTypeColor = () => {
@@ -63,15 +63,13 @@ const DashboardCourseCard: React.FC<DashboardCourseCardProps> = ({ course }) => 
               {role === UserRole.Trainer && (<span className="font-mono text-gray-800 dark:text-gray-200">{course.courseRunCode}</span>)}
             </div>
           </div>
-          <div className="flex-shrink-0 ml-4">
-            {role === UserRole.Learner && <CircularProgressBar percentage={progress} />}
-          </div>
+
         </div>
 
         {/* --- ACTION LINK --- */}
         <div className="border-t border-gray-200 dark:border-gray-700 mt-auto pt-3 flex justify-between items-center">
           <span className="font-semibold text-on-surface text-sm dark:text-gray-200">
-            {role === UserRole.Learner ? (progress >= 100 ? 'Class Completed' : 'Resume Learning') : 'View Class'}
+            {role === UserRole.Learner ? 'View Course' : 'View Class'}
           </span>
           <div className="w-8 h-8 rounded-full bg-primary text-white flex items-center justify-center hover:bg-primary transition-colors">
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">

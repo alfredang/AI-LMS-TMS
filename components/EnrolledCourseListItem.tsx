@@ -4,7 +4,7 @@ import { useLms } from '@contexts/LmsContext';
 import { Card } from './ui/Card';
 import { Icon, IconName } from './ui/Icon';
 import { Button } from './ui/Button';
-import CircularProgressBar from './CircularProgressBar';
+
 import { getCourseImageUrl } from '@utils/imageUtils';
 
 
@@ -21,8 +21,7 @@ const CourseStat: React.FC<{ icon: IconName; text: string | number }> = ({ icon,
 
 const EnrolledCourseListItem: React.FC<EnrolledCourseListItemProps> = ({ course }) => {
     const { role, loadCourseData } = useLms();
-    // Use the actual progress from the database
-    const progress = course.progressPercent ?? 0;
+
     const totalHours = Number(course.trainingHours) + Number(course.assessmentHours);
 
     const handleCourseClick = async () => {
@@ -57,9 +56,9 @@ const EnrolledCourseListItem: React.FC<EnrolledCourseListItemProps> = ({ course 
                         <span className="text-xs font-semibold bg-gray-200 text-gray-700 px-2 py-1 rounded">
                             {course.modeOfLearning.join(' / ')}
                         </span>
-                        {role === UserRole.Learner && <CircularProgressBar percentage={progress} />}
+
                         <Button variant="ghost" className="!border !border-gray-800 !font-semibold hover:!bg-gray-800 hover:!text-white">
-                            {progress < 100 ? 'Resume Learning' : 'Revise Course'}
+                            View Course
                         </Button>
                     </div>
                 </div>
