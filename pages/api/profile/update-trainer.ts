@@ -27,6 +27,7 @@ interface UpdateTrainerProfileRequest {
     country?: string;
     cnPlusEmail?: string;
     nric?: string;
+    secondaryEmail?: string;
   };
 }
 
@@ -55,6 +56,8 @@ export default async function handler(
 
   try {
     const { userId, profileData }: UpdateTrainerProfileRequest = req.body;
+    console.log('🔍 update-trainer: userId =', userId);
+    console.log('🔍 update-trainer: profileData =', JSON.stringify(profileData));
 
     if (!userId || !profileData) {
       return res.status(400).json({ 
@@ -86,6 +89,11 @@ export default async function handler(
       if (profileData.email) {
         userUpdates.push(`email = $${userParamIndex++}`);
         userValues.push(profileData.email);
+      }
+
+      if (profileData.secondaryEmail) {
+        userUpdates.push(`secondary_email = $${userParamIndex++}`);
+        userValues.push(profileData.secondaryEmail);
       }
 
       if (profileData.password) {
@@ -179,12 +187,15 @@ export default async function handler(
       // Update user table if needed
       if (userUpdates.length > 0) {
         const userUpdateQuery = `
-          UPDATE app_user 
+          UPDATE app_user
           SET ${userUpdates.join(', ')}
           WHERE id = $${userParamIndex}
         `;
         userValues.push(userId);
-        await client.query(userUpdateQuery, userValues);
+        console.log('🔍 User update query:', userUpdateQuery);
+        console.log('🔍 User values:', userValues);
+        const userUpdateResult = await client.query(userUpdateQuery, userValues);
+        console.log('🔍 User rows affected:', userUpdateResult.rowCount);
       }
 
       // Update trainer_profile table if needed
@@ -293,7 +304,8 @@ export default async function handler(
           t.common_name,
           t.country,
           t.cn_plus_email,
-          t.nric
+          t.nric,
+          u.secondary_email
         FROM app_user u
         LEFT JOIN trainer_profile t
           ON t.user_id = u.id
@@ -391,7 +403,8 @@ export default async function handler(
         commonName: row.common_name || '',
         country: row.country || '',
         cnPlusEmail: row.cn_plus_email || '',
-        nric: row.nric || ''
+        nric: row.nric || '',
+        secondaryEmail: row.secondary_email || ''
       };
 
       res.status(200).json({

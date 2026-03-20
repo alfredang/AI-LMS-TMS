@@ -106,10 +106,10 @@ const TrainerProfileView: React.FC = () => {
     // Only show full-page loading on initial load (no profile yet)
     if (trainerLoading && !trainerProfile) {
         return (
-            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+            <div className="flex items-center justify-center py-24 bg-background">
                 <div className="text-center">
                     <Spinner size="lg" />
-                    <p className="mt-4 text-gray-600">Loading trainer profile...</p>
+                    <p className="mt-4 text-sm text-on-surface-secondary">Loading trainer profile...</p>
                 </div>
             </div>
         );
@@ -117,8 +117,8 @@ const TrainerProfileView: React.FC = () => {
 
     if (!trainerProfile) {
         return (
-            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-                <div className="text-center text-subtle">
+            <div className="flex items-center justify-center py-24 bg-background">
+                <div className="text-center text-on-surface-secondary">
                     <p>No trainer profile found</p>
                     <p className="text-sm mt-2">Please contact support if this is an error.</p>
                 </div>
@@ -212,10 +212,10 @@ const TrainingProviderProfileView: React.FC = () => {
 
     if (loading) {
         return (
-            <div className="max-w-5xl mx-auto flex justify-center items-center min-h-[400px]">
+            <div className="flex justify-center items-center py-24 bg-background">
                 <div className="text-center">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-                    <p className="text-gray-600">Loading profile...</p>
+                    <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary mx-auto mb-4"></div>
+                    <p className="text-sm text-on-surface-secondary">Loading profile...</p>
                 </div>
             </div>
         );
@@ -306,10 +306,10 @@ const DeveloperProfileView: React.FC = () => {
 
     if (developerLoading) {
         return (
-            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+            <div className="flex items-center justify-center py-24 bg-background">
                 <div className="text-center">
                     <Spinner size="lg" />
-                    <p className="mt-4 text-gray-600">Loading developer profile...</p>
+                    <p className="mt-4 text-sm text-on-surface-secondary">Loading developer profile...</p>
                 </div>
             </div>
         );
@@ -317,8 +317,8 @@ const DeveloperProfileView: React.FC = () => {
 
     if (!developerProfile) {
         return (
-            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-                <div className="text-center text-subtle">
+            <div className="flex items-center justify-center py-24 bg-background">
+                <div className="text-center text-on-surface-secondary">
                     <p>No developer profile found</p>
                     <p className="text-sm mt-2">Please contact support if this is an error.</p>
                 </div>

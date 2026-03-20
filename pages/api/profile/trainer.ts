@@ -21,6 +21,7 @@ interface TrainerProfileRow {
   country: string;
   cn_plus_email: string;
   nric: string;
+  secondary_email: string;
 }
 
 export default async function handler(
@@ -78,7 +79,8 @@ export default async function handler(
         t.common_name,
         t.country,
         t.cn_plus_email,
-        t.nric
+        t.nric,
+        u.secondary_email
       FROM app_user u
       LEFT JOIN trainer_profile t
         ON t.user_id = u.id
@@ -161,6 +163,7 @@ export default async function handler(
     console.log('📋 Trainer API: Retrieved trainer data:', {
       name: row.name,
       email: row.email,
+      secondary_email: row.secondary_email,
       hasWorkExp: workExpResult.rows.length > 0,
       hasCertifications: certificationsResult.rows.length > 0
     });
@@ -221,6 +224,7 @@ export default async function handler(
       country: row.country || '',
       cnPlusEmail: row.cn_plus_email || '',
       nric: row.nric || '',
+      secondaryEmail: row.secondary_email || '',
       // Additional fields for security (not exposed to frontend)
       password: row.password,
       passwordHash: row.password_hash

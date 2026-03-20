@@ -63,6 +63,13 @@ export enum AdminPage {
   CheckAttendance = 'checkAttendance'
 }
 
+export enum TrainerPage {
+  EAttendance = 'eAttendance',
+  MyClasses = 'myClasses',
+  TaskList = 'taskList',
+  GenAIAuthoring = 'genAIAuthoring',
+}
+
 // Course related interfaces
 export interface Course {
   id: string;

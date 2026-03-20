@@ -1628,8 +1628,8 @@ export const CourseDetail: React.FC = () => {
     const completedSubtopicsSet = new Set(completedSubtopics);
 
     const traqomSurveyLink = 'https://ssgtraqom.qualtrics.com/jfe/form/SV_3K9i7rTJ9OLsauW?Q_CHL=qr';
-    // QR Code URLs temporarily disabled
-    // const traqomQrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(traqomSurveyLink)}`;
+    const traqomQrCodeUrl = '/qr_codes/traqom_survey_qr_code.png';
+    const certDeliveryQrCodeUrl = '/qr_codes/cert_delivery_qr_code.png';
 
     const attendanceLink = convertedCourse.daId ? `https://www.myskillsfuture.gov.sg/api/take-attendance/${convertedCourse.daId}` : null;
     // const attendanceQrCodeUrl = attendanceLink ? `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(attendanceLink)}` : null;
@@ -2068,7 +2068,7 @@ export const CourseDetail: React.FC = () => {
                                 </Card>
                             </div>
 
-                            {/* TRAQOM Survey */}
+                            {/* TRAQOM Survey & Certificate Delivery */}
                             {userRole === UserRole.Learner && (
                                 <div id={toId("TRAQOM Survey")}>
                                     <Card className="p-0 overflow-hidden">
@@ -2077,44 +2077,60 @@ export const CourseDetail: React.FC = () => {
                                             onClick={() => setIsTraqomOpen(!isTraqomOpen)}
                                             aria-expanded={isTraqomOpen}
                                         >
-                                            <h3 className="text-xl font-bold text-gray-900 dark:text-white">TRAQOM Survey</h3>
+                                            <h3 className="text-xl font-bold text-gray-900 dark:text-white">Certificate & TRAQOM Survey</h3>
                                             <Icon name={isTraqomOpen ? IconName.Minus : IconName.Plus} className="w-6 h-6 text-blue-600 flex-shrink-0" />
                                         </button>
                                         {isTraqomOpen && (
                                             <div className="px-6 pb-6 border-t">
-                                                <div className="pt-4 flex flex-col items-center gap-4 text-center">
-                                                    <p className="text-gray-500 dark:text-gray-400">
-                                                        Your feedback is important. Please use the link below to complete the survey.
-                                                    </p>
-                                                    {/* QR Code temporarily disabled
-                                                    <img
-                                                        src={traqomQrCodeUrl}
-                                                        alt="TRAQOM Survey QR Code"
-                                                        className="rounded-lg shadow-md"
-                                                    />
-                                                    */}
-                                                    <div className="w-full max-w-md">
-                                                        <div className="p-2 bg-gray-100 dark:bg-gray-700 rounded-md flex items-center gap-2">
-                                                            <a
-                                                                href={traqomSurveyLink}
-                                                                target="_blank"
-                                                                rel="noopener noreferrer"
-                                                                className="text-sm text-blue-600 dark:text-blue-400 hover:underline truncate"
-                                                            >
-                                                                {traqomSurveyLink}
-                                                            </a>
-                                                            <Button
-                                                                onClick={() => {
-                                                                    navigator.clipboard.writeText(traqomSurveyLink);
-                                                                    alert('Link copied to clipboard!');
-                                                                }}
-                                                            >
-                                                                Copy Link
-                                                            </Button>
+                                                <div className="pt-4 flex flex-col gap-6">
+                                                    {/* Cert Delivery QR — above TRAQOM */}
+                                                    <div className="flex flex-col sm:flex-row items-center gap-6">
+                                                        <div className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm flex-shrink-0">
+                                                            <img
+                                                                src={certDeliveryQrCodeUrl}
+                                                                alt="Certificate Delivery QR Code"
+                                                                className="w-40 h-40 object-contain"
+                                                            />
                                                         </div>
-                                                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
-                                                            Course Run ID: <span className="font-semibold text-gray-700 dark:text-gray-300">{convertedCourse.courseRunId}</span>
-                                                        </p>
+                                                        <div className="flex flex-col gap-1 text-center sm:text-left">
+                                                            <p className="font-semibold text-gray-900 dark:text-white">Certificate Survey</p>
+                                                            <p className="text-sm text-gray-500 dark:text-gray-400">Scan to complete the certificate survey.</p>
+                                                        </div>
+                                                    </div>
+
+                                                    <hr className="border-default" />
+
+                                                    {/* TRAQOM QR — below cert */}
+                                                    <div className="flex flex-col sm:flex-row items-center gap-6">
+                                                        <div className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm flex-shrink-0">
+                                                            <img
+                                                                src={traqomQrCodeUrl}
+                                                                alt="TRAQOM Survey QR Code"
+                                                                className="w-40 h-40 object-contain"
+                                                            />
+                                                        </div>
+                                                        <div className="flex flex-col gap-2 text-center sm:text-left">
+                                                            <p className="font-semibold text-gray-900 dark:text-white">TRAQOM Survey</p>
+                                                            <p className="text-sm text-gray-500 dark:text-gray-400">Your feedback is important. Scan the QR code or use the link below.</p>
+                                                            <div className="p-2 bg-gray-100 dark:bg-gray-700 rounded-md flex items-center gap-2">
+                                                                <a
+                                                                    href={traqomSurveyLink}
+                                                                    target="_blank"
+                                                                    rel="noopener noreferrer"
+                                                                    className="text-sm text-blue-600 dark:text-blue-400 hover:underline truncate"
+                                                                >
+                                                                    {traqomSurveyLink}
+                                                                </a>
+                                                                <Button
+                                                                    onClick={() => {
+                                                                        navigator.clipboard.writeText(traqomSurveyLink);
+                                                                        alert('Link copied to clipboard!');
+                                                                    }}
+                                                                >
+                                                                    Copy Link
+                                                                </Button>
+                                                            </div>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </div>

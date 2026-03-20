@@ -194,6 +194,8 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
   const [showEnrolNric, setShowEnrolNric]              = useState(false);
   const [showEnrolContact, setShowEnrolContact]        = useState(false);
   const [learnerAccountMap, setLearnerAccountMap]      = useState<Record<string, 'exists' | 'missing' | 'creating' | 'done' | 'error'>>({});
+  const [attendanceSummary, setAttendanceSummary]      = useState<{ totalSessions: number; byNric: Record<string, number> } | null>(null);
+  const [loadingAttendanceSummary, setLoadingAttendanceSummary] = useState(false);
 
   // Manual Attendance state
   const [manualSessions, setManualSessions]            = useState<any[]>([]);
@@ -263,6 +265,7 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
     setExtraAttendees([]);
     setManualAttendanceMsg(null);
     setLearnerAccountMap({});
+    setAttendanceSummary(null);
     try {
       const res = await fetch(`/api/admin/lookup-course-run?courseRunCode=${encodeURIComponent(code)}`);
       const json = await res.json();
@@ -279,7 +282,10 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
         handleFetchSessions(course.courseRunCode, course.courseCode, course);
         fetchEnrolments(course.courseRunCode, course);
       }
-      if (course.courseRunId) fetchManualSessions(course.courseRunId);
+      if (course.courseRunId) {
+        fetchManualSessions(course.courseRunId);
+        fetchAttendanceSummary(course.courseRunId);
+      }
     } catch (err) {
       setSearchError(err instanceof Error ? err.message : 'Lookup failed');
     } finally {
@@ -778,6 +784,11 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
 
   const checkLearnerAccounts = async (records: any[], courseOverride?: typeof selectedCourse) => {
     const emails: string[] = records
+      .filter((item: any) => {
+        const enrol = item?.enrolment ?? item;
+        const status = (enrol?.status || enrol?.enrolmentStatus || '').toLowerCase();
+        return status !== 'cancelled';
+      })
       .map((item: any) => {
         const enrol = item?.enrolment ?? item;
         const trainee = enrol?.trainee ?? {};
@@ -815,6 +826,23 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
         }
       }
     } catch { /* silent */ }
+  };
+
+  const fetchAttendanceSummary = async (courseRunId: string) => {
+    setLoadingAttendanceSummary(true);
+    setAttendanceSummary(null);
+    try {
+      const res = await fetch(`/api/trainer/attendance-summary?courseRunId=${encodeURIComponent(courseRunId)}`);
+      const json = await res.json();
+      if (json.success) {
+        const byNric: Record<string, number> = {};
+        for (const row of json.data) {
+          if (row.nric) byNric[row.nric] = row.attendedCount;
+        }
+        setAttendanceSummary({ totalSessions: json.totalSessions, byNric });
+      }
+    } catch { /* silent */ }
+    finally { setLoadingAttendanceSummary(false); }
   };
 
   const handleCreateLearnerAccount = async (email: string, fullName: string, nric?: string, enrolmentId?: string, courseOverride?: typeof selectedCourse) => {
@@ -1370,13 +1398,14 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
               {/* <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Payment</th> */}
               <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Enrolment Date</th>
               <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Account</th>
+              <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Total Attendance Taken</th>
             </tr>
           </thead>
           <tbody>
             {isLoadingEnrolments ? (
               Array.from({ length: 5 }).map((_, idx) => (
                 <tr key={idx} className="border-b border-default">
-                  {Array.from({ length: 15 }).map((__, col) => (
+                  {Array.from({ length: 16 }).map((__, col) => (
                     <td key={col} className="px-3 py-3">
                       <div className="h-3 rounded bg-surface-elevated animate-pulse" style={{ width: col === 5 ? '70%' : '50%' }} />
                     </td>
@@ -1457,12 +1486,25 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
                       );
                       return <div className="h-3 w-20 rounded bg-surface-elevated animate-pulse" />;
                     })()}</td>
+                    <td className="px-3 py-3 whitespace-nowrap">{(() => {
+                      const enrolStatus: string = (enrol?.status || enrol?.enrolmentStatus || '').toLowerCase();
+                      if (enrolStatus === 'cancelled') return <span className="text-muted text-xs">—</span>;
+                      if (loadingAttendanceSummary) return <div className="h-3 w-12 rounded bg-surface-elevated animate-pulse" />;
+                      if (!attendanceSummary) return <span className="text-muted text-xs">—</span>;
+                      const attended = attendanceSummary.byNric[nric] ?? 0;
+                      const total = attendanceSummary.totalSessions;
+                      return (
+                        <span className={`text-sm font-medium ${attended === total && total > 0 ? 'text-green-600 dark:text-green-400' : attended === 0 ? 'text-red-500 dark:text-red-400' : 'text-amber-600 dark:text-amber-400'}`}>
+                          {attended} / {total}
+                        </span>
+                      );
+                    })()}</td>
                   </tr>
                 );
               })
             ) : (
               <tr>
-                <td colSpan={15} className="px-3 py-10 text-center text-sm text-muted italic">
+                <td colSpan={16} className="px-3 py-10 text-center text-sm text-muted italic">
                   {selectedCourseRunId ? 'No enrolment records found.' : 'Select a class to load enrolments.'}
                 </td>
               </tr>

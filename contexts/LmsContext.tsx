@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/router';
-import { View, UserRole, AdminPage, CurrentUserProfile, CalendarEvent, Course, CourseDetail, LearningUnit, CourseAssessment, Submission } from '@app-types';
+import { View, UserRole, AdminPage, TrainerPage, CurrentUserProfile, CalendarEvent, Course, CourseDetail, LearningUnit, CourseAssessment, Submission } from '@app-types';
 import { TrainingProviderProfile } from '@app-types/profile';
 import { courseService } from '@lib/services/courseService';
 import { authService, User } from '@lib/services/authService';
@@ -209,6 +209,8 @@ interface LmsContextType {
   setCurrentView: (view: View) => void;
   adminPage: AdminPage;
   setAdminPage: (page: AdminPage) => void;
+  trainerPage: TrainerPage;
+  setTrainerPage: (page: TrainerPage) => void;
   selectedCourseRunId: string | null;
   setSelectedCourseRunId: (courseRunId: string | null) => void;
 
@@ -274,6 +276,7 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [userRoles, setUserRoles] = useState<UserRole[]>([]); // All roles the user has
   const [currentView, setCurrentView] = useState<View>(View.Dashboard);
   const [adminPage, setAdminPage] = useState<AdminPage>(AdminPage.Dashboard);
+  const [trainerPage, setTrainerPage] = useState<TrainerPage>(TrainerPage.EAttendance);
   const [selectedCourseRunId, setSelectedCourseRunId] = useState<string | null>(null);
 
   // Authentication state
@@ -1409,6 +1412,8 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setCurrentView,
     adminPage,
     setAdminPage: navigateAdminPage,
+    trainerPage,
+    setTrainerPage,
     selectedCourseRunId,
     setSelectedCourseRunId,
     isAuthenticated,

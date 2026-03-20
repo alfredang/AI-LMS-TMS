@@ -189,6 +189,7 @@ export interface TrainerProfile extends BaseProfile, ContactInfo, PersonalInfo {
   country?: string;
   cnPlusEmail?: string;
   nric?: string;
+  secondaryEmail?: string;
 }
 
 export interface DeveloperProfile extends BaseProfile, ContactInfo, PersonalInfo {

@@ -982,6 +982,7 @@ export const TrainerProfileCard: React.FC<{
             // Basic profile fields
             if (formData.name !== profile.name) changedFields.name = formData.name;
             if (formData.email !== profile.email) changedFields.email = formData.email;
+            if (formData.secondaryEmail !== profile.secondaryEmail) changedFields.secondaryEmail = formData.secondaryEmail;
             if (formData.tel !== profile.tel) changedFields.tel = formData.tel;
             if (formData.gender !== profile.gender) changedFields.gender = formData.gender;
             if (formData.trainerType !== profile.trainerType) changedFields.trainerType = formData.trainerType;
@@ -1052,14 +1053,12 @@ export const TrainerProfileCard: React.FC<{
                 }
 
                 console.log('✅ All changes saved to database successfully');
+                console.log('🔍 Server response secondaryEmail:', result.data?.profile?.secondaryEmail);
 
-                // Update the original profile state with all changes
-                Object.assign(profile, changedFields);
-
-                // If certifications were updated, use the server response
-                if (result.data?.profile?.certifications) {
-                    profile.certifications = result.data.profile.certifications;
-                    setFormData(prev => ({ ...prev, certifications: result.data.profile.certifications }));
+                // Update display from server response (reflects actual DB state)
+                if (result.data?.profile) {
+                    Object.assign(profile, result.data.profile);
+                    setFormData(result.data.profile);
                 }
             } else {
                 console.log('📝 No changes detected, skipping database update');
@@ -1169,6 +1168,7 @@ export const TrainerProfileCard: React.FC<{
                                 <div><label className="text-sm font-medium">Name</label><input type="text" name="name" value={formData.name} onChange={handleChange} className={inputClasses} /></div>
                                 <div><label className="text-sm font-medium">Phone</label><input type="tel" name="tel" value={formData.tel || ''} onChange={handleChange} className={inputClasses} /></div>
                                 <div><label className="text-sm font-medium">Email</label><input type="email" name="email" value={formData.email} onChange={handleChange} className={inputClasses} /></div>
+                                <div><label className="text-sm font-medium">Secondary Email</label><input type="email" name="secondaryEmail" value={formData.secondaryEmail ?? ''} onChange={handleChange} className={inputClasses} /></div>
                                 <div><label className="text-sm font-medium">Gender</label><select name="gender" value={formData.gender} onChange={handleChange} className={inputClasses}>{Object.values(Gender).map(g => <option key={g} value={g}>{g}</option>)}</select></div>
                                 <div><label className="text-sm font-medium">Trainer Type</label><select name="trainerType" value={formData.trainerType} onChange={handleChange} className={inputClasses}>{Object.values(TrainerType).map(t => <option key={t} value={t}>{t}</option>)}</select></div>
                                 <div><label className="text-sm font-medium">LinkedIn Profile</label><input type="url" name="linkedinUrl" value={formData.linkedinUrl || ''} onChange={handleChange} className={inputClasses} /></div>
@@ -1178,6 +1178,7 @@ export const TrainerProfileCard: React.FC<{
                                 <ProfileBioItem label="Name" value={formData.name} />
                                 <ProfileBioItem label="Phone" value={formData.tel} />
                                 <ProfileBioItem label="Email" value={formData.email} />
+                                <ProfileBioItem label="Secondary Email" value={formData.secondaryEmail || '—'} />
                                 <ProfileBioItem label="Gender" value={formData.gender} />
                                 <ProfileBioItem label="Trainer Type" value={formData.trainerType} />
                                 {formData.linkedinUrl && (

@@ -156,12 +156,7 @@ const Header: React.FC = () => {
       { view: View.Dashboard, label: 'Home', icon: IconName.Dashboard },
       { view: View.Courses, label: 'Courses', icon: IconName.Courses },
     ],
-    [UserRole.Trainer]: [
-      { view: View.Dashboard, label: 'Home', icon: IconName.Dashboard },
-      { view: View.Courses, label: 'My Classes', icon: IconName.Courses },
-      { view: View.Calendar, label: 'Task List', icon: IconName.Calendar },
-      { view: View.Create, label: 'Trainer GenAI Authoring', icon: IconName.Create },
-    ],
+    [UserRole.Trainer]: [],
     [UserRole.Developer]: [
       { view: View.Dashboard, label: 'Home', icon: IconName.Dashboard },
       { view: View.Courses, label: 'Courses', icon: IconName.Courses },
