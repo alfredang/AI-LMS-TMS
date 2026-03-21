@@ -171,6 +171,7 @@ export interface LearnerProfile extends BaseProfile, ContactInfo, PersonalInfo {
   pro_formal_url?: string;
   invoice_url?: string;
   receipt_url?: string;
+  secondaryEmail?: string;
 }
 
 export interface TrainerProfile extends BaseProfile, ContactInfo, PersonalInfo {
