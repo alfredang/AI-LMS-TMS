@@ -57,6 +57,7 @@ const ManagementCourseList: React.FC = () => {
     const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
     const [viewMode, setViewMode] = useState<'block' | 'table'>('block');
     const [selectedCourse, setSelectedCourse] = useState<any>(null);
+    const [trainerClassView, setTrainerClassView] = useState<'upcoming' | 'past'>('upcoming');
 
     // Pagination state
     const [currentPage, setCurrentPage] = useState(1);
@@ -125,6 +126,10 @@ const ManagementCourseList: React.FC = () => {
     const filteredCourses = useMemo(() => {
         if (!relevantCourses) return [];
 
+        const todayDate = new Date(new Date().toDateString());
+        const nextWeekDate = new Date(todayDate);
+        nextWeekDate.setDate(nextWeekDate.getDate() + 7);
+
         return relevantCourses.filter(course => {
             const searchLower = searchQuery.toLowerCase();
             const matchesSearch = searchQuery === '' ||
@@ -139,12 +144,20 @@ const ManagementCourseList: React.FC = () => {
             const matchesType = filterCourseType === 'All' || course.courseType === filterCourseType;
             const matchesMode = filterMode === 'All' || (course.modeOfLearning && course.modeOfLearning.includes(filterMode));
 
-            // Apply date filtering only for trainers (not for developers)
-            const matchesStartDate = (role !== UserRole.Trainer) || isDateInRange(course.startDate, filterStartDate);
+            // Trainer: apply upcoming/past date logic
+            if (role === UserRole.Trainer) {
+                const end = course.endDate ? new Date(course.endDate) : null;
+                const start = course.startDate ? new Date(course.startDate) : null;
+                const matchesDateView = trainerClassView === 'past'
+                    ? (end !== null && end < todayDate)
+                    : ((!end || end >= todayDate) && (!start || start <= nextWeekDate));
+                return matchesSearch && matchesCourseCode && matchesType && matchesMode && matchesDateView;
+            }
 
+            const matchesStartDate = isDateInRange(course.startDate, filterStartDate);
             return matchesSearch && matchesCourseCode && matchesType && matchesMode && matchesStartDate;
         });
-    }, [relevantCourses, searchQuery, filterCourseCode, filterCourseType, filterMode, filterStartDate, role]);
+    }, [relevantCourses, searchQuery, filterCourseCode, filterCourseType, filterMode, filterStartDate, role, trainerClassView]);
 
     // Pagination calculations
     const totalPages = Math.ceil(filteredCourses.length / itemsPerPage);
@@ -414,6 +427,24 @@ const ManagementCourseList: React.FC = () => {
 
     return (
         <div>
+
+            {/* Upcoming / Past toggle for trainer */}
+            {role === UserRole.Trainer && (
+                <div className="flex gap-1 p-1 bg-surface rounded-lg w-fit border border-default mb-6">
+                    <button
+                        onClick={() => { setTrainerClassView('upcoming'); setCurrentPage(1); }}
+                        className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${trainerClassView === 'upcoming' ? 'bg-primary text-white shadow-sm' : 'text-on-surface-secondary hover:text-on-surface'}`}
+                    >
+                        Upcoming
+                    </button>
+                    <button
+                        onClick={() => { setTrainerClassView('past'); setCurrentPage(1); }}
+                        className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${trainerClassView === 'past' ? 'bg-primary text-white shadow-sm' : 'text-on-surface-secondary hover:text-on-surface'}`}
+                    >
+                        Past Classes
+                    </button>
+                </div>
+            )}
 
             {/* Search and Filter Controls Card */}
             <Card className="p-6 mb-8 bg-surface border-default">

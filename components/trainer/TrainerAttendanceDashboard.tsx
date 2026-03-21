@@ -225,9 +225,24 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
   const [deleteLearnerError, setDeleteLearnerError]    = useState<string | null>(null);
 
   const today = new Date(new Date().toDateString());
+  const nextWeek = new Date(today);
+  nextWeek.setDate(nextWeek.getDate() + 7);
+  const [classView, setClassView] = useState<'upcoming' | 'past'>('upcoming');
   const activeCourses = courses
-    .filter(c => !c.endDate || new Date(c.endDate) >= today)
-    .sort((a, b) => new Date(a.startDate ?? '').getTime() - new Date(b.startDate ?? '').getTime());
+    .filter(c => {
+      const end = c.endDate ? new Date(c.endDate) : null;
+      const start = c.startDate ? new Date(c.startDate) : null;
+      if (classView === 'past') {
+        return end !== null && end < today;
+      }
+      // Upcoming: not ended yet AND starts within next week
+      return (!end || end >= today) && (!start || start <= nextWeek);
+    })
+    .sort((a, b) => {
+      const aTime = new Date(a.startDate ?? '').getTime();
+      const bTime = new Date(b.startDate ?? '').getTime();
+      return classView === 'past' ? bTime - aTime : aTime - bTime;
+    });
 
   const selectedCourse = isAdminMode
     ? adminCourse
@@ -804,7 +819,7 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
       });
       const json = await res.json();
       if (json.success) {
-        const map: Record<string, 'exists' | 'missing'> = {};
+        const map: Record<string, 'exists' | 'missing' | 'creating' | 'done' | 'error'> = {};
         for (const item of json.data) {
           map[item.email.toLowerCase()] = item.exists ? 'exists' : 'missing';
         }
@@ -959,6 +974,24 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
         </div>
 
         <div className="p-4 space-y-4">
+          {/* Class view toggle — only shown for trainer mode */}
+          {!isAdminMode && (
+            <div className="flex gap-1 p-1 bg-surface-elevated rounded-lg w-fit border border-default">
+              <button
+                onClick={() => { setClassView('upcoming'); setSelectedCourseRunId(''); }}
+                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${classView === 'upcoming' ? 'bg-primary text-white shadow-sm' : 'text-on-surface-secondary hover:text-on-surface'}`}
+              >
+                Upcoming
+              </button>
+              <button
+                onClick={() => { setClassView('past'); setSelectedCourseRunId(''); }}
+                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${classView === 'past' ? 'bg-primary text-white shadow-sm' : 'text-on-surface-secondary hover:text-on-surface'}`}
+              >
+                Past Classes
+              </button>
+            </div>
+          )}
+
           {/* Class selection row — admin gets a text input, trainer gets a dropdown */}
           <div>
             <label className="block text-xs font-medium text-on-surface-secondary mb-1">
