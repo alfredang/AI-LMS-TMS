@@ -442,7 +442,7 @@ const AssessmentsSection: React.FC<{
                     <p className="text-gray-500 dark:text-gray-400">
                         {userRole === UserRole.Developer || userRole === UserRole.TrainingProvider || userRole === UserRole.Admin
                             ? "No assessments have been created for this course yet."
-                            : "No assessments are currently published for this course."
+                            : "This section will display the assessment once it is published by your trainer. The assessment may be either a handwritten assessment or a soft copy assessment, depending on your trainer's arrangement."
                         }
                     </p>
                 </div>
@@ -672,7 +672,14 @@ const AssessmentsSection: React.FC<{
 
         // Only show assessments that are published by the trainer
         if (!assessment.published) {
-            return <p className="text-gray-500">This assessment has not been published by the trainer yet.</p>;
+            return (
+                <div className="text-center py-4 px-2">
+                    <Icon name={IconName.ClipboardCheck} className="w-10 h-10 text-gray-400 mx-auto mb-2" />
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                        This section will display the assessment once it is published by your trainer. The assessment may be either a handwritten assessment or a soft copy assessment, depending on your trainer's arrangement.
+                    </p>
+                </div>
+            );
         }
 
         if (submission && !canResubmit) {
@@ -1094,9 +1101,9 @@ const CertificateSection: React.FC<{ userRole: UserRole }> = ({ userRole }) => {
             ) : (
                 <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-md border border-gray-200 dark:border-gray-600 text-center">
                     <Icon name={IconName.FileText} className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-                    <p className="text-gray-600 dark:text-gray-300 font-medium">Certificate Not Available</p>
+                    <p className="text-gray-600 dark:text-gray-300 font-medium">Coming Soon</p>
                     <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                        Complete all assessments and course requirements to receive your certificate
+                        When this feature is available, your certificate download link will appear right here.
                     </p>
                 </div>
             )}
@@ -1167,7 +1174,7 @@ interface CourseSidebarProps {
 type NavItem = { type: 'link'; label: string; icon: IconName } | { type: 'separator' };
 
 const CourseSidebar: React.FC<CourseSidebarProps> = ({ userRole, onSetGradingView, selectedCourse, onMobileItemClick }) => {
-    const defaultActive = 'Lesson';
+    const defaultActive = userRole === UserRole.Learner ? 'Learning Outcomes' : 'Lesson';
     const [activeItem, setActiveItem] = useState(defaultActive);
 
     const handleItemClick = (label: string) => {
@@ -1178,7 +1185,7 @@ const CourseSidebar: React.FC<CourseSidebarProps> = ({ userRole, onSetGradingVie
             setActiveItem(label);
 
             let targetId = toId(label);
-            if (label === 'Lesson' || label === 'Lessons') targetId = 'lessons';
+            if (label === 'Lesson' || label === 'Lessons' || label === 'Learning Outcomes') targetId = 'lessons';
             else if (label === 'Assessment' || label === 'Assessments') targetId = 'assessments';
             else if (label === 'Certificate') targetId = 'certificate';
 
@@ -1198,7 +1205,7 @@ const CourseSidebar: React.FC<CourseSidebarProps> = ({ userRole, onSetGradingVie
         { type: 'link', label: "Lesson Plan", icon: IconName.BookOpen },
         { type: 'link', label: "Learner Guide", icon: IconName.FileText },
         { type: 'link', label: "Learner Slides", icon: IconName.FileText },
-        { type: 'link', label: "Lesson", icon: IconName.BookOpen },
+        { type: 'link', label: "Learning Outcomes", icon: IconName.BookOpen },
         { type: 'link', label: "TRAQOM Survey", icon: IconName.Edit },
         { type: 'link', label: "Assessment", icon: IconName.ClipboardCheck },
         { type: 'link', label: "Certificate", icon: IconName.FileText },
@@ -1262,6 +1269,8 @@ const CourseSidebar: React.FC<CourseSidebarProps> = ({ userRole, onSetGradingVie
 };
 
 // --- Topic Accordion Component ---
+const isUrl = (str: string) => /^https?:\/\//i.test(str) || /^www\./i.test(str);
+
 interface TopicAccordionProps {
     topic: Topic;
     progress: number;
@@ -1270,68 +1279,117 @@ interface TopicAccordionProps {
     userRole: UserRole;
     completedSubtopics: Set<string>;
     onToggleCompletion: (subtopicId: string) => void;
+    completedTopics: Set<string>;
+    onToggleTopicCompletion: (topicId: string) => void;
 }
 
-const TopicAccordion: React.FC<TopicAccordionProps> = ({ topic, progress, bookmarkedSubtopics, onToggleBookmark, userRole, completedSubtopics, onToggleCompletion }) => {
+const TopicAccordion: React.FC<TopicAccordionProps> = ({ topic, progress, bookmarkedSubtopics, onToggleBookmark, userRole, completedSubtopics, onToggleCompletion, completedTopics, onToggleTopicCompletion }) => {
     const [isOpen, setIsOpen] = React.useState(true);
     const displayTitle = topic.title.replace('Module', 'Learning Unit');
+
+    const hasSubtopics = topic.subtopics.length > 0;
+    // For topics WITH subtopics: all-complete when every subtopic is ticked
+    const isAllCompleted = hasSubtopics
+        ? topic.subtopics.every(st => completedSubtopics.has(st.id))
+        : completedTopics.has(topic.id);
+
+    const handleMarkTopicComplete = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (hasSubtopics) {
+            if (isAllCompleted) {
+                topic.subtopics.forEach(st => onToggleCompletion(st.id));
+            } else {
+                topic.subtopics.filter(st => !completedSubtopics.has(st.id)).forEach(st => onToggleCompletion(st.id));
+            }
+        } else {
+            // No subtopics — use topic-level toggle
+            onToggleTopicCompletion(topic.id);
+        }
+    };
+
     return (
         <Card>
             <button
                 className="w-full text-left p-4 flex justify-between items-center"
                 onClick={() => setIsOpen(!isOpen)}
             >
-                <div className="flex-grow">
+                <div className="flex-grow mr-4">
                     <h4 className="font-bold text-lg text-gray-900 dark:text-white">{displayTitle}</h4>
                     {userRole === UserRole.Learner && (
-                        <div className="flex items-center mt-2">
-                            <p className="text-sm font-bold text-green-600 w-12">{progress.toFixed(0)}%</p>
-                            <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-2">
-                                <div className="bg-green-500 h-2 rounded-full" style={{ width: `${progress}%` }}></div>
+                        <div className="flex items-center mt-2 gap-2">
+                            <p className="text-sm font-bold text-green-600 w-12 flex-shrink-0">{progress.toFixed(0)}%</p>
+                            <div className="flex-1 bg-gray-200 dark:bg-gray-600 rounded-full h-2">
+                                <div className="bg-green-500 h-2 rounded-full transition-all duration-300" style={{ width: `${progress}%` }}></div>
                             </div>
+                            <button
+                                onClick={handleMarkTopicComplete}
+                                className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors flex-shrink-0 ${
+                                    isAllCompleted
+                                        ? 'bg-green-100 text-green-700 border-green-300 hover:bg-green-200 dark:bg-green-900/30 dark:text-green-400 dark:border-green-700'
+                                        : 'bg-surface text-on-surface-secondary border-default hover:bg-surface-elevated hover:text-on-surface'
+                                }`}
+                            >
+                                {isAllCompleted ? '✓ Completed' : 'Mark Complete'}
+                            </button>
                         </div>
                     )}
                 </div>
-                <Icon name={IconName.ChevronDown} className={`w-5 h-5 ml-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                <div className="flex items-center gap-2 flex-shrink-0">
+                    <Icon name={IconName.ChevronDown} className={`w-5 h-5 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                </div>
             </button>
-            {isOpen && (
+            {isOpen && hasSubtopics && (
                 <div className="px-4 pb-2">
                     <ul className="border-t border-gray-200 dark:border-gray-700 divide-y divide-gray-200 dark:divide-gray-700">
-                        {topic.subtopics.map(subtopic => {
-                            const isBookmarked = bookmarkedSubtopics.has(subtopic.id);
-                            const isCompleted = completedSubtopics.has(subtopic.id);
-                            return (
-                                <li key={subtopic.id} className="flex items-center justify-between py-3">
-                                    <label htmlFor={`subtopic-complete-${subtopic.id}`} className="flex items-center flex-grow cursor-pointer group">
-                                        {userRole === UserRole.Learner && (
-                                            <input
-                                                id={`subtopic-complete-${subtopic.id}`}
-                                                type="checkbox"
-                                                checked={isCompleted}
-                                                onChange={(e) => {
-                                                    e.stopPropagation();
-                                                    onToggleCompletion(subtopic.id);
-                                                }}
-                                                className="h-5 w-5 rounded border-gray-300 text-primary focus:ring-primary mr-3 flex-shrink-0"
-                                                aria-label={`Mark '${subtopic.title}' as complete`}
-                                            />
+                            {topic.subtopics.map(subtopic => {
+                                const isBookmarked = bookmarkedSubtopics.has(subtopic.id);
+                                const isCompleted = completedSubtopics.has(subtopic.id);
+                                const titleIsUrl = isUrl(subtopic.title);
+                                return (
+                                    <li key={subtopic.id} className="flex items-center justify-between py-3">
+                                        <label htmlFor={`subtopic-complete-${subtopic.id}`} className="flex items-center flex-grow cursor-pointer group min-w-0">
+                                            {userRole === UserRole.Learner && (
+                                                <input
+                                                    id={`subtopic-complete-${subtopic.id}`}
+                                                    type="checkbox"
+                                                    checked={isCompleted}
+                                                    onChange={(e) => {
+                                                        e.stopPropagation();
+                                                        onToggleCompletion(subtopic.id);
+                                                    }}
+                                                    className="h-5 w-5 rounded border-gray-300 text-primary focus:ring-primary mr-3 flex-shrink-0"
+                                                    aria-label={`Mark '${subtopic.title}' as complete`}
+                                                />
+                                            )}
+                                            <Icon name={IconName.FileText} className="w-5 h-5 text-green-500 mr-3 flex-shrink-0" />
+                                            {titleIsUrl ? (
+                                                <a
+                                                    href={subtopic.title}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    onClick={e => e.stopPropagation()}
+                                                    className={`font-medium text-primary hover:underline truncate transition-colors ${isCompleted ? 'line-through opacity-50' : ''}`}
+                                                >
+                                                    {subtopic.title}
+                                                </a>
+                                            ) : (
+                                                <span className={`font-medium text-gray-800 dark:text-gray-200 group-hover:text-primary transition-colors ${isCompleted ? 'line-through text-gray-500 dark:text-gray-500' : ''}`}>
+                                                    {subtopic.title}
+                                                </span>
+                                            )}
+                                        </label>
+                                        {(userRole === UserRole.Learner || userRole === UserRole.Trainer) && (
+                                            <button
+                                                onClick={(e) => onToggleBookmark(e, subtopic.id)}
+                                                className={`p-2 rounded-full transition-colors flex-shrink-0 ${isBookmarked ? 'text-primary bg-primary/10' : 'text-gray-500 hover:text-primary hover:bg-gray-100 dark:hover:bg-gray-700'}`}
+                                                aria-label={isBookmarked ? 'Remove bookmark' : 'Add bookmark'}
+                                            >
+                                                <Icon name={isBookmarked ? IconName.Bookmark : IconName.Bookmark} className="w-5 h-5" />
+                                            </button>
                                         )}
-                                        <Icon name={IconName.FileText} className="w-5 h-5 text-green-500 mr-3 flex-shrink-0" />
-                                        <span className={`font-medium text-gray-800 dark:text-gray-200 group-hover:text-primary transition-colors ${isCompleted ? 'line-through text-gray-500 dark:text-gray-500' : ''}`}>{subtopic.title}</span>
-                                    </label>
-                                    {/* Only show bookmarks for Learner and Trainer roles */}
-                                    {(userRole === UserRole.Learner || userRole === UserRole.Trainer) && (
-                                        <button
-                                            onClick={(e) => onToggleBookmark(e, subtopic.id)}
-                                            className={`p-2 rounded-full transition-colors flex-shrink-0 ${isBookmarked ? 'text-primary bg-primary/10' : 'text-gray-500 hover:text-primary hover:bg-gray-100 dark:hover:bg-gray-700'}`}
-                                            aria-label={isBookmarked ? 'Remove bookmark' : 'Add bookmark'}
-                                        >
-                                            <Icon name={isBookmarked ? IconName.Bookmark : IconName.Bookmark} className="w-5 h-5" />
-                                        </button>
-                                    )}
-                                </li>
-                            );
-                        })}
+                                    </li>
+                                );
+                            })}
                     </ul>
                 </div>
             )}
@@ -1349,8 +1407,10 @@ export const CourseDetail: React.FC = () => {
         courseAssessments,
         bookmarkedSubtopics,
         completedSubtopics,
+        completedTopics,
         toggleBookmark,
         toggleCompletion,
+        toggleTopicCompletion,
         setEditingCourse,
         setAdminPage,
         currentUser,
@@ -1626,6 +1686,7 @@ export const CourseDetail: React.FC = () => {
 
     const bookmarkedSubtopicsSet = new Set(bookmarkedSubtopics);
     const completedSubtopicsSet = new Set(completedSubtopics);
+    const completedTopicsSet = new Set(completedTopics);
 
     const traqomSurveyLink = 'https://ssgtraqom.qualtrics.com/jfe/form/SV_3K9i7rTJ9OLsauW?Q_CHL=qr';
     const traqomQrCodeUrl = '/qr_codes/traqom_survey_qr_code.png';
@@ -1730,7 +1791,7 @@ export const CourseDetail: React.FC = () => {
                     <div className="xl:grid xl:grid-cols-[320px_minmax(0,1fr)] xl:gap-8">
                         {/* Desktop Sidebar */}
                         <aside className="hidden xl:block">
-                            <Card className="sticky top-24">
+                            <Card className="">
                                 <CourseSidebar userRole={userRole} onSetGradingView={setIsGradingView} selectedCourse={convertedCourse} />
                             </Card>
                         </aside>
@@ -2041,14 +2102,19 @@ export const CourseDetail: React.FC = () => {
                             <div id="lessons">
                                 <Card className="p-0 overflow-hidden">
                                     <button className="w-full text-left p-6 flex justify-between items-center" onClick={() => setIsLessonsOpen(!isLessonsOpen)} aria-expanded={isLessonsOpen}>
-                                        <h3 className="text-xl font-bold text-gray-900 dark:text-white">Lesson</h3>
+                                        <h3 className="text-xl font-bold text-gray-900 dark:text-white">{role === UserRole.Learner ? 'Learning Outcomes' : 'Lesson'}</h3>
                                         <Icon name={IconName.ChevronDown} className={`w-5 h-5 transition-transform duration-200 ${isLessonsOpen ? 'rotate-180' : ''}`} />
                                     </button>
                                     {isLessonsOpen && (
                                         <div className="px-6 pb-6 space-y-4 border-t pt-4">
                                             {convertedCourse.topics.map(topic => {
-                                                const topicCompletedCount = topic.subtopics.filter(st => completedSubtopicsSet.has(st.id)).length;
-                                                const topicProgress = topic.subtopics.length > 0 ? (topicCompletedCount / topic.subtopics.length) * 100 : 0;
+                                                let topicProgress: number;
+                                                if (topic.subtopics.length > 0) {
+                                                    const done = topic.subtopics.filter(st => completedSubtopicsSet.has(st.id)).length;
+                                                    topicProgress = (done / topic.subtopics.length) * 100;
+                                                } else {
+                                                    topicProgress = completedTopicsSet.has(topic.id) ? 100 : 0;
+                                                }
 
                                                 return (
                                                     <TopicAccordion
@@ -2060,6 +2126,8 @@ export const CourseDetail: React.FC = () => {
                                                         userRole={userRole}
                                                         completedSubtopics={completedSubtopicsSet}
                                                         onToggleCompletion={handleToggleCompletion}
+                                                        completedTopics={completedTopicsSet}
+                                                        onToggleTopicCompletion={toggleTopicCompletion}
                                                     />
                                                 );
                                             })}
@@ -2078,57 +2146,85 @@ export const CourseDetail: React.FC = () => {
                                             aria-expanded={isTraqomOpen}
                                         >
                                             <h3 className="text-xl font-bold text-gray-900 dark:text-white">Certificate & TRAQOM Survey</h3>
-                                            <Icon name={isTraqomOpen ? IconName.Minus : IconName.Plus} className="w-6 h-6 text-blue-600 flex-shrink-0" />
+                                            <Icon name={IconName.ChevronDown} className={`w-6 h-6 text-blue-600 flex-shrink-0 transition-transform ${isTraqomOpen ? 'rotate-180' : ''}`} />
                                         </button>
                                         {isTraqomOpen && (
-                                            <div className="px-6 pb-6 border-t">
-                                                <div className="pt-4 flex flex-col gap-6">
-                                                    {/* Cert Delivery QR — above TRAQOM */}
-                                                    <div className="flex flex-col sm:flex-row items-center gap-6">
-                                                        <div className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm flex-shrink-0">
-                                                            <img
-                                                                src={certDeliveryQrCodeUrl}
-                                                                alt="Certificate Delivery QR Code"
-                                                                className="w-40 h-40 object-contain"
-                                                            />
+                                            <div className="px-6 pb-6 border-t border-default">
+                                                <div className="pt-5 grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                                    {/* Certificate Delivery Card */}
+                                                    <div className="flex flex-col rounded-xl border border-default overflow-hidden">
+                                                        <div className="bg-blue-600 px-4 py-2.5 flex items-center gap-2">
+                                                            <Icon name={IconName.FileText} className="w-4 h-4 text-white flex-shrink-0" />
+                                                            <span className="text-sm font-semibold text-white">Certificate Delivery</span>
                                                         </div>
-                                                        <div className="flex flex-col gap-1 text-center sm:text-left">
-                                                            <p className="font-semibold text-gray-900 dark:text-white">Certificate Survey</p>
-                                                            <p className="text-sm text-gray-500 dark:text-gray-400">Scan to complete the certificate survey.</p>
+                                                        <div className="flex flex-col items-center p-5 bg-surface flex-1 justify-between gap-3">
+                                                            <div className="flex flex-col items-center gap-3 w-full">
+                                                                <div className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm">
+                                                                    <img
+                                                                        src={certDeliveryQrCodeUrl}
+                                                                        alt="Certificate Delivery QR Code"
+                                                                        className="w-36 h-36 object-contain"
+                                                                    />
+                                                                </div>
+                                                                <p className="text-sm text-on-surface-secondary text-center">Scan to receive your certificate</p>
+                                                            </div>
+                                                            <div className="w-full flex flex-col gap-2">
+                                                                <p className="text-xs text-on-surface-secondary break-all px-1">https://goo.gl/R2eumq</p>
+                                                                <div className="flex gap-2">
+                                                                    <a
+                                                                        href="https://goo.gl/R2eumq"
+                                                                        target="_blank"
+                                                                        rel="noopener noreferrer"
+                                                                        className="flex-1 text-center text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-lg py-2 transition-colors"
+                                                                    >
+                                                                        Open Link
+                                                                    </a>
+                                                                    <button
+                                                                        onClick={() => { navigator.clipboard.writeText('https://goo.gl/R2eumq'); alert('Link copied!'); }}
+                                                                        className="px-3 py-2 text-sm font-medium border border-default rounded-lg text-on-surface hover:bg-surface-elevated transition-colors"
+                                                                    >
+                                                                        Copy
+                                                                    </button>
+                                                                </div>
+                                                            </div>
                                                         </div>
                                                     </div>
 
-                                                    <hr className="border-default" />
-
-                                                    {/* TRAQOM QR — below cert */}
-                                                    <div className="flex flex-col sm:flex-row items-center gap-6">
-                                                        <div className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm flex-shrink-0">
-                                                            <img
-                                                                src={traqomQrCodeUrl}
-                                                                alt="TRAQOM Survey QR Code"
-                                                                className="w-40 h-40 object-contain"
-                                                            />
+                                                    {/* TRAQOM Survey Card */}
+                                                    <div className="flex flex-col rounded-xl border border-default overflow-hidden">
+                                                        <div className="bg-teal-600 px-4 py-2.5 flex items-center gap-2">
+                                                            <Icon name={IconName.Edit} className="w-4 h-4 text-white flex-shrink-0" />
+                                                            <span className="text-sm font-semibold text-white">TRAQOM Survey</span>
                                                         </div>
-                                                        <div className="flex flex-col gap-2 text-center sm:text-left">
-                                                            <p className="font-semibold text-gray-900 dark:text-white">TRAQOM Survey</p>
-                                                            <p className="text-sm text-gray-500 dark:text-gray-400">Your feedback is important. Scan the QR code or use the link below.</p>
-                                                            <div className="p-2 bg-gray-100 dark:bg-gray-700 rounded-md flex items-center gap-2">
-                                                                <a
-                                                                    href={traqomSurveyLink}
-                                                                    target="_blank"
-                                                                    rel="noopener noreferrer"
-                                                                    className="text-sm text-blue-600 dark:text-blue-400 hover:underline truncate"
-                                                                >
-                                                                    {traqomSurveyLink}
-                                                                </a>
-                                                                <Button
-                                                                    onClick={() => {
-                                                                        navigator.clipboard.writeText(traqomSurveyLink);
-                                                                        alert('Link copied to clipboard!');
-                                                                    }}
-                                                                >
-                                                                    Copy Link
-                                                                </Button>
+                                                        <div className="flex flex-col items-center p-5 bg-surface flex-1 justify-between gap-3">
+                                                            <div className="flex flex-col items-center gap-3 w-full">
+                                                                <div className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm">
+                                                                    <img
+                                                                        src={traqomQrCodeUrl}
+                                                                        alt="TRAQOM Survey QR Code"
+                                                                        className="w-36 h-36 object-contain"
+                                                                    />
+                                                                </div>
+                                                                <p className="text-sm text-on-surface-secondary text-center">Your feedback helps us improve</p>
+                                                            </div>
+                                                            <div className="w-full flex flex-col gap-2">
+                                                                <p className="text-xs text-on-surface-secondary break-all px-1">{traqomSurveyLink}</p>
+                                                                <div className="flex gap-2">
+                                                                    <a
+                                                                        href={traqomSurveyLink}
+                                                                        target="_blank"
+                                                                        rel="noopener noreferrer"
+                                                                        className="flex-1 text-center text-sm font-medium bg-teal-600 hover:bg-teal-700 text-white rounded-lg py-2 transition-colors"
+                                                                    >
+                                                                        Open Link
+                                                                    </a>
+                                                                    <button
+                                                                        onClick={() => { navigator.clipboard.writeText(traqomSurveyLink); alert('Link copied!'); }}
+                                                                        className="px-3 py-2 text-sm font-medium border border-default rounded-lg text-on-surface hover:bg-surface-elevated transition-colors"
+                                                                    >
+                                                                        Copy
+                                                                    </button>
+                                                                </div>
                                                             </div>
                                                         </div>
                                                     </div>

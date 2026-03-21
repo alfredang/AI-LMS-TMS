@@ -8,6 +8,7 @@ interface UpdateLearnerProfileRequest {
     // app_user fields
     name?: string;
     email?: string;
+    secondaryEmail?: string;
     profilePictureUrl?: string;
     password?: string;
     // learner_profile fields
@@ -66,6 +67,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (profileData.email !== undefined) {
         appUserFields.push(`email = $${paramIndex}`);
         appUserValues.push(profileData.email);
+        paramIndex++;
+      }
+
+      if (profileData.secondaryEmail !== undefined) {
+        appUserFields.push(`secondary_email = $${paramIndex}`);
+        appUserValues.push(profileData.secondaryEmail);
         paramIndex++;
       }
 
@@ -176,6 +183,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           u.id,
           u.full_name as name,
           u.email,
+          u.secondary_email as "secondaryEmail",
           u.email as "loginId",
           u.profile_picture_url as "profilePictureUrl",
           u.created_at as "createdAt",

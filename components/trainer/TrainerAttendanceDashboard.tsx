@@ -810,18 +810,36 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
         }
         setLearnerAccountMap(map);
 
-        // Auto-create accounts for all missing learners (skip cancelled enrolments)
+        // Process all enrolments based on status
         const course = courseOverride ?? selectedCourse;
         for (const item of records) {
           const enrol = item?.enrolment ?? item;
           const trainee = enrol?.trainee ?? {};
           const email: string = trainee?.email?.full || trainee?.email || '';
           if (!email) continue;
-          if (map[email.toLowerCase()] !== 'missing') continue;
           const enrolStatus: string = (enrol?.status || enrol?.enrolmentStatus || '').toLowerCase();
-          if (enrolStatus === 'cancelled') continue;
+
+          if (enrolStatus === 'cancelled') {
+            // Remove learner from the course run if they have an account and enrollment
+            if (course?.courseRunId) {
+              fetch('/api/admin/remove-enrollment', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, courseRunId: course.courseRunId }),
+              }).catch(() => { /* silent */ });
+            }
+            continue;
+          }
+
+          // Only process confirmed enrolments for account creation / assignment
+          if (enrolStatus !== 'confirmed') continue;
+          const accountStatus = map[email.toLowerCase()];
+          if (accountStatus === 'creating' || accountStatus === 'done') continue;
           const nric: string = trainee?.id || trainee?.nric || enrol?.nric || '';
           const enrolRef: string = enrol?.referenceNumber || enrol?.enrolmentReferenceNumber || '';
+          // For both missing AND existing accounts — create-learner-account handles both:
+          // - missing: creates account + enrolls
+          // - existing: skips creation, runs ensureEnrollment to assign course run if not yet assigned
           await handleCreateLearnerAccount(email, trainee?.fullName || trainee?.name || '', nric, enrolRef, course);
         }
       }
@@ -1398,14 +1416,14 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
               {/* <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Payment</th> */}
               <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Enrolment Date</th>
               <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Account</th>
-              <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Total Attendance Taken</th>
+              {/* <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Total Attendance Taken</th> */}
             </tr>
           </thead>
           <tbody>
             {isLoadingEnrolments ? (
               Array.from({ length: 5 }).map((_, idx) => (
                 <tr key={idx} className="border-b border-default">
-                  {Array.from({ length: 16 }).map((__, col) => (
+                  {Array.from({ length: 15 }).map((__, col) => (
                     <td key={col} className="px-3 py-3">
                       <div className="h-3 rounded bg-surface-elevated animate-pulse" style={{ width: col === 5 ? '70%' : '50%' }} />
                     </td>
@@ -1486,25 +1504,13 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
                       );
                       return <div className="h-3 w-20 rounded bg-surface-elevated animate-pulse" />;
                     })()}</td>
-                    <td className="px-3 py-3 whitespace-nowrap">{(() => {
-                      const enrolStatus: string = (enrol?.status || enrol?.enrolmentStatus || '').toLowerCase();
-                      if (enrolStatus === 'cancelled') return <span className="text-muted text-xs">—</span>;
-                      if (loadingAttendanceSummary) return <div className="h-3 w-12 rounded bg-surface-elevated animate-pulse" />;
-                      if (!attendanceSummary) return <span className="text-muted text-xs">—</span>;
-                      const attended = attendanceSummary.byNric[nric] ?? 0;
-                      const total = attendanceSummary.totalSessions;
-                      return (
-                        <span className={`text-sm font-medium ${attended === total && total > 0 ? 'text-green-600 dark:text-green-400' : attended === 0 ? 'text-red-500 dark:text-red-400' : 'text-amber-600 dark:text-amber-400'}`}>
-                          {attended} / {total}
-                        </span>
-                      );
-                    })()}</td>
+                    {/* Total Attendance Taken column hidden */}
                   </tr>
                 );
               })
             ) : (
               <tr>
-                <td colSpan={16} className="px-3 py-10 text-center text-sm text-muted italic">
+                <td colSpan={15} className="px-3 py-10 text-center text-sm text-muted italic">
                   {selectedCourseRunId ? 'No enrolment records found.' : 'Select a class to load enrolments.'}
                 </td>
               </tr>

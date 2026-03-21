@@ -153,7 +153,6 @@ const Header: React.FC = () => {
 
   const navConfig = {
     [UserRole.Learner]: [
-      { view: View.Dashboard, label: 'Home', icon: IconName.Dashboard },
       { view: View.Courses, label: 'Courses', icon: IconName.Courses },
     ],
     [UserRole.Trainer]: [],
@@ -175,21 +174,21 @@ const Header: React.FC = () => {
   return (
     <header className="bg-surface shadow-sm sticky top-0 z-30">
       <div className="container mx-auto px-3 sm:px-4 lg:px-6">
-        <div className="flex items-center justify-between h-14 sm:h-16">
+        <div className="grid grid-cols-3 items-center h-14 sm:h-16">
           {/* Left Section: Logo + Company Name */}
-          <div className="flex items-center space-x-2 sm:space-x-3 min-w-0 flex-shrink">
+          <div className="flex items-center space-x-2 sm:space-x-3 min-w-0">
             <img 
               src={ensureAbsoluteImageUrl(trainingProviderProfile?.companyLogoUrl || '/images/default-company-logo.png')} 
               alt="Company Logo" 
               className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg object-cover ring-2 ring-primary ring-offset-1 ring-offset-surface flex-shrink-0" 
             />
-            <span className="text-base sm:text-lg lg:text-xl font-bold text-on-surface truncate max-w-[120px] sm:max-w-[200px] lg:max-w-none">
+            <span className="text-base sm:text-lg lg:text-xl font-bold text-on-surface hidden sm:block">
               {trainingProviderProfile?.companyName || 'Training Provider'}
             </span>
           </div>
 
           {/* Center Section: Navigation - Always visible */}
-          <nav className="flex items-center space-x-1 sm:space-x-1.5 xl:space-x-2">
+          <nav className="flex items-center justify-center space-x-1 sm:space-x-1.5 xl:space-x-2">
             {navItems.map(item => (
               <a
                 key={item.label}
@@ -222,7 +221,7 @@ const Header: React.FC = () => {
           </nav>
 
           {/* Right Section: Actions */}
-          <div className="flex items-center space-x-1.5 sm:space-x-2">
+          <div className="flex items-center justify-end space-x-1.5 sm:space-x-2">
 
             {/* Role Switcher - only show if user has multiple roles */}
             {hasMultipleRoles && (

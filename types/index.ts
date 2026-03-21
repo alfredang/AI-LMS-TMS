@@ -145,6 +145,7 @@ export interface CourseDetail {
 }
 
 export interface LearningUnit {
+  id: string;
   title: string;
   position: number;
   subtopics: {

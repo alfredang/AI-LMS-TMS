@@ -2,6 +2,7 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 
 interface LearningUnitRow {
+  learning_unit_id: string;
   learning_unit_title: string;
   learning_unit_position: number;
   subtopic_id: string;
@@ -36,7 +37,8 @@ export default async function handler(
 
     // SQL query to get learning units and subtopics for a specific user and course run
     const learningUnitsQuery = `
-      SELECT 
+      SELECT
+        lu.id          AS learning_unit_id,
         lu.title       AS learning_unit_title,
         lu.position    AS learning_unit_position,
         st.id          AS subtopic_id,
@@ -64,16 +66,17 @@ export default async function handler(
     const learningUnitsMap = new Map();
     
     result.rows.forEach((row: LearningUnitRow) => {
-      if (!learningUnitsMap.has(row.learning_unit_title)) {
-        learningUnitsMap.set(row.learning_unit_title, {
+      if (!learningUnitsMap.has(row.learning_unit_id)) {
+        learningUnitsMap.set(row.learning_unit_id, {
+          id: row.learning_unit_id,
           title: row.learning_unit_title,
           position: row.learning_unit_position,
           subtopics: []
         });
       }
-      
+
       if (row.subtopic_title) {
-        learningUnitsMap.get(row.learning_unit_title).subtopics.push({
+        learningUnitsMap.get(row.learning_unit_id).subtopics.push({
           id: row.subtopic_id,
           title: row.subtopic_title,
           position: row.subtopic_position

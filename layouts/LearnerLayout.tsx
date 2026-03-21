@@ -36,22 +36,23 @@ const LearnerLayout: React.FC = () => {
     
     // Only reach this switch if no course is selected
     switch (currentView) {
-      case View.Dashboard:
-        return <WelcomeDashboard />;
       case View.Courses:
+      case View.Dashboard:
         return <CourseList />;
       case View.Calendar:
         return <CalendarView />;
       default:
-        return <WelcomeDashboard />;
+        return <CourseList />;
     }
   };
 
   return (
     <div className="min-h-screen flex flex-col bg-background font-sans text-on-surface">
       <Header />
-      <main className="container mx-auto p-4 sm:p-6 lg:p-8 flex-grow">
-        {renderContent()}
+      <main className="flex-grow">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+          {renderContent()}
+        </div>
       </main>
       <Footer />
       <AiChatbot />

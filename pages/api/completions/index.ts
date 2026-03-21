@@ -50,12 +50,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
          st."position" AS subtopic_position,
          sc.completed_at
        FROM public.subtopic_completion sc
-       JOIN public.enrollment e       ON e.id = sc.enrollment_id
        JOIN public.subtopic st        ON st.id = sc.subtopic_id
        JOIN public.learning_unit lu   ON lu.id = st.learning_unit_id
-       JOIN public.course c           ON c.id = lu.course_id
-       WHERE e.user_id      = $1
-         AND e.course_run_id = $2
+       WHERE sc.user_id       = $1
+         AND sc.course_run_id = $2
        ORDER BY lu."position", st."position"`,
       [userId, courseRunId]
     );

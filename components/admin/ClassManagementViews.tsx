@@ -3605,9 +3605,15 @@ export const AssignStudentView: React.FC = () => {
     const [loadingLearners, setLoadingLearners] = useState(false);
 
     const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
+    const [activeTab, setActiveTab] = useState<'assign' | 'unassign'>('assign');
     const [selectedLearnerId, setSelectedLearnerId] = useState('');
     const [saving, setSaving] = useState(false);
     const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+    // Unassign state
+    const [enrolledLearners, setEnrolledLearners] = useState<any[]>([]);
+    const [loadingEnrolled, setLoadingEnrolled] = useState(false);
+    const [unassigning, setUnassigning] = useState<string | null>(null);
 
     const fetchCourseRuns = async (q: string) => {
         setLoadingRuns(true);
@@ -3633,6 +3639,19 @@ export const AssignStudentView: React.FC = () => {
             /* silent */
         } finally {
             setLoadingLearners(false);
+        }
+    };
+
+    const fetchEnrolledLearners = async (courseRunId: string) => {
+        setLoadingEnrolled(true);
+        try {
+            const res = await fetch(`/api/admin/course-run-enrollments?courseRunId=${courseRunId}`);
+            const json = await res.json();
+            if (json.success) setEnrolledLearners(json.data);
+        } catch {
+            /* silent */
+        } finally {
+            setLoadingEnrolled(false);
         }
     };
 
@@ -3673,12 +3692,53 @@ export const AssignStudentView: React.FC = () => {
         }
     };
 
+    const handleUnassign = async (learner: any, run: any) => {
+        setMessage(null);
+        setUnassigning(learner.user_id);
+        try {
+            const res = await fetch('/api/admin/remove-enrollment', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email: learner.email, courseRunId: run.id }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.message || 'Failed to remove student');
+            setMessage({ type: 'success', text: `"${learner.full_name}" has been removed from ${run.courseTitle}.` });
+            setEnrolledLearners(prev => prev.filter(l => l.user_id !== learner.user_id));
+        } catch (err) {
+            setMessage({ type: 'error', text: err instanceof Error ? err.message : 'Failed to remove student' });
+        } finally {
+            setUnassigning(null);
+        }
+    };
+
+    const handleExpandRun = (run: any) => {
+        const isExpanded = selectedRunId === run.id;
+        if (isExpanded) {
+            setSelectedRunId(null);
+        } else {
+            setSelectedRunId(run.id);
+            setActiveTab('assign');
+            setSelectedLearnerId('');
+            setEnrolledLearners([]);
+            setMessage(null);
+        }
+    };
+
+    const handleTabChange = (tab: 'assign' | 'unassign', runId: string) => {
+        setActiveTab(tab);
+        setMessage(null);
+        if (tab === 'unassign') {
+            fetchEnrolledLearners(runId);
+        }
+    };
+
     const inputClasses = 'w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white';
 
     return (
         <div>
             <div className="flex justify-between items-center mb-6">
-                <h2 className="text-3xl font-bold dark:text-white">Assign Student</h2>
+                <h2 className="text-3xl font-bold dark:text-white">Assign / Unassign Student</h2>
                 <Button variant="ghost" onClick={() => setAdminPage(AdminPage.Dashboard)}>
                     Back to Dashboard
                 </Button>
@@ -3723,11 +3783,7 @@ export const AssignStudentView: React.FC = () => {
                                     {/* Row */}
                                     <div
                                         className="flex items-center justify-between px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer"
-                                        onClick={() => {
-                                            setSelectedRunId(isExpanded ? null : run.id);
-                                            setMessage(null);
-                                            setSelectedLearnerId('');
-                                        }}
+                                        onClick={() => handleExpandRun(run)}
                                     >
                                         <div className="flex-1 min-w-0 mr-4">
                                             <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{run.courseTitle}</p>
@@ -3739,40 +3795,90 @@ export const AssignStudentView: React.FC = () => {
                                         <span className="text-gray-400 text-xs shrink-0">{isExpanded ? '▲' : '▼'}</span>
                                     </div>
 
-                                    {/* Expanded assignment form */}
+                                    {/* Expanded panel */}
                                     {isExpanded && (
-                                        <div className="bg-gray-50 dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 px-4 py-4 space-y-4">
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                                    Student <span className="text-red-500">*</span>
-                                                </label>
-                                                {loadingLearners ? (
-                                                    <p className="text-sm text-gray-500 italic">Loading students...</p>
-                                                ) : (
-                                                    <select
-                                                        value={selectedLearnerId}
-                                                        onChange={e => setSelectedLearnerId(e.target.value)}
-                                                        className={inputClasses}
-                                                    >
-                                                        <option value="">— Select a student —</option>
-                                                        {availableLearners.map(l => (
-                                                            <option key={l.user_id} value={l.user_id}>
-                                                                {l.full_name} ({l.email})
-                                                            </option>
-                                                        ))}
-                                                    </select>
-                                                )}
+                                        <div className="bg-gray-50 dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700">
+                                            {/* Tabs */}
+                                            <div className="flex border-b border-gray-200 dark:border-gray-700 px-4">
+                                                <button
+                                                    className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${activeTab === 'assign' ? 'border-blue-500 text-blue-600 dark:text-blue-400' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'}`}
+                                                    onClick={() => handleTabChange('assign', run.id)}
+                                                >
+                                                    Assign Student
+                                                </button>
+                                                <button
+                                                    className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${activeTab === 'unassign' ? 'border-red-500 text-red-600 dark:text-red-400' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'}`}
+                                                    onClick={() => handleTabChange('unassign', run.id)}
+                                                >
+                                                    Unassign Student
+                                                </button>
                                             </div>
 
-                                            <div className="flex justify-end">
-                                                <Button
-                                                    onClick={() => handleAssign(run)}
-                                                    disabled={saving}
-                                                    className="bg-green-600 hover:bg-green-700 text-white"
-                                                >
-                                                    {saving ? 'Enrolling...' : 'Assign Student'}
-                                                </Button>
-                                            </div>
+                                            {/* Assign tab */}
+                                            {activeTab === 'assign' && (
+                                                <div className="px-4 py-4 space-y-4">
+                                                    <div>
+                                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                            Student <span className="text-red-500">*</span>
+                                                        </label>
+                                                        {loadingLearners ? (
+                                                            <p className="text-sm text-gray-500 italic">Loading students...</p>
+                                                        ) : (
+                                                            <select
+                                                                value={selectedLearnerId}
+                                                                onChange={e => setSelectedLearnerId(e.target.value)}
+                                                                className={inputClasses}
+                                                            >
+                                                                <option value="">— Select a student —</option>
+                                                                {availableLearners.map(l => (
+                                                                    <option key={l.user_id} value={l.user_id}>
+                                                                        {l.full_name} ({l.email})
+                                                                    </option>
+                                                                ))}
+                                                            </select>
+                                                        )}
+                                                    </div>
+                                                    <div className="flex justify-end">
+                                                        <Button
+                                                            onClick={() => handleAssign(run)}
+                                                            disabled={saving}
+                                                            className="bg-green-600 hover:bg-green-700 text-white"
+                                                        >
+                                                            {saving ? 'Enrolling...' : 'Assign Student'}
+                                                        </Button>
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* Unassign tab */}
+                                            {activeTab === 'unassign' && (
+                                                <div className="px-4 py-4">
+                                                    {loadingEnrolled ? (
+                                                        <p className="text-sm text-gray-500 italic">Loading enrolled students...</p>
+                                                    ) : enrolledLearners.length === 0 ? (
+                                                        <p className="text-sm text-gray-500 italic">No students enrolled in this course run.</p>
+                                                    ) : (
+                                                        <div className="divide-y divide-gray-200 dark:divide-gray-700 rounded-md border border-gray-200 dark:border-gray-700 overflow-hidden">
+                                                            {enrolledLearners.map(learner => (
+                                                                <div key={learner.user_id} className="flex items-center justify-between px-3 py-2 bg-white dark:bg-gray-800">
+                                                                    <div>
+                                                                        <p className="text-sm font-medium text-gray-900 dark:text-white">{learner.full_name}</p>
+                                                                        <p className="text-xs text-gray-500 dark:text-gray-400">{learner.email}</p>
+                                                                    </div>
+                                                                    <Button
+                                                                        variant="ghost"
+                                                                        onClick={() => handleUnassign(learner, run)}
+                                                                        disabled={unassigning === learner.user_id}
+                                                                        className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 text-xs"
+                                                                    >
+                                                                        {unassigning === learner.user_id ? 'Removing...' : 'Remove'}
+                                                                    </Button>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
                                         </div>
                                     )}
                                 </div>

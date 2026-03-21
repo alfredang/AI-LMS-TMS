@@ -240,6 +240,7 @@ interface LmsContextType {
   courseAssessments: CourseAssessment[];
   bookmarkedSubtopics: string[];
   completedSubtopics: string[];
+  completedTopics: string[];
   submissions: Submission[];
   certificate: any | null;
 
@@ -254,6 +255,7 @@ interface LmsContextType {
   loadCourseData: (course: Course) => Promise<void>;
   toggleBookmark: (subtopicId: string) => Promise<void>;
   toggleCompletion: (subtopicId: string) => Promise<void>;
+  toggleTopicCompletion: (topicId: string) => Promise<void>;
   submitAssessment: (assessmentId: string, fileName: string, fileUrl?: string) => Promise<void>;
   publishAssessment: (assessmentId: string, published: boolean) => Promise<void>;
   loadSubmissions: () => Promise<void>;
@@ -297,6 +299,7 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [courseAssessments, setCourseAssessments] = useState<CourseAssessment[]>([]);
   const [bookmarkedSubtopics, setBookmarkedSubtopics] = useState<string[]>([]);
   const [completedSubtopics, setCompletedSubtopics] = useState<string[]>([]);
+  const [completedTopics, setCompletedTopics] = useState<string[]>([]);
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [certificate, setCertificate] = useState<any | null>(null);
 
@@ -1002,6 +1005,13 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 const completionsResult = await completionsResponse.json();
                 console.log('🔍 Completions API response:', completionsResult);
 
+                // Load topic-level completions (for topics without subtopics)
+                const topicCompletionsResponse = await fetch(`/api/completions/topics?userId=${userId}&courseRunId=${detail.courseRunUuid}`);
+                const topicCompletionsResult = await topicCompletionsResponse.json();
+                if (topicCompletionsResult.success) {
+                  setCompletedTopics(topicCompletionsResult.data.map((r: any) => r.topic_id));
+                }
+
                 if (unitsResult.success) {
                   setLearningUnits(unitsResult.data);
                   console.log(`✅ LmsContext: Learning units loaded:`, unitsResult.data);
@@ -1242,6 +1252,44 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [selectedCourse?.id, selectedCourse?.courseRunId, courseDetail?.courseRunUuid, completedSubtopics, currentUser]);
 
+  const toggleTopicCompletion = useCallback(async (topicId: string) => {
+    if (!currentUser?.id || !courseDetail?.courseRunUuid) return;
+    const isCurrentlyCompleted = completedTopics.includes(topicId);
+    const newState = !isCurrentlyCompleted;
+
+    // Optimistic update — topics list
+    const newCompletedTopics = newState
+      ? [...completedTopics, topicId]
+      : completedTopics.filter(id => id !== topicId);
+    setCompletedTopics(newCompletedTopics);
+
+    // Optimistic update — overall progress on course card
+    const totalItems = learningUnits.reduce((sum, unit) =>
+      sum + (unit.subtopics.length > 0 ? unit.subtopics.length : 1), 0);
+    const completedItems =
+      completedSubtopics.length +
+      learningUnits.filter(u => u.subtopics.length === 0 && newCompletedTopics.includes(u.id)).length;
+    const newProgress = totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0;
+    setSelectedCourse(prev => prev ? { ...prev, progressPercent: newProgress } : prev);
+
+    try {
+      const response = await fetch('/api/completions/topic-toggle', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: currentUser.id, topicId, courseRunId: courseDetail.courseRunUuid, isCompleted: newState })
+      });
+      if (!response.ok) {
+        const errBody = await response.json().catch(() => ({}));
+        throw new Error(errBody?.error || `HTTP ${response.status}`);
+      }
+    } catch (error) {
+      console.error('❌ LmsContext: Failed to toggle topic completion:', error);
+      // Revert on error
+      setCompletedTopics(prev => !newState ? [...prev, topicId] : prev.filter(id => id !== topicId));
+      setSelectedCourse(prev => prev ? { ...prev, progressPercent: selectedCourse?.progressPercent ?? 0 } : prev);
+    }
+  }, [currentUser, courseDetail?.courseRunUuid, completedTopics, completedSubtopics, learningUnits, selectedCourse]);
+
   const loadSubmissions = useCallback(async () => {
     if (!selectedCourse?.id || !currentUser?.id) return;
 
@@ -1439,6 +1487,7 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     courseAssessments,
     bookmarkedSubtopics,
     completedSubtopics,
+    completedTopics,
     submissions,
     certificate,
     handleNavigation,
@@ -1449,6 +1498,7 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     loadCourseData,
     toggleBookmark,
     toggleCompletion,
+    toggleTopicCompletion,
     submitAssessment,
     publishAssessment,
     loadSubmissions,

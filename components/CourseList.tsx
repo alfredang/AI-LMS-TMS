@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useLms } from '@contexts/LmsContext';
 import { useCourses, useLearnerCourseSearch } from '../hooks/useCourses';
 import { useTrainerCourses, useTrainerCourseSearch } from '../hooks/useTrainerCourses';
@@ -15,9 +15,17 @@ import { BulkUploadCoursesView } from './admin/BulkUploadCoursesView';
 
 const getTypeColor = (courseType: string) => {
     switch (courseType) {
-        case 'WSQ': return 'bg-blue-100 text-blue-800';
-        case 'IBF': return 'bg-purple-100 text-purple-800';
-        default: return 'bg-gray-100 text-gray-800';
+        case 'WSQ': return 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300';
+        case 'IBF': return 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300';
+        default: return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
+    }
+}
+
+const getModeColor = (mode: string) => {
+    switch (mode) {
+        case 'Virtual': return 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/40 dark:text-cyan-300';
+        case 'Hybrid': return 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300';
+        default: return 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300';
     }
 }
 
@@ -609,54 +617,154 @@ const ManagementCourseList: React.FC = () => {
 //     );
 // };
 
-const LearnerCourseList: React.FC = () => {
-    const { currentUser } = useLms();
-    const { courses, loading, error } = useCourses(currentUser?.id);
+// Sanitize search input to prevent XSS and injection attacks
+const sanitizeSearchInput = (input: string): string => {
+    return input.replace(/[<>"'`;\\]/g, '').trim();
+};
 
-    // Search state
-    const [searchQuery, setSearchQuery] = useState('');
-    const [filterCourseType, setFilterCourseType] = useState<'WSQ' | 'IBF' | 'Non-WSQ' | 'All'>('All');
-    const [filterMode, setFilterMode] = useState<string>('All');
-    const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+const LearnerCardDetailRow: React.FC<{ label: string; value: React.ReactNode }> = ({ label, value }) => (
+    <div className="flex justify-between items-center py-1.5">
+        <span className="text-xs text-on-surface-secondary">{label}</span>
+        <span className="text-xs font-semibold text-on-surface text-right">{value}</span>
+    </div>
+);
 
-    // Client-side filtering based on search query and filters
-    const filteredCourses = useMemo(() => {
-        if (!courses) return [];
+const CircularProgress: React.FC<{ percent: number; size?: number }> = ({ percent, size = 44 }) => {
+    const radius = (size - 6) / 2;
+    const circumference = 2 * Math.PI * radius;
+    const offset = circumference - (Math.min(percent, 100) / 100) * circumference;
+    const isComplete = percent >= 100;
+    return (
+        <svg width={size} height={size} className="rotate-[-90deg]">
+            <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="currentColor" strokeWidth={4} className="text-gray-200 dark:text-gray-600" />
+            <circle
+                cx={size / 2} cy={size / 2} r={radius} fill="none"
+                stroke={isComplete ? '#22c55e' : '#3b82f6'}
+                strokeWidth={4} strokeLinecap="round"
+                strokeDasharray={circumference} strokeDashoffset={offset}
+                className="transition-all duration-500"
+            />
+        </svg>
+    );
+};
 
-        return courses.filter(course => {
-            // Search by course title (case-insensitive)
-            const matchesSearch = searchQuery === '' ||
-                course.title.toLowerCase().includes(searchQuery.toLowerCase());
+const LearnerCourseCard: React.FC<{ course: any }> = ({ course }) => {
+    const { loadCourseData } = useLms();
+    const totalHours = Number(course.trainingHours) + Number(course.assessmentHours);
+    const progress = Math.round(course.progressPercent || 0);
 
-            // Filter by course type
-            const matchesType = filterCourseType === 'All' || course.courseType === filterCourseType;
-
-            // Filter by mode of learning
-            const matchesMode = filterMode === 'All' ||
-                (course.modeOfLearning && course.modeOfLearning.includes(filterMode));
-
-            return matchesSearch && matchesType && matchesMode;
-        });
-    }, [courses, searchQuery, filterCourseType, filterMode]);
-
-    // Handle clear filters
-    const handleClearFilters = () => {
-        setSearchQuery('');
-        setFilterCourseType('All');
-        setFilterMode('All');
+    const handleClick = async () => {
+        try { await loadCourseData(course); } catch (e) { console.error(e); }
     };
 
-    const inputClasses = "w-full pl-10 pr-4 py-2 text-on-surface bg-surface border border-gray-300 rounded-md placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400";
+    return (
+        <div
+            onClick={handleClick}
+            className="group bg-surface border border-default rounded-2xl overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-200 cursor-pointer flex flex-col"
+        >
+            {/* Course Image */}
+            <div className="relative overflow-hidden bg-surface-elevated" style={{ height: '170px' }}>
+                <img
+                    src={getCourseImageUrl(course.imageUrl, course.id)}
+                    alt={course.title}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    onError={(e) => { (e.target as HTMLImageElement).src = `https://picsum.photos/seed/${course.id}/400/200`; }}
+                />
+            </div>
 
-    // Check if any filters are active
-    const hasActiveFilters = searchQuery !== '' || filterCourseType !== 'All' || filterMode !== 'All';
+            {/* Card Body */}
+            <div className="p-4 flex flex-col flex-grow">
+                {/* Title */}
+                <h3 className="font-bold text-sm text-on-surface line-clamp-2 mb-3 leading-snug group-hover:text-primary transition-colors">
+                    {course.title}
+                </h3>
+
+                {/* Detail Rows */}
+                <div className="flex-grow space-y-0">
+                    <LearnerCardDetailRow label="Course Code" value={course.courseCode || '—'} />
+                    <LearnerCardDetailRow
+                        label="Course Duration"
+                        value={`${totalHours} Hours (${course.trainingHours}T + ${course.assessmentHours}A)`}
+                    />
+                    <LearnerCardDetailRow
+                        label="Course Type"
+                        value={
+                            <span className={`px-2 py-0.5 rounded text-xs font-semibold ${getTypeColor(course.courseType)}`}>
+                                {course.courseType}
+                            </span>
+                        }
+                    />
+                    {(course.courseRunCode || course.courseRunId) && (
+                        <LearnerCardDetailRow
+                            label="Course Run"
+                            value={course.courseRunCode || course.courseRunId}
+                        />
+                    )}
+                </div>
+
+                {/* Footer */}
+                <div className="flex items-center justify-between mt-4 pt-3 border-t border-default">
+                    <span className="text-sm font-semibold text-primary">View Course</span>
+                    <div className="relative flex items-center justify-center flex-shrink-0" title={`${progress}% complete`}>
+                        <CircularProgress percent={progress} size={40} />
+                        <span className="absolute text-[10px] font-bold text-on-surface">{progress}%</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+const LearnerCourseList: React.FC = () => {
+    const { currentUser } = useLms();
+    const { courses, loading, error, refetchCourses } = useCourses(currentUser?.id);
+
+    const [searchQuery, setSearchQuery] = useState('');
+    const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+
+    // Poll every 30s — refetch if admin changed this learner's enrollments
+    const loadedAtRef = useRef(new Date().toISOString());
+    useEffect(() => {
+        if (!currentUser?.id) return;
+        const interval = setInterval(async () => {
+            try {
+                const res = await fetch(`/api/auth/check-refresh?userId=${currentUser.id}&since=${loadedAtRef.current}`);
+                const json = await res.json();
+                if (json.refresh) {
+                    loadedAtRef.current = new Date().toISOString();
+                    refetchCourses();
+                }
+            } catch { /* silent */ }
+        }, 30000);
+        return () => clearInterval(interval);
+    }, [currentUser?.id, refetchCourses]);
+
+    const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setSearchQuery(sanitizeSearchInput(e.target.value));
+    };
+
+    const filteredCourses = useMemo(() => {
+        if (!courses) return [];
+        if (searchQuery === '') return courses;
+        const q = searchQuery.toLowerCase();
+        return courses.filter(course => {
+            if (course.title.toLowerCase().includes(q)) return true;
+            if (course.courseCode?.toLowerCase().includes(q)) return true;
+            // Only match run ID/code if query is at least 3 chars (avoids single digit false matches)
+            if (q.length >= 3) {
+                if (course.courseRunCode?.toLowerCase().includes(q)) return true;
+                if (String(course.courseRunId || '').toLowerCase().includes(q)) return true;
+            }
+            return false;
+        });
+    }, [courses, searchQuery]);
 
     if (loading) {
         return (
             <div className="flex items-center justify-center min-h-64">
                 <div className="text-center">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto"></div>
-                    <p className="mt-2 text-gray-600">Loading your courses...</p>
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+                    <p className="mt-2 text-on-surface-secondary">Loading your courses...</p>
                 </div>
             </div>
         );
@@ -665,99 +773,89 @@ const LearnerCourseList: React.FC = () => {
     if (error) {
         return (
             <div className="text-center py-8">
-                <p className="text-red-600 mb-4">Error loading courses: {error}</p>
-                <button
-                    onClick={() => window.location.reload()}
-                    className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-                >
-                    Retry
-                </button>
+                <p className="text-red-500 mb-4">Error loading courses: {error}</p>
+                <button onClick={() => window.location.reload()} className="px-4 py-2 bg-primary text-white rounded hover:opacity-90">Retry</button>
             </div>
         );
     }
 
-    // Use filtered courses as enrolled courses
-    const enrolledCourses = filteredCourses;
-
     return (
-        <div>
-            <div className="flex justify-between items-center mb-6">
-                <div>
-                    <h2 className="text-3xl font-bold">Courses</h2>
-                    <p className="text-subtle mt-1">Continue your learning now</p>
-                </div>
-                <div className="flex items-center space-x-2">
-                    <div className="relative">
-                        <Icon name={IconName.Eye} className="w-5 h-5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                        <input
-                            type="text"
-                            placeholder="Search courses..."
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            className={inputClasses}
-                        />
-                    </div>
-                    {hasActiveFilters && (
-                        <Button variant="ghost" onClick={handleClearFilters}>
-                            Reset
-                        </Button>
+        <div className="space-y-4">
+            {/* Page Header */}
+            <h2 className="text-2xl font-bold text-on-surface">My Courses</h2>
+
+            {/* Search + View Toggle */}
+            <div className="flex items-center gap-3">
+                <div className="relative flex-1">
+                    <Icon name={IconName.Search} className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <input
+                        type="text"
+                        placeholder="Search by course code, title, or run ID..."
+                        value={searchQuery}
+                        onChange={handleSearchChange}
+                        className="w-full pl-9 pr-9 py-2.5 text-sm text-on-surface bg-surface border border-default rounded-xl placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent shadow-sm"
+                    />
+                    {searchQuery && (
+                        <button
+                            onClick={() => setSearchQuery('')}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                            aria-label="Clear search"
+                        >
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                        </button>
                     )}
+                </div>
+                {/* View toggle */}
+                <div className="flex items-center rounded-xl bg-surface border border-default p-0.5 shadow-sm flex-shrink-0">
+                    <button
+                        onClick={() => setViewMode('grid')}
+                        title="Card view"
+                        className={`p-2 rounded-lg transition-colors ${viewMode === 'grid' ? 'bg-primary text-white shadow' : 'text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}
+                    >
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" />
+                            <rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" />
+                        </svg>
+                    </button>
+                    <button
+                        onClick={() => setViewMode('list')}
+                        title="List view"
+                        className={`p-2 rounded-lg transition-colors ${viewMode === 'list' ? 'bg-primary text-white shadow' : 'text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}
+                    >
+                        <Icon name={IconName.Menu} className="w-4 h-4" />
+                    </button>
                 </div>
             </div>
 
-            {/* Advanced Filters */}
-            {showAdvancedFilters && (
-                <Card className="p-4 mb-6 dark:bg-gray-800 dark:border-gray-700">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-gray-300">Course Type</label>
-                            <select
-                                value={filterCourseType}
-                                onChange={e => setFilterCourseType(e.target.value as 'WSQ' | 'IBF' | 'Non-WSQ' | 'All')}
-                                className="w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                            >
-                                <option value="All">All Types</option>
-                                <option value="WSQ">WSQ</option>
-                                <option value="IBF">IBF</option>
-                                <option value="Non-WSQ">Non-WSQ</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-gray-300">Mode of Training</label>
-                            <select
-                                value={filterMode}
-                                onChange={e => setFilterMode(e.target.value)}
-                                className="w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                            >
-                                <option value="All">All Modes</option>
-                                <option value="Hybrid">Hybrid</option>
-                                <option value="Virtual">Virtual</option>
-                                <option value="Physical">Physical</option>
-                            </select>
-                        </div>
-                    </div>
-                </Card>
+            {/* Results count when searching */}
+            {searchQuery && (
+                <p className="text-sm text-on-surface-secondary -mt-2">
+                    {filteredCourses.length} result{filteredCourses.length !== 1 ? 's' : ''} for &ldquo;{searchQuery}&rdquo;
+                </p>
             )}
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                <div className="lg:col-span-3 space-y-4">
-                    {enrolledCourses.length === 0 ? (
-                        <EmptyState
-                            title={hasActiveFilters ? 'No courses match your search criteria' : 'No enrolled courses found'}
-                            description={hasActiveFilters ? 'Try adjusting your search or filters' : "You haven't enrolled in any courses yet"}
-                            icon={IconName.Courses}
-                            className="dark:bg-gray-800 dark:border-gray-700"
-                        />
-                    ) : (
-                        enrolledCourses.map(course => (
-                            <EnrolledCourseListItem key={course.id} course={course} />
-                        ))
-                    )}
+            {/* Course List */}
+            {filteredCourses.length === 0 ? (
+                <EmptyState
+                    title={searchQuery ? 'No courses match your search' : 'No enrolled courses found'}
+                    description={searchQuery ? 'Try a different course code, title, or run ID' : "You haven't enrolled in any courses yet"}
+                    icon={IconName.Courses}
+                />
+            ) : viewMode === 'grid' ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                    {filteredCourses.map(course => (
+                        <LearnerCourseCard key={course.id} course={course} />
+                    ))}
                 </div>
-                {/* <div className="lg:col-span-1">
-                    <TrendingCoursesCard />
-                </div> */}
-            </div>
+            ) : (
+                <div className="space-y-3">
+                    {filteredCourses.map(course => (
+                        <EnrolledCourseListItem key={course.id} course={course} />
+                    ))}
+                </div>
+            )}
         </div>
     );
 }

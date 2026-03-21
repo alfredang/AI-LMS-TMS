@@ -4,6 +4,7 @@ import { LearnerProfile, Gender, EmploymentStatus, Nationality, Ethnicity } from
 import { calculateAgeGroup, maskNric, formatDate, formatDateForInput } from '../../utils';
 import { ProfileService } from '@lib/services/profileService';
 import { useLms } from '@contexts/LmsContext';
+import { UserRole } from '@app-types';
 import { ensureAbsoluteImageUrl } from '@utils/imageUtils';
 import { getApiUrl, getUploadUrl, getDeleteFileUrl, stripBaseUrl } from '@/lib/urlHelpers';
 import { ThemeMode, getCurrentTheme, applyTheme } from '@utils/colorUtils';
@@ -208,7 +209,7 @@ export const LearnerProfileCard: React.FC<{
 
     console.log('form data content:', formData);
 
-    const isAdmin = true; // Mock admin for testing
+    const isAdmin = role === UserRole.Admin;
 
     useEffect(() => {
         setFormData(profile);
@@ -389,6 +390,7 @@ export const LearnerProfileCard: React.FC<{
             // Check each field for changes
             if (formData.name !== profile.name) changedFields.name = formData.name;
             if (formData.email !== profile.email) changedFields.email = formData.email;
+            if (formData.secondaryEmail !== profile.secondaryEmail) changedFields.secondaryEmail = formData.secondaryEmail;
 
             // For profile picture, prioritize the current upload, then state, then formData comparison
             if (currentUploadedPath) {
@@ -534,6 +536,7 @@ export const LearnerProfileCard: React.FC<{
                         <div><label className="text-sm font-medium dark:text-gray-200">Name</label><input type="text" name="name" value={formData.name} onChange={handleChange} className={inputClasses} /></div>
                         <div><label className="text-sm font-medium dark:text-gray-200">Telephone</label><input type="tel" name="tel" value={formData.tel} onChange={handleChange} className={inputClasses} /></div>
                         <div><label className="text-sm font-medium dark:text-gray-200">Email</label><input type="email" name="email" value={formData.email} onChange={handleChange} className={inputClasses} /></div>
+                        <div><label className="text-sm font-medium dark:text-gray-200">Secondary Email</label><input type="email" name="secondaryEmail" value={formData.secondaryEmail || ''} onChange={handleChange} className={inputClasses} /></div>
                         <div><label className="text-sm font-medium dark:text-gray-200">Date of Birth</label><input type="date" name="dob" value={formatDateForInput(formData.dob || '')} onChange={handleChange} className={inputClasses} /></div>
                         <div><label className="text-sm font-medium dark:text-gray-200">NRIC</label><input type="text" name="nric" value={formData.nric || ''} onChange={handleChange} className={inputClasses} /></div>
                         <div><label className="text-sm font-medium dark:text-gray-200">Race</label><select name="ethnicity" value={formData.ethnicity} onChange={handleChange} className={inputClasses}>{Object.values(Ethnicity).map(e => <option key={e} value={e}>{e}</option>)}</select></div>
@@ -547,6 +550,7 @@ export const LearnerProfileCard: React.FC<{
                         <ProfileBioItem label="Name" value={formData.name} />
                         <ProfileBioItem label="Telephone" value={formData.tel} />
                         <ProfileBioItem label="Email" value={formData.email} />
+                        <ProfileBioItem label="Secondary Email" value={formData.secondaryEmail || '—'} />
                         <MaskedProfileBioItem
                             label="Date of Birth"
                             value={formData.dob ? formatDate(formData.dob) : ''}
@@ -613,51 +617,41 @@ export const LearnerProfileCard: React.FC<{
                             </div>
                         </div>
 
-                        <div className="border-t dark:border-gray-700 my-6"></div>
-                        <h2 className="text-xl font-bold mb-4 dark:text-white">Billing Documents</h2>
-                        <div className="space-y-4">
-                            <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600">
-                                <div>
-                                    <p className="font-semibold dark:text-gray-200">Pro Forma Invoice</p>
-                                    <p className="text-xs text-subtle dark:text-gray-400">Pro forma invoice for your enrollment.</p>
+                        {isAdmin && (
+                            <>
+                                <div className="border-t dark:border-gray-700 my-6"></div>
+                                <h2 className="text-xl font-bold mb-4 dark:text-white">Billing Documents</h2>
+                                <div className="space-y-4">
+                                    <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600">
+                                        <div>
+                                            <p className="font-semibold dark:text-gray-200">Pro Forma Invoice</p>
+                                            <p className="text-xs text-subtle dark:text-gray-400">Pro forma invoice for your enrollment.</p>
+                                        </div>
+                                        <Button size="sm" className="!text-white" onClick={() => window.open(formData.pro_formal_url, '_blank')}>
+                                            Download
+                                        </Button>
+                                    </div>
+                                    <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600">
+                                        <div>
+                                            <p className="font-semibold dark:text-gray-200">Course Invoice</p>
+                                            <p className="text-xs text-subtle dark:text-gray-400">Invoice for your course enrollment.</p>
+                                        </div>
+                                        <Button size="sm" className="!text-white" disabled={!formData.invoice_url} onClick={() => formData.invoice_url && window.open(formData.invoice_url, '_blank')}>
+                                            Download
+                                        </Button>
+                                    </div>
+                                    <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600">
+                                        <div>
+                                            <p className="font-semibold dark:text-gray-200">Payment Receipt</p>
+                                            <p className="text-xs text-subtle dark:text-gray-400">Receipt for your payment.</p>
+                                        </div>
+                                        <Button size="sm" className="!text-white" disabled={!formData.receipt_url} onClick={() => formData.receipt_url && window.open(formData.receipt_url, '_blank')}>
+                                            Download
+                                        </Button>
+                                    </div>
                                 </div>
-                                <Button
-                                    size="sm"
-                                    className="!text-white"
-                                    onClick={() => window.open(formData.pro_formal_url, '_blank')}
-                                >
-                                    Download
-                                </Button>
-                            </div>
-                            <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600">
-                                <div>
-                                    <p className="font-semibold dark:text-gray-200">Course Invoice</p>
-                                    <p className="text-xs text-subtle dark:text-gray-400">Invoice for your course enrollment.</p>
-                                </div>
-                                <Button
-                                    size="sm"
-                                    className="!text-white"
-                                    disabled={!formData.invoice_url}
-                                    onClick={() => formData.invoice_url && window.open(formData.invoice_url, '_blank')}
-                                >
-                                    Download
-                                </Button>
-                            </div>
-                            <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600">
-                                <div>
-                                    <p className="font-semibold dark:text-gray-200">Payment Receipt</p>
-                                    <p className="text-xs text-subtle dark:text-gray-400">Receipt for your payment.</p>
-                                </div>
-                                <Button
-                                    size="sm"
-                                    className="!text-white"
-                                    disabled={!formData.receipt_url}
-                                    onClick={() => formData.receipt_url && window.open(formData.receipt_url, '_blank')}
-                                >
-                                    Download
-                                </Button>
-                            </div>
-                        </div>
+                            </>
+                        )}
                     </>
                 )}
             </Card>

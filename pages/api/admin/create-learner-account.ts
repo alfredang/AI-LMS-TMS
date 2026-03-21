@@ -1,7 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import bcrypt from 'bcryptjs';
-
 // POST { email, fullName, nric?, courseRunId?, courseId?, enrolmentId? }
 // Creates a Learner account if one doesn't already exist for that email.
 // If courseRunId + courseId are provided, also enrolls the learner into the course run.
@@ -28,7 +27,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   // Helper: enroll user into a course run if not already enrolled
   const ensureEnrollment = async (userId: string) => {
     if (!courseRunId || !courseId) return;
-    await client.query(
+    const result = await client.query(
       `INSERT INTO enrollment (user_id, course_id, course_run_id, enrolment_date, enrolment_id, nric, email)
        SELECT $1, $2, $3, CURRENT_DATE, $4, $5, $6
        WHERE NOT EXISTS (
@@ -36,6 +35,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
        )`,
       [userId, courseId, courseRunId, enrolmentId || null, nric?.trim() || null, email.trim().toLowerCase()]
     );
+    // Signal learner to refresh if a new enrollment was inserted
+    if (result.rowCount) {
+      await client.query(
+        `UPDATE app_user SET courses_updated_at = NOW() WHERE id = $1`,
+        [userId]
+      );
+    }
   };
 
   try {
@@ -66,12 +72,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       });
     }
 
-    // Create new account with default password
     const passwordHash = await bcrypt.hash('password123', 10);
-
     const insertUser = await client.query(
       `INSERT INTO app_user (email, full_name, password, password_hash, account_status, created_at, updated_at)
-       VALUES ($1, $2, $3, $3, 'active', NOW(), NOW())
+       VALUES ($1, $2, 'password123', $3, 'active', NOW(), NOW())
        RETURNING id`,
       [email.trim().toLowerCase(), fullName.trim(), passwordHash]
     );
