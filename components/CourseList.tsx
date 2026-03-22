@@ -1,5 +1,4 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { useRouter } from 'next/router';
 import { useLms } from '@contexts/LmsContext';
 import { useCourses, useLearnerCourseSearch } from '../hooks/useCourses';
 import { useTrainerCourses, useTrainerCourseSearch } from '../hooks/useTrainerCourses';
@@ -38,7 +37,7 @@ const DetailRow: React.FC<{ label: string; value: React.ReactNode }> = ({ label,
 );
 
 const ManagementCourseList: React.FC = () => {
-    const { role, currentUser, setSelectedCourse: setContextSelectedCourse, setEditingCourse, setCourseEditMode, loadCourseData, setAdminPage } = useLms();
+    const { role, currentUser, setSelectedCourse: setContextSelectedCourse, setEditingCourse, setCourseEditMode, loadCourseData, setAdminPage, courseListPage, setCourseListPage } = useLms();
 
     // Hooks for different user roles
     const { courses: learnerCourses, loading: learnerLoading, error: learnerError } = useCourses(
@@ -60,45 +59,10 @@ const ManagementCourseList: React.FC = () => {
     const [selectedCourse, setSelectedCourse] = useState<any>(null);
     const [trainerClassView, setTrainerClassView] = useState<'upcoming' | 'past'>('upcoming');
 
-    // Pagination state - synced with URL query param
-    const router = useRouter();
-    const [currentPage, setCurrentPage] = useState(() => {
-        // Try to read from URL on initial render (works when router.query is pre-populated)
-        if (typeof window !== 'undefined') {
-            const params = new URLSearchParams(window.location.search);
-            const p = params.get('page');
-            if (p) return Math.max(1, parseInt(p, 10) || 1);
-        }
-        return 1;
-    });
+    // Pagination state - stored in LmsContext so it persists across mount/unmount
+    const currentPage = courseListPage;
+    const setCurrentPage = setCourseListPage;
     const itemsPerPage = 9;
-    const hasInitialized = useRef(false);
-
-    // Also sync from router.query when it becomes ready (handles client-side navigation)
-    useEffect(() => {
-        if (router.isReady && !hasInitialized.current) {
-            hasInitialized.current = true;
-            if (router.query.page) {
-                const urlPage = Math.max(1, parseInt(router.query.page as string, 10) || 1);
-                setCurrentPage(urlPage);
-            }
-        }
-    }, [router.isReady, router.query.page]);
-
-    // When currentPage changes from user interaction, write to URL
-    const lastWrittenPage = useRef(currentPage);
-    useEffect(() => {
-        if (!router.isReady) return;
-        if (currentPage === lastWrittenPage.current) return;
-        lastWrittenPage.current = currentPage;
-        const newQuery: Record<string, string | string[] | undefined> = { ...router.query };
-        if (currentPage > 1) {
-            newQuery.page = String(currentPage);
-        } else {
-            delete newQuery.page;
-        }
-        router.replace({ pathname: router.pathname, query: newQuery }, undefined, { shallow: true });
-    }, [currentPage]);
 
     // Determine which courses to use based on role
     let relevantCourses, currentLoading, currentError;
@@ -612,7 +576,7 @@ const ManagementCourseList: React.FC = () => {
                         <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                            onClick={() => setCurrentPage(Math.max(currentPage - 1, 1))}
                             disabled={currentPage === 1}
                         >
                             <Icon name={IconName.Back} className="w-4 h-4 mr-1" />
@@ -647,7 +611,7 @@ const ManagementCourseList: React.FC = () => {
                         <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                            onClick={() => setCurrentPage(Math.min(currentPage + 1, totalPages))}
                             disabled={currentPage === totalPages}
                         >
                             Next →

@@ -235,6 +235,8 @@ interface LmsContextType {
   setCourseEditMode: (mode: 'create' | 'edit' | null) => void;
   editingCourseRun: any | null;
   setEditingCourseRun: (courseRun: any | null) => void;
+  courseListPage: number;
+  setCourseListPage: (page: number) => void;
   courseDetail: CourseDetail | null;
   learningUnits: LearningUnit[];
   courseAssessments: CourseAssessment[];
@@ -294,6 +296,7 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [editingCourse, setEditingCourse] = useState<Course | null>(null);
   const [courseEditMode, setCourseEditMode] = useState<'create' | 'edit' | null>(null);
   const [editingCourseRun, setEditingCourseRun] = useState<any | null>(null);
+  const [courseListPage, setCourseListPage] = useState(1);
   const [courseDetail, setCourseDetail] = useState<CourseDetail | null>(null);
   const [learningUnits, setLearningUnits] = useState<LearningUnit[]>([]);
   const [courseAssessments, setCourseAssessments] = useState<CourseAssessment[]>([]);
@@ -1487,6 +1490,8 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setCourseEditMode,
     editingCourseRun,
     setEditingCourseRun,
+    courseListPage,
+    setCourseListPage,
     courseDetail,
     learningUnits,
     courseAssessments,
