@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { useRouter } from 'next/router';
 import { useLms } from '@contexts/LmsContext';
 import { useCourses, useLearnerCourseSearch } from '../hooks/useCourses';
 import { useTrainerCourses, useTrainerCourseSearch } from '../hooks/useTrainerCourses';
@@ -60,9 +61,31 @@ const ManagementCourseList: React.FC = () => {
     const [trainerClassView, setTrainerClassView] = useState<'upcoming' | 'past'>('upcoming');
 
     // Pagination state - stored in LmsContext so it persists across mount/unmount
+    const router = useRouter();
     const currentPage = courseListPage;
-    const setCurrentPage = setCourseListPage;
     const itemsPerPage = 9;
+
+    const setCurrentPage = (page: number) => {
+        setCourseListPage(page);
+        // Also sync to URL for visibility/shareability
+        const newQuery: Record<string, string | string[] | undefined> = { ...router.query };
+        if (page > 1) {
+            newQuery.page = String(page);
+        } else {
+            delete newQuery.page;
+        }
+        router.replace({ pathname: router.pathname, query: newQuery }, undefined, { shallow: true });
+    };
+
+    // On mount: sync URL to reflect the current page from context
+    useEffect(() => {
+        if (!router.isReady) return;
+        const urlPage = router.query.page ? parseInt(router.query.page as string, 10) : 1;
+        if (currentPage > 1 && urlPage !== currentPage) {
+            const newQuery: Record<string, string | string[] | undefined> = { ...router.query, page: String(currentPage) };
+            router.replace({ pathname: router.pathname, query: newQuery }, undefined, { shallow: true });
+        }
+    }, [router.isReady]);
 
     // Determine which courses to use based on role
     let relevantCourses, currentLoading, currentError;
