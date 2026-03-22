@@ -421,9 +421,8 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
             return;
         }
 
-        // Validate trainer slides URL if link option is selected (optional validation)
-        if (course.trainerSlidesUrl && course.trainerSlidesUrl.trim() !== '') {
-            // Basic URL validation - only validate if URL is provided
+        // Validate trainer slides URL if it looks like a user-entered URL (skip uploaded file paths)
+        if (course.trainerSlidesUrl && course.trainerSlidesUrl.trim() !== '' && !course.trainerSlidesUrl.startsWith('/uploads/')) {
             try {
                 new URL(course.trainerSlidesUrl);
             } catch {
