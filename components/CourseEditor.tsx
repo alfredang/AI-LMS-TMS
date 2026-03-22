@@ -377,6 +377,15 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
             { field: course.courseType, name: 'Course Type' }
         ];
 
+        // TSC Title and TSC Code are required for WSQ and IBF courses
+        const isTscRequired = course.courseType === 'WSQ' || course.courseType === 'IBF';
+        if (isTscRequired) {
+            requiredFields.push(
+                { field: course.tscTitle, name: 'TSC Title' },
+                { field: course.tscCode, name: 'TSC Code' }
+            );
+        }
+
         const missingFields = requiredFields.filter(({ field }) => !field || field === '').map(({ name }) => name);
 
         // Mode of Learning — default to Physical if somehow unset
@@ -953,13 +962,13 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                             </div>
                             <div>
                                 <label htmlFor="tscTitle" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
-                                    TSC Title
+                                    TSC Title {(course.courseType === 'WSQ' || course.courseType === 'IBF') && <span className="text-red-500">*</span>}
                                 </label>
                                 <input type="text" id="tscTitle" name="tscTitle" value={course.tscTitle} onChange={handleCourseChange} className={inputClasses} placeholder="e.g. Web Development" />
                             </div>
                             <div>
                                 <label htmlFor="tscCode" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
-                                    TSC Code
+                                    TSC Code {(course.courseType === 'WSQ' || course.courseType === 'IBF') && <span className="text-red-500">*</span>}
                                 </label>
                                 <input type="text" id="tscCode" name="tscCode" value={course.tscCode} onChange={handleCourseChange} className={inputClasses} placeholder="e.g. ICT-DIT-3011-1.1" />
                             </div>
