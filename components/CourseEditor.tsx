@@ -367,7 +367,7 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
         return validateFileType(file, ['.pdf', '.doc', '.docx'], 'Assessment File');
     };
 
-    const handleSaveCourse = async () => {
+    const handleSaveCourse = async (continueEditing = false) => {
         // Validation for required fields
         const requiredFields = [
             { field: course.title, name: 'Course Title' },
@@ -638,19 +638,35 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
             const result = await response.json();
 
             if (response.ok && result.success) {
-                // Update the editing course context
-                setEditingCourse(null);
-                setCourseEditMode(null); // Also clear the edit mode
-
                 // Clear the files marked for deletion since they were successfully processed
                 setFilesToDelete([]);
                 setDeletedAssessments([]);
 
-                // Show success message
-                alert(`Course "${courseData.title}" ${isNewCourse ? 'created' : 'updated'} successfully!`);
+                if (continueEditing) {
+                    // Stay on the edit page — reload course data to get fresh state
+                    if (isNewCourse && result.data?.courseId) {
+                        // For new courses, update the course with the real ID from the server
+                        setCourse(prev => ({ ...prev, id: result.data.courseId }));
+                        setEditingCourse({ ...course, id: result.data.courseId } as any);
+                        setCourseEditMode('edit');
+                    }
+                    // Reset file inputs since files were already uploaded
+                    setFiles({
+                        assessmentFiles: [],
+                        assessmentFilesById: {}
+                    });
+                    alert(`Course "${courseData.title}" saved successfully!`);
+                } else {
+                    // Navigate away from editor
+                    setEditingCourse(null);
+                    setCourseEditMode(null);
+                    alert(`Course "${courseData.title}" ${isNewCourse ? 'created' : 'updated'} successfully!`);
+                }
                 console.log('✅ Course saved:', result.data);
             } else {
-                throw new Error(result.message || `Failed to ${isNewCourse ? 'create' : 'update'} course`);
+                const errorDetail = result.error?.message || result.message || `Failed to ${isNewCourse ? 'create' : 'update'} course`;
+                console.error('❌ Server error details:', result.error);
+                throw new Error(errorDetail);
             }
         } catch (error) {
             console.error(`❌ Failed to ${isNewCourse ? 'create' : 'update'} course:`, error);
@@ -836,7 +852,12 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                         setEditingCourse(null);
                         setCourseEditMode(null);
                     }}>Cancel</Button>
-                    <Button variant="primary" onClick={handleSaveCourse} disabled={isSaving}>
+                    {!isNewCourse && (
+                        <Button variant="outline" onClick={() => handleSaveCourse(true)} disabled={isSaving}>
+                            {isSaving ? <Spinner size="sm" /> : 'Save & Continue Editing'}
+                        </Button>
+                    )}
+                    <Button variant="primary" onClick={() => handleSaveCourse(false)} disabled={isSaving}>
                         {isSaving ? <Spinner size="sm" /> : (isNewCourse ? 'Create Course' : 'Save Changes')}
                     </Button>
                 </div>
