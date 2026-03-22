@@ -1200,7 +1200,7 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
                 className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px ${
                   activeTab === tab
                     ? 'border-primary text-primary'
-                    : 'border-transparent text-gray-400 hover:text-white hover:border-gray-500'
+                    : 'border-transparent text-on-surface-secondary hover:text-on-surface'
                 }`}
               >
                 {tab === 'qr' ? 'QR Attendance' : tab === 'elist' ? 'E-Attendance List' : tab === 'traqom' ? 'TRAQOM QR Code' : 'Cert QR Code'}

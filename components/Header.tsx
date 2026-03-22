@@ -242,17 +242,44 @@ const Header: React.FC = () => {
               </div>
             )}
 
-            {/* Profile Button (all roles) */}
-            <div className="relative" ref={profileRef}>
-              <button onClick={() => setIsProfileOpen(prev => !prev)} className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-gray-200 flex items-center justify-center ring-2 ring-offset-1 ring-primary overflow-hidden flex-shrink-0">
-                {currentUserProfile?.profilePictureUrl ? (
-                  <img src={ensureAbsoluteImageUrl(currentUserProfile.profilePictureUrl)} alt={currentUserProfile.name} className="w-full h-full object-cover" />
-                ) : (
-                  <Icon name={IconName.User} className="w-5 h-5 sm:w-6 sm:h-6 text-gray-600" />
-                )}
+            {/* Sign Out button (Training Provider layout) */}
+            {role === UserRole.TrainingProvider && (
+              <button
+                onClick={logout}
+                className="hidden md:flex items-center space-x-1 sm:space-x-1.5 text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 transition-colors"
+              >
+                <Icon name={IconName.Logout} className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                <span className="hidden lg:inline">Sign Out</span>
               </button>
-              {isProfileOpen && <ProfileDropdown onClose={() => setIsProfileOpen(false)} />}
-            </div>
+            )}
+
+            {/* Profile Button (non-Training Provider roles) */}
+            {(role !== UserRole.TrainingProvider) && (
+              <div className="relative" ref={profileRef}>
+                <button onClick={() => setIsProfileOpen(prev => !prev)} className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-gray-200 flex items-center justify-center ring-2 ring-offset-1 ring-primary overflow-hidden flex-shrink-0">
+                  {currentUserProfile?.profilePictureUrl ? (
+                    <img src={ensureAbsoluteImageUrl(currentUserProfile.profilePictureUrl)} alt={currentUserProfile.name} className="w-full h-full object-cover" />
+                  ) : (
+                    <Icon name={IconName.User} className="w-5 h-5 sm:w-6 sm:h-6 text-gray-600" />
+                  )}
+                </button>
+                {isProfileOpen && <ProfileDropdown onClose={() => setIsProfileOpen(false)} />}
+              </div>
+            )}
+
+            {/* Mobile-only profile button for Training Provider */}
+            {role === UserRole.TrainingProvider && (
+              <div className="relative md:hidden" ref={profileRef}>
+                <button onClick={() => setIsProfileOpen(prev => !prev)} className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center ring-2 ring-offset-1 ring-primary overflow-hidden flex-shrink-0">
+                  {trainingProviderProfile?.companyLogoUrl ? (
+                    <img src={ensureAbsoluteImageUrl(trainingProviderProfile.companyLogoUrl)} alt={trainingProviderProfile.companyName} className="w-full h-full object-cover" />
+                  ) : (
+                    <Icon name={IconName.User} className="w-5 h-5 text-gray-600" />
+                  )}
+                </button>
+                {isProfileOpen && <ProfileDropdown onClose={() => setIsProfileOpen(false)} />}
+              </div>
+            )}
           </div>
         </div>
       </div>
