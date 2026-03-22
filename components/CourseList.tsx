@@ -77,15 +77,19 @@ const ManagementCourseList: React.FC = () => {
         router.replace({ pathname: router.pathname, query: newQuery }, undefined, { shallow: true });
     };
 
-    // On mount: sync URL to reflect the current page from context
+    // Sync between URL and context: URL takes priority (allows navigation via URL editing)
     useEffect(() => {
         if (!router.isReady) return;
-        const urlPage = router.query.page ? parseInt(router.query.page as string, 10) : 1;
-        if (currentPage > 1 && urlPage !== currentPage) {
+        const urlPage = router.query.page ? Math.max(1, parseInt(router.query.page as string, 10) || 1) : null;
+        if (urlPage && urlPage !== currentPage) {
+            // URL has a page param that differs from context — user edited the URL
+            setCourseListPage(urlPage);
+        } else if (!urlPage && currentPage > 1) {
+            // No page in URL but context has one — write context to URL
             const newQuery: Record<string, string | string[] | undefined> = { ...router.query, page: String(currentPage) };
             router.replace({ pathname: router.pathname, query: newQuery }, undefined, { shallow: true });
         }
-    }, [router.isReady]);
+    }, [router.isReady, router.query.page]);
 
     // Determine which courses to use based on role
     let relevantCourses, currentLoading, currentError;
