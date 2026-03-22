@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useRouter } from 'next/router';
 import { useLms } from '@contexts/LmsContext';
 import { useCourses, useLearnerCourseSearch } from '../hooks/useCourses';
@@ -60,29 +60,36 @@ const ManagementCourseList: React.FC = () => {
     const [selectedCourse, setSelectedCourse] = useState<any>(null);
     const [trainerClassView, setTrainerClassView] = useState<'upcoming' | 'past'>('upcoming');
 
-    // Pagination state - read page from URL query param
+    // Pagination state - synced with URL query param
     const router = useRouter();
-    const [currentPage, setCurrentPageState] = useState(1);
+    const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 9;
+    const skipUrlSync = useRef(false);
 
-    // Sync page from URL whenever router.query.page changes (handles mount, remount, back/forward)
+    // On mount / remount: read page from URL
     useEffect(() => {
-        if (router.isReady) {
-            const urlPage = typeof router.query.page === 'string' ? Math.max(1, parseInt(router.query.page, 10) || 1) : 1;
-            setCurrentPageState(urlPage);
+        if (router.isReady && router.query.page) {
+            const urlPage = Math.max(1, parseInt(router.query.page as string, 10) || 1);
+            skipUrlSync.current = true; // prevent the write-back effect from firing
+            setCurrentPage(urlPage);
         }
     }, [router.isReady, router.query.page]);
 
-    // Wrapper that updates both state and URL
-    const setCurrentPage = useCallback((page: number | ((prev: number) => number)) => {
-        setCurrentPageState(prev => {
-            const newPage = typeof page === 'function' ? page(prev) : page;
-            const newQuery: Record<string, string | string[]> = { ...router.query, page: String(newPage) };
-            if (newPage <= 1) delete newQuery.page;
-            router.replace({ pathname: router.pathname, query: newQuery }, undefined, { shallow: true });
-            return newPage;
-        });
-    }, [router]);
+    // When currentPage changes (from user clicking pagination), write to URL
+    useEffect(() => {
+        if (!router.isReady) return;
+        if (skipUrlSync.current) {
+            skipUrlSync.current = false;
+            return;
+        }
+        const newQuery: Record<string, string | string[] | undefined> = { ...router.query };
+        if (currentPage > 1) {
+            newQuery.page = String(currentPage);
+        } else {
+            delete newQuery.page;
+        }
+        router.replace({ pathname: router.pathname, query: newQuery }, undefined, { shallow: true });
+    }, [currentPage]);
 
     // Determine which courses to use based on role
     let relevantCourses, currentLoading, currentError;
