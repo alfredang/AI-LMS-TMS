@@ -62,26 +62,35 @@ const ManagementCourseList: React.FC = () => {
 
     // Pagination state - synced with URL query param
     const router = useRouter();
-    const [currentPage, setCurrentPage] = useState(1);
+    const [currentPage, setCurrentPage] = useState(() => {
+        // Try to read from URL on initial render (works when router.query is pre-populated)
+        if (typeof window !== 'undefined') {
+            const params = new URLSearchParams(window.location.search);
+            const p = params.get('page');
+            if (p) return Math.max(1, parseInt(p, 10) || 1);
+        }
+        return 1;
+    });
     const itemsPerPage = 9;
-    const skipUrlSync = useRef(false);
+    const hasInitialized = useRef(false);
 
-    // On mount / remount: read page from URL
+    // Also sync from router.query when it becomes ready (handles client-side navigation)
     useEffect(() => {
-        if (router.isReady && router.query.page) {
-            const urlPage = Math.max(1, parseInt(router.query.page as string, 10) || 1);
-            skipUrlSync.current = true; // prevent the write-back effect from firing
-            setCurrentPage(urlPage);
+        if (router.isReady && !hasInitialized.current) {
+            hasInitialized.current = true;
+            if (router.query.page) {
+                const urlPage = Math.max(1, parseInt(router.query.page as string, 10) || 1);
+                setCurrentPage(urlPage);
+            }
         }
     }, [router.isReady, router.query.page]);
 
-    // When currentPage changes (from user clicking pagination), write to URL
+    // When currentPage changes from user interaction, write to URL
+    const lastWrittenPage = useRef(currentPage);
     useEffect(() => {
         if (!router.isReady) return;
-        if (skipUrlSync.current) {
-            skipUrlSync.current = false;
-            return;
-        }
+        if (currentPage === lastWrittenPage.current) return;
+        lastWrittenPage.current = currentPage;
         const newQuery: Record<string, string | string[] | undefined> = { ...router.query };
         if (currentPage > 1) {
             newQuery.page = String(currentPage);
