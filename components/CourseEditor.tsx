@@ -381,8 +381,8 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
         const isTscRequired = course.courseType === 'WSQ' || course.courseType === 'IBF';
         if (isTscRequired) {
             requiredFields.push(
-                { field: course.tscTitle, name: 'TSC Title' },
-                { field: course.tscCode, name: 'TSC Code' }
+                { field: course.tscTitle || '', name: 'TSC Title' },
+                { field: course.tscCode || '', name: 'TSC Code' }
             );
         }
 
