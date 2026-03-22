@@ -114,6 +114,8 @@ export interface Course {
   courseFee?: number;
   taxPercent?: number;
   isLeaderboardEnabled?: boolean;
+  courseLink?: string;
+  assessmentRecordLink?: string;
   topics: Topic[];
   assessments?: Assessment[];
   learners?: any[];

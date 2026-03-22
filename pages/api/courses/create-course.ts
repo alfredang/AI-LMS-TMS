@@ -89,6 +89,8 @@ interface CourseData {
   trainerSlidesUrl?: string;
   writtenAssessmentLink?: string;
   practicalPerformanceAssessmentLink?: string;
+  courseLink?: string;
+  assessmentRecordLink?: string;
   isGamified: boolean;
   learningUnits: Array<{
     title: string;
