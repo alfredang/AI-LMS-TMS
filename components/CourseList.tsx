@@ -60,19 +60,18 @@ const ManagementCourseList: React.FC = () => {
     const [selectedCourse, setSelectedCourse] = useState<any>(null);
     const [trainerClassView, setTrainerClassView] = useState<'upcoming' | 'past'>('upcoming');
 
-    // Pagination state - read initial page from URL query param
+    // Pagination state - read page from URL query param
     const router = useRouter();
-    const initialPage = typeof router.query.page === 'string' ? Math.max(1, parseInt(router.query.page, 10) || 1) : 1;
-    const [currentPage, setCurrentPageState] = useState(initialPage);
+    const [currentPage, setCurrentPageState] = useState(1);
     const itemsPerPage = 9;
 
-    // Sync page from URL when router becomes ready
+    // Sync page from URL whenever router.query.page changes (handles mount, remount, back/forward)
     useEffect(() => {
-        if (router.isReady && router.query.page) {
-            const urlPage = Math.max(1, parseInt(router.query.page as string, 10) || 1);
+        if (router.isReady) {
+            const urlPage = typeof router.query.page === 'string' ? Math.max(1, parseInt(router.query.page, 10) || 1) : 1;
             setCurrentPageState(urlPage);
         }
-    }, [router.isReady]);
+    }, [router.isReady, router.query.page]);
 
     // Wrapper that updates both state and URL
     const setCurrentPage = useCallback((page: number | ((prev: number) => number)) => {
