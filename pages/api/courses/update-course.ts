@@ -49,6 +49,8 @@ interface CourseData {
   facilitatorGuideUrl?: string;
   assessmentPlanUrl?: string;
   slidesUrl?: string;
+  courseLink?: string;
+  assessmentRecordLink?: string;
   writtenAssessmentLink?: string;
   practicalPerformanceAssessmentLink?: string;
   learningUnits: {
@@ -478,8 +480,10 @@ export default async function handler(
           tax_percent = $19,
           written_assessment_link = COALESCE($20, written_assessment_link),
           practical_performance_assessment_link = COALESCE($21, practical_performance_assessment_link),
+          course_link = COALESCE($22, course_link),
+          assessment_record_link = COALESCE($23, assessment_record_link),
           updated_at = now()
-        WHERE id = $22
+        WHERE id = $24
         RETURNING id
       `;
 
@@ -505,6 +509,8 @@ export default async function handler(
         courseData.taxPercent || null,
         fileUrls.writtenAssessmentLink || courseData.writtenAssessmentLink || null,
         fileUrls.practicalPerformanceAssessmentLink || courseData.practicalPerformanceAssessmentLink || null,
+        courseData.courseLink || null,
+        courseData.assessmentRecordLink || null,
         courseId
       ]);
 

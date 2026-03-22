@@ -80,6 +80,8 @@ export default async function handler(
         c.trainer_slides_url,
         c.written_assessment_link,
         c.practical_performance_assessment_link,
+        c.course_link,
+        c.assessment_record_link,
         c.is_gamified          AS is_leaderboard_enabled,
         c.image_url
       FROM course c
@@ -180,6 +182,8 @@ export default async function handler(
       trainerSlidesUrl: courseData.trainer_slides_url,
       writtenAssessmentLink: courseData.written_assessment_link,
       practicalPerformanceAssessmentLink: courseData.practical_performance_assessment_link,
+      courseLink: courseData.course_link,
+      assessmentRecordLink: courseData.assessment_record_link,
       isLeaderboardEnabled: courseData.is_leaderboard_enabled,
       imageUrl: courseData.image_url,
       // Convert learning units to topics format expected by the editor

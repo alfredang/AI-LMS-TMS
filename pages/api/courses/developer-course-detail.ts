@@ -29,6 +29,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           c.slides_url           AS learner_slides,
           c.trainer_slides_url   AS trainer_slides,
           c.assessment_plan_url  AS assessment_plan,
+          c.course_link,
+          c.assessment_record_link,
           c.written_assessment_link,
           c.practical_performance_assessment_link
       FROM course c
@@ -65,6 +67,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         facilitatorGuideUrl: courseDetail.facilitator_guide,
         trainerSlidesUrl: courseDetail.trainer_slides,
         assessmentPlanUrl: courseDetail.assessment_plan,
+        courseLink: courseDetail.course_link,
+        assessmentRecordLink: courseDetail.assessment_record_link,
         writtenAssessmentLink: courseDetail.written_assessment_link,
         practicalPerformanceAssessmentLink: courseDetail.practical_performance_assessment_link,
         certificate: ''

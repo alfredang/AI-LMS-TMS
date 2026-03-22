@@ -179,8 +179,9 @@ export default function handler(req: NextApiRequest & { files?: any }, res: Next
             training_hours, assessment_hours, mode_of_learning, course_type,
             learning_outcomes, is_gamified, learner_guide_url, slides_url,
             lesson_plan_url, assessment_plan_url, facilitator_guide_url, trainer_slides_url,
-            written_assessment_link, practical_performance_assessment_link
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+            written_assessment_link, practical_performance_assessment_link,
+            course_link, assessment_record_link
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
           RETURNING id
         `;
 
@@ -204,6 +205,8 @@ export default function handler(req: NextApiRequest & { files?: any }, res: Next
           filesByFieldname?.trainerSlides ? `/uploads/slides/${filesByFieldname.trainerSlides[0].filename}` : courseData.trainerSlidesUrl || null,
           filesByFieldname?.writtenAssessment ? `/uploads/assessments/${filesByFieldname.writtenAssessment[0].filename}` : courseData.writtenAssessmentLink || null,
           filesByFieldname?.practicalPerformanceAssessment ? `/uploads/assessments/${filesByFieldname.practicalPerformanceAssessment[0].filename}` : courseData.practicalPerformanceAssessmentLink || null,
+          courseData.courseLink || null,
+          courseData.assessmentRecordLink || null,
         ];
 
         console.log('🔍 About to execute course insert with values:', courseValues);

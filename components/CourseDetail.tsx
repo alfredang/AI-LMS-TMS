@@ -1230,7 +1230,7 @@ const CourseSidebar: React.FC<CourseSidebarProps> = ({ userRole, onSetGradingVie
     if (userRole === UserRole.Developer || userRole === UserRole.TrainingProvider || userRole === UserRole.Admin) {
         trainerNavItems = trainerNavItems.filter(item =>
             item.type === 'separator' ||
-            (item.label !== "Courseware Link" && item.label !== "Assessment Record Link" && item.label !== "TRAQOM Survey" && item.label !== "Grading")
+            (item.label !== "TRAQOM Survey" && item.label !== "Grading")
         );
     } else if (userRole === UserRole.Trainer) {
         trainerNavItems = trainerNavItems.filter(item =>
@@ -1833,9 +1833,9 @@ export const CourseDetail: React.FC = () => {
                             ) : (
                             <>
                             {/* Courseware Link */}
-                            {userRole === UserRole.Trainer && (
+                            {(userRole === UserRole.Trainer || userRole === UserRole.Developer || userRole === UserRole.Admin || userRole === UserRole.TrainingProvider) && (
                                 <div id={toId("Courseware Link")}>
-                                    <ContentSection>
+                                    <ContentSection title="Courseware">
                                         {convertedCourse.courseLink ? (
                                             <a
                                                 href={convertedCourse.courseLink}
@@ -1857,9 +1857,9 @@ export const CourseDetail: React.FC = () => {
                             )}
 
                             {/* Assessment Record Link */}
-                            {userRole === UserRole.Trainer && (
+                            {(userRole === UserRole.Trainer || userRole === UserRole.Developer || userRole === UserRole.Admin || userRole === UserRole.TrainingProvider) && (
                                 <div id={toId("Assessment Record Link")}>
-                                    <ContentSection>
+                                    <ContentSection title="Assessment Records">
                                         {convertedCourse.assessmentRecordLink ? (
                                             <a
                                                 href={convertedCourse.assessmentRecordLink}
@@ -1882,7 +1882,7 @@ export const CourseDetail: React.FC = () => {
 
                             {/* Lesson Plan */}
                             <div id={toId("Lesson Plan")}>
-                                <ContentSection>
+                                <ContentSection title="Lesson Plan">
                                     {convertedCourse.lessonPlanUrl ? (
                                         isLessonPlanExternal ? (
                                             <a
@@ -1917,7 +1917,7 @@ export const CourseDetail: React.FC = () => {
 
                             {/* Learner Guide */}
                             <div id={toId("Learner Guide")}>
-                                <ContentSection>
+                                <ContentSection title="Learner Guide">
                                     {convertedCourse.learnerGuideUrl ? (
                                         isLearnerGuideExternal ? (
                                             <a

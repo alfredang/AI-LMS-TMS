@@ -450,6 +450,8 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                 facilitatorGuideUrl: course.facilitatorGuideUrl || undefined,
                 assessmentPlanUrl: course.assessmentPlanUrl || undefined,
                 slidesUrl: course.slidesUrl || undefined,
+                courseLink: course.courseLink || undefined,
+                assessmentRecordLink: course.assessmentRecordLink || undefined,
                 writtenAssessmentLink: writtenAssessmentInputType === 'link' ? (course.writtenAssessmentLink || undefined) : undefined,
                 practicalPerformanceAssessmentLink: practicalPerformanceInputType === 'link' ? (course.practicalPerformanceAssessmentLink || undefined) : undefined,
                 // Convert topics to learning units with position
@@ -1076,6 +1078,28 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                             onChange={(e) => setCourse(prev => ({ ...prev, assessmentPlanUrl: e.target.value }))}
                             className={inputClasses}
                             placeholder="https://docs.google.com/..."
+                        />
+                    </Card>
+                    <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
+                        <label htmlFor="courseLink" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Courseware Link</label>
+                        <input
+                            type="url"
+                            id="courseLink"
+                            value={course.courseLink || ''}
+                            onChange={(e) => setCourse(prev => ({ ...prev, courseLink: e.target.value }))}
+                            className={inputClasses}
+                            placeholder="https://..."
+                        />
+                    </Card>
+                    <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
+                        <label htmlFor="assessmentRecordLink" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Assessment Record Link</label>
+                        <input
+                            type="url"
+                            id="assessmentRecordLink"
+                            value={course.assessmentRecordLink || ''}
+                            onChange={(e) => setCourse(prev => ({ ...prev, assessmentRecordLink: e.target.value }))}
+                            className={inputClasses}
+                            placeholder="https://..."
                         />
                     </Card>
                     <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
