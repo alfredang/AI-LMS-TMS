@@ -372,8 +372,6 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
         const requiredFields = [
             { field: course.title, name: 'Course Title' },
             { field: course.courseCode, name: 'Course Code' },
-            { field: course.tscTitle, name: 'TSC Title' },
-            { field: course.tscCode, name: 'TSC Code' },
             { field: course.trainingHours, name: 'Training Hours' },
             { field: course.assessmentHours, name: 'Assessment Hours' },
             { field: course.courseType, name: 'Course Type' }
@@ -955,13 +953,13 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                             </div>
                             <div>
                                 <label htmlFor="tscTitle" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
-                                    TSC Title <span className="text-red-500">*</span>
+                                    TSC Title
                                 </label>
                                 <input type="text" id="tscTitle" name="tscTitle" value={course.tscTitle} onChange={handleCourseChange} className={inputClasses} placeholder="e.g. Web Development" />
                             </div>
                             <div>
                                 <label htmlFor="tscCode" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
-                                    TSC Code <span className="text-red-500">*</span>
+                                    TSC Code
                                 </label>
                                 <input type="text" id="tscCode" name="tscCode" value={course.tscCode} onChange={handleCourseChange} className={inputClasses} placeholder="e.g. ICT-DIT-3011-1.1" />
                             </div>
