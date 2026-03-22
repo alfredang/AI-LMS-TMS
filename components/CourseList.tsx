@@ -187,8 +187,13 @@ const ManagementCourseList: React.FC = () => {
         return filteredCourses.slice(startIndex, startIndex + itemsPerPage);
     }, [filteredCourses, currentPage, itemsPerPage]);
 
-    // Reset page when filters change
+    // Reset page when filters change (skip initial mount to preserve URL page)
+    const isInitialMount = useRef(true);
     React.useEffect(() => {
+        if (isInitialMount.current) {
+            isInitialMount.current = false;
+            return;
+        }
         setCurrentPage(1);
     }, [searchQuery, filterCourseCode, filterCourseType, filterMode, filterStartDate]);
 
