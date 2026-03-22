@@ -1,5 +1,4 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { useRouter } from 'next/router';
 import { useLms } from '@contexts/LmsContext';
 import { useCourses, useLearnerCourseSearch } from '../hooks/useCourses';
 import { useTrainerCourses, useTrainerCourseSearch } from '../hooks/useTrainerCourses';
@@ -61,35 +60,38 @@ const ManagementCourseList: React.FC = () => {
     const [trainerClassView, setTrainerClassView] = useState<'upcoming' | 'past'>('upcoming');
 
     // Pagination state - stored in LmsContext so it persists across mount/unmount
-    const router = useRouter();
     const currentPage = courseListPage;
     const itemsPerPage = 9;
 
-    const setCurrentPage = (page: number) => {
-        setCourseListPage(page);
-        // Also sync to URL for visibility/shareability
-        const newQuery: Record<string, string | string[] | undefined> = { ...router.query };
+    // Helper: update page param in URL without using Next.js router (avoids re-render loops)
+    const syncPageToUrl = (page: number) => {
+        const url = new URL(window.location.href);
         if (page > 1) {
-            newQuery.page = String(page);
+            url.searchParams.set('page', String(page));
         } else {
-            delete newQuery.page;
+            url.searchParams.delete('page');
         }
-        router.replace({ pathname: router.pathname, query: newQuery }, undefined, { shallow: true });
+        window.history.replaceState(window.history.state, '', url.toString());
     };
 
-    // Sync between URL and context: URL takes priority (allows navigation via URL editing)
+    const setCurrentPage = (page: number) => {
+        setCourseListPage(page);
+        syncPageToUrl(page);
+    };
+
+    // On mount: read page from URL (supports direct URL navigation) and sync context → URL
     useEffect(() => {
-        if (!router.isReady) return;
-        const urlPage = router.query.page ? Math.max(1, parseInt(router.query.page as string, 10) || 1) : null;
-        if (urlPage && urlPage !== currentPage) {
-            // URL has a page param that differs from context — user edited the URL
-            setCourseListPage(urlPage);
-        } else if (!urlPage && currentPage > 1) {
-            // No page in URL but context has one — write context to URL
-            const newQuery: Record<string, string | string[] | undefined> = { ...router.query, page: String(currentPage) };
-            router.replace({ pathname: router.pathname, query: newQuery }, undefined, { shallow: true });
+        const url = new URL(window.location.href);
+        const urlPage = url.searchParams.get('page');
+        if (urlPage) {
+            const parsed = Math.max(1, parseInt(urlPage, 10) || 1);
+            if (parsed !== currentPage) {
+                setCourseListPage(parsed);
+            }
+        } else if (currentPage > 1) {
+            syncPageToUrl(currentPage);
         }
-    }, [router.isReady, router.query.page]);
+    }, []);
 
     // Determine which courses to use based on role
     let relevantCourses, currentLoading, currentError;
