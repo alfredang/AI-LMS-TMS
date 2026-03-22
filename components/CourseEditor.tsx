@@ -1187,13 +1187,10 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                     </div>
                     )}
 
-                    <div className="space-y-4">
-                        <h3 className="text-xl font-bold px-1">Learning Outcomes</h3>
-                        <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
-                            <label htmlFor="learningOutcomes" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Learning Outcomes</label>
-                            <textarea id="learningOutcomes" name="learningOutcomes" value={course.learningOutcomes} onChange={handleCourseChange} className={`${inputClasses} h-32`} placeholder="Describe the key learning outcomes..." />
-                        </Card>
-                    </div>
+                    <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
+                        <h3 className="text-xl font-bold mb-3">Learning Outcomes</h3>
+                        <textarea id="learningOutcomes" name="learningOutcomes" value={course.learningOutcomes} onChange={handleCourseChange} className={`${inputClasses} h-32`} placeholder="Describe the key learning outcomes..." />
+                    </Card>
 
                     <div className="space-y-4">
                         <h3 className="text-xl font-bold px-1">Course Outline</h3>
