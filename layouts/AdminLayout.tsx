@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
-import AiChatbot from '../components/AiChatbot';
+
 import { useLms } from '../contexts/LmsContext';
 import { View, AdminPage } from '@app-types';
 import { ProfilePage } from '../components/ProfilePage';
@@ -144,7 +144,7 @@ const AdminLayout: React.FC = () => {
           {currentView === View.Profile ? <ProfilePage /> : <HelpAndSupportView />}
         </main>
         <Footer />
-        <AiChatbot />
+
       </div>
     );
   }
@@ -330,7 +330,6 @@ const AdminLayout: React.FC = () => {
       </div>
 
       <Footer />
-      <AiChatbot />
     </div>
   );
 };

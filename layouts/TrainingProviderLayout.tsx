@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
-import AiChatbot from '../components/AiChatbot';
 import { useLms } from '../contexts/LmsContext';
 import { View } from '@app-types';
 import TrainingProviderDashboard from '../components/TrainingProviderDashboard';
@@ -121,7 +120,6 @@ const TrainingProviderLayout: React.FC = () => {
       </div>
 
       <Footer />
-      <AiChatbot />
     </div>
   );
 };
