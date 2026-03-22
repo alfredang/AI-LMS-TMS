@@ -260,24 +260,24 @@ const AdminLayout: React.FC = () => {
       <Header />
 
       {/* Sub-header: sidebar toggle + current page breadcrumb */}
-      <div className="flex items-center gap-3 px-4 sm:px-6 py-2.5 border-b border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800">
+      <div className="flex items-center gap-4 px-4 sm:px-6 py-3 border-b border-gray-200 dark:border-gray-700">
         <button
           onClick={() => {
             setIsSidebarOpen(prev => !prev);
             setIsDesktopSidebarOpen(prev => !prev);
           }}
-          className="p-1.5 rounded-md text-gray-500 hover:text-gray-900 hover:bg-gray-100 dark:hover:bg-slate-700 dark:text-slate-400 dark:hover:text-white transition-colors"
+          className="p-2 -ml-2 text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white"
           title="Toggle sidebar"
         >
-          <Icon name={IconName.Menu} className="w-5 h-5" />
+          <Icon name={IconName.Menu} className="w-6 h-6" />
         </button>
-        <span className="text-sm font-semibold text-gray-700 dark:text-gray-200 truncate">
+        <h2 className="text-lg font-bold truncate">
           {editingCourse
             ? (courseEditMode === 'create' ? 'Create Course' : 'Edit Course')
             : (selectedCourse && adminPage === AdminPage.ViewCourses
                 ? 'Course Detail'
                 : (PAGE_LABELS[adminPage] ?? formatAdminPageTitle(adminPage)))}
-        </span>
+        </h2>
       </div>
 
       {/* Mobile Sidebar Overlay */}
@@ -315,7 +315,7 @@ const AdminLayout: React.FC = () => {
       {/* Main Layout Container */}
       <div className="flex flex-1">
         {/* Desktop Sidebar - toggled by hamburger button */}
-        <aside className={`${isDesktopSidebarOpen ? 'hidden md:flex' : 'hidden'} w-64 flex-shrink-0 bg-white dark:bg-slate-800 border-r border-gray-200 dark:border-slate-700 transition-all`}>
+        <aside className={`${isDesktopSidebarOpen ? 'hidden md:flex' : 'hidden'} w-64 flex-shrink-0 bg-white dark:bg-slate-800 border-r border-gray-200 dark:border-slate-700`}>
           <div className="w-full">
             <AdminSidebar />
           </div>

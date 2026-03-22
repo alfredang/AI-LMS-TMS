@@ -50,20 +50,20 @@ const TrainerLayout: React.FC = () => {
       <Header />
 
       {/* Sub-header: sidebar toggle + current page breadcrumb */}
-      <div className="flex items-center gap-3 px-4 sm:px-6 py-2.5 border-b border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800">
+      <div className="flex items-center gap-4 px-4 sm:px-6 py-3 border-b border-gray-200 dark:border-gray-700">
         <button
           onClick={() => {
             setIsSidebarOpen(prev => !prev);
             setIsDesktopSidebarOpen(prev => !prev);
           }}
-          className="p-1.5 rounded-md text-gray-500 hover:text-gray-900 hover:bg-gray-100 dark:hover:bg-slate-700 dark:text-slate-400 dark:hover:text-white transition-colors"
+          className="p-2 -ml-2 text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white"
           title="Toggle sidebar"
         >
-          <Icon name={IconName.Menu} className="w-5 h-5" />
+          <Icon name={IconName.Menu} className="w-6 h-6" />
         </button>
-        <span className="text-sm font-semibold text-gray-700 dark:text-gray-200 truncate">
+        <h2 className="text-lg font-bold truncate">
           {currentView === View.Profile ? 'Profile' : currentView === View.HelpAndSupport ? 'Help & Support' : selectedCourse ? selectedCourse.title : PAGE_LABELS[trainerPage]}
-        </span>
+        </h2>
       </div>
 
       {/* Mobile Sidebar Overlay */}
@@ -74,13 +74,14 @@ const TrainerLayout: React.FC = () => {
             aria-hidden="true"
             onClick={() => setIsSidebarOpen(false)}
           />
-          <div className="relative flex flex-col w-64 max-w-[calc(100%-3rem)] h-full shadow-xl">
-            <div className="flex justify-end px-3 pt-3">
+          <div className="relative flex flex-col w-72 max-w-[calc(100%-3rem)] h-full bg-surface shadow-xl">
+            <div className="p-4 flex justify-between items-center border-b dark:border-gray-700">
+              <h3 className="font-bold">Menu</h3>
               <button
                 onClick={() => setIsSidebarOpen(false)}
-                className="p-1.5 rounded-md text-gray-500 hover:text-gray-900 hover:bg-gray-100 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-white transition-colors"
+                className="p-2 -mr-2 text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white"
               >
-                <Icon name={IconName.Close} className="w-5 h-5" />
+                <Icon name={IconName.Close} className="w-6 h-6" />
               </button>
             </div>
             <div className="flex-1 overflow-y-auto">

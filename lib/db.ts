@@ -10,8 +10,8 @@ const pool = new Pool({
   // Option 1: Use DATABASE_URL (recommended for Supabase)
   connectionString: process.env.DATABASE_URL,
 
-  // SSL configuration - only enable for production or when URL contains 'supabase'
-  ssl: process.env.DATABASE_URL && (process.env.NODE_ENV === 'production')
+  // SSL configuration - enable for Supabase (cloud) or production
+  ssl: process.env.DATABASE_URL && (process.env.NODE_ENV === 'production' || process.env.DATABASE_URL.includes('supabase'))
     ? { rejectUnauthorized: false }
     : false,
 

@@ -74,7 +74,7 @@ const AiChatbot: React.FC = () => {
     };
 
     return (
-        <div className="fixed bottom-6 right-6 z-50">
+        <div className="hidden md:block fixed bottom-6 right-6 z-50">
             {/* Chat Window */}
             {isChatOpen && (
                 <div className="w-96 h-[60vh] max-h-[700px] bg-surface shadow-2xl rounded-xl flex flex-col transform transition-all duration-300 ease-in-out origin-bottom-right scale-100 opacity-100 dark:bg-gray-800 dark:border dark:border-gray-700">
