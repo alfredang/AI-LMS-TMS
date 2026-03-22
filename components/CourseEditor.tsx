@@ -1065,135 +1065,136 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                 {/* Right Column: Content Sections */}
                 <div className="md:col-span-1 xl:col-span-2 space-y-6">
                     <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
-                        <label htmlFor="lessonPlanUrl" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Lesson Plan URL</label>
-                        <input
-                            type="url"
-                            id="lessonPlanUrl"
-                            value={course.lessonPlanUrl || ''}
-                            onChange={(e) => setCourse(prev => ({ ...prev, lessonPlanUrl: e.target.value }))}
-                            className={inputClasses}
-                            placeholder="https://docs.google.com/..."
-                        />
-                    </Card>
-                    <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
-                        <label htmlFor="learnerGuideUrl" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Learner Guide URL</label>
-                        <input
-                            type="url"
-                            id="learnerGuideUrl"
-                            value={course.learnerGuideUrl || ''}
-                            onChange={(e) => setCourse(prev => ({ ...prev, learnerGuideUrl: e.target.value }))}
-                            className={inputClasses}
-                            placeholder="https://docs.google.com/..."
-                        />
-                    </Card>
-                    <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
-                        <label htmlFor="facilitatorGuideUrl" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Facilitator Guide URL</label>
-                        <input
-                            type="url"
-                            id="facilitatorGuideUrl"
-                            value={course.facilitatorGuideUrl || ''}
-                            onChange={(e) => setCourse(prev => ({ ...prev, facilitatorGuideUrl: e.target.value }))}
-                            className={inputClasses}
-                            placeholder="https://docs.google.com/..."
-                        />
-                    </Card>
-                    <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
-                        <label htmlFor="assessmentPlanUrl" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Assessment Plan URL</label>
-                        <input
-                            type="url"
-                            id="assessmentPlanUrl"
-                            value={course.assessmentPlanUrl || ''}
-                            onChange={(e) => setCourse(prev => ({ ...prev, assessmentPlanUrl: e.target.value }))}
-                            className={inputClasses}
-                            placeholder="https://docs.google.com/..."
-                        />
-                    </Card>
-                    <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
-                        <label htmlFor="courseLink" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Courseware Link</label>
-                        <input
-                            type="url"
-                            id="courseLink"
-                            value={course.courseLink || ''}
-                            onChange={(e) => setCourse(prev => ({ ...prev, courseLink: e.target.value }))}
-                            className={inputClasses}
-                            placeholder="https://..."
-                        />
-                    </Card>
-                    <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
-                        <label htmlFor="assessmentRecordLink" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Assessment Record Link</label>
-                        <input
-                            type="url"
-                            id="assessmentRecordLink"
-                            value={course.assessmentRecordLink || ''}
-                            onChange={(e) => setCourse(prev => ({ ...prev, assessmentRecordLink: e.target.value }))}
-                            className={inputClasses}
-                            placeholder="https://..."
-                        />
-                    </Card>
-                    <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
-                        <label htmlFor="learnerSlidesUrl" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Learner Slides URL</label>
-                        <input
-                            type="url"
-                            id="learnerSlidesUrl"
-                            value={course.slidesUrl || ''}
-                            onChange={(e) => setCourse(prev => ({ ...prev, slidesUrl: e.target.value }))}
-                            className={inputClasses}
-                            placeholder="https://docs.google.com/..."
-                        />
-                    </Card>
-                    <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
-                        <label htmlFor="trainerSlidesUrl" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Trainer Slides URL</label>
-                        <input
-                            type="url"
-                            id="trainerSlidesUrl"
-                            name="trainerSlidesUrl"
-                            value={course.trainerSlidesUrl || ''}
-                            onChange={(e) => setCourse(prev => ({ ...prev, trainerSlidesUrl: e.target.value }))}
-                            className={inputClasses}
-                            placeholder="https://docs.google.com/presentation/..."
-                        />
-                    </Card>
-
-                    {(role === UserRole.Trainer || role === UserRole.Developer) && (
-                    <div className="space-y-4">
-                        <h3 className="text-xl font-bold px-1">Assessment</h3>
-
-                        {/* Written Assessment */}
-                        <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
-                            <label htmlFor="writtenAssessmentLink" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Written Assessment URL</label>
-                            <input
-                                type="url"
-                                id="writtenAssessmentLink"
-                                value={course.writtenAssessmentLink || ''}
-                                onChange={(e) => setCourse(prev => ({ ...prev, writtenAssessmentLink: e.target.value }))}
-                                className={inputClasses}
-                                placeholder="https://..."
-                            />
-                        </Card>
-
-                        {/* Practical Performance Assessment */}
-                        <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
-                            <label htmlFor="practicalPerformanceAssessmentLink" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Practical Performance Assessment URL</label>
-                            <input
-                                type="url"
-                                id="practicalPerformanceAssessmentLink"
-                                value={course.practicalPerformanceAssessmentLink || ''}
-                                onChange={(e) => setCourse(prev => ({ ...prev, practicalPerformanceAssessmentLink: e.target.value }))}
-                                className={inputClasses}
-                                placeholder="https://..."
-                            />
-                        </Card>
-
-                    </div>
-                    )}
-
-                    <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
                         <h3 className="text-xl font-bold mb-3">Learning Outcomes</h3>
                         <textarea id="learningOutcomes" name="learningOutcomes" value={course.learningOutcomes} onChange={handleCourseChange} className={`${inputClasses} h-32`} placeholder="Describe the key learning outcomes..." />
                     </Card>
+                    <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
+                        <h3 className="text-xl font-bold mb-4">Courseware</h3>
+                        <div className="space-y-4">
+                            <div>
+                                <label htmlFor="lessonPlanUrl" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Lesson Plan URL</label>
+                                <input
+                                    type="url"
+                                    id="lessonPlanUrl"
+                                    value={course.lessonPlanUrl || ''}
+                                    onChange={(e) => setCourse(prev => ({ ...prev, lessonPlanUrl: e.target.value }))}
+                                    className={inputClasses}
+                                    placeholder="https://docs.google.com/..."
+                                />
+                            </div>
+                            <div>
+                                <label htmlFor="learnerGuideUrl" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Learner Guide URL</label>
+                                <input
+                                    type="url"
+                                    id="learnerGuideUrl"
+                                    value={course.learnerGuideUrl || ''}
+                                    onChange={(e) => setCourse(prev => ({ ...prev, learnerGuideUrl: e.target.value }))}
+                                    className={inputClasses}
+                                    placeholder="https://docs.google.com/..."
+                                />
+                            </div>
+                            <div>
+                                <label htmlFor="facilitatorGuideUrl" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Facilitator Guide URL</label>
+                                <input
+                                    type="url"
+                                    id="facilitatorGuideUrl"
+                                    value={course.facilitatorGuideUrl || ''}
+                                    onChange={(e) => setCourse(prev => ({ ...prev, facilitatorGuideUrl: e.target.value }))}
+                                    className={inputClasses}
+                                    placeholder="https://docs.google.com/..."
+                                />
+                            </div>
+                            <div>
+                                <label htmlFor="assessmentPlanUrl" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Assessment Plan URL</label>
+                                <input
+                                    type="url"
+                                    id="assessmentPlanUrl"
+                                    value={course.assessmentPlanUrl || ''}
+                                    onChange={(e) => setCourse(prev => ({ ...prev, assessmentPlanUrl: e.target.value }))}
+                                    className={inputClasses}
+                                    placeholder="https://docs.google.com/..."
+                                />
+                            </div>
+                            <div>
+                                <label htmlFor="courseLink" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Courseware Link</label>
+                                <input
+                                    type="url"
+                                    id="courseLink"
+                                    value={course.courseLink || ''}
+                                    onChange={(e) => setCourse(prev => ({ ...prev, courseLink: e.target.value }))}
+                                    className={inputClasses}
+                                    placeholder="https://..."
+                                />
+                            </div>
+                            <div>
+                                <label htmlFor="assessmentRecordLink" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Assessment Record Link</label>
+                                <input
+                                    type="url"
+                                    id="assessmentRecordLink"
+                                    value={course.assessmentRecordLink || ''}
+                                    onChange={(e) => setCourse(prev => ({ ...prev, assessmentRecordLink: e.target.value }))}
+                                    className={inputClasses}
+                                    placeholder="https://..."
+                                />
+                            </div>
+                            <div>
+                                <label htmlFor="learnerSlidesUrl" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Learner Slides URL</label>
+                                <input
+                                    type="url"
+                                    id="learnerSlidesUrl"
+                                    value={course.slidesUrl || ''}
+                                    onChange={(e) => setCourse(prev => ({ ...prev, slidesUrl: e.target.value }))}
+                                    className={inputClasses}
+                                    placeholder="https://docs.google.com/..."
+                                />
+                            </div>
+                            <div>
+                                <label htmlFor="trainerSlidesUrl" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Trainer Slides URL</label>
+                                <input
+                                    type="url"
+                                    id="trainerSlidesUrl"
+                                    name="trainerSlidesUrl"
+                                    value={course.trainerSlidesUrl || ''}
+                                    onChange={(e) => setCourse(prev => ({ ...prev, trainerSlidesUrl: e.target.value }))}
+                                    className={inputClasses}
+                                    placeholder="https://docs.google.com/presentation/..."
+                                />
+                            </div>
+                        </div>
+                    </Card>
+
+                    {(role === UserRole.Trainer || role === UserRole.Developer) && (
+                    <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
+                        <h3 className="text-xl font-bold mb-4">Assessment</h3>
+                        <div className="space-y-4">
+                            <div>
+                                <label htmlFor="writtenAssessmentLink" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Written Assessment URL</label>
+                                <input
+                                    type="url"
+                                    id="writtenAssessmentLink"
+                                    value={course.writtenAssessmentLink || ''}
+                                    onChange={(e) => setCourse(prev => ({ ...prev, writtenAssessmentLink: e.target.value }))}
+                                    className={inputClasses}
+                                    placeholder="https://..."
+                                />
+                            </div>
+                            <div>
+                                <label htmlFor="practicalPerformanceAssessmentLink" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Practical Performance Assessment URL</label>
+                                <input
+                                    type="url"
+                                    id="practicalPerformanceAssessmentLink"
+                                    value={course.practicalPerformanceAssessmentLink || ''}
+                                    onChange={(e) => setCourse(prev => ({ ...prev, practicalPerformanceAssessmentLink: e.target.value }))}
+                                    className={inputClasses}
+                                    placeholder="https://..."
+                                />
+                            </div>
+                        </div>
+                    </Card>
+                    )}
 
                     <div className="space-y-4">
-                        <h3 className="text-xl font-bold px-1">Course Outline</h3>
+                        <h3 className="text-xl font-bold px-1">Lesson</h3>
                         {course.topics.map(topic => (
                             <div
                                 key={topic.id}
