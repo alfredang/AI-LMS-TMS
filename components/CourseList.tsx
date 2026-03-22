@@ -433,13 +433,13 @@ const ManagementCourseList: React.FC = () => {
                 <div className="flex gap-1 p-1 bg-surface rounded-lg w-fit border border-default mb-6">
                     <button
                         onClick={() => { setTrainerClassView('upcoming'); setCurrentPage(1); }}
-                        className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${trainerClassView === 'upcoming' ? 'bg-primary text-white shadow-sm' : 'text-on-surface-secondary hover:text-on-surface'}`}
+                        className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${trainerClassView === 'upcoming' ? 'bg-primary text-white shadow-sm' : 'text-gray-400 hover:text-white hover:bg-gray-700/50'}`}
                     >
                         Upcoming
                     </button>
                     <button
                         onClick={() => { setTrainerClassView('past'); setCurrentPage(1); }}
-                        className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${trainerClassView === 'past' ? 'bg-primary text-white shadow-sm' : 'text-on-surface-secondary hover:text-on-surface'}`}
+                        className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${trainerClassView === 'past' ? 'bg-primary text-white shadow-sm' : 'text-gray-400 hover:text-white hover:bg-gray-700/50'}`}
                     >
                         Past Classes
                     </button>

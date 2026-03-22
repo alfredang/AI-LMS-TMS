@@ -120,3 +120,9 @@ public/uploads/training_provider/self_signing_cert/*
 # client/
 # server/
 GOOGLE_KEY_B64.txt
+
+# Visibility (managed by /toggle-visibility)
+CLAUDE.md
+.mcp.json
+.claude/
+.agents/

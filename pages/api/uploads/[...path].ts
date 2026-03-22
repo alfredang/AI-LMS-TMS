@@ -2,7 +2,7 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import path from 'path';
 import fs from 'fs';
 
-export default function handler(req: NextApiRequest, res: NextApiResponse) {
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {
     return res.status(405).json({ message: 'Method not allowed' });
   }
@@ -29,8 +29,23 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
       return res.status(403).json({ message: 'Access denied' });
     }
 
-    // Check if file exists
+    // Check if file exists — if not, proxy from production in dev mode
     if (!fs.existsSync(resolvedPath)) {
+      if (process.env.NODE_ENV !== 'production') {
+        const prodUrl = `https://ai-lms-tms.tertiaryinfo.tech/uploads/${requestedPath}`;
+        try {
+          const prodRes = await fetch(prodUrl);
+          if (prodRes.ok && prodRes.body) {
+            const contentType = prodRes.headers.get('content-type') || 'application/octet-stream';
+            res.setHeader('Content-Type', contentType);
+            res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+            const buffer = Buffer.from(await prodRes.arrayBuffer());
+            return res.status(200).send(buffer);
+          }
+        } catch {
+          // Fall through to 404
+        }
+      }
       return res.status(404).json({ message: 'File not found' });
     }
 

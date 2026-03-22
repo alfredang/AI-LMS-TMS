@@ -278,7 +278,7 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [userRoles, setUserRoles] = useState<UserRole[]>([]); // All roles the user has
   const [currentView, setCurrentView] = useState<View>(View.Dashboard);
   const [adminPage, setAdminPage] = useState<AdminPage>(AdminPage.Dashboard);
-  const [trainerPage, setTrainerPage] = useState<TrainerPage>(TrainerPage.EAttendance);
+  const [trainerPage, setTrainerPage] = useState<TrainerPage>(TrainerPage.MyClasses);
   const [selectedCourseRunId, setSelectedCourseRunId] = useState<string | null>(null);
 
   // Authentication state
@@ -460,11 +460,16 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const { view, courseId } = router.query;
 
     // Restore current view - View enum values are lowercase, URL values are lowercase
+    // Skip restoring profile/help views so users always land on their dashboard on refresh
     if (view && typeof view === 'string') {
       const viewValue = view.toLowerCase() as View;
-      if (Object.values(View).includes(viewValue)) {
+      const skipOnRefresh = [View.Profile, View.HelpAndSupport];
+      if (Object.values(View).includes(viewValue) && !skipOnRefresh.includes(viewValue)) {
         console.log(`📍 LmsContext: Restored view from URL: ${viewValue}`);
         setCurrentView(viewValue);
+      } else if (skipOnRefresh.includes(viewValue)) {
+        // Clear the skipped view from URL
+        router.replace('/', undefined, { shallow: true });
       }
     }
 

@@ -979,13 +979,13 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
             <div className="flex gap-1 p-1 bg-surface-elevated rounded-lg w-fit border border-default">
               <button
                 onClick={() => { setClassView('upcoming'); setSelectedCourseRunId(''); }}
-                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${classView === 'upcoming' ? 'bg-primary text-white shadow-sm' : 'text-on-surface-secondary hover:text-on-surface'}`}
+                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${classView === 'upcoming' ? 'bg-primary text-white shadow-sm' : 'text-gray-400 hover:text-white hover:bg-gray-700/50'}`}
               >
                 Upcoming
               </button>
               <button
                 onClick={() => { setClassView('past'); setSelectedCourseRunId(''); }}
-                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${classView === 'past' ? 'bg-primary text-white shadow-sm' : 'text-on-surface-secondary hover:text-on-surface'}`}
+                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${classView === 'past' ? 'bg-primary text-white shadow-sm' : 'text-gray-400 hover:text-white hover:bg-gray-700/50'}`}
               >
                 Past Classes
               </button>

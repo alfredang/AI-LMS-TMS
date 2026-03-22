@@ -4,14 +4,14 @@ import Footer from '../components/Footer';
 import AiChatbot from '../components/AiChatbot';
 import { useLms } from '../contexts/LmsContext';
 import { View, TrainerPage } from '@app-types';
-import CourseList from '../components/CourseList';
 import CalendarView from '../components/CalendarView';
+import CourseList from '../components/CourseList';
 import CreateView from '../components/CreateView';
 import { ProfilePage } from '@components/ProfilePage';
 import { CourseDetail } from '../components/CourseDetail';
 import HelpAndSupportView from '../components/HelpAndSupportView';
 import { Icon, IconName } from '../components/ui/Icon';
-import TrainerAttendanceDashboard from '../components/trainer/TrainerAttendanceDashboard';
+import TrainerHomePage from '../components/trainer/TrainerHomePage';
 import TrainerSidebar from '../components/trainer/TrainerSidebar';
 
 const PAGE_LABELS: Record<TrainerPage, string> = {
@@ -33,7 +33,7 @@ const TrainerLayout: React.FC = () => {
 
     switch (trainerPage) {
       case TrainerPage.EAttendance:
-        return <TrainerAttendanceDashboard />;
+        return <TrainerHomePage />;
       case TrainerPage.MyClasses:
         return <CourseList />;
       case TrainerPage.TaskList:
@@ -41,7 +41,7 @@ const TrainerLayout: React.FC = () => {
       case TrainerPage.GenAIAuthoring:
         return <CreateView />;
       default:
-        return <TrainerAttendanceDashboard />;
+        return <TrainerHomePage />;
     }
   };
 
