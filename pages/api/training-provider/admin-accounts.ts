@@ -16,8 +16,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         au.created_at,
         au.is_protected,
         ap.tel,
-        ARRAY(
-          SELECT urm.role FROM public.user_role_map urm WHERE urm.user_id = au.id ORDER BY urm.role
+        (
+          SELECT array_agg(urm.role::text ORDER BY urm.role::text)
+          FROM public.user_role_map urm
+          WHERE urm.user_id = au.id
         ) AS roles
       FROM public.app_user au
       JOIN public.user_role_map urm2 ON urm2.user_id = au.id AND urm2.role = 'Admin'
