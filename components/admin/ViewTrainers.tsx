@@ -41,8 +41,8 @@ const getAccountStatusColor = (status: string | null) => {
 const capitalise = (s: string | null) =>
   s ? s.charAt(0).toUpperCase() + s.slice(1) : 'N/A';
 
-const TRAINER_TYPES = ['Internal', 'External', 'Adjunct'];
-const ACCOUNT_STATUSES = ['Active', 'Inactive', 'Suspended'];
+const TRAINER_TYPES = ['ACLP', 'non-ACLP'];
+const TRAINER_STATUSES = ['Active', 'Inactive'];
 
 const ViewTrainers: React.FC = () => {
   const [trainers, setTrainers] = useState<Trainer[]>([]);
@@ -50,7 +50,7 @@ const ViewTrainers: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [filterTrainerTypes, setFilterTrainerTypes] = useState<string[]>([]);
-  const [filterAccountStatuses, setFilterAccountStatuses] = useState<string[]>([]);
+  const [filterTrainerStatuses, setFilterTrainerStatuses] = useState<string[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [showAddTrainerForm, setShowAddTrainerForm] = useState(false);
   const [showBulkUpload, setShowBulkUpload] = useState(false);
@@ -78,7 +78,7 @@ const ViewTrainers: React.FC = () => {
   const handleResetFilters = () => {
     setSearchQuery('');
     setFilterTrainerTypes([]);
-    setFilterAccountStatuses([]);
+    setFilterTrainerStatuses([]);
     setCurrentPage(1);
   };
 
@@ -148,10 +148,10 @@ const ViewTrainers: React.FC = () => {
 
     const matchesTrainerType = filterTrainerTypes.length === 0 || filterTrainerTypes.includes(trainer.trainer_type || '');
 
-    const matchesAccountStatus = filterAccountStatuses.length === 0 ||
-      filterAccountStatuses.some(s => s.toLowerCase() === (trainer.account_status || '').toLowerCase());
+    const matchesTrainerStatus = filterTrainerStatuses.length === 0 ||
+      filterTrainerStatuses.includes(trainer.status || '');
 
-    return matchesSearch && matchesTrainerType && matchesAccountStatus;
+    return matchesSearch && matchesTrainerType && matchesTrainerStatus;
   });
 
   const totalPages = Math.ceil(filteredTrainers.length / itemsPerPage);
@@ -254,24 +254,24 @@ const ViewTrainers: React.FC = () => {
                 )}
               </div>
 
-              {/* Account Status checkboxes */}
+              {/* Trainer Status checkboxes */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Account Status</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Trainer Status</label>
                 <div className="flex flex-wrap gap-3">
-                  {ACCOUNT_STATUSES.map(s => (
+                  {TRAINER_STATUSES.map(s => (
                     <label key={s} className="flex items-center gap-2 cursor-pointer select-none">
                       <input
                         type="checkbox"
-                        checked={filterAccountStatuses.includes(s)}
-                        onChange={() => toggleCheckbox(s, filterAccountStatuses, setFilterAccountStatuses)}
+                        checked={filterTrainerStatuses.includes(s)}
+                        onChange={() => toggleCheckbox(s, filterTrainerStatuses, setFilterTrainerStatuses)}
                         className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700"
                       />
                       <span className="text-sm text-gray-700 dark:text-gray-300">{s}</span>
                     </label>
                   ))}
                 </div>
-                {filterAccountStatuses.length > 0 && (
-                  <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">Showing: {filterAccountStatuses.join(', ')}</p>
+                {filterTrainerStatuses.length > 0 && (
+                  <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">Showing: {filterTrainerStatuses.join(', ')}</p>
                 )}
               </div>
             </div>
