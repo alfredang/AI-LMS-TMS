@@ -2120,7 +2120,7 @@ export const CourseDetail: React.FC = () => {
                             </div>
 
                             {/* TRAQOM Survey & Certificate Delivery */}
-                            {userRole === UserRole.Learner && (
+                            {(userRole === UserRole.Learner || userRole === UserRole.Trainer) && (
                                 <div id={toId("TRAQOM Survey")}>
                                     <Card className="p-0 overflow-hidden">
                                         <button
