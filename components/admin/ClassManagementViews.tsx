@@ -3439,6 +3439,14 @@ export const AssignTrainerView: React.FC = () => {
         return true;
     });
 
+    // KPI stats
+    const totalUpcoming = courseRuns.length;
+    const trainersAssigned = courseRuns.filter(run => {
+        const local = localAssignments[run.id];
+        return (local?.name ?? run.assignedTrainerName);
+    }).length;
+    const missingTrainers = totalUpcoming - trainersAssigned;
+
     const inputClasses = 'w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white';
 
     return (
@@ -3448,6 +3456,22 @@ export const AssignTrainerView: React.FC = () => {
                 <Button variant="ghost" onClick={() => setAdminPage(AdminPage.Dashboard)}>
                     Back to Dashboard
                 </Button>
+            </div>
+
+            {/* KPI Stats */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                <Card className="p-6 text-center">
+                    <p className="text-4xl font-bold text-blue-600">{totalUpcoming}</p>
+                    <p className="text-gray-600 dark:text-gray-300 mt-1">Upcoming Classes</p>
+                </Card>
+                <Card className="p-6 text-center">
+                    <p className="text-4xl font-bold text-green-600">{trainersAssigned}</p>
+                    <p className="text-gray-600 dark:text-gray-300 mt-1">Trainers Assigned</p>
+                </Card>
+                <Card className="p-6 text-center">
+                    <p className="text-4xl font-bold text-red-600">{missingTrainers}</p>
+                    <p className="text-gray-600 dark:text-gray-300 mt-1">Missing Trainers</p>
+                </Card>
             </div>
 
             {/* Feedback banner */}
