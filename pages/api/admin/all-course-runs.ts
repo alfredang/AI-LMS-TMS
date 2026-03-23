@@ -31,7 +31,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       params.push(`%${search}%`);
     }
 
-    query += ` ORDER BY cr.start_date DESC LIMIT 100`;
+    query += ` ORDER BY cr.start_date ASC LIMIT 100`;
 
     const result = await pool.query(query, params);
 

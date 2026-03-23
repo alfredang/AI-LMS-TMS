@@ -3453,7 +3453,11 @@ export const AssignTrainerView: React.FC = () => {
                     <div className="p-8 text-center text-sm text-gray-500">No course runs found.</div>
                 ) : (
                     <div className="divide-y divide-gray-200 dark:divide-gray-700">
-                        {courseRuns.map(run => {
+                        {[...courseRuns].sort((a, b) => {
+                            const dateA = a.startDate ? new Date(a.startDate).getTime() : Infinity;
+                            const dateB = b.startDate ? new Date(b.startDate).getTime() : Infinity;
+                            return dateA - dateB;
+                        }).map(run => {
                             const local = localAssignments[run.id];
                             const currentName = local?.name ?? run.assignedTrainerName;
                             const currentEmail = local?.email ?? run.assignedTrainerEmail;
@@ -3469,6 +3473,11 @@ export const AssignTrainerView: React.FC = () => {
                                             setMessage(null);
                                         }}
                                     >
+                                        <div className="w-24 shrink-0 mr-4">
+                                            <p className="text-xs font-semibold text-blue-600 dark:text-blue-400">
+                                                {run.startDate ? new Date(run.startDate).toLocaleDateString() : '—'}
+                                            </p>
+                                        </div>
                                         <div className="flex-1 min-w-0 mr-4">
                                             <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{run.courseTitle}</p>
                                             <p className="text-xs text-gray-500 dark:text-gray-400">
