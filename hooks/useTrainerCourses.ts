@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Course } from '@app-types';
 import { courseService } from '@lib/services/courseService';
 
-export const useTrainerCourses = (trainerId?: string) => {
+export const useTrainerCourses = (trainerId?: string, upcomingOnly = false) => {
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -12,13 +12,13 @@ export const useTrainerCourses = (trainerId?: string) => {
       console.log('⚠️ useTrainerCourses - No trainerId provided');
       return;
     }
-    
+
     setLoading(true);
     setError(null);
-    
+
     try {
       console.log('📞 useTrainerCourses - Fetching courses for trainer:', trainerIdParam);
-      const trainerCourses = await courseService.getTrainerCourses(trainerIdParam);
+      const trainerCourses = await courseService.getTrainerCourses(trainerIdParam, upcomingOnly);
       console.log('✅ useTrainerCourses - Received courses:', trainerCourses);
       setCourses(trainerCourses || []);
     } catch (err) {
@@ -28,7 +28,7 @@ export const useTrainerCourses = (trainerId?: string) => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [upcomingOnly]);
 
   useEffect(() => {
     if (trainerId) {

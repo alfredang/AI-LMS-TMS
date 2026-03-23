@@ -99,8 +99,24 @@ export default async function handler(
       `);
     }
 
-    // If no trainerId provided, try to resolve it from app_user by email (primary or secondary)
+    // If trainerId is provided, verify it exists in trainer_profile (FK target); create profile if missing
     let resolvedTrainerId = trainerId || null;
+    if (resolvedTrainerId) {
+      const profileCheck = await pool.query(
+        `SELECT user_id FROM trainer_profile WHERE user_id = $1`,
+        [resolvedTrainerId]
+      );
+      if (profileCheck.rows.length === 0) {
+        console.log(`⚠️ trainer_profile missing for user ${resolvedTrainerId} — creating it`);
+        await pool.query(
+          `INSERT INTO trainer_profile (user_id, tel, trainer_type, status)
+           VALUES ($1, '', 'non-ACLP', 'Active')
+           ON CONFLICT (user_id) DO NOTHING`,
+          [resolvedTrainerId]
+        );
+      }
+    }
+
     if (!resolvedTrainerId && trainerEmail) {
       const emailLower = trainerEmail.trim().toLowerCase();
       const trainerLookup = await pool.query(

@@ -34,12 +34,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                     tp.status,
                     tp.linkedin_url
                 FROM app_user au
-                LEFT JOIN trainer_profile tp ON tp.user_id = au.id
-                WHERE au.id IN (
-                    SELECT user_id FROM trainer_profile
-                    UNION
-                    SELECT user_id FROM user_role_map WHERE role = 'Trainer'
-                )
+                INNER JOIN trainer_profile tp ON tp.user_id = au.id
                 ORDER BY au.full_name;
             `;
 
