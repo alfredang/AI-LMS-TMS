@@ -303,8 +303,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
             // Execute each tool call and add results
             for (const toolCall of message.tool_calls) {
-                const fnName = toolCall.function.name;
-                const fnArgs = JSON.parse(toolCall.function.arguments);
+                const tc = toolCall as any;
+                const fnName = tc.function?.name as string;
+                const fnArgs = JSON.parse(tc.function?.arguments ?? '{}');
                 console.log(`🔧 Nemo executing tool: ${fnName}`, fnArgs);
 
                 const result = await executeTool(fnName, fnArgs, req);
