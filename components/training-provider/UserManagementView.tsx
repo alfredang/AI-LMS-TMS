@@ -69,9 +69,10 @@ const UserManagementView: React.FC = () => {
 
     useEffect(() => {
         const handleClickOutside = (e: MouseEvent) => {
-            if (roleFilterRef.current && !roleFilterRef.current.contains(e.target as Node)) setShowRoleFilterDropdown(false);
-            if (filterRef.current && !filterRef.current.contains(e.target as Node)) setShowFilterDropdown(false);
-            if (sortRef.current && !sortRef.current.contains(e.target as Node)) setShowSortDropdown(false);
+            const target = e.target as Node;
+            if (roleFilterRef.current && !roleFilterRef.current.contains(target)) setShowRoleFilterDropdown(false);
+            if (filterRef.current && !filterRef.current.contains(target)) setShowFilterDropdown(false);
+            if (sortRef.current && !sortRef.current.contains(target)) setShowSortDropdown(false);
         };
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
