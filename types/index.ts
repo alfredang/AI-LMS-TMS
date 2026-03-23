@@ -63,7 +63,10 @@ export enum AdminPage {
   CourseSessionAttendance = 'courseSessionAttendance',
   CourseSessions = 'courseSessions',
   AssignStudent = 'assignStudent',
-  CheckAttendance = 'checkAttendance'
+  CheckAttendance = 'checkAttendance',
+  AutomationLogs = 'automationLogs',
+  AssignTrainerLogs = 'assignTrainerLogs',
+  BackfillEnrollments = 'backfillEnrollments'
 }
 
 export enum TrainerPage {

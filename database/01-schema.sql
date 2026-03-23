@@ -242,9 +242,8 @@ CREATE TYPE public.course_payment_status AS ENUM (
 --
 
 CREATE TYPE public.course_sponsorship AS ENUM (
-    'Self-Sponsored',
-    'Employer-Sponsored',
-    'N/A'
+    'Individual',
+    'Employer'
 );
 
 

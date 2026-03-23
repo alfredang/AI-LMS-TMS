@@ -109,6 +109,16 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate }) => {
                 <NavItem page={AdminPage.ViewGrantStatus} label="View Grant Status" isSubItem />
             </NavSection>
 
+            <NavSection title="Logging">
+                <NavItem page={AdminPage.AutomationLogs} label="Auto Create Learner Log" isSubItem />
+                <NavItem page={AdminPage.AssignTrainerLogs} label="Assign Trainer Log" isSubItem />
+            </NavSection>
+
+            {/* Tools section hidden
+            <NavSection title="Tools">
+                <NavItem page={AdminPage.BackfillEnrollments} label="Backfill Enrollments" isSubItem />
+            </NavSection>
+            */}
 
         </nav>
     );

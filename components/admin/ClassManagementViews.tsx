@@ -1,5 +1,5 @@
 import { getApiUrl, getFileUrl } from '@/lib/urlHelpers';
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { useLms } from '@contexts/LmsContext';
@@ -4438,6 +4438,727 @@ export const AddCourseRunView: React.FC = () => {
                     </div>
                 </form>
             </Card>
+        </div>
+    );
+};
+
+// ─── Automation Logging ──────────────────────────────────────────────────────
+
+interface AutomationLogRow {
+    id: number;
+    run_id: string;
+    created_at: string;
+    course_run_id: string;
+    course_title: string;
+    course_code: string | null;
+    status: 'success' | 'partial' | 'error' | 'pending';
+    total_enrolled: number;
+    created_count: number;
+    existing_count: number;
+    error_count: number;
+    details: { enrolmentRef?: string | null; email: string; name?: string; status: string; accountExists?: boolean; reason?: string }[] | null;
+    error_message: string | null;
+}
+
+interface AutomationBatch {
+    run_id: string;
+    created_at: string;
+    rows: AutomationLogRow[];
+    total_enrolled: number;
+    created_count: number;
+    existing_count: number;
+    error_count: number;
+    overallStatus: AutomationLogRow['status'];
+}
+
+export const AutomationLogsView: React.FC = () => {
+    const { setAdminPage } = useLms();
+    const [logs, setLogs] = useState<AutomationLogRow[]>([]);
+    const [loading, setLoading] = useState(false);
+    const [running, setRunning] = useState(false);
+    const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+    const [expandedBatch, setExpandedBatch] = useState<string | null>(null);
+
+    const fetchLogs = async () => {
+        setLoading(true);
+        try {
+            const res = await fetch('/api/admin/automation-logs?limit=500');
+            const json = await res.json();
+            if (json.success) setLogs(json.data);
+        } catch {
+            /* silent */
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => { fetchLogs(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+    const handleRunNow = async () => {
+        setRunning(true);
+        setMessage(null);
+        try {
+            const res = await fetch('/api/admin/trigger-automation', { method: 'POST' });
+            const json = await res.json();
+            if (json.success) {
+                setMessage({ type: 'success', text: `Run completed — ${json.processed} course run(s) processed.` });
+                await fetchLogs();
+            } else {
+                setMessage({ type: 'error', text: json.message || 'Run failed' });
+            }
+        } catch (err) {
+            setMessage({ type: 'error', text: err instanceof Error ? err.message : 'Request failed' });
+        } finally {
+            setRunning(false);
+        }
+    };
+
+    // Group logs by run_id, newest batch first
+    const batches: AutomationBatch[] = React.useMemo(() => {
+        const map = new Map<string, AutomationLogRow[]>();
+        for (const log of logs) {
+            if (!map.has(log.run_id)) map.set(log.run_id, []);
+            map.get(log.run_id)!.push(log);
+        }
+        return Array.from(map.entries()).map(([run_id, rows]) => {
+            const total_enrolled = rows.reduce((s, r) => s + r.total_enrolled, 0);
+            const created_count = rows.reduce((s, r) => s + r.created_count, 0);
+            const existing_count = rows.reduce((s, r) => s + r.existing_count, 0);
+            const error_count = rows.reduce((s, r) => s + r.error_count, 0);
+            const hasError = rows.some(r => r.status === 'error');
+            const hasPartial = rows.some(r => r.status === 'partial');
+            const overallStatus: AutomationLogRow['status'] = hasError ? 'error' : hasPartial ? 'partial' : 'success';
+            return { run_id, created_at: rows[0].created_at, rows, total_enrolled, created_count, existing_count, error_count, overallStatus };
+        });
+    }, [logs]);
+
+    const statusBadge = (status: AutomationLogRow['status']) => {
+        const map: Record<string, string> = {
+            success: 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300',
+            partial: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300',
+            error: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300',
+            pending: 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300',
+        };
+        return (
+            <span className={`inline-block px-2 py-0.5 rounded text-xs font-semibold ${map[status] ?? map.pending}`}>
+                {status}
+            </span>
+        );
+    };
+
+    return (
+        <div>
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+                <h2 className="text-3xl font-bold">Automation Logging</h2>
+                <div className="flex items-center gap-2">
+                    <Button variant="ghost" onClick={fetchLogs} disabled={loading}>
+                        {loading ? 'Refreshing…' : 'Refresh'}
+                    </Button>
+                    <Button
+                        onClick={handleRunNow}
+                        disabled={running}
+                        className="bg-indigo-600 hover:bg-indigo-700 text-white disabled:opacity-50"
+                    >
+                        {running ? 'Running…' : 'Run Now'}
+                    </Button>
+                    <Button variant="ghost" onClick={() => setAdminPage(AdminPage.Dashboard)}>
+                        Back
+                    </Button>
+                </div>
+            </div>
+
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                Daily automation (4 AM SGT): searches SSG enrollments for today&apos;s classes and auto-creates learner accounts.
+                Use <strong>Run Now</strong> to trigger manually.
+            </p>
+
+            {message && (
+                <div className={`mb-4 px-4 py-3 rounded-lg text-sm font-medium ${
+                    message.type === 'success'
+                        ? 'bg-green-50 text-green-800 border border-green-200 dark:bg-green-900/20 dark:text-green-300 dark:border-green-800'
+                        : 'bg-red-50 text-red-800 border border-red-200 dark:bg-red-900/20 dark:text-red-300 dark:border-red-800'
+                }`}>
+                    {message.text}
+                </div>
+            )}
+
+            {loading ? (
+                <div className="text-center py-12 text-gray-400">Loading logs…</div>
+            ) : batches.length === 0 ? (
+                <Card className="p-8 text-center text-gray-500 dark:text-gray-400">
+                    No automation runs yet. Click <strong>Run Now</strong> to trigger the first run.
+                </Card>
+            ) : (
+                <div className="space-y-3">
+                    {batches.map(batch => (
+                        <Card key={batch.run_id} className="overflow-hidden">
+                            {/* Batch header row */}
+                            <button
+                                className="w-full text-left px-5 py-4 flex flex-wrap items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors"
+                                onClick={() => setExpandedBatch(expandedBatch === batch.run_id ? null : batch.run_id)}
+                            >
+                                <div className="flex items-center gap-3 min-w-0">
+                                    <span className="text-sm font-medium text-gray-700 dark:text-gray-200 whitespace-nowrap">
+                                        {new Date(batch.created_at).toLocaleString('en-SG', {
+                                            day: '2-digit', month: 'short', year: 'numeric',
+                                            hour: '2-digit', minute: '2-digit', hour12: false,
+                                        })}
+                                    </span>
+                                    <span className="text-xs text-gray-400 dark:text-gray-500 font-mono bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded hidden sm:inline">
+                                        {batch.run_id}
+                                    </span>
+                                </div>
+                                <div className="ml-auto flex items-center gap-3 flex-wrap justify-end">
+                                    {statusBadge(batch.overallStatus)}
+                                    <span className="text-xs text-gray-400 dark:text-gray-500">{batch.rows.length} run{batch.rows.length !== 1 ? 's' : ''}</span>
+                                    <div className="flex items-center gap-2 text-sm">
+                                        <span className="text-gray-600 dark:text-gray-300 font-semibold">{batch.total_enrolled}</span>
+                                        <span className="text-gray-400 text-xs">enrolled</span>
+                                    </div>
+                                    <div className="flex items-center gap-1.5 text-sm">
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 text-xs font-semibold">✓ {batch.created_count} new</span>
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs font-semibold">↩ {batch.existing_count} existing</span>
+                                        {batch.error_count > 0 && (
+                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-300 text-xs font-semibold">✕ {batch.error_count} errors</span>
+                                        )}
+                                    </div>
+                                    <span className="text-gray-400 text-xs ml-1">{expandedBatch === batch.run_id ? '▲' : '▼'}</span>
+                                </div>
+                            </button>
+
+                            {/* Expanded: per-course-run table */}
+                            {expandedBatch === batch.run_id && (
+                                <div className="border-t border-gray-100 dark:border-gray-700">
+                                    <table className="w-full text-sm">
+                                        <thead className="bg-gray-50 dark:bg-gray-800/80 text-left">
+                                            <tr>
+                                                <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Course Title</th>
+                                                <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Course Code</th>
+                                                <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">SSG Run ID</th>
+                                                <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 text-center">Status</th>
+                                                <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 text-center">Enrolled</th>
+                                                <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 text-center">Created</th>
+                                                <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 text-center">Existing</th>
+                                                <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 text-center">Errors</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {batch.rows.map(log => (
+                                                <React.Fragment key={log.id}>
+                                                    <tr className="border-t border-gray-100 dark:border-gray-700/60 hover:bg-gray-50 dark:hover:bg-gray-800/30 transition-colors">
+                                                        <td className="px-4 py-3 max-w-[220px]">
+                                                            <div className="font-medium text-gray-900 dark:text-gray-100 truncate">{log.course_title || '—'}</div>
+                                                        </td>
+                                                        <td className="px-4 py-3">
+                                                            <span className="text-xs text-indigo-600 dark:text-indigo-400 font-mono bg-indigo-50 dark:bg-indigo-900/30 px-1.5 py-0.5 rounded">
+                                                                {log.course_code || '—'}
+                                                            </span>
+                                                        </td>
+                                                        <td className="px-4 py-3">
+                                                            <span className="text-xs text-gray-500 dark:text-gray-400 font-mono bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded">
+                                                                {log.course_run_id || '—'}
+                                                            </span>
+                                                            {log.error_message && (
+                                                                <span className="text-red-500 ml-1.5 text-xs" title={log.error_message}>⚠ {log.error_message.slice(0, 40)}{log.error_message.length > 40 ? '…' : ''}</span>
+                                                            )}
+                                                        </td>
+                                                        <td className="px-4 py-3 text-center">{statusBadge(log.status)}</td>
+                                                        <td className="px-4 py-3 text-center font-semibold text-gray-700 dark:text-gray-300">{log.total_enrolled}</td>
+                                                        <td className="px-4 py-3 text-center">
+                                                            <span className="font-semibold text-emerald-600 dark:text-emerald-400">{log.created_count}</span>
+                                                        </td>
+                                                        <td className="px-4 py-3 text-center">
+                                                            <span className="font-semibold text-blue-600 dark:text-blue-400">{log.existing_count}</span>
+                                                        </td>
+                                                        <td className="px-4 py-3 text-center">
+                                                            <span className={`font-semibold ${log.error_count > 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-400'}`}>{log.error_count}</span>
+                                                        </td>
+                                                    </tr>
+                                                    {/* Learner rows — always shown when there are details */}
+                                                    {log.details && log.details.length > 0 && (
+                                                        <tr key={`${log.id}-detail`}>
+                                                            <td colSpan={8} className="px-5 pb-4 pt-1 bg-gray-50/80 dark:bg-gray-900/40">
+                                                                <div className="rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+                                                                    <table className="w-full text-xs">
+                                                                        <thead className="bg-gray-100 dark:bg-gray-800">
+                                                                            <tr>
+                                                                                <th className="px-3 py-2 text-left font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide text-[10px]">Enrolment ID</th>
+                                                                                <th className="px-3 py-2 text-left font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide text-[10px]">Email</th>
+                                                                                <th className="px-3 py-2 text-left font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide text-[10px]">Name</th>
+                                                                                <th className="px-3 py-2 text-left font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide text-[10px]">Account</th>
+                                                                                <th className="px-3 py-2 text-left font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide text-[10px]">Result</th>
+                                                                                <th className="px-3 py-2 text-left font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide text-[10px]">Reason</th>
+                                                                            </tr>
+                                                                        </thead>
+                                                                        <tbody className="divide-y divide-gray-100 dark:divide-gray-700/60">
+                                                                            {log.details.map((d, i) => (
+                                                                                <tr key={i} className={`transition-colors ${
+                                                                                    d.status === 'error'     ? 'bg-red-50/60 dark:bg-red-900/10' :
+                                                                                    d.status === 'created'   ? 'bg-emerald-50/40 dark:bg-emerald-900/10' :
+                                                                                    d.status === 'cancelled' ? 'bg-orange-50/40 dark:bg-orange-900/10' :
+                                                                                    'hover:bg-white dark:hover:bg-gray-800/50'
+                                                                                }`}>
+                                                                                    <td className="px-3 py-2 font-mono text-gray-400 dark:text-gray-500">{d.enrolmentRef || '—'}</td>
+                                                                                    <td className="px-3 py-2 font-mono text-gray-700 dark:text-gray-300">{d.email}</td>
+                                                                                    <td className="px-3 py-2 text-gray-700 dark:text-gray-300">{d.name || '—'}</td>
+                                                                                    <td className="px-3 py-2">
+                                                                                        {d.accountExists === undefined ? (
+                                                                                            <span className="text-gray-400 text-[10px]">—</span>
+                                                                                        ) : d.accountExists ? (
+                                                                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300">✓ Exists</span>
+                                                                                        ) : (
+                                                                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300">✕ Not Found</span>
+                                                                                        )}
+                                                                                    </td>
+                                                                                    <td className="px-3 py-2">
+                                                                                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                                                                                            d.status === 'created'   ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300' :
+                                                                                            d.status === 'existing'  ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300' :
+                                                                                            d.status === 'cancelled' ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300' :
+                                                                                            d.status === 'error'     ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300' :
+                                                                                            'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
+                                                                                        }`}>
+                                                                                            {d.status === 'created' ? '✓' : d.status === 'existing' ? '↩' : d.status === 'cancelled' ? '⊘' : d.status === 'error' ? '✕' : ''}
+                                                                                            {d.status}
+                                                                                        </span>
+                                                                                    </td>
+                                                                                    <td className="px-3 py-2 text-gray-500 dark:text-gray-400 max-w-[300px]">
+                                                                                        {d.reason ? (
+                                                                                            <span className="text-red-500 dark:text-red-400">{d.reason}</span>
+                                                                                        ) : '—'}
+                                                                                    </td>
+                                                                                </tr>
+                                                                            ))}
+                                                                        </tbody>
+                                                                    </table>
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    )}
+                                                </React.Fragment>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+                        </Card>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+};
+
+// ─── Assign Trainer Logging ───────────────────────────────────────────────────
+
+interface AssignTrainerLogRow {
+    id: number;
+    created_at: string;
+    course_run_id: string;
+    course_code: string | null;
+    course_title: string | null;
+    start_date: string | null;
+    end_date: string | null;
+    ra_code: string | null;
+    trainer_name: string | null;
+    trainer_email: string | null;
+    action: string | null;
+    status: 'success' | 'error';
+    error_message: string | null;
+}
+
+export const AssignTrainerLogsView: React.FC = () => {
+    const { setAdminPage } = useLms();
+    const [logs, setLogs] = useState<AssignTrainerLogRow[]>([]);
+    const [loading, setLoading] = useState(false);
+    const [expandedDates, setExpandedDates] = useState<Set<string>>(new Set());
+
+    const fetchLogs = async () => {
+        setLoading(true);
+        try {
+            const res = await fetch('/api/admin/assign-trainer-logs?limit=500');
+            const json = await res.json();
+            if (json.success) setLogs(json.data);
+        } catch {
+            /* silent */
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => { fetchLogs(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+    const displayLogs = logs;
+
+    // Group logs by calendar date (SG time)
+    const batches = useMemo(() => {
+        const map = new Map<string, AssignTrainerLogRow[]>();
+        for (const log of displayLogs) {
+            const dateKey = new Date(log.created_at).toLocaleDateString('en-SG', {
+                timeZone: 'Asia/Singapore',
+                day: '2-digit', month: 'short', year: 'numeric',
+            });
+            if (!map.has(dateKey)) map.set(dateKey, []);
+            map.get(dateKey)!.push(log);
+        }
+        return Array.from(map.entries()); // [ [dateLabel, rows[]], ... ]
+    }, [displayLogs]);
+
+    // Expand the most recent batch by default
+    useEffect(() => {
+        if (batches.length > 0) {
+            setExpandedDates(new Set([batches[0][0]]));
+        }
+    }, [batches.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    const toggleDate = (dateKey: string) => {
+        setExpandedDates(prev => {
+            const next = new Set(prev);
+            next.has(dateKey) ? next.delete(dateKey) : next.add(dateKey);
+            return next;
+        });
+    };
+
+    const actionBadge = (action: string | null) => {
+        const map: Record<string, string> = {
+            created: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
+            updated: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
+            skipped: 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400',
+            error:   'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
+        };
+        const key = action ?? 'skipped';
+        return (
+            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${map[key] ?? map.skipped}`}>
+                {key}
+            </span>
+        );
+    };
+
+    return (
+        <div>
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+                <h2 className="text-3xl font-bold">Assign Trainer Log</h2>
+                <div className="flex items-center gap-2">
+                    <Button variant="ghost" onClick={fetchLogs} disabled={loading}>
+                        {loading ? 'Refreshing…' : 'Refresh'}
+                    </Button>
+                    <Button variant="ghost" onClick={() => setAdminPage(AdminPage.Dashboard)}>
+                        Back
+                    </Button>
+                </div>
+            </div>
+
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                Records every trainer assignment made via the external API (Kael). Grouped by date.
+            </p>
+
+            {loading ? (
+                <div className="text-center py-12 text-gray-400">Loading logs…</div>
+            ) : batches.length === 0 ? (
+                <Card className="p-8 text-center text-gray-500 dark:text-gray-400">No assign trainer logs yet.</Card>
+            ) : (
+                <div className="space-y-4">
+                    {batches.map(([dateKey, rows]) => {
+                        const isOpen = expandedDates.has(dateKey);
+                        const successCount = rows.filter(r => r.status === 'success').length;
+                        const errorCount   = rows.filter(r => r.status === 'error').length;
+                        return (
+                            <Card key={dateKey} className="overflow-hidden">
+                                {/* Batch header */}
+                                <button
+                                    onClick={() => toggleDate(dateKey)}
+                                    className="w-full flex items-center justify-between px-5 py-4 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors text-left"
+                                >
+                                    <div className="flex items-center gap-4 flex-wrap">
+                                        <span className="font-semibold text-gray-900 dark:text-white">{dateKey}</span>
+                                        <span className="text-sm text-gray-500 dark:text-gray-400">{rows.length} assignment{rows.length !== 1 ? 's' : ''}</span>
+                                        {successCount > 0 && (
+                                            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
+                                                {successCount} success
+                                            </span>
+                                        )}
+                                        {errorCount > 0 && (
+                                            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300">
+                                                {errorCount} error{errorCount !== 1 ? 's' : ''}
+                                            </span>
+                                        )}
+                                    </div>
+                                    <svg className={`w-5 h-5 text-gray-400 transition-transform flex-shrink-0 ${isOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                                </button>
+
+                                {/* Rows table */}
+                                {isOpen && (
+                                    <div className="border-t border-gray-100 dark:border-gray-700 overflow-x-auto">
+                                        <table className="w-full text-sm">
+                                            <thead className="bg-gray-50 dark:bg-gray-800 text-left">
+                                                <tr>
+                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Time</th>
+                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Course Title</th>
+                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Course Code</th>
+                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Course Run ID</th>
+                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Start Date</th>
+                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">End Date</th>
+                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">RA Code</th>
+                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Trainer</th>
+                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 text-center">Action</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                                                {rows.map(log => (
+                                                    <tr key={log.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                                                        <td className="px-4 py-3 whitespace-nowrap text-gray-500 dark:text-gray-400 text-xs">
+                                                            {new Date(log.created_at).toLocaleTimeString('en-SG', {
+                                                                timeZone: 'Asia/Singapore',
+                                                                hour: '2-digit', minute: '2-digit', hour12: false,
+                                                            })}
+                                                        </td>
+                                                        <td className="px-4 py-3 max-w-[260px]">
+                                                            <div className="font-medium text-gray-900 dark:text-gray-100 whitespace-normal break-words">{log.course_title || '—'}</div>
+                                                        </td>
+                                                        <td className="px-4 py-3 whitespace-nowrap">
+                                                            {log.course_code
+                                                                ? <span className="text-xs text-indigo-600 dark:text-indigo-400 font-mono bg-indigo-50 dark:bg-indigo-900/30 px-1.5 py-0.5 rounded">{log.course_code}</span>
+                                                                : <span className="text-gray-400">—</span>}
+                                                        </td>
+                                                        <td className="px-4 py-3 whitespace-nowrap">
+                                                            <span className="text-xs text-gray-500 dark:text-gray-400 font-mono bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded">
+                                                                {log.course_run_id || '—'}
+                                                            </span>
+                                                        </td>
+                                                        <td className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                                                            {log.start_date || '—'}
+                                                        </td>
+                                                        <td className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                                                            {log.end_date || '—'}
+                                                        </td>
+                                                        <td className="px-4 py-3 text-xs font-mono text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                                                            {log.ra_code || '—'}
+                                                        </td>
+                                                        <td className="px-4 py-3">
+                                                            <div className="font-medium text-gray-800 dark:text-gray-200">{log.trainer_name || '—'}</div>
+                                                            <div className="text-xs text-gray-400 font-mono">{log.trainer_email || ''}</div>
+                                                            {log.error_message && (
+                                                                <div className="text-xs text-red-500 mt-0.5">{log.error_message}</div>
+                                                            )}
+                                                        </td>
+                                                        <td className="px-4 py-3 text-center">
+                                                            {actionBadge(log.status === 'error' ? 'error' : log.action)}
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )}
+                            </Card>
+                        );
+                    })}
+                </div>
+            )}
+        </div>
+    );
+};
+
+// ── Backfill Enrollments ──────────────────────────────────────────────────────
+
+interface BackfillPreviewRow {
+    id: string;
+    enrolment_id: string;
+    enrolment_status: string | null;
+    email: string | null;
+    nric: string | null;
+    created_at: string;
+    ssg_run_id: string | null;
+    course_title: string | null;
+    course_code: string | null;
+}
+
+export const BackfillEnrollmentsView: React.FC = () => {
+    const { setAdminPage } = useLms();
+    const [preview, setPreview] = useState<BackfillPreviewRow[]>([]);
+    const [previewing, setPreviewing] = useState(false);
+    const [running, setRunning] = useState(false);
+    const [runResult, setRunResult] = useState<any>(null);
+    const [limit, setLimit] = useState(50);
+    const [error, setError] = useState<string | null>(null);
+
+    const fetchPreview = async () => {
+        setPreviewing(true);
+        setError(null);
+        setRunResult(null);
+        try {
+            const res  = await fetch(`/api/admin/backfill-enrollments?limit=${limit}`);
+            const json = await res.json();
+            if (json.success) {
+                setPreview(json.enrollments ?? []);
+            } else {
+                setError(json.error ?? 'Preview failed');
+            }
+        } catch (e) {
+            setError(e instanceof Error ? e.message : 'Network error');
+        } finally {
+            setPreviewing(false);
+        }
+    };
+
+    const runBackfill = async () => {
+        if (!window.confirm(`This will call the SSG webhook for up to ${preview.length} enrollment(s), 4 seconds apart. Proceed?`)) return;
+        setRunning(true);
+        setError(null);
+        setRunResult(null);
+        try {
+            const res  = await fetch(`/api/admin/backfill-enrollments?limit=${limit}`, {
+                method: 'POST',
+            });
+            const json = await res.json();
+            if (json.success) {
+                setRunResult(json);
+                setPreview([]); // clear preview after run
+            } else {
+                setError(json.error ?? 'Backfill failed');
+            }
+        } catch (e) {
+            setError(e instanceof Error ? e.message : 'Network error');
+        } finally {
+            setRunning(false);
+        }
+    };
+
+    return (
+        <div className="max-w-5xl">
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+                <h2 className="text-3xl font-bold">Backfill Enrollments</h2>
+                <Button variant="ghost" onClick={() => setAdminPage(AdminPage.Dashboard)}>Back</Button>
+            </div>
+
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+                Finds enrollments with a missing <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">raw_data</code> field and fetches the full SSG data for each one.
+                Preview first to verify, then run the backfill.
+            </p>
+
+            {/* Controls */}
+            <Card className="p-5 mb-6">
+                <div className="flex flex-wrap items-end gap-4">
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Limit</label>
+                        <input
+                            type="number"
+                            min={1} max={200}
+                            value={limit}
+                            onChange={e => setLimit(Math.min(200, Math.max(1, Number(e.target.value))))}
+                            className="w-24 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-slate-800 text-gray-900 dark:text-white"
+                        />
+                    </div>
+                    <Button onClick={fetchPreview} disabled={previewing || running} variant="secondary">
+                        {previewing ? 'Fetching preview…' : 'Fetch Preview'}
+                    </Button>
+                    {preview.length > 0 && (
+                        <Button onClick={runBackfill} disabled={running || previewing} className="bg-blue-600 hover:bg-blue-700 text-white">
+                            {running ? 'Running…' : `Run Backfill (${preview.length})`}
+                        </Button>
+                    )}
+                </div>
+                <p className="text-xs text-gray-400 dark:text-gray-500 mt-3">
+                    Note: Backfill calls the SSG webhook once per enrollment with a 4-second delay between each call.
+                </p>
+            </Card>
+
+            {/* Error */}
+            {error && (
+                <div className="mb-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-700 dark:text-red-300">
+                    {error}
+                </div>
+            )}
+
+            {/* Run result summary */}
+            {runResult && (
+                <Card className="p-5 mb-6">
+                    <h3 className="font-semibold text-gray-900 dark:text-white mb-3">Backfill Complete</h3>
+                    <div className="flex flex-wrap gap-4 mb-4 text-sm">
+                        <span className="px-3 py-1 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300">Total: <strong>{runResult.total}</strong></span>
+                        <span className="px-3 py-1 rounded-full bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300">Updated: <strong>{runResult.updated}</strong></span>
+                        <span className="px-3 py-1 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400">Skipped: <strong>{runResult.skipped}</strong></span>
+                        <span className="px-3 py-1 rounded-full bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300">Errors: <strong>{runResult.errors}</strong></span>
+                    </div>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                            <thead className="bg-gray-50 dark:bg-gray-800 text-left">
+                                <tr>
+                                    <th className="px-4 py-2 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Enrolment ID</th>
+                                    <th className="px-4 py-2 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">SSG Status</th>
+                                    <th className="px-4 py-2 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Result</th>
+                                    <th className="px-4 py-2 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Detail</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                                {(runResult.results ?? []).map((r: any, i: number) => (
+                                    <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                                        <td className="px-4 py-2 font-mono text-xs text-gray-700 dark:text-gray-300">{r.enrolmentId}</td>
+                                        <td className="px-4 py-2 text-xs text-gray-500 dark:text-gray-400">{r.status}</td>
+                                        <td className="px-4 py-2">
+                                            <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-semibold ${
+                                                r.result === 'updated' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
+                                                : r.result === 'skipped' ? 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
+                                                : 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
+                                            }`}>{r.result}</span>
+                                        </td>
+                                        <td className="px-4 py-2 text-xs text-gray-500 dark:text-gray-400">{r.detail ?? '—'}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </Card>
+            )}
+
+            {/* Preview table */}
+            {preview.length > 0 && !runResult && (
+                <Card className="overflow-hidden">
+                    <div className="px-5 py-3 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
+                        <span className="font-semibold text-gray-900 dark:text-white">{preview.length} enrollment{preview.length !== 1 ? 's' : ''} missing raw data</span>
+                        <span className="text-xs text-amber-600 dark:text-amber-400 font-medium">Review below, then click Run Backfill</span>
+                    </div>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                            <thead className="bg-gray-50 dark:bg-gray-800 text-left">
+                                <tr>
+                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Enrolment ID</th>
+                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Course</th>
+                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Course Run ID</th>
+                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Email</th>
+                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">NRIC</th>
+                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Status</th>
+                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Created</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                                {preview.map(row => (
+                                    <tr key={row.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                                        <td className="px-4 py-3 font-mono text-xs text-indigo-600 dark:text-indigo-400">{row.enrolment_id}</td>
+                                        <td className="px-4 py-3 max-w-[200px]">
+                                            <div className="font-medium text-gray-900 dark:text-gray-100 text-xs whitespace-normal">{row.course_title || '—'}</div>
+                                            {row.course_code && <span className="text-xs text-gray-400 font-mono">{row.course_code}</span>}
+                                        </td>
+                                        <td className="px-4 py-3 font-mono text-xs text-gray-500 dark:text-gray-400">{row.ssg_run_id || '—'}</td>
+                                        <td className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400">{row.email || '—'}</td>
+                                        <td className="px-4 py-3 text-xs font-mono text-gray-500 dark:text-gray-400">{row.nric || '—'}</td>
+                                        <td className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400">{row.enrolment_status || '—'}</td>
+                                        <td className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                                            {new Date(row.created_at).toLocaleDateString('en-SG', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </Card>
+            )}
+
+            {preview.length === 0 && !previewing && !runResult && !error && (
+                <Card className="p-8 text-center text-gray-500 dark:text-gray-400">
+                    Click <strong>Fetch Preview</strong> to see which enrollments are missing raw data.
+                </Card>
+            )}
         </div>
     );
 };

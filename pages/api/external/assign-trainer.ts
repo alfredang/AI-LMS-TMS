@@ -71,6 +71,26 @@ function parseToISO(d: number | string | undefined): string | null {
 //   return parts[parts.length - 1] || null;
 // }
 
+async function ensureLogTable() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS assign_trainer_log (
+      id             SERIAL PRIMARY KEY,
+      created_at     TIMESTAMPTZ DEFAULT NOW(),
+      course_run_id  TEXT,
+      course_code    TEXT,
+      course_title   TEXT,
+      start_date     TEXT,
+      end_date       TEXT,
+      ra_code        TEXT,
+      trainer_name   TEXT,
+      trainer_email  TEXT,
+      action         TEXT,
+      status         TEXT NOT NULL DEFAULT 'success',
+      error_message  TEXT
+    )
+  `);
+}
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ success: false, error: 'Method not allowed' });
@@ -100,6 +120,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     ra_code,
     course_title,
   } = req.body ?? {};
+
+  await ensureLogTable();
 
   if (!course_run_id || !primary_email || !course_code) {
     return res.status(400).json({
@@ -276,6 +298,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     console.log(`✅ [${action}] ${trainer.email} → run ${course_run_id}${raCode ? ` (RA: ${raCode})` : ''}`);
 
+    await pool.query(
+      `INSERT INTO assign_trainer_log
+         (course_run_id, course_code, course_title, start_date, end_date, ra_code, trainer_name, trainer_email, action, status)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'success')`,
+      [String(course_run_id), courseCode, courseTitle, startDateISO, endDateISO, raCode, trainer.full_name, trainer.email, action],
+    );
+
     return res.status(200).json({
       success: true,
       message: `Trainer assigned successfully (course run ${action === 'skipped' ? 'exists — data unchanged' : action})`,
@@ -296,9 +325,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   } catch (error) {
     await client.query('ROLLBACK').catch(() => {});
     console.error('❌ assign-trainer error:', error);
+    const errorMsg = error instanceof Error ? error.message : 'Internal server error';
+    await pool.query(
+      `INSERT INTO assign_trainer_log
+         (course_run_id, course_code, course_title, start_date, end_date, ra_code, trainer_email, action, status, error_message)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,'error','error',$8)`,
+      [String(course_run_id), courseCode ?? null, courseTitle ?? null, startDateISO ?? null, endDateISO ?? null, raCode ?? null, primary_email ?? null, errorMsg],
+    ).catch(() => {});
     return res.status(500).json({
       success: false,
-      error: error instanceof Error ? error.message : 'Internal server error',
+      error: errorMsg,
     });
   } finally {
     client.release();

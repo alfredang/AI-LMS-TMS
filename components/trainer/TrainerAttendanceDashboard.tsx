@@ -843,10 +843,19 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
           if (accountStatus === 'creating' || accountStatus === 'done') continue;
           const nric: string = trainee?.id || trainee?.nric || enrol?.nric || '';
           const enrolRef: string = enrol?.referenceNumber || enrol?.enrolmentReferenceNumber || '';
+          const enrolmentStatus: string = enrol?.status || '';
+          const sponsorshipType: string = trainee?.sponsorshipType || '';
+          const enrolmentDate: string = trainee?.enrolmentDate || '';
+          const courseReference: string = enrol?.course?.referenceNumber || '';
+          const tpCode: string = enrol?.trainingPartner?.code || '';
+          const paymentCollectionStatus: string = trainee?.fees?.collectionStatus || '';
           // For both missing AND existing accounts — create-learner-account handles both:
           // - missing: creates account + enrolls
           // - existing: skips creation, runs ensureEnrollment to assign course run if not yet assigned
-          await handleCreateLearnerAccount(email, trainee?.fullName || trainee?.name || '', nric, enrolRef, course);
+          await handleCreateLearnerAccount(
+            email, trainee?.fullName || trainee?.name || '', nric, enrolRef, course,
+            { enrolmentStatus, sponsorshipType, enrolmentDate, courseReference, tpCode, paymentCollectionStatus, rawData: enrol }
+          );
         }
       }
     } catch { /* silent */ }
@@ -869,7 +878,14 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
     finally { setLoadingAttendanceSummary(false); }
   };
 
-  const handleCreateLearnerAccount = async (email: string, fullName: string, nric?: string, enrolmentId?: string, courseOverride?: typeof selectedCourse) => {
+  const handleCreateLearnerAccount = async (
+    email: string, fullName: string, nric?: string, enrolmentId?: string,
+    courseOverride?: typeof selectedCourse,
+    extra?: {
+      enrolmentStatus?: string; sponsorshipType?: string; enrolmentDate?: string;
+      courseReference?: string; tpCode?: string; paymentCollectionStatus?: string; rawData?: any;
+    }
+  ) => {
     const course = courseOverride ?? selectedCourse;
     const key = email.toLowerCase();
     setLearnerAccountMap(prev => ({ ...prev, [key]: 'creating' }));
@@ -884,10 +900,18 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
           courseRunId: course?.courseRunId,
           courseId: course?.id,
           enrolmentId,
+          enrolmentStatus:          extra?.enrolmentStatus || null,
+          sponsorshipType:          extra?.sponsorshipType || null,
+          enrolmentDate:            extra?.enrolmentDate || null,
+          courseReference:          extra?.courseReference || null,
+          tpCode:                   extra?.tpCode || null,
+          paymentCollectionStatus:  extra?.paymentCollectionStatus || null,
+          rawData:                  extra?.rawData || null,
         }),
       });
       const json = await res.json();
-      setLearnerAccountMap(prev => ({ ...prev, [key]: json.success ? 'done' : 'error' }));
+      // 'done' = freshly created, 'exists' = account already existed
+      setLearnerAccountMap(prev => ({ ...prev, [key]: json.success ? (json.created ? 'done' : 'exists') : 'error' }));
     } catch {
       setLearnerAccountMap(prev => ({ ...prev, [key]: 'error' }));
     }
