@@ -29,7 +29,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       FROM app_user au
       LEFT JOIN learner_profile lp ON lp.user_id = au.id
       WHERE au.id IN (
-        SELECT DISTINCT user_id FROM user_role WHERE role = 'learner'
+        SELECT DISTINCT user_id FROM user_role_map WHERE role = 'Learner'
       )
       ORDER BY au.full_name;
     `);
