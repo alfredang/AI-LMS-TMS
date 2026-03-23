@@ -810,6 +810,7 @@ const LearnerCourseList: React.FC = () => {
 
     const [searchQuery, setSearchQuery] = useState('');
     const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+    const [classTab, setClassTab] = useState<'all' | 'current' | 'upcoming' | 'past'>('all');
 
     // Poll every 30s — refetch if admin changed this learner's enrollments
     const loadedAtRef = useRef(new Date().toISOString());
@@ -832,21 +833,47 @@ const LearnerCourseList: React.FC = () => {
         setSearchQuery(sanitizeSearchInput(e.target.value));
     };
 
+    // Classify courses by date
+    const classifyCourse = (course: any): 'current' | 'upcoming' | 'past' => {
+        const today = new Date(new Date().toDateString());
+        const start = course.startDate ? new Date(course.startDate) : null;
+        const end = course.endDate ? new Date(course.endDate) : null;
+
+        if (start && start > today) return 'upcoming';
+        if (end && end < today) return 'past';
+        if (start && end && start <= today && end >= today) return 'current';
+        // If only start exists and it's today or earlier, treat as current
+        if (start && !end && start <= today) return 'current';
+        return 'current'; // default
+    };
+
+    // KPI counts from full dataset
+    const currentClasses = (courses || []).filter(c => classifyCourse(c) === 'current').length;
+    const upcomingClasses = (courses || []).filter(c => classifyCourse(c) === 'upcoming').length;
+    const pastClasses = (courses || []).filter(c => classifyCourse(c) === 'past').length;
+
     const filteredCourses = useMemo(() => {
         if (!courses) return [];
-        if (searchQuery === '') return courses;
+
+        // First filter by tab
+        let tabFiltered = courses;
+        if (classTab !== 'all') {
+            tabFiltered = courses.filter(c => classifyCourse(c) === classTab);
+        }
+
+        // Then filter by search
+        if (searchQuery === '') return tabFiltered;
         const q = searchQuery.toLowerCase();
-        return courses.filter(course => {
+        return tabFiltered.filter(course => {
             if (course.title.toLowerCase().includes(q)) return true;
             if (course.courseCode?.toLowerCase().includes(q)) return true;
-            // Only match run ID/code if query is at least 3 chars (avoids single digit false matches)
             if (q.length >= 3) {
                 if (course.courseRunCode?.toLowerCase().includes(q)) return true;
                 if (String(course.courseRunId || '').toLowerCase().includes(q)) return true;
             }
             return false;
         });
-    }, [courses, searchQuery]);
+    }, [courses, searchQuery, classTab]);
 
     if (loading) {
         return (
@@ -872,6 +899,40 @@ const LearnerCourseList: React.FC = () => {
         <div className="space-y-4">
             {/* Page Header */}
             <h2 className="text-2xl font-bold text-on-surface">My Courses</h2>
+
+            {/* KPI Stat Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <Card className="p-6 text-center">
+                    <p className="text-4xl font-bold text-green-600">{currentClasses}</p>
+                    <p className="text-gray-600 dark:text-gray-300 mt-1">Current Classes</p>
+                </Card>
+                <Card className="p-6 text-center">
+                    <p className="text-4xl font-bold text-blue-600">{upcomingClasses}</p>
+                    <p className="text-gray-600 dark:text-gray-300 mt-1">Upcoming Classes</p>
+                </Card>
+                <Card className="p-6 text-center">
+                    <p className="text-4xl font-bold text-gray-500">{pastClasses}</p>
+                    <p className="text-gray-600 dark:text-gray-300 mt-1">Past Classes</p>
+                </Card>
+            </div>
+
+            {/* Class Tabs */}
+            <div className="flex gap-1 p-1 bg-surface rounded-lg w-fit border border-default">
+                {([
+                    { key: 'all' as const, label: 'All Classes' },
+                    { key: 'current' as const, label: 'Current Classes' },
+                    { key: 'upcoming' as const, label: 'Upcoming Classes' },
+                    { key: 'past' as const, label: 'Past Classes' },
+                ]).map(tab => (
+                    <button
+                        key={tab.key}
+                        onClick={() => setClassTab(tab.key)}
+                        className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${classTab === tab.key ? 'bg-primary text-white shadow-sm' : 'text-gray-400 hover:text-white hover:bg-gray-700/50'}`}
+                    >
+                        {tab.label}
+                    </button>
+                ))}
+            </div>
 
             {/* Search + View Toggle */}
             <div className="flex items-center gap-3">
@@ -928,8 +989,8 @@ const LearnerCourseList: React.FC = () => {
             {/* Course List */}
             {filteredCourses.length === 0 ? (
                 <EmptyState
-                    title={searchQuery ? 'No courses match your search' : 'No enrolled courses found'}
-                    description={searchQuery ? 'Try a different course code, title, or run ID' : "You haven't enrolled in any courses yet"}
+                    title={searchQuery ? 'No courses match your search' : classTab === 'all' ? 'No enrolled courses found' : `No ${classTab} classes`}
+                    description={searchQuery ? 'Try a different course code, title, or run ID' : classTab === 'all' ? "You haven't enrolled in any courses yet" : `You don't have any ${classTab} classes right now`}
                     icon={IconName.Courses}
                 />
             ) : viewMode === 'grid' ? (
