@@ -13,9 +13,11 @@ import HelpAndSupportView from '../components/HelpAndSupportView';
 import { Icon, IconName } from '../components/ui/Icon';
 import TrainerHomePage from '../components/trainer/TrainerHomePage';
 import TrainerSidebar from '../components/trainer/TrainerSidebar';
+import AssessmentGrading from '../components/trainer/AssessmentGrading';
 
 const PAGE_LABELS: Record<TrainerPage, string> = {
   [TrainerPage.EAttendance]: 'E-Attendance',
+  [TrainerPage.AssessmentGrading]: 'Assessment Grading',
   [TrainerPage.MyClasses]: 'My Classes',
   [TrainerPage.TaskList]: 'Task List',
   [TrainerPage.GenAIAuthoring]: 'Trainer GenAI Authoring',
@@ -34,6 +36,8 @@ const TrainerLayout: React.FC = () => {
     switch (trainerPage) {
       case TrainerPage.EAttendance:
         return <TrainerHomePage />;
+      case TrainerPage.AssessmentGrading:
+        return <AssessmentGrading />;
       case TrainerPage.MyClasses:
         return <CourseList />;
       case TrainerPage.TaskList:

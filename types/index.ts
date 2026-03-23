@@ -65,6 +65,7 @@ export enum AdminPage {
 
 export enum TrainerPage {
   EAttendance = 'eAttendance',
+  AssessmentGrading = 'assessmentGrading',
   MyClasses = 'myClasses',
   TaskList = 'taskList',
   GenAIAuthoring = 'genAIAuthoring',

@@ -1557,7 +1557,7 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
       {!isAdminMode && <div className="bg-surface rounded-lg border border-default shadow-sm overflow-hidden">
         <div className="flex items-center justify-between px-4 py-3 border-b border-default">
           <div className="flex items-center gap-2">
-            <h2 className="text-sm font-semibold text-on-surface">Manual Attendance Taking (Optional)</h2>
+            <h2 className="text-sm font-semibold text-on-surface">Manual Attendance Taking</h2>
             {(loadingManualSessions || loadingManualAttendance || isLoadingEnrolments || isLoadingAttendance) && (
               <div className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-primary" />
             )}
