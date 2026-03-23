@@ -10,10 +10,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    // Get total learners enrolled
+    // Get total learners from completed classes (all trainees in course runs that have ended)
     const totalLearnersResult = await pool.query(`
-      SELECT COUNT(DISTINCT user_id) AS total_learners
-      FROM enrollment;
+      SELECT COUNT(*) AS total_learners
+      FROM enrollment e
+      JOIN course_run cr ON e.course_run_id = cr.id
+      WHERE cr.end_date < CURRENT_DATE;
     `);
 
     // Get enrollment by month using created_at since enrolment_date is null
@@ -187,10 +189,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     });
 
+    // Get enrollment forecast from upcoming classes (next 3 months)
+    const enrollmentForecastResult = await pool.query(`
+      SELECT COUNT(*) AS forecast_learners
+      FROM enrollment e
+      JOIN course_run cr ON e.course_run_id = cr.id
+      WHERE cr.start_date > CURRENT_DATE
+        AND cr.start_date <= CURRENT_DATE + INTERVAL '3 months';
+    `);
+
+    console.log('📊 Total learners query result:', totalLearnersResult.rows);
+    console.log('📊 Enrollment forecast result:', enrollmentForecastResult.rows);
+
     const analyticsData = {
-      totalLearners: totalLearnersResult.rows[0]?.total_learners || 0,
+      totalLearners: parseInt(totalLearnersResult.rows[0]?.total_learners) || 0,
       totalGrants: 0, // As requested, set to 0 for now
       totalClaims: 0, // As requested, set to 0 for now
+      enrollmentForecast: parseInt(enrollmentForecastResult.rows[0]?.forecast_learners) || 0,
       enrollmentByMonth: allMonths.map(month => ({ label: month.label, value: month.value })),
       courseRanking: courseRankingResult.rows.map(row => ({
         label: row.course_title,

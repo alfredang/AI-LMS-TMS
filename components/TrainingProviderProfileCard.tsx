@@ -42,10 +42,10 @@ const API_KEY_CONFIGS: Record<string, { label: string; models: { value: string; 
     },
     'MINIMAX_API_KEY': {
         label: 'MiniMax',
-        defaultModel: 'MiniMax-M1',
+        defaultModel: 'MiniMax-M2.7',
         models: [
-            { value: 'MiniMax-M1', label: 'MiniMax M1' },
-            { value: 'MiniMax-Text-01', label: 'MiniMax Text 01' },
+            { value: 'MiniMax-M2.7', label: 'MiniMax 2.7' },
+            { value: 'MiniMax-M2.5', label: 'MiniMax 2.5' },
         ]
     },
     'KIMI_API_KEY': {
@@ -758,7 +758,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                         onClick={() => setIsEditing(true)}
                                     >
                                         <Icon name={IconName.Edit} className="w-4 h-4 mr-2" />
-                                        Edit Profile
+                                        Edit Company Setting
                                     </Button>
                                 )}
                             </div>

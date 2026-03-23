@@ -8,6 +8,7 @@ interface AnalyticsData {
   totalLearners: number;
   totalGrants: number;
   totalClaims: number;
+  enrollmentForecast: number;
   enrollmentByMonth: { label: string; value: number }[];
   courseRanking: { label: string; value: number }[];
   ageProfile: { label: string; value: number }[];
@@ -135,7 +136,7 @@ const TrainingProviderDashboard: React.FC = () => {
                 <StatCard title="Total Learners Enrolled" value={analyticsData.totalLearners} />
                 <StatCard title="Total Grants Applied" value={`$${analyticsData.totalGrants.toLocaleString()}`} />
                 <StatCard title="Total Claims Received" value={`$${analyticsData.totalClaims.toLocaleString()}`} />
-                <StatCard title="Enrollment Forecast" value="~25" subtext="Next 3 Months" />
+                <StatCard title="Enrollment Forecast" value={`~${analyticsData.enrollmentForecast || 0}`} subtext="Next 3 Months" />
                 <StatCard title="Grant Forecast" value="~$0" subtext="Next 3 Months" />
                 <StatCard title="Claim Forecast" value="~$0" subtext="Next 3 Months" />
             </div>

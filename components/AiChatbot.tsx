@@ -2,19 +2,32 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useLms } from '@contexts/LmsContext';
 import { Button } from './ui/Button';
 import { Icon, IconName } from './ui/Icon';
-import { getTutorResponseStream } from '@lib/services/geminiService';
-import { ChatMessage, Course } from '@app-types';
+import { ChatMessage } from '@app-types';
+import { getApiUrl } from '@/lib/urlHelpers';
+
+const NEMO_SYSTEM_PROMPT = `You are Nemo, an AI operations assistant for Tertiary Infotech Academy's LMS/TMS platform.
+You help admins and training providers manage courses, trainers, learners, enrollments, and class operations.
+
+Key capabilities:
+- Search and view course runs, trainers, learners, enrollments
+- Assign trainers to course runs
+- Create new classes and course runs
+- Manage learner enrollments
+- View statistics and analytics
+- Help with SSG/TPG grant and claim operations
+
+When a user asks you to perform an action (assign trainer, enroll learner, etc.), explain what you'll do and confirm before executing.
+Be concise, professional, and proactive in suggesting next steps.
+If you don't know something, say so honestly.`;
 
 const AiChatbot: React.FC = () => {
-    const { isChatOpen, toggleChat, courses, calendarEvents, resetInAppChat } = useLms();
+    const { isChatOpen, toggleChat, resetInAppChat } = useLms();
     const [messages, setMessages] = useState<ChatMessage[]>([
-        { id: 'initial', role: 'model', text: 'Hello! I am Tertiary, your AI tutor. Ask me about your courses or assignments!' }
+        { id: 'initial', role: 'model', text: 'Hello! I\'m Nemo, your AI operations assistant. I can help you manage courses, trainers, learners, and more. What would you like to do?' }
     ]);
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
-
-    const enrolledCourses = courses.filter((c: Course) => c.enrollmentStatus === 'enrolled');
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -24,9 +37,8 @@ const AiChatbot: React.FC = () => {
         if (isChatOpen) {
             scrollToBottom();
         } else {
-            // Reset chat when closed to ensure context is fresh next time
             if (messages.length > 1) {
-                setMessages([{ id: 'initial', role: 'model', text: 'Hello! I am Tertiary, your AI tutor. How can I help you today?' }]);
+                setMessages([{ id: 'initial', role: 'model', text: 'Hello! I\'m Nemo, your AI operations assistant. I can help you manage courses, trainers, learners, and more. What would you like to do?' }]);
                 resetInAppChat();
             }
         }
@@ -48,23 +60,52 @@ const AiChatbot: React.FC = () => {
         setMessages(prev => [...prev, { id: modelMessageId, role: 'model', text: '' }]);
 
         try {
-            const stream = await getTutorResponseStream(input, enrolledCourses, calendarEvents);
+            // Build conversation history for the AI
+            const conversationMessages = [...messages.filter(m => m.id !== 'initial'), userMessage].map(m => ({
+                role: m.role === 'model' ? 'assistant' : 'user',
+                content: m.text
+            }));
 
-            for await (const chunk of stream) {
-                const chunkText = chunk.text;
+            const response = await fetch(getApiUrl('/api/ai/nemo'), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    messages: conversationMessages,
+                    systemPrompt: NEMO_SYSTEM_PROMPT,
+                }),
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                const errorMsg = data?.error || data?.details || `API error: ${response.status}`;
+                console.error('Nemo API error:', errorMsg);
                 setMessages(prev =>
                     prev.map(msg =>
                         msg.id === modelMessageId
-                            ? { ...msg, text: msg.text + chunkText }
+                            ? { ...msg, text: `Sorry, I encountered an error: ${errorMsg}` }
                             : msg
                     )
                 );
+                setIsLoading(false);
+                return;
             }
-        } catch (error) {
+
+            const responseText = data.text || 'Sorry, I could not generate a response.';
+
             setMessages(prev =>
                 prev.map(msg =>
                     msg.id === modelMessageId
-                        ? { ...msg, text: 'Sorry, I encountered an error. Please try again.' }
+                        ? { ...msg, text: responseText }
+                        : msg
+                )
+            );
+        } catch (error) {
+            console.error('Nemo AI error:', error);
+            setMessages(prev =>
+                prev.map(msg =>
+                    msg.id === modelMessageId
+                        ? { ...msg, text: 'Sorry, I encountered an error. Please check that an AI provider is configured in Company Settings.' }
                         : msg
                 )
             );
@@ -77,9 +118,15 @@ const AiChatbot: React.FC = () => {
         <div className="hidden md:block fixed bottom-6 right-6 z-50">
             {/* Chat Window */}
             {isChatOpen && (
-                <div className="w-96 h-[60vh] max-h-[700px] bg-surface shadow-2xl rounded-xl flex flex-col transform transition-all duration-300 ease-in-out origin-bottom-right scale-100 opacity-100 dark:bg-gray-800 dark:border dark:border-gray-700">
+                <div className="w-[28rem] h-[65vh] max-h-[750px] bg-surface shadow-2xl rounded-xl flex flex-col transform transition-all duration-300 ease-in-out origin-bottom-right scale-100 opacity-100 dark:bg-gray-800 dark:border dark:border-gray-700">
                     <div className="flex justify-between items-center p-4 border-b border-gray-200 dark:border-gray-700">
-                        <h3 className="text-xl font-bold text-primary dark:text-blue-400">AI Tutor Chat</h3>
+                        <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-white font-bold text-sm">N</div>
+                            <div>
+                                <h3 className="text-lg font-bold text-primary dark:text-blue-400">Nemo</h3>
+                                <p className="text-[10px] text-gray-500 dark:text-gray-400 -mt-0.5">AI Operations Agent</p>
+                            </div>
+                        </div>
                         <Button variant="ghost" size="sm" onClick={toggleChat} className="!p-2 rounded-full dark:text-gray-400 dark:hover:bg-gray-700">
                             <Icon name={IconName.Close} className="w-6 h-6" />
                         </Button>
@@ -88,8 +135,11 @@ const AiChatbot: React.FC = () => {
                     <div className="flex-1 overflow-y-auto p-4 space-y-4">
                         {messages.map((msg) => (
                             <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                                <div className={`max-w-xs px-4 py-2 rounded-2xl ${msg.role === 'user' ? 'bg-primary text-white dark:bg-blue-600' : 'bg-gray-100 !text-black dark:bg-gray-200 dark:!text-black'}`}>
-                                    <p className="whitespace-pre-wrap">{msg.text || <span className="inline-block w-2 h-4 bg-gray-400 animate-pulse rounded-full"></span>}</p>
+                                {msg.role === 'model' && (
+                                    <div className="w-6 h-6 rounded-full bg-primary flex items-center justify-center text-white font-bold text-[10px] mr-2 mt-1 flex-shrink-0">N</div>
+                                )}
+                                <div className={`max-w-[80%] px-4 py-2 rounded-2xl ${msg.role === 'user' ? 'bg-primary text-white dark:bg-blue-600' : 'bg-gray-100 !text-black dark:bg-gray-200 dark:!text-black'}`}>
+                                    <p className="whitespace-pre-wrap text-sm">{msg.text || <span className="inline-block w-2 h-4 bg-gray-400 animate-pulse rounded-full"></span>}</p>
                                 </div>
                             </div>
                         ))}
@@ -103,8 +153,8 @@ const AiChatbot: React.FC = () => {
                                 value={input}
                                 onChange={(e) => setInput(e.target.value)}
                                 onKeyPress={(e) => e.key === 'Enter' && !isLoading && handleSend()}
-                                placeholder="Ask about your courses..."
-                                className="flex-1 px-4 py-2 text-on-surface bg-surface border border-gray-300 rounded-full placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400"
+                                placeholder="Ask Nemo anything..."
+                                className="flex-1 px-4 py-2 text-on-surface bg-surface border border-gray-300 rounded-full placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400 text-sm"
                                 disabled={isLoading}
                             />
                             <Button onClick={handleSend} disabled={isLoading} className="rounded-full !p-3">
@@ -120,7 +170,8 @@ const AiChatbot: React.FC = () => {
                 <Button
                     onClick={toggleChat}
                     className="rounded-full !p-4 shadow-lg w-16 h-16 flex items-center justify-center transform hover:scale-110 transition-transform duration-200"
-                    aria-label="Open AI Tutor Chat"
+                    aria-label="Open Nemo AI Agent"
+                    title="Nemo - AI Agent"
                 >
                     <Icon name={IconName.Chat} className="w-8 h-8" />
                 </Button>
