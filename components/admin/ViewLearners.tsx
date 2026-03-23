@@ -152,11 +152,30 @@ const ViewLearners: React.FC = () => {
     );
   }
 
+  const selfSponsored = learners.filter(l => (l.sponsorship_type || '').toLowerCase() === 'self-sponsored').length;
+  const employerSponsored = learners.filter(l => (l.sponsorship_type || '').toLowerCase() === 'employer-sponsored').length;
+
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white">View Learners</h1>
+      </div>
+
+      {/* KPI Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <Card className="p-6 text-center">
+          <p className="text-4xl font-bold text-blue-600">{learners.length}</p>
+          <p className="text-gray-600 dark:text-gray-300 mt-1">Learners</p>
+        </Card>
+        <Card className="p-6 text-center">
+          <p className="text-4xl font-bold text-green-600">{selfSponsored}</p>
+          <p className="text-gray-600 dark:text-gray-300 mt-1">Self Sponsored</p>
+        </Card>
+        <Card className="p-6 text-center">
+          <p className="text-4xl font-bold text-purple-600">{employerSponsored}</p>
+          <p className="text-gray-600 dark:text-gray-300 mt-1">Employer Sponsored</p>
+        </Card>
       </div>
 
       {/* Search and Filters */}
