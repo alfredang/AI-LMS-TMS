@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Icon, IconName } from '../ui/Icon';
@@ -62,6 +62,21 @@ const UserManagementView: React.FC = () => {
     const [showRoleFilterDropdown, setShowRoleFilterDropdown] = useState(false);
     const [selectedRoleFilters, setSelectedRoleFilters] = useState<string[]>([]);
 
+    // Refs for click-outside closing
+    const roleFilterRef = useRef<HTMLDivElement>(null);
+    const filterRef = useRef<HTMLDivElement>(null);
+    const sortRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const handleClickOutside = (e: MouseEvent) => {
+            if (roleFilterRef.current && !roleFilterRef.current.contains(e.target as Node)) setShowRoleFilterDropdown(false);
+            if (filterRef.current && !filterRef.current.contains(e.target as Node)) setShowFilterDropdown(false);
+            if (sortRef.current && !sortRef.current.contains(e.target as Node)) setShowSortDropdown(false);
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
     // Account status filter checkboxes
     const [showActive, setShowActive] = useState(true);
     const [showDisabled, setShowDisabled] = useState(false);
@@ -98,8 +113,8 @@ const UserManagementView: React.FC = () => {
 
     const filterableColumns = [
         { value: 'full_name', label: 'Full Name' },
-        { value: 'email', label: 'Email' },
-        { value: 'roles', label: 'Role' },
+        { value: 'roles', label: 'Roles' },
+        { value: 'account_status', label: 'Account Status' },
     ];
 
     // Fetch all users
@@ -580,7 +595,7 @@ const UserManagementView: React.FC = () => {
                     {/* Toolbar - Filter, Sort */}
                     <div className="px-4 py-3 border-b bg-gray-50 dark:bg-gray-800 dark:border-gray-700 flex flex-wrap items-center gap-2">
                         {/* Filter Button */}
-                        <div className="relative">
+                        <div className="relative" ref={filterRef}>
                             <button
                                 onClick={() => { setShowFilterDropdown(!showFilterDropdown); setShowSortDropdown(false); setShowRoleFilterDropdown(false); }}
                                 className="inline-flex items-center px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200"
@@ -627,7 +642,7 @@ const UserManagementView: React.FC = () => {
                         </div>
 
                         {/* Role Filter Button */}
-                        <div className="relative">
+                        <div className="relative" ref={roleFilterRef}>
                             <button
                                 onClick={() => { setShowRoleFilterDropdown(!showRoleFilterDropdown); setShowFilterDropdown(false); setShowSortDropdown(false); }}
                                 className={`inline-flex items-center px-3 py-1.5 text-sm border rounded bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors ${selectedRoleFilters.length > 0 ? 'border-blue-400 text-blue-700 dark:text-blue-300' : 'border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200'}`}
@@ -681,7 +696,7 @@ const UserManagementView: React.FC = () => {
                         </div>
 
                         {/* Sort Button */}
-                        <div className="relative">
+                        <div className="relative" ref={sortRef}>
                             <button
                                 onClick={() => { setShowSortDropdown(!showSortDropdown); setShowFilterDropdown(false); setShowRoleFilterDropdown(false); }}
                                 className="inline-flex items-center px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200"
