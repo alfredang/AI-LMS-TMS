@@ -182,7 +182,7 @@ export default function handler(req: NextApiRequest & { files?: any }, res: Next
             learning_outcomes, is_gamified, learner_guide_url, slides_url,
             lesson_plan_url, assessment_plan_url, facilitator_guide_url, trainer_slides_url,
             written_assessment_link, practical_performance_assessment_link,
-            course_link, assessment_record_link
+            courseware_link, assessment_record_link
           ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
           RETURNING id
         `;

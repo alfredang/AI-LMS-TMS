@@ -480,7 +480,7 @@ export default async function handler(
           tax_percent = $19,
           written_assessment_link = COALESCE($20, written_assessment_link),
           practical_performance_assessment_link = COALESCE($21, practical_performance_assessment_link),
-          course_link = COALESCE($22, course_link),
+          courseware_link = COALESCE($22, courseware_link),
           assessment_record_link = COALESCE($23, assessment_record_link),
           updated_at = now()
         WHERE id = $24

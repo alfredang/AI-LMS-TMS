@@ -947,7 +947,7 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       } else if (role === UserRole.Developer && course.id) {
         // Use developer-specific API for course details (using course ID, not course run ID)
         try {
-          const detailResponse = await fetch(`/api/courses/developer-course-detail?courseId=${course.id}`);
+          const detailResponse = await fetch(`/api/courses/developer-course-detail?courseId=${course.id}&_t=${Date.now()}`);
           const detailResult = await detailResponse.json();
 
           if (detailResult.success) {

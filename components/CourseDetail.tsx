@@ -1469,7 +1469,7 @@ export const CourseDetail: React.FC = () => {
             if ((userRole === UserRole.Developer || userRole === UserRole.TrainingProvider || userRole === UserRole.Admin) && selectedCourse?.id) {
                 try {
                     // Load developer course detail (use courseId instead of courseRunId)
-                    const detailResponse = await fetch(`/api/courses/developer-course-detail?courseId=${selectedCourse.id}`);
+                    const detailResponse = await fetch(`/api/courses/developer-course-detail?courseId=${selectedCourse.id}&_t=${Date.now()}`);
                     const detailResult = await detailResponse.json();
 
                     if (detailResult.success) {
@@ -1628,7 +1628,7 @@ export const CourseDetail: React.FC = () => {
         if (!selectedCourse?.id) return;
 
         try {
-            const response = await fetch(`/api/courses/edit-data?courseId=${selectedCourse.id}`);
+            const response = await fetch(`/api/courses/edit-data?courseId=${selectedCourse.id}&_t=${Date.now()}`);
             const result = await response.json();
 
             if (result.success && result.data) {
