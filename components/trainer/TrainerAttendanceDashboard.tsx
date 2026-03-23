@@ -156,7 +156,7 @@ const SectionHeader: React.FC<{ title: string; count?: number; right?: React.Rea
 );
 
 const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdminMode = false }) => {
-  const { currentUser } = useLms();
+  const { currentUser, pendingAttendanceCourseRunId, setPendingAttendanceCourseRunId } = useLms();
   const { courses, loading: coursesLoading } = useTrainerCourses(isAdminMode ? undefined : currentUser?.id, true);
 
   // Admin-mode course run lookup
@@ -935,6 +935,49 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
     type === 'qr'
       ? `https://www.myskillsfuture.gov.sg/spface/splogin/select-session?course-run-code=${digitalAttendanceId}`
       : `https://www.myskillsfuture.gov.sg/api/take-attendance/${digitalAttendanceId}`;
+
+  // Auto-select course run when navigating from CourseDetail E-Attendance link
+  useEffect(() => {
+    if (!pendingAttendanceCourseRunId || coursesLoading || isAdminMode) return;
+    const course = courses.find(c => c.courseRunId === pendingAttendanceCourseRunId);
+    if (course && course.courseRunId) {
+      setSelectedCourseRunId(course.courseRunId);
+      setSessions([]);
+      setSelectedSession('');
+      setFetchError(null);
+      setAttendanceRecords([]);
+      setAttendanceCourseRun(null);
+      setEnrolmentRecords([]);
+      setEnrolmentError(null);
+      setAttendanceSuccess(null);
+      setAttendanceError(null);
+      setDigitalIdError(null);
+      setManualSessions([]);
+      setSelectedManualSession('');
+      setManualAttendance([]);
+      setManualAttendanceDbMap({});
+      setExtraAttendees([]);
+      setManualAttendanceMsg(null);
+      setLearnerAccountMap({});
+      if (course.digitalAttendanceId) {
+        setDigitalAttendanceId(course.digitalAttendanceId);
+      } else {
+        setDigitalAttendanceId('');
+        if (course.courseRunId && course.courseRunCode) {
+          fetchDigitalAttendanceId(course.courseRunId, course.courseRunCode);
+        }
+      }
+      if (course.courseRunCode && course.courseCode) {
+        handleFetchSessions(course.courseRunCode, course.courseCode, course);
+        fetchEnrolments(course.courseRunCode, course);
+      }
+      if (course.courseRunId) {
+        fetchManualSessions(course.courseRunId);
+        fetchAttendanceSummary(course.courseRunId);
+      }
+    }
+    setPendingAttendanceCourseRunId(null);
+  }, [pendingAttendanceCourseRunId, courses, coursesLoading]);
 
   return (
     <div className="space-y-5">
