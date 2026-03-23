@@ -1296,6 +1296,7 @@ const CourseSidebar: React.FC<CourseSidebarProps> = ({ userRole, onSetGradingVie
         { type: 'link', label: "E-Attendance", icon: IconName.ClipboardCheck },
         { type: 'link', label: "Courseware Link", icon: IconName.Link },
         { type: 'link', label: "Assessment Record Link", icon: IconName.ClipboardCheck },
+        { type: 'link', label: "Assessment Grading", icon: IconName.Edit },
         { type: 'link', label: "Lesson Plan", icon: IconName.BookOpen },
         { type: 'link', label: "Learner Guide", icon: IconName.FileText },
         { type: 'link', label: "Facilitator Guide", icon: IconName.FileText },
@@ -1497,6 +1498,7 @@ export const CourseDetail: React.FC = () => {
         setAdminPage,
         setTrainerPage,
         setPendingAttendanceCourseRunId,
+        setPendingGradingCourseRunId,
         currentUser,
         role
     } = useLms();
@@ -2360,6 +2362,32 @@ export const CourseDetail: React.FC = () => {
                                         ) : (
                                             <p className="text-gray-500 dark:text-gray-400 text-sm">No assessment record link available.</p>
                                         )}
+                                    </ContentSection>
+                                </div>
+                            )}
+
+                            {/* Assessment Grading */}
+                            {userRole === UserRole.Trainer && (
+                                <div id={toId("Assessment Grading")}>
+                                    <ContentSection title="Assessment Grading">
+                                        <button
+                                            onClick={() => {
+                                                const runUuid = effectiveDetail?.courseRunUuid || selectedCourse?.courseRunId || '';
+                                                setPendingGradingCourseRunId(String(runUuid));
+                                                setSelectedCourse(null);
+                                                setTrainerPage(TrainerPage.AssessmentGrading);
+                                            }}
+                                            className="flex items-center gap-3 p-3 w-full text-left bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+                                        >
+                                            <Icon name={IconName.Edit} className="w-6 h-6 text-blue-600 flex-shrink-0" />
+                                            <div className="flex-1 min-w-0">
+                                                <p className="font-semibold text-gray-900 dark:text-white">Assessment Grading</p>
+                                                <p className="text-xs text-gray-500 dark:text-gray-400">
+                                                    Open Assessment Grading for Course Run {selectedCourse?.courseRunCode || selectedCourse?.courseRunId || convertedCourse.courseRunId || ''}
+                                                </p>
+                                            </div>
+                                            <Icon name={IconName.ExternalLink} className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                                        </button>
                                     </ContentSection>
                                 </div>
                             )}

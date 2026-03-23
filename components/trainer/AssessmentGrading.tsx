@@ -24,7 +24,7 @@ interface StudentData {
 }
 
 const AssessmentGrading: React.FC = () => {
-  const { currentUser } = useLms();
+  const { currentUser, pendingGradingCourseRunId, setPendingGradingCourseRunId } = useLms();
   const [classes, setClasses] = useState<ClassData[]>([]);
   const [loadingClasses, setLoadingClasses] = useState(false);
   const [selectedCourseRunId, setSelectedCourseRunId] = useState('');
@@ -44,6 +44,17 @@ const AssessmentGrading: React.FC = () => {
         .finally(() => setLoadingClasses(false));
     }
   }, [currentUser?.email]);
+
+  // Auto-select course run when navigating from CourseDetail Assessment Grading link
+  useEffect(() => {
+    if (!pendingGradingCourseRunId || loadingClasses) return;
+    if (classes.length === 0) return;
+    const match = classes.find(c => c.run_id === pendingGradingCourseRunId || c.run_code === pendingGradingCourseRunId);
+    if (match) {
+      setSelectedCourseRunId(match.run_id);
+      setPendingGradingCourseRunId(null);
+    }
+  }, [pendingGradingCourseRunId, classes, loadingClasses]);
 
   useEffect(() => {
     if (!selectedCourseRunId) {
