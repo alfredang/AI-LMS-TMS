@@ -460,8 +460,31 @@ const ManagementCourseList: React.FC = () => {
         );
     }
 
+    // KPI stats from full dataset
+    const wsqCourses = (relevantCourses || []).filter(c => c.courseType === 'WSQ').length;
+    const ibfCourses = (relevantCourses || []).filter(c => c.courseType === 'IBF').length;
+    const unfundedCourses = (relevantCourses || []).filter(c => c.courseType !== 'WSQ' && c.courseType !== 'IBF').length;
+
     return (
         <div>
+
+            {/* KPI Stat Cards */}
+            {(role === UserRole.Admin || role === UserRole.Developer || role === UserRole.TrainingProvider) && (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                    <Card className="p-6 text-center">
+                        <p className="text-4xl font-bold text-blue-600">{wsqCourses}</p>
+                        <p className="text-gray-600 dark:text-gray-300 mt-1">WSQ Courses</p>
+                    </Card>
+                    <Card className="p-6 text-center">
+                        <p className="text-4xl font-bold text-purple-600">{ibfCourses}</p>
+                        <p className="text-gray-600 dark:text-gray-300 mt-1">IBF Courses</p>
+                    </Card>
+                    <Card className="p-6 text-center">
+                        <p className="text-4xl font-bold text-gray-500">{unfundedCourses}</p>
+                        <p className="text-gray-600 dark:text-gray-300 mt-1">Unfunded Courses</p>
+                    </Card>
+                </div>
+            )}
 
             {/* Upcoming / Past toggle for trainer */}
             {role === UserRole.Trainer && (
