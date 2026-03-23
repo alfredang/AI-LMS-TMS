@@ -4,7 +4,7 @@ import { Button } from './ui/Button';
 import { Icon, IconName } from './ui/Icon';
 import { Card } from './ui/Card';
 import Spinner from './ui/Spinner';
-import { UserRole, CourseAssessment, AdminPage } from '@app-types';
+import { UserRole, CourseAssessment, AdminPage, TrainerPage } from '@app-types';
 import GradingView from './GradingView';
 import { extractFilenameFromPath } from '@utils/fileUtils';
 import { courseService } from '@lib/services/courseService';
@@ -1174,12 +1174,16 @@ interface CourseSidebarProps {
 type NavItem = { type: 'link'; label: string; icon: IconName } | { type: 'separator' };
 
 const CourseSidebar: React.FC<CourseSidebarProps> = ({ userRole, onSetGradingView, selectedCourse, onMobileItemClick }) => {
+    const { setTrainerPage, setSelectedCourse } = useLms();
     const defaultActive = userRole === UserRole.Learner ? 'Learning Outcomes' : 'Lesson';
     const [activeItem, setActiveItem] = useState(defaultActive);
 
     const handleItemClick = (label: string) => {
         if (label === 'Grading') {
-            onSetGradingView(true);
+            // Navigate to Assessment Grading sidebar page
+            setSelectedCourse(null);
+            setTrainerPage(TrainerPage.AssessmentGrading);
+            return;
         } else {
             onSetGradingView(false);
             setActiveItem(label);
@@ -1413,6 +1417,7 @@ export const CourseDetail: React.FC = () => {
         toggleTopicCompletion,
         setEditingCourse,
         setAdminPage,
+        setTrainerPage,
         currentUser,
         role
     } = useLms();
@@ -1798,14 +1803,16 @@ export const CourseDetail: React.FC = () => {
 
                         {/* Main Content */}
                         <main className="space-y-6">
-                            {/* Back Button */}
+                            {/* Back Button + Action Buttons */}
                             <div className="mb-6 flex justify-between items-center">
+                                {userRole !== UserRole.Trainer ? (
                                 <button
                                     onClick={handleBackToDashboard}
                                     className="px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-white rounded-lg flex items-center gap-2"
                                 >
                                     Back to Dashboard
                                 </button>
+                                ) : <div />}
                                 {!isLoading && (
                                 <div className="ml-auto flex gap-3">
                                     {userRole === UserRole.Admin && (
@@ -1851,30 +1858,6 @@ export const CourseDetail: React.FC = () => {
                                             </a>
                                         ) : (
                                             <p className="text-gray-500 dark:text-gray-400 text-sm">No course link available.</p>
-                                        )}
-                                    </ContentSection>
-                                </div>
-                            )}
-
-                            {/* Assessment Record Link */}
-                            {(userRole === UserRole.Trainer || userRole === UserRole.Developer || userRole === UserRole.Admin || userRole === UserRole.TrainingProvider) && (
-                                <div id={toId("Assessment Record Link")}>
-                                    <ContentSection title="Assessment Records">
-                                        {convertedCourse.assessmentRecordLink ? (
-                                            <a
-                                                href={convertedCourse.assessmentRecordLink}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
-                                            >
-                                                <Icon name={IconName.ExternalLink} className="w-6 h-6 text-blue-600 flex-shrink-0" />
-                                                <div className="flex-1 min-w-0">
-                                                    <p className="font-semibold text-gray-900 dark:text-white">Assessment Record Link</p>
-                                                    <p className="text-xs text-gray-500 dark:text-gray-400">Click to open</p>
-                                                </div>
-                                            </a>
-                                        ) : (
-                                            <p className="text-gray-500 dark:text-gray-400 text-sm">No assessment record link available.</p>
                                         )}
                                     </ContentSection>
                                 </div>
@@ -2247,6 +2230,30 @@ export const CourseDetail: React.FC = () => {
                                     handleFileDownload={handleFileDownload}
                                 />
                             </div>
+
+                            {/* Assessment Record Link */}
+                            {(userRole === UserRole.Trainer || userRole === UserRole.Developer || userRole === UserRole.Admin || userRole === UserRole.TrainingProvider) && (
+                                <div id={toId("Assessment Record Link")}>
+                                    <ContentSection title="Assessment Records">
+                                        {convertedCourse.assessmentRecordLink ? (
+                                            <a
+                                                href={convertedCourse.assessmentRecordLink}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+                                            >
+                                                <Icon name={IconName.ExternalLink} className="w-6 h-6 text-blue-600 flex-shrink-0" />
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="font-semibold text-gray-900 dark:text-white">Assessment Record Link</p>
+                                                    <p className="text-xs text-gray-500 dark:text-gray-400">Click to open</p>
+                                                </div>
+                                            </a>
+                                        ) : (
+                                            <p className="text-gray-500 dark:text-gray-400 text-sm">No assessment record link available.</p>
+                                        )}
+                                    </ContentSection>
+                                </div>
+                            )}
 
                             {/* Certificate */}
                             <div id="certificate">
