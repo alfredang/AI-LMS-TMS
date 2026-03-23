@@ -1924,8 +1924,9 @@ export const CourseDetail: React.FC = () => {
                                     <ContentSection title="E-Attendance">
                                         <button
                                             onClick={() => {
-                                                const runCode = selectedCourse?.courseRunCode || selectedCourse?.courseRunId || convertedCourse.courseRunId || '';
-                                                setPendingAttendanceCourseRunId(String(runCode));
+                                                // Pass the UUID (courseRunId) for matching in E-Attendance dashboard
+                                                const runId = selectedCourse?.courseRunId || convertedCourse.courseRunId || '';
+                                                setPendingAttendanceCourseRunId(String(runId));
                                                 setSelectedCourse(null);
                                                 setTrainerPage(TrainerPage.EAttendance);
                                             }}

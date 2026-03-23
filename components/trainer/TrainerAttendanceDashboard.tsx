@@ -157,7 +157,7 @@ const SectionHeader: React.FC<{ title: string; count?: number; right?: React.Rea
 
 const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdminMode = false }) => {
   const { currentUser, pendingAttendanceCourseRunId, setPendingAttendanceCourseRunId } = useLms();
-  const { courses, loading: coursesLoading } = useTrainerCourses(isAdminMode ? undefined : currentUser?.id, true);
+  const { courses, loading: coursesLoading } = useTrainerCourses(isAdminMode ? undefined : currentUser?.id, false);
 
   // Admin-mode course run lookup
   const [adminInput, setAdminInput]             = useState('');
@@ -939,7 +939,8 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
   // Auto-select course run when navigating from CourseDetail E-Attendance link
   useEffect(() => {
     if (!pendingAttendanceCourseRunId || coursesLoading || isAdminMode) return;
-    const course = courses.find(c => c.courseRunId === pendingAttendanceCourseRunId);
+    // Match by courseRunId (UUID) or courseRunCode (display code)
+    const course = courses.find(c => c.courseRunId === pendingAttendanceCourseRunId || c.courseRunCode === pendingAttendanceCourseRunId);
     if (course && course.courseRunId) {
       setSelectedCourseRunId(course.courseRunId);
       setSessions([]);
@@ -1101,7 +1102,7 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
                     <option value="" disabled>— Select a class —</option>
                     {activeCourses.map(c => (
                       <option key={c.courseRunId} value={c.courseRunId}>
-                        {c.title}
+                        {c.title}{c.courseRunCode ? ` (Run: ${c.courseRunCode})` : ''}
                       </option>
                     ))}
                   </select>
