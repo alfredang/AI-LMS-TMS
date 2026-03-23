@@ -3741,13 +3741,20 @@ export const AssignStudentView: React.FC = () => {
     const [loadingEnrolled, setLoadingEnrolled] = useState(false);
     const [unassigning, setUnassigning] = useState<string | null>(null);
 
+    // Track local enrollment count changes
+    const [localEnrollmentDeltas, setLocalEnrollmentDeltas] = useState<Record<string, number>>({});
+
     const fetchCourseRuns = async (q: string) => {
         setLoadingRuns(true);
         try {
-            const params = q ? `?search=${encodeURIComponent(q)}` : '';
-            const res = await fetch(`/api/admin/all-course-runs${params}`);
+            const queryParams = new URLSearchParams({ upcoming: 'true' });
+            if (q) queryParams.set('search', q);
+            const res = await fetch(`/api/admin/all-course-runs?${queryParams.toString()}`);
             const json = await res.json();
-            if (json.success) setCourseRuns(json.data);
+            if (json.success) {
+                setCourseRuns(json.data);
+                setLocalEnrollmentDeltas({});
+            }
         } catch {
             /* silent */
         } finally {
@@ -3794,7 +3801,7 @@ export const AssignStudentView: React.FC = () => {
     const handleAssign = async (run: any) => {
         setMessage(null);
         if (!selectedLearnerId) {
-            setMessage({ type: 'error', text: 'Please select a student.' });
+            setMessage({ type: 'error', text: 'Please select a learner.' });
             return;
         }
 
@@ -3806,13 +3813,15 @@ export const AssignStudentView: React.FC = () => {
                 body: JSON.stringify({ courseRunUuid: run.id, userId: selectedLearnerId }),
             });
             const data = await res.json();
-            if (!res.ok) throw new Error(data.error || 'Failed to assign student');
+            if (!res.ok) throw new Error(data.error || 'Failed to assign learner');
             const learner = availableLearners.find(l => l.user_id === selectedLearnerId);
-            setMessage({ type: 'success', text: `"${learner?.full_name || 'Student'}" enrolled in ${run.courseTitle}.` });
-            setSelectedRunId(null);
+            setMessage({ type: 'success', text: `"${learner?.full_name || 'Learner'}" enrolled in ${run.courseTitle}.` });
+            setLocalEnrollmentDeltas(prev => ({ ...prev, [run.id]: (prev[run.id] || 0) + 1 }));
             setSelectedLearnerId('');
+            // Refresh enrolled list if viewing unassign tab
+            if (activeTab === 'unassign') fetchEnrolledLearners(run.id);
         } catch (err) {
-            setMessage({ type: 'error', text: err instanceof Error ? err.message : 'Failed to assign student' });
+            setMessage({ type: 'error', text: err instanceof Error ? err.message : 'Failed to assign learner' });
         } finally {
             setSaving(false);
         }
@@ -3828,11 +3837,12 @@ export const AssignStudentView: React.FC = () => {
                 body: JSON.stringify({ email: learner.email, courseRunId: run.id }),
             });
             const data = await res.json();
-            if (!res.ok) throw new Error(data.message || 'Failed to remove student');
+            if (!res.ok) throw new Error(data.message || 'Failed to remove learner');
             setMessage({ type: 'success', text: `"${learner.full_name}" has been removed from ${run.courseTitle}.` });
             setEnrolledLearners(prev => prev.filter(l => l.user_id !== learner.user_id));
+            setLocalEnrollmentDeltas(prev => ({ ...prev, [run.id]: (prev[run.id] || 0) - 1 }));
         } catch (err) {
-            setMessage({ type: 'error', text: err instanceof Error ? err.message : 'Failed to remove student' });
+            setMessage({ type: 'error', text: err instanceof Error ? err.message : 'Failed to remove learner' });
         } finally {
             setUnassigning(null);
         }
@@ -3848,6 +3858,7 @@ export const AssignStudentView: React.FC = () => {
             setSelectedLearnerId('');
             setEnrolledLearners([]);
             setMessage(null);
+            fetchEnrolledLearners(run.id);
         }
     };
 
@@ -3859,15 +3870,40 @@ export const AssignStudentView: React.FC = () => {
         }
     };
 
+    const getEnrollmentCount = (run: any) => {
+        return (run.enrollmentCount || 0) + (localEnrollmentDeltas[run.id] || 0);
+    };
+
+    // KPI stats
+    const totalUpcoming = courseRuns.length;
+    const totalTrainees = courseRuns.reduce((sum, run) => sum + getEnrollmentCount(run), 0);
+    const classesWithNoTrainee = courseRuns.filter(run => getEnrollmentCount(run) === 0).length;
+
     const inputClasses = 'w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white';
 
     return (
         <div>
             <div className="flex justify-between items-center mb-6">
-                <h2 className="text-3xl font-bold dark:text-white">Assign / Unassign Student</h2>
+                <h2 className="text-3xl font-bold dark:text-white">Assign Learners</h2>
                 <Button variant="ghost" onClick={() => setAdminPage(AdminPage.Dashboard)}>
                     Back to Dashboard
                 </Button>
+            </div>
+
+            {/* KPI Stats */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                <Card className="p-6 text-center">
+                    <p className="text-4xl font-bold text-blue-600">{totalUpcoming}</p>
+                    <p className="text-gray-600 dark:text-gray-300 mt-1">Upcoming Classes</p>
+                </Card>
+                <Card className="p-6 text-center">
+                    <p className="text-4xl font-bold text-green-600">{totalTrainees}</p>
+                    <p className="text-gray-600 dark:text-gray-300 mt-1">No. of Trainees</p>
+                </Card>
+                <Card className="p-6 text-center">
+                    <p className="text-4xl font-bold text-red-600">{classesWithNoTrainee}</p>
+                    <p className="text-gray-600 dark:text-gray-300 mt-1">Classes with No Trainee</p>
+                </Card>
             </div>
 
             {/* Feedback banner */}
@@ -3893,123 +3929,166 @@ export const AssignStudentView: React.FC = () => {
                 </form>
             </Card>
 
-            {/* Course Runs List */}
+            {/* Course Runs Table */}
             <Card className="dark:bg-gray-800 dark:border-gray-700 overflow-hidden">
                 {loadingRuns ? (
-                    <div className="p-8 text-center text-sm text-gray-500">Loading course runs...</div>
+                    <div className="p-8 text-center">
+                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+                        <p className="text-gray-500 dark:text-gray-400 text-lg">Loading upcoming classes...</p>
+                    </div>
                 ) : courseRuns.length === 0 ? (
-                    <div className="p-8 text-center text-sm text-gray-500">No course runs found.</div>
+                    <div className="p-8 text-center text-sm text-gray-500 dark:text-gray-400">No upcoming classes found.</div>
                 ) : (
-                    <div className="divide-y divide-gray-200 dark:divide-gray-700">
-                        {courseRuns.map(run => {
-                            const isExpanded = selectedRunId === run.id;
+                    <div className="overflow-x-auto">
+                        <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                            <thead className="bg-gray-50 dark:bg-gray-700/50">
+                                <tr>
+                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Start Date</th>
+                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Course Run ID</th>
+                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Course Title</th>
+                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Course Ref Code</th>
+                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Trainees</th>
+                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody className="bg-white divide-y divide-gray-200 dark:bg-gray-800 dark:divide-gray-700">
+                                {courseRuns.map(run => {
+                                    const isExpanded = selectedRunId === run.id;
+                                    const enrollCount = getEnrollmentCount(run);
 
-                            return (
-                                <div key={run.id}>
-                                    {/* Row */}
-                                    <div
-                                        className="flex items-center justify-between px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer"
-                                        onClick={() => handleExpandRun(run)}
-                                    >
-                                        <div className="flex-1 min-w-0 mr-4">
-                                            <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{run.courseTitle}</p>
-                                            <p className="text-xs text-gray-500 dark:text-gray-400">
-                                                {run.courseCode}&nbsp;&nbsp;|&nbsp;&nbsp;Run: {run.courseRunId || '—'}&nbsp;&nbsp;|&nbsp;&nbsp;
-                                                {run.startDate ? new Date(run.startDate).toLocaleDateString() : '—'} – {run.endDate ? new Date(run.endDate).toLocaleDateString() : '—'}
-                                            </p>
-                                        </div>
-                                        <span className="text-gray-400 text-xs shrink-0">{isExpanded ? '▲' : '▼'}</span>
-                                    </div>
-
-                                    {/* Expanded panel */}
-                                    {isExpanded && (
-                                        <div className="bg-gray-50 dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700">
-                                            {/* Tabs */}
-                                            <div className="flex border-b border-gray-200 dark:border-gray-700 px-4">
-                                                <button
-                                                    className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${activeTab === 'assign' ? 'border-blue-500 text-blue-600 dark:text-blue-400' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'}`}
-                                                    onClick={() => handleTabChange('assign', run.id)}
-                                                >
-                                                    Assign Learner
-                                                </button>
-                                                <button
-                                                    className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${activeTab === 'unassign' ? 'border-red-500 text-red-600 dark:text-red-400' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'}`}
-                                                    onClick={() => handleTabChange('unassign', run.id)}
-                                                >
-                                                    Unassign Learner
-                                                </button>
-                                            </div>
-
-                                            {/* Assign tab */}
-                                            {activeTab === 'assign' && (
-                                                <div className="px-4 py-4 space-y-4">
-                                                    <div>
-                                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                                            Learner <span className="text-red-500">*</span>
-                                                        </label>
-                                                        {loadingLearners ? (
-                                                            <p className="text-sm text-gray-500 italic">Loading learners...</p>
-                                                        ) : (
-                                                            <select
-                                                                value={selectedLearnerId}
-                                                                onChange={e => setSelectedLearnerId(e.target.value)}
-                                                                className={inputClasses}
-                                                            >
-                                                                <option value="">— Select a learner —</option>
-                                                                {availableLearners.map(l => (
-                                                                    <option key={l.user_id} value={l.user_id}>
-                                                                        {l.full_name} ({l.email})
-                                                                    </option>
-                                                                ))}
-                                                            </select>
-                                                        )}
-                                                    </div>
-                                                    <div className="flex justify-end">
-                                                        <Button
-                                                            onClick={() => handleAssign(run)}
-                                                            disabled={saving}
-                                                            className="bg-green-600 hover:bg-green-700 text-white"
-                                                        >
-                                                            {saving ? 'Enrolling...' : 'Assign Learner'}
-                                                        </Button>
-                                                    </div>
-                                                </div>
-                                            )}
-
-                                            {/* Unassign tab */}
-                                            {activeTab === 'unassign' && (
-                                                <div className="px-4 py-4">
-                                                    {loadingEnrolled ? (
-                                                        <p className="text-sm text-gray-500 italic">Loading enrolled students...</p>
-                                                    ) : enrolledLearners.length === 0 ? (
-                                                        <p className="text-sm text-gray-500 italic">No students enrolled in this course run.</p>
+                                    return (
+                                        <React.Fragment key={run.id}>
+                                            <tr className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">
+                                                    {run.startDate ? new Date(run.startDate).toLocaleDateString() : '—'}
+                                                </td>
+                                                <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-blue-600 dark:text-blue-400">
+                                                    {run.courseRunId || '—'}
+                                                </td>
+                                                <td className="px-4 py-3 text-sm text-gray-900 dark:text-white max-w-xs truncate">
+                                                    {run.courseTitle}
+                                                </td>
+                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">
+                                                    {run.courseCode || '—'}
+                                                </td>
+                                                <td className="px-4 py-3 whitespace-nowrap text-sm">
+                                                    {enrollCount > 0 ? (
+                                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">
+                                                            {enrollCount} enrolled
+                                                        </span>
                                                     ) : (
-                                                        <div className="divide-y divide-gray-200 dark:divide-gray-700 rounded-md border border-gray-200 dark:border-gray-700 overflow-hidden">
-                                                            {enrolledLearners.map(learner => (
-                                                                <div key={learner.user_id} className="flex items-center justify-between px-3 py-2 bg-white dark:bg-gray-800">
-                                                                    <div>
-                                                                        <p className="text-sm font-medium text-gray-900 dark:text-white">{learner.full_name}</p>
-                                                                        <p className="text-xs text-gray-500 dark:text-gray-400">{learner.email}</p>
-                                                                    </div>
+                                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400">
+                                                            No trainees
+                                                        </span>
+                                                    )}
+                                                </td>
+                                                <td className="px-4 py-3 whitespace-nowrap text-sm">
+                                                    <button
+                                                        onClick={() => handleExpandRun(run)}
+                                                        className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                                                            isExpanded
+                                                                ? 'bg-gray-200 text-gray-700 dark:bg-gray-600 dark:text-gray-200'
+                                                                : 'bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-700 dark:hover:bg-blue-900/50'
+                                                        }`}
+                                                    >
+                                                        {isExpanded ? 'Close' : 'Add / Edit Learners'}
+                                                    </button>
+                                                </td>
+                                            </tr>
+
+                                            {/* Expanded panel */}
+                                            {isExpanded && (
+                                                <tr>
+                                                    <td colSpan={6} className="px-4 py-0 bg-gray-50 dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700">
+                                                        {/* Tabs */}
+                                                        <div className="flex border-b border-gray-200 dark:border-gray-700">
+                                                            <button
+                                                                className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${activeTab === 'assign' ? 'border-blue-500 text-blue-600 dark:text-blue-400' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'}`}
+                                                                onClick={() => handleTabChange('assign', run.id)}
+                                                            >
+                                                                Add Learner
+                                                            </button>
+                                                            <button
+                                                                className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${activeTab === 'unassign' ? 'border-red-500 text-red-600 dark:text-red-400' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'}`}
+                                                                onClick={() => handleTabChange('unassign', run.id)}
+                                                            >
+                                                                View / Remove Learners ({enrollCount})
+                                                            </button>
+                                                        </div>
+
+                                                        {/* Assign tab */}
+                                                        {activeTab === 'assign' && (
+                                                            <div className="py-4 space-y-4 max-w-2xl">
+                                                                <div>
+                                                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                                        Learner <span className="text-red-500">*</span>
+                                                                    </label>
+                                                                    {loadingLearners ? (
+                                                                        <p className="text-sm text-gray-500 italic">Loading learners...</p>
+                                                                    ) : (
+                                                                        <select
+                                                                            value={selectedLearnerId}
+                                                                            onChange={e => setSelectedLearnerId(e.target.value)}
+                                                                            className={inputClasses}
+                                                                        >
+                                                                            <option value="">— Select a learner —</option>
+                                                                            {availableLearners.map(l => (
+                                                                                <option key={l.user_id} value={l.user_id}>
+                                                                                    {l.full_name} ({l.email})
+                                                                                </option>
+                                                                            ))}
+                                                                        </select>
+                                                                    )}
+                                                                </div>
+                                                                <div className="flex justify-end">
                                                                     <Button
-                                                                        variant="ghost"
-                                                                        onClick={() => handleUnassign(learner, run)}
-                                                                        disabled={unassigning === learner.user_id}
-                                                                        className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 text-xs"
+                                                                        onClick={() => handleAssign(run)}
+                                                                        disabled={saving}
+                                                                        className="bg-green-600 hover:bg-green-700 text-white"
                                                                     >
-                                                                        {unassigning === learner.user_id ? 'Removing...' : 'Remove'}
+                                                                        {saving ? 'Enrolling...' : 'Add Learner'}
                                                                     </Button>
                                                                 </div>
-                                                            ))}
-                                                        </div>
-                                                    )}
-                                                </div>
+                                                            </div>
+                                                        )}
+
+                                                        {/* Unassign tab */}
+                                                        {activeTab === 'unassign' && (
+                                                            <div className="py-4">
+                                                                {loadingEnrolled ? (
+                                                                    <p className="text-sm text-gray-500 italic">Loading enrolled learners...</p>
+                                                                ) : enrolledLearners.length === 0 ? (
+                                                                    <p className="text-sm text-gray-500 dark:text-gray-400 italic">No learners enrolled in this course run.</p>
+                                                                ) : (
+                                                                    <div className="divide-y divide-gray-200 dark:divide-gray-700 rounded-md border border-gray-200 dark:border-gray-700 overflow-hidden max-w-2xl">
+                                                                        {enrolledLearners.map(learner => (
+                                                                            <div key={learner.user_id} className="flex items-center justify-between px-3 py-2 bg-white dark:bg-gray-800">
+                                                                                <div>
+                                                                                    <p className="text-sm font-medium text-gray-900 dark:text-white">{learner.full_name}</p>
+                                                                                    <p className="text-xs text-gray-500 dark:text-gray-400">{learner.email}</p>
+                                                                                </div>
+                                                                                <Button
+                                                                                    variant="ghost"
+                                                                                    onClick={() => handleUnassign(learner, run)}
+                                                                                    disabled={unassigning === learner.user_id}
+                                                                                    className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 text-xs"
+                                                                                >
+                                                                                    {unassigning === learner.user_id ? 'Removing...' : 'Remove'}
+                                                                                </Button>
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        )}
+                                                    </td>
+                                                </tr>
                                             )}
-                                        </div>
-                                    )}
-                                </div>
-                            );
-                        })}
+                                        </React.Fragment>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
                     </div>
                 )}
             </Card>

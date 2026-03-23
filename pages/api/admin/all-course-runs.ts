@@ -19,9 +19,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         cr.end_date,
         cr.assigned_trainer_id,
         cr.assigned_trainer_name,
-        cr.assigned_trainer_email
+        cr.assigned_trainer_email,
+        COALESCE(ec.enrollment_count, 0) AS enrollment_count
       FROM course_run cr
       JOIN course c ON cr.course_id = c.id
+      LEFT JOIN (
+        SELECT course_run_id, COUNT(*) AS enrollment_count
+        FROM enrollment
+        GROUP BY course_run_id
+      ) ec ON ec.course_run_id = cr.id
     `;
 
     const conditions: string[] = [];
@@ -56,6 +62,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         assignedTrainerId: row.assigned_trainer_id,
         assignedTrainerName: row.assigned_trainer_name,
         assignedTrainerEmail: row.assigned_trainer_email,
+        enrollmentCount: parseInt(row.enrollment_count, 10),
       })),
     });
   } catch (error) {
