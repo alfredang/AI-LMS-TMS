@@ -6,10 +6,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).json({ success: false, error: 'Method not allowed' });
   }
 
-  const { courseRunUuid, userId } = req.body;
+  const { courseRunUuid, userId, manualName, manualEmail } = req.body;
 
-  if (!courseRunUuid || !userId) {
-    return res.status(400).json({ success: false, error: 'courseRunUuid and userId are required' });
+  if (!courseRunUuid) {
+    return res.status(400).json({ success: false, error: 'courseRunUuid is required' });
+  }
+
+  // Either userId (dropdown) or manualName+manualEmail (manual) must be provided
+  if (!userId && !manualName) {
+    return res.status(400).json({ success: false, error: 'userId or manualName is required' });
   }
 
   const client = await pool.connect();
@@ -26,31 +31,87 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const { course_id: courseId } = runResult.rows[0];
 
-    // Check if enrollment already exists
-    const existing = await client.query(
-      `SELECT id FROM enrollment WHERE user_id = $1 AND course_run_id = $2`,
-      [userId, courseRunUuid]
-    );
+    let resolvedUserId = userId;
+    let userEmail = manualEmail || null;
+    let userNric = '';
 
-    if (existing.rows.length > 0) {
-      return res.status(409).json({ success: false, error: 'Student is already enrolled in this course run' });
+    if (userId) {
+      // Dropdown mode: look up user info
+      const existing = await client.query(
+        `SELECT id FROM enrollment WHERE user_id = $1 AND course_run_id = $2`,
+        [userId, courseRunUuid]
+      );
+      if (existing.rows.length > 0) {
+        return res.status(409).json({ success: false, error: 'Student is already enrolled in this course run' });
+      }
+
+      const userInfoResult = await client.query(
+        `SELECT au.email, COALESCE(lp.nric, '') AS nric
+         FROM app_user au
+         LEFT JOIN learner_profile lp ON lp.user_id = au.id
+         WHERE au.id = $1`,
+        [userId]
+      );
+      const info = userInfoResult.rows[0] ?? {};
+      userEmail = info.email;
+      userNric = info.nric;
+    } else {
+      // Manual mode: find or create user by email, or create without email
+      if (manualEmail) {
+        const existingUser = await client.query(
+          `SELECT id FROM app_user WHERE email = $1`,
+          [manualEmail]
+        );
+        if (existingUser.rows.length > 0) {
+          resolvedUserId = existingUser.rows[0].id;
+          // Check duplicate enrollment
+          const existingEnroll = await client.query(
+            `SELECT id FROM enrollment WHERE user_id = $1 AND course_run_id = $2`,
+            [resolvedUserId, courseRunUuid]
+          );
+          if (existingEnroll.rows.length > 0) {
+            return res.status(409).json({ success: false, error: 'Student is already enrolled in this course run' });
+          }
+        } else {
+          // Create new user with learner role
+          const newUser = await client.query(
+            `INSERT INTO app_user (id, email, full_name, role, account_status, created_at, updated_at)
+             VALUES (gen_random_uuid(), $1, $2, 'Learner', 'Active', NOW(), NOW())
+             RETURNING id`,
+            [manualEmail, manualName]
+          );
+          resolvedUserId = newUser.rows[0].id;
+          // Create learner profile
+          await client.query(
+            `INSERT INTO learner_profile (id, user_id, created_at, updated_at)
+             VALUES (gen_random_uuid(), $1, NOW(), NOW())
+             ON CONFLICT DO NOTHING`,
+            [resolvedUserId]
+          );
+        }
+      } else {
+        // No email provided — create user with just name
+        const newUser = await client.query(
+          `INSERT INTO app_user (id, email, full_name, role, account_status, created_at, updated_at)
+           VALUES (gen_random_uuid(), $1, $2, 'Learner', 'Active', NOW(), NOW())
+           RETURNING id`,
+          [manualName.toLowerCase().replace(/\s+/g, '.') + '@manual.entry', manualName]
+        );
+        resolvedUserId = newUser.rows[0].id;
+        await client.query(
+          `INSERT INTO learner_profile (id, user_id, created_at, updated_at)
+           VALUES (gen_random_uuid(), $1, NOW(), NOW())
+           ON CONFLICT DO NOTHING`,
+          [resolvedUserId]
+        );
+      }
     }
-
-    // Fetch email and NRIC for denormalisation
-    const userInfoResult = await client.query(
-      `SELECT au.email, COALESCE(lp.nric, '') AS nric
-       FROM app_user au
-       LEFT JOIN learner_profile lp ON lp.user_id = au.id
-       WHERE au.id = $1`,
-      [userId]
-    );
-    const { email: userEmail, nric: userNric } = userInfoResult.rows[0] ?? {};
 
     // Create enrollment
     await client.query(
       `INSERT INTO enrollment (id, user_id, course_id, course_run_id, progress_percent, payment_status, assessment_status, enrolment_date, email, nric, created_at, updated_at)
        VALUES (gen_random_uuid(), $1, $2, $3, 0, 'Unpaid', 'Pending', CURRENT_DATE, $4, $5, NOW(), NOW())`,
-      [userId, courseId, courseRunUuid, userEmail || null, userNric || null]
+      [resolvedUserId, courseId, courseRunUuid, userEmail || null, userNric || null]
     );
 
     res.status(200).json({ success: true, message: 'Student enrolled successfully' });

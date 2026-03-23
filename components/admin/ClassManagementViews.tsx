@@ -1,9 +1,68 @@
 import { getApiUrl, getFileUrl } from '@/lib/urlHelpers';
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { useLms } from '@contexts/LmsContext';
 import { AdminPage } from '@app-types';
+
+// Searchable select dropdown component
+const SearchableSelect: React.FC<{
+    options: { value: string; label: string }[];
+    value: string;
+    onChange: (value: string) => void;
+    placeholder?: string;
+    className?: string;
+}> = ({ options, value, onChange, placeholder = '— Search or select —', className }) => {
+    const [query, setQuery] = useState('');
+    const [open, setOpen] = useState(false);
+    const ref = useRef<HTMLDivElement>(null);
+
+    // Find selected label
+    const selectedOption = options.find(o => o.value === value);
+
+    // Close on outside click
+    useEffect(() => {
+        const handler = (e: MouseEvent) => {
+            if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+        };
+        document.addEventListener('mousedown', handler);
+        return () => document.removeEventListener('mousedown', handler);
+    }, []);
+
+    const filtered = query
+        ? options.filter(o => o.label.toLowerCase().includes(query.toLowerCase()))
+        : options;
+
+    return (
+        <div ref={ref} className="relative">
+            <input
+                type="text"
+                className={className}
+                placeholder={selectedOption ? selectedOption.label : placeholder}
+                value={open ? query : (selectedOption ? selectedOption.label : '')}
+                onChange={e => { setQuery(e.target.value); setOpen(true); if (!e.target.value) onChange(''); }}
+                onFocus={() => { setOpen(true); setQuery(''); }}
+            />
+            {open && (
+                <div className="absolute z-50 mt-1 w-full max-h-48 overflow-y-auto bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg">
+                    {filtered.length === 0 ? (
+                        <div className="px-3 py-2 text-sm text-gray-500 dark:text-gray-400 italic">No results found</div>
+                    ) : (
+                        filtered.map(o => (
+                            <div
+                                key={o.value}
+                                className={`px-3 py-2 text-sm cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/30 ${o.value === value ? 'bg-blue-100 dark:bg-blue-900/50 font-medium' : 'text-gray-900 dark:text-gray-100'}`}
+                                onMouseDown={e => { e.preventDefault(); onChange(o.value); setQuery(''); setOpen(false); }}
+                            >
+                                {o.label}
+                            </div>
+                        ))
+                    )}
+                </div>
+            )}
+        </div>
+    );
+};
 
 // Import SSG constants for ViewCourseSessions
 enum Month {
@@ -3118,18 +3177,13 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                         {availableTrainers.length === 0 ? (
                                             <p className="text-sm text-gray-500 italic">Loading trainers...</p>
                                         ) : (
-                                            <select
+                                            <SearchableSelect
+                                                options={availableTrainers.map((t: any) => ({ value: t.user_id, label: `${t.trainer_name} (${t.email})` }))}
                                                 value={selectedDbTrainerId}
-                                                onChange={e => setSelectedDbTrainerId(e.target.value)}
+                                                onChange={setSelectedDbTrainerId}
+                                                placeholder="— Search trainer by name or email —"
                                                 className={inputClasses}
-                                            >
-                                                <option value="">— Select a trainer —</option>
-                                                {availableTrainers.map((t: any) => (
-                                                    <option key={t.user_id} value={t.user_id}>
-                                                        {t.trainer_name} ({t.email})
-                                                    </option>
-                                                ))}
-                                            </select>
+                                            />
                                         )}
                                     </div>
                                 ) : (
@@ -3662,18 +3716,13 @@ export const AssignTrainerView: React.FC = () => {
                                                                     {loadingTrainers ? (
                                                                         <p className="text-sm text-gray-500 italic">Loading trainers...</p>
                                                                     ) : (
-                                                                        <select
+                                                                        <SearchableSelect
+                                                                            options={availableTrainers.map(t => ({ value: t.user_id, label: `${t.trainer_name} (${t.email})` }))}
                                                                             value={selectedTrainerId}
-                                                                            onChange={e => setSelectedTrainerId(e.target.value)}
+                                                                            onChange={setSelectedTrainerId}
+                                                                            placeholder="— Search trainer by name or email —"
                                                                             className={inputClasses}
-                                                                        >
-                                                                            <option value="">— Select a trainer —</option>
-                                                                            {availableTrainers.map(t => (
-                                                                                <option key={t.user_id} value={t.user_id}>
-                                                                                    {t.trainer_name} ({t.email})
-                                                                                </option>
-                                                                            ))}
-                                                                        </select>
+                                                                        />
                                                                     )}
                                                                 </div>
                                                             ) : (
@@ -3752,6 +3801,9 @@ export const AssignStudentView: React.FC = () => {
     const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState<'assign' | 'unassign'>('assign');
     const [selectedLearnerId, setSelectedLearnerId] = useState('');
+    const [learnerAssignMode, setLearnerAssignMode] = useState<'dropdown' | 'manual'>('dropdown');
+    const [manualLearnerName, setManualLearnerName] = useState('');
+    const [manualLearnerEmail, setManualLearnerEmail] = useState('');
     const [saving, setSaving] = useState(false);
     const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
@@ -3819,9 +3871,25 @@ export const AssignStudentView: React.FC = () => {
 
     const handleAssign = async (run: any) => {
         setMessage(null);
-        if (!selectedLearnerId) {
-            setMessage({ type: 'error', text: 'Please select a learner.' });
-            return;
+
+        let body: any;
+        let displayName: string;
+
+        if (learnerAssignMode === 'dropdown') {
+            if (!selectedLearnerId) {
+                setMessage({ type: 'error', text: 'Please select a learner.' });
+                return;
+            }
+            body = { courseRunUuid: run.id, userId: selectedLearnerId };
+            const learner = availableLearners.find(l => l.user_id === selectedLearnerId);
+            displayName = learner?.full_name || 'Learner';
+        } else {
+            if (!manualLearnerName.trim()) {
+                setMessage({ type: 'error', text: 'Please enter the learner name.' });
+                return;
+            }
+            body = { courseRunUuid: run.id, manualName: manualLearnerName.trim(), manualEmail: manualLearnerEmail.trim() || undefined };
+            displayName = manualLearnerName.trim();
         }
 
         setSaving(true);
@@ -3829,14 +3897,15 @@ export const AssignStudentView: React.FC = () => {
             const res = await fetch('/api/admin/assign-student', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ courseRunUuid: run.id, userId: selectedLearnerId }),
+                body: JSON.stringify(body),
             });
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || 'Failed to assign learner');
-            const learner = availableLearners.find(l => l.user_id === selectedLearnerId);
-            setMessage({ type: 'success', text: `"${learner?.full_name || 'Learner'}" enrolled in ${run.courseTitle}.` });
+            setMessage({ type: 'success', text: `"${displayName}" enrolled in ${run.courseTitle}.` });
             setLocalEnrollmentDeltas(prev => ({ ...prev, [run.id]: (prev[run.id] || 0) + 1 }));
             setSelectedLearnerId('');
+            setManualLearnerName('');
+            setManualLearnerEmail('');
             // Refresh enrolled list if viewing unassign tab
             if (activeTab === 'unassign') fetchEnrolledLearners(run.id);
         } catch (err) {
@@ -4038,27 +4107,66 @@ export const AssignStudentView: React.FC = () => {
                                                         {/* Assign tab */}
                                                         {activeTab === 'assign' && (
                                                             <div className="py-4 space-y-4 max-w-2xl">
-                                                                <div>
-                                                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                                                        Learner <span className="text-red-500">*</span>
-                                                                    </label>
-                                                                    {loadingLearners ? (
-                                                                        <p className="text-sm text-gray-500 italic">Loading learners...</p>
-                                                                    ) : (
-                                                                        <select
-                                                                            value={selectedLearnerId}
-                                                                            onChange={e => setSelectedLearnerId(e.target.value)}
-                                                                            className={inputClasses}
+                                                                {/* Mode toggle */}
+                                                                <div className="flex gap-2">
+                                                                    {(['dropdown', 'manual'] as const).map(mode => (
+                                                                        <button
+                                                                            key={mode}
+                                                                            type="button"
+                                                                            onClick={() => setLearnerAssignMode(mode)}
+                                                                            className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${learnerAssignMode === mode ? 'bg-blue-600 text-white' : 'border border-gray-300 text-gray-600 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700'}`}
                                                                         >
-                                                                            <option value="">— Select a learner —</option>
-                                                                            {availableLearners.map(l => (
-                                                                                <option key={l.user_id} value={l.user_id}>
-                                                                                    {l.full_name} ({l.email})
-                                                                                </option>
-                                                                            ))}
-                                                                        </select>
-                                                                    )}
+                                                                            {mode === 'dropdown' ? 'Select from list' : 'Enter manually'}
+                                                                        </button>
+                                                                    ))}
                                                                 </div>
+
+                                                                {learnerAssignMode === 'dropdown' ? (
+                                                                    <div>
+                                                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                                            Learner <span className="text-red-500">*</span>
+                                                                        </label>
+                                                                        {loadingLearners ? (
+                                                                            <p className="text-sm text-gray-500 italic">Loading learners...</p>
+                                                                        ) : (
+                                                                            <SearchableSelect
+                                                                                options={availableLearners.map(l => ({ value: l.user_id, label: `${l.full_name} (${l.email})` }))}
+                                                                                value={selectedLearnerId}
+                                                                                onChange={setSelectedLearnerId}
+                                                                                placeholder="— Search learner by name or email —"
+                                                                                className={inputClasses}
+                                                                            />
+                                                                        )}
+                                                                    </div>
+                                                                ) : (
+                                                                    <div className="space-y-3">
+                                                                        <div>
+                                                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                                                Learner Name <span className="text-red-500">*</span>
+                                                                            </label>
+                                                                            <input
+                                                                                type="text"
+                                                                                placeholder="Full name"
+                                                                                value={manualLearnerName}
+                                                                                onChange={e => setManualLearnerName(e.target.value)}
+                                                                                className={inputClasses}
+                                                                            />
+                                                                        </div>
+                                                                        <div>
+                                                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                                                Learner Email
+                                                                            </label>
+                                                                            <input
+                                                                                type="email"
+                                                                                placeholder="email@example.com"
+                                                                                value={manualLearnerEmail}
+                                                                                onChange={e => setManualLearnerEmail(e.target.value)}
+                                                                                className={inputClasses}
+                                                                            />
+                                                                        </div>
+                                                                    </div>
+                                                                )}
+
                                                                 <div className="flex justify-end">
                                                                     <Button
                                                                         onClick={() => handleAssign(run)}
