@@ -3307,6 +3307,7 @@ export const AssignTrainerView: React.FC = () => {
     // Filters
     const [filterNoTrainer, setFilterNoTrainer] = useState(false);
     const [filterTrainerName, setFilterTrainerName] = useState('');
+    const [filterCourse, setFilterCourse] = useState('');
 
     // Track live assignments without refetching
     const [localAssignments, setLocalAssignments] = useState<Record<string, { name: string; email: string }>>({});
@@ -3428,6 +3429,10 @@ export const AssignTrainerView: React.FC = () => {
         )
     ).sort();
 
+    const uniqueCourseNames = Array.from(
+        new Set(courseRuns.map(run => run.courseTitle).filter(Boolean))
+    ).sort();
+
     // Apply client-side filters
     const filteredRuns = courseRuns.filter(run => {
         const local = localAssignments[run.id];
@@ -3435,6 +3440,7 @@ export const AssignTrainerView: React.FC = () => {
 
         if (filterNoTrainer && trainerName) return false;
         if (filterTrainerName && trainerName !== filterTrainerName) return false;
+        if (filterCourse && run.courseTitle !== filterCourse) return false;
 
         return true;
     });
@@ -3520,6 +3526,19 @@ export const AssignTrainerView: React.FC = () => {
                         >
                             <option value="">All trainers</option>
                             {uniqueTrainerNames.map(name => (
+                                <option key={name} value={name}>{name}</option>
+                            ))}
+                        </select>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <label className="text-sm text-gray-700 dark:text-gray-300 whitespace-nowrap">Filter by course:</label>
+                        <select
+                            value={filterCourse}
+                            onChange={e => setFilterCourse(e.target.value)}
+                            className="border border-gray-300 dark:border-gray-600 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white max-w-xs"
+                        >
+                            <option value="">All courses</option>
+                            {uniqueCourseNames.map(name => (
                                 <option key={name} value={name}>{name}</option>
                             ))}
                         </select>
