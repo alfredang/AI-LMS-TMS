@@ -225,11 +225,15 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
   const [deleteLearnerError, setDeleteLearnerError]    = useState<string | null>(null);
 
   // API already filters to upcoming classes (today → today+7, not ended); just sort
-  const activeCourses = [...courses].sort((a, b) => {
-    const aTime = new Date(a.startDate ?? '').getTime();
-    const bTime = new Date(b.startDate ?? '').getTime();
-    return aTime - bTime; // earliest first
-  });
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const activeCourses = courses
+    .filter(c => !c.endDate || new Date(c.endDate) >= today)
+    .sort((a, b) => {
+      const aTime = new Date(a.startDate ?? '').getTime();
+      const bTime = new Date(b.startDate ?? '').getTime();
+      return aTime - bTime;
+    });
 
   const selectedCourse = isAdminMode
     ? adminCourse
