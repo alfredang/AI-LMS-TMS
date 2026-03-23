@@ -313,7 +313,7 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                                         {/* Course Title */}
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-1">Course Title</label>
+                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Course Title</label>
                                             <input
                                                 type="text"
                                                 placeholder="Enter course title..."
@@ -325,7 +325,7 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
 
                                         {/* Course Code */}
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-1">Course Code</label>
+                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Course Code</label>
                                             <input
                                                 type="text"
                                                 placeholder="Enter course code..."
@@ -337,7 +337,7 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
 
                                         {/* Course Run ID */}
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-1">Course Run ID</label>
+                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Course Run ID</label>
                                             <input
                                                 type="text"
                                                 placeholder="Enter run ID..."
@@ -349,7 +349,7 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
 
                                         {/* Trainer Dropdown */}
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-1">Trainer</label>
+                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Trainer</label>
                                             <select
                                                 value={selectedTrainer}
                                                 onChange={(e) => setSelectedTrainer(e.target.value)}
@@ -366,7 +366,7 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
 
                                         {/* Start Date From */}
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-1">Start Date (From)</label>
+                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Start Date (From)</label>
                                             <input
                                                 type="text"
                                                 placeholder="YYYY/MM/DD"
@@ -379,7 +379,7 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
 
                                         {/* End Date Until */}
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-1">End Date (Until)</label>
+                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">End Date (Until)</label>
                                             <input
                                                 type="text"
                                                 placeholder="YYYY/MM/DD"
@@ -419,33 +419,33 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                 <thead className="bg-gray-50 dark:bg-gray-700/50">
                                     <tr className="border-b dark:border-gray-700">
                                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">COURSE RUN ID</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">COURSE TITLE</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">TGS REF</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">CLASS STATUS</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">DA ID</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">START DATE</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">END DATE</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">TRAINER</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"># OF TRAINEE</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ACTIONS</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">COURSE TITLE</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">COURSE REF CODE</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">CLASS STATUS</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">DA ID</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">START DATE</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">END DATE</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">TRAINER</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"># OF TRAINEE</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">ACTIONS</th>
                                     </tr>
                                 </thead>
                                 <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                                     {upcomingClasses.map((classItem, index) => (
                                         <tr key={index} className="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                                            <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{classItem.courseRunId}</td>
+                                            <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.courseRunId}</td>
                                             <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">{classItem.courseTitle}</td>
-                                            <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">{classItem.courseCode}</td>
+                                            <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.courseCode}</td>
                                             <td className="px-4 py-4 whitespace-nowrap text-sm">
                                                 <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(classItem.classStatus || 'Unknown')}`}>
                                                     {classItem.classStatus}
                                                 </span>
                                             </td>
-                                            <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">{classItem.digitalAttendanceId || 'N/A'}</td>
-                                            <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">{formatDate(classItem.startDate)}</td>
-                                            <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">{formatDate(classItem.endDate)}</td>
-                                            <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">{classItem.trainerName}</td>
-                                            <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 text-center">{classItem.numOfTrainee}</td>
+                                            <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.digitalAttendanceId || 'N/A'}</td>
+                                            <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{formatDate(classItem.startDate)}</td>
+                                            <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{formatDate(classItem.endDate)}</td>
+                                            <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.trainerName}</td>
+                                            <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200 text-center">{classItem.numOfTrainee}</td>
                                             <td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
                                                 <div className="flex items-center space-x-2">
                                                     <Button
