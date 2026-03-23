@@ -112,7 +112,7 @@ const ProfileDropdown: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 };
 
 const Header: React.FC = () => {
-  const { role, userRoles, currentView, adminPage, trainerPage, handleNavigation, setAdminPage, setTrainerPage, resetCreateView, resetAdminView, trainingProviderProfile, currentUserProfile, logout } = useLms();
+  const { role, userRoles, currentView, adminPage, trainerPage, handleNavigation, setAdminPage, setTrainerPage, setSelectedCourse, resetCreateView, resetAdminView, trainingProviderProfile, currentUserProfile, logout } = useLms();
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isRoleSwitcherOpen, setIsRoleSwitcherOpen] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
@@ -158,6 +158,7 @@ const Header: React.FC = () => {
       { view: View.Courses, label: 'TRAQOM Survey', icon: IconName.ClipboardCheck, href: 'https://ssgtraqom.qualtrics.com/jfe/form/SV_3K9i7rTJ9OLsauW?Q_CHL=qr' },
     ],
     [UserRole.Trainer]: [
+      { view: View.Dashboard, label: 'E-Attendance', icon: IconName.ClipboardCheck, trainerPage: TrainerPage.EAttendance },
       { view: View.Dashboard, label: 'Break Timer', icon: IconName.Clock, href: 'https://alfredang.github.io/musical-timer-countdown/' },
       { view: View.Dashboard, label: 'Pinboard', icon: IconName.Bookmark, href: 'https://alfredang.github.io/pinboard/' },
       { view: View.Dashboard, label: 'GenAI Authoring', icon: IconName.Create, trainerPage: TrainerPage.GenAIAuthoring },
@@ -225,6 +226,7 @@ const Header: React.FC = () => {
                     e.preventDefault();
 
                     if (isTrainerItem) {
+                      setSelectedCourse(null);
                       setTrainerPage(item.trainerPage);
                       handleNavigation(View.Dashboard);
                       return;

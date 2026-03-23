@@ -280,7 +280,7 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [userRoles, setUserRoles] = useState<UserRole[]>([]); // All roles the user has
   const [currentView, setCurrentView] = useState<View>(View.Dashboard);
   const [adminPage, setAdminPage] = useState<AdminPage>(AdminPage.Dashboard);
-  const [trainerPage, setTrainerPage] = useState<TrainerPage>(TrainerPage.MyClasses);
+  const [trainerPage, setTrainerPage] = useState<TrainerPage>(TrainerPage.EAttendance);
   const [selectedCourseRunId, setSelectedCourseRunId] = useState<string | null>(null);
 
   // Authentication state

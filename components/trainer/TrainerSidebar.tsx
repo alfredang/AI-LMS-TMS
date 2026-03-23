@@ -23,7 +23,7 @@ const inactiveClass = 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:h
 const inactiveIconClass = 'text-gray-400 dark:text-gray-500 group-hover:text-gray-900 dark:group-hover:text-white';
 
 const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate }) => {
-  const { trainerPage, setTrainerPage, setCurrentView } = useLms();
+  const { trainerPage, setTrainerPage, setCurrentView, setSelectedCourse } = useLms();
 
   return (
     <div className="flex flex-col h-full bg-surface border-r border-default">
@@ -41,6 +41,7 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate }) => {
               href="#"
               onClick={(e) => {
                 e.preventDefault();
+                setSelectedCourse(null);
                 setCurrentView(View.Dashboard);
                 setTrainerPage(page);
                 onNavigate?.();
@@ -90,6 +91,7 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate }) => {
                 href="#"
                 onClick={(e) => {
                   e.preventDefault();
+                  setSelectedCourse(null);
                   setCurrentView(View.Dashboard);
                   setTrainerPage(page!);
                   onNavigate?.();
