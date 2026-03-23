@@ -43,43 +43,63 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Get learner age groups with all age ranges
     const ageGroupResult = await pool.query(`
       WITH age_ranges AS (
-        SELECT '20-25' AS age_group
-        UNION SELECT '26-30'
-        UNION SELECT '31-35'
-        UNION SELECT '41-45'
-        UNION SELECT '46-50'
+        SELECT '20-25' AS age_group, 1 AS sort_order
+        UNION SELECT '26-30', 2
+        UNION SELECT '31-35', 3
+        UNION SELECT '36-40', 4
+        UNION SELECT '41-45', 5
+        UNION SELECT '46-50', 6
+        UNION SELECT '51+', 7
       ),
       learner_ages AS (
-        SELECT 
+        SELECT
           lp.user_id,
-          CASE 
+          CASE
             WHEN EXTRACT(YEAR FROM AGE(current_date, lp.dob)) BETWEEN 20 AND 25 THEN '20-25'
             WHEN EXTRACT(YEAR FROM AGE(current_date, lp.dob)) BETWEEN 26 AND 30 THEN '26-30'
             WHEN EXTRACT(YEAR FROM AGE(current_date, lp.dob)) BETWEEN 31 AND 35 THEN '31-35'
+            WHEN EXTRACT(YEAR FROM AGE(current_date, lp.dob)) BETWEEN 36 AND 40 THEN '36-40'
             WHEN EXTRACT(YEAR FROM AGE(current_date, lp.dob)) BETWEEN 41 AND 45 THEN '41-45'
             WHEN EXTRACT(YEAR FROM AGE(current_date, lp.dob)) BETWEEN 46 AND 50 THEN '46-50'
-            ELSE 'Other'
+            WHEN EXTRACT(YEAR FROM AGE(current_date, lp.dob)) > 50 THEN '51+'
+            ELSE NULL
           END AS age_group
         FROM learner_profile lp
         WHERE lp.dob IS NOT NULL
       )
-      SELECT 
+      SELECT
         ar.age_group,
         COALESCE(COUNT(DISTINCT la.user_id), 0) AS unique_learners
       FROM age_ranges ar
       LEFT JOIN learner_ages la ON ar.age_group = la.age_group
-      GROUP BY ar.age_group
-      ORDER BY ar.age_group;
+      GROUP BY ar.age_group, ar.sort_order
+      ORDER BY ar.sort_order;
     `);
 
-    // Get gender breakdown
+    // Get gender breakdown (normalize to Male/Female)
     const genderBreakdownResult = await pool.query(`
-      SELECT 
-        gender,
-        COUNT(DISTINCT user_id) AS total_learners
-      FROM learner_profile
-      GROUP BY gender
-      ORDER BY gender;
+      WITH gender_types AS (
+        SELECT 'Male' AS gender, 1 AS sort_order
+        UNION SELECT 'Female', 2
+      ),
+      learner_gender AS (
+        SELECT
+          user_id,
+          CASE
+            WHEN UPPER(gender) IN ('M', 'MALE') THEN 'Male'
+            WHEN UPPER(gender) IN ('F', 'FEMALE') THEN 'Female'
+            ELSE NULL
+          END AS gender
+        FROM learner_profile
+        WHERE gender IS NOT NULL
+      )
+      SELECT
+        gt.gender,
+        COALESCE(COUNT(DISTINCT lg.user_id), 0) AS total_learners
+      FROM gender_types gt
+      LEFT JOIN learner_gender lg ON gt.gender = lg.gender
+      GROUP BY gt.gender, gt.sort_order
+      ORDER BY gt.sort_order;
     `);
 
     // Get sponsorship breakdown with all types
