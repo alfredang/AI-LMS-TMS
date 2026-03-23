@@ -213,6 +213,8 @@ interface LmsContextType {
   setTrainerPage: (page: TrainerPage) => void;
   selectedCourseRunId: string | null;
   setSelectedCourseRunId: (courseRunId: string | null) => void;
+  pendingAttendanceCourseRunId: string | null;
+  setPendingAttendanceCourseRunId: (id: string | null) => void;
 
   // Authentication
   isAuthenticated: boolean;
@@ -282,6 +284,7 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [adminPage, setAdminPage] = useState<AdminPage>(AdminPage.Dashboard);
   const [trainerPage, setTrainerPage] = useState<TrainerPage>(TrainerPage.EAttendance);
   const [selectedCourseRunId, setSelectedCourseRunId] = useState<string | null>(null);
+  const [pendingAttendanceCourseRunId, setPendingAttendanceCourseRunId] = useState<string | null>(null);
 
   // Authentication state
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
@@ -1472,6 +1475,8 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setTrainerPage,
     selectedCourseRunId,
     setSelectedCourseRunId,
+    pendingAttendanceCourseRunId,
+    setPendingAttendanceCourseRunId,
     isAuthenticated,
     isLoading,
     currentUser,

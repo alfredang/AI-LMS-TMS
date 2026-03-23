@@ -1289,6 +1289,7 @@ const CourseSidebar: React.FC<CourseSidebarProps> = ({ userRole, onSetGradingVie
     ];
 
     let trainerNavItems: NavItem[] = [
+        { type: 'link', label: "E-Attendance", icon: IconName.ClipboardCheck },
         { type: 'link', label: "Courseware Link", icon: IconName.Link },
         { type: 'link', label: "Assessment Record Link", icon: IconName.ClipboardCheck },
         { type: 'link', label: "Lesson Plan", icon: IconName.BookOpen },
@@ -1491,6 +1492,7 @@ export const CourseDetail: React.FC = () => {
         setEditingCourse,
         setAdminPage,
         setTrainerPage,
+        setPendingAttendanceCourseRunId,
         currentUser,
         role
     } = useLms();
@@ -1912,6 +1914,31 @@ export const CourseDetail: React.FC = () => {
                                 <LoadingSkeleton />
                             ) : (
                             <>
+                            {/* E-Attendance */}
+                            {userRole === UserRole.Trainer && (
+                                <div id={toId("E-Attendance")}>
+                                    <ContentSection title="E-Attendance">
+                                        <button
+                                            onClick={() => {
+                                                const runCode = selectedCourse?.courseRunCode || selectedCourse?.courseRunId || convertedCourse.courseRunId || '';
+                                                setPendingAttendanceCourseRunId(String(runCode));
+                                                setTrainerPage(TrainerPage.EAttendance);
+                                            }}
+                                            className="flex items-center gap-3 p-3 w-full text-left bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+                                        >
+                                            <Icon name={IconName.ClipboardCheck} className="w-6 h-6 text-blue-600 flex-shrink-0" />
+                                            <div className="flex-1 min-w-0">
+                                                <p className="font-semibold text-gray-900 dark:text-white">E-Attendance</p>
+                                                <p className="text-xs text-gray-500 dark:text-gray-400">
+                                                    Open E-Attendance for Course Run {selectedCourse?.courseRunCode || selectedCourse?.courseRunId || convertedCourse.courseRunId || ''}
+                                                </p>
+                                            </div>
+                                            <Icon name={IconName.ExternalLink} className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                                        </button>
+                                    </ContentSection>
+                                </div>
+                            )}
+
                             {/* Courseware Link */}
                             {(userRole === UserRole.Trainer || userRole === UserRole.Developer || userRole === UserRole.Admin || userRole === UserRole.TrainingProvider) && (
                                 <div id={toId("Courseware Link")}>
