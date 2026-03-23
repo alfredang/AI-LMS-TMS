@@ -15,7 +15,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         au.full_name,
         au.account_status,
         au.created_at,
-        au.is_protected,
         ap.tel
       FROM public.app_user au
       JOIN public.user_role_map urm2 ON urm2.user_id = au.id AND urm2.role = 'Admin'
@@ -46,7 +45,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           fullName: row.full_name,
           accountStatus: row.account_status,
           createdAt: row.created_at,
-          isProtected: row.is_protected,
           tel: row.tel,
           roles: rolesMap[row.id] || [],
         })),
