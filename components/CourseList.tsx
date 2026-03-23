@@ -789,6 +789,18 @@ const LearnerCourseCard: React.FC<{ course: any }> = ({ course }) => {
                             value={course.courseRunCode || course.courseRunId}
                         />
                     )}
+                    {course.startDate && (
+                        <LearnerCardDetailRow
+                            label="Start Date"
+                            value={new Date(course.startDate).toLocaleDateString('en-SG', { year: 'numeric', month: 'short', day: 'numeric' })}
+                        />
+                    )}
+                    {course.endDate && (
+                        <LearnerCardDetailRow
+                            label="End Date"
+                            value={new Date(course.endDate).toLocaleDateString('en-SG', { year: 'numeric', month: 'short', day: 'numeric' })}
+                        />
+                    )}
                 </div>
 
                 {/* Footer */}
