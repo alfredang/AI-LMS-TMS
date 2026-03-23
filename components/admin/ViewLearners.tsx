@@ -19,6 +19,7 @@ interface Learner {
   ethnicity: string | null;
   dob: string | null;
   account_status: string | null;
+  sponsorship_type: string | null;
 }
 
 const getAccountStatusColor = (status: string | null) => {
@@ -33,7 +34,7 @@ const capitalise = (s: string | null) =>
   s ? s.charAt(0).toUpperCase() + s.slice(1) : 'N/A';
 
 const ACCOUNT_STATUSES = ['Active', 'Inactive', 'Suspended'];
-const GENDERS = ['Male', 'Female'];
+const SPONSORSHIP_TYPES = ['Self-Sponsored', 'Employer-Sponsored'];
 const NATIONALITIES = ['Singaporean', 'Singapore PR', 'Non Citizen'];
 
 const ViewLearners: React.FC = () => {
@@ -41,9 +42,8 @@ const ViewLearners: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
-  const [filterName, setFilterName] = useState('');
+  const [filterSponsorships, setFilterSponsorships] = useState<string[]>([]);
   const [filterAccountStatuses, setFilterAccountStatuses] = useState<string[]>([]);
-  const [filterGenders, setFilterGenders] = useState<string[]>([]);
   const [filterNationalities, setFilterNationalities] = useState<string[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
 
@@ -68,9 +68,8 @@ const ViewLearners: React.FC = () => {
 
   const handleResetFilters = () => {
     setSearchQuery('');
-    setFilterName('');
+    setFilterSponsorships([]);
     setFilterAccountStatuses([]);
-    setFilterGenders([]);
     setFilterNationalities([]);
     setCurrentPage(1);
   };
@@ -126,18 +125,16 @@ const ViewLearners: React.FC = () => {
       (learner.telephone && learner.telephone.includes(searchQuery)) ||
       (learner.company && learner.company.toLowerCase().includes(searchQuery.toLowerCase()));
 
-    const matchesName = !filterName || learner.learner_name.toLowerCase().includes(filterName.toLowerCase());
+    const matchesSponsorship = filterSponsorships.length === 0 ||
+      filterSponsorships.includes(learner.sponsorship_type || '');
 
     const matchesAccountStatus = filterAccountStatuses.length === 0 ||
       filterAccountStatuses.some(s => s.toLowerCase() === (learner.account_status || '').toLowerCase());
 
-    const matchesGender = filterGenders.length === 0 ||
-      filterGenders.some(g => g.toLowerCase() === (learner.gender || '').toLowerCase());
-
     const matchesNationality = filterNationalities.length === 0 ||
       filterNationalities.includes(learner.nationality || '');
 
-    return matchesSearch && matchesName && matchesAccountStatus && matchesGender && matchesNationality;
+    return matchesSearch && matchesSponsorship && matchesAccountStatus && matchesNationality;
   });
 
   const totalPages = Math.ceil(filteredLearners.length / itemsPerPage);
@@ -191,50 +188,25 @@ const ViewLearners: React.FC = () => {
 
         {showAdvancedFilters && (
           <div className="mt-4 pt-4 border-t dark:border-gray-700 space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-start">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Learner Name</label>
-                <input
-                  type="text"
-                  value={filterName}
-                  onChange={e => { setFilterName(e.target.value); setCurrentPage(1); }}
-                  className={inputClasses}
-                  placeholder="Filter by name..."
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Account Status</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Sponsorship</label>
                 <div className="flex flex-wrap gap-3">
-                  {ACCOUNT_STATUSES.map(s => (
+                  {SPONSORSHIP_TYPES.map(s => (
                     <label key={s} className="flex items-center gap-2 cursor-pointer select-none">
                       <input
                         type="checkbox"
-                        checked={filterAccountStatuses.includes(s)}
-                        onChange={() => toggleCheckbox(s, filterAccountStatuses, setFilterAccountStatuses)}
+                        checked={filterSponsorships.includes(s)}
+                        onChange={() => toggleCheckbox(s, filterSponsorships, setFilterSponsorships)}
                         className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700"
                       />
                       <span className="text-sm text-gray-700 dark:text-gray-300">{s}</span>
                     </label>
                   ))}
                 </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Gender</label>
-                <div className="flex flex-wrap gap-3">
-                  {GENDERS.map(g => (
-                    <label key={g} className="flex items-center gap-2 cursor-pointer select-none">
-                      <input
-                        type="checkbox"
-                        checked={filterGenders.includes(g)}
-                        onChange={() => toggleCheckbox(g, filterGenders, setFilterGenders)}
-                        className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700"
-                      />
-                      <span className="text-sm text-gray-700 dark:text-gray-300">{g}</span>
-                    </label>
-                  ))}
-                </div>
+                {filterSponsorships.length > 0 && (
+                  <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">Showing: {filterSponsorships.join(', ')}</p>
+                )}
               </div>
 
               <div>
@@ -252,6 +224,29 @@ const ViewLearners: React.FC = () => {
                     </label>
                   ))}
                 </div>
+                {filterNationalities.length > 0 && (
+                  <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">Showing: {filterNationalities.join(', ')}</p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Account Status</label>
+                <div className="flex flex-wrap gap-3">
+                  {ACCOUNT_STATUSES.map(s => (
+                    <label key={s} className="flex items-center gap-2 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={filterAccountStatuses.includes(s)}
+                        onChange={() => toggleCheckbox(s, filterAccountStatuses, setFilterAccountStatuses)}
+                        className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700"
+                      />
+                      <span className="text-sm text-gray-700 dark:text-gray-300">{s}</span>
+                    </label>
+                  ))}
+                </div>
+                {filterAccountStatuses.length > 0 && (
+                  <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">Showing: {filterAccountStatuses.join(', ')}</p>
+                )}
               </div>
             </div>
           </div>

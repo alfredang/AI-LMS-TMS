@@ -1130,7 +1130,7 @@ const CourseInfoPanel: React.FC<{ course: Course; userRole: UserRole }> = ({ cou
             <h3 className="font-bold text-lg text-gray-900 dark:text-white mb-6">Course Details</h3>
             <div className="space-y-4 text-sm">
                 <DetailRow label="Course Title" value={course.title} />
-                <DetailRow label="TGS Ref" value={course.courseCode} />
+                <DetailRow label="Course Ref Code" value={course.courseCode} />
                 <DetailRow label="TSC Title" value={course.tscTitle || 'N/A'} />
                 <DetailRow label="TSC Code" value={course.tscCode || 'N/A'} />
                 {/* Hide course run related information for developers and training providers */}

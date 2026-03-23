@@ -3804,13 +3804,13 @@ export const AssignStudentView: React.FC = () => {
                                                     className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${activeTab === 'assign' ? 'border-blue-500 text-blue-600 dark:text-blue-400' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'}`}
                                                     onClick={() => handleTabChange('assign', run.id)}
                                                 >
-                                                    Assign Student
+                                                    Assign Learner
                                                 </button>
                                                 <button
                                                     className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${activeTab === 'unassign' ? 'border-red-500 text-red-600 dark:text-red-400' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'}`}
                                                     onClick={() => handleTabChange('unassign', run.id)}
                                                 >
-                                                    Unassign Student
+                                                    Unassign Learner
                                                 </button>
                                             </div>
 
@@ -3819,17 +3819,17 @@ export const AssignStudentView: React.FC = () => {
                                                 <div className="px-4 py-4 space-y-4">
                                                     <div>
                                                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                                            Student <span className="text-red-500">*</span>
+                                                            Learner <span className="text-red-500">*</span>
                                                         </label>
                                                         {loadingLearners ? (
-                                                            <p className="text-sm text-gray-500 italic">Loading students...</p>
+                                                            <p className="text-sm text-gray-500 italic">Loading learners...</p>
                                                         ) : (
                                                             <select
                                                                 value={selectedLearnerId}
                                                                 onChange={e => setSelectedLearnerId(e.target.value)}
                                                                 className={inputClasses}
                                                             >
-                                                                <option value="">— Select a student —</option>
+                                                                <option value="">— Select a learner —</option>
                                                                 {availableLearners.map(l => (
                                                                     <option key={l.user_id} value={l.user_id}>
                                                                         {l.full_name} ({l.email})
@@ -3844,7 +3844,7 @@ export const AssignStudentView: React.FC = () => {
                                                             disabled={saving}
                                                             className="bg-green-600 hover:bg-green-700 text-white"
                                                         >
-                                                            {saving ? 'Enrolling...' : 'Assign Student'}
+                                                            {saving ? 'Enrolling...' : 'Assign Learner'}
                                                         </Button>
                                                     </div>
                                                 </div>

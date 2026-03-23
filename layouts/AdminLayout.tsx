@@ -131,6 +131,7 @@ const PAGE_LABELS: Partial<Record<AdminPage, string>> = {
   [AdminPage.DeleteCourseRun]: 'Delete Course Run',
   [AdminPage.ClassDetail]: 'Class Detail',
   [AdminPage.CheckAttendance]: 'Check Attendance',
+  [AdminPage.AssignStudent]: 'Assign Learners',
 };
 
 const AdminLayout: React.FC = () => {
