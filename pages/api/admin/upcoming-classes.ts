@@ -213,6 +213,35 @@ export default async function handler(
     const countResult = await pool.query(countQuery, countParams);
     const totalCount = parseInt(countResult.rows[0]?.total_count) || 0;
 
+    // Aggregate stats for KPI cards (across all pages, with same filters)
+    let statsQuery = `
+      SELECT
+        COUNT(DISTINCT cr.id) AS total_classes,
+        COALESCE(SUM(ec.cnt), 0) AS total_trainees,
+        COUNT(DISTINCT COALESCE(cr.assigned_trainer_name, au.full_name)) FILTER (WHERE COALESCE(cr.assigned_trainer_name, au.full_name) IS NOT NULL) AS total_trainers
+      FROM course_run cr
+      JOIN course c ON cr.course_id = c.id
+      LEFT JOIN app_user au ON cr.assigned_trainer_email = au.email
+      LEFT JOIN (SELECT course_run_id, COUNT(*) AS cnt FROM enrollment GROUP BY course_run_id) ec ON ec.course_run_id = cr.id
+      WHERE cr.start_date > CURRENT_DATE
+    `;
+    // Reuse count filters
+    const statsParams = [...countParams];
+    let statsParamIndex = 1;
+    if (search && search !== '') {
+      statsQuery += ` AND (c.title ILIKE $${statsParamIndex} OR c.course_code ILIKE $${statsParamIndex} OR cr.course_run_id ILIKE $${statsParamIndex} OR au.full_name ILIKE $${statsParamIndex})`;
+      statsParamIndex++;
+    }
+    if (courseTitle && courseTitle !== '') { statsQuery += ` AND c.title ILIKE $${statsParamIndex}`; statsParamIndex++; }
+    if (courseCode && courseCode !== '') { statsQuery += ` AND c.course_code ILIKE $${statsParamIndex}`; statsParamIndex++; }
+    if (courseRunId && courseRunId !== '') { statsQuery += ` AND cr.course_run_id ILIKE $${statsParamIndex}`; statsParamIndex++; }
+    if (trainer && trainer !== '') { statsQuery += ` AND au.full_name ILIKE $${statsParamIndex}`; statsParamIndex++; }
+    if (startDateFrom && startDateFrom !== '') { statsQuery += ` AND cr.start_date >= $${statsParamIndex}`; statsParamIndex++; }
+    if (endDateUntil && endDateUntil !== '') { statsQuery += ` AND cr.end_date <= $${statsParamIndex}`; statsParamIndex++; }
+
+    const statsResult = await pool.query(statsQuery, statsParams);
+    const stats = statsResult.rows[0] || {};
+
     const upcomingClasses: UpcomingClass[] = result.rows.map(row => ({
       id: row.id,
       courseRunId: row.course_run_id,
@@ -234,7 +263,12 @@ export default async function handler(
         classes: upcomingClasses,
         totalCount,
         currentPage: pageNum,
-        totalPages: Math.ceil(totalCount / limitNum)
+        totalPages: Math.ceil(totalCount / limitNum),
+        stats: {
+          totalClasses: parseInt(stats.total_classes) || 0,
+          totalTrainees: parseInt(stats.total_trainees) || 0,
+          totalTrainers: parseInt(stats.total_trainers) || 0,
+        }
       }
     });
 

@@ -85,6 +85,7 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
     const [loading, setLoading] = useState(true);
     const [totalCount, setTotalCount] = useState(0);
     const [totalPages, setTotalPages] = useState(0);
+    const [stats, setStats] = useState<{ totalClasses: number; totalTrainees: number; totalTrainers: number }>({ totalClasses: 0, totalTrainees: 0, totalTrainers: 0 });
 
     // Import Run modal states
     const [showImportModal, setShowImportModal] = useState(false);
@@ -145,6 +146,7 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                 setUpcomingClasses(result.data.classes);
                 setTotalCount(result.data.totalCount);
                 setTotalPages(result.data.totalPages);
+                if (result.data.stats) setStats(result.data.stats);
             } else {
                 console.error('❌ Error fetching upcoming classes:', result.message);
             }
@@ -263,6 +265,24 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                         <Icon name={IconName.Add} className="w-4 h-4 mr-2" />
                         Import Course Run
                     </Button>
+                </div>
+            )}
+
+            {/* KPI Stats */}
+            {showTitle && (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                    <Card className="p-6 text-center">
+                        <p className="text-4xl font-bold text-blue-600">{stats.totalClasses}</p>
+                        <p className="text-gray-600 dark:text-gray-300 mt-1">Upcoming Classes</p>
+                    </Card>
+                    <Card className="p-6 text-center">
+                        <p className="text-4xl font-bold text-green-600">{stats.totalTrainees}</p>
+                        <p className="text-gray-600 dark:text-gray-300 mt-1">Trainees</p>
+                    </Card>
+                    <Card className="p-6 text-center">
+                        <p className="text-4xl font-bold text-purple-600">{stats.totalTrainers}</p>
+                        <p className="text-gray-600 dark:text-gray-300 mt-1">Trainers</p>
+                    </Card>
                 </div>
             )}
 
