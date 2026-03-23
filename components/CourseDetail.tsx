@@ -1077,33 +1077,106 @@ const AssessmentsSection: React.FC<{
 
 // --- Certificate Section Component ---
 const CertificateSection: React.FC<{ userRole: UserRole }> = ({ userRole }) => {
-    const { certificate } = useLms();
+    const { certificate, selectedCourse } = useLms();
+    const [generating, setGenerating] = React.useState(false);
+    const [localCertUrl, setLocalCertUrl] = React.useState<string | null>(null);
+
+    React.useEffect(() => {
+        if (certificate?.certificate_url) {
+            setLocalCertUrl(certificate.certificate_url);
+        }
+    }, [certificate?.certificate_url]);
 
     // Only show certificate section for learners
     if (userRole !== UserRole.Learner) {
         return null;
     }
 
+    const isCompetent = selectedCourse?.assessmentStatus === 'Competent' || selectedCourse?.assessmentStatus === 'Passed';
+
+    const handleGenerate = async () => {
+        if (!certificate?.enrollment_id) return;
+        setGenerating(true);
+        try {
+            const res = await fetch('/api/learner/generate-certificate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ enrolmentId: certificate.enrollment_id })
+            });
+            
+            if (res.ok) {
+                // Handle Blob download directly
+                const blob = await res.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                
+                const disposition = res.headers.get('Content-Disposition');
+                let filename = 'Certificate.pdf';
+                if (disposition && disposition.indexOf('filename=') !== -1) {
+                    filename = disposition.split('filename=')[1];
+                }
+                
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                window.URL.revokeObjectURL(url);
+                
+                // We successfully saved it to DB too, so we can reload to show the static download link
+                window.location.reload();
+            } else {
+                const data = await res.json().catch(() => ({}));
+                alert(data.message || 'Failed to generate certificate. Ensure the template is uploaded.');
+            }
+        } catch (e) {
+            alert('Failed to generate certificate due to network error.');
+        } finally {
+            setGenerating(false);
+        }
+    };
+
     return (
         <ContentSection title="Certificate of Completion">
-            {certificate && certificate.certificate_url ? (
-                <div className="text-center p-6 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
-                    <Icon name={IconName.FileText} className="w-16 h-16 text-green-500 mx-auto mb-4" />
-                    <h4 className="text-lg font-bold text-green-800 dark:text-green-300">Congratulations!</h4>
-                    <p className="text-green-700 dark:text-green-400 mt-1 mb-4">You have successfully completed this course.</p>
-                    <a href={certificate.certificate_url} target="_blank" rel="noopener noreferrer">
-                        <Button variant="secondary">
-                            <Icon name={IconName.Download} className="w-5 h-5 mr-2" />
-                            Download Your Certificate
+            {isCompetent ? (
+                localCertUrl ? (
+                    <div className="text-center p-6 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+                        <Icon name={IconName.FileText} className="w-16 h-16 text-green-500 mx-auto mb-4" />
+                        <h4 className="text-lg font-bold text-green-800 dark:text-green-300">Congratulations!</h4>
+                        <p className="text-green-700 dark:text-green-400 mt-1 mb-4">You have successfully completed this course.</p>
+                        <a href={localCertUrl} download target="_blank" rel="noopener noreferrer">
+                            <Button variant="secondary">
+                                <Icon name={IconName.Download} className="w-5 h-5 mr-2" />
+                                Download Your Certificate
+                            </Button>
+                        </a>
+                    </div>
+                ) : (
+                    <div className="text-center p-6 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                        <Icon name={IconName.Award} className="w-16 h-16 text-blue-500 mx-auto mb-4" />
+                        <h4 className="text-lg font-bold text-blue-800 dark:text-blue-300">You are Competent!</h4>
+                        <p className="text-blue-700 dark:text-blue-400 mt-1 mb-4">Your certificate is ready to be generated.</p>
+                        <Button variant="primary" onClick={handleGenerate} disabled={generating || !certificate?.enrollment_id}>
+                            {generating ? (
+                                <>
+                                    <Icon name={IconName.Spinner} className="w-5 h-5 mr-2 animate-spin" />
+                                    Generating...
+                                </>
+                            ) : (
+                                <>
+                                    <Icon name={IconName.FileText} className="w-5 h-5 mr-2" />
+                                    Generate & Download Certificate
+                                </>
+                            )}
                         </Button>
-                    </a>
-                </div>
+                    </div>
+                )
             ) : (
                 <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-md border border-gray-200 dark:border-gray-600 text-center">
                     <Icon name={IconName.FileText} className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-                    <p className="text-gray-600 dark:text-gray-300 font-medium">Coming Soon</p>
+                    <p className="text-gray-600 dark:text-gray-300 font-medium">Not Yet Competent</p>
                     <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                        When this feature is available, your certificate download link will appear right here.
+                        When you successfully complete all assessments to standard, your certificate will be available here.
                     </p>
                 </div>
             )}
