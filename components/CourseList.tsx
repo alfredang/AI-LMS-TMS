@@ -57,7 +57,7 @@ const ManagementCourseList: React.FC = () => {
     const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
     const [viewMode, setViewMode] = useState<'block' | 'table'>('block');
     const [selectedCourse, setSelectedCourse] = useState<any>(null);
-    const [trainerClassView, setTrainerClassView] = useState<'upcoming' | 'past'>('upcoming');
+    const [trainerClassView, setTrainerClassView] = useState<'all' | 'current' | 'upcoming' | 'past'>('all');
 
     // Pagination state - stored in LmsContext so it persists across mount/unmount
     const currentPage = courseListPage;
@@ -174,13 +174,19 @@ const ManagementCourseList: React.FC = () => {
             const matchesType = filterCourseType === 'All' || course.courseType === filterCourseType;
             const matchesMode = filterMode === 'All' || (course.modeOfLearning && course.modeOfLearning.includes(filterMode));
 
-            // Trainer: apply upcoming/past date logic
+            // Trainer: apply date tab logic
             if (role === UserRole.Trainer) {
                 const end = course.endDate ? new Date(course.endDate) : null;
                 const start = course.startDate ? new Date(course.startDate) : null;
-                const matchesDateView = trainerClassView === 'past'
-                    ? (end !== null && end < todayDate)
-                    : ((!end || end >= todayDate) && (!start || start <= nextWeekDate));
+                let matchesDateView = true;
+                if (trainerClassView === 'current') {
+                    matchesDateView = (start !== null && start <= todayDate) && (end !== null && end >= todayDate);
+                } else if (trainerClassView === 'upcoming') {
+                    matchesDateView = start !== null && start > todayDate;
+                } else if (trainerClassView === 'past') {
+                    matchesDateView = end !== null && end < todayDate;
+                }
+                // 'all' shows everything
                 return matchesSearch && matchesCourseCode && matchesType && matchesMode && matchesDateView;
             }
 
@@ -486,23 +492,57 @@ const ManagementCourseList: React.FC = () => {
                 </div>
             )}
 
-            {/* Upcoming / Past toggle for trainer */}
-            {role === UserRole.Trainer && (
-                <div className="flex gap-1 p-1 bg-surface rounded-lg w-fit border border-default mb-6">
-                    <button
-                        onClick={() => { setTrainerClassView('upcoming'); setCurrentPage(1); }}
-                        className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${trainerClassView === 'upcoming' ? 'bg-primary text-white shadow-sm' : 'text-gray-400 hover:text-white hover:bg-gray-700/50'}`}
-                    >
-                        Upcoming
-                    </button>
-                    <button
-                        onClick={() => { setTrainerClassView('past'); setCurrentPage(1); }}
-                        className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${trainerClassView === 'past' ? 'bg-primary text-white shadow-sm' : 'text-gray-400 hover:text-white hover:bg-gray-700/50'}`}
-                    >
-                        Past Classes
-                    </button>
-                </div>
-            )}
+            {/* Trainer KPI cards and class tabs */}
+            {role === UserRole.Trainer && (() => {
+                const todayKpi = new Date(new Date().toDateString());
+                const trainerCurrentClasses = (relevantCourses || []).filter(c => {
+                    const s = c.startDate ? new Date(c.startDate) : null;
+                    const e = c.endDate ? new Date(c.endDate) : null;
+                    return s && s <= todayKpi && e && e >= todayKpi;
+                }).length;
+                const trainerUpcomingClasses = (relevantCourses || []).filter(c => {
+                    const s = c.startDate ? new Date(c.startDate) : null;
+                    return s && s > todayKpi;
+                }).length;
+                const trainerPastClasses = (relevantCourses || []).filter(c => {
+                    const e = c.endDate ? new Date(c.endDate) : null;
+                    return e && e < todayKpi;
+                }).length;
+                return (
+                    <>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                            <Card className="p-6 text-center">
+                                <p className="text-4xl font-bold text-green-600">{trainerCurrentClasses}</p>
+                                <p className="text-gray-600 dark:text-gray-300 mt-1">Current Classes</p>
+                            </Card>
+                            <Card className="p-6 text-center">
+                                <p className="text-4xl font-bold text-blue-600">{trainerUpcomingClasses}</p>
+                                <p className="text-gray-600 dark:text-gray-300 mt-1">Upcoming Classes</p>
+                            </Card>
+                            <Card className="p-6 text-center">
+                                <p className="text-4xl font-bold text-gray-500">{trainerPastClasses}</p>
+                                <p className="text-gray-600 dark:text-gray-300 mt-1">Past Classes</p>
+                            </Card>
+                        </div>
+                        <div className="flex gap-1 p-1 bg-surface rounded-lg w-fit border border-default mb-6">
+                            {([
+                                { key: 'all' as const, label: 'All Classes' },
+                                { key: 'current' as const, label: 'Current Classes' },
+                                { key: 'upcoming' as const, label: 'Upcoming Classes' },
+                                { key: 'past' as const, label: 'Past Classes' },
+                            ]).map(tab => (
+                                <button
+                                    key={tab.key}
+                                    onClick={() => { setTrainerClassView(tab.key); setCurrentPage(1); }}
+                                    className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${trainerClassView === tab.key ? 'bg-primary text-white shadow-sm' : 'text-gray-400 hover:text-white hover:bg-gray-700/50'}`}
+                                >
+                                    {tab.label}
+                                </button>
+                            ))}
+                        </div>
+                    </>
+                );
+            })()}
 
             {/* Search and Filter Controls Card */}
             <Card className="p-6 mb-8 bg-surface border-default">
