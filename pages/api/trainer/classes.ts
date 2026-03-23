@@ -31,7 +31,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             FROM course_run cr
             JOIN course c ON cr.course_id = c.id
             WHERE cr.assigned_trainer_email ILIKE $1
-            ORDER BY cr.start_date DESC
+              AND (cr.end_date IS NULL OR cr.end_date >= CURRENT_DATE)
+            ORDER BY cr.start_date ASC
         `;
         
         const values = [`%${email.trim()}%`];
