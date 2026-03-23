@@ -40,7 +40,7 @@ interface ApiResponse {
 const StatCard: React.FC<{ title: string; value: string | number }> = ({ title, value }) => (
   <Card className="p-6 text-center">
     <p className="text-4xl font-bold text-blue-600">{value}</p>
-    <p className="text-gray-600 mt-1">{title}</p>
+    <p className="text-gray-600 dark:text-gray-300 mt-1">{title}</p>
   </Card>
 );
 
@@ -406,7 +406,7 @@ const OngoingClasses: React.FC = () => {
                 <thead className="bg-gray-50 dark:bg-gray-700/50">
                   <tr className="border-b">
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Course Title</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">TGS Ref</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Course Ref Code</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Course Run ID</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Start Date</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">End Date</th>
@@ -419,12 +419,12 @@ const OngoingClasses: React.FC = () => {
                   {ongoingClasses.map((classItem, index) => (
                     <tr key={classItem.courseRunId || index} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
                       <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">{classItem.courseTitle}</td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{classItem.courseCode}</td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{classItem.courseRunId}</td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{formatDate(classItem.startDate)}</td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{formatDate(classItem.endDate)}</td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{classItem.trainerName}</td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 text-center dark:text-gray-400">{classItem.numOfTrainee}</td>
+                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">{classItem.courseCode}</td>
+                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.courseRunId}</td>
+                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{formatDate(classItem.startDate)}</td>
+                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{formatDate(classItem.endDate)}</td>
+                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.trainerName}</td>
+                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700 text-center dark:text-gray-200">{classItem.numOfTrainee}</td>
                       <td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
                         <div className="flex items-center space-x-2">
                           <Button
