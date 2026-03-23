@@ -3801,6 +3801,9 @@ export const AssignStudentView: React.FC = () => {
     const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState<'assign' | 'unassign'>('assign');
     const [selectedLearnerId, setSelectedLearnerId] = useState('');
+    const [learnerAssignMode, setLearnerAssignMode] = useState<'dropdown' | 'manual'>('dropdown');
+    const [manualLearnerName, setManualLearnerName] = useState('');
+    const [manualLearnerEmail, setManualLearnerEmail] = useState('');
     const [saving, setSaving] = useState(false);
     const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
@@ -3868,9 +3871,25 @@ export const AssignStudentView: React.FC = () => {
 
     const handleAssign = async (run: any) => {
         setMessage(null);
-        if (!selectedLearnerId) {
-            setMessage({ type: 'error', text: 'Please select a learner.' });
-            return;
+
+        let body: any;
+        let displayName: string;
+
+        if (learnerAssignMode === 'dropdown') {
+            if (!selectedLearnerId) {
+                setMessage({ type: 'error', text: 'Please select a learner.' });
+                return;
+            }
+            body = { courseRunUuid: run.id, userId: selectedLearnerId };
+            const learner = availableLearners.find(l => l.user_id === selectedLearnerId);
+            displayName = learner?.full_name || 'Learner';
+        } else {
+            if (!manualLearnerName.trim()) {
+                setMessage({ type: 'error', text: 'Please enter the learner name.' });
+                return;
+            }
+            body = { courseRunUuid: run.id, manualName: manualLearnerName.trim(), manualEmail: manualLearnerEmail.trim() || undefined };
+            displayName = manualLearnerName.trim();
         }
 
         setSaving(true);
@@ -3878,14 +3897,15 @@ export const AssignStudentView: React.FC = () => {
             const res = await fetch('/api/admin/assign-student', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ courseRunUuid: run.id, userId: selectedLearnerId }),
+                body: JSON.stringify(body),
             });
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || 'Failed to assign learner');
-            const learner = availableLearners.find(l => l.user_id === selectedLearnerId);
-            setMessage({ type: 'success', text: `"${learner?.full_name || 'Learner'}" enrolled in ${run.courseTitle}.` });
+            setMessage({ type: 'success', text: `"${displayName}" enrolled in ${run.courseTitle}.` });
             setLocalEnrollmentDeltas(prev => ({ ...prev, [run.id]: (prev[run.id] || 0) + 1 }));
             setSelectedLearnerId('');
+            setManualLearnerName('');
+            setManualLearnerEmail('');
             // Refresh enrolled list if viewing unassign tab
             if (activeTab === 'unassign') fetchEnrolledLearners(run.id);
         } catch (err) {
@@ -4087,22 +4107,66 @@ export const AssignStudentView: React.FC = () => {
                                                         {/* Assign tab */}
                                                         {activeTab === 'assign' && (
                                                             <div className="py-4 space-y-4 max-w-2xl">
-                                                                <div>
-                                                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                                                        Learner <span className="text-red-500">*</span>
-                                                                    </label>
-                                                                    {loadingLearners ? (
-                                                                        <p className="text-sm text-gray-500 italic">Loading learners...</p>
-                                                                    ) : (
-                                                                        <SearchableSelect
-                                                                            options={availableLearners.map(l => ({ value: l.user_id, label: `${l.full_name} (${l.email})` }))}
-                                                                            value={selectedLearnerId}
-                                                                            onChange={setSelectedLearnerId}
-                                                                            placeholder="— Search learner by name or email —"
-                                                                            className={inputClasses}
-                                                                        />
-                                                                    )}
+                                                                {/* Mode toggle */}
+                                                                <div className="flex gap-2">
+                                                                    {(['dropdown', 'manual'] as const).map(mode => (
+                                                                        <button
+                                                                            key={mode}
+                                                                            type="button"
+                                                                            onClick={() => setLearnerAssignMode(mode)}
+                                                                            className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${learnerAssignMode === mode ? 'bg-blue-600 text-white' : 'border border-gray-300 text-gray-600 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700'}`}
+                                                                        >
+                                                                            {mode === 'dropdown' ? 'Select from list' : 'Enter manually'}
+                                                                        </button>
+                                                                    ))}
                                                                 </div>
+
+                                                                {learnerAssignMode === 'dropdown' ? (
+                                                                    <div>
+                                                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                                            Learner <span className="text-red-500">*</span>
+                                                                        </label>
+                                                                        {loadingLearners ? (
+                                                                            <p className="text-sm text-gray-500 italic">Loading learners...</p>
+                                                                        ) : (
+                                                                            <SearchableSelect
+                                                                                options={availableLearners.map(l => ({ value: l.user_id, label: `${l.full_name} (${l.email})` }))}
+                                                                                value={selectedLearnerId}
+                                                                                onChange={setSelectedLearnerId}
+                                                                                placeholder="— Search learner by name or email —"
+                                                                                className={inputClasses}
+                                                                            />
+                                                                        )}
+                                                                    </div>
+                                                                ) : (
+                                                                    <div className="space-y-3">
+                                                                        <div>
+                                                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                                                Learner Name <span className="text-red-500">*</span>
+                                                                            </label>
+                                                                            <input
+                                                                                type="text"
+                                                                                placeholder="Full name"
+                                                                                value={manualLearnerName}
+                                                                                onChange={e => setManualLearnerName(e.target.value)}
+                                                                                className={inputClasses}
+                                                                            />
+                                                                        </div>
+                                                                        <div>
+                                                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                                                Learner Email
+                                                                            </label>
+                                                                            <input
+                                                                                type="email"
+                                                                                placeholder="email@example.com"
+                                                                                value={manualLearnerEmail}
+                                                                                onChange={e => setManualLearnerEmail(e.target.value)}
+                                                                                className={inputClasses}
+                                                                            />
+                                                                        </div>
+                                                                    </div>
+                                                                )}
+
                                                                 <div className="flex justify-end">
                                                                     <Button
                                                                         onClick={() => handleAssign(run)}
