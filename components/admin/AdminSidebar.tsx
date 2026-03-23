@@ -69,27 +69,44 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate }) => {
             </NavSection>
 
             <NavSection title="TPG Management">
-                <NavItem page={AdminPage.CheckAttendance} label="Check Attendance" isSubItem />
+                {/* Course Run */}
+                <p className="pl-8 pt-2 pb-1 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">Course Run</p>
                 <NavItem page={AdminPage.CreateNewClass} label="Create New Class" isSubItem />
                 <NavItem page={AdminPage.SearchCourseRuns} label="Search Course Runs" isSubItem />
                 <NavItem page={AdminPage.ViewCourseRun} label="View Course Run" isSubItem />
                 <NavItem page={AdminPage.UploadCourseRuns} label="Upload Course Runs" isSubItem />
+                <NavItem page={AdminPage.DeleteCourseRun} label="Delete Course Run" isSubItem />
+                <NavItem page={AdminPage.CourseSessions} label="Course Sessions" isSubItem />
+                <NavItem page={AdminPage.CourseSessionAttendance} label="Course Session Attendance" isSubItem />
+                <NavItem page={AdminPage.CheckAttendance} label="Check Attendance" isSubItem />
+
+                <div className="mx-3 my-2 border-t border-gray-200 dark:border-gray-700" />
+
+                {/* Enrolment */}
+                <p className="pl-8 pt-1 pb-1 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">Enrolment</p>
                 <NavItem page={AdminPage.EnrollLearners} label="Enroll Learners" isSubItem />
                 <NavItem page={AdminPage.UploadEnrolments} label="Upload Enrolments" isSubItem />
                 <NavItem page={AdminPage.SearchEnrolment} label="Search Enrolment" isSubItem />
                 <NavItem page={AdminPage.ViewEnrolment} label="View Enrolment" isSubItem />
-                <NavItem page={AdminPage.SearchGrant} label="Search Grant" isSubItem />
-                <NavItem page={AdminPage.ViewGrantStatus} label="View Grant Status" isSubItem /> 
+                <NavItem page={AdminPage.UpdateEnrolment} label="Update Enrolment" isSubItem />
+                <NavItem page={AdminPage.CancelEnrolment} label="Cancel Enrolment" isSubItem />
+                <NavItem page={AdminPage.UpdateEnrolmentFees} label="Update Enrolment Fees" isSubItem />
+
+                <div className="mx-3 my-2 border-t border-gray-200 dark:border-gray-700" />
+
+                {/* Assessment */}
+                <p className="pl-8 pt-1 pb-1 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">Assessment</p>
                 <NavItem page={AdminPage.SubmitAssessment} label="Submit Assessment" isSubItem />
                 <NavItem page={AdminPage.UpdateAssessment} label="Update Assessment" isSubItem />
-                <NavItem page={AdminPage.UpdateEnrolmentFees} label="Update Enrolment Fees" isSubItem />
                 <NavItem page={AdminPage.SearchAssessments} label="Search Assessments" isSubItem />
                 <NavItem page={AdminPage.ViewAssessment} label="View Assessment" isSubItem />
-                <NavItem page={AdminPage.CancelEnrolment} label="Cancel Enrolment" isSubItem />
-                <NavItem page={AdminPage.UpdateEnrolment} label="Update Enrolment" isSubItem />
-                <NavItem page={AdminPage.DeleteCourseRun} label="Delete Course Run" isSubItem />
-                <NavItem page={AdminPage.CourseSessionAttendance} label="Course Session Attendance" isSubItem />
-                <NavItem page={AdminPage.CourseSessions} label="Course Sessions" isSubItem />
+
+                <div className="mx-3 my-2 border-t border-gray-200 dark:border-gray-700" />
+
+                {/* Grant */}
+                <p className="pl-8 pt-1 pb-1 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">Grant</p>
+                <NavItem page={AdminPage.SearchGrant} label="Search Grant" isSubItem />
+                <NavItem page={AdminPage.ViewGrantStatus} label="View Grant Status" isSubItem />
             </NavSection>
 
 
