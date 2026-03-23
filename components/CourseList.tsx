@@ -315,7 +315,7 @@ const ManagementCourseList: React.FC = () => {
                         )}
                     </div>
                     <div className="flex items-center justify-between mt-4 pt-3 border-t border-default">
-                        <span className="text-sm font-semibold text-primary">View Course</span>
+                        <Button size="sm">View Course</Button>
                     </div>
                 </div>
             </div>
@@ -890,7 +890,7 @@ const LearnerCourseCard: React.FC<{ course: any }> = ({ course }) => {
 
                 {/* Footer */}
                 <div className="flex items-center justify-between mt-4 pt-3 border-t border-default">
-                    <span className="text-sm font-semibold text-primary">View Course</span>
+                    <Button size="sm">View Course</Button>
                     <div className="relative flex items-center justify-center flex-shrink-0" title={`${progress}% complete`}>
                         <CircularProgress percent={progress} size={40} />
                         <span className="absolute text-[10px] font-bold text-on-surface">{progress}%</span>
