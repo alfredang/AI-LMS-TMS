@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Card } from '../ui/Card';
 import { Icon, IconName } from '../ui/Icon';
+import { useLms } from '@contexts/LmsContext';
+
+const ALL_ROLES = ['Learner', 'Trainer', 'Admin', 'Developer', 'Training Provider'];
 
 interface AdminAccount {
   id: string;
@@ -30,10 +33,28 @@ const getRoleBadge = (role: string): { classes: string; dot: string } => {
 };
 
 const AdminManagementView: React.FC = () => {
+  const { currentUser } = useLms();
+  const currentUserId = currentUser?.id;
+
   const [admins, setAdmins] = useState<AdminAccount[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Edit modal state
+  const [editingAdmin, setEditingAdmin] = useState<AdminAccount | null>(null);
+  const [editFullName, setEditFullName] = useState('');
+  const [editRoles, setEditRoles] = useState<string[]>([]);
+  const [editAccountStatus, setEditAccountStatus] = useState('active');
+  const [isSaving, setIsSaving] = useState(false);
+
+  // Disable confirmation
+  const [disablingAdmin, setDisablingAdmin] = useState<AdminAccount | null>(null);
+  const [isDisabling, setIsDisabling] = useState(false);
+
+  // Delete confirmation
+  const [deletingAdmin, setDeletingAdmin] = useState<AdminAccount | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const fetchAdmins = async () => {
     setLoading(true);
@@ -68,6 +89,115 @@ const AdminManagementView: React.FC = () => {
 
   const formatDate = (dateStr: string) => {
     return new Date(dateStr).toLocaleDateString();
+  };
+
+  // Edit handlers
+  const openEditModal = (admin: AdminAccount) => {
+    setEditingAdmin(admin);
+    setEditFullName(admin.fullName || '');
+    setEditRoles([...admin.roles]);
+    setEditAccountStatus(admin.accountStatus);
+  };
+
+  const handleToggleRole = (role: string) => {
+    setEditRoles(prev =>
+      prev.includes(role) ? prev.filter(r => r !== role) : [...prev, role]
+    );
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingAdmin || editRoles.length === 0) {
+      alert('At least one role must be selected.');
+      return;
+    }
+    setIsSaving(true);
+    try {
+      const response = await fetch('/api/training-provider/update-user-roles', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: editingAdmin.id,
+          roles: editRoles,
+          accountStatus: editAccountStatus,
+          currentUserId,
+          full_name: editFullName,
+        }),
+      });
+      const result = await response.json();
+      if (result.success) {
+        await fetchAdmins();
+        setEditingAdmin(null);
+      } else {
+        throw new Error(result.error || 'Failed to update admin');
+      }
+    } catch (err) {
+      alert(`Failed to update: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // Disable/Enable handler
+  const handleDisableAdmin = async () => {
+    if (!disablingAdmin) return;
+    setIsDisabling(true);
+    try {
+      const response = await fetch('/api/training-provider/delete-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: disablingAdmin.id }),
+      });
+      const result = await response.json();
+      if (!result.success) throw new Error(result.message || 'Failed to disable admin');
+      await fetchAdmins();
+      setDisablingAdmin(null);
+    } catch (err) {
+      alert(`Failed to disable: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      setIsDisabling(false);
+    }
+  };
+
+  const handleEnableAdmin = async (admin: AdminAccount) => {
+    try {
+      const response = await fetch('/api/training-provider/update-user-roles', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: admin.id,
+          roles: admin.roles,
+          accountStatus: 'active',
+          currentUserId,
+        }),
+      });
+      const result = await response.json();
+      if (!result.success) throw new Error(result.message || 'Failed to enable admin');
+      await fetchAdmins();
+    } catch (err) {
+      alert(`Failed to enable: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    }
+  };
+
+  // Delete handler
+  const handleDeleteAdmin = async () => {
+    if (!deletingAdmin) return;
+    setIsDeleting(true);
+    try {
+      const response = await fetch('/api/training-provider/hard-delete-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: deletingAdmin.id }),
+      });
+      const result = await response.json();
+      if (!result.success) throw new Error(result.message || 'Failed to delete admin');
+      await fetchAdmins();
+      setDeletingAdmin(null);
+      alert('Admin permanently deleted.');
+    } catch (err) {
+      alert(`Failed to delete: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   return (
@@ -139,6 +269,7 @@ const AdminManagementView: React.FC = () => {
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Roles</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Account Status</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Created</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Actions</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200 dark:bg-gray-800 dark:divide-gray-700">
@@ -178,6 +309,48 @@ const AdminManagementView: React.FC = () => {
                     <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">
                       {formatDate(admin.createdAt)}
                     </td>
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      {admin.id === currentUserId ? (
+                        <span className="text-xs text-gray-400 italic">Cannot edit self</span>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          {/* Edit */}
+                          <button
+                            onClick={() => openEditModal(admin)}
+                            className="inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 border border-blue-300 dark:border-blue-600 rounded-md hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors"
+                          >
+                            <Icon name={IconName.Edit} className="w-3.5 h-3.5" />
+                            Edit
+                          </button>
+                          {/* Disable / Enable */}
+                          {admin.accountStatus === 'active' ? (
+                            <button
+                              onClick={() => setDisablingAdmin(admin)}
+                              className="inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium text-yellow-700 hover:text-yellow-900 dark:text-yellow-400 dark:hover:text-yellow-300 border border-yellow-400 dark:border-yellow-600 rounded-md hover:bg-yellow-50 dark:hover:bg-yellow-900/30 transition-colors"
+                            >
+                              <Icon name={IconName.Delete} className="w-3.5 h-3.5" />
+                              Disable
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => handleEnableAdmin(admin)}
+                              className="inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium text-green-700 hover:text-green-900 dark:text-green-400 dark:hover:text-green-300 border border-green-400 dark:border-green-600 rounded-md hover:bg-green-50 dark:hover:bg-green-900/30 transition-colors"
+                            >
+                              <Icon name={IconName.Check} className="w-3.5 h-3.5" />
+                              Enable
+                            </button>
+                          )}
+                          {/* Delete */}
+                          <button
+                            onClick={() => setDeletingAdmin(admin)}
+                            className="inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 border border-red-300 dark:border-red-600 rounded-md hover:bg-red-50 dark:hover:bg-red-900/30 transition-colors"
+                          >
+                            <Icon name={IconName.Delete} className="w-3.5 h-3.5" />
+                            Delete
+                          </button>
+                        </div>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -185,6 +358,146 @@ const AdminManagementView: React.FC = () => {
           </div>
         )}
       </Card>
+
+      {/* Edit Modal */}
+      {editingAdmin && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full p-6">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Edit Admin</h3>
+
+            <div className="space-y-4">
+              {/* Full Name */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Full Name</label>
+                <input
+                  type="text"
+                  value={editFullName}
+                  onChange={(e) => setEditFullName(e.target.value)}
+                  className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                />
+              </div>
+
+              {/* Email (read-only) */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Email</label>
+                <input
+                  type="text"
+                  value={editingAdmin.email}
+                  disabled
+                  className="w-full border border-gray-200 dark:border-gray-600 rounded-md px-3 py-2 text-sm bg-gray-50 dark:bg-gray-600 text-gray-500 dark:text-gray-400"
+                />
+              </div>
+
+              {/* Roles */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Roles</label>
+                <div className="flex flex-wrap gap-2">
+                  {ALL_ROLES.map(role => (
+                    <button
+                      key={role}
+                      type="button"
+                      onClick={() => handleToggleRole(role)}
+                      className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+                        editRoles.includes(role)
+                          ? getRoleBadge(role).classes
+                          : 'bg-gray-50 text-gray-400 border-gray-200 dark:bg-gray-700 dark:text-gray-500 dark:border-gray-600'
+                      }`}
+                    >
+                      {role}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Account Status */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Account Status</label>
+                <select
+                  value={editAccountStatus}
+                  onChange={(e) => setEditAccountStatus(e.target.value)}
+                  className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                >
+                  <option value="active">Active</option>
+                  <option value="disabled">Disabled</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 mt-6">
+              <button
+                onClick={() => setEditingAdmin(null)}
+                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveEdit}
+                disabled={isSaving || editRoles.length === 0}
+                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors"
+              >
+                {isSaving ? 'Saving...' : 'Save Changes'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Disable Confirmation Modal */}
+      {disablingAdmin && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-sm w-full p-6">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Disable Admin</h3>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+              Are you sure you want to disable <span className="font-medium text-gray-900 dark:text-white">{disablingAdmin.fullName || disablingAdmin.email}</span>? They will no longer be able to log in.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setDisablingAdmin(null)}
+                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDisableAdmin}
+                disabled={isDisabling}
+                className="px-4 py-2 text-sm font-medium text-white bg-yellow-600 rounded-md hover:bg-yellow-700 disabled:opacity-50 transition-colors"
+              >
+                {isDisabling ? 'Disabling...' : 'Disable'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deletingAdmin && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-sm w-full p-6">
+            <h3 className="text-lg font-semibold text-red-600 dark:text-red-400 mb-2">Permanently Delete Admin</h3>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+              Are you sure you want to permanently delete <span className="font-medium text-gray-900 dark:text-white">{deletingAdmin.fullName || deletingAdmin.email}</span>?
+            </p>
+            <p className="text-sm text-red-600 dark:text-red-400 font-medium mb-4">
+              This action cannot be undone. All data for this user will be permanently removed.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setDeletingAdmin(null)}
+                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteAdmin}
+                disabled={isDeleting}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 disabled:opacity-50 transition-colors"
+              >
+                {isDeleting ? 'Deleting...' : 'Delete Permanently'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
