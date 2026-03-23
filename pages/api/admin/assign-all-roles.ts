@@ -27,11 +27,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     let userId: string;
 
     if (result.rows.length === 0) {
-      // Create user with temporary password
+      // Create user without password (they must set one via the app)
       const name = fullName || email.split('@')[0];
       const createResult = await client.query(
         `INSERT INTO public.app_user (id, email, password_hash, full_name, account_status, created_at, updated_at)
-         VALUES (gen_random_uuid(), $1, crypt('TempPass123!', gen_salt('bf', 10)), $2, 'active', NOW(), NOW())
+         VALUES (gen_random_uuid(), $1, 'pending_reset', $2, 'active', NOW(), NOW())
          RETURNING id`,
         [email.toLowerCase().trim(), name]
       );
