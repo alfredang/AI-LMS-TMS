@@ -186,6 +186,10 @@ const ViewTrainers: React.FC = () => {
     );
   }
 
+  const totalTrainers = trainers.length;
+  const activeTrainers = trainers.filter(t => (t.status || '').toLowerCase() === 'active').length;
+  const aclpTrainers = trainers.filter(t => (t.trainer_type || '').toUpperCase() === 'ACLP').length;
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -201,6 +205,22 @@ const ViewTrainers: React.FC = () => {
             Add New Trainer
           </Button>
         </div>
+      </div>
+
+      {/* KPI Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <Card className="p-6 text-center">
+          <p className="text-4xl font-bold text-blue-600">{totalTrainers}</p>
+          <p className="text-gray-600 dark:text-gray-300 mt-1">Trainers</p>
+        </Card>
+        <Card className="p-6 text-center">
+          <p className="text-4xl font-bold text-green-600">{activeTrainers}</p>
+          <p className="text-gray-600 dark:text-gray-300 mt-1">Active Trainers</p>
+        </Card>
+        <Card className="p-6 text-center">
+          <p className="text-4xl font-bold text-purple-600">{aclpTrainers}</p>
+          <p className="text-gray-600 dark:text-gray-300 mt-1">ACLP Trainers</p>
+        </Card>
       </div>
 
       {/* Search and Filters */}
