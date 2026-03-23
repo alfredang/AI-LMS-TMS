@@ -55,6 +55,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
   } catch (error) {
     console.error('Error fetching admin accounts:', error);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
+    const msg = error instanceof Error ? error.message : 'Internal server error';
+    return res.status(500).json({ success: false, error: msg });
   }
 }
