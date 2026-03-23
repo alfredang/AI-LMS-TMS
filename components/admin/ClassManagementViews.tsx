@@ -3304,14 +3304,19 @@ export const AssignTrainerView: React.FC = () => {
     const [saving, setSaving] = useState(false);
     const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
+    // Filters
+    const [filterNoTrainer, setFilterNoTrainer] = useState(false);
+    const [filterTrainerName, setFilterTrainerName] = useState('');
+
     // Track live assignments without refetching
     const [localAssignments, setLocalAssignments] = useState<Record<string, { name: string; email: string }>>({});
 
     const fetchCourseRuns = async (q: string) => {
         setLoadingRuns(true);
         try {
-            const params = q ? `?search=${encodeURIComponent(q)}` : '';
-            const res = await fetch(`/api/admin/all-course-runs${params}`);
+            const queryParams = new URLSearchParams({ upcoming: 'true' });
+            if (q) queryParams.set('search', q);
+            const res = await fetch(`/api/admin/all-course-runs?${queryParams.toString()}`);
             const json = await res.json();
             if (json.success) setCourseRuns(json.data);
         } catch {
@@ -3411,6 +3416,29 @@ export const AssignTrainerView: React.FC = () => {
         }
     };
 
+    // Get unique trainer names for filter dropdown
+    const uniqueTrainerNames = Array.from(
+        new Set(
+            courseRuns
+                .map(run => {
+                    const local = localAssignments[run.id];
+                    return local?.name || run.assignedTrainerName;
+                })
+                .filter(Boolean)
+        )
+    ).sort();
+
+    // Apply client-side filters
+    const filteredRuns = courseRuns.filter(run => {
+        const local = localAssignments[run.id];
+        const trainerName = local?.name ?? run.assignedTrainerName;
+
+        if (filterNoTrainer && trainerName) return false;
+        if (filterTrainerName && trainerName !== filterTrainerName) return false;
+
+        return true;
+    });
+
     const inputClasses = 'w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white';
 
     return (
@@ -3429,9 +3457,9 @@ export const AssignTrainerView: React.FC = () => {
                 </div>
             )}
 
-            {/* Search */}
+            {/* Search & Filters */}
             <Card className="p-4 mb-4 dark:bg-gray-800 dark:border-gray-700">
-                <form onSubmit={handleSearch} className="flex gap-2">
+                <form onSubmit={handleSearch} className="flex gap-2 mb-4">
                     <input
                         type="text"
                         value={search}
@@ -3443,159 +3471,224 @@ export const AssignTrainerView: React.FC = () => {
                         {loadingRuns ? 'Searching...' : 'Search'}
                     </Button>
                 </form>
+                <div className="flex flex-wrap items-center gap-4">
+                    <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
+                        <input
+                            type="checkbox"
+                            checked={filterNoTrainer}
+                            onChange={e => {
+                                setFilterNoTrainer(e.target.checked);
+                                if (e.target.checked) setFilterTrainerName('');
+                            }}
+                            className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
+                        />
+                        Show only classes with no trainer
+                    </label>
+                    <div className="flex items-center gap-2">
+                        <label className="text-sm text-gray-700 dark:text-gray-300 whitespace-nowrap">Filter by trainer:</label>
+                        <select
+                            value={filterTrainerName}
+                            onChange={e => {
+                                setFilterTrainerName(e.target.value);
+                                if (e.target.value) setFilterNoTrainer(false);
+                            }}
+                            className="border border-gray-300 dark:border-gray-600 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                        >
+                            <option value="">All trainers</option>
+                            {uniqueTrainerNames.map(name => (
+                                <option key={name} value={name}>{name}</option>
+                            ))}
+                        </select>
+                    </div>
+                    <span className="text-xs text-gray-500 dark:text-gray-400">
+                        Showing {filteredRuns.length} of {courseRuns.length} upcoming classes
+                    </span>
+                </div>
             </Card>
 
-            {/* Course Runs List */}
+            {/* Course Runs Table */}
             <Card className="dark:bg-gray-800 dark:border-gray-700 overflow-hidden">
                 {loadingRuns ? (
-                    <div className="p-8 text-center text-sm text-gray-500">Loading course runs...</div>
-                ) : courseRuns.length === 0 ? (
-                    <div className="p-8 text-center text-sm text-gray-500">No course runs found.</div>
+                    <div className="p-8 text-center">
+                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+                        <p className="text-gray-500 dark:text-gray-400 text-lg">Loading upcoming classes...</p>
+                    </div>
+                ) : filteredRuns.length === 0 ? (
+                    <div className="p-8 text-center text-sm text-gray-500 dark:text-gray-400">
+                        {courseRuns.length === 0 ? 'No upcoming classes found.' : 'No classes match the current filters.'}
+                    </div>
                 ) : (
-                    <div className="divide-y divide-gray-200 dark:divide-gray-700">
-                        {[...courseRuns].sort((a, b) => {
-                            const dateA = a.startDate ? new Date(a.startDate).getTime() : Infinity;
-                            const dateB = b.startDate ? new Date(b.startDate).getTime() : Infinity;
-                            return dateA - dateB;
-                        }).map(run => {
-                            const local = localAssignments[run.id];
-                            const currentName = local?.name ?? run.assignedTrainerName;
-                            const currentEmail = local?.email ?? run.assignedTrainerEmail;
-                            const isExpanded = selectedRunId === run.id;
+                    <div className="overflow-x-auto">
+                        <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                            <thead className="bg-gray-50 dark:bg-gray-700/50">
+                                <tr>
+                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Start Date</th>
+                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Course Run ID</th>
+                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Course Title</th>
+                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Course Ref Code</th>
+                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Trainer</th>
+                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody className="bg-white divide-y divide-gray-200 dark:bg-gray-800 dark:divide-gray-700">
+                                {filteredRuns.map(run => {
+                                    const local = localAssignments[run.id];
+                                    const currentName = local?.name ?? run.assignedTrainerName;
+                                    const currentEmail = local?.email ?? run.assignedTrainerEmail;
+                                    const isExpanded = selectedRunId === run.id;
 
-                            return (
-                                <div key={run.id}>
-                                    {/* Row */}
-                                    <div
-                                        className="flex items-center justify-between px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer"
-                                        onClick={() => {
-                                            setSelectedRunId(isExpanded ? null : run.id);
-                                            setMessage(null);
-                                        }}
-                                    >
-                                        <div className="w-24 shrink-0 mr-4">
-                                            <p className="text-xs font-semibold text-blue-600 dark:text-blue-400">
-                                                {run.startDate ? new Date(run.startDate).toLocaleDateString() : '—'}
-                                            </p>
-                                        </div>
-                                        <div className="flex-1 min-w-0 mr-4">
-                                            <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{run.courseTitle}</p>
-                                            <p className="text-xs text-gray-500 dark:text-gray-400">
-                                                {run.courseCode}&nbsp;&nbsp;|&nbsp;&nbsp;Run: {run.courseRunId || '—'}&nbsp;&nbsp;|&nbsp;&nbsp;
-                                                {run.startDate ? new Date(run.startDate).toLocaleDateString() : '—'} – {run.endDate ? new Date(run.endDate).toLocaleDateString() : '—'}
-                                            </p>
-                                        </div>
-                                        <div className="flex items-center gap-3 shrink-0">
-                                            {currentName ? (
-                                                <span className="text-xs bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 px-2 py-0.5 rounded-full">
-                                                    {currentName}
-                                                </span>
-                                            ) : (
-                                                <span className="text-xs bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400 px-2 py-0.5 rounded-full">
-                                                    No trainer
-                                                </span>
-                                            )}
-                                            <span className="text-gray-400 text-xs">{isExpanded ? '▲' : '▼'}</span>
-                                        </div>
-                                    </div>
-
-                                    {/* Expanded assignment form */}
-                                    {isExpanded && (
-                                        <div className="bg-gray-50 dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 px-4 py-4 space-y-4">
-                                            {currentName && (
-                                                <p className="text-sm text-gray-600 dark:text-gray-300">
-                                                    <span className="font-medium">Currently assigned:</span> {currentName}{currentEmail ? ` (${currentEmail})` : ''}
-                                                </p>
-                                            )}
-
-                                            {/* Mode toggle */}
-                                            <div className="flex gap-2">
-                                                {(['dropdown', 'manual'] as const).map(mode => (
-                                                    <button
-                                                        key={mode}
-                                                        type="button"
-                                                        onClick={() => setAssignMode(mode)}
-                                                        className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${assignMode === mode ? 'bg-blue-600 text-white' : 'border border-gray-300 text-gray-600 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700'}`}
-                                                    >
-                                                        {mode === 'dropdown' ? 'Select from list' : 'Enter manually'}
-                                                    </button>
-                                                ))}
-                                            </div>
-
-                                            {assignMode === 'dropdown' ? (
-                                                <div>
-                                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                                        Trainer <span className="text-red-500">*</span>
-                                                    </label>
-                                                    {loadingTrainers ? (
-                                                        <p className="text-sm text-gray-500 italic">Loading trainers...</p>
+                                    return (
+                                        <React.Fragment key={run.id}>
+                                            <tr className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">
+                                                    {run.startDate ? new Date(run.startDate).toLocaleDateString() : '—'}
+                                                </td>
+                                                <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-blue-600 dark:text-blue-400">
+                                                    {run.courseRunId || '—'}
+                                                </td>
+                                                <td className="px-4 py-3 text-sm text-gray-900 dark:text-white max-w-xs truncate">
+                                                    {run.courseTitle}
+                                                </td>
+                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">
+                                                    {run.courseCode || '—'}
+                                                </td>
+                                                <td className="px-4 py-3 whitespace-nowrap text-sm">
+                                                    {currentName ? (
+                                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">
+                                                            {currentName}
+                                                        </span>
                                                     ) : (
-                                                        <select
-                                                            value={selectedTrainerId}
-                                                            onChange={e => setSelectedTrainerId(e.target.value)}
-                                                            className={inputClasses}
-                                                        >
-                                                            <option value="">— Select a trainer —</option>
-                                                            {availableTrainers.map(t => (
-                                                                <option key={t.user_id} value={t.user_id}>
-                                                                    {t.trainer_name} ({t.email})
-                                                                </option>
-                                                            ))}
-                                                        </select>
+                                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400">
+                                                            No trainer
+                                                        </span>
                                                     )}
-                                                </div>
-                                            ) : (
-                                                <div className="space-y-2">
-                                                    <div>
-                                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                                            Trainer Name <span className="text-red-500">*</span>
-                                                        </label>
-                                                        <input
-                                                            type="text"
-                                                            placeholder="Full name"
-                                                            value={manualName}
-                                                            onChange={e => setManualName(e.target.value)}
-                                                            className={inputClasses}
-                                                        />
-                                                    </div>
-                                                    <div>
-                                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                                            Trainer Email
-                                                        </label>
-                                                        <input
-                                                            type="email"
-                                                            placeholder="email@example.com"
-                                                            value={manualEmail}
-                                                            onChange={e => setManualEmail(e.target.value)}
-                                                            className={inputClasses}
-                                                        />
-                                                    </div>
-                                                </div>
-                                            )}
-
-                                            <div className="flex justify-between items-center">
-                                                {currentName ? (
-                                                    <Button
-                                                        onClick={() => handleRemoveTrainer(run)}
-                                                        disabled={saving}
-                                                        className="bg-red-600 hover:bg-red-700 text-white"
+                                                </td>
+                                                <td className="px-4 py-3 whitespace-nowrap text-sm">
+                                                    <button
+                                                        onClick={() => {
+                                                            setSelectedRunId(isExpanded ? null : run.id);
+                                                            setMessage(null);
+                                                            setAssignMode('dropdown');
+                                                            setSelectedTrainerId('');
+                                                            setManualName('');
+                                                            setManualEmail('');
+                                                        }}
+                                                        className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                                                            isExpanded
+                                                                ? 'bg-gray-200 text-gray-700 dark:bg-gray-600 dark:text-gray-200'
+                                                                : currentName
+                                                                    ? 'bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-700 dark:hover:bg-blue-900/50'
+                                                                    : 'bg-green-50 text-green-700 hover:bg-green-100 border border-green-200 dark:bg-green-900/30 dark:text-green-300 dark:border-green-700 dark:hover:bg-green-900/50'
+                                                        }`}
                                                     >
-                                                        {saving ? 'Removing...' : 'Remove Trainer'}
-                                                    </Button>
-                                                ) : <span />}
-                                                <Button
-                                                    onClick={() => handleAssign(run)}
-                                                    disabled={saving}
-                                                    className="bg-green-600 hover:bg-green-700 text-white"
-                                                >
-                                                    {saving ? 'Saving...' : 'Assign Trainer'}
-                                                </Button>
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-                            );
-                        })}
+                                                        {isExpanded ? 'Close' : currentName ? 'Edit Trainer' : 'Assign Trainer'}
+                                                    </button>
+                                                </td>
+                                            </tr>
+
+                                            {/* Expanded assignment form row */}
+                                            {isExpanded && (
+                                                <tr>
+                                                    <td colSpan={6} className="px-4 py-4 bg-gray-50 dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700">
+                                                        <div className="max-w-2xl space-y-4">
+                                                            {currentName && (
+                                                                <p className="text-sm text-gray-600 dark:text-gray-300">
+                                                                    <span className="font-medium">Currently assigned:</span> {currentName}{currentEmail ? ` (${currentEmail})` : ''}
+                                                                </p>
+                                                            )}
+
+                                                            {/* Mode toggle */}
+                                                            <div className="flex gap-2">
+                                                                {(['dropdown', 'manual'] as const).map(mode => (
+                                                                    <button
+                                                                        key={mode}
+                                                                        type="button"
+                                                                        onClick={() => setAssignMode(mode)}
+                                                                        className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${assignMode === mode ? 'bg-blue-600 text-white' : 'border border-gray-300 text-gray-600 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700'}`}
+                                                                    >
+                                                                        {mode === 'dropdown' ? 'Select from list' : 'Enter manually'}
+                                                                    </button>
+                                                                ))}
+                                                            </div>
+
+                                                            {assignMode === 'dropdown' ? (
+                                                                <div>
+                                                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                                        Trainer <span className="text-red-500">*</span>
+                                                                    </label>
+                                                                    {loadingTrainers ? (
+                                                                        <p className="text-sm text-gray-500 italic">Loading trainers...</p>
+                                                                    ) : (
+                                                                        <select
+                                                                            value={selectedTrainerId}
+                                                                            onChange={e => setSelectedTrainerId(e.target.value)}
+                                                                            className={inputClasses}
+                                                                        >
+                                                                            <option value="">— Select a trainer —</option>
+                                                                            {availableTrainers.map(t => (
+                                                                                <option key={t.user_id} value={t.user_id}>
+                                                                                    {t.trainer_name} ({t.email})
+                                                                                </option>
+                                                                            ))}
+                                                                        </select>
+                                                                    )}
+                                                                </div>
+                                                            ) : (
+                                                                <div className="space-y-2">
+                                                                    <div>
+                                                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                                            Trainer Name <span className="text-red-500">*</span>
+                                                                        </label>
+                                                                        <input
+                                                                            type="text"
+                                                                            placeholder="Full name"
+                                                                            value={manualName}
+                                                                            onChange={e => setManualName(e.target.value)}
+                                                                            className={inputClasses}
+                                                                        />
+                                                                    </div>
+                                                                    <div>
+                                                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                                            Trainer Email
+                                                                        </label>
+                                                                        <input
+                                                                            type="email"
+                                                                            placeholder="email@example.com"
+                                                                            value={manualEmail}
+                                                                            onChange={e => setManualEmail(e.target.value)}
+                                                                            className={inputClasses}
+                                                                        />
+                                                                    </div>
+                                                                </div>
+                                                            )}
+
+                                                            <div className="flex justify-between items-center">
+                                                                {currentName ? (
+                                                                    <Button
+                                                                        onClick={() => handleRemoveTrainer(run)}
+                                                                        disabled={saving}
+                                                                        className="bg-red-600 hover:bg-red-700 text-white"
+                                                                    >
+                                                                        {saving ? 'Removing...' : 'Remove Trainer'}
+                                                                    </Button>
+                                                                ) : <span />}
+                                                                <Button
+                                                                    onClick={() => handleAssign(run)}
+                                                                    disabled={saving}
+                                                                    className="bg-green-600 hover:bg-green-700 text-white"
+                                                                >
+                                                                    {saving ? 'Saving...' : 'Assign Trainer'}
+                                                                </Button>
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            )}
+                                        </React.Fragment>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
                     </div>
                 )}
             </Card>

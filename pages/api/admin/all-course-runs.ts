@@ -7,7 +7,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const { search } = req.query;
+    const { search, upcoming } = req.query;
 
     let query = `
       SELECT
@@ -24,14 +24,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       JOIN course c ON cr.course_id = c.id
     `;
 
+    const conditions: string[] = [];
     const params: any[] = [];
 
-    if (search && search !== '') {
-      query += ` WHERE (c.title ILIKE $1 OR c.course_code ILIKE $1 OR cr.course_run_id ILIKE $1)`;
-      params.push(`%${search}%`);
+    if (upcoming === 'true') {
+      conditions.push(`cr.start_date >= CURRENT_DATE`);
     }
 
-    query += ` ORDER BY cr.start_date ASC LIMIT 100`;
+    if (search && search !== '') {
+      params.push(`%${search}%`);
+      conditions.push(`(c.title ILIKE $${params.length} OR c.course_code ILIKE $${params.length} OR cr.course_run_id ILIKE $${params.length})`);
+    }
+
+    if (conditions.length > 0) {
+      query += ` WHERE ` + conditions.join(' AND ');
+    }
+
+    query += ` ORDER BY cr.start_date ASC LIMIT 200`;
 
     const result = await pool.query(query, params);
 
