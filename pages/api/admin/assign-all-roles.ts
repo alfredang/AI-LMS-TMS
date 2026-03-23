@@ -57,22 +57,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Ensure profile records exist
     await client.query(
-      `INSERT INTO public.learner_profile (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING`,
+      `INSERT INTO public.learner_profile (user_id, tel) VALUES ($1, 'N/A') ON CONFLICT (user_id) DO NOTHING`,
       [userId]
     );
     await client.query(
-      `INSERT INTO public.trainer_profile (user_id, gender, trainer_type, status)
-       VALUES ($1, 'Prefer not to say', 'non-ACLP', 'Active')
+      `INSERT INTO public.trainer_profile (user_id, tel, gender, trainer_type, status)
+       VALUES ($1, 'N/A', 'Prefer not to say', 'non-ACLP', 'Active')
        ON CONFLICT (user_id) DO NOTHING`,
       [userId]
     );
     await client.query(
-      `INSERT INTO public.admin_profile (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING`,
+      `INSERT INTO public.admin_profile (user_id, tel) VALUES ($1, 'N/A') ON CONFLICT (user_id) DO NOTHING`,
       [userId]
     );
     await client.query(
-      `INSERT INTO public.developer_profile (user_id, developer_type)
-       VALUES ($1, 'N/A')
+      `INSERT INTO public.developer_profile (user_id, tel, developer_type)
+       VALUES ($1, 'N/A', 'N/A')
        ON CONFLICT (user_id) DO NOTHING`,
       [userId]
     );
