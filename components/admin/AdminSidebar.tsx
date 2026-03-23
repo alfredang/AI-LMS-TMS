@@ -54,6 +54,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate }) => {
             <NavSection title="Class Management">
                 <NavItem page={AdminPage.ViewCourses} label="View Courses" isSubItem />
                 <NavItem page={AdminPage.ViewTrainers} label="View Trainers" isSubItem />
+                <NavItem page={AdminPage.ViewLearners} label="View Learners" isSubItem />
                 <NavItem page={AdminPage.UpcomingClasses} label="Upcoming Classes" isSubItem />
                 <NavItem page={AdminPage.OngoingClasses} label="Ongoing Classes" isSubItem />
                 <NavItem page={AdminPage.CompletedClasses} label="Completed Classes" isSubItem />

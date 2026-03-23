@@ -16,6 +16,7 @@ import { Icon } from '../components/ui/Icon';
 import { Card } from '../components/ui/Card';
 import AdminSidebar from '../components/admin/AdminSidebar';
 import ViewTrainers from '../components/admin/ViewTrainers';
+import ViewLearners from '../components/admin/ViewLearners';
 import OngoingClasses from '../components/admin/OngoingClasses';
 import CompletedClasses from '../components/admin/CompletedClasses';
 import ClassDetailView from '../components/admin/ClassDetailView';
@@ -60,6 +61,7 @@ const ManagementDashboard: React.FC<ManagementDashboardProps> = ({ type }) => {
   const classManagementLinks: NavBoxProps[] = [
     { title: "View Courses", description: "Browse and manage all course templates.", icon: IconName.BookOpen, onClick: () => setAdminPage(AdminPage.ViewCourses) },
     { title: "View Trainers", description: "View details and assignments for all trainers.", icon: IconName.User, onClick: () => setAdminPage(AdminPage.ViewTrainers) },
+    { title: "View Learners", description: "View learner profiles, status, and contact details.", icon: IconName.MyAccount, onClick: () => setAdminPage(AdminPage.ViewLearners) },
     { title: "Upcoming Classes", description: "See all scheduled upcoming classes.", icon: IconName.Calendar, onClick: () => setAdminPage(AdminPage.UpcomingClasses) },
     { title: "Ongoing Classes", description: "Monitor classes that are currently in session.", icon: IconName.Clock, onClick: () => setAdminPage(AdminPage.OngoingClasses) },
     { title: "Completed Classes", description: "Review past classes and their records.", icon: IconName.ClipboardCheck, onClick: () => setAdminPage(AdminPage.CompletedClasses) },
@@ -105,6 +107,7 @@ const PAGE_LABELS: Partial<Record<AdminPage, string>> = {
   [AdminPage.TpgManagement]: 'TPG Management',
   [AdminPage.ViewCourses]: 'View Courses',
   [AdminPage.ViewTrainers]: 'View Trainers',
+  [AdminPage.ViewLearners]: 'View Learners',
   [AdminPage.UpcomingClasses]: 'Upcoming Classes',
   [AdminPage.OngoingClasses]: 'Ongoing Classes',
   [AdminPage.CompletedClasses]: 'Completed Classes',
@@ -174,6 +177,8 @@ const AdminLayout: React.FC = () => {
         return <CourseList />;
       case AdminPage.ViewTrainers:
         return <ViewTrainers />;
+      case AdminPage.ViewLearners:
+        return <ViewLearners />;
       case AdminPage.UpcomingClasses:
         return <UpcomingClassesTable showTitle={true} showFilters={true} />;
       case AdminPage.OngoingClasses:

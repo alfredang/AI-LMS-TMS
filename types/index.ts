@@ -26,6 +26,7 @@ export enum AdminPage {
   TpgManagement = 'tpgManagement',
   ViewCourses = 'viewCourses',
   ViewTrainers = 'viewTrainers',
+  ViewLearners = 'viewLearners',
   UpcomingClasses = 'upcomingClasses',
   OngoingClasses = 'ongoingClasses',
   CompletedClasses = 'completedClasses',
