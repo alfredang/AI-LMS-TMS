@@ -70,6 +70,8 @@ export enum TrainerPage {
   EAttendance = 'eAttendance',
   AssessmentGrading = 'assessmentGrading',
   MyClasses = 'myClasses',
+  PastAttendance = 'pastAttendance',
+  PastAssessment = 'pastAssessment',
   TaskList = 'taskList',
   GenAIAuthoring = 'genAIAuthoring',
 }
@@ -207,6 +209,7 @@ export interface Submission {
 export interface TrainingProviderProfile {
   companyLogoUrl: string;
   companyName: string;
+  companyShortname?: string;
 }
 
 export interface CurrentUserProfile {

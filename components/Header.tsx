@@ -3,6 +3,7 @@ import { useLms } from '@contexts/LmsContext';
 import { View, UserRole, AdminPage, TrainerPage } from '@app-types';
 import { Icon, IconName } from './ui/Icon';
 import { ensureAbsoluteImageUrl } from '@utils/imageUtils';
+import { getFileUrl } from '@/lib/urlHelpers';
 
 // Helper to get display name for a role
 const getRoleDisplayName = (role: UserRole): string => {
@@ -182,13 +183,13 @@ const Header: React.FC = () => {
         <div className="grid grid-cols-3 items-center h-14 sm:h-16">
           {/* Left Section: Logo + Company Name */}
           <div className="flex items-center space-x-2 sm:space-x-3 min-w-0">
-            <img 
-              src={ensureAbsoluteImageUrl(trainingProviderProfile?.companyLogoUrl || '/images/default-company-logo.png')} 
-              alt="Company Logo" 
-              className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg object-cover ring-2 ring-primary ring-offset-1 ring-offset-surface flex-shrink-0" 
+            <img
+              src={trainingProviderProfile?.companyLogoUrl ? (trainingProviderProfile.companyLogoUrl.startsWith('http') ? trainingProviderProfile.companyLogoUrl : getFileUrl(trainingProviderProfile.companyLogoUrl)) : '/images/default-company-logo.png'}
+              alt="Company Logo"
+              className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg object-cover ring-2 ring-primary ring-offset-1 ring-offset-surface flex-shrink-0"
             />
             <span className="text-base sm:text-lg lg:text-xl font-bold text-on-surface hidden sm:block">
-              {trainingProviderProfile?.companyName || 'Training Provider'}
+              {trainingProviderProfile?.companyShortname || trainingProviderProfile?.companyName || 'Training Provider'}
             </span>
           </div>
 

@@ -14,78 +14,64 @@ const inputClasses = "block w-full px-3 py-2 text-on-surface bg-surface border b
 
 // API Key configurations with their available models
 const API_KEY_CONFIGS: Record<string, { label: string; models: { value: string; label: string }[]; defaultModel: string }> = {
-    'OPENROUTER_API_KEY': {
-        label: 'OpenRouter',
-        defaultModel: 'anthropic/claude-3.5-sonnet',
+    'ANTHROPIC_API_KEY': {
+        label: 'Anthropic (Claude)',
+        defaultModel: 'claude-sonnet-4-6-20250527',
         models: [
-            { value: 'anthropic/claude-3.5-sonnet', label: 'Claude 3.5 Sonnet' },
-            { value: 'anthropic/claude-3-opus', label: 'Claude 3 Opus' },
-            { value: 'openai/gpt-4-turbo', label: 'GPT-4 Turbo' },
-            { value: 'openai/gpt-4o', label: 'GPT-4o' },
-            { value: 'google/gemini-pro-1.5', label: 'Gemini Pro 1.5' },
-            { value: 'meta-llama/llama-3.1-405b-instruct', label: 'Llama 3.1 405B' },
+            { value: 'claude-opus-4-6-20250527', label: 'Claude Opus 4.6' },
+            { value: 'claude-sonnet-4-6-20250527', label: 'Claude Sonnet 4.6' },
         ]
     },
     'OPENAI_API_KEY': {
         label: 'OpenAI',
-        defaultModel: 'gpt-4o',
+        defaultModel: 'gpt-4.1',
         models: [
-            { value: 'gpt-4o', label: 'GPT-4o' },
-            { value: 'gpt-4o-mini', label: 'GPT-4o Mini' },
-            { value: 'gpt-4-turbo', label: 'GPT-4 Turbo' },
-            { value: 'gpt-4', label: 'GPT-4' },
-            { value: 'gpt-3.5-turbo', label: 'GPT-3.5 Turbo' },
-            { value: 'o1-preview', label: 'o1 Preview' },
-            { value: 'o1-mini', label: 'o1 Mini' },
-        ]
-    },
-    'ANTHROPIC_API_KEY': {
-        label: 'Anthropic (Claude)',
-        defaultModel: 'claude-sonnet-4-20250514',
-        models: [
-            { value: 'claude-sonnet-4-20250514', label: 'Claude Sonnet 4' },
-            { value: 'claude-3-5-sonnet-20241022', label: 'Claude 3.5 Sonnet' },
-            { value: 'claude-3-5-haiku-20241022', label: 'Claude 3.5 Haiku' },
-            { value: 'claude-3-opus-20240229', label: 'Claude 3 Opus' },
+            { value: 'gpt-5.4', label: 'GPT-5.4' },
+            { value: 'gpt-4.1', label: 'GPT-4.1' },
+            { value: 'gpt-4.1-mini', label: 'GPT-4.1 Mini' },
         ]
     },
     'GEMINI_API_KEY': {
         label: 'Google Gemini',
-        defaultModel: 'gemini-1.5-pro',
+        defaultModel: 'gemini-2.5-flash',
         models: [
+            { value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
+            { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
             { value: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash' },
-            { value: 'gemini-1.5-pro', label: 'Gemini 1.5 Pro' },
-            { value: 'gemini-1.5-flash', label: 'Gemini 1.5 Flash' },
-            { value: 'gemini-1.0-pro', label: 'Gemini 1.0 Pro' },
         ]
     },
-    'GROQ_API_KEY': {
-        label: 'Groq',
-        defaultModel: 'llama-3.3-70b-versatile',
+    'MINIMAX_API_KEY': {
+        label: 'MiniMax',
+        defaultModel: 'MiniMax-M1',
         models: [
-            { value: 'llama-3.3-70b-versatile', label: 'Llama 3.3 70B' },
-            { value: 'llama-3.1-70b-versatile', label: 'Llama 3.1 70B' },
-            { value: 'llama-3.1-8b-instant', label: 'Llama 3.1 8B' },
-            { value: 'mixtral-8x7b-32768', label: 'Mixtral 8x7B' },
-            { value: 'gemma2-9b-it', label: 'Gemma 2 9B' },
+            { value: 'MiniMax-M1', label: 'MiniMax M1' },
+            { value: 'MiniMax-Text-01', label: 'MiniMax Text 01' },
         ]
     },
-    'GROK_API_KEY': {
-        label: 'Grok (xAI)',
-        defaultModel: 'grok-2',
+    'KIMI_API_KEY': {
+        label: 'Kimi (Moonshot)',
+        defaultModel: 'kimi-latest',
         models: [
-            { value: 'grok-2', label: 'Grok 2' },
-            { value: 'grok-2-mini', label: 'Grok 2 Mini' },
-            { value: 'grok-beta', label: 'Grok Beta' },
+            { value: 'kimi-latest', label: 'Kimi Latest' },
+            { value: 'moonshot-v1-128k', label: 'Moonshot v1 128K' },
+            { value: 'moonshot-v1-32k', label: 'Moonshot v1 32K' },
         ]
     },
     'DEEPSEEK_API_KEY': {
         label: 'DeepSeek',
         defaultModel: 'deepseek-chat',
         models: [
-            { value: 'deepseek-chat', label: 'DeepSeek Chat' },
-            { value: 'deepseek-coder', label: 'DeepSeek Coder' },
-            { value: 'deepseek-reasoner', label: 'DeepSeek Reasoner' },
+            { value: 'deepseek-chat', label: 'DeepSeek V3' },
+            { value: 'deepseek-reasoner', label: 'DeepSeek R1' },
+        ]
+    },
+    'OPENROUTER_API_KEY': {
+        label: 'OpenRouter',
+        defaultModel: 'anthropic/claude-sonnet-4',
+        models: [
+            { value: 'anthropic/claude-sonnet-4', label: 'Claude Sonnet 4' },
+            { value: 'openai/gpt-4.1', label: 'GPT-4.1' },
+            { value: 'google/gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
         ]
     },
 };
@@ -309,9 +295,21 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
 
     // Transform initial profile data to ensure colorScheme is a string
     const getInitialFormData = (profile: TrainingProviderProfile) => {
-        const transformedProfile = {
+        // Extract default/fallback AI provider from apiKeys (stored as special entries)
+        const defaultAiProvider = profile.apiKeys?.['DEFAULT_AI_PROVIDER'] || '';
+        const fallbackAiProvider = profile.apiKeys?.['FALLBACK_AI_PROVIDER'] || '';
+
+        // Remove special keys from displayed apiKeys
+        const cleanApiKeys = { ...profile.apiKeys };
+        delete cleanApiKeys['DEFAULT_AI_PROVIDER'];
+        delete cleanApiKeys['FALLBACK_AI_PROVIDER'];
+
+        const transformedProfile: TrainingProviderProfile & { defaultAiProvider: string; fallbackAiProvider: string } = {
             ...profile,
-            apiKeyModels: profile.apiKeyModels || {}
+            apiKeys: cleanApiKeys,
+            apiKeyModels: profile.apiKeyModels || {},
+            defaultAiProvider,
+            fallbackAiProvider
         };
 
         // Handle colorScheme transformation from object to string
@@ -327,6 +325,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
     const [newApiKey, setNewApiKey] = useState({ name: '', value: '' });
     const [isGeneratingLogo, setIsGeneratingLogo] = useState(false);
     const [visibleApiKeys, setVisibleApiKeys] = useState<{ [key: string]: boolean }>({});
+    const [isApiKeysOpen, setIsApiKeysOpen] = useState(false);
     const [isEncryptionKeyVisible, setIsEncryptionKeyVisible] = useState(false);
     const [themeMode, setThemeMode] = useState<ThemeMode>(() => getCurrentTheme());
 
@@ -560,6 +559,14 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                         filteredApiKeys[key] = strValue;
                     }
                 }
+            }
+
+            // Include default/fallback AI provider selections as special API key entries
+            if (formData.defaultAiProvider) {
+                filteredApiKeys['DEFAULT_AI_PROVIDER'] = formData.defaultAiProvider;
+            }
+            if (formData.fallbackAiProvider) {
+                filteredApiKeys['FALLBACK_AI_PROVIDER'] = formData.fallbackAiProvider;
             }
 
             // Prepare profile data with filtered API keys
@@ -817,11 +824,23 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                 )}
 
                 <div className="border-t my-6"></div>
-                <h2 className="text-xl font-bold mb-2">API Keys & Model Selection</h2>
-                <p className="text-sm text-subtle mb-4">
-                    Configure your API keys and select the model to use for each provider. The default provider is Anthropic (Claude).
-                </p>
-                <div className="space-y-4">
+                <button
+                    type="button"
+                    onClick={() => setIsApiKeysOpen(prev => !prev)}
+                    className="w-full flex items-center justify-between group"
+                >
+                    <div className="text-left">
+                        <h2 className="text-xl font-bold">API Keys & Model Selection</h2>
+                        <p className="text-sm text-subtle mt-1">
+                            Configure your API keys and select the model to use for each provider.
+                        </p>
+                    </div>
+                    <Icon
+                        name={IconName.ChevronDown}
+                        className={`w-5 h-5 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 transition-transform duration-200 flex-shrink-0 ml-4 ${isApiKeysOpen ? 'rotate-180' : ''}`}
+                    />
+                </button>
+                {isApiKeysOpen && <><div className="space-y-4 mt-4">
                     {FIXED_API_KEY_NAMES.map((keyName) => {
                         const keyValue = (formData.apiKeys || {})[keyName] || '';
                         // Fix for allowing "None" (empty string) selection:
@@ -952,6 +971,84 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                         );
                     })}
                 </div>
+
+                <div className="mt-4 p-4 rounded-lg border-2 border-primary/30 bg-primary/5">
+                    <h3 className="text-lg font-bold mb-1">AI Provider for Chatbot & GenAI Tools</h3>
+                    <p className="text-xs text-muted mb-4">
+                        Select the default AI provider to power the chatbot and GenAI authoring tools. Configure a fallback provider in case the default is unavailable.
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        {/* Default Provider */}
+                        <div>
+                            <label className="block text-sm font-semibold text-on-surface mb-1">Default Provider</label>
+                            {isEditing ? (
+                                <select
+                                    value={formData.defaultAiProvider || ''}
+                                    onChange={(e) => setFormData(prev => ({ ...prev, defaultAiProvider: e.target.value } as any))}
+                                    className="w-full px-3 py-2 text-on-surface bg-surface border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                                >
+                                    <option value="">— Select default provider —</option>
+                                    {FIXED_API_KEY_NAMES
+                                        .filter(k => (formData.apiKeys || {})[k])
+                                        .map(k => {
+                                            const modelLabel = API_KEY_CONFIGS[k]?.models.find(m => m.value === formData.apiKeyModels?.[k])?.label;
+                                            return (
+                                                <option key={k} value={k}>
+                                                    {API_KEY_CONFIGS[k]?.label}{modelLabel ? ` — ${modelLabel}` : ''}
+                                                </option>
+                                            );
+                                        })
+                                    }
+                                </select>
+                            ) : (
+                                <div className="px-3 py-2 bg-surface border border-gray-300 dark:border-gray-600 rounded-md text-sm">
+                                    {(() => {
+                                        const dp = formData.defaultAiProvider;
+                                        if (!dp) return <span className="text-gray-500 italic">Not set</span>;
+                                        const config = API_KEY_CONFIGS[dp];
+                                        const modelLabel = config?.models.find(m => m.value === formData.apiKeyModels?.[dp])?.label;
+                                        return <span>{config?.label}{modelLabel ? ` — ${modelLabel}` : ''}</span>;
+                                    })()}
+                                </div>
+                            )}
+                        </div>
+                        {/* Fallback Provider */}
+                        <div>
+                            <label className="block text-sm font-semibold text-on-surface mb-1">Fallback Provider</label>
+                            {isEditing ? (
+                                <select
+                                    value={formData.fallbackAiProvider || ''}
+                                    onChange={(e) => setFormData(prev => ({ ...prev, fallbackAiProvider: e.target.value } as any))}
+                                    className="w-full px-3 py-2 text-on-surface bg-surface border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                                >
+                                    <option value="">— None —</option>
+                                    {FIXED_API_KEY_NAMES
+                                        .filter(k => (formData.apiKeys || {})[k] && k !== formData.defaultAiProvider)
+                                        .map(k => {
+                                            const modelLabel = API_KEY_CONFIGS[k]?.models.find(m => m.value === formData.apiKeyModels?.[k])?.label;
+                                            return (
+                                                <option key={k} value={k}>
+                                                    {API_KEY_CONFIGS[k]?.label}{modelLabel ? ` — ${modelLabel}` : ''}
+                                                </option>
+                                            );
+                                        })
+                                    }
+                                </select>
+                            ) : (
+                                <div className="px-3 py-2 bg-surface border border-gray-300 dark:border-gray-600 rounded-md text-sm">
+                                    {(() => {
+                                        const fp = formData.fallbackAiProvider;
+                                        if (!fp) return <span className="text-gray-500 italic">None</span>;
+                                        const config = API_KEY_CONFIGS[fp];
+                                        const modelLabel = config?.models.find(m => m.value === formData.apiKeyModels?.[fp])?.label;
+                                        return <span>{config?.label} — {modelLabel || formData.apiKeyModels?.[fp] || 'No model'}</span>;
+                                    })()}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+                </>}
 
                 <div className="border-t my-6"></div>
 

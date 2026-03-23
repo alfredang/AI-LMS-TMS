@@ -71,6 +71,27 @@ interface GenerateContentOptions {
 }
 
 const callGeminiAPI = async (prompt: string, modelName = 'gemini-2.5-flash', options: GenerateContentOptions = {}): Promise<string> => {
+  // For non-JSON text generation, try the multi-provider endpoint first
+  if (options.responseFormat !== 'json') {
+    try {
+      const chatRes = await fetch('/api/ai/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          systemPrompt: 'You are a helpful AI assistant for educational content creation.',
+          messages: [{ role: 'user', content: prompt }]
+        })
+      });
+      if (chatRes.ok) {
+        const data = await chatRes.json();
+        return cleanMarkdownCodeBlocks(data.text);
+      }
+    } catch (e) {
+      console.warn('Multi-provider endpoint failed for content generation, falling back to Gemini:', e);
+    }
+  }
+
+  // Fall back to direct Gemini API (required for JSON mode and as fallback)
   try {
     const apiKey = await getDynamicApiKey();
     const genAI = new GoogleGenerativeAI(apiKey);
@@ -81,18 +102,14 @@ const callGeminiAPI = async (prompt: string, modelName = 'gemini-2.5-flash', opt
         temperature: 0.7,
         topK: 40,
         topP: 0.95,
-        // maxOutputTokens: 2048,
-        // Configure response format for the model here
         responseMimeType: options.responseFormat === 'json' ? 'application/json' : undefined,
       }
     });
 
-    // Generate content using the prompt
     const result = await model.generateContent(prompt);
     const response = await result.response;
     const text = response.text();
 
-    // Only clean markdown if it's NOT a JSON response
     let cleanedText = text;
     if (options.responseFormat !== 'json') {
       cleanedText = cleanMarkdownCodeBlocks(text);
@@ -102,7 +119,6 @@ const callGeminiAPI = async (prompt: string, modelName = 'gemini-2.5-flash', opt
   } catch (error: any) {
     console.error('Error calling Gemini API:', error);
 
-    // Provide more helpful error messages
     if (error.message?.includes('quota')) {
       throw new Error('API quota exceeded. Please wait a moment and try again, or check your billing settings.');
     } else if (error.message?.includes('404')) {
@@ -663,25 +679,39 @@ export const getTutorResponseStream = async function* (
     // Add user message to session
     tutorChatSession.messages.push({ role: 'user', content: message });
 
-    // Create the full prompt with context and conversation history
-    const conversationHistory = tutorChatSession.messages
-      .slice(-10) // Keep last 10 messages for context
-      .map(msg => `${msg.role === 'user' ? 'User' : 'Assistant'}: ${msg.content}`)
-      .join('\n');
+    // Try the multi-provider /api/ai/chat endpoint first (supports Anthropic, Gemini, OpenAI with fallback)
+    let response: string;
+    try {
+      const chatRes = await fetch('/api/ai/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          systemPrompt,
+          messages: tutorChatSession.messages.slice(-10).map(msg => ({
+            role: msg.role,
+            content: msg.content
+          }))
+        })
+      });
 
-    const fullPrompt = `${systemPrompt}
-
-Conversation History:
-${conversationHistory}
-
-Please respond to the latest user message:`;
-
-    const response = await callGeminiAPI(fullPrompt);
+      if (!chatRes.ok) throw new Error(`Chat API error: ${chatRes.status}`);
+      const data = await chatRes.json();
+      response = data.text;
+    } catch (chatError) {
+      // Fallback to direct Gemini API if multi-provider endpoint fails
+      console.warn('Multi-provider chat failed, falling back to Gemini:', chatError);
+      const conversationHistory = tutorChatSession.messages
+        .slice(-10)
+        .map(msg => `${msg.role === 'user' ? 'User' : 'Assistant'}: ${msg.content}`)
+        .join('\n');
+      const fullPrompt = `${systemPrompt}\n\nConversation History:\n${conversationHistory}\n\nPlease respond to the latest user message:`;
+      response = await callGeminiAPI(fullPrompt);
+    }
 
     // Add AI response to session
     tutorChatSession.messages.push({ role: 'model', content: response });
 
-    // Simulate streaming by yielding the response
+    // Yield the response
     yield { text: response };
 
   } catch (error) {
@@ -723,20 +753,33 @@ export const getAdvisorResponseStream = async function* (
     // Add user message to session
     advisorChatSession.messages.push({ role: 'user', content: message });
 
-    // Create the full prompt with context and conversation history
-    const conversationHistory = advisorChatSession.messages
-      .slice(-10) // Keep last 10 messages for context
-      .map(msg => `${msg.role === 'user' ? 'User' : 'Assistant'}: ${msg.content}`)
-      .join('\n');
+    // Try multi-provider endpoint first
+    let response: string;
+    try {
+      const chatRes = await fetch('/api/ai/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          systemPrompt,
+          messages: advisorChatSession.messages.slice(-10).map(msg => ({
+            role: msg.role,
+            content: msg.content
+          }))
+        })
+      });
 
-    const fullPrompt = `${systemPrompt}
-
-Conversation History:
-${conversationHistory}
-
-Please respond to the latest user message:`;
-
-    const response = await callGeminiAPI(fullPrompt);
+      if (!chatRes.ok) throw new Error(`Chat API error: ${chatRes.status}`);
+      const data = await chatRes.json();
+      response = data.text;
+    } catch (chatError) {
+      console.warn('Multi-provider chat failed, falling back to Gemini:', chatError);
+      const conversationHistory = advisorChatSession.messages
+        .slice(-10)
+        .map(msg => `${msg.role === 'user' ? 'User' : 'Assistant'}: ${msg.content}`)
+        .join('\n');
+      const fullPrompt = `${systemPrompt}\n\nConversation History:\n${conversationHistory}\n\nPlease respond to the latest user message:`;
+      response = await callGeminiAPI(fullPrompt);
+    }
 
     // Add AI response to session
     advisorChatSession.messages.push({ role: 'model', content: response });

@@ -14,11 +14,15 @@ import { Icon, IconName } from '../components/ui/Icon';
 import TrainerHomePage from '../components/trainer/TrainerHomePage';
 import TrainerSidebar from '../components/trainer/TrainerSidebar';
 import AssessmentGrading from '../components/trainer/AssessmentGrading';
+import PastAttendance from '../components/trainer/PastAttendance';
+import PastAssessment from '../components/trainer/PastAssessment';
 
 const PAGE_LABELS: Record<TrainerPage, string> = {
   [TrainerPage.EAttendance]: 'E-Attendance',
   [TrainerPage.AssessmentGrading]: 'Assessment Grading',
   [TrainerPage.MyClasses]: 'My Classes',
+  [TrainerPage.PastAttendance]: 'Past Attendance',
+  [TrainerPage.PastAssessment]: 'Past Assessment',
   [TrainerPage.TaskList]: 'Task List',
   [TrainerPage.GenAIAuthoring]: 'Trainer GenAI Authoring',
 };
@@ -40,6 +44,10 @@ const TrainerLayout: React.FC = () => {
         return <AssessmentGrading />;
       case TrainerPage.MyClasses:
         return <CourseList />;
+      case TrainerPage.PastAttendance:
+        return <PastAttendance />;
+      case TrainerPage.PastAssessment:
+        return <PastAssessment />;
       case TrainerPage.TaskList:
         return <CalendarView />;
       case TrainerPage.GenAIAuthoring:

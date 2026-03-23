@@ -62,7 +62,7 @@ const TrainingProviderLayout: React.FC = () => {
       case View.Courses: return 'Courses';
       case View.UserManagement: return 'User Management';
       case View.AdminManagement: return 'Admin Management';
-      case View.Profile: return 'My Profile';
+      case View.Profile: return 'Company Setting';
       case View.HelpAndSupport: return 'Help & Support';
       case View.ApiEndpoints: return 'API Endpoints';
       default: return 'Dashboard';

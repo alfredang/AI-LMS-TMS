@@ -19,7 +19,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(400).json({ message: 'Trainer ID is required' });
     }
 
-    // Base SQL query
+    // Base SQL query — query course_run directly without requiring trainer_profile
     let sqlQuery = `
       SELECT
           c.id AS course_id,
@@ -37,11 +37,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           cr.start_date,
           cr.end_date,
           cr.mode_of_learning
-      FROM trainer_profile tp
-      JOIN course_run cr ON tp.user_id = cr.assigned_trainer_id
+      FROM course_run cr
       JOIN course c ON cr.course_id = c.id
       LEFT JOIN app_user au ON cr.assigned_trainer_id = au.id
-      WHERE tp.user_id = $1
+      WHERE cr.assigned_trainer_id = $1
     `;
 
     const params: any[] = [trainerId];

@@ -11,6 +11,8 @@ const NAV_ITEMS: { page: TrainerPage; label: string; icon: IconName }[] = [
   { page: TrainerPage.MyClasses,          label: 'My Classes',          icon: IconName.BookOpen       },
   { page: TrainerPage.EAttendance,        label: 'E-Attendance',        icon: IconName.ClipboardCheck },
   { page: TrainerPage.AssessmentGrading,  label: 'Assessment Grading',  icon: IconName.Award          },
+  { page: TrainerPage.PastAttendance,     label: 'Past Attendance',     icon: IconName.ClipboardCheck },
+  { page: TrainerPage.PastAssessment,     label: 'Past Assessment',     icon: IconName.Award          },
 ];
 
 const ED_TOOLS: { page?: TrainerPage; label: string; icon: IconName; href?: string }[] = [
