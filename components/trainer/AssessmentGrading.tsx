@@ -107,7 +107,7 @@ const AssessmentGrading: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6 max-w-5xl mx-auto">
+    <div className="space-y-6">
       <h1 className="text-2xl font-bold dark:text-white">Assessment Grading</h1>
 
       {/* Class Selection */}
@@ -116,7 +116,7 @@ const AssessmentGrading: React.FC = () => {
           <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
             Select a Class You Teach
           </label>
-          <div className="relative max-w-xl">
+          <div className="relative w-full">
             {loadingClasses ? (
               <div className="flex items-center gap-2 text-sm text-gray-500 py-2">
                 <Icon name={IconName.Spinner} className="w-5 h-5 animate-spin text-blue-500" />
