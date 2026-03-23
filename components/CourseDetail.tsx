@@ -1922,6 +1922,7 @@ export const CourseDetail: React.FC = () => {
                                             onClick={() => {
                                                 const runCode = selectedCourse?.courseRunCode || selectedCourse?.courseRunId || convertedCourse.courseRunId || '';
                                                 setPendingAttendanceCourseRunId(String(runCode));
+                                                setSelectedCourse(null);
                                                 setTrainerPage(TrainerPage.EAttendance);
                                             }}
                                             className="flex items-center gap-3 p-3 w-full text-left bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
