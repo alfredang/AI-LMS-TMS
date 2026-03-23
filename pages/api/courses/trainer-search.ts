@@ -7,11 +7,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const { 
-      trainerId, 
-      search, 
-      courseType, 
-      modeOfLearning 
+    const {
+      trainerId,
+      search,
+      courseType,
+      modeOfLearning,
+      upcoming
     } = req.query;
 
     if (!trainerId) {
@@ -72,7 +73,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       paramIndex++;
     }
 
-    sqlQuery += ` ORDER BY cr.start_date DESC`;
+    // When fetching upcoming classes: not ended AND starts within today → today+7
+    if (upcoming === 'true') {
+      sqlQuery += `
+        AND (cr.end_date IS NULL OR cr.end_date >= CURRENT_DATE)
+        AND cr.start_date >= CURRENT_DATE
+        AND cr.start_date <= CURRENT_DATE + INTERVAL '7 days'
+      `;
+    }
+
+    sqlQuery += ` ORDER BY cr.start_date ASC`;
 
     const result = await pool.query(sqlQuery, params);
 

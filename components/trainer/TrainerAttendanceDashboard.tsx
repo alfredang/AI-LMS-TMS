@@ -224,25 +224,12 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
   const [isDeletingFromClass, setIsDeletingFromClass]  = useState(false);
   const [deleteLearnerError, setDeleteLearnerError]    = useState<string | null>(null);
 
-  const today = new Date(new Date().toDateString());
-  const nextWeek = new Date(today);
-  nextWeek.setDate(nextWeek.getDate() + 7);
-  const [classView, setClassView] = useState<'upcoming' | 'past'>('upcoming');
-  const activeCourses = courses
-    .filter(c => {
-      const end = c.endDate ? new Date(c.endDate) : null;
-      const start = c.startDate ? new Date(c.startDate) : null;
-      if (classView === 'past') {
-        return end !== null && end < today;
-      }
-      // Upcoming: not ended yet AND starts within next week
-      return (!end || end >= today) && (!start || start <= nextWeek);
-    })
-    .sort((a, b) => {
-      const aTime = new Date(a.startDate ?? '').getTime();
-      const bTime = new Date(b.startDate ?? '').getTime();
-      return classView === 'past' ? bTime - aTime : aTime - bTime;
-    });
+  // API already filters to upcoming classes (today → today+7, not ended); just sort
+  const activeCourses = [...courses].sort((a, b) => {
+    const aTime = new Date(a.startDate ?? '').getTime();
+    const bTime = new Date(b.startDate ?? '').getTime();
+    return aTime - bTime; // earliest first
+  });
 
   const selectedCourse = isAdminMode
     ? adminCourse
@@ -974,24 +961,6 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
         </div>
 
         <div className="p-4 space-y-4">
-          {/* Class view toggle — only shown for trainer mode */}
-          {!isAdminMode && (
-            <div className="flex gap-1 p-1 bg-surface-elevated rounded-lg w-fit border border-default">
-              <button
-                onClick={() => { setClassView('upcoming'); setSelectedCourseRunId(''); }}
-                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${classView === 'upcoming' ? 'bg-primary text-white shadow-sm' : 'text-gray-400 hover:text-white hover:bg-gray-700/50'}`}
-              >
-                Upcoming
-              </button>
-              <button
-                onClick={() => { setClassView('past'); setSelectedCourseRunId(''); }}
-                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${classView === 'past' ? 'bg-primary text-white shadow-sm' : 'text-gray-400 hover:text-white hover:bg-gray-700/50'}`}
-              >
-                Past Classes
-              </button>
-            </div>
-          )}
-
           {/* Class selection row — admin gets a text input, trainer gets a dropdown */}
           <div>
             <label className="block text-xs font-medium text-on-surface-secondary mb-1">
@@ -1118,7 +1087,7 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
             </div>
           </div>
 
-          {/* Course Run ID + Course Code pills — appear right after class is selected */}
+          {/* Course Run ID + Course Code + Start/End Date pills — appear right after class is selected */}
           {selectedCourse && (
             <div className="flex flex-wrap gap-2">
               <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-surface-elevated border border-default text-sm">
@@ -1129,6 +1098,22 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
                 <span className="font-medium text-on-surface-secondary">Course Code</span>
                 <span className="font-bold text-on-surface">{selectedCourse.courseCode}</span>
               </span>
+              {selectedCourse.startDate && (
+                <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-surface-elevated border border-default text-sm">
+                  <span className="font-medium text-on-surface-secondary">Start Date</span>
+                  <span className="font-bold text-on-surface">
+                    {new Date(selectedCourse.startDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                  </span>
+                </span>
+              )}
+              {selectedCourse.endDate && (
+                <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-surface-elevated border border-default text-sm">
+                  <span className="font-medium text-on-surface-secondary">End Date</span>
+                  <span className="font-bold text-on-surface">
+                    {new Date(selectedCourse.endDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                  </span>
+                </span>
+              )}
             </div>
           )}
 

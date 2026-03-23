@@ -61,9 +61,18 @@ export const courseService = {
     }
   },
 
-  // Get trainer courses (alias for searchTrainerCourses for compatibility)
+  // Get upcoming trainer courses for e-attendance (today → today+7, not ended)
   async getTrainerCourses(trainerId: string) {
-    return this.searchTrainerCourses(trainerId);
+    try {
+      const params = new URLSearchParams({ trainerId, upcoming: 'true' });
+      const response = await apiClient.get<Course[]>(
+        `/api/courses/trainer-search?${params.toString()}`
+      );
+      return response;
+    } catch (error) {
+      console.error('💥 courseService - Error fetching trainer courses:', error);
+      throw error;
+    }
   },
 
   // Search learner courses (placeholder implementation)
