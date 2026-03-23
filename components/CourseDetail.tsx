@@ -1810,7 +1810,7 @@ export const CourseDetail: React.FC = () => {
                                     onClick={handleBackToDashboard}
                                     className="px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-white rounded-lg flex items-center gap-2"
                                 >
-                                    Back to Dashboard
+                                    {userRole === UserRole.Developer ? 'Back to All Courses' : 'Back to Dashboard'}
                                 </button>
                                 ) : <div />}
                                 {!isLoading && (

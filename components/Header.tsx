@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useLms } from '@contexts/LmsContext';
-import { View, UserRole, AdminPage } from '@app-types';
+import { View, UserRole, AdminPage, TrainerPage } from '@app-types';
 import { Icon, IconName } from './ui/Icon';
 import { ensureAbsoluteImageUrl } from '@utils/imageUtils';
 
@@ -112,7 +112,7 @@ const ProfileDropdown: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 };
 
 const Header: React.FC = () => {
-  const { role, userRoles, currentView, adminPage, handleNavigation, setAdminPage, resetCreateView, resetAdminView, trainingProviderProfile, currentUserProfile, logout } = useLms();
+  const { role, userRoles, currentView, adminPage, trainerPage, handleNavigation, setAdminPage, setTrainerPage, resetCreateView, resetAdminView, trainingProviderProfile, currentUserProfile, logout } = useLms();
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isRoleSwitcherOpen, setIsRoleSwitcherOpen] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
@@ -155,9 +155,12 @@ const Header: React.FC = () => {
     [UserRole.Learner]: [
       { view: View.Courses, label: 'Courses', icon: IconName.Courses },
     ],
-    [UserRole.Trainer]: [],
+    [UserRole.Trainer]: [
+      { view: View.Dashboard, label: 'Break Timer', icon: IconName.Clock, href: 'https://alfredang.github.io/musical-timer-countdown/' },
+      { view: View.Dashboard, label: 'Pinboard', icon: IconName.Bookmark, href: 'https://alfredang.github.io/pinboard/' },
+      { view: View.Dashboard, label: 'GenAI Authoring', icon: IconName.Create, trainerPage: TrainerPage.GenAIAuthoring },
+    ],
     [UserRole.Developer]: [
-      { view: View.Dashboard, label: 'Home', icon: IconName.Dashboard },
       { view: View.Courses, label: 'Courses', icon: IconName.Courses },
       { view: View.Create, label: 'Developer GenAI Authoring', icon: IconName.Create },
     ],
@@ -189,35 +192,65 @@ const Header: React.FC = () => {
 
           {/* Center Section: Navigation - Always visible */}
           <nav className="flex items-center justify-center space-x-1 sm:space-x-1.5 xl:space-x-2">
-            {navItems.map(item => (
-              <a
-                key={item.label}
-                href="#"
-                onClick={(e) => {
-                  e.preventDefault();
+            {navItems.map(item => {
+              // External link (opens in new tab)
+              if ('href' in item && item.href) {
+                return (
+                  <a
+                    key={item.label}
+                    href={item.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-center space-x-1 px-2 sm:px-2.5 xl:px-3 py-2 rounded-md text-xs xl:text-sm font-medium transition-colors whitespace-nowrap text-on-surface hover:bg-surface-elevated hover:text-primary"
+                  >
+                    <Icon name={item.icon} className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" />
+                    <span className="hidden lg:inline">{item.label}</span>
+                  </a>
+                );
+              }
 
-                  if (role === UserRole.Admin && 'page' in item) {
-                    if (item.page === AdminPage.Dashboard) {
-                      resetAdminView();
+              // Trainer page navigation
+              const isTrainerItem = 'trainerPage' in item && item.trainerPage;
+              const isActive = isTrainerItem
+                ? trainerPage === item.trainerPage
+                : (role === UserRole.Admin && isAdminPageActive(item)) || (role !== UserRole.Admin && currentView === item.view);
+
+              return (
+                <a
+                  key={item.label}
+                  href="#"
+                  onClick={(e) => {
+                    e.preventDefault();
+
+                    if (isTrainerItem) {
+                      setTrainerPage(item.trainerPage);
+                      handleNavigation(View.Dashboard);
+                      return;
                     }
-                    setAdminPage(item.page);
-                  }
 
-                  if (item.view === View.Create && currentView === item.view) {
-                    resetCreateView();
-                  } else {
-                    handleNavigation(item.view);
-                  }
-                }}
-                className={`flex items-center justify-center space-x-1 px-2 sm:px-2.5 xl:px-3 py-2 rounded-md text-xs xl:text-sm font-medium transition-colors whitespace-nowrap ${(role === UserRole.Admin && isAdminPageActive(item)) || (role !== UserRole.Admin && currentView === item.view)
-                  ? 'bg-primary text-white'
-                  : 'text-on-surface hover:bg-surface-elevated hover:text-primary'
-                  }`}
-              >
-                <Icon name={item.icon} className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" />
-                <span className="hidden lg:inline">{item.label}</span>
-              </a>
-            ))}
+                    if (role === UserRole.Admin && 'page' in item) {
+                      if (item.page === AdminPage.Dashboard) {
+                        resetAdminView();
+                      }
+                      setAdminPage(item.page);
+                    }
+
+                    if (item.view === View.Create && currentView === item.view) {
+                      resetCreateView();
+                    } else {
+                      handleNavigation(item.view);
+                    }
+                  }}
+                  className={`flex items-center justify-center space-x-1 px-2 sm:px-2.5 xl:px-3 py-2 rounded-md text-xs xl:text-sm font-medium transition-colors whitespace-nowrap ${isActive
+                    ? 'bg-primary text-white'
+                    : 'text-on-surface hover:bg-surface-elevated hover:text-primary'
+                    }`}
+                >
+                  <Icon name={item.icon} className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" />
+                  <span className="hidden lg:inline">{item.label}</span>
+                </a>
+              );
+            })}
           </nav>
 
           {/* Right Section: Actions */}
