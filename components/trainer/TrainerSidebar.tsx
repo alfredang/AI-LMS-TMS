@@ -8,8 +8,8 @@ interface TrainerSidebarProps {
 }
 
 const NAV_ITEMS: { page: TrainerPage; label: string; icon: IconName }[] = [
-  { page: TrainerPage.EAttendance,        label: 'E-Attendance',        icon: IconName.ClipboardCheck },
   { page: TrainerPage.MyClasses,          label: 'My Classes',          icon: IconName.BookOpen       },
+  { page: TrainerPage.EAttendance,        label: 'E-Attendance',        icon: IconName.ClipboardCheck },
   { page: TrainerPage.AssessmentGrading,  label: 'Assessment Grading',  icon: IconName.Award          },
 ];
 
