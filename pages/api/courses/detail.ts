@@ -72,6 +72,8 @@ export default async function handler(
           c.practical_performance_assessment_link,
           cr.written_assessment_published,
           cr.practical_assessment_published,
+          cr.start_date,
+          cr.end_date,
           e.certificate
         FROM enrollment e
         JOIN course_run cr
@@ -102,6 +104,8 @@ export default async function handler(
           c.practical_performance_assessment_link,
           cr.written_assessment_published,
           cr.practical_assessment_published,
+          cr.start_date,
+          cr.end_date,
           e.certificate
         FROM enrollment e
         JOIN course_run cr
@@ -150,6 +154,8 @@ export default async function handler(
         practicalPerformanceAssessmentLink: courseDetail.practical_performance_assessment_link,
         writtenAssessmentPublished: courseDetail.written_assessment_published ?? false,
         practicalAssessmentPublished: courseDetail.practical_assessment_published ?? false,
+        startDate: (courseDetail as any).start_date || null,
+        endDate: (courseDetail as any).end_date || null,
         certificate: courseDetail.certificate
       }
     });

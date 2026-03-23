@@ -147,6 +147,8 @@ export interface CourseDetail {
   practicalPerformanceAssessmentLink?: string;
   writtenAssessmentPublished?: boolean;
   practicalAssessmentPublished?: boolean;
+  startDate?: string;
+  endDate?: string;
   certificate: string;
 }
 

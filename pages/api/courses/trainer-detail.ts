@@ -71,7 +71,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         cr.practical_assessment_published,
         c.id AS course_id,
         c.course_code,
-        cr.course_run_id AS external_course_run_id
+        cr.course_run_id AS external_course_run_id,
+        cr.start_date,
+        cr.end_date
       FROM trainer_profile tp
       JOIN course_run cr ON tp.user_id = cr.assigned_trainer_id
       JOIN course c ON cr.course_id = c.id
@@ -177,6 +179,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           practicalPerformanceAssessmentLink: courseDetail.practical_performance_assessment_link,
           writtenAssessmentPublished: courseDetail.written_assessment_published ?? false,
           practicalAssessmentPublished: courseDetail.practical_assessment_published ?? false,
+          startDate: courseDetail.start_date || null,
+          endDate: courseDetail.end_date || null,
           courseId: courseDetail.course_id,
           courseCode: courseDetail.course_code
         },

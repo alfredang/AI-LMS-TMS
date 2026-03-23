@@ -1657,6 +1657,8 @@ export const CourseDetail: React.FC = () => {
         tscCode: effectiveDetail?.tscCode,
         trainingHours: effectiveDetail?.trainingHours || selectedCourse.trainingHours,
         assessmentHours: effectiveDetail?.assessmentHours || selectedCourse.assessmentHours,
+        startDate: effectiveDetail?.startDate || selectedCourse.startDate,
+        endDate: effectiveDetail?.endDate || selectedCourse.endDate,
         courseType: selectedCourse.courseType,
         modeOfLearning: selectedCourse.modeOfLearning,
         classStatus: selectedCourse.classStatus,
@@ -1924,9 +1926,10 @@ export const CourseDetail: React.FC = () => {
                                     <ContentSection title="E-Attendance">
                                         <button
                                             onClick={() => {
-                                                // Pass the UUID (courseRunId) for matching in E-Attendance dashboard
-                                                const runId = selectedCourse?.courseRunId || convertedCourse.courseRunId || '';
-                                                setPendingAttendanceCourseRunId(String(runId));
+                                                // Pass the UUID for matching in E-Attendance dashboard
+                                                // effectiveDetail.courseRunUuid is the UUID, selectedCourse.courseRunId is also UUID from trainer-search
+                                                const runUuid = effectiveDetail?.courseRunUuid || selectedCourse?.courseRunId || '';
+                                                setPendingAttendanceCourseRunId(String(runUuid));
                                                 setSelectedCourse(null);
                                                 setTrainerPage(TrainerPage.EAttendance);
                                             }}
