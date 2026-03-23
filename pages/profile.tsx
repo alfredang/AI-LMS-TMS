@@ -6,7 +6,7 @@ const Profile: NextPage = () => {
   return (
     <>
       <Head>
-        <title>Profile - Test Backend</title>
+        <title>Profile - Tertiary Infotech Academy LMS TMS</title>
         <meta name="description" content="User Profile Management" />
         <link rel="icon" href="/favicon.ico" />
       </Head>

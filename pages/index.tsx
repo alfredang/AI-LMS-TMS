@@ -54,7 +54,7 @@ const Home: NextPage = () => {
     return (
       <>
         <Head>
-          <title>TechEd Solutions - Login</title>
+          <title>Tertiary Infotech Academy LMS TMS - Login</title>
           <meta name="description" content="Login to your learning management system" />
           <link rel="icon" href="/favicon.ico" />
         </Head>
@@ -73,7 +73,7 @@ const Home: NextPage = () => {
     return (
       <>
         <Head>
-          <title>Learning Management System</title>
+          <title>Tertiary Infotech Academy LMS TMS</title>
           <meta name="description" content="Your personal learning dashboard" />
           <link rel="icon" href="/favicon.ico" />
         </Head>
@@ -86,7 +86,7 @@ const Home: NextPage = () => {
     return (
       <>
         <Head>
-          <title>TechEd Solutions - Trainer Dashboard</title>
+          <title>Tertiary Infotech Academy LMS TMS - Trainer Dashboard</title>
           <meta name="description" content="Trainer management dashboard" />
           <link rel="icon" href="/favicon.ico" />
         </Head>
@@ -99,7 +99,7 @@ const Home: NextPage = () => {
     return (
       <>
         <Head>
-          <title>TechEd Solutions - Developer Dashboard</title>
+          <title>Tertiary Infotech Academy LMS TMS - Developer Dashboard</title>
           <meta name="description" content="Developer dashboard and profile" />
           <link rel="icon" href="/favicon.ico" />
         </Head>
@@ -112,7 +112,7 @@ const Home: NextPage = () => {
     return (
       <>
         <Head>
-          <title>TechEd Solutions - Admin Dashboard</title>
+          <title>Tertiary Infotech Academy LMS TMS - Admin Dashboard</title>
           <meta name="description" content="Admin management dashboard" />
           <link rel="icon" href="/favicon.ico" />
         </Head>
@@ -125,7 +125,7 @@ const Home: NextPage = () => {
     return (
       <>
         <Head>
-          <title>TechEd Solutions - Training Provider Dashboard</title>
+          <title>Tertiary Infotech Academy LMS TMS - Training Provider Dashboard</title>
           <meta name="description" content="Training provider management dashboard" />
           <link rel="icon" href="/favicon.ico" />
         </Head>
@@ -138,7 +138,7 @@ const Home: NextPage = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       <Head>
-        <title>TechEd Solutions - Dashboard</title>
+        <title>Tertiary Infotech Academy LMS TMS - Dashboard</title>
         <meta name="description" content="Learning Management System Dashboard" />
         <link rel="icon" href="/favicon.ico" />
       </Head>
