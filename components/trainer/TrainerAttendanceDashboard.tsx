@@ -939,6 +939,8 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
   // Auto-select course run when navigating from CourseDetail E-Attendance link
   useEffect(() => {
     if (!pendingAttendanceCourseRunId || coursesLoading || isAdminMode) return;
+    // Wait for courses to actually load before trying to match
+    if (courses.length === 0) return;
     // Match by courseRunId (UUID) or courseRunCode (display code)
     const course = courses.find(c => c.courseRunId === pendingAttendanceCourseRunId || c.courseRunCode === pendingAttendanceCourseRunId);
     if (course && course.courseRunId) {
@@ -976,8 +978,8 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
         fetchManualSessions(course.courseRunId);
         fetchAttendanceSummary(course.courseRunId);
       }
+      setPendingAttendanceCourseRunId(null);
     }
-    setPendingAttendanceCourseRunId(null);
   }, [pendingAttendanceCourseRunId, courses, coursesLoading]);
 
   return (
