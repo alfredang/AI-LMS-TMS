@@ -66,7 +66,8 @@ export enum AdminPage {
   CheckAttendance = 'checkAttendance',
   AutomationLogs = 'automationLogs',
   AssignTrainerLogs = 'assignTrainerLogs',
-  BackfillEnrollments = 'backfillEnrollments'
+  BackfillEnrollments = 'backfillEnrollments',
+  FetchUpcomingEnrolments = 'fetchUpcomingEnrolments'
 }
 
 export enum TrainerPage {
@@ -122,6 +123,7 @@ export interface Course {
   practicalAssessmentPublished?: boolean;
   courseFee?: number;
   taxPercent?: number;
+  fundingValidity?: string;
   isLeaderboardEnabled?: boolean;
   courseLink?: string;
   assessmentRecordLink?: string;

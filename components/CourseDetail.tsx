@@ -76,6 +76,7 @@ interface Course {
     practicalPerformanceAssessmentLink?: string;
     writtenAssessmentPublished?: boolean;
     practicalAssessmentPublished?: boolean;
+    fundingValidity?: string;
 }
 
 // --- Utility Functions ---
@@ -1208,6 +1209,19 @@ const CourseInfoPanel: React.FC<{ course: Course; userRole: UserRole }> = ({ cou
                 <DetailRow label="Course Ref Code" value={course.courseCode} />
                 <DetailRow label="TSC Title" value={course.tscTitle || 'N/A'} />
                 <DetailRow label="TSC Code" value={course.tscCode || 'N/A'} />
+                {(() => {
+                    const expiry = course.fundingValidity ? new Date(course.fundingValidity) : null;
+                    const isExpired = expiry ? expiry < new Date() : false;
+                    const formatted = expiry ? expiry.toLocaleDateString('en-SG', { year: 'numeric', month: 'short', day: 'numeric' }) : 'N/A';
+                    return (
+                        <div className="flex justify-between items-start gap-4">
+                            <p className="text-gray-500 dark:text-gray-400 flex-shrink-0">Funding Validity</p>
+                            <p className={`font-semibold text-right ${expiry && isExpired ? 'text-red-600 dark:text-red-400' : expiry ? 'text-green-600 dark:text-green-400' : 'text-gray-900 dark:text-gray-100'}`}>
+                                {formatted}{expiry ? (isExpired ? ' (Expired)' : ' (Valid)') : ''}
+                            </p>
+                        </div>
+                    );
+                })()}
                 {/* Hide course run related information for developers and training providers */}
                 {userRole !== UserRole.Developer && userRole !== UserRole.TrainingProvider && (
                     <>

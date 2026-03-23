@@ -117,6 +117,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate }) => {
             {/* Tools section hidden
             <NavSection title="Tools">
                 <NavItem page={AdminPage.BackfillEnrollments} label="Backfill Enrollments" isSubItem />
+                <NavItem page={AdminPage.FetchUpcomingEnrolments} label="Fetch Upcoming Classes Enrolment" isSubItem />
             </NavSection>
             */}
 

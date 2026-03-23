@@ -12,9 +12,8 @@ interface AnalyticsData {
   enrollmentByMonth: { label: string; value: number }[];
   courseRanking: { label: string; value: number }[];
   ageProfile: { label: string; value: number }[];
-  genderBreakdown: { label: string; value: number }[];
+  enrolmentStatusBreakdown: { label: string; value: number }[];
   sponsorshipBreakdown: { label: string; value: number }[];
-  ethnicityBreakdown: { label: string; value: number }[];
 }
 
 // Reusable Components
@@ -152,14 +151,11 @@ const TrainingProviderDashboard: React.FC = () => {
                 <ChartCard title="Learner Age Profile">
                      <BarChart data={analyticsData.ageProfile} color="primary" />
                 </ChartCard>
-                <ChartCard title="Learner Gender Breakdown">
-                     <BarChart data={analyticsData.genderBreakdown} color="primary" />
+                <ChartCard title="Enrolment Status">
+                     <BarChart data={analyticsData.enrolmentStatusBreakdown ?? []} color="primary" />
                 </ChartCard>
-                 <ChartCard title="Learner Sponsorship Type">
+                <ChartCard title="Learner Sponsorship Type">
                      <BarChart data={analyticsData.sponsorshipBreakdown} color="primary" />
-                </ChartCard>
-                 <ChartCard title="Learner Ethnicity">
-                     <BarChart data={analyticsData.ethnicityBreakdown} color="primary" />
                 </ChartCard>
             </div>
         </div>

@@ -22,7 +22,7 @@ import OngoingClasses from '../components/admin/OngoingClasses';
 import CompletedClasses from '../components/admin/CompletedClasses';
 import ClassDetailView from '../components/admin/ClassDetailView';
 import { UpcomingClassesTable } from '../components/UpcomingClassesTable';
-import { ClassManagerView, AssignTrainerView, AssignStudentView, AddCourseView, AddCourseRunView, AutomationLogsView, AssignTrainerLogsView, BackfillEnrollmentsView } from '../components/admin/ClassManagementViews';
+import { ClassManagerView, AssignTrainerView, AssignStudentView, AddCourseView, AddCourseRunView, AutomationLogsView, AssignTrainerLogsView, BackfillEnrollmentsView, FetchUpcomingEnrolmentsView } from '../components/admin/ClassManagementViews';
 import { CreateNewClassView } from '../components/admin/CreateNewClassView';
 import EnrollLearners from '../components/admin/EnrollLearners';
 import {
@@ -136,6 +136,7 @@ const PAGE_LABELS: Partial<Record<AdminPage, string>> = {
   [AdminPage.AutomationLogs]: 'Automation Logging',
   [AdminPage.AssignTrainerLogs]: 'Assign Trainer Log',
   [AdminPage.BackfillEnrollments]: 'Backfill Enrollments',
+  [AdminPage.FetchUpcomingEnrolments]: 'Fetch Upcoming Classes Enrolment',
 };
 
 const AdminLayout: React.FC = () => {
@@ -266,6 +267,8 @@ const AdminLayout: React.FC = () => {
         return <AssignTrainerLogsView />;
       case AdminPage.BackfillEnrollments:
         return <BackfillEnrollmentsView />;
+      case AdminPage.FetchUpcomingEnrolments:
+        return <FetchUpcomingEnrolmentsView />;
       default:
         return <AdminDashboard />;
     }

@@ -92,6 +92,7 @@ const EnrollLearners: React.FC = () => {
     traineeContactNumberCountryCode: '+65',
     traineeContactNumberPhoneNumber: '',
     traineeSponsorshipType: SponsorshipType.INDIVIDUAL,
+    employerCountryCode: '+65',
     trainingPartnerUen: '201200696W',
     trainingPartnerCode: '201200696W-01'
   });
@@ -401,7 +402,7 @@ const EnrollLearners: React.FC = () => {
       employerFullName: '',
       employerEmailAddress: '',
       employerAreaCode: '',
-      employerCountryCode: '',
+      employerCountryCode: '+65',
       employerPhoneNumber: ''
     }));
   };
@@ -473,7 +474,18 @@ const EnrollLearners: React.FC = () => {
         throw new Error(`Enrolment search failed with status: ${response.status}`);
       }
 
-      const rawResult = await response.json();
+      const text = await response.text();
+      if (!text || !text.trim()) {
+        // n8n returned an empty body — treat as no enrollments found
+        setEnrolmentData({ status: 200, data: [] });
+        return;
+      }
+      let rawResult: any;
+      try {
+        rawResult = JSON.parse(text);
+      } catch {
+        throw new Error(`n8n returned non-JSON response: ${text.slice(0, 200)}`);
+      }
       // n8n returns { result: "<JSON string>" } — parse the inner JSON
       const parsed = typeof rawResult.result === 'string'
         ? JSON.parse(rawResult.result)
@@ -773,6 +785,7 @@ const EnrollLearners: React.FC = () => {
           traineeContactNumberCountryCode: '+65',
           traineeContactNumberPhoneNumber: '',
           traineeSponsorshipType: SponsorshipType.INDIVIDUAL,
+          employerCountryCode: '+65',
           trainingPartnerUen: '201200696W',
           trainingPartnerCode: '201200696W-01'
         });
@@ -832,6 +845,7 @@ const EnrollLearners: React.FC = () => {
       traineeContactNumberCountryCode: '+65',
       traineeContactNumberPhoneNumber: '',
       traineeSponsorshipType: SponsorshipType.INDIVIDUAL,
+      employerCountryCode: '+65',
       trainingPartnerUen: '201200696W',
       trainingPartnerCode: '201200696W-01'
     });

@@ -19,7 +19,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           c.image_url AS course_image,
           c.training_hours,
           c.assessment_hours,
-          c.mode_of_learning
+          c.mode_of_learning,
+          c.funding_validity
       FROM course c
       ORDER BY c.title
     `;
@@ -39,6 +40,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       tscCode: row.tsc_code || '',
       imageUrl: row.course_image || null,
       modeOfLearning: row.mode_of_learning ? [row.mode_of_learning] : ['Hybrid'],
+      fundingValidity: row.funding_validity || null,
       courseRunId: null, // No course run for developers
       startDate: null,   // No start date for developers
       endDate: null,     // No end date for developers

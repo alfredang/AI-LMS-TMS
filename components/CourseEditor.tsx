@@ -457,6 +457,7 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                 assessmentPlanUrl: course.assessmentPlanUrl || undefined,
                 slidesUrl: course.slidesUrl || undefined,
                 courseLink: course.courseLink || undefined,
+                fundingValidity: course.fundingValidity || undefined,
                 assessmentRecordLink: course.assessmentRecordLink || undefined,
                 writtenAssessmentLink: writtenAssessmentInputType === 'link' ? (course.writtenAssessmentLink || undefined) : undefined,
                 practicalPerformanceAssessmentLink: practicalPerformanceInputType === 'link' ? (course.practicalPerformanceAssessmentLink || undefined) : undefined,
@@ -991,6 +992,13 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                     TSC Code {(course.courseType === 'WSQ' || course.courseType === 'IBF') && <span className="text-red-500">*</span>}
                                 </label>
                                 <input type="text" id="tscCode" name="tscCode" value={course.tscCode} onChange={handleCourseChange} className={inputClasses} placeholder="e.g. ICT-DIT-3011-1.1" />
+                            </div>
+                            <div>
+                                <label htmlFor="fundingValidity" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
+                                    Funding Validity
+                                </label>
+                                <input type="date" id="fundingValidity" name="fundingValidity" value={course.fundingValidity ? course.fundingValidity.slice(0, 10) : ''} onChange={handleCourseChange} className={inputClasses} />
+                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Date until which the course funding is valid</p>
                             </div>
                             <div>
                                 <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">

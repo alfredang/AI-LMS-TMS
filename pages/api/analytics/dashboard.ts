@@ -10,12 +10,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    // Get total learners from completed classes (all trainees in course runs that have ended)
+    // Get total unique learners enrolled across all course runs
     const totalLearnersResult = await pool.query(`
-      SELECT COUNT(*) AS total_learners
+      SELECT COUNT(DISTINCT e.user_id) AS total_learners
       FROM enrollment e
-      JOIN course_run cr ON e.course_run_id = cr.id
-      WHERE cr.end_date < CURRENT_DATE;
+      WHERE e.enrolment_status IS NULL OR LOWER(e.enrolment_status) != 'cancelled';
     `);
 
     // Get enrollment by month using created_at since enrolment_date is null
@@ -42,7 +41,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       LIMIT 10;
     `);
 
-    // Get learner age groups with all age ranges
+    // Get learner age groups using dateOfBirth from raw_data JSONB column
     const ageGroupResult = await pool.query(`
       WITH age_ranges AS (
         SELECT '20-25' AS age_group, 1 AS sort_order
@@ -54,68 +53,64 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         UNION SELECT '51+', 7
       ),
       learner_ages AS (
+        SELECT DISTINCT ON (e.user_id)
+          e.user_id,
+          (e.raw_data->'trainee'->>'dateOfBirth')::date AS dob
+        FROM enrollment e
+        WHERE e.raw_data->'trainee'->>'dateOfBirth' IS NOT NULL
+          AND e.raw_data->'trainee'->>'dateOfBirth' != ''
+      ),
+      learner_age_groups AS (
         SELECT
-          lp.user_id,
+          user_id,
           CASE
-            WHEN EXTRACT(YEAR FROM AGE(current_date, lp.dob)) BETWEEN 20 AND 25 THEN '20-25'
-            WHEN EXTRACT(YEAR FROM AGE(current_date, lp.dob)) BETWEEN 26 AND 30 THEN '26-30'
-            WHEN EXTRACT(YEAR FROM AGE(current_date, lp.dob)) BETWEEN 31 AND 35 THEN '31-35'
-            WHEN EXTRACT(YEAR FROM AGE(current_date, lp.dob)) BETWEEN 36 AND 40 THEN '36-40'
-            WHEN EXTRACT(YEAR FROM AGE(current_date, lp.dob)) BETWEEN 41 AND 45 THEN '41-45'
-            WHEN EXTRACT(YEAR FROM AGE(current_date, lp.dob)) BETWEEN 46 AND 50 THEN '46-50'
-            WHEN EXTRACT(YEAR FROM AGE(current_date, lp.dob)) > 50 THEN '51+'
+            WHEN EXTRACT(YEAR FROM AGE(current_date, dob)) BETWEEN 20 AND 25 THEN '20-25'
+            WHEN EXTRACT(YEAR FROM AGE(current_date, dob)) BETWEEN 26 AND 30 THEN '26-30'
+            WHEN EXTRACT(YEAR FROM AGE(current_date, dob)) BETWEEN 31 AND 35 THEN '31-35'
+            WHEN EXTRACT(YEAR FROM AGE(current_date, dob)) BETWEEN 36 AND 40 THEN '36-40'
+            WHEN EXTRACT(YEAR FROM AGE(current_date, dob)) BETWEEN 41 AND 45 THEN '41-45'
+            WHEN EXTRACT(YEAR FROM AGE(current_date, dob)) BETWEEN 46 AND 50 THEN '46-50'
+            WHEN EXTRACT(YEAR FROM AGE(current_date, dob)) > 50 THEN '51+'
             ELSE NULL
           END AS age_group
-        FROM learner_profile lp
-        WHERE lp.dob IS NOT NULL
+        FROM learner_ages
       )
       SELECT
         ar.age_group,
         COALESCE(COUNT(DISTINCT la.user_id), 0) AS unique_learners
       FROM age_ranges ar
-      LEFT JOIN learner_ages la ON ar.age_group = la.age_group
+      LEFT JOIN learner_age_groups la ON ar.age_group = la.age_group
       GROUP BY ar.age_group, ar.sort_order
       ORDER BY ar.sort_order;
     `);
 
-    // Get gender breakdown (normalize to Male/Female)
-    const genderBreakdownResult = await pool.query(`
-      WITH gender_types AS (
-        SELECT 'Male' AS gender, 1 AS sort_order
-        UNION SELECT 'Female', 2
-      ),
-      learner_gender AS (
-        SELECT
-          user_id,
-          CASE
-            WHEN UPPER(gender) IN ('M', 'MALE') THEN 'Male'
-            WHEN UPPER(gender) IN ('F', 'FEMALE') THEN 'Female'
-            ELSE NULL
-          END AS gender
-        FROM learner_profile
-        WHERE gender IS NOT NULL
-      )
+    // Get enrolment status breakdown (Confirmed vs Cancelled)
+    const enrolmentStatusResult = await pool.query(`
       SELECT
-        gt.gender,
-        COALESCE(COUNT(DISTINCT lg.user_id), 0) AS total_learners
-      FROM gender_types gt
-      LEFT JOIN learner_gender lg ON gt.gender = lg.gender
-      GROUP BY gt.gender, gt.sort_order
-      ORDER BY gt.sort_order;
+        CASE
+          WHEN LOWER(e.enrolment_status) = 'confirmed' THEN 'Confirmed'
+          WHEN LOWER(e.enrolment_status) = 'cancelled' THEN 'Cancelled'
+          ELSE 'Other'
+        END AS status,
+        COUNT(DISTINCT e.user_id) AS total_learners
+      FROM enrollment e
+      WHERE e.enrolment_status IS NOT NULL
+      GROUP BY 1
+      ORDER BY 1;
     `);
 
     // Get sponsorship breakdown with all types
     const sponsorshipBreakdownResult = await pool.query(`
       WITH sponsorship_types AS (
-        SELECT 'Employer-Sponsored' AS sponsorship_type
-        UNION SELECT 'Self-Sponsored'
+        SELECT 'Employer' AS sponsorship_type
+        UNION SELECT 'Individual'
         UNION SELECT 'N/A'
       ),
       enrollment_sponsorship AS (
-        SELECT 
-          CASE 
-            WHEN e.course_sponsorship = 'Employer-Sponsored' THEN 'Employer-Sponsored'
-            WHEN e.course_sponsorship = 'Self-Sponsored' THEN 'Self-Sponsored'
+        SELECT
+          CASE
+            WHEN e.course_sponsorship::text = 'Employer' THEN 'Employer'
+            WHEN e.course_sponsorship::text = 'Individual' THEN 'Individual'
             ELSE 'N/A'
           END AS sponsorship_type,
           e.user_id
@@ -130,33 +125,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       ORDER BY st.sponsorship_type;
     `);
 
-    // Get ethnicity breakdown with all major ethnicities
-    const ethnicityBreakdownResult = await pool.query(`
-      WITH ethnicity_types AS (
-        SELECT 'Chinese' AS ethnicity
-        UNION SELECT 'Malay'
-        UNION SELECT 'Indian'
-        UNION SELECT 'Others'
-      ),
-      learner_ethnicity AS (
-        SELECT 
-          CASE 
-            WHEN lp.ethnicity = 'Chinese' THEN 'Chinese'
-            WHEN lp.ethnicity = 'Malay' THEN 'Malay'
-            WHEN lp.ethnicity = 'Indian' THEN 'Indian'
-            ELSE 'Others'
-          END AS ethnicity,
-          lp.user_id
-        FROM learner_profile lp
-      )
-      SELECT 
-        et.ethnicity,
-        COALESCE(COUNT(DISTINCT le.user_id), 0) AS total_learners
-      FROM ethnicity_types et
-      LEFT JOIN learner_ethnicity le ON et.ethnicity = le.ethnicity
-      GROUP BY et.ethnicity
-      ORDER BY et.ethnicity;
-    `);
 
     // Format the data
     const currentDate = new Date();
@@ -215,16 +183,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         label: row.age_group,
         value: parseInt(row.unique_learners)
       })),
-      genderBreakdown: genderBreakdownResult.rows.map(row => ({
-        label: row.gender,
+      enrolmentStatusBreakdown: enrolmentStatusResult.rows.map(row => ({
+        label: row.status,
         value: parseInt(row.total_learners)
       })),
       sponsorshipBreakdown: sponsorshipBreakdownResult.rows.map(row => ({
         label: row.sponsorship_type,
-        value: parseInt(row.total_learners)
-      })),
-      ethnicityBreakdown: ethnicityBreakdownResult.rows.map(row => ({
-        label: row.ethnicity,
         value: parseInt(row.total_learners)
       }))
     };

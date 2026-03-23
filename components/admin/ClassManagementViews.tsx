@@ -5162,3 +5162,227 @@ export const BackfillEnrollmentsView: React.FC = () => {
         </div>
     );
 };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Fetch Upcoming Classes Enrolment
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface UpcomingCourseRunPreview {
+    uuid: string;
+    ssg_run_id: string;
+    course_title: string;
+    course_code: string;
+    start_date: string;
+    end_date: string;
+    class_status: string;
+    enrolment_count: string;
+}
+
+interface FetchUpcomingRunResult {
+    ssgRunId: string;
+    courseTitle: string;
+    enrollmentsInserted: number;
+    enrollmentsSkipped: number;
+    dateFixed: boolean;
+    dateMismatch?: string;
+    error?: string;
+}
+
+export const FetchUpcomingEnrolmentsView: React.FC = () => {
+    const { setAdminPage } = useLms();
+    const [preview, setPreview] = useState<UpcomingCourseRunPreview[]>([]);
+    const [previewing, setPreviewing] = useState(false);
+    const [running, setRunning] = useState(false);
+    const [runResult, setRunResult] = useState<any>(null);
+    const [limit, setLimit] = useState(20);
+    const [error, setError] = useState<string | null>(null);
+
+    const fetchPreview = async () => {
+        setPreviewing(true);
+        setError(null);
+        setRunResult(null);
+        try {
+            const res = await fetch(`/api/admin/fetch-upcoming-enrolments?limit=${limit}`);
+            const json = await res.json();
+            if (json.success) {
+                setPreview(json.courseRuns ?? []);
+            } else {
+                setError(json.error ?? 'Preview failed');
+            }
+        } catch (e) {
+            setError(e instanceof Error ? e.message : 'Network error');
+        } finally {
+            setPreviewing(false);
+        }
+    };
+
+    const runFetch = async () => {
+        if (!window.confirm(`This will call the SSG webhook for up to ${preview.length} course run(s), 4 seconds apart. Proceed?`)) return;
+        setRunning(true);
+        setError(null);
+        setRunResult(null);
+        try {
+            const res = await fetch(`/api/admin/fetch-upcoming-enrolments?limit=${limit}`, { method: 'POST' });
+            const json = await res.json();
+            if (json.success) {
+                setRunResult(json);
+                setPreview([]);
+            } else {
+                setError(json.error ?? 'Fetch failed');
+            }
+        } catch (e) {
+            setError(e instanceof Error ? e.message : 'Network error');
+        } finally {
+            setRunning(false);
+        }
+    };
+
+    const fmt = (d: string) => d ? new Date(d).toLocaleDateString('en-SG', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+
+    return (
+        <div className="max-w-5xl">
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+                <h2 className="text-3xl font-bold">Fetch Upcoming Classes Enrolment</h2>
+                <Button variant="ghost" onClick={() => setAdminPage(AdminPage.Dashboard)}>Back</Button>
+            </div>
+
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+                For each upcoming course run, calls the SSG view-enrolment webhook, upserts all returned enrolments into the database, and corrects any mismatched start/end dates.
+                Preview first to verify, then run.
+            </p>
+
+            {/* Controls */}
+            <Card className="p-5 mb-6">
+                <div className="flex flex-wrap items-end gap-4">
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Limit</label>
+                        <input
+                            type="number"
+                            min={1} max={100}
+                            value={limit}
+                            onChange={e => setLimit(Math.min(100, Math.max(1, Number(e.target.value))))}
+                            className="w-24 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-slate-800 text-gray-900 dark:text-white"
+                        />
+                    </div>
+                    <Button onClick={fetchPreview} disabled={previewing || running} variant="secondary">
+                        {previewing ? 'Fetching preview…' : 'Fetch Preview'}
+                    </Button>
+                    {preview.length > 0 && (
+                        <Button onClick={runFetch} disabled={running || previewing} className="bg-blue-600 hover:bg-blue-700 text-white">
+                            {running ? 'Running…' : `Run Fetch (${preview.length} runs)`}
+                        </Button>
+                    )}
+                </div>
+                <p className="text-xs text-gray-400 dark:text-gray-500 mt-3">
+                    Note: Calls the SSG webhook once per course run with a 4-second delay between each call.
+                </p>
+            </Card>
+
+            {/* Error */}
+            {error && (
+                <div className="mb-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-700 dark:text-red-300">
+                    {error}
+                </div>
+            )}
+
+            {/* Run result summary */}
+            {runResult && (
+                <Card className="p-5 mb-6">
+                    <h3 className="font-semibold text-gray-900 dark:text-white mb-3">Fetch Complete</h3>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">{runResult.message}</p>
+                    <div className="flex flex-wrap gap-4 mb-4 text-sm">
+                        <span className="px-3 py-1 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300">Runs: <strong>{runResult.total}</strong></span>
+                        <span className="px-3 py-1 rounded-full bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300">Inserted: <strong>{runResult.totalInserted}</strong></span>
+                        <span className="px-3 py-1 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300">Dates Fixed: <strong>{runResult.totalFixed}</strong></span>
+                        <span className="px-3 py-1 rounded-full bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300">Errors: <strong>{runResult.totalErrors}</strong></span>
+                    </div>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                            <thead className="bg-gray-50 dark:bg-gray-800 text-left">
+                                <tr>
+                                    <th className="px-4 py-2 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Course Run ID</th>
+                                    <th className="px-4 py-2 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Course</th>
+                                    <th className="px-4 py-2 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Inserted</th>
+                                    <th className="px-4 py-2 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Skipped</th>
+                                    <th className="px-4 py-2 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Date Fix</th>
+                                    <th className="px-4 py-2 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Detail</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                                {(runResult.results ?? []).map((r: FetchUpcomingRunResult, i: number) => (
+                                    <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                                        <td className="px-4 py-2 font-mono text-xs text-indigo-600 dark:text-indigo-400">{r.ssgRunId}</td>
+                                        <td className="px-4 py-2 text-xs text-gray-700 dark:text-gray-300 max-w-[180px] whitespace-normal">{r.courseTitle}</td>
+                                        <td className="px-4 py-2 text-xs text-center">
+                                            <span className="px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 font-semibold">{r.enrollmentsInserted}</span>
+                                        </td>
+                                        <td className="px-4 py-2 text-xs text-center text-gray-500 dark:text-gray-400">{r.enrollmentsSkipped}</td>
+                                        <td className="px-4 py-2 text-xs text-center">
+                                            {r.dateFixed
+                                                ? <span className="px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 font-semibold">Fixed</span>
+                                                : <span className="text-gray-400">—</span>
+                                            }
+                                        </td>
+                                        <td className="px-4 py-2 text-xs text-gray-500 dark:text-gray-400">
+                                            {r.error
+                                                ? <span className="text-red-600 dark:text-red-400">{r.error}</span>
+                                                : r.dateMismatch
+                                                    ? <span className="text-blue-600 dark:text-blue-400">{r.dateMismatch}</span>
+                                                    : '—'
+                                            }
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </Card>
+            )}
+
+            {/* Preview table */}
+            {preview.length > 0 && !runResult && (
+                <Card className="overflow-hidden">
+                    <div className="px-5 py-3 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
+                        <span className="font-semibold text-gray-900 dark:text-white">{preview.length} upcoming course run{preview.length !== 1 ? 's' : ''}</span>
+                        <span className="text-xs text-amber-600 dark:text-amber-400 font-medium">Review below, then click Run Fetch</span>
+                    </div>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                            <thead className="bg-gray-50 dark:bg-gray-800 text-left">
+                                <tr>
+                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Course Run ID</th>
+                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Course</th>
+                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Start Date</th>
+                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">End Date</th>
+                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Status</th>
+                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Enrolments</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                                {preview.map(row => (
+                                    <tr key={row.uuid} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                                        <td className="px-4 py-3 font-mono text-xs text-indigo-600 dark:text-indigo-400">{row.ssg_run_id || '—'}</td>
+                                        <td className="px-4 py-3 max-w-[200px]">
+                                            <div className="font-medium text-gray-900 dark:text-gray-100 text-xs whitespace-normal">{row.course_title || '—'}</div>
+                                            {row.course_code && <span className="text-xs text-gray-400 font-mono">{row.course_code}</span>}
+                                        </td>
+                                        <td className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">{fmt(row.start_date)}</td>
+                                        <td className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">{fmt(row.end_date)}</td>
+                                        <td className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400">{row.class_status || '—'}</td>
+                                        <td className="px-4 py-3 text-xs text-center font-semibold text-gray-700 dark:text-gray-300">{row.enrolment_count}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </Card>
+            )}
+
+            {preview.length === 0 && !previewing && !runResult && !error && (
+                <Card className="p-8 text-center text-gray-500 dark:text-gray-400">
+                    Click <strong>Fetch Preview</strong> to see upcoming course runs.
+                </Card>
+            )}
+        </div>
+    );
+};
