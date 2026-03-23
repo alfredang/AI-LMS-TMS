@@ -1256,19 +1256,14 @@ const CourseSidebar: React.FC<CourseSidebarProps> = ({ userRole, onSetGradingVie
     const [activeItem, setActiveItem] = useState(defaultActive);
 
     const handleItemClick = (label: string) => {
-        if (label === 'Grading') {
-            // Navigate to Assessment Grading sidebar page
-            setSelectedCourse(null);
-            setTrainerPage(TrainerPage.AssessmentGrading);
-            return;
-        } else {
-            onSetGradingView(false);
-            setActiveItem(label);
+        onSetGradingView(false);
+        setActiveItem(label);
 
-            let targetId = toId(label);
-            if (label === 'Lesson' || label === 'Lessons' || label === 'Learning Outcomes') targetId = 'lessons';
-            else if (label === 'Assessment' || label === 'Assessments') targetId = 'assessments';
-            else if (label === 'Certificate') targetId = 'certificate';
+        let targetId = toId(label);
+        if (label === 'Lesson' || label === 'Lessons' || label === 'Learning Outcomes') targetId = 'lessons';
+        else if (label === 'Assessment' || label === 'Assessments') targetId = 'assessments';
+        else if (label === 'Certificate') targetId = 'certificate';
+        else if (label === 'Grading') targetId = 'assessment-grading';
 
             const element = document.getElementById(targetId);
             if (element) {
@@ -1276,7 +1271,6 @@ const CourseSidebar: React.FC<CourseSidebarProps> = ({ userRole, onSetGradingVie
                 const y = element.getBoundingClientRect().top + window.pageYOffset + yOffset;
                 window.scrollTo({ top: y, behavior: 'smooth' });
             }
-        }
         if (onMobileItemClick) {
             onMobileItemClick();
         }
