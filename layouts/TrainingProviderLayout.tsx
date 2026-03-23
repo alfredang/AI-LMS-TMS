@@ -10,6 +10,7 @@ import { CourseDetail } from '../components/CourseDetail';
 import { Icon, IconName } from '../components/ui/Icon';
 import HelpAndSupportView from '../components/HelpAndSupportView';
 import UserManagementView from '../components/training-provider/UserManagementView';
+import AdminManagementView from '../components/training-provider/AdminManagementView';
 import ApiEndpointsView from '../components/training-provider/ApiEndpointsView';
 import TrainingProviderSidebar from '../components/training-provider/TrainingProviderSidebar';
 import { Card } from '../components/ui/Card';
@@ -40,6 +41,8 @@ const TrainingProviderLayout: React.FC = () => {
         return <CourseList />;
       case View.UserManagement:
         return <UserManagementView />;
+      case View.AdminManagement:
+        return <AdminManagementView />;
       case View.Profile:
         return <ProfileView />;
       case View.HelpAndSupport:
@@ -58,6 +61,7 @@ const TrainingProviderLayout: React.FC = () => {
       case View.Dashboard: return 'Dashboard';
       case View.Courses: return 'Courses';
       case View.UserManagement: return 'User Management';
+      case View.AdminManagement: return 'Admin Management';
       case View.Profile: return 'My Profile';
       case View.HelpAndSupport: return 'Help & Support';
       case View.ApiEndpoints: return 'API Endpoints';

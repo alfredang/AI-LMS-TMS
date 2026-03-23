@@ -9,7 +9,8 @@ export enum View {
   Profile = 'profile',
   HelpAndSupport = 'helpAndSupport',
   UserManagement = 'userManagement',
-  ApiEndpoints = 'apiEndpoints'
+  ApiEndpoints = 'apiEndpoints',
+  AdminManagement = 'adminManagement'
 }
 
 export enum UserRole {
