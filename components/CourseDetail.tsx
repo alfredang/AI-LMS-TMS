@@ -62,6 +62,8 @@ interface Course {
     assessments?: Assessment[];
     learners?: LearnerProgress[];
     bookmarkedSubtopics?: string[];
+    startDate?: string;
+    endDate?: string;
     lessonPlanUrl?: string;
     facilitatorGuideUrl?: string;
     learnerGuideUrl?: string;
@@ -1211,6 +1213,8 @@ const CourseInfoPanel: React.FC<{ course: Course; userRole: UserRole }> = ({ cou
                     <>
                         <DetailRow label="Course Run ID" value={course.courseRunId} />
                         <DetailRow label="Digital Attendance ID" value={course.daId || 'N/A'} />
+                        <DetailRow label="Start Date" value={course.startDate ? new Date(course.startDate).toLocaleDateString('en-SG', { year: 'numeric', month: 'short', day: 'numeric' }) : 'N/A'} />
+                        <DetailRow label="End Date" value={course.endDate ? new Date(course.endDate).toLocaleDateString('en-SG', { year: 'numeric', month: 'short', day: 'numeric' }) : 'N/A'} />
                     </>
                 )}
 
