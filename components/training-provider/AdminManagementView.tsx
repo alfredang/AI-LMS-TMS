@@ -8,7 +8,6 @@ interface AdminAccount {
   fullName: string;
   accountStatus: string;
   createdAt: string;
-  isProtected: boolean;
   tel: string | null;
   roles: string[];
 }
@@ -86,8 +85,8 @@ const AdminManagementView: React.FC = () => {
           <p className="text-gray-600 dark:text-gray-300 mt-1">Active Admins</p>
         </Card>
         <Card className="p-6 text-center">
-          <p className="text-4xl font-bold text-purple-600">{admins.filter(a => a.isProtected).length}</p>
-          <p className="text-gray-600 dark:text-gray-300 mt-1">Protected Accounts</p>
+          <p className="text-4xl font-bold text-purple-600">{admins.filter(a => a.roles.length >= 3).length}</p>
+          <p className="text-gray-600 dark:text-gray-300 mt-1">Multi-Role Admins</p>
         </Card>
       </div>
 
@@ -140,7 +139,6 @@ const AdminManagementView: React.FC = () => {
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Roles</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Account Status</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Created</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Protected</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200 dark:bg-gray-800 dark:divide-gray-700">
@@ -179,16 +177,6 @@ const AdminManagementView: React.FC = () => {
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">
                       {formatDate(admin.createdAt)}
-                    </td>
-                    <td className="px-4 py-4 whitespace-nowrap text-sm text-center">
-                      {admin.isProtected ? (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300">
-                          <Icon name={IconName.Settings} className="w-3 h-3 mr-1" />
-                          Protected
-                        </span>
-                      ) : (
-                        <span className="text-gray-400 dark:text-gray-500">—</span>
-                      )}
                     </td>
                   </tr>
                 ))}
