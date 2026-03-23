@@ -275,9 +275,59 @@ const ManagementCourseList: React.FC = () => {
         );
     }
 
+    const TrainerCourseCard: React.FC<{ course: any }> = ({ course }) => {
+        const totalHours = Number(course.trainingHours) + Number(course.assessmentHours);
+        const handleClick = () => {
+            setSelectedCourse(course);
+            loadCourseData(course);
+        };
+        return (
+            <div
+                onClick={handleClick}
+                className="group bg-surface border border-default rounded-2xl overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-200 cursor-pointer flex flex-col"
+            >
+                <div className="relative overflow-hidden bg-surface-elevated" style={{ height: '170px' }}>
+                    <img
+                        src={getCourseImageUrl(course.imageUrl, course.id)}
+                        alt={course.title}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        onError={(e) => { (e.target as HTMLImageElement).src = `https://picsum.photos/seed/${course.id}/400/200`; }}
+                    />
+                </div>
+                <div className="p-4 flex flex-col flex-grow">
+                    <h3 className="font-bold text-sm text-on-surface line-clamp-2 mb-3 leading-snug group-hover:text-primary transition-colors">
+                        {course.title}
+                    </h3>
+                    <div className="flex-grow space-y-0">
+                        <LearnerCardDetailRow label="Course Code" value={course.courseCode || '—'} />
+                        <LearnerCardDetailRow label="Course Duration" value={`${totalHours} Hours (${course.trainingHours}T + ${course.assessmentHours}A)`} />
+                        <LearnerCardDetailRow label="Course Type" value={
+                            <span className={`px-2 py-0.5 rounded text-xs font-semibold ${getTypeColor(course.courseType)}`}>{course.courseType}</span>
+                        } />
+                        {(course.courseRunCode || course.courseRunId) && (
+                            <LearnerCardDetailRow label="Course Run" value={course.courseRunCode || course.courseRunId} />
+                        )}
+                        {course.startDate && (
+                            <LearnerCardDetailRow label="Start Date" value={new Date(course.startDate).toLocaleDateString('en-SG', { year: 'numeric', month: 'short', day: 'numeric' })} />
+                        )}
+                        {course.endDate && (
+                            <LearnerCardDetailRow label="End Date" value={new Date(course.endDate).toLocaleDateString('en-SG', { year: 'numeric', month: 'short', day: 'numeric' })} />
+                        )}
+                    </div>
+                    <div className="flex items-center justify-between mt-4 pt-3 border-t border-default">
+                        <span className="text-sm font-semibold text-primary">View Course</span>
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
     const CourseBlockView = () => (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {paginatedCourses.map(course => {
+                if (role === UserRole.Trainer) {
+                    return <TrainerCourseCard key={course.id} course={course} />;
+                }
                 const totalHours = Number(course.trainingHours) + Number(course.assessmentHours);
                 return (
                     <Card key={course.id} className="flex flex-col bg-surface border-default">
@@ -293,10 +343,8 @@ const ManagementCourseList: React.FC = () => {
                             />
                         </div>
                         <div className="p-6 flex flex-col flex-grow">
-                            {/* Title with fixed height and line clamp */}
                             <h3 className="text-xl font-bold mb-4 h-14 line-clamp-2 overflow-hidden">{course.title}</h3>
 
-                            {/* Details Section with consistent height */}
                             <div className="text-xs space-y-2 mb-4 flex-grow min-h-[180px]">
                                 <DetailRow label="TGS Ref" value={course.courseCode} />
                                 <DetailRow label="TSC Title" value={course.tscTitle || 'N/A'} />
@@ -315,9 +363,6 @@ const ManagementCourseList: React.FC = () => {
                                         </span>
                                     </div>
                                 } />
-                                {role === UserRole.Trainer && course.courseRunId && (
-                                    <DetailRow label="Course Run ID" value={course.courseRunCode} />
-                                )}
                                 {course.startDate && role !== UserRole.Developer && (
                                     <DetailRow label="Start Date" value={
                                         new Date(course.startDate).toLocaleDateString('en-SG', {
