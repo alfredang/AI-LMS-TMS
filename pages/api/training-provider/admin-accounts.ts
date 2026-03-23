@@ -7,6 +7,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
+    // First get all admin users
     const result = await pool.query(`
       SELECT
         au.id,
@@ -15,17 +16,26 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         au.account_status,
         au.created_at,
         au.is_protected,
-        ap.tel,
-        (
-          SELECT array_agg(urm.role::text ORDER BY urm.role::text)
-          FROM public.user_role_map urm
-          WHERE urm.user_id = au.id
-        ) AS roles
+        ap.tel
       FROM public.app_user au
       JOIN public.user_role_map urm2 ON urm2.user_id = au.id AND urm2.role = 'Admin'
       LEFT JOIN public.admin_profile ap ON ap.user_id = au.id
       ORDER BY au.full_name ASC
     `);
+
+    // Then fetch roles for each admin
+    const adminIds = result.rows.map((r: any) => r.id);
+    let rolesMap: Record<string, string[]> = {};
+    if (adminIds.length > 0) {
+      const rolesResult = await pool.query(
+        `SELECT user_id, role::text as role FROM public.user_role_map WHERE user_id = ANY($1) ORDER BY role::text`,
+        [adminIds]
+      );
+      for (const row of rolesResult.rows) {
+        if (!rolesMap[row.user_id]) rolesMap[row.user_id] = [];
+        rolesMap[row.user_id].push(row.role);
+      }
+    }
 
     return res.status(200).json({
       success: true,
@@ -38,7 +48,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           createdAt: row.created_at,
           isProtected: row.is_protected,
           tel: row.tel,
-          roles: row.roles,
+          roles: rolesMap[row.id] || [],
         })),
         totalCount: result.rows.length,
       },
