@@ -9,6 +9,12 @@ interface AnalyticsData {
   totalGrants: number;
   totalClaims: number;
   enrollmentForecast: number;
+  grantForecast: number;
+  grantForecastMethod: 'seasonal+growth' | 'seasonal' | 'average' | 'none';
+  grantsInPipeline: number;
+  claimForecast: number;
+  claimForecastMethod: 'seasonal' | 'average' | 'none';
+  claimsInPipeline: number;
   enrollmentByMonth: { label: string; value: number }[];
   courseRanking: { label: string; value: number }[];
   ageProfile: { label: string; value: number }[];
@@ -72,33 +78,37 @@ const BarChart: React.FC<{ data: { label: string; value: number }[]; color: 'pri
 const TrainingProviderDashboard: React.FC = () => {
     const [analyticsData, setAnalyticsData] = useState<AnalyticsData | null>(null);
     const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    useEffect(() => {
-        const fetchAnalyticsData = async () => {
-            try {
-                setLoading(true);
-                const response = await fetch(getApiUrl('/api/analytics/dashboard'));
-                
-                if (!response.ok) {
-                    throw new Error('Failed to fetch analytics data');
-                }
-                
-                const result = await response.json();
-                
-                if (!result.success) {
-                    throw new Error(result.error || 'Failed to fetch analytics data');
-                }
-                
-                setAnalyticsData(result.data);
-            } catch (err) {
-                console.error('Error fetching analytics data:', err);
-                setError(err instanceof Error ? err.message : 'Unknown error');
-            } finally {
-                setLoading(false);
-            }
-        };
+    const fetchAnalyticsData = async (isRefresh = false) => {
+        try {
+            if (isRefresh) setRefreshing(true);
+            else setLoading(true);
+            const response = await fetch(getApiUrl('/api/analytics/dashboard'));
 
+            if (!response.ok) {
+                throw new Error('Failed to fetch analytics data');
+            }
+
+            const result = await response.json();
+
+            if (!result.success) {
+                throw new Error(result.error || 'Failed to fetch analytics data');
+            }
+
+            setAnalyticsData(result.data);
+            setError(null);
+        } catch (err) {
+            console.error('Error fetching analytics data:', err);
+            setError(err instanceof Error ? err.message : 'Unknown error');
+        } finally {
+            setLoading(false);
+            setRefreshing(false);
+        }
+    };
+
+    useEffect(() => {
         fetchAnalyticsData();
     }, []);
 
@@ -128,16 +138,36 @@ const TrainingProviderDashboard: React.FC = () => {
 
     return (
         <div>
-            <h2 className="text-3xl font-bold mb-6">AI Analytics Dashboard</h2>
-            
+            <div className="flex items-center justify-between mb-6">
+                <h2 className="text-3xl font-bold">AI Analytics Dashboard</h2>
+                <button
+                    onClick={() => fetchAnalyticsData(true)}
+                    disabled={refreshing}
+                    className="px-4 py-2 text-sm font-medium rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50 transition-colors"
+                >
+                    {refreshing ? 'Refreshing...' : 'Refresh'}
+                </button>
+            </div>
+
             {/* KPIs */}
             <div className="grid grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
                 <StatCard title="Total Learners Enrolled" value={analyticsData.totalLearners} />
-                <StatCard title="Total Grants Applied" value={`$${analyticsData.totalGrants.toLocaleString()}`} />
-                <StatCard title="Total Claims Received" value={`$${analyticsData.totalClaims.toLocaleString()}`} />
+                <StatCard title="Total Grants Applied" value={`$${Math.round(analyticsData.totalGrants).toLocaleString()}`} />
+                <StatCard title="Total Claims Disbursed" value={`$${Math.round(analyticsData.totalClaims).toLocaleString()}`} />
                 <StatCard title="Enrollment Forecast" value={`~${analyticsData.enrollmentForecast || 0}`} subtext="Next 3 Months" />
-                <StatCard title="Grant Forecast" value="~$0" subtext="Next 3 Months" />
-                <StatCard title="Claim Forecast" value="~$0" subtext="Next 3 Months" />
+                <StatCard
+                    title="Grant Forecast"
+                    value={`~$${Math.round(analyticsData.grantForecast || 0).toLocaleString()}`}
+                    subtext={`Next 3 Months (${
+                        analyticsData.grantForecastMethod === 'seasonal+growth' ? 'seasonal+growth' :
+                        analyticsData.grantForecastMethod === 'seasonal' ? 'seasonal' : 'avg'
+                    })`}
+                />
+                <StatCard
+                    title="Claim Forecast"
+                    value={`~$${Math.round(analyticsData.claimForecast || 0).toLocaleString()}`}
+                    subtext={`Next 3 Months (${analyticsData.claimForecastMethod === 'seasonal' ? 'seasonal' : 'avg'})`}
+                />
             </div>
 
             {/* Charts */}
