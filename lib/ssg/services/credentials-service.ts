@@ -83,22 +83,37 @@ export class SSGCredentialsService {
       };
       
       const credentials: SSGCredentials = {
-        uen: row.uen,
+        uen: process.env.TRAINING_PARTNER_UEN || row.uen,
         encryptionKey: row.ssg_encryption_key || process.env.SSG_ENCRYPTION_KEY || process.env.ENCRYPTION_KEY || '',
         certificatePath: convertToAbsolutePath(row.ssg_self_sign_cert_file),
         privateKeyPath: convertToAbsolutePath(row.ssg_private_key_file)
       };
       console.log('🔑 Encryption key loaded from:', row.ssg_encryption_key ? 'database' : (process.env.SSG_ENCRYPTION_KEY ? 'SSG_ENCRYPTION_KEY env' : (process.env.ENCRYPTION_KEY ? 'ENCRYPTION_KEY env' : 'NONE')));
 
-      // Normalize PEM string: replace literal \n with actual newlines
-      const normalizePem = (pem: string): string => pem.replace(/\\n/g, '\n').trim();
+      /**
+       * Resolve a PEM value from an env var.
+       * Supports two formats:
+       *   1. Base64-encoded PEM  → Buffer.from(val, 'base64').toString('utf8')
+       *   2. Raw PEM with literal \n  → replace \\n with \n
+       */
+      const resolvePem = (val: string): string => {
+        try {
+          const decoded = Buffer.from(val, 'base64').toString('utf8');
+          if (decoded.includes('-----BEGIN')) {
+            console.log('🔑 PEM decoded from base64');
+            return decoded.trim();
+          }
+        } catch {}
+        // Fall back: treat literal \n as newlines
+        return val.replace(/\\n/g, '\n').trim();
+      };
 
       // Read certificate and private key — env vars take priority over file paths
       const certEnv = process.env.CERT_VALUE;
       const keyEnv  = process.env.PRIVATE_KEY_VALUE;
 
       if (certEnv) {
-        credentials.certificateContent = normalizePem(certEnv);
+        credentials.certificateContent = resolvePem(certEnv);
         console.log('✅ Certificate loaded from CERT_VALUE env var, length:', credentials.certificateContent.length);
       } else {
         try {
@@ -114,8 +129,8 @@ export class SSGCredentialsService {
       }
 
       if (keyEnv) {
-        credentials.privateKeyContent = normalizePem(keyEnv);
-        console.log('✅ Private key loaded from PRIVATE_KEY_VALUE env var, length:', credentials.privateKeyContent.length);
+        credentials.privateKeyContent = resolvePem(keyEnv);
+        console.log('✅ Private key loaded from PRIVATE_KEY_VALUE env var, length:', credentials.privateKeyContent!.length);
       } else {
         try {
           if (credentials.privateKeyPath && credentials.privateKeyPath.trim() !== '' && fs.existsSync(credentials.privateKeyPath)) {

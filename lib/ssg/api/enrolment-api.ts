@@ -59,12 +59,18 @@ export class SSGEnrolmentAPI {
     if (raw.error && !raw.data) return raw;
     try {
       const decrypted = Cryptography.decryptJSON(this.credentials.encryptionKey, raw.data);
+      console.log('📦 SSG decrypted response:', JSON.stringify(decrypted, null, 2));
+      const hasError = decrypted?.error && Object.keys(decrypted.error).length > 0;
+      if (hasError) {
+        console.error('❌ SSG API error in response:', JSON.stringify(decrypted.error, null, 2));
+      }
       return {
         data: decrypted?.data ?? decrypted,
         status: Number(decrypted?.status ?? raw.status),
-        error: decrypted?.error && Object.keys(decrypted.error).length > 0 ? decrypted.error : undefined
+        error: hasError ? decrypted.error : undefined
       };
-    } catch {
+    } catch (e) {
+      console.error('❌ Failed to decrypt SSG response:', e);
       return { error: { code: 'DECRYPT_ERROR', message: 'Failed to decrypt SSG response' }, status: raw.status };
     }
   }
@@ -158,8 +164,10 @@ export class SSGEnrolmentAPI {
   async updateEnrolment(enrolmentReferenceNumber: string, payload: UpdateEnrolmentPayload): Promise<SSGApiResponse<any>> {
     try {
       const builder = this.encryptAndBuild(`/tpg/enrolments/${enrolmentReferenceNumber}`);
+      builder.withParam('uen', this.credentials.uen);
       builder.withBody(this.encrypt(this.removeNullFields(payload)));
-      return await handleRequest(this.httpClient, builder.build());
+      const raw = await handleRequest(this.httpClient, builder.build());
+      return this.decryptSSGResponse(raw);
     } catch (err) {
       return { error: { code: 'UPDATE_ENROLMENT_ERROR', message: err instanceof Error ? err.message : 'Unknown error' }, status: 0 };
     }
@@ -169,9 +177,10 @@ export class SSGEnrolmentAPI {
 
   async updateFeeCollection(enrolmentReferenceNumber: string, payload: UpdateFeeCollectionPayload): Promise<SSGApiResponse<any>> {
     try {
-      const builder = this.encryptAndBuild(`/tpg/enrolments/${enrolmentReferenceNumber}/feeCollections`);
+      const builder = this.encryptAndBuild(`/tpg/enrolments/feeCollections/${enrolmentReferenceNumber}`);
       builder.withBody(this.encrypt(this.removeNullFields(payload)));
-      return await handleRequest(this.httpClient, builder.build());
+      const raw = await handleRequest(this.httpClient, builder.build());
+      return this.decryptSSGResponse(raw);
     } catch (err) {
       return { error: { code: 'UPDATE_FEE_COLLECTION_ERROR', message: err instanceof Error ? err.message : 'Unknown error' }, status: 0 };
     }

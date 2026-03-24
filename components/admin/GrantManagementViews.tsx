@@ -1400,21 +1400,21 @@ export const UpdateAssessmentView: React.FC = () => {
 
 export const UpdateEnrolmentFeesView: React.FC = () => {
     const [enrolmentReferenceNumber, setEnrolmentReferenceNumber] = useState<string>('');
-    const [collectionStatus, setCollectionStatus] = useState<string>('Full Payment');
+    const [collectionStatus, setCollectionStatus] = useState<string>('Pending Payment');
     const [trainingPartnerUen, setTrainingPartnerUen] = useState<string>('201200696W');
     const [trainingPartnerCode, setTrainingPartnerCode] = useState<string>('201200696W-01');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [result, setResult] = useState<any>(null);
     const [error, setError] = useState<string | null>(null);
 
-    const WEBHOOK_URL = 'https://n8n.srv1231536.hstgr.cloud/webhook/7cd0d0da-f438-432c-8857-93346ac83b78';
+    const UPDATE_FEES_API = '/api/enrolment/update-fees';
 
     const inputClasses = "block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-500";
 
     const collectionStatusOptions = [
-        'Full Payment',
-        'Pending',
+        'Pending Payment',
         'Partial Payment',
+        'Full Payment',
         'Cancelled'
     ];
 
@@ -1437,96 +1437,26 @@ export const UpdateEnrolmentFeesView: React.FC = () => {
         setResult(null);
 
         try {
-            const payload = {
-                payload: {
-                    referenceNumber: enrolmentReferenceNumber.trim(),
-                    enrolment: {
-                        trainingPartner: {
-                            uen: trainingPartnerUen.trim(),
-                            code: trainingPartnerCode.trim()
-                        },
-                        fees: {
-                            collectionStatus: collectionStatus
-                        }
-                    }
-                }
-            };
+            console.log('📤 Update enrolment fees:', enrolmentReferenceNumber.trim(), collectionStatus);
 
-            console.log('📤 Update enrolment fees payload:', payload);
-
-            const response = await fetch(WEBHOOK_URL, {
+            const response = await fetch(UPDATE_FEES_API, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(payload)
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    referenceNumber: enrolmentReferenceNumber.trim(),
+                    collectionStatus
+                })
             });
 
-            if (!response.ok) {
-                if (response.status === 500) {
-                    throw new Error('SSG API server error. The service may be temporarily unavailable. Please try again later.');
-                }
-                throw new Error(`Unable to connect to SSG API (Error ${response.status}). Please check your connection and try again.`);
-            }
-
-            const text = await response.text();
-            let data;
-            try {
-                data = text ? JSON.parse(text) : {};
-            } catch (e) {
-                console.error('Failed to parse JSON response:', text);
-                throw new Error(`Invalid JSON response from webhook`);
-            }
+            const data = await response.json();
             console.log('✅ Update enrolment fees response:', data);
 
-            let parsedResult = data;
-            if (data?.result !== undefined && data?.result !== null) {
-                if (typeof data.result === 'string') {
-                    try {
-                        parsedResult = JSON.parse(data.result);
-                    } catch (e) {
-                        console.error('Failed to parse result string:', data.result);
-                        parsedResult = { error: { message: data.result } };
-                    }
-                } else if (typeof data.result === 'object') {
-                    if (data.result.message && typeof data.result.message === 'string') {
-                        const match = data.result.message.match(/^\d+\s*-\s*"([\s\S]+)"$/);
-                        if (match) {
-                            try {
-                                const unescaped = match[1].replace(/\\n/g, '').replace(/\\"/g, '"');
-                                parsedResult = JSON.parse(unescaped);
-                            } catch (e) {
-                                console.error('Failed to parse embedded JSON:', e);
-                                parsedResult = data.result;
-                            }
-                        } else {
-                            parsedResult = data.result;
-                        }
-                    } else {
-                        parsedResult = data.result;
-                    }
-                } else {
-                    parsedResult = { error: { message: String(data.result) } };
-                }
+            if (!response.ok || !data.success) {
+                const errorMessage = data?.error?.message || data?.error || 'Failed to update enrolment fees';
+                setError(typeof errorMessage === 'string' ? errorMessage : JSON.stringify(errorMessage));
             }
 
-            // Check for error status - handle both nested error object and root level errors
-            const hasError = (parsedResult?.error?.details?.length > 0) ||
-                (parsedResult?.error?.message) ||
-                (parsedResult?.status && parsedResult.status >= 400) ||
-                (parsedResult?.details?.length > 0) ||
-                (parsedResult?.message && parsedResult.message.toLowerCase().includes('cannot'));
-
-            if (hasError) {
-                const errorMessage = parsedResult?.error?.details?.[0]?.message ||
-                    parsedResult?.error?.message ||
-                    parsedResult?.details?.[0]?.message ||
-                    parsedResult?.message ||
-                    'Failed to update enrolment fees';
-                setError(errorMessage);
-            }
-
-            setResult(parsedResult);
+            setResult(data.data ?? data);
         } catch (err) {
             console.error('❌ Error updating enrolment fees:', err);
             setError(err instanceof Error ? err.message : 'Failed to update enrolment fees');
@@ -1537,7 +1467,7 @@ export const UpdateEnrolmentFeesView: React.FC = () => {
 
     const handleClear = () => {
         setEnrolmentReferenceNumber('');
-        setCollectionStatus('Full Payment');
+        setCollectionStatus('Pending Payment');
         setTrainingPartnerUen('201200696W');
         setTrainingPartnerCode('201200696W-01');
         setResult(null);
@@ -4174,7 +4104,7 @@ export const CancelEnrolmentView: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
     const [showConfirm, setShowConfirm] = useState(false);
 
-    const WEBHOOK_URL = 'https://n8n.srv1231536.hstgr.cloud/webhook/b0e0eaf3-00f2-4273-8a3d-159d9e7734a4';
+    const CANCEL_ENROLMENT_API = '/api/enrolment/cancel';
 
     const inputClasses = "block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-500";
 
@@ -4186,115 +4116,24 @@ export const CancelEnrolmentView: React.FC = () => {
         setWebhookData(null);
 
         try {
-            const payload = {
-                enrolmentId: enrolmentId.trim(),
-                courseRunId: courseRunId.trim(),
-                timestamp: new Date().toISOString(),
-                source: 'admin-cancel-enrolment'
-            };
-
-            console.log('📤 Cancel enrolment payload:', payload);
-
-            const response = await fetch(WEBHOOK_URL, {
+            const response = await fetch(CANCEL_ENROLMENT_API, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(payload)
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ enrolmentId: enrolmentId.trim(), courseRunId: courseRunId.trim() })
             });
 
-            if (!response.ok) {
-                if (response.status === 500) {
-                    throw new Error('SSG API server error. The service may be temporarily unavailable. Please try again later.');
-                }
-                throw new Error(`Unable to connect to SSG API (Error ${response.status}). Please check your connection and try again.`);
+            const json = await response.json();
+
+            if (!response.ok || !json.success) {
+                const errMsg = typeof json.error === 'string' ? json.error : (json.error?.message ?? JSON.stringify(json.error) ?? `Error ${response.status}`);
+                setError(errMsg);
+                setResult(json);
+                return;
             }
 
-            // Safe JSON parsing
-            const text = await response.text();
-            let data;
-            try {
-                data = text ? JSON.parse(text) : {};
-            } catch (e) {
-                console.error('Failed to parse JSON response:', text);
-                throw new Error(`Invalid JSON response from webhook`);
-            }
-            console.log('✅ Cancel enrolment response:', data);
-
-            // Check if webhook returned empty response
-            if (!data || (typeof data === 'object' && Object.keys(data).length === 0)) {
-                throw new Error('Webhook returned empty response. Please check your n8n workflow configuration.');
-            }
-
-            // Store the complete webhook response for raw display (after validation)
-            setWebhookData(data);
-
-            // Parse response - handle various response formats
-            let parsedResult = data;
-
-            // If response has a 'result' property, use that
-            if (data?.result !== undefined && data?.result !== null) {
-                // If result is a string, try to parse it as JSON
-                if (typeof data.result === 'string') {
-                    try {
-                        parsedResult = JSON.parse(data.result);
-                    } catch (e) {
-                        // If parsing fails, treat the string as error message
-                        console.error('Failed to parse result string:', data.result);
-                        parsedResult = { error: { message: data.result } };
-                    }
-                } else if (typeof data.result === 'object') {
-                    // If result is already an object, use it directly
-                    parsedResult = data.result;
-                } else {
-                    // For other types, treat as error
-                    parsedResult = { error: { message: String(data.result) } };
-                }
-            }
-
-            // Check for error status - handle both nested error object and root level errors
-            const hasError = (parsedResult?.error?.details?.length > 0) ||
-                (parsedResult?.error?.message) ||
-                (parsedResult?.status && parsedResult.status >= 400) ||
-                (parsedResult?.details?.length > 0) ||
-                (parsedResult?.message && parsedResult.message.toLowerCase().includes('cannot'));
-
-            if (hasError) {
-                const errorMessage = parsedResult?.error?.details?.[0]?.message ||
-                    parsedResult?.error?.message ||
-                    parsedResult?.details?.[0]?.message ||
-                    parsedResult?.message ||
-                    'Failed to cancel enrolment';
-                setError(errorMessage);
-            }
-
-            // If SSG cancellation succeeded, update the enrollment table in our DB
-            const ssgStatus = parsedResult?.status;
-            const enrolmentRefFromSSG = parsedResult?.data?.enrolment?.referenceNumber;
-            const enrolmentStatusFromSSG = parsedResult?.data?.enrolment?.status;
-            const cancelSucceeded = !hasError &&
-                (ssgStatus === 200 || ssgStatus === '200') &&
-                (enrolmentStatusFromSSG === 'Cancelled' || enrolmentStatusFromSSG === 'cancelled');
-
-            if (cancelSucceeded) {
-                const refToUpdate = enrolmentRefFromSSG || enrolmentId.trim();
-                try {
-                    const dbRes = await fetch('/api/enrolments/cancel', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ enrolmentId: refToUpdate }),
-                    });
-                    if (dbRes.ok) {
-                        console.log('✅ enrollment table updated to Cancelled for enrolment_id:', refToUpdate);
-                    } else {
-                        console.error('❌ Failed to update enrollment table:', await dbRes.json().catch(() => ({})));
-                    }
-                } catch (dbErr) {
-                    console.error('❌ Error updating enrollment table:', dbErr);
-                }
-            }
-
-            setResult(parsedResult);
+            console.log('✅ Cancel enrolment response:', json);
+            setWebhookData(json);
+            setResult(json.data);
         } catch (err) {
             console.error('❌ Error cancelling enrolment:', err);
             setError(err instanceof Error ? err.message : 'Failed to cancel enrolment');
@@ -4463,10 +4302,9 @@ export const UpdateEnrolmentView: React.FC = () => {
     const [courseRunId, setCourseRunId] = useState<string>('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [result, setResult] = useState<any>(null);
-    const [webhookData, setWebhookData] = useState<any>(null); // Store complete webhook response
     const [error, setError] = useState<string | null>(null);
 
-    const WEBHOOK_URL = 'https://n8n.srv1231536.hstgr.cloud/webhook/789cf428-911e-4354-8bed-9187726727aa';
+    const UPDATE_ENROLMENT_API = '/api/enrolment/update';
 
     const inputClasses = "block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-500";
 
@@ -4474,92 +4312,24 @@ export const UpdateEnrolmentView: React.FC = () => {
         setIsSubmitting(true);
         setError(null);
         setResult(null);
-        setWebhookData(null);
 
         try {
-            const payload = {
-                enrolmentId: enrolmentId.trim(),
-                courseRunId: courseRunId.trim(),
-                timestamp: new Date().toISOString(),
-                source: 'admin-update-enrolment'
-            };
-
-            console.log('📤 Update enrolment payload:', payload);
-
-            const response = await fetch(WEBHOOK_URL, {
+            const response = await fetch(UPDATE_ENROLMENT_API, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(payload)
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ enrolmentId: enrolmentId.trim(), courseRunId: courseRunId.trim() })
             });
 
-            if (!response.ok) {
-                if (response.status === 500) {
-                    throw new Error('SSG API server error. The service may be temporarily unavailable. Please try again later.');
-                }
-                throw new Error(`Unable to connect to SSG API (Error ${response.status}). Please check your connection and try again.`);
+            const json = await response.json();
+            console.log('✅ Update enrolment response:', json);
+
+            if (!json.success) {
+                const errMsg = typeof json.error === 'string' ? json.error : (json.error?.message ?? JSON.stringify(json.error));
+                setError(errMsg || 'Failed to update enrolment');
+                return;
             }
 
-            // Safe JSON parsing
-            const text = await response.text();
-            let data;
-            try {
-                data = text ? JSON.parse(text) : {};
-            } catch (e) {
-                console.error('Failed to parse JSON response:', text);
-                throw new Error(`Invalid JSON response from webhook`);
-            }
-            console.log('✅ Update enrolment response:', data);
-
-            // Check if webhook returned empty response
-            if (!data || (typeof data === 'object' && Object.keys(data).length === 0)) {
-                throw new Error('Webhook returned empty response. Please check your n8n workflow configuration.');
-            }
-
-            // Store the complete webhook response for raw display (after validation)
-            setWebhookData(data);
-
-            // Parse response - handle various response formats
-            let parsedResult = data;
-
-            // If response has a 'result' property, use that
-            if (data?.result !== undefined && data?.result !== null) {
-                // If result is a string, try to parse it as JSON
-                if (typeof data.result === 'string') {
-                    try {
-                        parsedResult = JSON.parse(data.result);
-                    } catch (e) {
-                        // If parsing fails, treat the string as error message
-                        console.error('Failed to parse result string:', data.result);
-                        parsedResult = { error: { message: data.result } };
-                    }
-                } else if (typeof data.result === 'object') {
-                    // If result is already an object, use it directly
-                    parsedResult = data.result;
-                } else {
-                    // For other types, treat as error
-                    parsedResult = { error: { message: String(data.result) } };
-                }
-            }
-
-            // Check for error status - handle both nested error object and root level errors
-            const hasError = (parsedResult?.error?.details?.length > 0) ||
-                (parsedResult?.error?.message) ||
-                (parsedResult?.status && parsedResult.status >= 400) ||
-                (parsedResult?.details?.length > 0) ||
-                (parsedResult?.message && parsedResult.message.toLowerCase().includes('cannot'));
-
-            if (hasError) {
-                const errorMessage = parsedResult?.error?.details?.[0]?.message ||
-                    parsedResult?.error?.message ||
-                    parsedResult?.details?.[0]?.message ||
-                    parsedResult?.message ||
-                    'Failed to update enrolment';
-                setError(errorMessage);
-            }
-
-            setResult(parsedResult);
+            setResult(json.data);
         } catch (err) {
             console.error('❌ Error updating enrolment:', err);
             setError(err instanceof Error ? err.message : 'Failed to update enrolment');
@@ -4572,7 +4342,6 @@ export const UpdateEnrolmentView: React.FC = () => {
         setEnrolmentId('');
         setCourseRunId('');
         setResult(null);
-        setWebhookData(null);
         setError(null);
     };
 
@@ -4675,17 +4444,17 @@ export const UpdateEnrolmentView: React.FC = () => {
                                 <h4 className="font-semibold text-green-900 dark:text-green-200">Enrolment Updated Successfully</h4>
                             </div>
                             <div className="pl-7 space-y-1">
-                                {result?.data?.enrolment?.referenceNumber && (
+                                {(result?.enrolment?.referenceNumber ?? result?.data?.enrolment?.referenceNumber) && (
                                     <p className="text-sm text-green-700 dark:text-green-300">
                                         <span className="font-medium">Reference:</span>{' '}
                                         <span className="font-mono bg-green-100 dark:bg-green-900/40 px-2 py-0.5 rounded">
-                                            {result.data.enrolment.referenceNumber}
+                                            {result?.enrolment?.referenceNumber ?? result?.data?.enrolment?.referenceNumber}
                                         </span>
                                     </p>
                                 )}
-                                {result?.data?.enrolment?.status && (
+                                {(result?.enrolment?.status ?? result?.data?.enrolment?.status) && (
                                     <p className="text-sm text-green-700 dark:text-green-300">
-                                        <span className="font-medium">Status:</span> {result.data.enrolment.status}
+                                        <span className="font-medium">Status:</span> {result?.enrolment?.status ?? result?.data?.enrolment?.status}
                                     </p>
                                 )}
                             </div>
@@ -4698,7 +4467,7 @@ export const UpdateEnrolmentView: React.FC = () => {
                             View Raw Response
                         </summary>
                         <pre className="mt-2 text-xs bg-gray-100 dark:bg-gray-800 p-3 rounded overflow-auto max-h-60">
-                            {JSON.stringify(webhookData || result, null, 2)}
+                            {JSON.stringify(result, null, 2)}
                         </pre>
                     </details>
                 </Card>
