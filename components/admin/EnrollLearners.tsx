@@ -433,16 +433,16 @@ const EnrollLearners: React.FC = () => {
     return () => clearTimeout(timeoutId);
   }, [searchQuery]);
 
-  // Search for enrolment records when courseRunId changes (only trigger when exactly 7 digits)
+  // Search for enrolment records when courseRunId changes (trigger when exactly 7 digits)
   useEffect(() => {
     setEnrolmentData(null);
     setEnrolmentError(null);
     if (/^\d{7}$/.test(formData.courseRunId.trim())) {
-      searchEnrolmentRecords(formData.courseRunId);
+      searchEnrolmentRecords(formData.courseRunId.trim());
     }
   }, [formData.courseRunId]);
 
-  // Function to search enrolment records via n8n webhook
+  // Function to search enrolment records via direct SSG API
   const searchEnrolmentRecords = async (courseRunId: string) => {
     if (!courseRunId) {
       setEnrolmentError('Course Run ID is required for enrolment search');
@@ -461,37 +461,29 @@ const EnrollLearners: React.FC = () => {
       setEnrolmentError(null);
       console.log('🔍 Searching enrolment records for course run:', courseRunId);
 
-      const response = await fetch('https://n8n.srv1231536.hstgr.cloud/webhook/246caa5e-bd7e-42e8-82b1-cde2e05e5013', {
+      const response = await fetch('/api/enrolment/search', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ courseRunId }),
         signal
       });
 
+      const result = await response.json();
+
       if (!response.ok) {
-        throw new Error(`Enrolment search failed with status: ${response.status}`);
+        throw new Error(result?.error || `Enrolment search failed with status: ${response.status}`);
       }
 
-      const text = await response.text();
-      if (!text || !text.trim()) {
-        // n8n returned an empty body — treat as no enrollments found
-        setEnrolmentData({ status: 200, data: [] });
-        return;
+      console.log('✅ Enrolment search results:', result);
+      // Store in format the UI expects: { status: 200, data: [...] }
+      const records = Array.isArray(result.data) ? result.data : [];
+      setEnrolmentData({ status: 200, data: records });
+
+      // Auto-fill course reference number from the first record
+      const refNumber = records[0]?.enrolment?.course?.referenceNumber;
+      if (refNumber) {
+        setFormData(prev => ({ ...prev, courseReferenceNumber: refNumber }));
       }
-      let rawResult: any;
-      try {
-        rawResult = JSON.parse(text);
-      } catch {
-        throw new Error(`n8n returned non-JSON response: ${text.slice(0, 200)}`);
-      }
-      // n8n returns { result: "<JSON string>" } — parse the inner JSON
-      const parsed = typeof rawResult.result === 'string'
-        ? JSON.parse(rawResult.result)
-        : rawResult.result ?? rawResult;
-      console.log('✅ Enrolment search results from n8n:', parsed);
-      setEnrolmentData(parsed);
 
     } catch (err: any) {
       if (err.name === 'AbortError') return; // stale request cancelled — ignore
@@ -640,50 +632,51 @@ const EnrollLearners: React.FC = () => {
   };
 
   const buildPayload = () => {
+    const trainee: any = {
+      id: formData.traineeId,
+      idType: { type: formData.traineeIdType },
+      fullName: formData.traineeFullName,
+      dateOfBirth: formData.traineeDateOfBirth,
+      emailAddress: formData.traineeEmailAddress,
+      contactNumber: {
+        countryCode: formData.traineeContactNumberCountryCode,
+        phoneNumber: formData.traineeContactNumberPhoneNumber,
+        ...(formData.traineeContactNumberAreaCode ? { areaCode: formData.traineeContactNumberAreaCode } : {})
+      },
+      enrolmentDate: formData.traineeEnrolmentDate || new Date().toISOString().split('T')[0],
+      sponsorshipType: formData.traineeSponsorshipType,
+      fees: {
+        discountAmount: formData.traineeFeesDiscountAmount ?? 0,
+        collectionStatus: formData.traineeFeesCollectionStatus
+      }
+    };
+
+    if (formData.traineeSponsorshipType === SponsorshipType.EMPLOYER) {
+      trainee.employer = {
+        uen: formData.employerUen,
+        contact: {
+          fullName: formData.employerFullName,
+          emailAddress: formData.employerEmailAddress,
+          contactNumber: {
+            countryCode: formData.employerCountryCode,
+            phoneNumber: formData.employerPhoneNumber,
+            ...(formData.employerAreaCode ? { areaCode: formData.employerAreaCode } : {})
+          }
+        }
+      };
+    }
+
     return {
       enrolment: {
-        course: {
-          run: {
-            id: formData.courseRunId || null
-          },
-          referenceNumber: formData.courseReferenceNumber
-        },
-        trainee: {
-          id: formData.traineeId,
-          fees: {
-            discountAmount: formData.traineeFeesDiscountAmount || 0,
-            collectionStatus: formData.traineeFeesCollectionStatus
-          },
-          idType: {
-            type: formData.traineeIdType
-          },
-          employer: {
-            uen: formData.employerUen || null,
-            contact: {
-              fullName: formData.employerFullName || null,
-              emailAddress: formData.employerEmailAddress || null,
-              contactNumber: {
-                areaCode: formData.employerAreaCode || null,
-                countryCode: formData.employerCountryCode || null,
-                phoneNumber: formData.employerPhoneNumber || null
-              }
-            }
-          },
-          fullName: formData.traineeFullName,
-          dateOfBirth: formData.traineeDateOfBirth,
-          emailAddress: formData.traineeEmailAddress,
-          contactNumber: {
-            areaCode: formData.traineeContactNumberAreaCode || null,
-            countryCode: formData.traineeContactNumberCountryCode,
-            phoneNumber: formData.traineeContactNumberPhoneNumber
-          },
-          enrolmentDate: formData.traineeEnrolmentDate || null,
-          sponsorshipType: formData.traineeSponsorshipType
-        },
         trainingPartner: {
-          uen: formData.trainingPartnerUen,
-          code: formData.trainingPartnerCode
-        }
+          code: formData.trainingPartnerCode,
+          uen: formData.trainingPartnerUen
+        },
+        course: {
+          referenceNumber: formData.courseReferenceNumber,
+          run: { id: formData.courseRunId }
+        },
+        trainee
       }
     };
   };
@@ -716,27 +709,20 @@ const EnrollLearners: React.FC = () => {
       };
       localStorage.setItem(ENROLMENT_DRAFT_KEY, JSON.stringify(draft));
 
-      console.log('Submitting enrolment to webhook:', JSON.stringify(payload, null, 2));
+      console.log('Submitting enrolment to SSG API:', JSON.stringify(payload, null, 2));
 
-      const response = await fetch('https://n8n.srv1231536.hstgr.cloud/webhook/7f595887-aa07-4b0f-a94e-7ed5982fe077', {
+      const response = await fetch('/api/enrolment/create', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
 
-      const rawResult = await response.json();
-
-      // n8n returns { result: "<JSON string>" } — parse the inner JSON
-      const parsed = typeof rawResult.result === 'string'
-        ? JSON.parse(rawResult.result)
-        : rawResult.result ?? rawResult;
+      const parsed = await response.json();
 
       // Read back from localStorage to populate the result page
       const storedDraft = JSON.parse(localStorage.getItem(ENROLMENT_DRAFT_KEY) || '{}');
 
-      if (parsed?.status === 200) {
+      if (parsed?.success) {
         setSubmissionResult({
           success: true,
           referenceNumber:       parsed.data?.enrolment?.referenceNumber,
@@ -791,6 +777,7 @@ const EnrollLearners: React.FC = () => {
         });
       } else {
         const errorMessages: string[] =
+          (typeof parsed?.error === 'string' ? [parsed.error] : null) ||
           parsed?.error?.details?.map((d: { field: string; message: string }) => d.message) ||
           (parsed?.error?.message ? [parsed.error.message] : ['Failed to create enrolment']);
         setSubmissionResult({

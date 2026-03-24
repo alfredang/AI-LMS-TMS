@@ -90,12 +90,22 @@ export class SSGCredentialsService {
       };
       console.log('🔑 Encryption key loaded from:', row.ssg_encryption_key ? 'database' : (process.env.SSG_ENCRYPTION_KEY ? 'SSG_ENCRYPTION_KEY env' : (process.env.ENCRYPTION_KEY ? 'ENCRYPTION_KEY env' : 'NONE')));
 
-      // Normalize PEM from env var — handles literal \n, Windows \r\n, and leading/trailing whitespace
-      const resolvePem = (val: string): string => val
-        .replace(/\\n/g, '\n')   // literal backslash-n → real newline
-        .replace(/\r\n/g, '\n')  // Windows CRLF → LF
-        .replace(/\r/g, '\n')    // stray CR → LF
-        .trim();
+      // Normalize PEM from env var — handles base64-encoded PEM, literal \n, Windows \r\n
+      const resolvePem = (val: string): string => {
+        const trimmed = val.trim();
+        // If it doesn't start with -----, try base64 decode first
+        if (!trimmed.startsWith('-----')) {
+          try {
+            const decoded = Buffer.from(trimmed, 'base64').toString('utf8').trim();
+            if (decoded.startsWith('-----BEGIN')) return decoded;
+          } catch { /* not base64, fall through */ }
+        }
+        // Otherwise normalize line endings
+        return trimmed
+          .replace(/\\n/g, '\n')   // literal backslash-n → real newline
+          .replace(/\r\n/g, '\n')  // Windows CRLF → LF
+          .replace(/\r/g, '\n');   // stray CR → LF
+      };
 
       // Read certificate and private key — env vars take priority over file paths
       const certEnv = process.env.CERT_VALUE;

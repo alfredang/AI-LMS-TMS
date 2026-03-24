@@ -455,7 +455,24 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     };
 
-    checkAuth();
+    // Safety timeout — never hang on "Checking your session..." for more than 10s
+    const timeout = setTimeout(() => {
+      console.warn('⚠️ LmsContext: Auth check timed out after 10s');
+      const cachedUser = authService.getUserData();
+      if (cachedUser?.role) {
+        // Has a cached session — restore it and show their dashboard
+        console.warn('⚠️ Restoring from cache:', cachedUser.role);
+        setCurrentUser(cachedUser);
+        setRole(cachedUser.role);
+        setIsAuthenticated(true);
+      } else {
+        // No cached session — redirect to login
+        setIsAuthenticated(false);
+      }
+      setIsLoading(false);
+    }, 10000);
+
+    checkAuth().finally(() => clearTimeout(timeout));
   }, []);
 
   // Function to restore state from URL parameters

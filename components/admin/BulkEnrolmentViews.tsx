@@ -59,18 +59,26 @@ const ErrorMessageDisplay: React.FC<{ error: any }> = ({ error }) => {
 
 // Excel template column name constants (must match Enrolment_Upload_Template.xlsx headers after trimming)
 const COL = {
-    traineeIdType:    'Trainee ID Type *',
-    traineeId:        'Trainee ID *',
-    traineeDob:       'Date of Birth (DD-MM-YYYY or DD/MM/YYYY format) *',
-    traineeName:      'Trainee Name (as on government ID)',
-    courseRefCode:    'Course Reference Code*',
-    courseRun:        'Course Run*',
-    traineeEmail:     'Trainee Email *',
-    phoneCountryCode: 'Trainee Phone Country Code (+xx) *',
-    phoneAreaCode:    'Trainee Phone Area Code',
-    traineePhone:     'Trainee Phone *',
-    sponsorshipType:  'Sponsorship Type *',
-    employerUen:      'Employer UEN (mandatory if sponsorship type = employer)',
+    traineeIdType:            'Trainee ID Type *',
+    traineeId:                'Trainee ID *',
+    traineeDob:               'Date of Birth (DD-MM-YYYY or DD/MM/YYYY format) *',
+    traineeName:              'Trainee Name (as on government ID)',
+    courseRefCode:            'Course Reference Code*',
+    courseRun:                'Course Run*',
+    traineeEmail:             'Trainee Email *',
+    phoneCountryCode:         'Trainee Phone Country Code (+xx) *',
+    phoneAreaCode:            'Trainee Phone Area Code',
+    traineePhone:             'Trainee Phone *',
+    sponsorshipType:          'Sponsorship Type *',
+    employerUen:              'Employer UEN (mandatory if sponsorship type = employer)',
+    employerContactName:      'Employer Contact Name (mandatory if sponsorship type = employer)',
+    employerPhoneCountryCode: 'Employer Phone Country Code (+xx) (mandatory if sponsorship type = employer)',
+    employerPhoneAreaCode:    'Employer Phone Area Code',
+    employerPhone:            'Employer Phone (mandatory if sponsorship type = employer)',
+    employerContactEmail:     'Employer Contact Email (mandatory if sponsorship type = employer)',
+    feeDiscountAmount:        'Course Fee Discount Amount (where applicable)',
+    feeCollectionStatus:      'Fee Collection Status',
+    bundleCode:               'Bundle Code (mandatory if sponsorship type = individual for SCTP course)',
 } as const;
 
 export const BulkUploadEnrolmentView: React.FC = () => {
@@ -317,104 +325,119 @@ export const BulkUploadEnrolmentView: React.FC = () => {
             console.log('✅ Normalized date formats in', normalizedData.length, 'rows');
             if (normalizedData.length > 0) {
                 console.log('📅 Sample normalized row (first entry):', normalizedData[0]);
-                console.log('🔑 All column keys being sent to webhook:', Object.keys(normalizedData[0]));
+                console.log('🔑 Column keys in first row:', Object.keys(normalizedData[0]));
             }
 
-            console.log('🔄 Sending data to n8n webhook for bulk enrolment...');
-            const response = await fetch('https://n8n.srv1231536.hstgr.cloud/webhook/f19790ae-0ba2-4edf-9c3e-87d1dec1d458', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    enrolments: normalizedData
-                })
-            });
+            console.log('🔄 Processing', normalizedData.length, 'enrolments via SSG API directly...');
 
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => ({}));
-                throw new Error(errorData.error || `Unable to process request (Error ${response.status}). Please try again.`);
-            }
-
-            // Check if response has content
-            const contentType = response.headers.get('content-type');
-            if (!contentType || !contentType.includes('application/json')) {
-                throw new Error('Server returned non-JSON response. Please check the webhook configuration.');
-            }
-
-            const text = await response.text();
-
-            let result;
-            try {
-                result = JSON.parse(text);
-            } catch {
-                // Only throw error if text is truly empty
-                if (!text || text.trim() === '') {
-                    throw new Error('Server returned empty response. Please check the webhook is configured correctly.');
+            // Convert DOB from DD/MM/YYYY or DD-MM-YYYY → YYYY-MM-DD for SSG API
+            const convertDobToISO = (dob: string): string => {
+                if (!dob) return '';
+                const parts = dob.split(/[\/\-]/);
+                if (parts.length === 3 && parts[2].length === 4) {
+                    return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
                 }
-                throw new Error('Server returned invalid JSON. Please check the webhook configuration.');
-            }
+                return dob;
+            };
 
-            console.log('✅ Bulk enrolment result:', result);
+            const trainingPartnerUen = '201200696W';
+            const trainingPartnerCode = '201200696W-01';
 
-            // Normalize results from any response shape into a flat array of items
-            let allItems: any[] = [];
-            if (Array.isArray(result) && result[0]?.results) {
-                allItems = result[0].results;
-            } else if (result?.results && Array.isArray(result.results)) {
-                allItems = result.results;
-            } else if (result?.result && Array.isArray(result.result)) {
-                allItems = result.result;
-            } else if (Array.isArray(result)) {
-                allItems = result;
-            }
-
-            // Process successful enrolments and save to database
-            // Use normalizedData (original Excel rows) for trainee fields — the n8n response
-            // items use the raw Excel column names (e.g. "Trainee Email *"), not camelCase.
-            console.log('💾 Processing', normalizedData.length, 'enrolments for database insertion...');
-            console.log('🔑 COL keys used for mapping:', COL);
-            if (normalizedData.length > 0) {
-                console.log('📋 Row 0 actual keys:', Object.keys(normalizedData[0] as object));
-                console.log('📋 Row 0 email value:', (normalizedData[0] as any)[COL.traineeEmail]);
-                console.log('📋 Row 0 courseRun value:', (normalizedData[0] as any)[COL.courseRun]);
-            }
-
-            const rowDbErrors: { row: number; email: string; error: string }[] = [];
+            const allItems: any[] = [];
 
             for (let i = 0; i < normalizedData.length; i++) {
                 const row = normalizedData[i] as any;
-                const item = allItems[i]; // corresponding n8n result (may be undefined)
+                const sponsorshipType = (row[COL.sponsorshipType] || 'INDIVIDUAL').toUpperCase().trim();
 
-                // Parse the SSG result for this row
-                let parsedResult = item?.parsedResult;
-                if (!parsedResult && item?.result) {
-                    if (typeof item.result === 'string') {
-                        try { parsedResult = JSON.parse(item.result); item.parsedResult = parsedResult; } catch { /* ignore */ }
-                    } else if (typeof item.result === 'object') {
-                        parsedResult = item.result;
-                        if (item) item.parsedResult = parsedResult;
+                const trainee: any = {
+                    id: String(row[COL.traineeId] || '').trim(),
+                    idType: { type: (row[COL.traineeIdType] || 'NRIC').trim() },
+                    fullName: (row[COL.traineeName] || '').trim(),
+                    dateOfBirth: convertDobToISO(row[COL.traineeDob] || ''),
+                    emailAddress: (row[COL.traineeEmail] || '').trim(),
+                    contactNumber: {
+                        countryCode: (row[COL.phoneCountryCode] || '+65').trim(),
+                        phoneNumber: String(row[COL.traineePhone] || '').trim(),
+                        ...(row[COL.phoneAreaCode] ? { areaCode: String(row[COL.phoneAreaCode]).trim() } : {})
+                    },
+                    enrolmentDate: new Date().toISOString().split('T')[0],
+                    sponsorshipType,
+                    fees: {
+                        discountAmount: Number(row[COL.feeDiscountAmount]) || 0,
+                        collectionStatus: (row[COL.feeCollectionStatus] || 'Pending Payment').trim()
                     }
+                };
+
+                if (sponsorshipType === 'EMPLOYER') {
+                    trainee.employer = {
+                        uen: (row[COL.employerUen] || '').trim(),
+                        contact: {
+                            fullName: (row[COL.employerContactName] || '').trim(),
+                            emailAddress: (row[COL.employerContactEmail] || '').trim(),
+                            contactNumber: {
+                                countryCode: (row[COL.employerPhoneCountryCode] || '+65').trim(),
+                                phoneNumber: String(row[COL.employerPhone] || '').trim(),
+                                ...(row[COL.employerPhoneAreaCode] ? { areaCode: String(row[COL.employerPhoneAreaCode]).trim() } : {})
+                            }
+                        }
+                    };
                 }
 
-                // Determine SSG enrolment status and reference number
+                if (row[COL.bundleCode] && String(row[COL.bundleCode]).trim()) {
+                    trainee.bundle = { id: String(row[COL.bundleCode]).trim() };
+                }
+
+                const payload = {
+                    enrolment: {
+                        trainingPartner: { code: trainingPartnerCode, uen: trainingPartnerUen },
+                        course: {
+                            referenceNumber: (row[COL.courseRefCode] || '').trim(),
+                            run: { id: String(row[COL.courseRun] || '').trim() }
+                        },
+                        trainee
+                    }
+                };
+
+                let itemResult: any;
+                try {
+                    const resp = await fetch('/api/enrolment/create', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    itemResult = await resp.json();
+                    console.log(`✅ Row ${i + 1} SSG result:`, itemResult);
+                } catch (rowErr) {
+                    const errMsg = rowErr instanceof Error ? rowErr.message : 'Network error';
+                    itemResult = { success: false, error: errMsg };
+                    console.error(`❌ Row ${i + 1} error:`, rowErr);
+                }
+
+                allItems.push({
+                    traineeId: String(row[COL.traineeId] || '').trim(),
+                    traineeName: (row[COL.traineeName] || '').trim(),
+                    traineeEmail: (row[COL.traineeEmail] || '').trim(),
+                    courseRunId: String(row[COL.courseRun] || '').trim(),
+                    courseReferenceNumber: (row[COL.courseRefCode] || '').trim(),
+                    sponsorshipType,
+                    parsedResult: itemResult
+                });
+            }
+
+            // Save successful enrolments to local database
+            const rowDbErrors: { row: number; email: string; error: string }[] = [];
+
+            for (let i = 0; i < allItems.length; i++) {
+                const item = allItems[i];
+                const parsedResult = item.parsedResult;
+
                 const ssgStatus = parsedResult?.data?.enrolment?.status;
                 const ssgRefNumber = parsedResult?.data?.enrolment?.referenceNumber;
-                const ssgHardError = (parsedResult?.status >= 400) &&
-                    (parsedResult?.error?.details?.length > 0 || parsedResult?.error?.message);
+                const ssgHardError = !parsedResult?.success;
 
-                // Skip DB insert only if SSG returned a definitive hard error (4xx/5xx with error body)
                 if (!ssgHardError) {
-                    // Map Excel column names to API fields using COL constants
-                    const traineeEmail = row[COL.traineeEmail] || '';
-                    const traineeName = row[COL.traineeName] || '';
-                    const traineeNric = row[COL.traineeId] || '';
-                    const courseCode = row[COL.courseRefCode] || '';
-                    const courseRunId = String(row[COL.courseRun] || '');
-                    const sponsorshipType = row[COL.sponsorshipType] || '';
                     const enrolmentStatus = ssgStatus || 'Pending';
-
-                    console.log(`💾 Row ${i + 1}: email="${traineeEmail}" courseRun="${courseRunId}" status="${enrolmentStatus}" enrolmentId="${ssgRefNumber || ''}"`);
+                    console.log(`💾 Row ${i + 1}: email="${item.traineeEmail}" courseRun="${item.courseRunId}" status="${enrolmentStatus}" enrolmentId="${ssgRefNumber || ''}"`);
 
                     try {
                         const dbResponse = await fetch('/api/enrolments/bulk-create', {
@@ -422,14 +445,14 @@ export const BulkUploadEnrolmentView: React.FC = () => {
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
                                 enrolment: {
-                                    traineeEmail,
-                                    traineeName,
-                                    traineeNric,
-                                    courseCode,
+                                    traineeEmail: item.traineeEmail,
+                                    traineeName: item.traineeName,
+                                    traineeNric: item.traineeId,
+                                    courseCode: item.courseReferenceNumber,
                                     courseTitle: '',
-                                    courseRunId,
-                                    courseReferenceNumber: courseCode,
-                                    sponsorshipType,
+                                    courseRunId: item.courseRunId,
+                                    courseReferenceNumber: item.courseReferenceNumber,
+                                    sponsorshipType: item.sponsorshipType,
                                     enrolmentDate: new Date().toISOString().split('T')[0],
                                     enrolmentStatus,
                                     enrolmentId: ssgRefNumber || ''
@@ -444,25 +467,24 @@ export const BulkUploadEnrolmentView: React.FC = () => {
                             const dbError = await dbResponse.json().catch(() => ({}));
                             const errMsg = dbError?.error?.message || dbError?.error || JSON.stringify(dbError);
                             console.error(`❌ Row ${i + 1} DB insert failed (${dbResponse.status}):`, dbError);
-                            rowDbErrors.push({ row: i + 1, email: traineeEmail, error: errMsg });
+                            rowDbErrors.push({ row: i + 1, email: item.traineeEmail, error: errMsg });
                         }
                     } catch (dbErr) {
                         const errMsg = dbErr instanceof Error ? dbErr.message : 'Network error';
                         console.error(`❌ Row ${i + 1} DB insert exception:`, dbErr);
-                        rowDbErrors.push({ row: i + 1, email: traineeEmail, error: errMsg });
+                        rowDbErrors.push({ row: i + 1, email: item.traineeEmail, error: errMsg });
                     }
                 } else {
-                    console.warn('⚠️ Skipping DB insert due to hard SSG error for:', row[COL.traineeEmail] || 'unknown', parsedResult?.error);
+                    console.warn('⚠️ Skipping DB insert due to SSG error for:', item.traineeEmail, parsedResult?.error);
                 }
             }
 
             if (rowDbErrors.length > 0) {
                 setDbInsertErrors(rowDbErrors);
-                console.warn(`⚠️ ${rowDbErrors.length} row(s) failed to insert into database:`, rowDbErrors);
             }
             console.log('✅ Database insertion process completed');
 
-            setUploadResult(result);
+            setUploadResult({ results: allItems });
 
         } catch (err) {
             console.error('❌ Upload error:', err);
@@ -616,18 +638,8 @@ export const BulkUploadEnrolmentView: React.FC = () => {
         }
 
         const isRecordSuccess = (r: any) => {
-            let pr = r.parsedResult;
-            // Fallback: try to parse r.result if parsedResult wasn't set
-            if (!pr && r.result && typeof r.result === 'string') {
-                try { pr = JSON.parse(r.result); } catch { /* ignore */ }
-            }
-            const isStatusSuccess = pr?.status && pr.status >= 200 && pr.status < 300;
-            const hasData = pr?.data && Object.keys(pr.data).length > 0;
-            const hasSuccessFlag = pr?.success === true;
-            const hasRealError = (pr?.error?.details?.length > 0) ||
-                (pr?.error?.message) ||
-                (pr?.status >= 400);
-            return (isStatusSuccess || hasData || hasSuccessFlag || r.status === 'success') && !hasRealError;
+            const pr = r.parsedResult;
+            return pr?.success === true;
         };
 
         const successCount = results.filter(r => isRecordSuccess(r)).length;
@@ -730,17 +742,8 @@ export const BulkUploadEnrolmentView: React.FC = () => {
                                                         <td className="px-4 py-3 text-sm text-gray-500 dark:text-gray-200">
                                                             <div className="min-w-[280px]">
                                                                 {(() => {
-                                                                    // Check for actual error (not empty error objects from SSG)
-                                                                    const hasRealError = (record.parsedResult?.error?.details?.length > 0) ||
-                                                                        (record.parsedResult?.error?.message) ||
-                                                                        (record.parsedResult?.status >= 400);
-
                                                                     if (isSuccess) {
-                                                                        // Success case — resolve parsedResult with same fallback as isRecordSuccess
-                                                                        let pr = record.parsedResult;
-                                                                        if (!pr && record.result && typeof record.result === 'string') {
-                                                                            try { pr = JSON.parse(record.result); } catch { /* ignore */ }
-                                                                        }
+                                                                        const pr = record.parsedResult;
                                                                         const enrolmentRef = pr?.data?.enrolment?.referenceNumber || 'N/A';
                                                                         const enrolmentStatus = pr?.data?.enrolment?.status || 'Confirmed';
                                                                         return (
@@ -759,9 +762,12 @@ export const BulkUploadEnrolmentView: React.FC = () => {
                                                                                 </div>
                                                                             </div>
                                                                         );
-                                                                    } else if (hasRealError) {
+                                                                    } else if (record.parsedResult && !record.parsedResult.success) {
                                                                         // Error case
-                                                                        return <ErrorMessageDisplay error={record.parsedResult.error} />;
+                                                                        const errPayload = typeof record.parsedResult.error === 'string'
+                                                                            ? { message: record.parsedResult.error }
+                                                                            : record.parsedResult.error;
+                                                                        return <ErrorMessageDisplay error={errPayload} />;
                                                                     } else if (record.parsedResult) {
                                                                         // parsedResult exists but no clear error or data - show parsed result
                                                                         return <pre className="text-xs bg-gray-100 dark:bg-gray-800 p-2 rounded">{JSON.stringify(record.parsedResult, null, 2)}</pre>;
