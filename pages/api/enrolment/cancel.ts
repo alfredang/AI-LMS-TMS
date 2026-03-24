@@ -6,8 +6,11 @@ import crypto from 'crypto';
 
 /**
  * POST /api/enrolment/cancel
- * Cancel an enrolment via SSG API directly.
+ * Cancel an enrolment via SSG API.
  * Body: { enrolmentId, courseRunId }
+ *
+ * SSG payload:
+ * { "enrolment": { "course": { "run": { "id": "<courseRunId>" } } } }
  */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -20,45 +23,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    // Look up NRIC and course reference number from local DB
-    const dbRow = await pool.query(
-      `SELECT e.nric, c.course_code
-       FROM enrollment e
-       JOIN course_run cr ON cr.id = e.course_run_id
-       JOIN course c ON c.id = cr.course_id
-       WHERE e.enrolment_id = $1 AND cr.course_run_id = $2
-       LIMIT 1`,
-      [enrolmentId, courseRunId]
-    );
-
-    if (dbRow.rows.length === 0) {
-      return res.status(404).json({ success: false, error: 'Enrolment not found in local database' });
-    }
-
-    const { nric, course_code } = dbRow.rows[0];
-
     const credentials = await getSSGCredentialsService().getSSGCredentials();
     if (!credentials) {
       return res.status(500).json({ success: false, error: 'SSG credentials not found' });
     }
 
     const ssgBaseUrl = process.env.SSG_API_URL || 'https://api.ssg-wsg.sg';
-    const tpUen  = process.env.TRAINING_PARTNER_UEN  || credentials.uen;
-    const tpCode = process.env.TRAINING_PARTNER_CODE || '';
 
     const payload = {
       enrolment: {
+        action: 'Cancel',
         course: {
-          run: { id: courseRunId },
-          referenceNumber: course_code
-        },
-        trainee: {
-          id: nric,
-          idType: { type: 'NRIC' }
-        },
-        trainingPartner: {
-          uen: tpUen,
-          code: tpCode
+          run: { id: String(courseRunId) }
         }
       }
     };
@@ -70,7 +46,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     encryptedPayload += cipher.final('base64');
 
     const builder = new HTTPRequestBuilder()
-      .withEndpoint(ssgBaseUrl, `/tpg/enrolments/${enrolmentId}/cancel`)
+      .withEndpoint(ssgBaseUrl, `/tpg/enrolments/details/${enrolmentId}`)
       .withMethod(HttpMethod.POST)
       .withBody(encryptedPayload);
 
@@ -82,10 +58,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const httpResponse = await httpClient.request(builder.build());
 
     if (httpResponse.status !== 200) {
-      return res.status(httpResponse.status).json({ success: false, error: `SSG error ${httpResponse.status}` });
+      console.error(`❌ SSG cancel error [${httpResponse.status}]:`, JSON.stringify(httpResponse.data));
+      return res.status(httpResponse.status).json({ success: false, error: `SSG error ${httpResponse.status}`, details: httpResponse.data });
     }
 
-    // Decrypt raw response
     const rawBody = typeof httpResponse.data === 'string' ? httpResponse.data : JSON.stringify(httpResponse.data);
     const decipher = crypto.createDecipheriv('aes-256-cbc', encKey, iv);
     let decrypted = decipher.update(rawBody, 'base64', 'utf8');
@@ -97,7 +73,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(Number(parsed.status) || 400).json({ success: false, error: parsed?.error ?? `SSG status ${parsed.status}` });
     }
 
-    // Update local DB to Cancelled
+    // Update local DB if the record exists
     await pool.query(
       `UPDATE enrollment SET enrolment_status = 'Cancelled', updated_at = NOW() WHERE enrolment_id = $1`,
       [enrolmentId]

@@ -4100,7 +4100,6 @@ export const CancelEnrolmentView: React.FC = () => {
     const [courseRunId, setCourseRunId] = useState<string>('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [result, setResult] = useState<any>(null);
-    const [webhookData, setWebhookData] = useState<any>(null); // Store complete webhook response
     const [error, setError] = useState<string | null>(null);
     const [showConfirm, setShowConfirm] = useState(false);
 
@@ -4113,7 +4112,6 @@ export const CancelEnrolmentView: React.FC = () => {
         setIsSubmitting(true);
         setError(null);
         setResult(null);
-        setWebhookData(null);
 
         try {
             const response = await fetch(CANCEL_ENROLMENT_API, {
@@ -4132,7 +4130,6 @@ export const CancelEnrolmentView: React.FC = () => {
             }
 
             console.log('✅ Cancel enrolment response:', json);
-            setWebhookData(json);
             setResult(json.data);
         } catch (err) {
             console.error('❌ Error cancelling enrolment:', err);
@@ -4146,7 +4143,6 @@ export const CancelEnrolmentView: React.FC = () => {
         setEnrolmentId('');
         setCourseRunId('');
         setResult(null);
-        setWebhookData(null);
         setError(null);
         setShowConfirm(false);
     };
@@ -4264,17 +4260,17 @@ export const CancelEnrolmentView: React.FC = () => {
                                 <h4 className="font-semibold text-green-900 dark:text-green-200">Enrolment Cancelled Successfully</h4>
                             </div>
                             <div className="pl-7 space-y-1">
-                                {result?.data?.enrolment?.referenceNumber && (
+                                {(result?.enrolment?.referenceNumber ?? result?.data?.enrolment?.referenceNumber) && (
                                     <p className="text-sm text-green-700 dark:text-green-300">
-                                        <span className="font-medium">Reference:</span>{' '}
+                                        <span className="font-medium">Enrolment ID:</span>{' '}
                                         <span className="font-mono bg-green-100 dark:bg-green-900/40 px-2 py-0.5 rounded">
-                                            {result.data.enrolment.referenceNumber}
+                                            {result?.enrolment?.referenceNumber ?? result?.data?.enrolment?.referenceNumber}
                                         </span>
                                     </p>
                                 )}
-                                {result?.data?.enrolment?.status && (
+                                {(result?.enrolment?.status ?? result?.data?.enrolment?.status) && (
                                     <p className="text-sm text-green-700 dark:text-green-300">
-                                        <span className="font-medium">Status:</span> {result.data.enrolment.status}
+                                        <span className="font-medium">Status:</span> {result?.enrolment?.status ?? result?.data?.enrolment?.status}
                                     </p>
                                 )}
                             </div>
@@ -4287,7 +4283,7 @@ export const CancelEnrolmentView: React.FC = () => {
                             View Raw Response
                         </summary>
                         <pre className="mt-2 text-xs bg-gray-100 dark:bg-gray-800 p-3 rounded overflow-auto max-h-60">
-                            {JSON.stringify(webhookData || result, null, 2)}
+                            {JSON.stringify(result, null, 2)}
                         </pre>
                     </details>
                 </Card>
@@ -4305,7 +4301,6 @@ export const UpdateEnrolmentView: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
 
     const UPDATE_ENROLMENT_API = '/api/enrolment/update';
-
     const inputClasses = "block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-500";
 
     const handleSubmit = async () => {
@@ -4351,64 +4346,41 @@ export const UpdateEnrolmentView: React.FC = () => {
         <div>
             <h2 className="text-3xl font-bold mb-6 dark:text-white">Update Enrolment</h2>
 
-            {/* Input Form Card */}
             <Card className="p-6 mb-6">
                 <h3 className="text-lg font-bold text-gray-700 dark:text-gray-200 mb-4">Enrolment Details</h3>
                 <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                    Both Enrolment ID and Course Run ID are required to update an enrolment.
+                    Enter the Enrolment ID and the new Course Run ID to update the enrolment on SSG.
                 </p>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                     <div>
-                        <label htmlFor="update-enrolment-id" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
+                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
                             Enrolment ID <span className="text-red-500">*</span>
                         </label>
-                        <input
-                            id="update-enrolment-id"
-                            type="text"
-                            value={enrolmentId}
-                            onChange={(e) => setEnrolmentId(e.target.value)}
-                            placeholder="e.g. ENR-2602-014784"
-                            className={inputClasses}
-                            disabled={isSubmitting}
-                        />
+                        <input type="text" value={enrolmentId} onChange={(e) => setEnrolmentId(e.target.value)}
+                            placeholder="e.g. ENR-2602-014784" className={inputClasses} disabled={isSubmitting} />
                     </div>
                     <div>
-                        <label htmlFor="update-course-run-id" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
+                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
                             Course Run ID <span className="text-red-500">*</span>
                         </label>
-                        <input
-                            id="update-course-run-id"
-                            type="text"
-                            value={courseRunId}
-                            onChange={(e) => setCourseRunId(e.target.value)}
-                            placeholder="e.g. 1225151"
-                            className={inputClasses}
-                            disabled={isSubmitting}
-                        />
+                        <input type="text" value={courseRunId} onChange={(e) => setCourseRunId(e.target.value)}
+                            placeholder="e.g. 1225151" className={inputClasses} disabled={isSubmitting} />
                     </div>
                 </div>
 
                 <div className="flex gap-3">
-                    <Button
-                        onClick={handleSubmit}
-                        disabled={isSubmitting || !isFormValid}
-                    >
+                    <Button onClick={handleSubmit} disabled={isSubmitting || !isFormValid}>
                         {isSubmitting ? (
                             <div className="flex items-center">
                                 <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
                                 Updating...
                             </div>
                         ) : (
-                            <>
-                                <Icon name={IconName.Edit} className="w-4 h-4 mr-2" />
-                                Update Enrolment
-                            </>
+                            <><Icon name={IconName.Edit} className="w-4 h-4 mr-2" />Update Enrolment</>
                         )}
                     </Button>
-                    <Button variant="outline" onClick={handleClear} disabled={isSubmitting}>
-                        Clear
-                    </Button>
+                    <Button variant="outline" onClick={handleClear} disabled={isSubmitting}>Clear</Button>
                 </div>
 
                 {error && !result && (
@@ -4416,7 +4388,6 @@ export const UpdateEnrolmentView: React.FC = () => {
                 )}
             </Card>
 
-            {/* Loading State */}
             {isSubmitting && (
                 <div className="flex justify-center py-10">
                     <div className="text-center">
@@ -4426,7 +4397,6 @@ export const UpdateEnrolmentView: React.FC = () => {
                 </div>
             )}
 
-            {/* Result Display */}
             {!isSubmitting && result && (
                 <Card className="p-6">
                     {error ? (
@@ -4460,8 +4430,6 @@ export const UpdateEnrolmentView: React.FC = () => {
                             </div>
                         </div>
                     )}
-
-                    {/* Raw Response (collapsible) */}
                     <details className="mt-4">
                         <summary className="text-sm text-gray-500 dark:text-gray-400 cursor-pointer hover:text-gray-700 dark:hover:text-gray-300">
                             View Raw Response

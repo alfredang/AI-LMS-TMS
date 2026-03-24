@@ -189,7 +189,7 @@ export class HttpClient {
     };
 
     // Add body for methods that support it
-    if (config.body && ['POST', 'PUT', 'PATCH'].includes(config.method)) {
+    if (config.body && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(config.method)) {
       requestInit.body = typeof config.body === 'string' 
         ? config.body 
         : JSON.stringify(config.body);
@@ -250,7 +250,7 @@ export class HttpClient {
       console.log(`🔐 Certificate length: ${config.cert?.length || 0} characters`);
       console.log(`🔐 Private key length: ${config.key?.length || 0} characters`);
 
-      const requestBody = config.body && ['POST', 'PUT', 'PATCH'].includes(config.method)
+      const requestBody = config.body && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(config.method)
         ? (typeof config.body === 'string' ? config.body : JSON.stringify(config.body))
         : undefined;
 

@@ -32,8 +32,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const payload = {
       enrolment: {
+        action: 'update',
         course: {
-          run: { id: courseRunId }
+          run: { id: String(courseRunId) }
         }
       }
     };
@@ -45,7 +46,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     encryptedPayload += cipher.final('base64');
 
     const builder = new HTTPRequestBuilder()
-      .withEndpoint(ssgBaseUrl, `/tpg/enrolments/${enrolmentId}`)
+      .withEndpoint(ssgBaseUrl, `/tpg/enrolments/details/${enrolmentId}`)
       .withMethod(HttpMethod.POST)
       .withBody(encryptedPayload);
 
@@ -57,7 +58,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const httpResponse = await httpClient.request(builder.build());
 
     if (httpResponse.status !== 200) {
-      return res.status(httpResponse.status).json({ success: false, error: `SSG error ${httpResponse.status}` });
+      console.error(`❌ SSG update enrolment error [${httpResponse.status}]:`, JSON.stringify(httpResponse.data));
+      return res.status(httpResponse.status).json({ success: false, error: `SSG error ${httpResponse.status}`, details: httpResponse.data });
     }
 
     // Decrypt raw response

@@ -90,23 +90,12 @@ export class SSGCredentialsService {
       };
       console.log('🔑 Encryption key loaded from:', row.ssg_encryption_key ? 'database' : (process.env.SSG_ENCRYPTION_KEY ? 'SSG_ENCRYPTION_KEY env' : (process.env.ENCRYPTION_KEY ? 'ENCRYPTION_KEY env' : 'NONE')));
 
-      /**
-       * Resolve a PEM value from an env var.
-       * Supports two formats:
-       *   1. Base64-encoded PEM  → Buffer.from(val, 'base64').toString('utf8')
-       *   2. Raw PEM with literal \n  → replace \\n with \n
-       */
-      const resolvePem = (val: string): string => {
-        try {
-          const decoded = Buffer.from(val, 'base64').toString('utf8');
-          if (decoded.includes('-----BEGIN')) {
-            console.log('🔑 PEM decoded from base64');
-            return decoded.trim();
-          }
-        } catch {}
-        // Fall back: treat literal \n as newlines
-        return val.replace(/\\n/g, '\n').trim();
-      };
+      // Normalize PEM from env var — handles literal \n, Windows \r\n, and leading/trailing whitespace
+      const resolvePem = (val: string): string => val
+        .replace(/\\n/g, '\n')   // literal backslash-n → real newline
+        .replace(/\r\n/g, '\n')  // Windows CRLF → LF
+        .replace(/\r/g, '\n')    // stray CR → LF
+        .trim();
 
       // Read certificate and private key — env vars take priority over file paths
       const certEnv = process.env.CERT_VALUE;
@@ -115,6 +104,7 @@ export class SSGCredentialsService {
       if (certEnv) {
         credentials.certificateContent = resolvePem(certEnv);
         console.log('✅ Certificate loaded from CERT_VALUE env var, length:', credentials.certificateContent.length);
+        console.log('🔍 Cert first 40 chars:', JSON.stringify(credentials.certificateContent.slice(0, 40)));
       } else {
         try {
           if (credentials.certificatePath && credentials.certificatePath.trim() !== '' && fs.existsSync(credentials.certificatePath)) {
