@@ -110,31 +110,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         console.log('✅ app_user table updated successfully');
       }
 
-      // Prepare admin_profile update fields
-      const adminProfileFields = [];
-      const adminProfileValues = [];
-      let adminParamIndex = 1;
-
-      if (profileData.tel !== undefined) {
-        adminProfileFields.push(`tel = $${adminParamIndex}`);
-        adminProfileValues.push(profileData.tel);
-        adminParamIndex++;
-      }
-
       // Update admin_profile table if there are fields to update
-      if (adminProfileFields.length > 0) {
+      if (profileData.tel !== undefined) {
         const adminProfileQuery = `
-          UPDATE admin_profile
-          SET ${adminProfileFields.join(', ')}
-          WHERE user_id = $${adminParamIndex}
+          INSERT INTO admin_profile (user_id, tel)
+          VALUES ($1, $2)
+          ON CONFLICT (user_id) DO UPDATE
+          SET tel = EXCLUDED.tel
         `;
-        adminProfileValues.push(userId);
 
-        console.log('🔄 Executing admin_profile update:', adminProfileQuery);
-        console.log('📝 Values:', adminProfileValues);
+        console.log('🔄 Executing admin_profile upsert:', adminProfileQuery);
+        console.log('📝 Values:', [userId, profileData.tel]);
 
-        await client.query(adminProfileQuery, adminProfileValues);
-        console.log('✅ admin_profile table updated successfully');
+        await client.query(adminProfileQuery, [userId, profileData.tel]);
+        console.log('✅ admin_profile table upserted successfully');
       }
 
       // Commit the transaction
@@ -149,7 +138,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             au.profile_picture_url,
             ap.tel AS telephone
         FROM app_user au
-        JOIN admin_profile ap 
+        LEFT JOIN admin_profile ap 
             ON ap.user_id = au.id
         WHERE au.id = $1
       `, [userId]);

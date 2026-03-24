@@ -468,19 +468,31 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return;
     }
 
-    const { view, courseId } = router.query;
+    const { view, courseId, adminPage, trainerPage } = router.query;
 
     // Restore current view - View enum values are lowercase, URL values are lowercase
-    // Skip restoring profile/help views so users always land on their dashboard on refresh
     if (view && typeof view === 'string') {
-      const viewValue = view.toLowerCase() as View;
-      const skipOnRefresh = [View.Profile, View.HelpAndSupport];
-      if (Object.values(View).includes(viewValue) && !skipOnRefresh.includes(viewValue)) {
-        console.log(`📍 LmsContext: Restored view from URL: ${viewValue}`);
-        setCurrentView(viewValue);
-      } else if (skipOnRefresh.includes(viewValue)) {
-        // Clear the skipped view from URL
-        router.replace('/', undefined, { shallow: true });
+      const matchedView = Object.values(View).find(v => v.toLowerCase() === view.toLowerCase());
+
+      if (matchedView) {
+        console.log(`📍 LmsContext: Restored view from URL: ${matchedView}`);
+        setCurrentView(matchedView);
+      }
+    }
+
+    if (adminPage && typeof adminPage === 'string') {
+      const matchedAdminPage = Object.values(AdminPage).find(v => v.toLowerCase() === adminPage.toLowerCase());
+      if (matchedAdminPage) {
+        console.log(`📍 LmsContext: Restored adminPage from URL: ${matchedAdminPage}`);
+        setAdminPage(matchedAdminPage);
+      }
+    }
+
+    if (trainerPage && typeof trainerPage === 'string') {
+      const matchedTrainerPage = Object.values(TrainerPage).find(v => v.toLowerCase() === trainerPage.toLowerCase());
+      if (matchedTrainerPage) {
+        console.log(`📍 LmsContext: Restored trainerPage from URL: ${matchedTrainerPage}`);
+        setTrainerPage(matchedTrainerPage);
       }
     }
 
@@ -545,17 +557,43 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const urlObj = new URL(url, window.location.origin);
         const viewParam = urlObj.searchParams.get('view');
         const courseIdParam = urlObj.searchParams.get('courseId');
+        const adminPageParam = urlObj.searchParams.get('adminPage');
+        const trainerPageParam = urlObj.searchParams.get('trainerPage');
 
-        console.log(`🔙 LmsContext: Route changed (back/forward) - view=${viewParam}, courseId=${courseIdParam}`);
+        console.log(`🔙 LmsContext: Route changed (back/forward) - view=${viewParam}, courseId=${courseIdParam}, adminPage=${adminPageParam}, trainerPage=${trainerPageParam}`);
 
         // Sync the view state - View enum values are lowercase
         if (viewParam) {
-          const viewValue = viewParam.toLowerCase() as View;
-          if (Object.values(View).includes(viewValue)) {
-            setCurrentView(viewValue);
+          const matchedView = Object.values(View).find(v => v.toLowerCase() === viewParam.toLowerCase());
+          if (matchedView) {
+            setCurrentView(matchedView);
+          } else {
+            setCurrentView(View.Dashboard);
           }
         } else {
           setCurrentView(View.Dashboard);
+        }
+
+        if (adminPageParam) {
+          const matchedAdminPage = Object.values(AdminPage).find(v => v.toLowerCase() === adminPageParam.toLowerCase());
+          if (matchedAdminPage) {
+            setAdminPage(matchedAdminPage);
+          } else {
+            setAdminPage(AdminPage.Dashboard);
+          }
+        } else {
+          setAdminPage(AdminPage.Dashboard);
+        }
+
+        if (trainerPageParam) {
+          const matchedTrainerPage = Object.values(TrainerPage).find(v => v.toLowerCase() === trainerPageParam.toLowerCase());
+          if (matchedTrainerPage) {
+            setTrainerPage(matchedTrainerPage);
+          } else {
+            setTrainerPage(TrainerPage.EAttendance);
+          }
+        } else {
+          setTrainerPage(TrainerPage.EAttendance);
         }
 
         // Sync the selected course state
@@ -602,10 +640,18 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const navigateAdminPage = useCallback((page: AdminPage) => {
     setAdminPage(page);
     setSelectedCourse(null);
-    const newQuery: any = { ...router.query };
+    const newQuery: any = { ...router.query, adminPage: page };
     delete newQuery.courseId;
-    router.replace({ pathname: router.pathname, query: newQuery }, undefined, { shallow: true });
+    router.push({ pathname: router.pathname, query: newQuery }, undefined, { shallow: true });
   }, [router]);
+
+  // Wrapped setTrainerPage to sync with URL
+  const navigateTrainerPage = useCallback((page: TrainerPage) => {
+    setTrainerPage(page);
+    const newQuery: any = { ...router.query, trainerPage: page };
+    router.push({ pathname: router.pathname, query: newQuery }, undefined, { shallow: true });
+  }, [router]);
+
 
   // Login function
   const login = useCallback(async (userRole: UserRole, user: User) => {
@@ -1480,7 +1526,7 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     adminPage,
     setAdminPage: navigateAdminPage,
     trainerPage,
-    setTrainerPage,
+    setTrainerPage: navigateTrainerPage,
     selectedCourseRunId,
     setSelectedCourseRunId,
     pendingAttendanceCourseRunId,

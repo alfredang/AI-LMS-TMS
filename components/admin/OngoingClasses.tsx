@@ -158,13 +158,9 @@ const OngoingClasses: React.FC = () => {
     fetchOngoingClasses();
   }, []);
 
-  // Refetch when filters or pagination change (with debounce for search)
+  // Refetch when filters or pagination change
   useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      fetchOngoingClasses();
-    }, searchQuery ? 300 : 0); // 300ms delay for search, immediate for other filters
-
-    return () => clearTimeout(timeoutId);
+    fetchOngoingClasses();
   }, [currentPage, searchQuery, courseTitle, courseCode, courseRunId, selectedTrainer, startDateFrom, endDateUntil]);
 
   // Date formatting function
@@ -239,13 +235,7 @@ const OngoingClasses: React.FC = () => {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="flex justify-center items-center h-64">
-        <div className="text-lg">Loading ongoing classes...</div>
-      </div>
-    );
-  }
+
 
   return (
     <div>
