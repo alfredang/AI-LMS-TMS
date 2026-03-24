@@ -13,6 +13,7 @@ import HelpAndSupportView from '../components/HelpAndSupportView';
 import UserManagementView from '../components/training-provider/UserManagementView';
 import AdminManagementView from '../components/training-provider/AdminManagementView';
 import ApiEndpointsView from '../components/training-provider/ApiEndpointsView';
+import DocumentsView from '../components/training-provider/DocumentsView';
 import TrainingProviderSidebar from '../components/training-provider/TrainingProviderSidebar';
 import { Card } from '../components/ui/Card';
 
@@ -50,6 +51,8 @@ const TrainingProviderLayout: React.FC = () => {
         return <HelpAndSupportView />;
       case View.ApiEndpoints:
         return <ApiEndpointsView />;
+      case View.Documents:
+        return <DocumentsView />;
       default:
         return <TrainingProviderDashboard />;
     }
@@ -66,6 +69,7 @@ const TrainingProviderLayout: React.FC = () => {
       case View.Profile: return 'Company Setting';
       case View.HelpAndSupport: return 'Help & Support';
       case View.ApiEndpoints: return 'API Endpoints';
+      case View.Documents: return 'Documents';
       default: return 'Dashboard';
     }
   };

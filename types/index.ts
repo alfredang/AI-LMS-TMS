@@ -10,7 +10,8 @@ export enum View {
   HelpAndSupport = 'helpAndSupport',
   UserManagement = 'userManagement',
   ApiEndpoints = 'apiEndpoints',
-  AdminManagement = 'adminManagement'
+  AdminManagement = 'adminManagement',
+  Documents = 'documents'
 }
 
 export enum UserRole {
