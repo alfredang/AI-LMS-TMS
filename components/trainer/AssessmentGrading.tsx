@@ -36,10 +36,15 @@ const AssessmentGrading: React.FC = () => {
   useEffect(() => {
     if (currentUser?.email) {
       setLoadingClasses(true);
-      fetch(`/api/trainer/classes?email=${encodeURIComponent(currentUser.email)}`)
-        .then(res => res.json())
-        .then(data => {
-          if (Array.isArray(data)) setClasses(data);
+      Promise.all([
+        fetch(`/api/trainer/classes?email=${encodeURIComponent(currentUser.email)}`).then(res => res.json()),
+        fetch(`/api/trainer/past-classes?email=${encodeURIComponent(currentUser.email)}`).then(res => res.json())
+      ])
+        .then(([active, past]) => {
+          const merged = [];
+          if (Array.isArray(active)) merged.push(...active);
+          if (Array.isArray(past)) merged.push(...past);
+          setClasses(merged);
         })
         .finally(() => setLoadingClasses(false));
     }

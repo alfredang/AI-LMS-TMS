@@ -1,6 +1,7 @@
+require('dotenv').config({ path: '.env.local' });
 const { Pool } = require('pg');
 const pool = new Pool({
-  connectionString: 'postgres://postgres:zUapKZbD9gLQISOdo0rDiwStXNR8l5dtr8HJd7tSlj7jb814ITY6V6YO9OSxAdrm@76.13.180.29:6433/postgres?sslmode=disable'
+  connectionString: process.env.DATABASE_URL
 });
 
 async function main() {

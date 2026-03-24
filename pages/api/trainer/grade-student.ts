@@ -19,25 +19,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     try {
         const newStatus = isCompetent ? 'Competent' : 'Not Yet Competent';
 
-        if (source === 'manual') {
-            if (!isCompetent) {
-                await pool.query(
-                    `UPDATE enrollment SET assessment_status = $1, certificate = NULL, updated_at = NOW() WHERE id = $2`,
-                    [newStatus, enrolmentId]
-                );
-            } else {
-                await pool.query(
-                    `UPDATE enrollment SET assessment_status = $1, updated_at = NOW() WHERE id = $2`,
-                    [newStatus, enrolmentId]
-                );
-            }
-        } else if (source === 'ssg') {
+        if (source !== 'manual' && source !== 'ssg') {
+            return res.status(400).json({ message: 'Invalid source. Must be manual or ssg.' });
+        }
+
+        if (!isCompetent) {
             await pool.query(
-                `UPDATE ssg_enrolments SET enrolment_status = $1 WHERE id = $2`,
+                `UPDATE enrollment SET assessment_status = $1, certificate = NULL, updated_at = NOW() WHERE id = $2`,
                 [newStatus, enrolmentId]
             );
         } else {
-            return res.status(400).json({ message: 'Invalid source. Must be manual or ssg.' });
+            await pool.query(
+                `UPDATE enrollment SET assessment_status = $1, updated_at = NOW() WHERE id = $2`,
+                [newStatus, enrolmentId]
+            );
         }
 
         return res.status(200).json({ message: 'Competency updated successfully', status: newStatus });
