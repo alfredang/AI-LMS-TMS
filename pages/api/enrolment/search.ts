@@ -1,165 +1,88 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { cors } from '../../../lib/cors';
 import { getSSGCredentialsService } from '../../../lib/ssg/services/credentials-service';
+import { HttpClient, HTTPRequestBuilder, HttpMethod } from '../../../lib/ssg/utils/http-utils';
+import crypto from 'crypto';
 
 /**
- * API endpoint for searching enrolment records
  * POST /api/enrolment/search
+ * Search enrolments by Course Run ID via SSG API directly.
  */
-export default async function handler(
-  req: NextApiRequest, 
-  res: NextApiResponse
-) {
-  // Handle CORS
-  if (cors(req, res)) {
-    return; // Preflight request handled
-  }
-
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
+  const { courseRunId } = req.body;
+  if (!courseRunId) {
+    return res.status(400).json({ success: false, error: 'courseRunId is required' });
+  }
+
   try {
-    const { courseRunId, trainingPartnerUen, trainingPartnerCode, pageSize } = req.body;
-
-    // Validate required fields
-    if (!courseRunId) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'Course Run ID is required' 
-      });
+    const credentials = await getSSGCredentialsService().getSSGCredentials();
+    if (!credentials) {
+      return res.status(500).json({ success: false, error: 'SSG credentials not found' });
     }
 
-    if (!trainingPartnerUen) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'Training Partner UEN is required' 
-      });
-    }
+    const ssgBaseUrl = process.env.SSG_API_URL || 'https://api.ssg-wsg.sg';
+    const tpUen  = process.env.TRAINING_PARTNER_UEN  || credentials.uen;
+    const tpCode = process.env.TRAINING_PARTNER_CODE || '';
 
-    if (!trainingPartnerCode) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'Training Partner Code is required' 
-      });
-    }
-
-    // Build the request body according to the SSG API structure
-    const requestBody = {
+    // Encrypt the payload
+    const payload = {
+      parameters: { page: 0, pageSize: 100 },
       enrolment: {
-        course: {
-          run: {
-            id: courseRunId
-          }
-        },
-        trainingPartner: {
-          uen: trainingPartnerUen,
-          code: trainingPartnerCode
-        }
-      },
-      parameters: {
-        pageSize: pageSize || 100
+        course: { run: { id: courseRunId } },
+        trainingPartner: { uen: tpUen, code: tpCode }
       }
     };
 
-    console.log('🔍 Searching enrolments with request body:', JSON.stringify(requestBody, null, 2));
+    console.log('📤 Search payload:', JSON.stringify(payload, null, 2));
 
-    // Get SSG credentials for authentication and encryption
-    const credentialsService = getSSGCredentialsService();
-    const credentials = await credentialsService.getSSGCredentials();
+    const encKey = Buffer.from(process.env.ENCRYPTION_KEY || credentials.encryptionKey, 'base64');
+    const iv = Buffer.from('SSGAPIInitVector', 'utf8');
+    const cipher = crypto.createCipheriv('aes-256-cbc', encKey, iv);
+    let encryptedPayload = cipher.update(JSON.stringify(payload), 'utf8', 'base64');
+    encryptedPayload += cipher.final('base64');
 
-    if (!credentials) {
-      console.error('❌ SSG credentials not found');
-      return res.status(500).json({
-        success: false,
-        error: 'SSG credentials not found',
-        message: 'Please configure SSG credentials in the database',
-        requestBody
-      });
-    }
-
-    // Check if SSG API base URL is configured
-    const baseUrl = process.env.SSG_API_BASE_URL;
-    if (!baseUrl) {
-      console.error('❌ SSG_API_BASE_URL not configured');
-      return res.status(500).json({
-        success: false,
-        error: 'SSG API configuration missing',
-        message: 'Please add SSG_API_BASE_URL to your environment variables',
-        requestBody
-      });
-    }
-
-    // Use the SSG HTTP client with encryption and authentication (matching Python implementation)
-    const { HTTPRequestBuilder, HttpMethod, handleRequest } = await import('../../../lib/ssg/utils/http-utils');
-    const { Cryptography } = await import('../../../lib/ssg/utils/cryptography');
-
+    // Build request with cert/key
     const builder = new HTTPRequestBuilder()
-      .withEndpoint(baseUrl, '/tpg/enrolments/search')
+      .withEndpoint(ssgBaseUrl, '/tpg/enrolments/search')
       .withMethod(HttpMethod.POST)
-      .withHeader('Content-Type', 'application/json')
-      .withHeader('accept', 'application/json');
+      .withBody(encryptedPayload);
 
-    // Add certificate authentication (matches Python cert_pem, key_pem)
     if (credentials.certificateContent && credentials.privateKeyContent) {
       builder.withCertificate(credentials.certificateContent, credentials.privateKeyContent);
     }
 
-    // Encrypt the payload (matches Python post_encrypted method)
-    const encryptedPayload = Cryptography.encryptJSON(credentials.encryptionKey, requestBody);
-    builder.withBody(encryptedPayload);
+    const httpClient = new HttpClient(ssgBaseUrl, { 'Content-Type': 'application/json', 'Accept': 'application/json' });
+    const httpResponse = await httpClient.request(builder.build());
 
-    const config = builder.build();
-    
-    // Create HTTP client and make the request
-    const { HttpClient } = await import('../../../lib/ssg/utils/http-utils');
-    const httpClient = new HttpClient(baseUrl, {
-      'Content-Type': 'application/json',
-      'Accept': 'application/json'
-    });
-
-    const result = await handleRequest(httpClient, config);
-
-    if (result.error) {
-      console.error('❌ SSG API error:', result.error);
-      return res.status(result.status || 400).json({
-        success: false,
-        error: `SSG API error: ${result.status || 400} - ${result.error}`,
-        requestBody
-      });
+    if (httpResponse.status !== 200) {
+      return res.status(httpResponse.status).json({ success: false, error: `SSG error ${httpResponse.status}` });
     }
 
-    // The response from SSG API is encrypted, we need to decrypt it (matching Python handle_response)
-    let decryptedData;
-    try {
-      console.log('🔓 Decrypting SSG API response...');
-      decryptedData = Cryptography.decryptJSON(credentials.encryptionKey, result.data);
-      console.log('✅ Enrolment search successful (decrypted):', decryptedData);
-    } catch (decryptionError) {
-      console.error('❌ Failed to decrypt response:', decryptionError);
-      return res.status(500).json({
-        success: false,
-        error: 'Failed to decrypt response from SSG API',
-        encryptedResponse: result.data,
-        requestBody
-      });
+    // Decrypt raw response body directly
+    const rawBody = typeof httpResponse.data === 'string' ? httpResponse.data : JSON.stringify(httpResponse.data);
+    const decipher = crypto.createDecipheriv('aes-256-cbc', encKey, iv);
+    let decrypted = decipher.update(rawBody, 'base64', 'utf8');
+    decrypted += decipher.final('utf8');
+
+    const parsed = JSON.parse(decrypted);
+    console.log('📦 Decrypted SSG response:', JSON.stringify(parsed, null, 2));
+
+    if (parsed?.status && String(parsed.status) === '404') {
+      // No enrolments found — not an error
+      return res.status(200).json({ success: true, data: [] });
     }
 
-    return res.status(200).json({
-      success: true,
-      data: decryptedData,
-      encryptedResponse: result.data, // Include encrypted response for debugging
-      requestBody,
-      message: 'Enrolment search completed successfully'
-    });
+    if (parsed?.status && String(parsed.status) !== '200') {
+      return res.status(Number(parsed.status) || 400).json({ success: false, error: parsed?.error ?? `SSG status ${parsed.status}` });
+    }
+
+    return res.status(200).json({ success: true, data: parsed?.data ?? [] });
 
   } catch (error) {
-    console.error('❌ Error in enrolment search:', error);
-    
-    return res.status(500).json({
-      success: false,
-      error: error instanceof Error ? error.message : 'Internal server error',
-      message: 'Failed to search enrolment records'
-    });
+    console.error('❌ Search enrolment error:', error);
+    return res.status(500).json({ success: false, error: error instanceof Error ? error.message : 'Internal server error' });
   }
 }

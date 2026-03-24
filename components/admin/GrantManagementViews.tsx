@@ -2612,8 +2612,7 @@ export const SearchEnrolmentView: React.FC = () => {
     const [parsedData, setParsedData] = useState<any>(null);
     const [searchError, setSearchError] = useState<string | null>(null);
 
-    // Webhook URL for enrolment search
-    const WEBHOOK_URL = 'https://n8n.srv1231536.hstgr.cloud/webhook/246caa5e-bd7e-42e8-82b1-cde2e05e5013';
+    const SEARCH_ENROLMENT_API = '/api/enrolment/search';
 
     const inputClasses = "block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-500";
 
@@ -2645,69 +2644,27 @@ export const SearchEnrolmentView: React.FC = () => {
         setParsedData(null);
 
         try {
-            console.log('🔍 Sending enrolment search request to n8n webhook:', WEBHOOK_URL);
-
-            const payload = {
-                courseRunId: courseRunId.trim(),
-                timestamp: new Date().toISOString(),
-                source: 'admin-search-enrolment'
-            };
-
-            console.log('📤 Search payload:', payload);
-
-            const response = await fetch(WEBHOOK_URL, {
+            const response = await fetch(SEARCH_ENROLMENT_API, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(payload)
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ courseRunId: courseRunId.trim() })
             });
 
-            if (!response.ok) {
-                if (response.status === 500) {
-                    throw new Error('SSG API server error. The service may be temporarily unavailable. Please try again later.');
-                }
-                throw new Error(`Unable to connect to SSG API (Error ${response.status}). Please check your connection and try again.`);
+            const json = await response.json();
+
+            if (!response.ok || !json.success) {
+                const errMsg = typeof json.error === 'string' ? json.error : (json.error?.message ?? JSON.stringify(json.error) ?? `SSG API error (${response.status})`);
+                throw new Error(errMsg);
             }
 
-            // Safe JSON parsing
-            const text = await response.text();
-            let data;
-            try {
-                data = text ? JSON.parse(text) : {};
-            } catch (e) {
-                console.error('Failed to parse JSON response:', text);
-                throw new Error(`Invalid JSON response from webhook`);
-            }
-            console.log('✅ Webhook response:', data);
-            setWebhookResponse(data);
+            console.log('✅ Search enrolment response:', json);
+            setWebhookResponse(json);
 
-            // Parse nested JSON in result property
-            // Response format: { "result": "{\"status\":\"200\",\"data\":[...],\"meta\":{...}}" }
-            try {
-                let resultData = null;
-
-                // Handle direct result property (string that needs parsing)
-                if (data?.result) {
-                    resultData = typeof data.result === 'string' ? JSON.parse(data.result) : data.result;
-                }
-                // Handle array response format [{ "result": "..." }]
-                else if (Array.isArray(data) && data[0]?.result) {
-                    resultData = typeof data[0].result === 'string' ? JSON.parse(data[0].result) : data[0].result;
-                }
-
-                if (resultData) {
-                    console.log('✅ Parsed enrolment data:', resultData);
-                    console.log('✅ Total records:', resultData.meta?.totalRecords);
-                    console.log('✅ Data array length:', resultData.data?.length);
-                    setParsedData(resultData);
-                }
-            } catch (e) {
-                console.error('❌ Error parsing result JSON:', e);
-                setParsedData(null);
-            }
+            // data is the decrypted SSG payload: { data: [...], meta: {...} }
+            const resultData = json.data;
+            setParsedData(resultData ?? null);
         } catch (error) {
-            console.error('❌ Error calling webhook:', error);
+            console.error('❌ Search enrolment error:', error);
             setSearchError(error instanceof Error ? error.message : 'Failed to fetch enrolment data');
         } finally {
             setIsSearching(false);
@@ -2784,12 +2741,12 @@ export const SearchEnrolmentView: React.FC = () => {
                         </p>
                     </div>
                     <div className="p-6">
-                        {parsedData && parsedData.data && Array.isArray(parsedData.data) && parsedData.data.length > 0 ? (
+                        {Array.isArray(parsedData) && parsedData.length > 0 ? (
                             <div className="space-y-6">
                                 <div className="flex justify-between items-center bg-blue-50 dark:bg-blue-900/30 p-4 rounded-lg border border-blue-100 dark:border-blue-800">
                                     <div>
-                                        <h4 className="font-bold text-blue-900 dark:text-blue-300">Total Records Found: {parsedData.meta?.totalRecords ?? parsedData.data.length}</h4>
-                                        <p className="text-sm text-blue-700 dark:text-blue-400">Course: {parsedData.data[0]?.enrolment?.course?.title || 'N/A'}</p>
+                                        <h4 className="font-bold text-blue-900 dark:text-blue-300">Total Records Found: {parsedData.length}</h4>
+                                        <p className="text-sm text-blue-700 dark:text-blue-400">Course: {parsedData[0]?.enrolment?.course?.title || 'N/A'}</p>
                                     </div>
                                 </div>
 
@@ -2812,7 +2769,7 @@ export const SearchEnrolmentView: React.FC = () => {
                                             </tr>
                                         </thead>
                                         <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                                            {parsedData.data.map((item: any, index: number) => {
+                                            {parsedData.map((item: any, index: number) => {
                                                 const enrolment = item.enrolment || {};
                                                 const course = enrolment.course || {};
                                                 const courseRun = course.run || {};
@@ -2923,8 +2880,7 @@ export const ViewEnrolmentView: React.FC = () => {
     const [parsedData, setParsedData] = useState<any>(null);
     const [searchError, setSearchError] = useState<string | null>(null);
 
-    // Webhook URL for view enrolment
-    const WEBHOOK_URL = 'https://n8n.srv1231536.hstgr.cloud/webhook/638428e2-07e7-4448-88be-f956c5b44620';
+    const VIEW_ENROLMENT_API = '/api/enrolment/view';
 
     const inputClasses = "block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-500";
 
@@ -2956,63 +2912,21 @@ export const ViewEnrolmentView: React.FC = () => {
         setParsedData(null);
 
         try {
-            console.log('🔍 Sending view enrolment request to n8n webhook:', WEBHOOK_URL);
+            console.log('🔍 Fetching enrolment:', enrolmentId.trim());
 
-            const payload = {
-                enrolmentId: enrolmentId.trim(),
-                timestamp: new Date().toISOString(),
-                source: 'admin-view-enrolment'
-            };
-
-            console.log('📤 View enrolment payload:', payload);
-
-            const response = await fetch(WEBHOOK_URL, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(payload)
-            });
+            const response = await fetch(`${VIEW_ENROLMENT_API}?enrolmentId=${encodeURIComponent(enrolmentId.trim())}`);
 
             if (!response.ok) {
-                if (response.status === 500) {
-                    throw new Error('SSG API server error. The service may be temporarily unavailable. Please try again later.');
-                }
-                throw new Error(`Unable to connect to SSG API (Error ${response.status}). Please check your connection and try again.`);
+                const err = await response.json().catch(() => ({}));
+                throw new Error(err?.error?.message || err?.error || `SSG API error (${response.status})`);
             }
 
-            // Safe JSON parsing
-            const text = await response.text();
-            let data;
-            try {
-                data = text ? JSON.parse(text) : {};
-            } catch (e) {
-                console.error('Failed to parse JSON response:', text);
-                throw new Error(`Invalid JSON response from webhook`);
-            }
-            console.log('✅ Webhook response:', data);
+            const data = await response.json();
+            console.log('✅ View enrolment response:', data);
             setWebhookResponse(data);
-
-            // Parse nested JSON in result property
-            try {
-                let resultData = null;
-
-                if (data?.result) {
-                    resultData = typeof data.result === 'string' ? JSON.parse(data.result) : data.result;
-                } else if (Array.isArray(data) && data[0]?.result) {
-                    resultData = typeof data[0].result === 'string' ? JSON.parse(data[0].result) : data[0].result;
-                }
-
-                if (resultData) {
-                    console.log('✅ Parsed enrolment data:', resultData);
-                    setParsedData(resultData);
-                }
-            } catch (e) {
-                console.error('❌ Error parsing result JSON:', e);
-                setParsedData(null);
-            }
+            setParsedData(data.data ?? null);
         } catch (error) {
-            console.error('❌ Error calling webhook:', error);
+            console.error('❌ Error viewing enrolment:', error);
             setSearchError(error instanceof Error ? error.message : 'Failed to fetch enrolment data');
         } finally {
             setIsSearching(false);

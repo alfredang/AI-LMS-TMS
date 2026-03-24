@@ -1,5 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
+import { createSSGEnrolmentAPI } from '../../../lib/ssg/api/enrolment-api';
+import { getSSGCredentialsService } from '../../../lib/ssg/services/credentials-service';
 
 /**
  * Fetch Upcoming Class Enrolments
@@ -8,11 +10,10 @@ import pool from '../../../lib/db';
  *   Preview: returns upcoming course runs with enrollment count + date status
  *
  * POST /api/admin/fetch-upcoming-enrolments?limit=20
- *   Run: for each upcoming course run, call the SSG view-enrolment webhook,
+ *   Run: for each upcoming course run, call SSG search-enrolment API directly,
  *        insert/upsert all returned enrollments, and fix mismatched start/end dates.
  */
 
-const VIEW_ENROLMENT_WEBHOOK = 'https://n8n.srv1231536.hstgr.cloud/webhook/246caa5e-bd7e-42e8-82b1-cde2e05e5013';
 const RATE_LIMIT_MS = 4000;
 
 function sleep(ms: number) {
@@ -104,53 +105,50 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     error?: string;
   }[] = [];
 
+  // Load SSG credentials once before the loop
+  const credentialsService = getSSGCredentialsService();
+  const credentials = await credentialsService.getSSGCredentials();
+  if (!credentials) {
+    return res.status(500).json({ success: false, error: 'SSG credentials not found in database' });
+  }
+
+  const ssgBaseUrl  = process.env.SSG_API_URL || 'https://api.ssg-wsg.sg';
+  const tpUen       = process.env.TRAINING_PARTNER_UEN  || '201200696W';
+  const tpCode      = process.env.TRAINING_PARTNER_CODE || '201200696W-01';
+  const enrolmentAPI = createSSGEnrolmentAPI(ssgBaseUrl, credentials);
+
   for (const cr of courseRuns) {
     const ssgRunId: string = cr.ssg_run_id;
     console.log(`📋 Fetching enrolments for course run ${ssgRunId} (${cr.course_title})…`);
 
-    // ── 1. Call SSG view-enrolment webhook ──────────────────────────────────
+    // ── 1. Call SSG search-enrolment API directly ───────────────────────────
     let enrolments: any[] = [];
     let ssgStartDate: string | null = null;
     let ssgEndDate: string | null = null;
 
     try {
-      const webhookRes = await fetch(VIEW_ENROLMENT_WEBHOOK, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ courseRunId: ssgRunId }),
+      const result = await enrolmentAPI.searchEnrolment({
+        meta: { pageSize: 100 },
+        enrolment: {
+          course: { run: { id: ssgRunId } },
+          trainingPartner: { uen: tpUen, code: tpCode }
+        }
       });
 
-      const text = await webhookRes.text();
-      if (!text || !text.trim()) {
-        results.push({ ssgRunId, courseTitle: cr.course_title, enrollmentsInserted: 0, enrollmentsSkipped: 0, dateFixed: false, error: 'Empty response from webhook' });
+      if (result.error) {
+        const code = String(result.status);
+        if (code === '404') {
+          // No enrolments on SSG for this run — not an error
+          results.push({ ssgRunId, courseTitle: cr.course_title, enrollmentsInserted: 0, enrollmentsSkipped: 0, dateFixed: false });
+          await sleep(RATE_LIMIT_MS);
+          continue;
+        }
+        results.push({ ssgRunId, courseTitle: cr.course_title, enrollmentsInserted: 0, enrollmentsSkipped: 0, dateFixed: false, error: `SSG error ${code}: ${result.error.message ?? ''}` });
         await sleep(RATE_LIMIT_MS);
         continue;
       }
 
-      let raw: any;
-      try { raw = JSON.parse(text); } catch {
-        results.push({ ssgRunId, courseTitle: cr.course_title, enrollmentsInserted: 0, enrollmentsSkipped: 0, dateFixed: false, error: 'Non-JSON webhook response' });
-        await sleep(RATE_LIMIT_MS);
-        continue;
-      }
-
-      const parsed = typeof raw.result === 'string' ? JSON.parse(raw.result) : (raw.result ?? raw);
-      const status = String(parsed?.status ?? '');
-
-      if (status === '404') {
-        // No enrolments on SSG for this run — not an error
-        results.push({ ssgRunId, courseTitle: cr.course_title, enrollmentsInserted: 0, enrollmentsSkipped: 0, dateFixed: false });
-        await sleep(RATE_LIMIT_MS);
-        continue;
-      }
-
-      if (status !== '200') {
-        results.push({ ssgRunId, courseTitle: cr.course_title, enrollmentsInserted: 0, enrollmentsSkipped: 0, dateFixed: false, error: `SSG returned status ${status}` });
-        await sleep(RATE_LIMIT_MS);
-        continue;
-      }
-
-      enrolments = Array.isArray(parsed?.data) ? parsed.data : [];
+      enrolments = Array.isArray(result.data) ? result.data : [];
 
       // Grab start/end dates from the first enrollment record if available
       if (enrolments.length > 0) {

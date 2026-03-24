@@ -84,29 +84,49 @@ export class SSGCredentialsService {
       
       const credentials: SSGCredentials = {
         uen: row.uen,
-        encryptionKey: row.ssg_encryption_key,
+        encryptionKey: row.ssg_encryption_key || process.env.SSG_ENCRYPTION_KEY || process.env.ENCRYPTION_KEY || '',
         certificatePath: convertToAbsolutePath(row.ssg_self_sign_cert_file),
         privateKeyPath: convertToAbsolutePath(row.ssg_private_key_file)
       };
+      console.log('🔑 Encryption key loaded from:', row.ssg_encryption_key ? 'database' : (process.env.SSG_ENCRYPTION_KEY ? 'SSG_ENCRYPTION_KEY env' : (process.env.ENCRYPTION_KEY ? 'ENCRYPTION_KEY env' : 'NONE')));
 
-      // Read certificate and private key file contents
-      try {
-        if (credentials.certificatePath && credentials.certificatePath.trim() !== '' && fs.existsSync(credentials.certificatePath)) {
-          credentials.certificateContent = fs.readFileSync(credentials.certificatePath, 'utf8');
-          console.log(`✅ Certificate loaded successfully from: ${credentials.certificatePath}`);
-        } else {
-          console.warn(`❌ Certificate file not found: ${credentials.certificatePath}`);
-        }
+      // Normalize PEM string: replace literal \n with actual newlines
+      const normalizePem = (pem: string): string => pem.replace(/\\n/g, '\n').trim();
 
-        if (credentials.privateKeyPath && credentials.privateKeyPath.trim() !== '' && fs.existsSync(credentials.privateKeyPath)) {
-          credentials.privateKeyContent = fs.readFileSync(credentials.privateKeyPath, 'utf8');
-          console.log(`✅ Private key loaded successfully from: ${credentials.privateKeyPath}`);
-        } else {
-          console.warn(`❌ Private key file not found: ${credentials.privateKeyPath}`);
+      // Read certificate and private key — env vars take priority over file paths
+      const certEnv = process.env.CERT_VALUE;
+      const keyEnv  = process.env.PRIVATE_KEY_VALUE;
+
+      if (certEnv) {
+        credentials.certificateContent = normalizePem(certEnv);
+        console.log('✅ Certificate loaded from CERT_VALUE env var, length:', credentials.certificateContent.length);
+      } else {
+        try {
+          if (credentials.certificatePath && credentials.certificatePath.trim() !== '' && fs.existsSync(credentials.certificatePath)) {
+            credentials.certificateContent = fs.readFileSync(credentials.certificatePath, 'utf8');
+            console.log(`✅ Certificate loaded from file: ${credentials.certificatePath}`);
+          } else {
+            console.warn(`❌ Certificate not found — set CERT_VALUE or fix path: ${credentials.certificatePath}`);
+          }
+        } catch (fileError) {
+          console.error('Error reading certificate file:', fileError);
         }
-      } catch (fileError) {
-        console.error('Error reading certificate/key files:', fileError);
-        throw new Error(`Failed to read SSL certificate or private key files: ${fileError instanceof Error ? fileError.message : 'Unknown error'}`);
+      }
+
+      if (keyEnv) {
+        credentials.privateKeyContent = normalizePem(keyEnv);
+        console.log('✅ Private key loaded from PRIVATE_KEY_VALUE env var, length:', credentials.privateKeyContent.length);
+      } else {
+        try {
+          if (credentials.privateKeyPath && credentials.privateKeyPath.trim() !== '' && fs.existsSync(credentials.privateKeyPath)) {
+            credentials.privateKeyContent = fs.readFileSync(credentials.privateKeyPath, 'utf8');
+            console.log(`✅ Private key loaded from file: ${credentials.privateKeyPath}`);
+          } else {
+            console.warn(`❌ Private key not found — set PRIVATE_KEY_VALUE or fix path: ${credentials.privateKeyPath}`);
+          }
+        } catch (fileError) {
+          console.error('Error reading private key file:', fileError);
+        }
       }
 
       return credentials;
