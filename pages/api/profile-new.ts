@@ -128,7 +128,7 @@ async function getLearnerProfile(userId: string) {
     nric: profile.nric || '',
     gender: profile.gender || '',
     company: profile.company || '',
-    employment_status: profile.employment_status || '',
+    employmentStatus: profile.employment_status || '',
     nationality: profile.nationality || '',
     ethnicity: profile.ethnicity || '',
     invoice_url: profile.invoice_url || '',

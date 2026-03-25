@@ -159,16 +159,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         paramIndex++;
       }
 
-      // Update learner_profile table if there are fields to update
+      // Upsert learner_profile table if there are fields to update
       if (learnerFields.length > 0) {
+        // Extract the column names from the SET clauses (e.g. "tel = $1" -> "tel")
+        const insertColumns = learnerFields.map(f => f.split(' = ')[0].trim());
+        const insertPlaceholders = insertColumns.map((_, i) => `$${i + 1}`);
+        
+        // user_id is always the last parameter
+        const userIdParamIdx = learnerValues.length + 1;
+        
         const learnerQuery = `
-          UPDATE learner_profile 
-          SET ${learnerFields.join(', ')} 
-          WHERE user_id = $${paramIndex}
+          INSERT INTO learner_profile (user_id, ${insertColumns.join(', ')})
+          VALUES ($${userIdParamIdx}, ${insertPlaceholders.join(', ')})
+          ON CONFLICT (user_id) DO UPDATE
+          SET ${learnerFields.join(', ')}
         `;
         learnerValues.push(userId);
         
-        console.log('Learner Profile Query:', learnerQuery);
+        console.log('Learner Profile Upsert Query:', learnerQuery);
         console.log('Learner Profile Values:', learnerValues);
         
         await client.query(learnerQuery, learnerValues);
