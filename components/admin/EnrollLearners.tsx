@@ -751,6 +751,8 @@ const EnrollLearners: React.FC = () => {
               sponsorshipType:       storedDraft.sponsorshipType,
               traineeName:           storedDraft.traineeFullName,
               traineeNric:           storedDraft.traineeId,
+              enrolmentId:           parsed.data?.enrolment?.referenceNumber,
+              enrolmentStatus:       parsed.data?.enrolment?.status,
             }),
           });
           const syncData = await syncRes.json();

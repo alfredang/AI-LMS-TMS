@@ -1,6 +1,8 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { getSSGCredentialsService } from '../../../lib/ssg/services/credentials-service';
 import { HttpClient, HTTPRequestBuilder, HttpMethod } from '../../../lib/ssg/utils/http-utils';
+import { syncEnrolmentToDB } from '../../../lib/ssg/utils/sync-enrolment-to-db';
+import pool from '../../../lib/db';
 import crypto from 'crypto';
 
 /**
@@ -79,7 +81,26 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(Number(parsed.status) || 400).json({ success: false, error: parsed?.error ?? `SSG status ${parsed.status}` });
     }
 
-    return res.status(200).json({ success: true, data: parsed?.data ?? [] });
+    const records: any[] = parsed?.data ?? [];
+
+    // Sync each enrolment into the local DB (skip if already exists)
+    if (records.length > 0) {
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        for (const enrolment of records) {
+          await syncEnrolmentToDB(client, enrolment);
+        }
+        await client.query('COMMIT');
+      } catch (dbErr) {
+        await client.query('ROLLBACK');
+        console.error('⚠️ DB sync error (non-fatal):', dbErr);
+      } finally {
+        client.release();
+      }
+    }
+
+    return res.status(200).json({ success: true, data: records });
 
   } catch (error) {
     console.error('❌ Search enrolment error:', error);

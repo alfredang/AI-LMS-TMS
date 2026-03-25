@@ -45,13 +45,34 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Map SSG collection status → local payment_status enum (Paid / Unpaid)
     const localPaymentStatus = collectionStatus === 'Full Payment' ? 'Paid' : 'Unpaid';
 
-    await pool.query(
-      `UPDATE enrollment
-          SET payment_status = $1::public.learner_payment_status,
-              updated_at     = NOW()
-        WHERE enrolment_id = $2`,
-      [localPaymentStatus, referenceNumber.trim()]
+    // Fetch current raw_data to patch in-place
+    const existing = await pool.query(
+      `SELECT raw_data FROM enrollment WHERE enrolment_id = $1 LIMIT 1`,
+      [referenceNumber.trim()]
     );
+
+    if (existing.rows.length > 0) {
+      let rawData: any = null;
+      try {
+        const stored = existing.rows[0].raw_data;
+        rawData = typeof stored === 'string' ? JSON.parse(stored) : stored;
+      } catch { /* leave null */ }
+
+      if (rawData) {
+        if (!rawData.trainee) rawData.trainee = {};
+        if (!rawData.trainee.fees) rawData.trainee.fees = {};
+        rawData.trainee.fees.collectionStatus = collectionStatus;
+      }
+
+      await pool.query(
+        `UPDATE enrollment
+            SET payment_status = $1::public.learner_payment_status,
+                raw_data       = $2,
+                updated_at     = NOW()
+          WHERE enrolment_id = $3`,
+        [localPaymentStatus, rawData ? JSON.stringify(rawData) : existing.rows[0].raw_data, referenceNumber.trim()]
+      );
+    }
 
     return res.status(200).json({ success: true, data: result.data });
   } catch (error) {

@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Icon, IconName } from '../ui/Icon';
+import { getApiUrl } from '@/lib/urlHelpers';
 
 // Helper functions for consistent styling
 const getStatusColor = (status: string) => {
@@ -280,58 +281,33 @@ export const ViewGrantStatusView: React.FC = () => {
     // Search functionality state
     const [searchInput, setSearchInput] = useState<string>('');
     const [isSearching, setIsSearching] = useState(false);
-    const [webhookResponse, setWebhookResponse] = useState<any>(null);
+    const [grantData, setGrantData] = useState<any>(null);
     const [searchError, setSearchError] = useState<string | null>(null);
-
-    // Webhook URL
-    const WEBHOOK_URL = 'https://n8n.srv1231536.hstgr.cloud/webhook/3ba28a37-dbfe-4c5a-8ec9-252c3d2cfc25';
 
     const handleSearch = async () => {
         if (!searchInput.trim()) {
-            setSearchError('Please enter a search query');
+            setSearchError('Please enter a Grant ID');
             return;
         }
 
         setIsSearching(true);
         setSearchError(null);
-        setWebhookResponse(null);
+        setGrantData(null);
 
         try {
-            console.log('🔍 Sending request to n8n webhook:', WEBHOOK_URL);
-            console.log('📤 Search input:', searchInput);
+            console.log('🔍 Fetching grant from SSG:', searchInput.trim());
 
-            const response = await fetch(WEBHOOK_URL, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    query: searchInput,
-                    timestamp: new Date().toISOString(),
-                    source: 'admin-grant-status'
-                })
-            });
+            const response = await fetch(getApiUrl(`/api/grants/view?grantId=${encodeURIComponent(searchInput.trim())}`));
+            const json = await response.json();
 
-            if (!response.ok) {
-                if (response.status === 500) {
-                    throw new Error('SSG API server error. The service may be temporarily unavailable. Please try again later.');
-                }
-                throw new Error(`Unable to connect to SSG API (Error ${response.status}). Please check your connection and try again.`);
+            if (!json.success) {
+                throw new Error(json.error || `SSG error ${response.status}`);
             }
 
-            // Safe JSON parsing
-            const text = await response.text();
-            let data;
-            try {
-                data = text ? JSON.parse(text) : {};
-            } catch (e) {
-                console.error('Failed to parse JSON response:', text);
-                throw new Error(`Invalid JSON response from webhook`);
-            }
-            console.log('✅ Webhook response:', data);
-            setWebhookResponse(data);
+            console.log('✅ Grant data:', json.data);
+            setGrantData(json.data);
         } catch (error) {
-            console.error('❌ Error calling webhook:', error);
+            console.error('❌ Error fetching grant:', error);
             setSearchError(error instanceof Error ? error.message : 'Failed to fetch grant status');
         } finally {
             setIsSearching(false);
@@ -397,140 +373,112 @@ export const ViewGrantStatusView: React.FC = () => {
                 <div className="flex justify-center py-10">
                     <div className="text-center">
                         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
-                        <p className="mt-4 text-gray-600 dark:text-gray-300">Fetching grant status from n8n...</p>
+                        <p className="mt-4 text-gray-600 dark:text-gray-300">Fetching grant status from SSG...</p>
                     </div>
                 </div>
             )}
 
-            {/* Webhook Response Display */}
-            {webhookResponse && !isSearching && (
+            {/* Grant Data Display */}
+            {grantData && !isSearching && (
                 <Card className="p-0 dark:bg-gray-800 dark:border-gray-700">
                     <div className="p-6 border-b dark:border-gray-700">
                         <h3 className="text-xl font-bold dark:text-white">Grant Status Results</h3>
-                        <p className="text-gray-500 dark:text-gray-400 mt-1 dark:text-gray-400">Search query: "{searchInput}"</p>
+                        <p className="text-gray-500 dark:text-gray-400 mt-1">Grant ID: "{searchInput}"</p>
                     </div>
                     <div className="p-6">
-                        {/* Check if response has the expected structure */}
-                        {webhookResponse.result && webhookResponse.result.data ? (
-                            <div className="space-y-6">
-                                {/* Grant Summary Card */}
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div className="bg-white border border-gray-200 rounded-lg p-4 dark:bg-gray-700 dark:border-gray-600">
-                                        <h4 className="text-sm font-medium text-gray-500 mb-2 dark:text-gray-300">Grant Reference Number</h4>
-                                        <p className="text-lg font-semibold text-gray-900 dark:text-white">
-                                            {webhookResponse.result.data.referenceNumber || 'N/A'}
-                                        </p>
-                                    </div>
-                                    <div className="bg-white border border-gray-200 rounded-lg p-4 dark:bg-gray-700 dark:border-gray-600">
-                                        <h4 className="text-sm font-medium text-gray-500 mb-2 dark:text-gray-300">Status</h4>
-                                        <span className={`inline-flex px-3 py-1 text-sm font-semibold rounded-full border ${getStatusColor(webhookResponse.result.data.status || 'Pending')}`}>
-                                            {webhookResponse.result.data.status || 'Pending'}
-                                        </span>
+                        <div className="space-y-6">
+                            {/* Grant Summary */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="bg-white border border-gray-200 rounded-lg p-4 dark:bg-gray-700 dark:border-gray-600">
+                                    <h4 className="text-sm font-medium text-gray-500 mb-2 dark:text-gray-300">Grant Reference Number</h4>
+                                    <p className="text-lg font-semibold text-gray-900 dark:text-white">
+                                        {grantData.referenceNumber || 'N/A'}
+                                    </p>
+                                </div>
+                                <div className="bg-white border border-gray-200 rounded-lg p-4 dark:bg-gray-700 dark:border-gray-600">
+                                    <h4 className="text-sm font-medium text-gray-500 mb-2 dark:text-gray-300">Status</h4>
+                                    <span className={`inline-flex px-3 py-1 text-sm font-semibold rounded-full border ${getStatusColor(grantData.status || 'Pending')}`}>
+                                        {grantData.status || 'Pending'}
+                                    </span>
+                                </div>
+                            </div>
+
+                            {/* Funding Information */}
+                            {grantData.fundingScheme && (
+                                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 dark:bg-blue-900/20 dark:border-blue-800">
+                                    <h4 className="font-semibold text-blue-900 mb-3 dark:text-blue-300">Funding Information</h4>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div>
+                                            <p className="text-sm text-blue-700 font-medium dark:text-blue-400">Funding Scheme</p>
+                                            <p className="text-blue-900 dark:text-blue-200">
+                                                {grantData.fundingScheme.code} - {grantData.fundingScheme.description}
+                                            </p>
+                                        </div>
+                                        {grantData.fundingComponent && (
+                                            <div>
+                                                <p className="text-sm text-blue-700 font-medium dark:text-blue-400">Funding Component</p>
+                                                <p className="text-blue-900 dark:text-blue-200">
+                                                    {grantData.fundingComponent.code} - {grantData.fundingComponent.description}
+                                                </p>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
+                            )}
 
-                                {/* Funding Information */}
-                                {webhookResponse.result.data.fundingScheme && (
-                                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 dark:bg-blue-900/20 dark:border-blue-800">
-                                        <h4 className="font-semibold text-blue-900 mb-3 dark:text-blue-300">Funding Information</h4>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                            <div>
-                                                <p className="text-sm text-blue-700 font-medium dark:text-blue-400">Funding Scheme</p>
-                                                <p className="text-blue-900 dark:text-blue-200">
-                                                    {webhookResponse.result.data.fundingScheme.code} - {webhookResponse.result.data.fundingScheme.description}
-                                                </p>
-                                            </div>
-                                            {webhookResponse.result.data.fundingComponent && (
-                                                <div>
-                                                    <p className="text-sm text-blue-700 font-medium dark:text-blue-400">Funding Component</p>
-                                                    <p className="text-blue-900 dark:text-blue-200">
-                                                        {webhookResponse.result.data.fundingComponent.code} - {webhookResponse.result.data.fundingComponent.description}
-                                                    </p>
-                                                </div>
-                                            )}
+                            {/* Grant Amount Details */}
+                            {grantData.grantAmount && (
+                                <div className="bg-green-50 border border-green-200 rounded-lg p-4 dark:bg-green-900/20 dark:border-green-800">
+                                    <h4 className="font-semibold text-green-900 mb-3 dark:text-green-300">Grant Amount</h4>
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                        <div>
+                                            <p className="text-sm text-green-700 font-medium dark:text-green-400">Estimated</p>
+                                            <p className="text-xl font-bold text-green-900 dark:text-green-200">
+                                                ${grantData.grantAmount.estimated?.toFixed(2) || '0.00'}
+                                            </p>
+                                        </div>
+                                        <div>
+                                            <p className="text-sm text-green-700 font-medium dark:text-green-400">Paid</p>
+                                            <p className="text-xl font-bold text-green-900 dark:text-green-200">
+                                                ${grantData.grantAmount.paid?.toFixed(2) || '0.00'}
+                                            </p>
+                                        </div>
+                                        <div>
+                                            <p className="text-sm text-green-700 font-medium dark:text-green-400">Recovery</p>
+                                            <p className="text-xl font-bold text-green-900 dark:text-green-200">
+                                                ${grantData.grantAmount.recovery?.toFixed(2) || '0.00'}
+                                            </p>
                                         </div>
                                     </div>
-                                )}
+                                </div>
+                            )}
 
-                                {/* Grant Amount Details */}
-                                {webhookResponse.result.data.grantAmount && (
-                                    <div className="bg-green-50 border border-green-200 rounded-lg p-4 dark:bg-green-900/20 dark:border-green-800">
-                                        <h4 className="font-semibold text-green-900 mb-3 dark:text-green-300">Grant Amount</h4>
-                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                            <div>
-                                                <p className="text-sm text-green-700 font-medium dark:text-green-400">Estimated</p>
-                                                <p className="text-xl font-bold text-green-900 dark:text-green-200">
-                                                    ${webhookResponse.result.data.grantAmount.estimated?.toFixed(2) || '0.00'}
-                                                </p>
-                                            </div>
-                                            <div>
-                                                <p className="text-sm text-green-700 font-medium dark:text-green-400">Paid</p>
-                                                <p className="text-xl font-bold text-green-900 dark:text-green-200">
-                                                    ${webhookResponse.result.data.grantAmount.paid?.toFixed(2) || '0.00'}
-                                                </p>
-                                            </div>
-                                            <div>
-                                                <p className="text-sm text-green-700 font-medium dark:text-green-400">Recovery</p>
-                                                <p className="text-xl font-bold text-green-900 dark:text-green-200">
-                                                    ${webhookResponse.result.data.grantAmount.recovery?.toFixed(2) || '0.00'}
-                                                </p>
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
+                            {/* Enrolment Information */}
+                            {grantData.enrolment && (
+                                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 dark:bg-gray-700/30 dark:border-gray-600">
+                                    <h4 className="font-semibold text-gray-900 mb-2 dark:text-white">Enrolment Reference</h4>
+                                    <p className="text-gray-700 dark:text-gray-300">
+                                        {grantData.enrolment.referenceNumber || 'N/A'}
+                                    </p>
+                                </div>
+                            )}
 
-                                {/* Enrolment Information */}
-                                {webhookResponse.result.data.enrolment && (
-                                    <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 dark:bg-gray-700/30 dark:border-gray-600">
-                                        <h4 className="font-semibold text-gray-900 mb-2 dark:text-white">Enrolment Reference</h4>
-                                        <p className="text-gray-700 dark:text-gray-300">
-                                            {webhookResponse.result.data.enrolment.referenceNumber || 'N/A'}
-                                        </p>
-                                    </div>
-                                )}
-
-                                {/* Meta Information */}
-                                {webhookResponse.result.meta && (
-                                    <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 dark:bg-gray-700/30 dark:border-gray-600">
-                                        <h4 className="font-semibold text-gray-900 mb-3 dark:text-white">Timestamps</h4>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                            <div>
-                                                <p className="text-sm text-gray-600 font-medium dark:text-gray-400">Created On</p>
-                                                <p className="text-gray-900 dark:text-white">{webhookResponse.result.meta.createdOn || 'N/A'}</p>
-                                            </div>
-                                            <div>
-                                                <p className="text-sm text-gray-600 font-medium dark:text-gray-400">Last Updated</p>
-                                                <p className="text-gray-900 dark:text-white">{webhookResponse.result.meta.updatedOn || 'N/A'}</p>
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* Raw JSON Response (Collapsible) */}
-                                <details className="bg-gray-50 border border-gray-200 rounded-lg p-4 dark:bg-gray-700/30 dark:border-gray-600">
-                                    <summary className="font-semibold text-gray-800 cursor-pointer hover:text-gray-600 dark:text-white dark:hover:text-gray-300">
-                                        View Raw JSON Response
-                                    </summary>
-                                    <pre className="mt-3 text-sm text-gray-700 whitespace-pre-wrap overflow-x-auto max-h-96 bg-white p-3 rounded border dark:bg-gray-900 dark:text-gray-300 dark:border-gray-700">
-                                        {JSON.stringify(webhookResponse, null, 2)}
-                                    </pre>
-                                </details>
-                            </div>
-                        ) : (
-                            /* Fallback for unexpected response format */
-                            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                                <h4 className="font-semibold text-gray-800 mb-3">Response Data:</h4>
-                                <pre className="text-sm text-gray-700 whitespace-pre-wrap overflow-x-auto max-h-96">
-                                    {JSON.stringify(webhookResponse, null, 2)}
+                            {/* Raw JSON Response (Collapsible) */}
+                            <details className="bg-gray-50 border border-gray-200 rounded-lg p-4 dark:bg-gray-700/30 dark:border-gray-600">
+                                <summary className="font-semibold text-gray-800 cursor-pointer hover:text-gray-600 dark:text-white dark:hover:text-gray-300">
+                                    View Raw JSON Response
+                                </summary>
+                                <pre className="mt-3 text-sm text-gray-700 whitespace-pre-wrap overflow-x-auto max-h-96 bg-white p-3 rounded border dark:bg-gray-900 dark:text-gray-300 dark:border-gray-700">
+                                    {JSON.stringify(grantData, null, 2)}
                                 </pre>
-                            </div>
-                        )}
+                            </details>
+                        </div>
 
                         <div className="mt-6 flex justify-end">
                             <Button
                                 variant="outline"
                                 onClick={() => {
-                                    setWebhookResponse(null);
+                                    setGrantData(null);
                                     setSearchInput('');
                                 }}
                             >
@@ -542,7 +490,7 @@ export const ViewGrantStatusView: React.FC = () => {
             )}
 
             {/* Empty State */}
-            {!webhookResponse && !isSearching && (
+            {!grantData && !isSearching && (
                 <Card className="p-12">
                     <div className="text-center text-gray-500 dark:text-gray-400">
                         <Icon name={IconName.Search} className="w-16 h-16 mx-auto mb-4 text-gray-400" />
@@ -3607,8 +3555,6 @@ export const ViewCourseRunView: React.FC = () => {
     const [parsedData, setParsedData] = useState<any>(null);
     const [searchError, setSearchError] = useState<string | null>(null);
 
-    // Webhook URL for view course run
-    const WEBHOOK_URL = 'https://n8n.srv1231536.hstgr.cloud/webhook/7f2f5d21-beb6-47a9-8056-e1ccf79a3ea7';
 
     const inputClasses = "block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-500";
 
@@ -3674,76 +3620,23 @@ export const ViewCourseRunView: React.FC = () => {
         setParsedData(null);
 
         try {
-            console.log('🔍 Sending view course run request to n8n webhook:', WEBHOOK_URL);
+            const response = await fetch(`/api/course-runs/view?courseRunId=${encodeURIComponent(courseRunId.trim())}`);
+            const json = await response.json();
 
-            const payload = {
-                courseRunId: courseRunId.trim(),
-                timestamp: new Date().toISOString(),
-                source: 'admin-view-course-run'
-            };
-
-            console.log('📤 View course run payload:', payload);
-
-            const response = await fetch(WEBHOOK_URL, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(payload)
-            });
-
-            if (!response.ok) {
-                if (response.status === 500) {
-                    throw new Error('SSG API server error. The service may be temporarily unavailable. Please try again later.');
-                }
-                throw new Error(`Unable to connect to SSG API (Error ${response.status}). Please check your connection and try again.`);
+            if (!json.success) {
+                throw new Error(json.error || `SSG API error ${response.status}`);
             }
 
-            // Safe JSON parsing
-            const text = await response.text();
-            let data;
-            try {
-                data = text ? JSON.parse(text) : {};
-            } catch (e) {
-                console.error('Failed to parse JSON response:', text);
-                throw new Error(`Invalid JSON response from webhook`);
-            }
-            console.log('✅ Webhook response:', data);
-            setWebhookResponse(data);
+            // data = { course: { run: {...}, title, referenceNumber, ... } }
+            setWebhookResponse(json.data);
+            setParsedData(json.data);
 
-            // Parse response - webhook returns { result: "{{ $json.data }}" }
-            // The result field contains the SSG API response (array with data.course.run structure)
-            try {
-                let resultData = null;
-
-                // Extract result field from webhook response
-                if (data?.result) {
-                    // Parse result if it's a string, otherwise use as-is
-                    const parsedResult = typeof data.result === 'string' ? JSON.parse(data.result) : data.result;
-
-                    // Handle array response from SSG
-                    if (Array.isArray(parsedResult) && parsedResult.length > 0) {
-                        resultData = parsedResult[0];
-                    } else {
-                        resultData = parsedResult;
-                    }
-                } else if (Array.isArray(data) && data.length > 0) {
-                    // Fallback: direct array response
-                    resultData = data[0];
-                } else {
-                    resultData = data;
-                }
-
-                if (resultData) {
-                    console.log('✅ Parsed course run data:', resultData);
-                    setParsedData(resultData);
-                }
-            } catch (e) {
-                console.error('❌ Error parsing result JSON:', e);
+            if (!json.data?.course?.run) {
+                console.warn('⚠️ No course run data in SSG response');
                 setParsedData(null);
             }
         } catch (error) {
-            console.error('❌ Error calling webhook:', error);
+            console.error('❌ Error fetching course run:', error);
             setSearchError(error instanceof Error ? error.message : 'Failed to fetch course run data');
         } finally {
             setIsSearching(false);

@@ -2,10 +2,9 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '@/lib/db';
 
 // Maps SSG sponsorship values to the course_sponsorship DB enum
-function mapSponsorshipType(ssgType: string): 'Self-Sponsored' | 'Employer-Sponsored' | 'N/A' {
-  if (ssgType === 'EMPLOYER') return 'Employer-Sponsored';
-  if (ssgType === 'INDIVIDUAL') return 'Self-Sponsored';
-  return 'N/A';
+function mapSponsorshipType(ssgType: string): 'Individual' | 'Employer' {
+  if (ssgType?.toUpperCase().includes('EMPLOYER')) return 'Employer';
+  return 'Individual';
 }
 
 // Derive a readable name from an email address as a last-resort fallback
@@ -28,6 +27,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     sponsorshipType,
     traineeName,
     traineeNric,
+    enrolmentId,
+    enrolmentStatus,
   } = req.body;
 
   if (!traineeEmail || !courseReferenceNumber || !courseRunId) {
@@ -167,17 +168,52 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     // ── 4. Upsert enrollment ─────────────────────────────────────────────────
-    // enrollment has UNIQUE (user_id, course_run_id).
     const sponsorship = mapSponsorshipType(sponsorshipType || 'INDIVIDUAL');
+
+    const rawData = JSON.stringify({
+      course: {
+        run: { id: courseRunId },
+        referenceNumber: courseReferenceNumber,
+      },
+      status: enrolmentStatus || 'Confirmed',
+      trainee: {
+        id: traineeNric || '',
+        email: { full: traineeEmail },
+        fullName: traineeName || '',
+        sponsorshipType: sponsorship,
+        fees: { collectionStatus: 'Pending Payment', discountAmount: '0' },
+      },
+      referenceNumber: enrolmentId || '',
+      trainingPartner: {
+        uen: '201200696W',
+        code: '201200696W-01',
+        name: 'TERTIARY INFOTECH ACADEMY PTE. LTD.',
+      },
+    });
 
     const enrollResult = await client.query(
       `INSERT INTO enrollment
          (user_id, course_id, course_run_id, payment_status, assessment_status,
-          progress_percent, course_sponsorship, enrolment_date)
-       VALUES ($1, $2, $3, 'Unpaid', 'Pending', 0, $4, NOW())
-       ON CONFLICT (user_id, course_run_id) DO NOTHING
+          progress_percent, course_sponsorship, enrolment_date,
+          enrolment_id, enrolment_status, nric, email, course_reference,
+          training_partner_code, raw_data)
+       VALUES ($1, $2, $3, 'Unpaid', 'Pending', 0, $4, NOW(),
+               $5, $6, $7, $8, $9, '201200696W-01', $10)
+       ON CONFLICT (user_id, course_run_id) DO UPDATE SET
+         enrolment_id     = COALESCE(EXCLUDED.enrolment_id,     enrollment.enrolment_id),
+         enrolment_status = COALESCE(EXCLUDED.enrolment_status, enrollment.enrolment_status),
+         raw_data         = COALESCE(EXCLUDED.raw_data,         enrollment.raw_data),
+         updated_at       = NOW()
        RETURNING id`,
-      [learnerId, courseId, courseRunUuid, sponsorship]
+      [
+        learnerId, courseId, courseRunUuid, sponsorship,
+        enrolmentId || null,
+        enrolmentStatus || null,
+        traineeNric || null,
+        traineeEmail,
+        courseReferenceNumber,
+        rawData,
+      ]
     );
 
     await client.query('COMMIT');

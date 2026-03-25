@@ -21,28 +21,31 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Extract enrolment data
     const {
-      traineeEmail,
+      traineeEmail: rawEmail,
       traineeName,
       traineeNric,
       courseCode,
       courseTitle,
       courseRunId,
       courseReferenceNumber,
-      trainingPartnerCode,
+      trainingPartnerCode: rawTrainingPartnerCode,
       sponsorshipType,
       enrolmentDate,
       enrolmentStatus,
       enrolmentId,
       completionDate,
+      ssgData,
     } = enrolment;
 
-    // Map sponsorship type to valid DB enum values
-    const mapSponsorship = (type: string | undefined): 'Self-Sponsored' | 'Employer-Sponsored' | 'N/A' => {
-      if (!type) return 'Self-Sponsored';
+    const traineeEmail = rawEmail?.toLowerCase().trim();
+    const trainingPartnerCode = rawTrainingPartnerCode || '201200696W-01';
+
+    // Map sponsorship type to valid DB enum values ('Individual' | 'Employer')
+    const mapSponsorship = (type: string | undefined): 'Individual' | 'Employer' => {
+      if (!type) return 'Individual';
       const t = type.toUpperCase();
-      if (t === 'EMPLOYER' || t === 'EMPLOYER-SPONSORED' || t === 'EMPLOYER SPONSORED') return 'Employer-Sponsored';
-      if (t === 'INDIVIDUAL' || t === 'SELF-SPONSORED' || t === 'SELF SPONSORED' || t === 'SELF-FUNDED' || t === 'SELF FUNDED') return 'Self-Sponsored';
-      return 'Self-Sponsored';
+      if (t.includes('EMPLOYER')) return 'Employer';
+      return 'Individual';
     };
 
     // 1. Check if course exists by course_code
@@ -132,27 +135,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       console.log(`✅ Found existing course run: ${courseRunUuid}`);
     }
 
-    // 4. Check if enrollment already exists
-    const existingEnrolment = await client.query(
-      `SELECT id FROM enrollment 
-       WHERE user_id = $1 AND course_id = $2 AND course_run_id = $3`,
-      [userId, courseId, courseRunUuid]
-    );
+    // 4. Check if enrollment already exists by SSG enrolment_id
+    if (enrolmentId) {
+      const existingEnrolment = await client.query(
+        `SELECT id FROM enrollment WHERE enrolment_id = $1 LIMIT 1`,
+        [enrolmentId]
+      );
 
-    if (existingEnrolment.rows.length > 0) {
-      await client.query('ROLLBACK');
-      return res.status(400).json({
-        success: false,
-        error: {
-          message: 'Duplicate enrolment',
-          details: [
-            {
-              field: 'enrolment',
-              message: 'Duplicate record found'
-            }
-          ]
-        }
-      });
+      if (existingEnrolment.rows.length > 0) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({
+          success: false,
+          error: {
+            message: 'Duplicate enrolment',
+            details: [{ field: 'enrolment', message: 'Duplicate record found' }]
+          }
+        });
+      }
     }
 
     // 5. Insert enrollment
@@ -184,7 +183,42 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         courseReferenceNumber || null,
         trainingPartnerCode || null,
         completionDate || null,
-        enrolment ? JSON.stringify(enrolment) : null,
+        JSON.stringify({
+          course: {
+            run: {
+              id: courseRunId,
+              endDate: ssgData?.course?.run?.endDate || '',
+              startDate: ssgData?.course?.run?.startDate || '',
+            },
+            title: ssgData?.course?.title || courseTitle || '',
+            referenceNumber: courseReferenceNumber,
+          },
+          status: enrolmentStatus || 'Confirmed',
+          trainee: {
+            id: traineeNric || '',
+            fees: {
+              discountAmount: ssgData?.trainee?.fees?.discountAmount || '0',
+              collectionStatus: ssgData?.trainee?.fees?.collectionStatus || 'Pending Payment',
+            },
+            email: { full: traineeEmail },
+            idType: { type: ssgData?.trainee?.idType?.type || 'NRIC' },
+            employer: ssgData?.trainee?.employer || {
+              uen: '', name: '',
+              contact: { email: { full: '' }, fullName: '', contactNumber: { areaCode: '', countryCode: '', phoneNumber: '' } }
+            },
+            fullName: traineeName || '',
+            dateOfBirth: ssgData?.trainee?.dateOfBirth || '',
+            contactNumber: ssgData?.trainee?.contactNumber || { areaCode: '', countryCode: '', phoneNumber: '' },
+            enrolmentDate: enrolmentDate || new Date().toISOString().split('T')[0],
+            sponsorshipType: mapSponsorship(sponsorshipType),
+          },
+          referenceNumber: enrolmentId || '',
+          trainingPartner: {
+            uen: '201200696W',
+            code: trainingPartnerCode,
+            name: 'TERTIARY INFOTECH ACADEMY PTE. LTD.',
+          },
+        }),
       ]
     );
 

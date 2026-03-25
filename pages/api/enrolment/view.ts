@@ -1,6 +1,8 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { getSSGCredentialsService } from '../../../lib/ssg/services/credentials-service';
 import { createSSGEnrolmentAPI } from '../../../lib/ssg/api/enrolment-api';
+import { syncEnrolmentToDB } from '../../../lib/ssg/utils/sync-enrolment-to-db';
+import pool from '../../../lib/db';
 
 /**
  * GET /api/enrolment/view?enrolmentId=ENR-XXXX-XXXXXX
@@ -33,6 +35,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     if (result.error) {
       return res.status(result.status || 400).json({ success: false, error: result.error });
+    }
+
+    // Sync into local DB (skip if enrolment_id already exists)
+    if (result.data) {
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        await syncEnrolmentToDB(client, result.data);
+        await client.query('COMMIT');
+      } catch (dbErr) {
+        await client.query('ROLLBACK');
+        console.error('⚠️ DB sync error (non-fatal):', dbErr);
+      } finally {
+        client.release();
+      }
     }
 
     return res.status(200).json({ success: true, data: result.data });

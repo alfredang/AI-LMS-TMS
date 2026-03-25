@@ -4333,22 +4333,26 @@ export const AddCourseRunView: React.FC = () => {
         setFetchedTitle(null);
         setMessage(null);
         try {
-            const res = await fetch('https://n8n.srv1231536.hstgr.cloud/webhook/7f2f5d21-beb6-47a9-8056-e1ccf79a3ea7', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ courseRunId: form.courseRunId.trim(), courseCode: form.courseCode.trim() }),
-            });
-            if (!res.ok) throw new Error(`Webhook returned ${res.status}`);
-            const data = await res.json();
-            const run = data?.course?.run;
-            if (!run) throw new Error('Invalid response from webhook');
-            const startDate = run.courseStartDate ? formatDateNum(run.courseStartDate) : '';
-            const endDate = run.courseEndDate ? formatDateNum(run.courseEndDate) : '';
-            const digitalAttendanceId = run.qrCodeLink ? (run.qrCodeLink.split('/').pop() || '') : '';
+            const res = await fetch(`/api/course-runs/view?courseRunId=${encodeURIComponent(form.courseRunId.trim())}`);
+            if (!res.ok) throw new Error(`SSG API returned ${res.status}`);
+            const json = await res.json();
+            if (!json.success) throw new Error(json.error || 'Failed to fetch course run');
+            // SSG response: data.course.run (run is nested inside course)
+            const course = json.data?.course;
+            const run = course?.run;
+            if (!run) throw new Error('No course run data in SSG response');
+            // Dates are numbers e.g. 20261212 → convert to YYYY-MM-DD
+            const fmtDate = (v: number | undefined) =>
+                v ? `${String(v).slice(0,4)}-${String(v).slice(4,6)}-${String(v).slice(6,8)}` : '';
+            const startDate = fmtDate(run.courseStartDate);
+            const endDate = fmtDate(run.courseEndDate);
+            // Extract digital attendance ID from qrCodeLink
+            const qrRaw: string = run.qrCodeLink || run.digitalClassroomLink || '';
+            const digitalAttendanceId = qrRaw ? (qrRaw.split('/').pop() || '') : '';
             setForm(p => ({ ...p, startDate, endDate, digitalAttendanceId }));
-            setFetchedTitle(data?.course?.title || null);
+            setFetchedTitle(course?.title || null);
         } catch (err) {
-            setMessage({ type: 'error', text: 'Failed to fetch course run info: ' + (err instanceof Error ? err.message : 'Unknown error') });
+            setMessage({ type: 'error', text: 'Failed to fetch course run from SSG: ' + (err instanceof Error ? err.message : 'Unknown error') });
         } finally {
             setFetching(false);
         }

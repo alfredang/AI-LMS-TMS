@@ -452,10 +452,12 @@ export const BulkUploadEnrolmentView: React.FC = () => {
                                     courseTitle: '',
                                     courseRunId: item.courseRunId,
                                     courseReferenceNumber: item.courseReferenceNumber,
+                                    trainingPartnerCode: '201200696W-01',
                                     sponsorshipType: item.sponsorshipType,
                                     enrolmentDate: new Date().toISOString().split('T')[0],
                                     enrolmentStatus,
-                                    enrolmentId: ssgRefNumber || ''
+                                    enrolmentId: ssgRefNumber || '',
+                                    ssgData: parsedResult?.data?.enrolment ?? parsedResult?.data ?? null,
                                 }
                             })
                         });
