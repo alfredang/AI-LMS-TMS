@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Icon, IconName } from '../ui/Icon';
+import { maskNric } from '../../utils';
 
 interface Learner {
   user_id: string;
@@ -46,6 +47,7 @@ const ViewLearners: React.FC = () => {
   const [filterAccountStatuses, setFilterAccountStatuses] = useState<string[]>([]);
   const [filterNationalities, setFilterNationalities] = useState<string[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
+  const [visibleNrics, setVisibleNrics] = useState<Set<string>>(new Set());
 
   const [showStatusConfirmation, setShowStatusConfirmation] = useState(false);
   const [selectedLearner, setSelectedLearner] = useState<Learner | null>(null);
@@ -64,6 +66,15 @@ const ViewLearners: React.FC = () => {
       prev.includes(value) ? prev.filter(v => v !== value) : [...prev, value]
     );
     setCurrentPage(1);
+  };
+
+  const toggleNricVisibility = (userId: string) => {
+    setVisibleNrics(prev => {
+      const next = new Set(prev);
+      if (next.has(userId)) next.delete(userId);
+      else next.add(userId);
+      return next;
+    });
   };
 
   const handleResetFilters = () => {
@@ -281,6 +292,7 @@ const ViewLearners: React.FC = () => {
                 <tr>
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Learner Name</th>
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Contact</th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">NRIC</th>
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Gender</th>
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Company</th>
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Nationality</th>
@@ -317,6 +329,24 @@ const ViewLearners: React.FC = () => {
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm text-gray-900 dark:text-white">{learner.email}</div>
                       <div className="text-sm text-gray-500 dark:text-gray-400">{learner.telephone || 'N/A'}</div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-gray-900 dark:text-white">
+                          {learner.nric && learner.nric !== 'N/A' 
+                            ? (visibleNrics.has(learner.user_id) ? learner.nric : maskNric(learner.nric)) 
+                            : 'N/A'}
+                        </span>
+                        {learner.nric && learner.nric !== 'N/A' && (
+                          <button 
+                            onClick={() => toggleNricVisibility(learner.user_id)}
+                            className="text-gray-400 hover:text-blue-500 transition-colors"
+                            title={visibleNrics.has(learner.user_id) ? "Hide NRIC" : "Show full NRIC"}
+                          >
+                            <Icon name={visibleNrics.has(learner.user_id) ? IconName.EyeOff : IconName.Eye} className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{capitalise(learner.gender)}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{learner.company || 'N/A'}</td>
