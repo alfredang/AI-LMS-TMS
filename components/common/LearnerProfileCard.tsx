@@ -499,7 +499,7 @@ export const LearnerProfileCard: React.FC<{
                                 <Button
                                     variant="ghost"
                                     size="sm"
-                                    className="mt-2"
+                                    className="mt-2 border border-gray-300 dark:border-gray-500 text-gray-700 dark:text-gray-200"
                                     onClick={handleGenerateAvatar}
                                     disabled={isGeneratingAvatar}
                                 >
@@ -514,7 +514,7 @@ export const LearnerProfileCard: React.FC<{
                     </div>
                     {isEditing ? (
                         <div className="flex items-center gap-2">
-                            <Button variant="ghost" onClick={() => {
+                            <Button variant="ghost" className="border border-gray-300 dark:border-gray-500 text-gray-700 dark:text-gray-200" onClick={() => {
                                 setIsEditing(false);
                                 setFormData(profile);
                                 // Clear any preview state when canceling
