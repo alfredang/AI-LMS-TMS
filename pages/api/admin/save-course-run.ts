@@ -1,6 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import bcrypt from 'bcryptjs';
+import { google, drive_v3 } from 'googleapis';
 
 // Helper function for database queries
 const query = (text: string, params?: any[]) => pool.query(text, params);
@@ -447,6 +448,57 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             endDate: endDate,
             modeOfLearning: 'Physical'
         });
+
+        // --- Auto-share courseware Google Drive folder with the assigned trainer ---
+        if (trainerEmail) {
+            try {
+                const coursewareRes = await query(
+                    `SELECT courseware_link FROM course WHERE id = $1 AND courseware_link IS NOT NULL AND courseware_link LIKE '%drive.google.com%'`,
+                    [courseId]
+                );
+
+                if (coursewareRes.rows.length > 0 && coursewareRes.rows[0].courseware_link) {
+                    const coursewareLink = coursewareRes.rows[0].courseware_link;
+                    let folderId: string | null = null;
+
+                    if (coursewareLink.includes('folders/')) {
+                        const parts = coursewareLink.split('folders/');
+                        if (parts.length > 1) folderId = parts[1].split('?')[0].split('/')[0];
+                    } else if (coursewareLink.includes('id=')) {
+                        folderId = new URL(coursewareLink).searchParams.get('id');
+                    }
+
+                    if (folderId) {
+                        const clientId = process.env.GOOGLE_OAUTH_CLIENT_ID;
+                        const clientSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET;
+                        const refreshToken = process.env.GOOGLE_OAUTH_REFRESH_TOKEN;
+
+                        if (clientId && clientSecret && refreshToken) {
+                            const oauth2Client = new google.auth.OAuth2(clientId, clientSecret, 'http://localhost:9876');
+                            oauth2Client.setCredentials({ refresh_token: refreshToken });
+                            const drive: drive_v3.Drive = google.drive({ version: 'v3', auth: oauth2Client });
+
+                            try {
+                                await drive.permissions.create({
+                                    fileId: folderId,
+                                    sendNotificationEmail: false,
+                                    requestBody: { role: 'reader', type: 'user', emailAddress: trainerEmail }
+                                });
+                                console.log(`📂 Auto-shared courseware folder with trainer ${trainerEmail}`);
+                            } catch (shareErr: any) {
+                                if (shareErr.message?.includes('already exists')) {
+                                    console.log(`📂 Trainer ${trainerEmail} already has access to courseware folder.`);
+                                } else {
+                                    console.warn(`⚠️ Could not share courseware folder with ${trainerEmail}: ${shareErr.message}`);
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (shareError) {
+                console.warn('⚠️ Auto-share courseware error (non-blocking):', shareError);
+            }
+        }
 
         return res.status(200).json({
             success: true,
