@@ -114,6 +114,11 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate }) => {
                 <NavItem page={AdminPage.AssignTrainerLogs} label="Assign Trainer Log" isSubItem />
             </NavSection>
 
+            <NavSection title="Certificate">
+                <NavItem page={AdminPage.CreateCertificate} label="Create Certificate" isSubItem />
+                <NavItem page={AdminPage.DeleteCertificate} label="Delete Certificate" isSubItem />
+            </NavSection>
+
             {/* Tools section hidden
             <NavSection title="Tools">
                 <NavItem page={AdminPage.BackfillEnrollments} label="Backfill Enrollments" isSubItem />

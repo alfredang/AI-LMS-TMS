@@ -19,6 +19,7 @@ interface StudentData {
   student_name: string;
   email: string;
   competent_status: string;
+  certificate: string | null;
   source: 'manual' | 'ssg';
   is_competent: boolean;
 }
@@ -79,10 +80,13 @@ const AssessmentGrading: React.FC = () => {
     const newCompetentState = !student.is_competent;
     const studentId = student.enrolment_id || student.student_name;
     
-    // Optomistic UI update
+    // Optimistic UI update
     const updatedStudents = [...students];
     updatedStudents[index].is_competent = newCompetentState;
     updatedStudents[index].competent_status = newCompetentState ? 'Competent' : 'Not Yet Competent';
+    if (!newCompetentState) {
+      updatedStudents[index].certificate = null; // Clear certificate when marking incompetent
+    }
     setStudents(updatedStudents);
 
     setSavingStatus(prev => ({ ...prev, [studentId]: true }));
@@ -98,6 +102,14 @@ const AssessmentGrading: React.FC = () => {
         })
       });
       if (!res.ok) throw new Error('Failed to update');
+
+      // If marking competent, re-fetch to pick up the generated certificate URL
+      if (newCompetentState) {
+        const refreshRes = await fetch(`/api/trainer/class-students?courseRunId=${selectedCourseRunId}`);
+        const refreshData = await refreshRes.json();
+        if (Array.isArray(refreshData)) setStudents(refreshData);
+      }
+
     } catch (e) {
       console.error('Failed to save competency status', e);
       // Revert optimism on failure
@@ -198,6 +210,18 @@ const AssessmentGrading: React.FC = () => {
                       </div>
 
                       <div className="flex items-center space-x-4">
+                        {/* Certificate Status Badge */}
+                        {student.is_competent && (
+                          <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-full ${
+                            student.certificate
+                              ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                              : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
+                          }`}>
+                            <Icon name={student.certificate ? IconName.CheckCircle : IconName.Clock} className="w-3.5 h-3.5" />
+                            {student.certificate ? 'Cert Issued' : 'Cert Pending'}
+                          </span>
+                        )}
+
                         <span className={`text-xs font-semibold uppercase tracking-wider ${
                             student.is_competent ? 'text-green-600 dark:text-green-400' : 'text-gray-500 dark:text-gray-500'
                           }`}>
@@ -214,7 +238,7 @@ const AssessmentGrading: React.FC = () => {
                             disabled={isSaving}
                             className="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500"
                             style={{
-                              borderColor: student.is_competent ? '#10B981' : '#D1D5DB', // Emerald vs Gray
+                              borderColor: student.is_competent ? '#10B981' : '#D1D5DB',
                               transform: student.is_competent ? 'translateX(100%)' : 'translateX(0)',
                               transition: 'all 0.2s ease-in-out',
                               zIndex: 10

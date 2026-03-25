@@ -25,6 +25,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 u.full_name as student_name,
                 u.email,
                 e.assessment_status as competent_status,
+                e.certificate,
                 CASE WHEN e.enrolment_id IS NOT NULL THEN 'ssg' ELSE 'manual' END as source
             FROM enrollment e
             JOIN app_user u ON e.user_id = u.id

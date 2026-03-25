@@ -23,6 +23,7 @@ import CompletedClasses from '../components/admin/CompletedClasses';
 import ClassDetailView from '../components/admin/ClassDetailView';
 import { UpcomingClassesTable } from '../components/UpcomingClassesTable';
 import { ClassManagerView, AssignTrainerView, AssignStudentView, AddCourseView, AddCourseRunView, AutomationLogsView, AssignTrainerLogsView, BackfillEnrollmentsView, FetchUpcomingEnrolmentsView } from '../components/admin/ClassManagementViews';
+import { CreateCertificateView, DeleteCertificateView } from '../components/admin/CertificateManagement';
 import { CreateNewClassView } from '../components/admin/CreateNewClassView';
 import EnrollLearners from '../components/admin/EnrollLearners';
 import {
@@ -137,6 +138,8 @@ const PAGE_LABELS: Partial<Record<AdminPage, string>> = {
   [AdminPage.AssignTrainerLogs]: 'Assign Trainer Log',
   [AdminPage.BackfillEnrollments]: 'Backfill Enrollments',
   [AdminPage.FetchUpcomingEnrolments]: 'Fetch Upcoming Classes Enrolment',
+  [AdminPage.CreateCertificate]: 'Create Certificate',
+  [AdminPage.DeleteCertificate]: 'Delete Certificate',
 };
 
 const AdminLayout: React.FC = () => {
@@ -269,6 +272,10 @@ const AdminLayout: React.FC = () => {
         return <BackfillEnrollmentsView />;
       case AdminPage.FetchUpcomingEnrolments:
         return <FetchUpcomingEnrolmentsView />;
+      case AdminPage.CreateCertificate:
+        return <CreateCertificateView />;
+      case AdminPage.DeleteCertificate:
+        return <DeleteCertificateView />;
       default:
         return <AdminDashboard />;
     }

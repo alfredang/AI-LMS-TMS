@@ -68,7 +68,9 @@ export enum AdminPage {
   AutomationLogs = 'automationLogs',
   AssignTrainerLogs = 'assignTrainerLogs',
   BackfillEnrollments = 'backfillEnrollments',
-  FetchUpcomingEnrolments = 'fetchUpcomingEnrolments'
+  FetchUpcomingEnrolments = 'fetchUpcomingEnrolments',
+  CreateCertificate = 'createCertificate',
+  DeleteCertificate = 'deleteCertificate'
 }
 
 export enum TrainerPage {
