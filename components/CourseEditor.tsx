@@ -309,9 +309,13 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
 
     const handleCourseChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
         const { name, value, type } = e.target;
+        const inputMode = (e.target as HTMLInputElement).inputMode;
 
-        if (type === 'number') {
-            setCourse({ ...course, [name]: parseFloat(value) || 0 });
+        if (type === 'number' || inputMode === 'decimal') {
+            // Allow empty, digits, and one decimal point — preserve raw string for typing
+            if (value === '' || /^\d*\.?\d*$/.test(value)) {
+                setCourse({ ...course, [name]: value });
+            }
         } else {
             setCourse({ ...course, [name]: value });
         }
@@ -997,7 +1001,16 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                 <label htmlFor="fundingValidity" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
                                     Funding Validity
                                 </label>
-                                <input type="date" id="fundingValidity" name="fundingValidity" value={course.fundingValidity ? course.fundingValidity.slice(0, 10) : ''} onChange={handleCourseChange} className={inputClasses} />
+                                <input type="date" id="fundingValidity" name="fundingValidity" value={(() => {
+                                    if (!course.fundingValidity) return '';
+                                    if (/^\d{4}-\d{2}-\d{2}/.test(course.fundingValidity)) return course.fundingValidity.slice(0, 10);
+                                    const d = new Date(course.fundingValidity);
+                                    if (isNaN(d.getTime())) return '';
+                                    const yyyy = d.getFullYear();
+                                    const mm = String(d.getMonth() + 1).padStart(2, '0');
+                                    const dd = String(d.getDate()).padStart(2, '0');
+                                    return `${yyyy}-${mm}-${dd}`;
+                                })()} onChange={handleCourseChange} className={inputClasses} />
                                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Date until which the course funding is valid</p>
                             </div>
                             <div>
@@ -1010,13 +1023,13 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                             <label htmlFor="trainingHours" className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
                                                 Training Hours <span className="text-red-500">*</span>
                                             </label>
-                                            <input type="number" id="trainingHours" name="trainingHours" value={course.trainingHours} onChange={handleCourseChange} className={inputClasses} />
+                                            <input type="text" inputMode="decimal" id="trainingHours" name="trainingHours" value={course.trainingHours} onChange={handleCourseChange} className={inputClasses} placeholder="0" />
                                         </div>
                                         <div>
                                             <label htmlFor="assessmentHours" className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
                                                 Assessment Hours <span className="text-red-500">*</span>
                                             </label>
-                                            <input type="number" id="assessmentHours" name="assessmentHours" value={course.assessmentHours} onChange={handleCourseChange} className={inputClasses} />
+                                            <input type="text" inputMode="decimal" id="assessmentHours" name="assessmentHours" value={course.assessmentHours} onChange={handleCourseChange} className={inputClasses} placeholder="0" />
                                         </div>
                                     </div>
                                     <div className="pt-2 text-right">
