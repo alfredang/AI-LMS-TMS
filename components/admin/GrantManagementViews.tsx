@@ -290,6 +290,11 @@ export const ViewGrantStatusView: React.FC = () => {
             return;
         }
 
+        if (!/^GRN-\d/i.test(searchInput.trim())) {
+            setSearchError('Invalid Grant ID. Format should be GRN-NNNN-NNNNNN (e.g. GRN-2512-016146)');
+            return;
+        }
+
         setIsSearching(true);
         setSearchError(null);
         setGrantData(null);
@@ -301,14 +306,18 @@ export const ViewGrantStatusView: React.FC = () => {
             const json = await response.json();
 
             if (!json.success) {
-                throw new Error(json.error || `SSG error ${response.status}`);
+                const errMsg = typeof json.error === 'string'
+                    ? json.error
+                    : (json.error?.message || `SSG error ${response.status}`);
+                setSearchError(errMsg);
+                return;
             }
 
             console.log('✅ Grant data:', json.data);
             setGrantData(json.data);
         } catch (error) {
             console.error('❌ Error fetching grant:', error);
-            setSearchError(error instanceof Error ? error.message : 'Failed to fetch grant status');
+            setSearchError('Failed to connect to SSG. Please check your connection and try again.');
         } finally {
             setIsSearching(false);
         }
@@ -2156,14 +2165,10 @@ export const SearchGrantView: React.FC = () => {
     // Search functionality state
     const [courseRunId, setCourseRunId] = useState<string>('');
     const [page, setPage] = useState<number>(0);
-    const [pageSize, setPageSize] = useState<number>(30);
+    const [pageSize, setPageSize] = useState<number>(100);
     const [isSearching, setIsSearching] = useState(false);
-    const [webhookResponse, setWebhookResponse] = useState<any>(null);
-    const [parsedData, setParsedData] = useState<any>(null);
+    const [grantsData, setGrantsData] = useState<{ data: any[]; meta: any } | null>(null);
     const [searchError, setSearchError] = useState<string | null>(null);
-
-    // Webhook URL
-    const WEBHOOK_URL = 'https://n8n.srv1231536.hstgr.cloud/webhook/350792b8-727e-4140-9c54-1363524ab248';
 
     // Helper functions for consistent styling
     const getStatusColor = (status: string) => {
@@ -2207,65 +2212,29 @@ export const SearchGrantView: React.FC = () => {
 
         setIsSearching(true);
         setSearchError(null);
-        setWebhookResponse(null);
+        setGrantsData(null);
 
         try {
-            console.log('🔍 Sending request to n8n webhook:', WEBHOOK_URL);
+            console.log('🔍 Searching grants for course run:', courseRunId.trim());
 
-            const payload = {
-                courseRunId,
-                page: page,
-                pageSize,
-                timestamp: new Date().toISOString(),
-                source: 'admin-search-grant'
-            };
-
-            console.log('📤 Search payload:', payload);
-
-            const response = await fetch(WEBHOOK_URL, {
+            const response = await fetch(getApiUrl('/api/grants/search'), {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(payload)
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ courseRunId: courseRunId.trim(), page, pageSize }),
             });
 
-            if (!response.ok) {
-                if (response.status === 500) {
-                    throw new Error('SSG API server error. The service may be temporarily unavailable. Please try again later.');
-                }
-                throw new Error(`Unable to connect to SSG API (Error ${response.status}). Please check your connection and try again.`);
+            const json = await response.json();
+
+            if (!json.success) {
+                setSearchError(json.error || `SSG error ${response.status}`);
+                return;
             }
 
-            // Safe JSON parsing
-            const text = await response.text();
-            let data;
-            try {
-                data = text ? JSON.parse(text) : {};
-            } catch (e) {
-                console.error('Failed to parse JSON response:', text);
-                throw new Error(`Invalid JSON response from webhook`);
-            }
-            console.log('✅ Webhook response:', data);
-            setWebhookResponse(data);
-
-            // Parse nested JSON in result property if exists
-            if (data.result) {
-                try {
-                    // Start parsing nested string response
-                    const nested = typeof data.result === 'string' ? JSON.parse(data.result) : data.result;
-                    console.log('✅ Parsed nested result:', nested);
-                    setParsedData(nested);
-                } catch (e) {
-                    console.error('❌ Error parsing nested result JSON:', e);
-                    setParsedData(null);
-                }
-            } else {
-                setParsedData(null);
-            }
+            console.log('✅ Grants data:', json);
+            setGrantsData({ data: json.data ?? [], meta: json.meta ?? {} });
         } catch (error) {
-            console.error('❌ Error calling webhook:', error);
-            setSearchError(error instanceof Error ? error.message : 'Failed to fetch grant status');
+            console.error('❌ Error searching grants:', error);
+            setSearchError('Failed to connect to SSG. Please check your connection and try again.');
         } finally {
             setIsSearching(false);
         }
@@ -2365,26 +2334,24 @@ export const SearchGrantView: React.FC = () => {
                 <div className="flex justify-center py-10">
                     <div className="text-center">
                         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
-                        <p className="mt-4 text-gray-600 dark:text-gray-400">Fetching grant details from n8n...</p>
+                        <p className="mt-4 text-gray-600 dark:text-gray-400">Fetching grant details from SSG...</p>
                     </div>
                 </div>
             )}
 
-            {/* Webhook Response Display */}
-            {webhookResponse && !isSearching && (
+            {/* Results Display */}
+            {grantsData && !isSearching && (
                 <Card className="p-0">
                     <div className="p-6 border-b dark:border-gray-700">
-                        <h3 className="text-xl font-bold dark:text-white">Grant Status Results</h3>
-                        <p className="text-gray-500 dark:text-gray-400 mt-1">
-                            Run: {courseRunId}
-                        </p>
+                        <h3 className="text-xl font-bold dark:text-white">Grant Search Results</h3>
+                        <p className="text-gray-500 dark:text-gray-400 mt-1">Course Run ID: {courseRunId}</p>
                     </div>
                     <div className="p-6">
-                        {parsedData && parsedData.data && Array.isArray(parsedData.data) && parsedData.data.length > 0 ? (
+                        {Array.isArray(grantsData.data) && grantsData.data.length > 0 ? (
                             <div className="space-y-6">
                                 <div className="flex justify-between items-center bg-blue-50 dark:bg-blue-900/30 p-4 rounded-lg border border-blue-100 dark:border-blue-800">
                                     <div>
-                                        <h4 className="font-bold text-blue-900 dark:text-blue-300">Total Records Found: {parsedData.meta?.totalRecords ?? 0}</h4>
+                                        <h4 className="font-bold text-blue-900 dark:text-blue-300">Total Records Found: {grantsData.meta?.totalRecords ?? grantsData.data.length}</h4>
                                         <p className="text-sm text-blue-700 dark:text-blue-400">Course Run ID: {courseRunId}</p>
                                     </div>
                                 </div>
@@ -2403,7 +2370,7 @@ export const SearchGrantView: React.FC = () => {
                                             </tr>
                                         </thead>
                                         <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                                            {parsedData.data.map((item: any, index: number) => (
+                                            {grantsData.data.map((item: any, index: number) => (
                                                 <tr key={index} className="hover:bg-gray-50 dark:hover:bg-gray-700">
                                                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
                                                         {courseRunId}
@@ -2449,7 +2416,7 @@ export const SearchGrantView: React.FC = () => {
                                 View Raw JSON Response
                             </summary>
                             <pre className="mt-3 text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap overflow-x-auto max-h-96 bg-white dark:bg-gray-800 p-3 rounded border dark:border-gray-600">
-                                {JSON.stringify(webhookResponse, null, 2)}
+                                {JSON.stringify(grantsData, null, 2)}
                             </pre>
                         </details>
 
@@ -2457,8 +2424,7 @@ export const SearchGrantView: React.FC = () => {
                             <Button
                                 variant="outline"
                                 onClick={() => {
-                                    setWebhookResponse(null);
-                                    setParsedData(null);
+                                    setGrantsData(null);
                                     setCourseRunId('');
                                 }}
                             >
@@ -2470,7 +2436,7 @@ export const SearchGrantView: React.FC = () => {
             )}
 
             {/* Empty State */}
-            {!webhookResponse && !isSearching && (
+            {!grantsData && !isSearching && (
                 <Card className="p-12">
                     <div className="text-center text-gray-500 dark:text-gray-400">
                         <Icon name={IconName.Search} className="w-16 h-16 mx-auto mb-4 text-gray-400" />
@@ -3095,108 +3061,48 @@ export const ViewEnrolmentView: React.FC = () => {
 export const SearchCourseRunsView: React.FC = () => {
     const [courseCode, setCourseCode] = useState<string>('');
     const [isSearching, setIsSearching] = useState(false);
-    const [webhookResponse, setWebhookResponse] = useState<any>(null);
-    const [parsedData, setParsedData] = useState<any>(null);
+    const [courseRunsData, setCourseRunsData] = useState<any>(null);
     const [searchError, setSearchError] = useState<string | null>(null);
-    const [currentPage, setCurrentPage] = useState(1);
-    const itemsPerPage = 10;
-
-    const WEBHOOK_URL = 'https://n8n.srv1231536.hstgr.cloud/webhook/c963c0c9-e1f2-4914-9b09-e957f4292fae';
+    const [currentPage, setCurrentPage] = useState(0);
 
     const inputClasses = "block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-500";
+
+    const fetchCourseRuns = async (code: string, page: number) => {
+        setIsSearching(true);
+        setSearchError(null);
+        setCourseRunsData(null);
+
+        try {
+            const response = await fetch(
+                `/api/course-runs/search?courseCode=${encodeURIComponent(code.trim())}&page=${page}&pageSize=100&includeExpired=true`
+            );
+            const json = await response.json();
+
+            if (!json.success) {
+                setSearchError(json.error || 'Unable to retrieve course runs. Please try again later.');
+                return;
+            }
+
+            setCourseRunsData(json.data);
+        } catch (error) {
+            setSearchError('Something went wrong. Please try again later.');
+        } finally {
+            setIsSearching(false);
+        }
+    };
 
     const handleSearch = async () => {
         if (!courseCode.trim()) {
             setSearchError('Please enter a Course Code');
             return;
         }
+        setCurrentPage(0);
+        await fetchCourseRuns(courseCode, 0);
+    };
 
-        setIsSearching(true);
-        setSearchError(null);
-        setWebhookResponse(null);
-        setParsedData(null);
-        setCurrentPage(1);
-
-        try {
-            const payload = {
-                courseCode: courseCode.trim(),
-                timestamp: new Date().toISOString(),
-                source: 'admin-search-course-runs'
-            };
-
-            const response = await fetch(WEBHOOK_URL, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(payload)
-            });
-
-            if (!response.ok) {
-                if (response.status === 500) {
-                    throw new Error('The service is temporarily unavailable. Please try again later.');
-                }
-                throw new Error('Unable to retrieve course runs. Please try again later.');
-            }
-
-            const text = await response.text();
-
-            let data;
-            try {
-                data = JSON.parse(text);
-            } catch {
-                // Only throw error if text is truly empty or invalid
-                if (!text || text.trim() === '') {
-                    throw new Error('No response received from the server. Please try again later.');
-                }
-                throw new Error('Received an unexpected response from the server. Please try again later.');
-            }
-
-            setWebhookResponse(data);
-
-            try {
-                let resultData = null;
-
-                // Handle results array structure (e.g., [{results: [{result: "..."}]}])
-                if (Array.isArray(data) && data[0]?.results) {
-                    const results = data[0].results;
-                    // Find the first result with actual data
-                    for (const item of results) {
-                        if (item?.result) {
-                            resultData = typeof item.result === 'string' ? JSON.parse(item.result) : item.result;
-                            break;
-                        }
-                    }
-                } else if (data?.result) {
-                    resultData = typeof data.result === 'string' ? JSON.parse(data.result) : data.result;
-                } else if (Array.isArray(data) && data[0]?.result) {
-                    resultData = typeof data[0].result === 'string' ? JSON.parse(data[0].result) : data[0].result;
-                }
-
-                // Check if the result is an error object (any shape)
-                const isError = resultData && (
-                    resultData.name === 'AxiosError' ||
-                    resultData.code?.startsWith?.('ERR_') ||
-                    resultData.error ||
-                    (resultData.status && resultData.status >= 400) ||
-                    (typeof resultData.message === 'string' && !resultData.data)
-                );
-
-                if (isError) {
-                    const errorMsg = extractErrorMessage(resultData);
-                    setSearchError(errorMsg);
-                    setParsedData(null);
-                } else if (resultData) {
-                    setParsedData(resultData);
-                }
-            } catch (e) {
-                setParsedData(null);
-            }
-        } catch (error) {
-            setSearchError(error instanceof Error ? error.message : 'Something went wrong. Please try again later.');
-        } finally {
-            setIsSearching(false);
-        }
+    const handlePageChange = async (page: number) => {
+        setCurrentPage(page);
+        await fetchCourseRuns(courseCode, page);
     };
 
     // Format YYYYMMDD integer to readable date
@@ -3250,29 +3156,19 @@ export const SearchCourseRunsView: React.FC = () => {
     };
 
     const renderCourseRuns = () => {
-        if (!parsedData) return null;
+        if (!courseRunsData) return null;
 
-        // Handle SSG response: course.runs[] or fallback to data[] / direct array
-        const courseRuns = parsedData.course?.runs || parsedData.data || (Array.isArray(parsedData) ? parsedData : null);
-        const courseRef = parsedData.course?.referenceNumber || courseCode;
+        // Handle SSG response: course.runs[] or fallback to runs[] / direct array
+        const courseRuns = courseRunsData.course?.runs || courseRunsData.runs || (Array.isArray(courseRunsData) ? courseRunsData : null);
+        const courseRef = courseRunsData.course?.referenceNumber || courseCode;
 
         if (courseRuns && Array.isArray(courseRuns) && courseRuns.length > 0) {
-            // Pagination calculations
-            const totalItems = courseRuns.length;
-            const totalPages = Math.ceil(totalItems / itemsPerPage);
-            const startIndex = (currentPage - 1) * itemsPerPage;
-            const endIndex = startIndex + itemsPerPage;
-            const currentPageData = courseRuns.slice(startIndex, endIndex);
-
             return (
                 <div className="space-y-6">
                     <div className="flex justify-between items-center bg-blue-50 dark:bg-blue-900/30 p-4 rounded-lg border border-blue-100 dark:border-blue-800">
                         <div>
-                            <h4 className="font-bold text-blue-900 dark:text-blue-300">Total Course Runs Found: {totalItems}</h4>
+                            <h4 className="font-bold text-blue-900 dark:text-blue-300">Course Runs: {courseRuns.length} results (page {currentPage})</h4>
                             <p className="text-sm text-blue-700 dark:text-blue-400">Course Reference: {courseRef}</p>
-                        </div>
-                        <div className="text-sm text-blue-700 dark:text-blue-400">
-                            Showing {startIndex + 1}-{Math.min(endIndex, totalItems)} of {totalItems}
                         </div>
                     </div>
 
@@ -3292,7 +3188,7 @@ export const SearchCourseRunsView: React.FC = () => {
                                 </tr>
                             </thead>
                             <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                                {currentPageData.map((run: any, index: number) => (
+                                {courseRuns.map((run: any, index: number) => (
                                     <tr key={index} className="hover:bg-gray-50 dark:hover:bg-gray-700">
                                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600 dark:text-blue-400">
                                             {run.id || 'N/A'}
@@ -3321,7 +3217,7 @@ export const SearchCourseRunsView: React.FC = () => {
                                                     View
                                                 </a>
                                             ) : (
-                                                <span className="text-gray-400 dark:text-gray-500 dark:text-gray-400">N/A</span>
+                                                <span className="text-gray-400 dark:text-gray-500">N/A</span>
                                             )}
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
@@ -3340,87 +3236,6 @@ export const SearchCourseRunsView: React.FC = () => {
                             </tbody>
                         </table>
                     </div>
-
-                    {/* Pagination Controls */}
-                    {totalPages > 1 && (
-                        <div className="flex items-center justify-between border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-3 sm:px-6 rounded-b-lg">
-                            <div className="flex flex-1 justify-between sm:hidden">
-                                <Button
-                                    variant="outline"
-                                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                                    disabled={currentPage === 1}
-                                    className="relative inline-flex items-center"
-                                >
-                                    Previous
-                                </Button>
-                                <Button
-                                    variant="outline"
-                                    onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                                    disabled={currentPage === totalPages}
-                                    className="relative ml-3 inline-flex items-center"
-                                >
-                                    Next
-                                </Button>
-                            </div>
-                            <div className="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
-                                <div>
-                                    <p className="text-sm text-gray-700 dark:text-gray-300">
-                                        Page <span className="font-medium">{currentPage}</span> of <span className="font-medium">{totalPages}</span>
-                                    </p>
-                                </div>
-                                <div>
-                                    <nav className="isolate inline-flex -space-x-px rounded-md shadow-sm" aria-label="Pagination">
-                                        <button
-                                            onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                                            disabled={currentPage === 1}
-                                            className="relative inline-flex items-center rounded-l-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50 disabled:cursor-not-allowed dark:ring-gray-600 dark:hover:bg-gray-700"
-                                        >
-                                            <span className="sr-only">Previous</span>
-                                            <Icon name={IconName.Back} className="h-5 w-5" />
-                                        </button>
-
-                                        {/* Page Numbers */}
-                                        {Array.from({ length: totalPages }, (_, i) => i + 1).map((pageNum) => {
-                                            // Show first page, last page, current page, and pages around current
-                                            const showPage = pageNum === 1 ||
-                                                pageNum === totalPages ||
-                                                (pageNum >= currentPage - 1 && pageNum <= currentPage + 1);
-
-                                            if (!showPage && pageNum === 2 && currentPage > 3) {
-                                                return <span key={pageNum} className="relative inline-flex items-center px-4 py-2 text-sm font-semibold text-gray-700 dark:text-gray-300">...</span>;
-                                            }
-                                            if (!showPage && pageNum === totalPages - 1 && currentPage < totalPages - 2) {
-                                                return <span key={pageNum} className="relative inline-flex items-center px-4 py-2 text-sm font-semibold text-gray-700 dark:text-gray-300">...</span>;
-                                            }
-                                            if (!showPage) return null;
-
-                                            return (
-                                                <button
-                                                    key={pageNum}
-                                                    onClick={() => setCurrentPage(pageNum)}
-                                                    className={`relative inline-flex items-center px-4 py-2 text-sm font-semibold ${currentPage === pageNum
-                                                        ? 'z-10 bg-blue-600 text-white focus:z-20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600'
-                                                        : 'text-gray-900 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0 dark:text-gray-300 dark:ring-gray-600 dark:hover:bg-gray-700'
-                                                        }`}
-                                                >
-                                                    {pageNum}
-                                                </button>
-                                            );
-                                        })}
-
-                                        <button
-                                            onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                                            disabled={currentPage === totalPages}
-                                            className="relative inline-flex items-center rounded-r-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50 disabled:cursor-not-allowed dark:ring-gray-600 dark:hover:bg-gray-700"
-                                        >
-                                            <span className="sr-only">Next</span>
-                                            <Icon name={IconName.ChevronDown} className="h-5 w-5 rotate-[-90deg]" />
-                                        </button>
-                                    </nav>
-                                </div>
-                            </div>
-                        </div>
-                    )}
                 </div>
             );
         }
@@ -3430,7 +3245,7 @@ export const SearchCourseRunsView: React.FC = () => {
                 <Icon name={IconName.InfoCircle} className="w-12 h-12 mx-auto text-yellow-500 dark:text-yellow-400 mb-3" />
                 <h4 className="text-lg font-bold text-yellow-800 dark:text-yellow-300 mb-2">No Course Runs Found</h4>
                 <p className="text-yellow-700 dark:text-yellow-400">
-                    No course runs were found for this Course Code.
+                    No course runs were found for this Course Code on page {currentPage}.
                 </p>
             </div>
         );
@@ -3497,13 +3312,28 @@ export const SearchCourseRunsView: React.FC = () => {
             )}
 
             {/* Results Display */}
-            {webhookResponse && !isSearching && (
+            {courseRunsData && !isSearching && (
                 <Card className="p-0">
-                    <div className="p-6 border-b dark:border-gray-700">
-                        <h3 className="text-xl font-bold dark:text-white">Course Run Results</h3>
-                        <p className="text-gray-500 dark:text-gray-400 mt-1">
-                            Course Code: {courseCode}
-                        </p>
+                    <div className="p-6 border-b dark:border-gray-700 flex flex-wrap items-center justify-between gap-4">
+                        <div>
+                            <h3 className="text-xl font-bold dark:text-white">Course Run Results</h3>
+                            <p className="text-gray-500 dark:text-gray-400 mt-1">Course Code: {courseCode}</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <label htmlFor="page-select" className="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                                Page:
+                            </label>
+                            <select
+                                id="page-select"
+                                value={currentPage}
+                                onChange={(e) => handlePageChange(Number(e.target.value))}
+                                className="px-3 py-1.5 text-sm border border-gray-300 rounded-md bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            >
+                                {Array.from({ length: 10 }, (_, i) => (
+                                    <option key={i} value={i}>Page {i}</option>
+                                ))}
+                            </select>
+                        </div>
                     </div>
                     <div className="p-6">
                         {renderCourseRuns()}
@@ -3513,7 +3343,7 @@ export const SearchCourseRunsView: React.FC = () => {
                                 View Raw JSON Response
                             </summary>
                             <pre className="mt-3 text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap overflow-x-auto max-h-96 bg-white dark:bg-gray-800 p-3 rounded border dark:border-gray-600">
-                                {JSON.stringify(webhookResponse, null, 2)}
+                                {JSON.stringify(courseRunsData, null, 2)}
                             </pre>
                         </details>
 
@@ -3521,8 +3351,7 @@ export const SearchCourseRunsView: React.FC = () => {
                             <Button
                                 variant="outline"
                                 onClick={() => {
-                                    setWebhookResponse(null);
-                                    setParsedData(null);
+                                    setCourseRunsData(null);
                                     setCourseCode('');
                                     setCurrentPage(1);
                                 }}
@@ -3535,7 +3364,7 @@ export const SearchCourseRunsView: React.FC = () => {
             )}
 
             {/* Empty State */}
-            {!webhookResponse && !isSearching && (
+            {!courseRunsData && !isSearching && (
                 <Card className="p-12">
                     <div className="text-center text-gray-500 dark:text-gray-400">
                         <Icon name={IconName.Search} className="w-16 h-16 mx-auto mb-4 text-gray-400" />

@@ -4173,7 +4173,7 @@ export const AssignStudentView: React.FC = () => {
                                                                         disabled={saving}
                                                                         className="bg-green-600 hover:bg-green-700 text-white"
                                                                     >
-                                                                        {saving ? 'Enrolling...' : 'Add Learner'}
+                                                                        {saving ? 'Adding...' : 'Add Learner'}
                                                                     </Button>
                                                                 </div>
                                                             </div>

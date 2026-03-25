@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
+import bcrypt from 'bcryptjs';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -19,6 +20,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const client = await pool.connect();
   try {
+    await client.query('BEGIN');
+
     // Fetch the course_id for this course run
     const runResult = await client.query(
       `SELECT id, course_id FROM course_run WHERE id = $1`,
@@ -58,13 +61,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     } else {
       // Manual mode: find or create user by email, or create without email
       if (manualEmail) {
+        // Match against primary OR secondary email, case-insensitively
         const existingUser = await client.query(
-          `SELECT id FROM app_user WHERE email = $1`,
+          `SELECT id FROM app_user
+           WHERE LOWER(email) = LOWER($1) OR LOWER(secondary_email) = LOWER($1)
+           LIMIT 1`,
           [manualEmail]
         );
         if (existingUser.rows.length > 0) {
+          // Account already exists — ensure it's active, then assign to class
           resolvedUserId = existingUser.rows[0].id;
-          // Check duplicate enrollment
+          await client.query(
+            `UPDATE app_user SET account_status = 'active', updated_at = NOW() WHERE id = $1 AND account_status != 'active'`,
+            [resolvedUserId]
+          );
           const existingEnroll = await client.query(
             `SELECT id FROM enrollment WHERE user_id = $1 AND course_run_id = $2`,
             [resolvedUserId, courseRunUuid]
@@ -73,35 +83,43 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             return res.status(409).json({ success: false, error: 'Student is already enrolled in this course run' });
           }
         } else {
-          // Create new user with learner role
+          // Create app_user with default password
+          const passwordHash = await bcrypt.hash('password123', 10);
           const newUser = await client.query(
-            `INSERT INTO app_user (id, email, full_name, role, account_status, created_at, updated_at)
-             VALUES (gen_random_uuid(), $1, $2, 'Learner', 'Active', NOW(), NOW())
+            `INSERT INTO app_user (id, email, full_name, password_hash, account_status, created_at, updated_at)
+             VALUES (gen_random_uuid(), $1, $2, $3, 'active', NOW(), NOW())
              RETURNING id`,
-            [manualEmail, manualName]
+            [manualEmail.toLowerCase(), manualName, passwordHash]
           );
           resolvedUserId = newUser.rows[0].id;
-          // Create learner profile
+          // Assign Learner role via user_role_map
           await client.query(
-            `INSERT INTO learner_profile (id, user_id, created_at, updated_at)
-             VALUES (gen_random_uuid(), $1, NOW(), NOW())
-             ON CONFLICT DO NOTHING`,
+            `INSERT INTO user_role_map (user_id, role) VALUES ($1, 'Learner') ON CONFLICT DO NOTHING`,
+            [resolvedUserId]
+          );
+          // Create learner_profile (user_id is PK, tel required — default empty)
+          await client.query(
+            `INSERT INTO learner_profile (user_id, tel) VALUES ($1, '') ON CONFLICT (user_id) DO NOTHING`,
             [resolvedUserId]
           );
         }
       } else {
-        // No email provided — create user with just name
+        // No email — generate placeholder and create account
+        const placeholderEmail = manualName.toLowerCase().replace(/\s+/g, '.') + '@manual.entry';
+        const passwordHash = await bcrypt.hash('password123', 10);
         const newUser = await client.query(
-          `INSERT INTO app_user (id, email, full_name, role, account_status, created_at, updated_at)
-           VALUES (gen_random_uuid(), $1, $2, 'Learner', 'Active', NOW(), NOW())
+          `INSERT INTO app_user (id, email, full_name, password_hash, account_status, created_at, updated_at)
+           VALUES (gen_random_uuid(), $1, $2, $3, 'active', NOW(), NOW())
            RETURNING id`,
-          [manualName.toLowerCase().replace(/\s+/g, '.') + '@manual.entry', manualName]
+          [placeholderEmail, manualName, passwordHash]
         );
         resolvedUserId = newUser.rows[0].id;
         await client.query(
-          `INSERT INTO learner_profile (id, user_id, created_at, updated_at)
-           VALUES (gen_random_uuid(), $1, NOW(), NOW())
-           ON CONFLICT DO NOTHING`,
+          `INSERT INTO user_role_map (user_id, role) VALUES ($1, 'Learner') ON CONFLICT DO NOTHING`,
+          [resolvedUserId]
+        );
+        await client.query(
+          `INSERT INTO learner_profile (user_id, tel) VALUES ($1, '') ON CONFLICT (user_id) DO NOTHING`,
           [resolvedUserId]
         );
       }
@@ -114,10 +132,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       [resolvedUserId, courseId, courseRunUuid, userEmail || null, userNric || null]
     );
 
+    await client.query('COMMIT');
     res.status(200).json({ success: true, message: 'Student enrolled successfully' });
   } catch (error) {
+    await client.query('ROLLBACK');
     console.error('Error assigning student:', error);
-    res.status(500).json({ success: false, error: 'Internal server error' });
+    res.status(500).json({ success: false, error: error instanceof Error ? error.message : 'Internal server error' });
   } finally {
     client.release();
   }

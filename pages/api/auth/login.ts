@@ -103,7 +103,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse<LoginResponse>)
       console.log(`✅ User found: ${user.email}`);
 
       // Check if account is disabled
-      if (user.account_status === 'disabled') {
+      if (user.account_status !== 'active') {
         console.log(`❌ Account disabled for user: ${email}`);
         return res.status(403).json({
           success: false,
@@ -123,6 +123,9 @@ async function handler(req: NextApiRequest, res: NextApiResponse<LoginResponse>)
       console.log(`🔍 Debug: Input password: ${password}`);
       console.log(`🔍 Debug: Password hash starts with $2b$: ${user.password?.startsWith('$2b$')}`);
 
+      if (!user.password) {
+        return res.status(401).json({ success: false, error: 'No password set for this account. Please contact your administrator.' });
+      }
       const isPasswordValid = await bcrypt.compare(password, user.password);
       console.log(`🔍 Debug: bcrypt.compare result: ${isPasswordValid}`);
 
@@ -236,7 +239,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse<LoginResponse>)
       user = userResult.rows[0];
 
       // Check if account is disabled (for existing users)
-      if (user.account_status === 'disabled') {
+      if (user.account_status !== 'active') {
         console.log(`❌ Account disabled for user: ${email}`);
         return res.status(403).json({
           success: false,
