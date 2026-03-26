@@ -272,7 +272,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     try {
         const form = new IncomingForm({
             keepExtensions: true,
-            maxFileSize: 50 * 1024 * 1024, // 50 MB limit
+            maxFileSize: 100 * 1024 * 1024, // 100 MB limit
         });
 
         const { files } = await new Promise<{ fields: any; files: any }>((resolve, reject) => {
