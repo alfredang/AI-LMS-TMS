@@ -5390,3 +5390,251 @@ export const FetchUpcomingEnrolmentsView: React.FC = () => {
         </div>
     );
 };
+
+// ── Course Run Date Sync Log ──────────────────────────────────────────────────
+
+interface DateSyncLogRow {
+    id: number;
+    run_id: string;
+    created_at: string;
+    course_run_id: string | null;
+    course_title: string | null;
+    course_code: string | null;
+    db_start_date: string | null;
+    db_end_date: string | null;
+    ssg_start_date: string | null;
+    ssg_end_date: string | null;
+    status: string;
+    updated: boolean;
+    error_message: string | null;
+}
+
+export const CourseRunDateSyncLogsView: React.FC = () => {
+    const { setAdminPage } = useLms();
+    const [logs, setLogs] = useState<DateSyncLogRow[]>([]);
+    const [loading, setLoading] = useState(false);
+    const [running, setRunning] = useState(false);
+    const [runResult, setRunResult] = useState<{ updated: number; noChange: number; errors: number; processed: number } | null>(null);
+    const [runError, setRunError] = useState<string | null>(null);
+    const [expandedDates, setExpandedDates] = useState<Set<string>>(new Set());
+
+    const fetchLogs = async () => {
+        setLoading(true);
+        try {
+            const res = await fetch('/api/admin/course-run-date-sync-logs?limit=500');
+            const json = await res.json();
+            if (json.success) setLogs(json.data);
+        } catch {
+            /* silent */
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => { fetchLogs(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+    const handleRunNow = async () => {
+        setRunning(true);
+        setRunResult(null);
+        setRunError(null);
+        try {
+            const res = await fetch('/api/admin/run-date-sync', { method: 'POST' });
+            const json = await res.json();
+            if (!json.success) throw new Error(json.error || 'Sync failed');
+            setRunResult({ updated: json.updated, noChange: json.noChange, errors: json.errors, processed: json.processed });
+            await fetchLogs();
+        } catch (err) {
+            setRunError(err instanceof Error ? err.message : 'Failed to run sync');
+        } finally {
+            setRunning(false);
+        }
+    };
+
+    // Group by calendar date (SG time)
+    const batches = useMemo(() => {
+        const map = new Map<string, DateSyncLogRow[]>();
+        for (const log of logs) {
+            const dateKey = new Date(log.created_at).toLocaleDateString('en-SG', {
+                timeZone: 'Asia/Singapore',
+                day: '2-digit', month: 'short', year: 'numeric',
+            });
+            if (!map.has(dateKey)) map.set(dateKey, []);
+            map.get(dateKey)!.push(log);
+        }
+        return Array.from(map.entries());
+    }, [logs]);
+
+    useEffect(() => {
+        if (batches.length > 0) setExpandedDates(new Set([batches[0][0]]));
+    }, [batches.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    const toggleDate = (dateKey: string) => {
+        setExpandedDates(prev => {
+            const next = new Set(prev);
+            next.has(dateKey) ? next.delete(dateKey) : next.add(dateKey);
+            return next;
+        });
+    };
+
+    const statusBadge = (status: string, updated: boolean) => {
+        const map: Record<string, string> = {
+            updated:   'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
+            no_change: 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400',
+            error:     'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
+        };
+        const label = updated ? 'updated' : status;
+        return (
+            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${map[status] ?? map.no_change}`}>
+                {label}
+            </span>
+        );
+    };
+
+    return (
+        <div>
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+                <h2 className="text-3xl font-bold">Course Run Date Sync Log</h2>
+                <div className="flex items-center gap-2">
+                    <Button onClick={handleRunNow} disabled={running || loading}>
+                        {running ? 'Running…' : 'Run Now'}
+                    </Button>
+                    <Button variant="ghost" onClick={fetchLogs} disabled={loading || running}>
+                        {loading ? 'Refreshing…' : 'Refresh'}
+                    </Button>
+                    <Button variant="ghost" onClick={() => setAdminPage(AdminPage.Dashboard)}>
+                        Back
+                    </Button>
+                </div>
+            </div>
+
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                Daily sync log — compares SSG course run dates with the database for classes starting today. Grouped by date.
+            </p>
+
+            {runResult && (
+                <div className="mb-4 p-4 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-700 text-sm text-emerald-800 dark:text-emerald-300">
+                    Sync complete — <strong>{runResult.processed}</strong> run{runResult.processed !== 1 ? 's' : ''} checked,{' '}
+                    <strong>{runResult.updated}</strong> updated,{' '}
+                    <strong>{runResult.noChange}</strong> no change,{' '}
+                    <strong>{runResult.errors}</strong> error{runResult.errors !== 1 ? 's' : ''}.
+                </div>
+            )}
+            {runError && (
+                <div className="mb-4 p-4 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 text-sm text-red-700 dark:text-red-400">
+                    {runError}
+                </div>
+            )}
+
+            {loading ? (
+                <div className="text-center py-12 text-gray-400">Loading logs…</div>
+            ) : batches.length === 0 ? (
+                <Card className="p-8 text-center text-gray-500 dark:text-gray-400">No date sync logs yet.</Card>
+            ) : (
+                <div className="space-y-4">
+                    {batches.map(([dateKey, rows]) => {
+                        const isOpen = expandedDates.has(dateKey);
+                        const updatedCount  = rows.filter(r => r.updated).length;
+                        const noChangeCount = rows.filter(r => r.status === 'no_change').length;
+                        const errorCount    = rows.filter(r => r.status === 'error').length;
+                        return (
+                            <Card key={dateKey} className="overflow-hidden">
+                                <button
+                                    onClick={() => toggleDate(dateKey)}
+                                    className="w-full flex items-center justify-between px-5 py-4 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors text-left"
+                                >
+                                    <div className="flex items-center gap-4 flex-wrap">
+                                        <span className="font-semibold text-gray-900 dark:text-white">{dateKey}</span>
+                                        <span className="text-sm text-gray-500 dark:text-gray-400">{rows.length} run{rows.length !== 1 ? 's' : ''}</span>
+                                        {updatedCount > 0 && (
+                                            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
+                                                {updatedCount} updated
+                                            </span>
+                                        )}
+                                        {noChangeCount > 0 && (
+                                            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400">
+                                                {noChangeCount} no change
+                                            </span>
+                                        )}
+                                        {errorCount > 0 && (
+                                            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300">
+                                                {errorCount} error{errorCount !== 1 ? 's' : ''}
+                                            </span>
+                                        )}
+                                    </div>
+                                    <svg className={`w-5 h-5 text-gray-400 transition-transform flex-shrink-0 ${isOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                                </button>
+
+                                {isOpen && (
+                                    <div className="border-t border-gray-100 dark:border-gray-700 overflow-x-auto">
+                                        <table className="w-full text-sm">
+                                            <thead className="bg-gray-50 dark:bg-gray-800 text-left">
+                                                <tr>
+                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Time</th>
+                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Course Title</th>
+                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Code</th>
+                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Run ID</th>
+                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">DB Start</th>
+                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">DB End</th>
+                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">SSG Start</th>
+                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">SSG End</th>
+                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 text-center">Status</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                                                {rows.map(log => {
+                                                    const startMismatch = log.ssg_start_date && log.ssg_start_date !== log.db_start_date;
+                                                    const endMismatch   = log.ssg_end_date   && log.ssg_end_date   !== log.db_end_date;
+                                                    return (
+                                                        <tr key={log.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                                                            <td className="px-4 py-3 whitespace-nowrap text-gray-500 dark:text-gray-400 text-xs">
+                                                                {new Date(log.created_at).toLocaleTimeString('en-SG', {
+                                                                    timeZone: 'Asia/Singapore',
+                                                                    hour: '2-digit', minute: '2-digit', hour12: false,
+                                                                })}
+                                                            </td>
+                                                            <td className="px-4 py-3 max-w-[240px]">
+                                                                <div className="font-medium text-gray-900 dark:text-gray-100 whitespace-normal break-words">{log.course_title || '—'}</div>
+                                                            </td>
+                                                            <td className="px-4 py-3 whitespace-nowrap">
+                                                                {log.course_code
+                                                                    ? <span className="text-xs text-indigo-600 dark:text-indigo-400 font-mono bg-indigo-50 dark:bg-indigo-900/30 px-1.5 py-0.5 rounded">{log.course_code}</span>
+                                                                    : <span className="text-gray-400">—</span>}
+                                                            </td>
+                                                            <td className="px-4 py-3 whitespace-nowrap">
+                                                                <span className="text-xs text-gray-500 dark:text-gray-400 font-mono bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded">
+                                                                    {log.course_run_id || '—'}
+                                                                </span>
+                                                            </td>
+                                                            <td className={`px-4 py-3 text-xs whitespace-nowrap ${startMismatch ? 'text-amber-600 dark:text-amber-400 font-semibold' : 'text-gray-500 dark:text-gray-400'}`}>
+                                                                {log.db_start_date || '—'}
+                                                            </td>
+                                                            <td className={`px-4 py-3 text-xs whitespace-nowrap ${endMismatch ? 'text-amber-600 dark:text-amber-400 font-semibold' : 'text-gray-500 dark:text-gray-400'}`}>
+                                                                {log.db_end_date || '—'}
+                                                            </td>
+                                                            <td className={`px-4 py-3 text-xs whitespace-nowrap ${startMismatch ? 'text-blue-600 dark:text-blue-400 font-semibold' : 'text-gray-500 dark:text-gray-400'}`}>
+                                                                {log.ssg_start_date || '—'}
+                                                            </td>
+                                                            <td className={`px-4 py-3 text-xs whitespace-nowrap ${endMismatch ? 'text-blue-600 dark:text-blue-400 font-semibold' : 'text-gray-500 dark:text-gray-400'}`}>
+                                                                {log.ssg_end_date || '—'}
+                                                            </td>
+                                                            <td className="px-4 py-3 text-center">
+                                                                {statusBadge(log.status, log.updated)}
+                                                                {log.error_message && (
+                                                                    <div className="text-xs text-red-500 mt-1 text-left">{log.error_message}</div>
+                                                                )}
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )}
+                            </Card>
+                        );
+                    })}
+                </div>
+            )}
+        </div>
+    );
+};

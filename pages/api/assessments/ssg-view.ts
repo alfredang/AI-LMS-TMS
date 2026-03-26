@@ -4,19 +4,18 @@ import { HttpClient, HTTPRequestBuilder, HttpMethod } from '../../../lib/ssg/uti
 import crypto from 'crypto';
 
 /**
- * POST /api/grants/search
- * Search grants by course run ID via SSG TPG API.
- * Body: { courseRunId, page?, pageSize? }
+ * GET /api/assessments/ssg-view?referenceNumber=ASM-XXXX-XXXXXX
+ * View a single assessment record from SSG by its reference number.
  */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  if (req.method !== 'POST') {
+  if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { courseRunId } = req.body;
+  const { referenceNumber } = req.query;
 
-  if (!courseRunId) {
-    return res.status(400).json({ success: false, error: 'courseRunId is required' });
+  if (!referenceNumber || typeof referenceNumber !== 'string' || !referenceNumber.trim()) {
+    return res.status(400).json({ success: false, error: 'referenceNumber query parameter is required' });
   }
 
   try {
@@ -29,32 +28,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const encKey = Buffer.from(process.env.ENCRYPTION_KEY || credentials.encryptionKey, 'base64');
     const iv = Buffer.from('SSGAPIInitVector', 'utf8');
 
-    const ssgPayload = {
-      grants: {
-        course: {
-          run: {
-            id: String(courseRunId)
-          }
-        },
-        trainingPartner: {
-          uen: credentials.uen || process.env.TRAINING_PARTNER_UEN || '201200696W',
-          code: process.env.TRAINING_PARTNER_CODE || '201200696W-01'
-        }
-      },
-      parameters: {
-        page: 0,
-        pageSize: 100
-      }
-    };
-
-    const cipher = crypto.createCipheriv('aes-256-cbc', encKey, iv);
-    let encryptedPayload = cipher.update(JSON.stringify(ssgPayload), 'utf8', 'base64');
-    encryptedPayload += cipher.final('base64');
-
     const builder = new HTTPRequestBuilder()
-      .withEndpoint(ssgBaseUrl, '/tpg/grants/search')
-      .withMethod(HttpMethod.POST)
-      .withBody(encryptedPayload);
+      .withEndpoint(ssgBaseUrl, `/tpg/assessments/details/${referenceNumber.trim()}`)
+      .withMethod(HttpMethod.GET)
+      .withParam('uen', credentials.uen);
 
     if (credentials.certificateContent && credentials.privateKeyContent) {
       builder.withCertificate(credentials.certificateContent, credentials.privateKeyContent);
@@ -68,7 +45,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const httpResponse = await httpClient.request(builder.build());
 
     if (httpResponse.status !== 200) {
-      console.error(`❌ SSG search grants error [${httpResponse.status}]:`, JSON.stringify(httpResponse.data));
+      console.error(`❌ SSG view assessment error [${httpResponse.status}]:`, JSON.stringify(httpResponse.data));
+      if (httpResponse.status === 403 || httpResponse.status === 404) {
+        return res.status(404).json({ success: false, error: 'Assessment not found. Please check the Reference Number and try again.' });
+      }
       return res.status(httpResponse.status).json({
         success: false,
         error: `SSG error ${httpResponse.status}`,
@@ -86,22 +66,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     decrypted += decipher.final('utf8');
     const parsed = JSON.parse(decrypted);
 
-    console.log('📦 SSG search grants response:', JSON.stringify(parsed));
+    console.log('📦 SSG view assessment response:', JSON.stringify(parsed));
 
     // SSG always returns "error": {} even on success — only treat as error if code/message present
     const hasError = parsed?.error && (parsed.error.code || parsed.error.message);
     if (hasError) {
       const decryptedStatus = Number(parsed.status) || 400;
       if (decryptedStatus === 403 || decryptedStatus === 404) {
-        return res.status(404).json({ success: false, error: 'No grants found for this Course Run ID.' });
+        return res.status(404).json({ success: false, error: 'Assessment not found. Please check the Reference Number and try again.' });
       }
       return res.status(decryptedStatus).json({ success: false, error: parsed.error.message });
     }
 
-    return res.status(200).json({ success: true, data: parsed?.data ?? [], meta: parsed?.meta ?? {} });
+    return res.status(200).json({ success: true, data: parsed?.data ?? parsed });
 
   } catch (error) {
-    console.error('❌ Search grants error:', error);
+    console.error('❌ View assessment error:', error);
     return res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : 'Internal server error',

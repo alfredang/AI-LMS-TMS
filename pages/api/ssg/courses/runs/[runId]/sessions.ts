@@ -1,11 +1,11 @@
 /**
  * Next.js API route for course sessions
- * GET /api/ssg/courses/runs/[runId]/sessions - View course sessions via n8n webhook
+ * GET /api/ssg/courses/runs/[runId]/sessions?courseCode=TGS-XXX&uen=201200696W
  */
 
 import { NextApiRequest, NextApiResponse } from 'next';
-
-const WEBHOOK_URL = 'https://n8n.srv1231536.hstgr.cloud/webhook/117adf9a-7802-439c-aa2d-7d2e0d10fe13';
+import { getSSGCredentialsService } from '../../../../../../lib/ssg/services/credentials-service';
+import { HttpClient, HTTPRequestBuilder, HttpMethod } from '../../../../../../lib/ssg/utils/http-utils';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {
@@ -14,63 +14,64 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const { runId, courseRunId: courseRunIdParam, courseCode, includeExpired, month, year, uen } = req.query;
-    // Accept courseRunId from URL path segment OR as an explicit query param fallback
+    const { runId, courseRunId: courseRunIdParam, courseCode, uen: uenParam } = req.query;
     const courseRunId = (runId ?? courseRunIdParam) as string | undefined;
 
-    console.log('📚 Course Sessions API - Request received:', {
-      courseRunId,
-      courseCode,
-      uen: uen || '(not provided)',
-      includeExpired,
-      month,
-      year,
-      timestamp: new Date().toISOString()
-    });
-
     if (!courseRunId || typeof courseRunId !== 'string') {
-      console.error('❌ Missing or invalid runId');
       return res.status(400).json({ error: 'runId is required' });
     }
 
     if (!courseCode || typeof courseCode !== 'string') {
-      console.error('❌ Missing or invalid courseReferenceNumber');
-      return res.status(400).json({ error: 'courseReferenceNumber is required as a query parameter' });
+      return res.status(400).json({ error: 'courseCode is required as a query parameter' });
     }
 
-    const requestBody = {
-      courseRunId,
-      courseCode,
-      includeExpired: includeExpired || 'false',
-      ...(uen && { uen: typeof uen === 'string' ? uen : uen[0] }),
-      ...(month && { month }),
-      ...(year && { year }),
-    };
+    const credentials = await getSSGCredentialsService().getSSGCredentials();
+    if (!credentials) {
+      return res.status(500).json({ error: 'SSG credentials not found' });
+    }
 
-    console.log('🔄 Sending request to webhook:', requestBody);
+    const ssgBaseUrl = process.env.SSG_API_URL || 'https://api.ssg-wsg.sg';
 
-    const webhookResponse = await fetch(WEBHOOK_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(requestBody),
+    const uen = (typeof uenParam === 'string' ? uenParam : null)
+      || credentials.uen
+      || process.env.TRAINING_PARTNER_UEN
+      || '201200696W';
+
+    const builder = new HTTPRequestBuilder()
+      .withEndpoint(ssgBaseUrl, `/courses/runs/${courseRunId}/sessions`)
+      .withMethod(HttpMethod.GET)
+      .withParam('uen', uen)
+      .withParam('courseReferenceNumber', courseCode)
+      .withParam('includeExpiredCourses', 'true');
+
+    if (credentials.certificateContent && credentials.privateKeyContent) {
+      builder.withCertificate(credentials.certificateContent, credentials.privateKeyContent);
+    }
+
+    const httpClient = new HttpClient(ssgBaseUrl, {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
     });
 
-    const webhookData = await webhookResponse.json();
+    const httpResponse = await httpClient.request(builder.build());
 
-    console.log('📥 Webhook response status:', webhookResponse.status);
-    console.log('📥 Webhook response data:', JSON.stringify(webhookData, null, 2));
-
-    if (!webhookResponse.ok) {
-      console.error('❌ Webhook error response:', webhookData);
-      return res.status(webhookResponse.status).json({ error: webhookData });
+    if (httpResponse.status !== 200) {
+      console.error(`❌ SSG course sessions error [${httpResponse.status}]:`, JSON.stringify(httpResponse.data));
+      if (httpResponse.status === 404) {
+        return res.status(404).json({ error: 'Not Found — No record matches the provided details.' });
+      }
+      return res.status(httpResponse.status).json({
+        error: `SSG error ${httpResponse.status}`,
+        details: httpResponse.data,
+      });
     }
 
-    // Log session count if available
-    const sessionCount = webhookData?.result?.sessions?.length || 0;
-    console.log(`✅ Successfully retrieved ${sessionCount} sessions`);
+    const parsed = typeof httpResponse.data === 'string'
+      ? JSON.parse(httpResponse.data)
+      : httpResponse.data;
 
-    // Return as { data: webhookData } so frontend can access data.data.result.sessions
-    return res.status(200).json({ data: webhookData });
+    return res.status(200).json({ data: { result: parsed.data ?? parsed } });
+
   } catch (error) {
     console.error('❌ Course Sessions API Error:', error);
     res.status(500).json({

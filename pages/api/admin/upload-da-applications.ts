@@ -1,5 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
+import { searchEnrolment } from '../../../lib/ssg/services/enrolment-service';
 
 // Increase body size limit to 50MB (default is 1MB, which causes HTTP 413 for large Excel uploads)
 export const config = {
@@ -133,11 +134,8 @@ function transformRow(excelRow: Record<string, any>): Record<string, any> {
     return dbRow;
 }
 
-// DA Search Enrolment Webhook URL
-const DA_SEARCH_ENROLMENT_WEBHOOK = 'https://n8n.srv1231536.hstgr.cloud/webhook/4ac2fd52-7e73-493c-93a5-352295fc0d1c';
-
 /**
- * Build the search enrolment payload for a single record.
+ * Build the SSG search enrolment payload for a single record.
  */
 function buildEnrolmentPayload(record: Record<string, any>): Record<string, any> {
     const runId = String(record.course_run_id || '');
@@ -168,7 +166,7 @@ function buildEnrolmentPayload(record: Record<string, any>): Record<string, any>
     }
 
     return {
-        payload: {
+        ssgPayload: {
             enrolment: {
                 course: {
                     run: { id: runId },
@@ -185,115 +183,57 @@ function buildEnrolmentPayload(record: Record<string, any>): Record<string, any>
                 pageSize: 40
             }
         },
-        trainee_email: record.trainee_email || '',
         application_id: record.application_id,
-        source: record.source || 'unknown'
     };
 }
 
 /**
- * Call the webhook with ALL records in a single batch request.
- * Sends an array of enrolment payloads.
- * Parses the response and updates enrolment_status in database.
- * 
- * Expected n8n response format (per record):
- * Success: { result: { status: "200", data: { enrolment: { status: "Confirmed" } }, ... } }
- * Not Found: { result: { status: "404", data: [], error: { message: "Not Found", ... } } }
+ * Search SSG enrolment status for each record and update the database.
+ * Calls SSG POST /tpg/enrolments/search directly (one call per record).
  */
-async function callSearchEnrolmentWebhookBatch(records: Record<string, any>[]): Promise<{ success: boolean; count: number; results: any[]; error?: string }> {
+async function callSearchEnrolmentSSGBatch(records: Record<string, any>[]): Promise<{ success: boolean; count: number; results: any[]; error?: string }> {
     if (records.length === 0) {
         return { success: true, count: 0, results: [] };
     }
 
-    try {
-        // Build payloads for all records
-        const payloads = records.map(record => buildEnrolmentPayload(record));
+    const processedResults: any[] = [];
 
-        console.log(`📤 Calling DA Search Enrolment webhook with ${payloads.length} records...`);
+    for (const record of records) {
+        const built = buildEnrolmentPayload(record);
+        const applicationId = built.application_id;
 
-        const response = await fetch(DA_SEARCH_ENROLMENT_WEBHOOK, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ records: payloads }),
-        });
-
-        if (!response.ok) {
-            console.error(`❌ Batch webhook failed: ${response.status}`);
-            return { success: false, count: payloads.length, results: [], error: `Webhook returned ${response.status}` };
+        if (!applicationId) {
+            processedResults.push({ application_id: null, status: 'error', message: 'Missing application_id' });
+            continue;
         }
 
-        const responseBody = await response.json();
-        const webhookResults = Array.isArray(responseBody) ? responseBody : [responseBody];
+        try {
+            const result = await searchEnrolment(built.ssgPayload as any);
 
-        console.log(`✅ Batch webhook responded with ${webhookResults.length} results`);
-
-        // Process each result and update database
-        const processedResults: any[] = [];
-
-        for (let i = 0; i < webhookResults.length; i++) {
-            const webhookResult = webhookResults[i];
-            const originalRecord = records[i];
-            const applicationId = originalRecord?.application_id;
-
-            if (!applicationId) {
-                processedResults.push({ application_id: null, status: 'error', message: 'Missing application_id' });
-                continue;
-            }
-
-            // Parse the result - handle both string and object formats
-            let parsedResult = webhookResult?.result;
-            if (typeof parsedResult === 'string') {
-                try {
-                    parsedResult = JSON.parse(parsedResult);
-                } catch (e) {
-                    console.error(`Failed to parse result for ${applicationId}:`, e);
-                    processedResults.push({ application_id: applicationId, status: 'error', message: 'Failed to parse response' });
-                    continue;
-                }
-            }
-
-            // Determine enrolment status based on SSG response
             let enrolmentStatus: string | null = null;
-            const ssgStatus = parsedResult?.status;
-            const ssgError = parsedResult?.error;
-
-            if (ssgStatus === '404' || ssgStatus === 404 || ssgError?.message === 'Not Found') {
-                // SSG returned 404 - No records found
+            if (result.status === 'not_found') {
                 enrolmentStatus = 'Not Found';
-            } else if (ssgStatus === '200' || ssgStatus === 200) {
-                // SSG returned success - get the enrolment status
-                const enrolmentData = parsedResult?.data?.enrolment || parsedResult?.data?.[0]?.enrolment;
-                if (enrolmentData?.status) {
-                    enrolmentStatus = enrolmentData.status; // "Confirmed", "Cancelled", etc.
-                } else {
-                    enrolmentStatus = 'Confirmed'; // Default to Confirmed if status not in response
-                }
+            } else if (result.success) {
+                enrolmentStatus = result.enrolmentStatus || 'Confirmed';
             } else {
-                // Unknown response - log and skip
-                console.warn(`⚠️ Unknown SSG response for ${applicationId}:`, parsedResult);
-                processedResults.push({ application_id: applicationId, status: 'unknown', response: parsedResult });
+                console.warn(`⚠️ Unknown SSG response for ${applicationId}:`, result.error);
+                processedResults.push({ application_id: applicationId, status: 'unknown', error: result.error });
                 continue;
             }
 
-            // Update database with enrolment_status
-            try {
-                await pool.query(
-                    `UPDATE da_application SET enrolment_status = $1, updated_at = NOW() WHERE application_id = $2`,
-                    [enrolmentStatus, applicationId]
-                );
-                console.log(`✅ Updated ${applicationId} enrolment_status to "${enrolmentStatus}"`);
-                processedResults.push({ application_id: applicationId, enrolment_status: enrolmentStatus, success: true });
-            } catch (dbError) {
-                console.error(`❌ Failed to update ${applicationId}:`, dbError);
-                processedResults.push({ application_id: applicationId, status: 'db_error', error: dbError instanceof Error ? dbError.message : 'DB update failed' });
-            }
+            await pool.query(
+                `UPDATE da_application SET enrolment_status = $1, updated_at = NOW() WHERE application_id = $2`,
+                [enrolmentStatus, applicationId]
+            );
+            console.log(`✅ Updated ${applicationId} enrolment_status to "${enrolmentStatus}"`);
+            processedResults.push({ application_id: applicationId, enrolment_status: enrolmentStatus, success: true });
+        } catch (err) {
+            console.error(`❌ Failed to search/update ${applicationId}:`, err);
+            processedResults.push({ application_id: applicationId, status: 'error', error: err instanceof Error ? err.message : 'Unknown error' });
         }
-
-        return { success: true, count: payloads.length, results: processedResults };
-    } catch (error) {
-        console.error(`❌ Batch webhook error:`, error);
-        return { success: false, count: records.length, results: [], error: error instanceof Error ? error.message : 'Unknown error' };
     }
+
+    return { success: true, count: records.length, results: processedResults };
 }
 
 
@@ -526,7 +466,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         let webhookResult: { success: boolean; count: number; results: any[]; error?: string } = { success: true, count: 0, results: [] };
 
         if (webhookQueue.length > 0) {
-            webhookResult = await callSearchEnrolmentWebhookBatch(webhookQueue);
+            webhookResult = await callSearchEnrolmentSSGBatch(webhookQueue);
         }
 
         return res.status(200).json({

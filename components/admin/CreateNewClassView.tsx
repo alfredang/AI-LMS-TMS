@@ -89,14 +89,14 @@ export const CreateNewClassView: React.FC = () => {
     // scheduleInfo will be dynamically generated from course dates
 
     // Venue Info
-    const [block, setBlock] = useState('');
-    const [street, setStreet] = useState('');
-    const [building, setBuilding] = useState('');
+    const [block, setBlock] = useState('12');
+    const [street, setStreet] = useState('WOODS SQUARE');
+    const [building, setBuilding] = useState('WOODS SQUARE');
     const [wheelchairAccess, setWheelchairAccess] = useState(OptionalSelector.YES);
-    const [floor, setFloor] = useState('');
-    const [unit, setUnit] = useState('');
-    const [postalCode, setPostalCode] = useState('');
-    const [room, setRoom] = useState('');
+    const [floor, setFloor] = useState('07');
+    const [unit, setUnit] = useState('85-87');
+    const [postalCode, setPostalCode] = useState('737715');
+    const [room, setRoom] = useState('Training room');
 
     // Intake Details
     const [intakeSize, setIntakeSize] = useState(0);
@@ -263,19 +263,7 @@ export const CreateNewClassView: React.FC = () => {
     // Function to fetch course run details from SSG API and save to database
     const fetchAndSaveCourseRunData = async (courseRunId: string) => {
         try {
-            console.log('🔍 Fetching course run details for ID:', courseRunId);
-
-            // Call the n8n webhook to get course run details
-            const webhookUrl = 'https://n8n.srv1231536.hstgr.cloud/webhook/7f2f5d21-beb6-47a9-8056-e1ccf79a3ea7';
-            const fetchResponse = await fetch(webhookUrl, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    courseRunId: courseRunId
-                })
-            });
+            const fetchResponse = await fetch(`/api/admin/ssg-get-course-run?courseRunId=${encodeURIComponent(courseRunId)}`);
 
             if (!fetchResponse.ok) {
                 console.warn(`⚠️ Could not fetch course run details: ${fetchResponse.status}`);
@@ -284,29 +272,17 @@ export const CreateNewClassView: React.FC = () => {
             }
 
             const response = await fetchResponse.json();
-            console.log('📊 Fetched course run data:', response);
 
-            // Handle both 'result' and 'data' property structures from webhook
-            const dataWrapper = response.result || response.data;
-            
-            // Check if response has valid course data
+            // response shape: { data: { course: { referenceNumber, title, run: {...} } } }
+            const dataWrapper = response.data;
+
             if (!dataWrapper?.course) {
-                console.warn('⚠️ Invalid response from webhook:', response);
-                console.warn('⚠️ Expected structure with course data not found');
+                console.warn('⚠️ No course data in SSG response');
                 return;
             }
 
             const courseData = dataWrapper.course;
             const runData = courseData.run;
-
-            console.log('📊 Fetched course run data from webhook:', {
-                courseRunId: courseRunId,
-                referenceNumber: courseData.referenceNumber,
-                title: courseData.title,
-                runId: runData.id,
-                hasTrainer: !!runData.linkCourseRunTrainer?.[0],
-                qrCodeLink: runData.qrCodeLink
-            });
 
             // Step 1: Save course run to database with retry logic
             // The API endpoint handles course creation if needed
@@ -593,213 +569,45 @@ export const CreateNewClassView: React.FC = () => {
                 }
             };
 
-            console.log('Submitting course run data to webhook:', requestBody);
-
-            // Call the n8n webhook
-            const WEBHOOK_URL = 'https://n8n.srv1231536.hstgr.cloud/webhook/3f6f054d-4200-47e0-a71d-cb3c17cdb545';
-            const response = await fetch(WEBHOOK_URL, {
+            const response = await fetch('/api/ssg/courses/courseRuns/create-new', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(requestBody)
             });
 
-            // Parse response
-            const text = await response.text();
-            console.log('📥 Raw webhook response:', text);
-            console.log('📥 Response status:', response.status);
+            const responseData = await response.json();
 
-            let responseData;
-            try {
-                responseData = text ? JSON.parse(text) : {};
-            } catch (e) {
-                console.error('Failed to parse JSON response:', text);
-                responseData = { error: { message: `Invalid JSON response from webhook: ${text}` } };
-            }
+            if (!response.ok) {
+                const errorDetails = responseData?.error?.details || [];
+                const userFriendlyMessage = errorDetails[0]?.message
+                    || responseData?.error?.message
+                    || `SSG error ${response.status}`;
 
-            // Handle nested result string (common in n8n responses)
-            let parsedResult = responseData;
-            if (responseData?.result !== undefined && responseData?.result !== null) {
-                if (typeof responseData.result === 'string') {
-                    try {
-                        parsedResult = JSON.parse(responseData.result);
-                    } catch (e) {
-                        parsedResult = responseData;
-                    }
-                } else if (typeof responseData.result === 'object') {
-                    parsedResult = responseData.result;
-                }
-            }
-
-            // Check for success - handle both nested and root level responses
-            // Success if: HTTP 200/201 AND (has explicit success status OR no error messages)
-            const hasExplicitSuccess = parsedResult.status === 200 || parsedResult.status === 201;
-            const hasNoErrors = !parsedResult.error?.message && !parsedResult.error?.details?.length;
-            const hasData = parsedResult.data || parsedResult.runs || responseData.data;
-            
-            const isSuccess = response.ok && hasNoErrors && (hasExplicitSuccess || hasData);
-
-            if (isSuccess) {
-                console.log('✅ Webhook success:', parsedResult);
-
-                // Extract course run ID from response (try multiple paths)
-                const courseRunId = parsedResult.data?.runs?.[0]?.id ||
-                    parsedResult.data?.run?.id ||
-                    parsedResult.runs?.[0]?.id ||
-                    responseData.data?.runs?.[0]?.id;
+                setSubmissionResult({
+                    success: false,
+                    courseRunId: 'N/A',
+                    message: userFriendlyMessage,
+                    error: { message: userFriendlyMessage, details: errorDetails, status: response.status }
+                });
+            } else {
+                const courseRunId = responseData?.data?.runs?.[0]?.id
+                    || responseData?.runs?.[0]?.id
+                    || responseData?.data?.run?.id;
 
                 if (courseRunId) {
-                    console.log('📝 Course Run ID from response:', courseRunId);
-
-                    // Fetch detailed course run data and save to database
                     await fetchAndSaveCourseRunData(courseRunId);
-
-                    // Set success result
                     setSubmissionResult({
                         success: true,
                         courseRunId: courseRunId.toString(),
                         message: 'Course run created successfully! The data has been saved to the database.'
                     });
                 } else {
-                    console.warn('⚠️ No course run ID found in response');
                     setSubmissionResult({
                         success: true,
                         courseRunId: 'Not available',
                         message: 'Course run created successfully! However, the course run ID could not be retrieved.'
                     });
                 }
-            } else {
-                // Extract error details from various response formats
-                let errorDetails = parsedResult?.error?.details || [];
-                let errorMessage = parsedResult?.error?.message ||
-                    parsedResult?.details?.[0]?.message ||
-                    parsedResult?.message ||
-                    responseData?.error?.message ||
-                    (text && text !== '{}' ? text : 'Unknown error occurred');
-                
-                let extractedCourseRunId = null;
-                let httpStatus = parsedResult?.status || response.status;
-                let userFriendlyMessage = errorMessage;
-
-                console.log('🔍 Initial error message:', errorMessage);
-                console.log('🔍 Error message type:', typeof errorMessage);
-
-                // Check if error message is a nested JSON string (from result.error.message)
-                // This handles responses like: {"result": {"error": {"message": "400 - {...}"}}}
-                if (typeof errorMessage === 'string') {
-                    // First, try to remove the HTTP status prefix like "400 - "
-                    const statusPrefixMatch = errorMessage.match(/^\d{3}\s*-\s*([\s\S]+)$/);
-                    if (statusPrefixMatch) {
-                        errorMessage = statusPrefixMatch[1].trim();
-                        console.log('🔍 After removing status prefix:', errorMessage);
-                    }
-
-                    // The error message might be a JSON-encoded string (with \" and \n escapes)
-                    // Try to parse it as JSON first to decode the escape sequences
-                    if (errorMessage.startsWith('"') && errorMessage.endsWith('"')) {
-                        try {
-                            // This will decode \" to " and \n to newlines
-                            errorMessage = JSON.parse(errorMessage);
-                            console.log('🔍 After JSON.parse decode:', errorMessage);
-                        } catch (e) {
-                            console.log('⚠️ Could not JSON.parse the quoted string:', e);
-                            // Try manual unquoting as fallback
-                            errorMessage = errorMessage.slice(1, -1);
-                        }
-                    }
-
-                    // Now try to parse as JSON object
-                    if (errorMessage.includes('{')) {
-                        try {
-                            const nestedError = JSON.parse(errorMessage);
-                            console.log('🔍 Parsed nested error:', nestedError);
-                            
-                            if (nestedError.error?.details && Array.isArray(nestedError.error.details)) {
-                                errorDetails = nestedError.error.details;
-                                httpStatus = nestedError.status || httpStatus;
-                                
-                                // Extract user-friendly message from details
-                                if (errorDetails.length > 0 && errorDetails[0].message) {
-                                    userFriendlyMessage = errorDetails[0].message;
-                                } else {
-                                    userFriendlyMessage = nestedError.error.message || errorMessage;
-                                }
-                            } else if (nestedError.data?.error?.details) {
-                                errorDetails = nestedError.data.error.details;
-                                httpStatus = nestedError.data.status || httpStatus;
-                                
-                                if (errorDetails.length > 0 && errorDetails[0].message) {
-                                    userFriendlyMessage = errorDetails[0].message;
-                                }
-                            }
-                        } catch (e) {
-                            console.log('⚠️ Could not parse nested error JSON:', e);
-                        }
-                    }
-                }
-                
-                // If errorDetails exists directly in parsedResult, use it
-                if (!userFriendlyMessage || userFriendlyMessage === errorMessage) {
-                    if (errorDetails && errorDetails.length > 0 && errorDetails[0].message) {
-                        userFriendlyMessage = errorDetails[0].message;
-                    }
-                }
-
-                // Final cleanup: If userFriendlyMessage still looks like JSON or has escape sequences, clean it up
-                if (typeof userFriendlyMessage === 'string') {
-                    // Remove common escape sequences that might remain
-                    userFriendlyMessage = userFriendlyMessage
-                        .replace(/\\n/g, ' ')
-                        .replace(/\\"/g, '"')
-                        .replace(/\\'/g, "'")
-                        .replace(/\s+/g, ' ')
-                        .trim();
-                    
-                    // If it still looks like JSON object string, try to extract just the error message
-                    if (userFriendlyMessage.includes('{') && userFriendlyMessage.includes('error')) {
-                        const errorMatch = userFriendlyMessage.match(/"message"\s*:\s*"([^"]+)"/);
-                        if (errorMatch) {
-                            userFriendlyMessage = errorMatch[1];
-                        }
-                    }
-                }
-
-                // If we still have a very long message or JSON-like content, provide a generic message
-                if (userFriendlyMessage.length > 200 || (userFriendlyMessage.includes('{') && userFriendlyMessage.includes('}'))) {
-                    console.warn('⚠️ Error message too complex, using generic message');
-                    userFriendlyMessage = 'An error occurred while creating the course run. Please check the details and try again.';
-                }
-
-                // Ensure we don't show empty message
-                if (!userFriendlyMessage || userFriendlyMessage.trim() === '') {
-                    userFriendlyMessage = 'An unknown error occurred while creating the course run';
-                }
-
-                // Extract course run ID from error message if present
-                if (errorDetails && errorDetails.length > 0) {
-                    const detailMessage = errorDetails[0]?.message || '';
-                    const courseRunIdMatch = detailMessage.match(/Course Run ID is (\d+)/i);
-                    if (courseRunIdMatch) {
-                        extractedCourseRunId = courseRunIdMatch[1];
-                    }
-                }
-                
-                console.error('❌ Webhook Error:', parsedResult);
-                console.error('❌ Raw response text:', text);
-                console.log('📝 Extracted Course Run ID from error:', extractedCourseRunId);
-                console.log('📝 User-friendly message:', userFriendlyMessage);
-
-                setSubmissionResult({
-                    success: false,
-                    courseRunId: extractedCourseRunId || 'N/A',
-                    message: userFriendlyMessage,
-                    error: {
-                        message: userFriendlyMessage,
-                        details: errorDetails,
-                        status: httpStatus
-                    }
-                });
             }
 
         } catch (error) {

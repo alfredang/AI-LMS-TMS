@@ -1,5 +1,8 @@
-import type { NextApiRequest, NextApiResponse } from 'next'; import pool from '../../../lib/db';
+import type { NextApiRequest, NextApiResponse } from 'next';
+import pool from '../../../lib/db';
 import bcrypt from 'bcryptjs';
+import { getSSGCredentialsService } from '../../../lib/ssg/services/credentials-service';
+import { createSSGEnrolmentAPI } from '../../../lib/ssg/api/enrolment-api';
 
 /**
  * External API — Auto Create Learners
@@ -17,8 +20,6 @@ import bcrypt from 'bcryptjs';
  *   5. Upsert enrollment records
  *   6. Log results to auto_create_learner_log
  */
-
-const ENROLMENT_SEARCH_WEBHOOK = 'https://n8n.srv1231536.hstgr.cloud/webhook/246caa5e-bd7e-42e8-82b1-cde2e05e5013';
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -54,60 +55,35 @@ async function ensureAutomationTable() {
   await pool.query(`ALTER TABLE auto_create_learner_log ADD COLUMN IF NOT EXISTS course_code TEXT`);
 }
 
-// ── Fetch enrollments from n8n webhook ───────────────────────────────────────
+// ── Fetch enrollments directly from SSG ──────────────────────────────────────
 
 async function fetchEnrollments(courseRunId: string): Promise<any[]> {
-  const body = {
-    courseRunId,
-    timestamp: new Date().toISOString(),
-    source: 'auto-create-learners',
-  };
+  const credentials = await getSSGCredentialsService().getSSGCredentials();
+  if (!credentials) throw new Error('SSG credentials not found');
 
-  const doFetch = async () => {
-    const res = await fetch(ENROLMENT_SEARCH_WEBHOOK, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-    const text = await res.text();
-    if (!res.ok) throw new Error(`Webhook HTTP ${res.status}: ${text.slice(0, 200)}`);
-    try {
-      return JSON.parse(text);
-    } catch {
-      throw new Error(`Webhook returned non-JSON (status ${res.status}): ${text.slice(0, 200)}`);
-    }
-  };
+  const ssgBaseUrl = process.env.SSG_API_URL || 'https://api.ssg-wsg.sg';
+  const tpUen  = process.env.TRAINING_PARTNER_UEN  || credentials.uen;
+  const tpCode = process.env.TRAINING_PARTNER_CODE || `${tpUen}-01`;
 
-  let raw: any;
-  try {
-    raw = await doFetch();
-  } catch (err) {
-    console.warn(`⚠️ Enrolment search attempt 1 failed for ${courseRunId}, retrying:`, err);
-    raw = await doFetch();
+  const api = createSSGEnrolmentAPI(ssgBaseUrl, credentials);
+  const result = await api.searchEnrolment({
+    enrolment: {
+      course: { run: { id: courseRunId } },
+      trainingPartner: { uen: tpUen, code: tpCode },
+    },
+    parameters: { page: 0, pageSize: 20 },
+  } as any);
+
+  if (result.error) {
+    const status = Number(result.status) || 0;
+    if (status === 404) return [];
+    throw new Error(`SSG error ${status}: ${result.error.message ?? 'unknown'}`);
   }
 
-  const extractFromParsed = (parsed: any): any[] => {
-    if (Array.isArray(parsed?.data)) {
-      return parsed.data.map((item: any) => item.enrolment ?? item);
-    }
-    if (Array.isArray(parsed?.data?.enrolment)) return parsed.data.enrolment;
-    if (Array.isArray(parsed?.enrolment)) return parsed.enrolment;
-    return [];
-  };
-
-  if (Array.isArray(raw)) {
-    const first = raw[0];
-    if (first?.result) {
-      const parsed = typeof first.result === 'string' ? JSON.parse(first.result) : first.result;
-      return extractFromParsed(parsed);
-    }
-    return raw;
-  }
-  if (raw?.result) {
-    const parsed = typeof raw.result === 'string' ? JSON.parse(raw.result) : raw.result;
-    return extractFromParsed(parsed);
-  }
-  return extractFromParsed(raw);
+  const raw = result.data;
+  if (Array.isArray(raw?.enrolment)) return raw.enrolment;
+  if (Array.isArray(raw)) return (raw as any[]).map((item: any) => item.enrolment ?? item);
+  return [];
 }
 
 // ── Upsert learner account + enrollment ──────────────────────────────────────
@@ -293,7 +269,7 @@ export async function runAutomation() {
 
     try {
       const enrollees = await fetchEnrollments(run.course_run_id);
-      console.log(`📥 Webhook returned ${enrollees.length} enrollee(s) for run "${run.course_run_id}"`);
+      console.log(`📥 SSG returned ${enrollees.length} enrollee(s) for run "${run.course_run_id}"`);
       if (enrollees.length > 0) console.log('📄 First enrollee sample:', JSON.stringify(enrollees[0], null, 2));
       logEntry.totalEnrolled = enrollees.length;
 

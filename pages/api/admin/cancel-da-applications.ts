@@ -1,8 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
-
-// Cancel Enrolment Webhook URL (n8n will search enrolment and cancel it)
-const DA_CANCEL_ENROLMENT_WEBHOOK = 'https://n8n.srv1231536.hstgr.cloud/webhook/26e31541-ed6a-4450-bae7-bfae976b2aaf';
+import { searchEnrolment, cancelEnrolment } from '../../../lib/ssg/services/enrolment-service';
 
 /**
  * Build the search enrolment payload for a single DA application record.
@@ -36,7 +34,7 @@ function buildEnrolmentPayload(record: Record<string, any>): Record<string, any>
     }
 
     return {
-        payload: {
+        ssgPayload: {
             enrolment: {
                 course: {
                     run: { id: runId },
@@ -53,28 +51,19 @@ function buildEnrolmentPayload(record: Record<string, any>): Record<string, any>
                 pageSize: 40
             }
         },
-        trainee_email: record.trainee_email || '',
         application_id: record.application_id,
     };
 }
 
 /**
- * API endpoint to cancel multiple DA Applications by their IDs.
- *
  * POST /api/admin/cancel-da-applications
  * Body: { applicationIds: string[] }
  *
  * Flow:
  * 1. Fetch full application data for the given IDs
- * 2. Send to n8n cancel enrolment webhook and WAIT for response
- * 3. Parse per-record results from n8n (SSG response)
+ * 2. For each record: search SSG for the enrolment reference number
+ * 3. For each record: cancel the enrolment via SSG
  * 4. Only update DB (application_status + enrolment_status) for records that succeeded
- *
- * n8n SSG success response per record:
- *   { status: 200, data: { enrolment: { referenceNumber, status } }, meta: {...}, error: {} }
- *
- * n8n SSG error response per record:
- *   { error: "Cannot read properties of undefined (reading 'ciphertext')" }
  */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
     if (req.method !== 'POST') {
@@ -93,7 +82,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
         console.log(`🚫 Cancelling ${applicationIds.length} DA applications...`);
 
-        // 1. Fetch full application data (needed for webhook payload)
+        // 1. Fetch full application data
         const fetchResult = await pool.query(
             `SELECT * FROM da_application WHERE application_id = ANY($1::text[])`,
             [applicationIds]
@@ -108,109 +97,48 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             });
         }
 
-        // 2. Send to n8n webhook and WAIT for response
+        // 2. Search then cancel each enrolment via SSG directly (sequential per record)
         const records = applicationRows.map(row => buildEnrolmentPayload(row));
-        console.log(`📤 Sending ${records.length} records to cancel enrolment webhook...`);
+        console.log(`📤 Processing ${records.length} record(s) — search then cancel via SSG...`);
 
-        let webhookResultItems: any[] = [];
-        let webhookError: string | undefined;
-
-        try {
-            const webhookResponse = await fetch(DA_CANCEL_ENROLMENT_WEBHOOK, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ records }),
-            });
-
-            if (!webhookResponse.ok) {
-                webhookError = `Webhook returned status ${webhookResponse.status}`;
-                console.error(`❌ Cancel enrolment webhook failed: ${webhookResponse.status}`);
-            } else {
-                const responseBody = await webhookResponse.json();
-                // n8n returns: { results: [...] } or { result: [...] } or direct array
-                if (responseBody.results && Array.isArray(responseBody.results)) {
-                    webhookResultItems = responseBody.results;
-                } else if (responseBody.result && Array.isArray(responseBody.result)) {
-                    webhookResultItems = responseBody.result;
-                } else if (Array.isArray(responseBody)) {
-                    webhookResultItems = responseBody;
-                } else {
-                    webhookResultItems = [responseBody];
-                }
-                console.log(`✅ Webhook responded with ${webhookResultItems.length} results`);
-            }
-        } catch (err) {
-            webhookError = err instanceof Error ? err.message : 'Unknown webhook error';
-            console.error('❌ Cancel enrolment webhook error:', err);
-        }
-
-        // 3. Build a map of webhook results by application_id for reliable matching
-        const resultsByAppId = new Map<string, any>();
-        for (const item of webhookResultItems) {
-            if (item.application_id) {
-                resultsByAppId.set(item.application_id, item);
-            }
-        }
-
-        // 4. Parse per-record results and update DB only for successful cancellations
         const succeeded: { application_id: string; enrolment_ref: string; enrolment_status: string }[] = [];
         const failed: { application_id: string; error: string }[] = [];
 
         for (const record of records) {
             const appId = record.application_id;
-            const item = resultsByAppId.get(appId);
 
-            if (!item) {
-                failed.push({
-                    application_id: appId,
-                    error: webhookError || 'No response received from webhook',
-                });
-                continue;
-            }
-
-            // Parse the stringified SSG result
-            let ssgResponse: any = null;
             try {
-                ssgResponse = typeof item.result === 'string'
-                    ? JSON.parse(item.result)
-                    : item.result;
-            } catch {
-                failed.push({ application_id: appId, error: 'Failed to parse SSG response' });
-                continue;
-            }
+                // Step 1: Search for the enrolment reference number
+                const searchResult = await searchEnrolment(record.ssgPayload as any);
 
-            const ssgStatus = ssgResponse?.status;
-            const enrolmentData = ssgResponse?.data?.enrolment;
-            const ssgError = ssgResponse?.error;
-
-            // Check for error response
-            const hasError = ssgError && typeof ssgError === 'object'
-                ? (ssgError.message || (ssgError.details && ssgError.details.length > 0))
-                : (typeof ssgError === 'string' && ssgError.length > 0);
-
-            if (hasError && (ssgStatus !== 200 && ssgStatus !== '200')) {
-                let errorMsg = typeof ssgError === 'string' ? ssgError : (ssgError?.message || 'Unknown error');
-                if (ssgError?.details && Array.isArray(ssgError.details)) {
-                    const details = ssgError.details
-                        .map((d: { message?: string; field?: string }) => d.message || d.field || '')
-                        .filter(Boolean)
-                        .join('; ');
-                    if (details) errorMsg += ` (${details})`;
+                if (!searchResult.success || !searchResult.referenceNumber) {
+                    const errMsg = searchResult.status === 'not_found'
+                        ? 'Enrolment not found in SSG'
+                        : (searchResult.error || 'Search failed');
+                    failed.push({ application_id: appId, error: errMsg });
+                    continue;
                 }
-                failed.push({ application_id: appId, error: errorMsg });
-                continue;
-            }
 
-            if ((ssgStatus === 200 || ssgStatus === '200') && enrolmentData?.status === 'Cancelled') {
+                // Step 2: Cancel the enrolment using the reference number
+                const cancelResult = await cancelEnrolment(
+                    searchResult.referenceNumber,
+                    record.ssgPayload.enrolment.course.run.id,
+                );
+
+                if (!cancelResult.success) {
+                    failed.push({ application_id: appId, error: cancelResult.error || 'Cancel failed' });
+                    continue;
+                }
+
                 succeeded.push({
                     application_id: appId,
-                    enrolment_ref: enrolmentData.referenceNumber || '',
-                    enrolment_status: enrolmentData.status,
+                    enrolment_ref: cancelResult.referenceNumber || searchResult.referenceNumber,
+                    enrolment_status: cancelResult.enrolmentStatus || 'Cancelled',
                 });
-            } else {
+            } catch (err) {
                 failed.push({
                     application_id: appId,
-                    error: `Unexpected response: status=${ssgStatus}, enrolment status=${enrolmentData?.status || 'unknown'}`,
+                    error: err instanceof Error ? err.message : 'Unknown error',
                 });
             }
         }

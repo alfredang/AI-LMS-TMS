@@ -1,5 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
+import { getSSGCredentialsService } from '../../../lib/ssg/services/credentials-service';
+import { createSSGEnrolmentAPI } from '../../../lib/ssg/api/enrolment-api';
 
 /**
  * Admin proxy for the backfill-enrollments operation.
@@ -9,7 +11,6 @@ import pool from '../../../lib/db';
  * POST /api/admin/backfill-enrollments?limit=50   — run backfill
  */
 
-const WEBHOOK_URL = 'https://n8n.srv1231536.hstgr.cloud/webhook/638428e2-07e7-4448-88be-f956c5b44620';
 const RATE_LIMIT_MS = 4000;
 
 function sleep(ms: number) {
@@ -69,6 +70,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   const results: { enrolmentId: string; status: string; result: string; detail?: string }[] = [];
+  const credentials = await getSSGCredentialsService().getSSGCredentials();
+  if (!credentials) {
+    return res.status(500).json({ success: false, error: 'SSG credentials not found' });
+  }
+  const ssgBaseUrl = process.env.SSG_API_URL || 'https://api.ssg-wsg.sg';
+  const enrolmentAPI = createSSGEnrolmentAPI(ssgBaseUrl, credentials);
+
   let updated = 0, skipped = 0, errors = 0;
 
   for (const row of rows) {
@@ -77,22 +85,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     let fetched: { success: boolean; status: string; enrolment?: any; error?: string };
     try {
-      const webhookRes = await fetch(WEBHOOK_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enrolmentId, timestamp: new Date().toISOString(), source: 'admin-backfill' }),
-      });
-      const text = await webhookRes.text();
-      let json: any;
-      try { json = JSON.parse(text); } catch { fetched = { success: false, status: 'parse_error', error: text.slice(0, 100) }; await sleep(RATE_LIMIT_MS); continue; }
-
-      const r = json?.result ?? json;
-      const status = String(r?.status ?? '');
-      if (status === '200') {
-        const enrolment = r?.data?.enrolment;
-        fetched = enrolment ? { success: true, status: '200', enrolment } : { success: false, status: '200_no_data', error: 'No enrolment object' };
+      const result = await enrolmentAPI.viewEnrolment(enrolmentId);
+      if (result.error) {
+        const status = String(result.status || '');
+        fetched = { success: false, status: status || 'error', error: result.error.message ?? String(result.error) };
       } else {
-        fetched = { success: false, status, error: String(r?.error?.message ?? r?.error ?? `HTTP ${status}`) };
+        const enrolment = result.data?.enrolment ?? result.data;
+        fetched = enrolment ? { success: true, status: '200', enrolment } : { success: false, status: '200_no_data', error: 'No enrolment object' };
       }
     } catch (err) {
       fetched = { success: false, status: 'network_error', error: err instanceof Error ? err.message : 'Unknown' };

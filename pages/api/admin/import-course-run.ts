@@ -1,7 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
-
-const WEBHOOK_URL = 'https://n8n.srv1231536.hstgr.cloud/webhook/7f2f5d21-beb6-47a9-8056-e1ccf79a3ea7';
+import { getSSGCredentialsService } from '../../../lib/ssg/services/credentials-service';
+import { createSSGCourseAPI } from '../../../lib/ssg/api/course-api';
 
 function parseToISO(d: number | string | undefined): string | null {
   if (!d) return null;
@@ -42,7 +42,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const courseRunId = String(course_run_id).trim();
 
-  // ── Fetch course run data from SSG via n8n webhook ──────────────────────────
+  // ── Fetch course run data directly from SSG ─────────────────────────────────
   let courseCode: string;
   let courseTitle: string;
   let startDateISO: string | null;
@@ -51,24 +51,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   let modeOfLearning: string;
 
   try {
-    const webhookRes = await fetch(WEBHOOK_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ courseRunId }),
-    });
-
-    if (!webhookRes.ok) {
-      return res.status(502).json({
-        success: false,
-        error: `SSG data fetch failed (HTTP ${webhookRes.status}). The course run ID may not exist in SSG.`,
-      });
+    const credentials = await getSSGCredentialsService().getSSGCredentials();
+    if (!credentials) {
+      return res.status(500).json({ success: false, error: 'SSG credentials not found' });
     }
 
-    const ssgData = await webhookRes.json();
-    const run = ssgData?.result?.course?.run;
-    const courseInfo = ssgData?.result?.course;
+    const ssgBaseUrl = process.env.SSG_API_URL || 'https://api.ssg-wsg.sg';
+    const api = createSSGCourseAPI(ssgBaseUrl, credentials);
+    const ssgResult = await api.viewCourseRun(courseRunId);
 
-    if (!run || !courseInfo) {
+    const hasError = ssgResult.error && (ssgResult.error.code || ssgResult.error.message ||
+      (ssgResult.error.details && ssgResult.error.details.length > 0));
+
+    const run = ssgResult.data?.course?.run;
+    const courseInfo = ssgResult.data?.course;
+
+    if (hasError || !run || !courseInfo) {
       return res.status(404).json({
         success: false,
         error: `No data returned from SSG for course run ID: ${courseRunId}. Please verify the ID is correct.`,
@@ -77,8 +75,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     courseCode   = courseInfo.referenceNumber as string;
     courseTitle  = (courseInfo.title as string) ?? '';
-    startDateISO = parseToISO(run.courseStartDate);
-    endDateISO   = parseToISO(run.courseEndDate);
+    startDateISO = parseToISO(run.courseStartDate ?? run.courseDates?.start);
+    endDateISO   = parseToISO(run.courseEndDate   ?? run.courseDates?.end);
     raCode       = extractRaCode(run.qrCodeLink);
 
     const titleLower = courseTitle.toLowerCase();
@@ -90,7 +88,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   } catch (err) {
     return res.status(502).json({
       success: false,
-      error: 'Could not reach SSG webhook. Please check your network connection and try again.',
+      error: 'Could not reach SSG API. Please check your network connection and try again.',
     });
   }
 

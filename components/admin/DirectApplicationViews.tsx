@@ -134,14 +134,10 @@ export const UploadDirectApplicationView: React.FC = () => {
                     const sheetName = workbook.SheetNames[0];
                     const worksheet = workbook.Sheets[sheetName];
 
-                    // 🔍 DEBUG: read raw rows (including headers)
                     const rawRows: any[][] = XLSX.utils.sheet_to_json(worksheet, {
                         header: 1,
                         blankrows: false,
                     });
-
-                    console.log('🧪 Raw Excel rows count:', rawRows.length);
-                    console.log('🧪 First 3 rows:', rawRows.slice(0, 3));
 
                     // ❌ No rows at all
                     if (!rawRows.length) {
@@ -167,11 +163,6 @@ export const UploadDirectApplicationView: React.FC = () => {
                         defval: '',
                         raw: false,
                     });
-
-                    console.log('✅ Parsed', jsonData.length, 'data rows');
-                    if (jsonData.length > 0) {
-                        console.log('🔑 Column headers:', Object.keys(jsonData[0] as object));
-                    }
 
                     resolve(jsonData);
                 } catch (err) {
@@ -204,9 +195,7 @@ export const UploadDirectApplicationView: React.FC = () => {
         setProgressTotal(0);
 
         try {
-            console.log('📊 Parsing Excel file:', file.name);
             const excelData = await parseExcelFile(file);
-            console.log('✅ Parsed Excel data:', excelData.length, 'rows');
 
             const total = excelData.length;
             setProgressTotal(total);
@@ -266,7 +255,6 @@ export const UploadDirectApplicationView: React.FC = () => {
             setAllResults(flat);
             setSummary({ inserted: ins, updated: upd, skipped: skip, failed: fail });
             setViewState('results');
-            console.log('✅ Upload complete — inserted:', ins, 'updated:', upd, 'failed:', fail);
 
         } catch (err) {
             console.error('❌ Upload error:', err);
@@ -645,7 +633,9 @@ export const ViewDirectApplicationView: React.FC = () => {
                     alert(`Successfully cancelled ${succeededCount} application(s) and enrolment(s).`);
                 } else if (succeededCount > 0 && failedCount > 0) {
                     // Partial success
-                    const failedList = result.results.failed.map((f: any) => `  - ${f.application_id}`).join('\n');
+                    const failedList = result.results.failed.map((f: any) =>
+                        `  - ${f.application_id}${f.error ? `: ${f.error}` : ''}`
+                    ).join('\n');
                     alert(
                         `${succeededCount} application(s) cancelled successfully.\n\n` +
                         `${failedCount} application(s) failed to cancel:\n${failedList}\n\n` +
@@ -653,10 +643,12 @@ export const ViewDirectApplicationView: React.FC = () => {
                     );
                 } else {
                     // All failed
-                    const failedIds = result.results?.failed?.map((f: any) => f.application_id).join(', ') || '';
+                    const failedList = result.results?.failed?.map((f: any) =>
+                        `  - ${f.application_id}${f.error ? `: ${f.error}` : ''}`
+                    ).join('\n') || '';
                     alert(
                         `Enrolment cancellation failed for all ${failedCount} application(s).\n\n` +
-                        (failedIds ? `Application IDs: ${failedIds}\n\n` : '') +
+                        (failedList ? `${failedList}\n\n` : '') +
                         `No changes were made. Please try again or cancel manually via the SSG portal.`
                     );
                 }
@@ -706,33 +698,28 @@ export const ViewDirectApplicationView: React.FC = () => {
 
     // Trigger Direct Application Enrolment workflow
     const handleEnrolment = async () => {
-        // Get selected applications that are Confirmed with empty enrolment_status
+        // Get selected applications that are Confirmed
         const toEnrollApps = applications.filter(app => {
             if (!selectedIds.has(app.application_id)) return false;
-            const isConfirmed = (app.application_status || '').toLowerCase() === 'confirmed';
-            const hasNoEnrolmentStatus = !app.enrolment_status || app.enrolment_status.trim() === '';
-            return isConfirmed && hasNoEnrolmentStatus;
+            return (app.application_status || '').toLowerCase() === 'confirmed';
         });
 
         if (toEnrollApps.length === 0) {
             alert(
                 'No eligible applications found to enroll.\n\n' +
-                'Selected applications must meet both conditions:\n' +
-                '• Application Status = Confirmed\n' +
-                '• Enrolment Status = Empty\n\n' +
-                'Tip: Use the "To be enrolled Learner(s)" filter to automatically select all eligible applications.'
+                'Selected applications must have Application Status = Confirmed.'
             );
             return;
         }
 
         const confirmEnrol = window.confirm(
-            `Are you sure you want to trigger enrolment for ${toEnrollApps.length} selected application(s)?\n\nThis will send them to the Direct Application Enrolment workflow.`
+            `Are you sure you want to enrol ${toEnrollApps.length} selected application(s) via SSG?`
         );
         if (!confirmEnrol) return;
 
         setIsEnrolling(true);
         try {
-            const response = await fetch('https://n8n.srv1231536.hstgr.cloud/webhook/b50f2b79-40f6-4590-bb67-b714e60d2854', {
+            const response = await fetch('/api/admin/da-enrol', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -743,86 +730,25 @@ export const ViewDirectApplicationView: React.FC = () => {
                 }),
             });
 
-            const webhookBody = await response.json();
+            const body = await response.json();
+            if (!response.ok) throw new Error(body.error || `Server error ${response.status}`);
 
-            // Webhook returns: { results: [{ application_id, result: "..." }, ...] }
-            // Handle both "results" and "result" keys, or direct array
-            let results: any[];
-            if (webhookBody.results && Array.isArray(webhookBody.results)) {
-                results = webhookBody.results;
-            } else if (webhookBody.result && Array.isArray(webhookBody.result)) {
-                results = webhookBody.result;
-            } else if (Array.isArray(webhookBody)) {
-                results = webhookBody;
-            } else {
-                results = [webhookBody];
-            }
-
-            const succeeded: { application_id: string }[] = [];
-            const failed: { application_id: string; message: string }[] = [];
-
-            for (const item of results) {
-                const appId = item.application_id || '';
-
-                // Parse the SSG result (stringified JSON)
-                let ssgResponse: any = null;
-                try {
-                    ssgResponse = typeof item.result === 'string'
-                        ? JSON.parse(item.result)
-                        : item.result;
-                } catch {
-                    failed.push({ application_id: appId, message: 'Failed to parse SSG response' });
-                    continue;
-                }
-
-                const status = ssgResponse?.status;
-
-                if (status === 200 || status === '200') {
-                    // Success - mark for DB update
-                    succeeded.push({ application_id: appId });
-                } else {
-                    // Error - collect error details
-                    let errorMsg = ssgResponse?.error?.message || 'Enrolment failed';
-                    if (ssgResponse?.error?.details && Array.isArray(ssgResponse.error.details)) {
-                        const details = ssgResponse.error.details
-                            .map((d: { message?: string; field?: string }) => d.message || d.field || '')
-                            .filter(Boolean)
-                            .join('; ');
-                        if (details) errorMsg += ` (${details})`;
-                    }
-                    failed.push({ application_id: appId, message: errorMsg });
-                }
-            }
-
-            // Update enrolment_status = "Confirmed" in database for successful ones
-            if (succeeded.length > 0) {
-                await fetch('/api/admin/update-da-enrolment-status', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        updates: succeeded.map(s => ({
-                            application_id: s.application_id,
-                            enrolment_status: 'Confirmed',
-                        })),
-                    }),
-                });
-            }
+            const results: { application_id: string; success: boolean; error?: string }[] = body.results ?? [];
+            const succeeded = results.filter(r => r.success);
+            const failed = results.filter(r => !r.success);
 
             // Show summary to user
             let message = '';
             if (succeeded.length > 0) {
-                message += `Enrolment created successfully for ${succeeded.length} application(s).`;
+                message += `Enrolment created successfully for ${succeeded.length} application(s):\n`;
+                succeeded.forEach(s => { message += `• ${s.application_id}\n`; });
             }
             if (failed.length > 0) {
-                if (message) message += '\n\n';
-                message += `Failed for ${failed.length} application(s):`;
-                failed.forEach(f => {
-                    message += `\n• ${f.application_id}: ${f.message}`;
-                });
+                if (message) message += '\n';
+                message += `Failed for ${failed.length} application(s):\n`;
+                failed.forEach(f => { message += `• ${f.application_id}: ${f.error || 'Unknown error'}\n`; });
             }
-            if (!message) {
-                message = 'No results returned from the enrolment webhook.';
-            }
+            if (!message) message = 'No results returned.';
 
             alert(message);
             setSelectedIds(new Set());

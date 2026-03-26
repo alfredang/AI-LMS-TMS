@@ -527,8 +527,6 @@ export const SubmitAssessmentView: React.FC = () => {
     const [result, setResult] = useState<any>(null);
     const [error, setError] = useState<string | null>(null);
 
-    const WEBHOOK_URL = 'https://n8n.srv1231536.hstgr.cloud/webhook/3955e2d7-38c5-4f06-9177-53281157763c';
-
     const inputClasses = "block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-500";
 
     // Auto-determine idType based on first letter of trainee ID
@@ -544,140 +542,47 @@ export const SubmitAssessmentView: React.FC = () => {
     };
 
     const handleSubmit = async () => {
-        // Validate required fields based on SSG API
-        if (!courseRunId.trim()) {
-            setError('Course Run ID is required');
-            return;
-        }
-        if (!courseReferenceNumber.trim()) {
-            setError('Course Reference Number is required');
-            return;
-        }
-        if (!traineeId.trim()) {
-            setError('Trainee ID is required');
-            return;
-        }
-        if (!traineeFullName.trim()) {
-            setError('Trainee Full Name is required');
-            return;
-        }
-        if (!assessmentDate.trim()) {
-            setError('Assessment Date is required');
-            return;
-        }
-        if (!skillCode.trim()) {
-            setError('Skill Code is required');
-            return;
-        }
-        if (!trainingPartnerUen.trim()) {
-            setError('Training Partner UEN is required');
-            return;
-        }
-        if (!trainingPartnerCode.trim()) {
-            setError('Training Partner Code is required');
-            return;
-        }
+        if (!courseRunId.trim()) { setError('Course Run ID is required'); return; }
+        if (!courseReferenceNumber.trim()) { setError('Course Reference Number is required'); return; }
+        if (!traineeId.trim()) { setError('Trainee ID is required'); return; }
+        if (!traineeFullName.trim()) { setError('Trainee Full Name is required'); return; }
+        if (!assessmentDate.trim()) { setError('Assessment Date is required'); return; }
+        if (!skillCode.trim()) { setError('Skill Code is required'); return; }
+        if (!trainingPartnerUen.trim()) { setError('Training Partner UEN is required'); return; }
+        if (!trainingPartnerCode.trim()) { setError('Training Partner Code is required'); return; }
 
         setIsSubmitting(true);
         setError(null);
         setResult(null);
 
         try {
-            const idType = getIdType(traineeId);
-
-            const payload: any = {
-                payload: {
-                    assessment: {
-                        course: {
-                            run: {
-                                id: courseRunId.trim()
-                            },
-                            referenceNumber: courseReferenceNumber.trim()
-                        },
-                        result: assessmentResult,
-                        trainee: {
-                            id: traineeId.trim(),
-                            idType: idType,
-                            fullName: traineeFullName.trim()
-                        },
-                        assessmentDate: assessmentDate.trim(),
-                        skillCode: skillCode.trim(),
-                        trainingPartner: {
-                            uen: trainingPartnerUen.trim(),
-                            code: trainingPartnerCode.trim()
-                        }
-                    }
-                }
-            };
-
-            // Add optional field if provided
-
-            if (enrolmentNumber.trim()) {
-                payload.enrolmentNumber = enrolmentNumber.trim();
-            }
-
-            console.log('📤 Submit assessment payload:', payload);
-
-            const response = await fetch(WEBHOOK_URL, {
+            const response = await fetch('/api/assessments/ssg-create', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(payload)
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    courseRunId: courseRunId.trim(),
+                    courseReferenceNumber: courseReferenceNumber.trim(),
+                    result: assessmentResult,
+                    traineeId: traineeId.trim(),
+                    traineeIdType: getIdType(traineeId),
+                    traineeFullName: traineeFullName.trim(),
+                    skillCode: skillCode.trim(),
+                    assessmentDate: assessmentDate.trim(),
+                    trainingPartnerUen: trainingPartnerUen.trim(),
+                    trainingPartnerCode: trainingPartnerCode.trim(),
+                    enrolmentReferenceNumber: enrolmentNumber.trim() || undefined,
+                })
             });
 
-            if (!response.ok) {
-                if (response.status === 500) {
-                    throw new Error('SSG API server error. The service may be temporarily unavailable. Please try again later.');
-                }
-                throw new Error(`Unable to connect to SSG API (Error ${response.status}). Please check your connection and try again.`);
+            const data = await response.json();
+
+            if (!data.success) {
+                setError(data.details?.[0]?.message || data.error || 'Failed to submit assessment');
+                setResult(data);
+                return;
             }
 
-            // Safe JSON parsing
-            const text = await response.text();
-            let data;
-            try {
-                data = text ? JSON.parse(text) : {};
-            } catch (e) {
-                console.error('Failed to parse JSON response:', text);
-                throw new Error(`Invalid JSON response from webhook`);
-            }
-            console.log('✅ Submit assessment response:', data);
-
-            // Parse response
-            let parsedResult = data;
-            if (data?.result !== undefined && data?.result !== null) {
-                if (typeof data.result === 'string') {
-                    try {
-                        parsedResult = JSON.parse(data.result);
-                    } catch (e) {
-                        console.error('Failed to parse result string:', data.result);
-                        parsedResult = { error: { message: data.result } };
-                    }
-                } else if (typeof data.result === 'object') {
-                    parsedResult = data.result;
-                } else {
-                    parsedResult = { error: { message: String(data.result) } };
-                }
-            }
-
-            // Check for error status - handle both nested error object and root level errors
-            const hasError = (parsedResult?.error?.details?.length > 0) ||
-                (parsedResult?.error?.message) ||
-                (parsedResult?.status && parsedResult.status >= 400) ||
-                (parsedResult?.details?.length > 0) ||
-                (parsedResult?.message && parsedResult.message.toLowerCase().includes('cannot'));
-
-            if (hasError) {
-                const errorMessage = parsedResult?.error?.details?.[0]?.message ||
-                    parsedResult?.error?.message ||
-                    parsedResult?.details?.[0]?.message ||
-                    parsedResult?.message ||
-                    'Failed to submit assessment';
-                setError(errorMessage);
-            }
-
-            setResult(parsedResult);
+            setResult(data.data);
         } catch (err) {
             console.error('❌ Error submitting assessment:', err);
             setError(err instanceof Error ? err.message : 'Failed to submit assessment');
@@ -714,7 +619,7 @@ export const SubmitAssessmentView: React.FC = () => {
             <Card className="p-6 mb-6">
                 <h3 className="text-lg font-bold text-gray-700 dark:text-gray-200 mb-4">Assessment Details</h3>
                 <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                    All fields marked with * are required. Only Enrolment Number is optional.
+                    All fields marked with * are required.
                 </p>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
@@ -851,20 +756,6 @@ export const SubmitAssessmentView: React.FC = () => {
                             disabled={isSubmitting}
                         />
                     </div>
-                    <div>
-                        <label htmlFor="submit-enrolment-number" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
-                            Enrolment Number
-                        </label>
-                        <input
-                            id="submit-enrolment-number"
-                            type="text"
-                            value={enrolmentNumber}
-                            onChange={(e) => setEnrolmentNumber(e.target.value)}
-                            placeholder="e.g. ENR-2024-001 (optional)"
-                            className={inputClasses}
-                            disabled={isSubmitting}
-                        />
-                    </div>
                 </div>
 
                 <div className="flex gap-3">
@@ -913,7 +804,7 @@ export const SubmitAssessmentView: React.FC = () => {
                                 <Icon name={IconName.X} className="w-5 h-5 text-red-600 dark:text-red-400" />
                                 <h4 className="font-semibold text-red-900 dark:text-red-200">Submission Creation Failed</h4>
                             </div>
-                            {/* <p className="text-sm text-red-800 dark:text-red-300 pl-7">{error}</p> */}
+                            <p className="text-sm text-red-800 dark:text-red-300 pl-7">{error}</p>
                         </div>
                     ) : (
                         <div className="bg-green-50 dark:bg-green-900/20 border-l-4 border-green-500 dark:border-green-600 rounded-r-lg p-4">
@@ -925,7 +816,7 @@ export const SubmitAssessmentView: React.FC = () => {
                                 <p className="text-sm text-green-700 dark:text-green-300">
                                     <span className="font-medium">Reference:</span>{' '}
                                     <span className="font-mono bg-green-100 dark:bg-green-900/40 px-2 py-0.5 rounded">
-                                        {result?.data?.assessment?.referenceNumber || 'N/A'}
+                                        {result?.assessment?.referenceNumber || 'N/A'}
                                     </span>
                                 </p>
                                 <p className="text-sm text-green-700 dark:text-green-300">
@@ -964,39 +855,16 @@ export const UpdateAssessmentView: React.FC = () => {
     const [apiResult, setApiResult] = useState<any>(null);
     const [error, setError] = useState<string | null>(null);
 
-    const WEBHOOK_URL = 'https://n8n.srv1231536.hstgr.cloud/webhook/5a3271b2-6b10-455b-a5a1-196c5d3a6887'; // TODO: Replace with actual webhook URL
-
     const inputClasses = "block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-500";
 
     const handleSubmit = async () => {
-        // Validate required fields
-        if (!referenceNumber.trim()) {
-            setError('Assessment Reference Number is required');
-            return;
-        }
-        if (!action.trim()) {
-            setError('Action is required');
-            return;
-        }
-
-        // For update action, validate required fields
+        if (!referenceNumber.trim()) { setError('Assessment Reference Number is required'); return; }
+        if (!action.trim()) { setError('Action is required'); return; }
         if (action === 'update') {
-            if (!result.trim()) {
-                setError('Assessment Result is required for update action');
-                return;
-            }
-            if (!traineeFullName.trim()) {
-                setError('Trainee Full Name is required for update action');
-                return;
-            }
-            if (!assessmentDate.trim()) {
-                setError('Assessment Date is required for update action');
-                return;
-            }
-            if (!skillCode.trim()) {
-                setError('Skill Code is required for update action');
-                return;
-            }
+            if (!result.trim()) { setError('Assessment Result is required for update action'); return; }
+            if (!traineeFullName.trim()) { setError('Trainee Full Name is required for update action'); return; }
+            if (!assessmentDate.trim()) { setError('Assessment Date is required for update action'); return; }
+            if (!skillCode.trim()) { setError('Skill Code is required for update action'); return; }
         }
 
         setIsSubmitting(true);
@@ -1004,93 +872,30 @@ export const UpdateAssessmentView: React.FC = () => {
         setApiResult(null);
 
         try {
-            const payload: any = {
-                referenceNumber: referenceNumber.trim(),
-                assessment: {
-                    action: action
-                }
-            };
-
-            // Only add fields for update action (void action leaves fields blank)
-            if (action === 'update') {
-                payload.assessment.result = result;
-                payload.assessment.trainee = {
-                    fullName: traineeFullName.trim()
-                };
-                payload.assessment.assessmentDate = assessmentDate.trim();
-                payload.assessment.skillCode = skillCode.trim();
-
-                // Add optional fields if provided
-                if (grade.trim()) {
-                    payload.assessment.grade = grade.trim();
-                }
-                if (score.trim()) {
-                    payload.assessment.score = parseInt(score.trim(), 10);
-                }
-            }
-
-            console.log('📤 Update assessment payload:', payload);
-
-            const response = await fetch(WEBHOOK_URL, {
+            const response = await fetch('/api/assessments/ssg-update', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(payload)
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    referenceNumber: referenceNumber.trim(),
+                    action,
+                    result: action === 'update' ? result : undefined,
+                    traineeFullName: action === 'update' ? traineeFullName.trim() : undefined,
+                    skillCode: action === 'update' ? skillCode.trim() : undefined,
+                    assessmentDate: action === 'update' ? assessmentDate.trim() : undefined,
+                    grade: grade.trim() || undefined,
+                    score: score.trim() || undefined,
+                })
             });
 
-            if (!response.ok) {
-                if (response.status === 500) {
-                    throw new Error('SSG API server error. The service may be temporarily unavailable. Please try again later.');
-                }
-                throw new Error(`Unable to connect to SSG API (Error ${response.status}). Please check your connection and try again.`);
+            const data = await response.json();
+
+            if (!data.success) {
+                setError(data.details?.[0]?.message || data.error || `Failed to ${action} assessment`);
+                setApiResult(data);
+                return;
             }
 
-            // Safe JSON parsing
-            const text = await response.text();
-            let data;
-            try {
-                data = text ? JSON.parse(text) : {};
-            } catch (e) {
-                console.error('Failed to parse JSON response:', text);
-                throw new Error(`Invalid JSON response from webhook`);
-            }
-            console.log('✅ Update assessment response:', data);
-
-            // Parse response
-            let parsedResult = data;
-            if (data?.result !== undefined && data?.result !== null) {
-                if (typeof data.result === 'string') {
-                    try {
-                        parsedResult = JSON.parse(data.result);
-                    } catch (e) {
-                        console.error('Failed to parse result string:', data.result);
-                        parsedResult = { error: { message: data.result } };
-                    }
-                } else if (typeof data.result === 'object') {
-                    parsedResult = data.result;
-                } else {
-                    parsedResult = { error: { message: String(data.result) } };
-                }
-            }
-
-            // Check for error status
-            const hasError = (parsedResult?.error?.details?.length > 0) ||
-                (parsedResult?.error?.message) ||
-                (parsedResult?.status && parsedResult.status >= 400) ||
-                (parsedResult?.details?.length > 0) ||
-                (parsedResult?.message && parsedResult.message.toLowerCase().includes('cannot'));
-
-            if (hasError) {
-                const errorMessage = parsedResult?.error?.details?.[0]?.message ||
-                    parsedResult?.error?.message ||
-                    parsedResult?.details?.[0]?.message ||
-                    parsedResult?.message ||
-                    `Failed to ${action} assessment`;
-                setError(errorMessage);
-            }
-
-            setApiResult(parsedResult);
+            setApiResult(data.data);
         } catch (err) {
             console.error('❌ Error updating assessment:', err);
             setError(err instanceof Error ? err.message : 'Failed to update assessment');
@@ -1989,6 +1794,7 @@ export const UploadCourseRunsView: React.FC = () => {
     const [submissionResult, setSubmissionResult] = useState<any[] | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [isDragOver, setIsDragOver] = useState(false);
+    const [progress, setProgress] = useState<{ current: number; total: number } | null>(null);
 
     const handleFileChange = (selectedFile: File | undefined | null) => {
         if (selectedFile) {
@@ -2016,28 +1822,202 @@ export const UploadCourseRunsView: React.FC = () => {
         handleFileChange(droppedFile);
     };
 
-    const handleSimulateUpload = () => {
-        if (!file) return;
+    // Convert any date value from Excel to YYYYMMDD integer
+    const parseDateToInt = (value: any): number => {
+        if (!value) return 0;
+        const str = String(value).trim();
+        if (/^\d{8}$/.test(str)) return parseInt(str); // already YYYYMMDD
+        if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return parseInt(str.replace(/-/g, '')); // YYYY-MM-DD
+        const slashMatch = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+        if (slashMatch) return parseInt(`${slashMatch[3]}${slashMatch[2].padStart(2, '0')}${slashMatch[1].padStart(2, '0')}`);
+        return 0;
+    };
 
+    // Extract leading code number from values like "1 - Classroom" → "1"
+    const extractCode = (value: any, fallback = '1'): string => {
+        if (!value) return fallback;
+        const m = String(value).trim().match(/^(\d+)/);
+        return m ? m[1] : fallback;
+    };
+
+    const isTruthy = (value: any): boolean => {
+        if (!value) return false;
+        const s = String(value).trim().toLowerCase();
+        return s === 'yes' || s === 'true' || s === '1' || s === 'y';
+    };
+
+    const handleUpload = async () => {
+        if (!file) return;
         setIsUploading(true);
         setSubmissionResult(null);
+        setError(null);
+        setProgress(null);
 
-        // Simulate a network request to SSG
-        setTimeout(() => {
-            const mockResults = [
-                { courseRef: 'TGS-2025053174', startDate: '05/09/2025', endDate: '08/09/2025', status: 'Success', courseRunId: Math.floor(1000000 + Math.random() * 9000000).toString() },
-                { courseRef: 'TGS-2024081123', startDate: '29/08/2025', endDate: '03/09/2025', status: 'Success', courseRunId: Math.floor(1000000 + Math.random() * 9000000).toString() },
-                { courseRef: 'CRS-Q-0041189-2', startDate: '25/09/2025', endDate: '27/09/2025', status: 'Failed', error: 'Trainer is not qualified for this course.' },
-            ];
-            setSubmissionResult(mockResults);
+        try {
+            const XLSX = await import('xlsx');
+            const buffer = await file.arrayBuffer();
+            const wb = XLSX.read(buffer, { type: 'array', cellDates: false, raw: false });
+            const ws = wb.Sheets[wb.SheetNames[0]];
+            const rows: any[] = XLSX.utils.sheet_to_json(ws, { raw: false, dateNF: 'YYYY-MM-DD', defval: '' });
+
+            const dataRows = rows.filter(r => String(r['Course Reference Number'] ?? '').trim());
+            if (dataRows.length === 0) {
+                setError('No data rows found in the Excel file. Please check the format.');
+                return;
+            }
+
+            // Fetch UEN once
+            const uenRes = await fetch('/api/training-provider/uen');
+            if (!uenRes.ok) throw new Error('Failed to fetch UEN from database');
+            const { uen } = await uenRes.json();
+
+            const results: any[] = [];
+            setProgress({ current: 0, total: dataRows.length });
+
+            for (let i = 0; i < dataRows.length; i++) {
+                const row = dataRows[i];
+                setProgress({ current: i + 1, total: dataRows.length });
+
+                const courseRef = String(row['Course Reference Number']).trim();
+                const startDateDisplay = row['Course Start Date'] || '';
+                const endDateDisplay = row['Course End Date'] || '';
+
+                try {
+                    // Venue (with defaults matching office address)
+                    const postalCode  = String(row['Venue - Postal Code'] || '737715').trim();
+                    const floor       = String(row['Venue - Floor Number'] || '07').trim();
+                    const unit        = String(row['Venue - Unit Number'] || '85-87').trim();
+                    const room        = String(row['Venue - Room'] || 'Training room').trim();
+                    const wheelchair  = !row['Wheelchair Access'] || isTruthy(row['Wheelchair Access']);
+
+                    const venue = {
+                        block: '12',
+                        street: 'WOODS SQUARE',
+                        building: 'WOODS SQUARE',
+                        floor,
+                        unit,
+                        postalCode,
+                        room,
+                        wheelChairAccess: wheelchair,
+                    };
+
+                    const scheduleDesc = String(row['Schedule: Description'] || 'Description').trim();
+                    const startInt = parseDateToInt(row['Course Start Date']);
+                    const endInt   = parseDateToInt(row['Course End Date']);
+                    const scheduleInfo = startDateDisplay && endDateDisplay
+                        ? `${startDateDisplay} - ${endDateDisplay}`
+                        : 'Course dates not specified';
+
+                    const runObject: any = {
+                        sequenceNumber: 0,
+                        registrationDates: {
+                            opening: parseDateToInt(row['Registration Opening Date']),
+                            closing: parseDateToInt(row['Registration Closing Date']),
+                        },
+                        courseDates: { start: startInt, end: endInt },
+                        scheduleInfoType: { code: '01', description: scheduleDesc },
+                        scheduleInfo,
+                        venue,
+                        modeOfTraining: extractCode(row['Course Run Mode of Training']),
+                        courseAdminEmail: String(row['Course Admin Email'] || '').trim(),
+                        courseVacancy: {
+                            code: extractCode(row['Vacancy'], 'A'),
+                            description: extractCode(row['Vacancy'], 'A') === 'A' ? 'Available' : 'Full',
+                        },
+                        file: { Name: '' },
+                    };
+
+                    // Session (optional)
+                    const sessionStart = row['Session Start Date'];
+                    const sessionEnd   = row['Session End Date'];
+                    if (sessionStart && sessionEnd) {
+                        const sameVenue = !row['Same as Primary Venue'] || isTruthy(row['Same as Primary Venue']);
+                        const sessionVenue = sameVenue ? { ...venue } : {
+                            block: '12',
+                            street: 'WOODS SQUARE',
+                            building: 'WOODS SQUARE',
+                            floor:       String(row['Session Venue - Floor Number'] || floor).trim(),
+                            unit:        String(row['Session Venue - Unit Number'] || unit).trim(),
+                            postalCode:  String(row['Session Venue - Postal Code'] || postalCode).trim(),
+                            room:        String(row['Session Venue - Room'] || room).trim(),
+                            wheelChairAccess: isTruthy(row['Session Wheelchair Access'] ?? 'yes'),
+                        };
+                        runObject.sessions = [{
+                            startDate:      String(sessionStart).replace(/-/g, ''),
+                            endDate:        String(sessionEnd).replace(/-/g, ''),
+                            startTime:      String(row['Session -Start Time'] || '09:00').trim() + ':00',
+                            endTime:        String(row['Session -End Time'] || '18:00').trim() + ':00',
+                            modeOfTraining: extractCode(row['Session Mode of Training'], runObject.modeOfTraining),
+                            venue:          sessionVenue,
+                        }];
+                    }
+
+                    // Trainer (optional)
+                    const trainerIdNumber = String(row['Trainer ID Number'] || '').trim();
+                    if (trainerIdNumber) {
+                        runObject.linkCourseRunTrainer = [{
+                            trainer: {
+                                trainerType: {
+                                    code: extractCode(row['Trainer: Option'], '1'),
+                                    description: extractCode(row['Trainer: Option'], '1') === '1' ? 'Existing' : 'New',
+                                },
+                                idNumber: trainerIdNumber,
+                            },
+                        }];
+                    }
+
+                    const requestBody = {
+                        course: {
+                            courseReferenceNumber: courseRef,
+                            trainingProvider: { uen },
+                            runs: [runObject],
+                        },
+                    };
+
+                    const response = await fetch('/api/ssg/courses/courseRuns/create-new', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(requestBody),
+                    });
+
+                    const responseData = await response.json();
+
+                    if (!response.ok) {
+                        const errMsg = responseData?.error?.details?.[0]?.message
+                            || responseData?.error?.message
+                            || `SSG error ${response.status}`;
+                        results.push({ courseRef, startDate: startDateDisplay, endDate: endDateDisplay, status: 'Failed', error: errMsg });
+                    } else {
+                        const courseRunId = responseData?.data?.runs?.[0]?.id
+                            || responseData?.runs?.[0]?.id
+                            || responseData?.data?.run?.id;
+                        results.push({ courseRef, startDate: startDateDisplay, endDate: endDateDisplay, status: 'Success', courseRunId: courseRunId?.toString() || 'N/A' });
+                    }
+                } catch (rowErr) {
+                    results.push({
+                        courseRef,
+                        startDate: startDateDisplay,
+                        endDate: endDateDisplay,
+                        status: 'Failed',
+                        error: rowErr instanceof Error ? rowErr.message : 'Unknown error',
+                    });
+                }
+            }
+
+            setSubmissionResult(results);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Failed to process file');
+        } finally {
             setIsUploading(false);
-        }, 2500);
+            setProgress(null);
+        }
     };
 
     const resetView = () => {
         setFile(null);
         setSubmissionResult(null);
         setError(null);
+        setProgress(null);
     };
 
     const UploadStep = () => (
@@ -2088,7 +2068,7 @@ export const UploadCourseRunsView: React.FC = () => {
                     <Icon name={IconName.Download} className="w-4 h-4 mr-2" />
                     Course Run Template
                 </Button>
-                <Button onClick={handleSimulateUpload} disabled={!file || isUploading}>
+                <Button onClick={handleUpload} disabled={!file || isUploading}>
                     {isUploading ? (
                         <div className="flex items-center">
                             <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
@@ -2149,7 +2129,13 @@ export const UploadCourseRunsView: React.FC = () => {
                 <div className="flex justify-center py-20">
                     <div className="text-center">
                         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
-                        <p className="mt-4 text-gray-600 dark:text-gray-300">Submitting to SSG, this may take a moment...</p>
+                        {progress ? (
+                            <p className="mt-4 text-gray-600 dark:text-gray-300">
+                                Submitting to SSG… {progress.current} / {progress.total}
+                            </p>
+                        ) : (
+                            <p className="mt-4 text-gray-600 dark:text-gray-300">Parsing file…</p>
+                        )}
                     </div>
                 </div>
             ) : submissionResult ? (
@@ -2164,11 +2150,11 @@ export const UploadCourseRunsView: React.FC = () => {
 export const SearchGrantView: React.FC = () => {
     // Search functionality state
     const [courseRunId, setCourseRunId] = useState<string>('');
-    const [page, setPage] = useState<number>(0);
-    const [pageSize, setPageSize] = useState<number>(100);
     const [isSearching, setIsSearching] = useState(false);
     const [grantsData, setGrantsData] = useState<{ data: any[]; meta: any } | null>(null);
     const [searchError, setSearchError] = useState<string | null>(null);
+    const [currentPage, setCurrentPage] = useState<number>(0);
+    const PAGE_SIZE = 10;
 
     // Helper functions for consistent styling
     const getStatusColor = (status: string) => {
@@ -2213,6 +2199,7 @@ export const SearchGrantView: React.FC = () => {
         setIsSearching(true);
         setSearchError(null);
         setGrantsData(null);
+        setCurrentPage(0);
 
         try {
             console.log('🔍 Searching grants for course run:', courseRunId.trim());
@@ -2220,7 +2207,7 @@ export const SearchGrantView: React.FC = () => {
             const response = await fetch(getApiUrl('/api/grants/search'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ courseRunId: courseRunId.trim(), page, pageSize }),
+                body: JSON.stringify({ courseRunId: courseRunId.trim() }),
             });
 
             const json = await response.json();
@@ -2262,45 +2249,6 @@ export const SearchGrantView: React.FC = () => {
                             className={inputClasses}
                             disabled={isSearching}
                         />
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                        <div>
-                            <label htmlFor="page-number" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
-                                Page Number
-                            </label>
-                            <input
-                                id="page-number"
-                                type="number"
-                                min="0"
-                                max="100"
-                                value={page}
-                                onChange={(e) => {
-                                    const val = parseInt(e.target.value) || 0;
-                                    setPage(Math.min(val, 100));
-                                }}
-                                className={inputClasses}
-                                disabled={isSearching}
-                            />
-                        </div>
-                        <div>
-                            <label htmlFor="page-size" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
-                                Page Size
-                            </label>
-                            <input
-                                id="page-size"
-                                type="number"
-                                min="1"
-                                max="100"
-                                value={pageSize}
-                                onChange={(e) => {
-                                    const val = parseInt(e.target.value) || 10;
-                                    setPageSize(Math.min(val, 100));
-                                }}
-                                className={inputClasses}
-                                disabled={isSearching}
-                            />
-                        </div>
                     </div>
 
                     <div className="flex justify-end">
@@ -2347,61 +2295,199 @@ export const SearchGrantView: React.FC = () => {
                         <p className="text-gray-500 dark:text-gray-400 mt-1">Course Run ID: {courseRunId}</p>
                     </div>
                     <div className="p-6">
-                        {Array.isArray(grantsData.data) && grantsData.data.length > 0 ? (
-                            <div className="space-y-6">
-                                <div className="flex justify-between items-center bg-blue-50 dark:bg-blue-900/30 p-4 rounded-lg border border-blue-100 dark:border-blue-800">
-                                    <div>
-                                        <h4 className="font-bold text-blue-900 dark:text-blue-300">Total Records Found: {grantsData.meta?.totalRecords ?? grantsData.data.length}</h4>
-                                        <p className="text-sm text-blue-700 dark:text-blue-400">Course Run ID: {courseRunId}</p>
-                                    </div>
-                                </div>
+                        {Array.isArray(grantsData.data) && grantsData.data.length > 0 ? (() => {
+                            // Group grants by enrolment reference number
+                            const grouped: Record<string, any[]> = {};
+                            for (const item of grantsData.data) {
+                                const enrolKey = item.enrolment?.referenceNumber || 'Unknown';
+                                if (!grouped[enrolKey]) grouped[enrolKey] = [];
+                                grouped[enrolKey].push(item);
+                            }
+                            const BL_CODES = ['Baseline', 'BL'];
+                            const rows = Object.entries(grouped);
+                            const totalPages = Math.ceil(rows.length / PAGE_SIZE);
+                            const pagedRows = rows.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE);
 
-                                <div className="overflow-x-auto border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm">
-                                    <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                                        <thead className="bg-gray-50 dark:bg-gray-700">
-                                            <tr>
-                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Course Run ID</th>
-                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Enrolment ID</th>
-                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Grant Ref No</th>
-                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Status</th>
-                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Estimated</th>
-                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Paid</th>
-                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Recovery</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                                            {grantsData.data.map((item: any, index: number) => (
-                                                <tr key={index} className="hover:bg-gray-50 dark:hover:bg-gray-700">
-                                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
-                                                        {courseRunId}
-                                                    </td>
-                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
-                                                        {item.enrolment?.referenceNumber || 'N/A'}
-                                                    </td>
-                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
-                                                        {item.referenceNumber || 'N/A'}
-                                                    </td>
-                                                    <td className="px-6 py-4 whitespace-nowrap">
-                                                        <span className={`inline-flex px-2 text-xs leading-5 font-semibold rounded-full border ${getStatusColor(item.status || 'Pending')}`}>
-                                                            {item.status || 'Pending'}
-                                                        </span>
-                                                    </td>
-                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
-                                                        ${item.grantAmount?.estimated?.toFixed(2) || '0.00'}
-                                                    </td>
-                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-green-600 dark:text-green-400 font-medium">
-                                                        ${item.grantAmount?.paid?.toFixed(2) || '0.00'}
-                                                    </td>
-                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-red-600 dark:text-red-400">
-                                                        ${item.grantAmount?.recovery?.toFixed(2) || '0.00'}
-                                                    </td>
+                            return (
+                                <div className="space-y-3">
+                                    {/* Summary */}
+                                    <div className="flex items-center bg-blue-50 dark:bg-blue-900/30 px-4 py-2 rounded-lg border border-blue-100 dark:border-blue-800 text-sm">
+                                        <span className="font-bold text-blue-900 dark:text-blue-300 mr-3">
+                                            {rows.length} Enrolment{rows.length !== 1 ? 's' : ''} &nbsp;·&nbsp; {grantsData.meta?.totalRecords ?? grantsData.data.length} Grant{(grantsData.meta?.totalRecords ?? grantsData.data.length) !== 1 ? 's' : ''}
+                                        </span>
+                                        <span className="text-blue-700 dark:text-blue-400">Course Run: <span className="font-mono">{courseRunId}</span></span>
+                                    </div>
+
+                                    {/* Desktop table */}
+                                    <div className="hidden md:block overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
+                                        <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-xs">
+                                            <thead className="bg-gray-50 dark:bg-gray-700">
+                                                <tr>
+                                                    <th className="px-3 py-2 text-center text-xs font-semibold text-gray-600 dark:text-gray-300 border-r border-gray-200 dark:border-gray-600 uppercase tracking-wider">Enrolment</th>
+                                                    <th colSpan={3} className="px-3 py-2 text-center text-xs font-semibold text-blue-700 dark:text-blue-400 border-r border-gray-200 dark:border-gray-600 uppercase tracking-wider bg-blue-50 dark:bg-blue-900/20">Baseline (BL)</th>
+                                                    <th colSpan={4} className="px-3 py-2 text-center text-xs font-semibold text-purple-700 dark:text-purple-400 border-r border-gray-200 dark:border-gray-600 uppercase tracking-wider bg-purple-50 dark:bg-purple-900/20">MCES / SME / IBF</th>
+                                                    <th className="px-3 py-2 text-center text-xs font-semibold text-green-700 dark:text-green-400 uppercase tracking-wider bg-green-50 dark:bg-green-900/20">Total</th>
                                                 </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
+                                                <tr>
+                                                    <th className="px-3 py-2 text-left font-medium text-gray-500 dark:text-gray-400 whitespace-nowrap border-r border-gray-200 dark:border-gray-600">Enrolment ID</th>
+                                                    <th className="px-3 py-2 text-left font-medium text-blue-600 dark:text-blue-400 whitespace-nowrap bg-blue-50 dark:bg-blue-900/20">Grant Status</th>
+                                                    <th className="px-3 py-2 text-left font-medium text-blue-600 dark:text-blue-400 whitespace-nowrap bg-blue-50 dark:bg-blue-900/20">Grant ID (BL)</th>
+                                                    <th className="px-3 py-2 text-left font-medium text-blue-600 dark:text-blue-400 whitespace-nowrap border-r border-gray-200 dark:border-gray-600 bg-blue-50 dark:bg-blue-900/20">Amount (BL)</th>
+                                                    <th className="px-3 py-2 text-left font-medium text-purple-600 dark:text-purple-400 whitespace-nowrap bg-purple-50 dark:bg-purple-900/20">Grant Status</th>
+                                                    <th className="px-3 py-2 text-left font-medium text-purple-600 dark:text-purple-400 whitespace-nowrap bg-purple-50 dark:bg-purple-900/20">Grant ID</th>
+                                                    <th className="px-3 py-2 text-left font-medium text-purple-600 dark:text-purple-400 whitespace-nowrap bg-purple-50 dark:bg-purple-900/20">Scheme Code</th>
+                                                    <th className="px-3 py-2 text-left font-medium text-purple-600 dark:text-purple-400 whitespace-nowrap border-r border-gray-200 dark:border-gray-600 bg-purple-50 dark:bg-purple-900/20">Amount</th>
+                                                    <th className="px-3 py-2 text-left font-medium text-green-700 dark:text-green-400 whitespace-nowrap bg-green-50 dark:bg-green-900/20">TG Amount</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                                                {pagedRows.map(([enrolmentId, grants]) => {
+                                                    const bl      = grants.find((g: any) => BL_CODES.includes(g.fundingScheme?.code));
+                                                    const mces    = grants.find((g: any) => !BL_CODES.includes(g.fundingScheme?.code));
+                                                    const totalTG = grants.reduce((sum: number, g: any) => sum + (g.grantAmount?.estimated ?? 0), 0);
+                                                    return (
+                                                        <tr key={enrolmentId} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                                                            <td className="px-3 py-3 font-mono text-gray-800 dark:text-gray-200 whitespace-nowrap border-r border-gray-200 dark:border-gray-700">{enrolmentId}</td>
+                                                            <td className="px-3 py-3 whitespace-nowrap bg-blue-50/30 dark:bg-blue-900/10">
+                                                                {bl ? <span className={`inline-flex px-2 py-0.5 text-xs font-semibold rounded-full border ${getStatusColor(bl.status)}`}>{bl.status}</span> : <span className="text-gray-400">—</span>}
+                                                            </td>
+                                                            <td className="px-3 py-3 font-mono text-gray-700 dark:text-gray-300 whitespace-nowrap bg-blue-50/30 dark:bg-blue-900/10">{bl?.referenceNumber || '—'}</td>
+                                                            <td className="px-3 py-3 text-gray-700 dark:text-gray-300 whitespace-nowrap border-r border-gray-200 dark:border-gray-700 bg-blue-50/30 dark:bg-blue-900/10">{bl ? `$${(bl.grantAmount?.estimated ?? 0).toFixed(2)}` : '—'}</td>
+                                                            <td className="px-3 py-3 whitespace-nowrap bg-purple-50/30 dark:bg-purple-900/10">
+                                                                {mces ? <span className={`inline-flex px-2 py-0.5 text-xs font-semibold rounded-full border ${getStatusColor(mces.status)}`}>{mces.status}</span> : <span className="text-gray-400">—</span>}
+                                                            </td>
+                                                            <td className="px-3 py-3 font-mono text-gray-700 dark:text-gray-300 whitespace-nowrap bg-purple-50/30 dark:bg-purple-900/10">{mces?.referenceNumber || '—'}</td>
+                                                            <td className="px-3 py-3 whitespace-nowrap bg-purple-50/30 dark:bg-purple-900/10">
+                                                                {mces ? <span className="font-mono text-xs bg-purple-100 dark:bg-purple-900/40 text-purple-800 dark:text-purple-300 px-1.5 py-0.5 rounded">{mces.fundingScheme?.code}</span> : '—'}
+                                                            </td>
+                                                            <td className="px-3 py-3 text-gray-700 dark:text-gray-300 whitespace-nowrap border-r border-gray-200 dark:border-gray-700 bg-purple-50/30 dark:bg-purple-900/10">{mces ? `$${(mces.grantAmount?.estimated ?? 0).toFixed(2)}` : '—'}</td>
+                                                            <td className="px-3 py-3 font-bold text-green-700 dark:text-green-400 whitespace-nowrap bg-green-50/30 dark:bg-green-900/10">${totalTG.toFixed(2)}</td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
+                                    </div>
+
+                                    {/* Mobile cards */}
+                                    <div className="md:hidden space-y-4">
+                                        {pagedRows.map(([enrolmentId, grants]) => {
+                                            const bl      = grants.find((g: any) => BL_CODES.includes(g.fundingScheme?.code));
+                                            const mces    = grants.find((g: any) => !BL_CODES.includes(g.fundingScheme?.code));
+                                            const totalTG = grants.reduce((sum: number, g: any) => sum + (g.grantAmount?.estimated ?? 0), 0);
+                                            return (
+                                                <div key={enrolmentId} className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+                                                    {/* Enrolment header */}
+                                                    <div className="bg-gray-50 dark:bg-gray-700 px-4 py-2 flex items-center justify-between">
+                                                        <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Enrolment ID</span>
+                                                        <span className="font-mono text-sm font-bold text-gray-800 dark:text-white">{enrolmentId}</span>
+                                                    </div>
+                                                    <div className="divide-y divide-gray-100 dark:divide-gray-700">
+                                                        {/* BL section */}
+                                                        <div className="bg-blue-50/50 dark:bg-blue-900/10 px-4 py-3">
+                                                            <p className="text-xs font-bold text-blue-700 dark:text-blue-400 uppercase mb-2">Baseline (BL)</p>
+                                                            {bl ? (
+                                                                <div className="grid grid-cols-2 gap-2 text-sm">
+                                                                    <div>
+                                                                        <p className="text-xs text-gray-500 dark:text-gray-400">Status</p>
+                                                                        <span className={`inline-flex mt-0.5 px-2 py-0.5 text-xs font-semibold rounded-full border ${getStatusColor(bl.status)}`}>{bl.status}</span>
+                                                                    </div>
+                                                                    <div>
+                                                                        <p className="text-xs text-gray-500 dark:text-gray-400">Amount</p>
+                                                                        <p className="font-semibold text-gray-800 dark:text-gray-200">${(bl.grantAmount?.estimated ?? 0).toFixed(2)}</p>
+                                                                    </div>
+                                                                    <div className="col-span-2">
+                                                                        <p className="text-xs text-gray-500 dark:text-gray-400">Grant ID</p>
+                                                                        <p className="font-mono text-xs text-gray-700 dark:text-gray-300">{bl.referenceNumber}</p>
+                                                                    </div>
+                                                                </div>
+                                                            ) : <p className="text-sm text-gray-400">—</p>}
+                                                        </div>
+                                                        {/* MCES section */}
+                                                        <div className="bg-purple-50/50 dark:bg-purple-900/10 px-4 py-3">
+                                                            <p className="text-xs font-bold text-purple-700 dark:text-purple-400 uppercase mb-2">MCES / SME / IBF</p>
+                                                            {mces ? (
+                                                                <div className="grid grid-cols-2 gap-2 text-sm">
+                                                                    <div>
+                                                                        <p className="text-xs text-gray-500 dark:text-gray-400">Status</p>
+                                                                        <span className={`inline-flex mt-0.5 px-2 py-0.5 text-xs font-semibold rounded-full border ${getStatusColor(mces.status)}`}>{mces.status}</span>
+                                                                    </div>
+                                                                    <div>
+                                                                        <p className="text-xs text-gray-500 dark:text-gray-400">Scheme Code</p>
+                                                                        <span className="inline-flex mt-0.5 font-mono text-xs bg-purple-100 dark:bg-purple-900/40 text-purple-800 dark:text-purple-300 px-1.5 py-0.5 rounded">{mces.fundingScheme?.code}</span>
+                                                                    </div>
+                                                                    <div>
+                                                                        <p className="text-xs text-gray-500 dark:text-gray-400">Amount</p>
+                                                                        <p className="font-semibold text-gray-800 dark:text-gray-200">${(mces.grantAmount?.estimated ?? 0).toFixed(2)}</p>
+                                                                    </div>
+                                                                    <div>
+                                                                        <p className="text-xs text-gray-500 dark:text-gray-400">Grant ID</p>
+                                                                        <p className="font-mono text-xs text-gray-700 dark:text-gray-300">{mces.referenceNumber}</p>
+                                                                    </div>
+                                                                </div>
+                                                            ) : <p className="text-sm text-gray-400">—</p>}
+                                                        </div>
+                                                        {/* Total */}
+                                                        <div className="bg-green-50/50 dark:bg-green-900/10 px-4 py-3 flex items-center justify-between">
+                                                            <span className="text-xs font-bold text-green-700 dark:text-green-400 uppercase">Total TG Amount</span>
+                                                            <span className="text-base font-bold text-green-700 dark:text-green-400">${totalTG.toFixed(2)}</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+
+                                    {/* Pagination */}
+                                    {totalPages > 1 && (
+                                        <div className="flex items-center justify-between pt-2">
+                                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                                                Showing {currentPage * PAGE_SIZE + 1}–{Math.min((currentPage + 1) * PAGE_SIZE, rows.length)} of {rows.length} enrolments
+                                            </p>
+                                            <div className="flex items-center gap-1">
+                                                <button
+                                                    onClick={() => setCurrentPage(0)}
+                                                    disabled={currentPage === 0}
+                                                    className="px-2 py-1 text-xs rounded border border-gray-300 dark:border-gray-600 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-gray-300"
+                                                >«</button>
+                                                <button
+                                                    onClick={() => setCurrentPage(p => Math.max(0, p - 1))}
+                                                    disabled={currentPage === 0}
+                                                    className="px-2 py-1 text-xs rounded border border-gray-300 dark:border-gray-600 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-gray-300"
+                                                >‹</button>
+                                                {Array.from({ length: totalPages }, (_, i) => i).filter(i =>
+                                                    i === 0 || i === totalPages - 1 || Math.abs(i - currentPage) <= 1
+                                                ).reduce<(number | string)[]>((acc, i, idx, arr) => {
+                                                    if (idx > 0 && (i as number) - (arr[idx - 1] as number) > 1) acc.push('…');
+                                                    acc.push(i);
+                                                    return acc;
+                                                }, []).map((item, idx) =>
+                                                    item === '…' ? (
+                                                        <span key={`ellipsis-${idx}`} className="px-1 text-xs text-gray-400">…</span>
+                                                    ) : (
+                                                        <button
+                                                            key={item}
+                                                            onClick={() => setCurrentPage(item as number)}
+                                                            className={`px-2.5 py-1 text-xs rounded border ${currentPage === item ? 'bg-blue-600 text-white border-blue-600' : 'border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-gray-300'}`}
+                                                        >{(item as number) + 1}</button>
+                                                    )
+                                                )}
+                                                <button
+                                                    onClick={() => setCurrentPage(p => Math.min(totalPages - 1, p + 1))}
+                                                    disabled={currentPage === totalPages - 1}
+                                                    className="px-2 py-1 text-xs rounded border border-gray-300 dark:border-gray-600 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-gray-300"
+                                                >›</button>
+                                                <button
+                                                    onClick={() => setCurrentPage(totalPages - 1)}
+                                                    disabled={currentPage === totalPages - 1}
+                                                    className="px-2 py-1 text-xs rounded border border-gray-300 dark:border-gray-600 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-gray-300"
+                                                >»</button>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
-                            </div>
-                        ) : (
+                            );
+                        })() : (
                             <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-lg p-8 text-center">
                                 <Icon name={IconName.InfoCircle} className="w-12 h-12 mx-auto text-yellow-500 dark:text-yellow-400 mb-3" />
                                 <h4 className="text-lg font-bold text-yellow-800 dark:text-yellow-300 mb-2">No Records Found</h4>
@@ -3064,6 +3150,8 @@ export const SearchCourseRunsView: React.FC = () => {
     const [courseRunsData, setCourseRunsData] = useState<any>(null);
     const [searchError, setSearchError] = useState<string | null>(null);
     const [currentPage, setCurrentPage] = useState(0);
+    const [displayPage, setDisplayPage] = useState(0);
+    const DISPLAY_PAGE_SIZE = 10;
 
     const inputClasses = "block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-500";
 
@@ -3071,6 +3159,7 @@ export const SearchCourseRunsView: React.FC = () => {
         setIsSearching(true);
         setSearchError(null);
         setCourseRunsData(null);
+        setDisplayPage(0);
 
         try {
             const response = await fetch(
@@ -3102,7 +3191,17 @@ export const SearchCourseRunsView: React.FC = () => {
 
     const handlePageChange = async (page: number) => {
         setCurrentPage(page);
+        setDisplayPage(0);
         await fetchCourseRuns(courseCode, page);
+    };
+
+    // Format trainer list from linkCourseRunTrainer array
+    const formatTrainers = (trainers: any[] | undefined): string => {
+        if (!trainers || trainers.length === 0) return '--';
+        const names = trainers
+            .map((t: any) => t.trainer?.name || t.name)
+            .filter(Boolean);
+        return names.length > 0 ? names.join(', ') : '--';
     };
 
     // Format YYYYMMDD integer to readable date
@@ -3163,13 +3262,19 @@ export const SearchCourseRunsView: React.FC = () => {
         const courseRef = courseRunsData.course?.referenceNumber || courseCode;
 
         if (courseRuns && Array.isArray(courseRuns) && courseRuns.length > 0) {
+            const totalDisplayPages = Math.ceil(courseRuns.length / DISPLAY_PAGE_SIZE);
+            const pagedRuns = courseRuns.slice(displayPage * DISPLAY_PAGE_SIZE, (displayPage + 1) * DISPLAY_PAGE_SIZE);
+
             return (
-                <div className="space-y-6">
+                <div className="space-y-4">
                     <div className="flex justify-between items-center bg-blue-50 dark:bg-blue-900/30 p-4 rounded-lg border border-blue-100 dark:border-blue-800">
                         <div>
-                            <h4 className="font-bold text-blue-900 dark:text-blue-300">Course Runs: {courseRuns.length} results (page {currentPage})</h4>
+                            <h4 className="font-bold text-blue-900 dark:text-blue-300">Course Runs: {courseRuns.length} results</h4>
                             <p className="text-sm text-blue-700 dark:text-blue-400">Course Reference: {courseRef}</p>
                         </div>
+                        <p className="text-sm text-blue-700 dark:text-blue-400">
+                            Showing {displayPage * DISPLAY_PAGE_SIZE + 1}–{Math.min((displayPage + 1) * DISPLAY_PAGE_SIZE, courseRuns.length)} of {courseRuns.length}
+                        </p>
                     </div>
 
                     <div className="overflow-x-auto border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm">
@@ -3184,11 +3289,12 @@ export const SearchCourseRunsView: React.FC = () => {
                                     <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">QR Code Link</th>
                                     <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Mode</th>
                                     <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Venue</th>
+                                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Trainer</th>
                                     <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Vacancy</th>
                                 </tr>
                             </thead>
                             <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                                {courseRuns.map((run: any, index: number) => (
+                                {pagedRuns.map((run: any, index: number) => (
                                     <tr key={index} className="hover:bg-gray-50 dark:hover:bg-gray-700">
                                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600 dark:text-blue-400">
                                             {run.id || 'N/A'}
@@ -3226,6 +3332,9 @@ export const SearchCourseRunsView: React.FC = () => {
                                         <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-300 min-w-[300px]" title={formatVenue(run.venue)}>
                                             {formatVenue(run.venue)}
                                         </td>
+                                        <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-300 min-w-[150px]">
+                                            {formatTrainers(run.linkCourseRunTrainer)}
+                                        </td>
                                         <td className="px-6 py-4 whitespace-nowrap">
                                             <span className={`inline-flex px-2 text-xs leading-5 font-semibold rounded-full border ${getVacancyColor(run.courseVacancy?.code || '')}`}>
                                                 {run.courseVacancy?.description || 'N/A'}
@@ -3236,6 +3345,39 @@ export const SearchCourseRunsView: React.FC = () => {
                             </tbody>
                         </table>
                     </div>
+
+                    {/* Pagination controls */}
+                    {totalDisplayPages > 1 && (
+                        <div className="flex items-center justify-center gap-2 pt-2">
+                            <button
+                                onClick={() => setDisplayPage(p => Math.max(0, p - 1))}
+                                disabled={displayPage === 0}
+                                className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-gray-600"
+                            >
+                                Previous
+                            </button>
+                            {Array.from({ length: totalDisplayPages }, (_, i) => (
+                                <button
+                                    key={i}
+                                    onClick={() => setDisplayPage(i)}
+                                    className={`px-3 py-1.5 text-sm border rounded-md ${
+                                        i === displayPage
+                                            ? 'bg-blue-600 border-blue-600 text-white'
+                                            : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600'
+                                    }`}
+                                >
+                                    {i + 1}
+                                </button>
+                            ))}
+                            <button
+                                onClick={() => setDisplayPage(p => Math.min(totalDisplayPages - 1, p + 1))}
+                                disabled={displayPage === totalDisplayPages - 1}
+                                className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-gray-600"
+                            >
+                                Next
+                            </button>
+                        </div>
+                    )}
                 </div>
             );
         }
@@ -3353,7 +3495,8 @@ export const SearchCourseRunsView: React.FC = () => {
                                 onClick={() => {
                                     setCourseRunsData(null);
                                     setCourseCode('');
-                                    setCurrentPage(1);
+                                    setCurrentPage(0);
+                                    setDisplayPage(0);
                                 }}
                             >
                                 Clear Results
@@ -4172,11 +4315,8 @@ export const DeleteCourseRunView: React.FC = () => {
     const [courseRunId, setCourseRunId] = useState<string>('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [result, setResult] = useState<any>(null);
-    const [webhookData, setWebhookData] = useState<any>(null); // Store complete webhook response
     const [error, setError] = useState<string | null>(null);
     const [showConfirm, setShowConfirm] = useState(false);
-
-    const WEBHOOK_URL = 'https://n8n.srv1231536.hstgr.cloud/webhook/57ee587b-5e8d-4927-8717-30833ba1b7ea';
 
     const inputClasses = "block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-500";
 
@@ -4187,142 +4327,24 @@ export const DeleteCourseRunView: React.FC = () => {
         setResult(null);
 
         try {
-            const payload = {
-                courseReferenceNumber: courseReferenceNumber.trim(),
-                courseRunId: courseRunId.trim(),
-                timestamp: new Date().toISOString(),
-                source: 'admin-delete-course-run'
-            };
-
-            console.log('📤 Delete course run payload:', payload);
-
-            const response = await fetch(WEBHOOK_URL, {
+            const response = await fetch('/api/admin/ssg-delete-course-run', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(payload)
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    courseReferenceNumber: courseReferenceNumber.trim(),
+                    courseRunId: courseRunId.trim(),
+                }),
             });
 
+            const data = await response.json();
+
             if (!response.ok) {
-                if (response.status === 500) {
-                    throw new Error('SSG API server error. The service may be temporarily unavailable. Please try again later.');
-                }
-                throw new Error(`Unable to connect to SSG API (Error ${response.status}). Please check your connection and try again.`);
+                setError(data?.error || `Failed to delete course run (${response.status})`);
+                setResult(data);
+                return;
             }
 
-            // Safe JSON parsing
-            const text = await response.text();
-            let data;
-            try {
-                data = text ? JSON.parse(text) : {};
-            } catch (e) {
-                console.error('Failed to parse JSON response:', text);
-                throw new Error(`Invalid JSON response from webhook`);
-            }
-            console.log('✅ Delete course run response:', data);
-
-            // Check if webhook returned empty response
-            if (!data || (typeof data === 'object' && Object.keys(data).length === 0)) {
-                throw new Error('Webhook returned empty response. Please check your n8n workflow configuration.');
-            }
-
-            // Store the complete webhook response for raw display (after validation)
-            setWebhookData(data);
-
-            // Parse response - handle various response formats
-            let parsedResult = data;
-
-            // If response has a 'result' property, use that
-            if (data?.result !== undefined && data?.result !== null) {
-                // If result is a string, try to parse it as JSON
-                if (typeof data.result === 'string') {
-                    try {
-                        parsedResult = JSON.parse(data.result);
-                    } catch (e) {
-                        // If parsing fails, treat the string as error message
-                        console.error('Failed to parse result string:', data.result);
-                        parsedResult = { error: { message: data.result } };
-                    }
-                } else if (typeof data.result === 'object') {
-                    // If result is already an object, check if it's an AxiosError with embedded JSON
-                    if (data.result.message && typeof data.result.message === 'string') {
-                        // Handle format like "400 - \"{...json...}\""
-                        const match = data.result.message.match(/^\d+\s*-\s*"([\s\S]+)"$/);
-                        if (match) {
-                            try {
-                                // Unescape the JSON string and parse it
-                                const unescaped = match[1].replace(/\\n/g, '').replace(/\\"/g, '"');
-                                parsedResult = JSON.parse(unescaped);
-                            } catch (e) {
-                                console.error('Failed to parse embedded JSON:', e);
-                                parsedResult = data.result;
-                            }
-                        } else {
-                            parsedResult = data.result;
-                        }
-                    } else {
-                        // If result is already an object, use it directly
-                        parsedResult = data.result;
-                    }
-                } else {
-                    // For other types, treat as error
-                    parsedResult = { error: { message: String(data.result) } };
-                }
-            }
-
-            // Check for error status - handle both nested error object and root level errors
-            const hasError = (parsedResult?.error?.details?.length > 0) ||
-                (parsedResult?.error?.message) ||
-                (parsedResult?.status && parsedResult.status >= 400) ||
-                (parsedResult?.details?.length > 0) ||
-                (parsedResult?.message && parsedResult.message.toLowerCase().includes('cannot'));
-
-            // Check if it's a "record not found" error - this means already deleted in SSG
-            const isRecordNotFound = parsedResult?.error?.details?.some(
-                (detail: any) => detail.message?.toLowerCase().includes('record not found')
-            ) || parsedResult?.error?.message?.toLowerCase().includes('record not found') ||
-                parsedResult?.details?.some(
-                    (detail: any) => detail.message?.toLowerCase().includes('record not found')
-                ) || parsedResult?.message?.toLowerCase().includes('record not found');
-
-            // Always mark as deleted in database for success OR "record not found"
-            if (!hasError || isRecordNotFound) {
-                // Either success OR "record not found" (already deleted) - mark as deleted in local database
-                try {
-                    console.log('🔄 Calling local database API to mark course run as deleted:', courseRunId.trim());
-
-                    const dbResponse = await fetch('/api/admin/delete-course-run', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ courseRunId: courseRunId.trim() })
-                    });
-
-                    console.log('📥 Database API response status:', dbResponse.status);
-
-                    if (dbResponse.ok) {
-                        const dbData = await dbResponse.json();
-                        console.log('✅ Course run marked as deleted in database:', dbData);
-                    } else {
-                        const dbError = await dbResponse.json().catch(() => ({}));
-                        console.error('❌ Database update failed:', dbError);
-                    }
-                } catch (dbErr) {
-                    console.error('❌ Error updating database:', dbErr);
-                }
-            }
-
-            // Show error message if there's an error (including "record not found")
-            if (hasError) {
-                const errorMessage = parsedResult?.error?.details?.[0]?.message ||
-                    parsedResult?.error?.message ||
-                    parsedResult?.details?.[0]?.message ||
-                    parsedResult?.message ||
-                    'Failed to delete course run';
-                setError(errorMessage);
-            }
-
-            setResult(parsedResult);
+            setResult(data);
         } catch (err) {
             console.error('❌ Error deleting course run:', err);
             setError(err instanceof Error ? err.message : 'Failed to delete course run');
@@ -4335,7 +4357,6 @@ export const DeleteCourseRunView: React.FC = () => {
         setCourseReferenceNumber('');
         setCourseRunId('');
         setResult(null);
-        setWebhookData(null);
         setError(null);
         setShowConfirm(false);
     };
@@ -4475,7 +4496,7 @@ export const DeleteCourseRunView: React.FC = () => {
                             View Raw Response
                         </summary>
                         <pre className="mt-2 text-xs bg-gray-100 dark:bg-gray-800 p-3 rounded overflow-auto max-h-60">
-                            {JSON.stringify(webhookData || result, null, 2)}
+                            {JSON.stringify(result, null, 2)}
                         </pre>
                     </details>
                 </Card>
@@ -4487,32 +4508,6 @@ export const DeleteCourseRunView: React.FC = () => {
 // Export assessment views from separate file
 export { SearchAssessmentsView, ViewAssessmentView } from './AssessmentViews';
 
-// ─── Shared SSG error parser for n8n AxiosError responses ────────────────────
-
-const parseSsgErrorMessage = (errObj: any): string => {
-    // errObj.message format: "404 - \"{ escaped JSON }\""
-    const msg: string = errObj?.message || '';
-    const match = msg.match(/^\d+\s*-\s*"([\s\S]+)"$/);
-    if (match) {
-        try {
-            const inner = JSON.parse(match[1]);
-            const details = inner.error?.details;
-            if (Array.isArray(details) && details.length > 0) {
-                const msgs = details.map((d: any) => d.message).filter(Boolean);
-                if (msgs.length > 0) return msgs.join('. ');
-            }
-            const innerMsg: string = inner.error?.message || '';
-            if (innerMsg === 'Not Found') return 'Not Found — No record matches the provided details.';
-            if (innerMsg === 'Internal Server Error') return 'Internal Server Error — The service is temporarily unavailable. Please try again later.';
-            if (innerMsg === 'Bad Request') return 'Bad Request — The request was invalid. Please check your input and try again.';
-            if (innerMsg) return innerMsg;
-        } catch { /* fall through */ }
-    }
-    if (errObj?.status === 500 || msg.includes('500')) return 'Internal Server Error — The service is temporarily unavailable. Please try again later.';
-    if (errObj?.status === 400 || msg.includes('400')) return 'Bad Request — The request was invalid. Please check your input and try again.';
-    return msg || 'An unexpected error occurred. Please try again.';
-};
-
 // ─── Course Sessions View ─────────────────────────────────────────────────────
 
 export const CourseSessionsView: React.FC = () => {
@@ -4522,8 +4517,6 @@ export const CourseSessionsView: React.FC = () => {
     const [isSearching, setIsSearching] = useState(false);
     const [searchError, setSearchError] = useState<string | null>(null);
     const [parsedData, setParsedData] = useState<any>(null);
-
-    const WEBHOOK_URL = 'https://n8n.srv1231536.hstgr.cloud/webhook/117adf9a-7802-439c-aa2d-7d2e0d10fe13';
 
     const isFormValid = uen.trim() && courseCode.trim() && courseRunId.trim();
 
@@ -4538,54 +4531,26 @@ export const CourseSessionsView: React.FC = () => {
         setParsedData(null);
 
         try {
-            const payload = {
-                uen: uen.trim(),
+            const params = new URLSearchParams({
                 courseCode: courseCode.trim(),
-                courseRunId: courseRunId.trim(),
-            };
-
-            const response = await fetch(WEBHOOK_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload),
+                uen: uen.trim(),
             });
-         
-            const text = await response.text();
-               console.log('📤 Fetch sessions payload:', JSON.parse(text));
-            let data: any;
-            try {
-                data = text ? JSON.parse(text) : {};
-            } catch {
-                throw new Error('Invalid response from server.');
+
+            const response = await fetch(
+                `/api/ssg/courses/runs/${encodeURIComponent(courseRunId.trim())}/sessions?${params}`
+            );
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.error || `Request failed with status ${response.status}`);
             }
 
-            // Handle array wrapper from n8n
-            const item = Array.isArray(data) ? data[0] : data;
-
-            // n8n AxiosError — SSG returned a non-2xx response
-            if (item?.error && typeof item.error === 'object' && item.error.message) {
-                throw new Error(parseSsgErrorMessage(item.error));
-            }
-
-            // SSG returned a non-200 status inside its own envelope
-            if (item?.status && item.status !== 200) {
-                const details = item.error?.details;
-                if (Array.isArray(details) && details.length > 0) {
-                    const msgs = details.map((d: any) => d.message).filter(Boolean);
-                    if (msgs.length > 0) throw new Error(msgs.join('. '));
-                }
-                const statusMsg: string = item.error?.message || '';
-                if (statusMsg === 'Not Found') throw new Error('Not Found — No record matches the provided details.');
-                if (statusMsg === 'Internal Server Error') throw new Error('Internal Server Error — The service is temporarily unavailable. Please try again later.');
-                if (statusMsg === 'Bad Request') throw new Error('Bad Request — The request was invalid. Please check your input and try again.');
-                throw new Error(statusMsg || `Request failed with status ${item.status}.`);
-            }
-
-            if (!item?.result?.sessions) {
+            if (!data?.data?.result?.sessions) {
                 throw new Error('Not Found — No sessions were returned for the provided details.');
             }
 
-            setParsedData(item);
+            setParsedData(data.data);
         } catch (err) {
             setSearchError(err instanceof Error ? err.message : 'Failed to fetch course sessions.');
         } finally {
@@ -4772,10 +4737,19 @@ export const CourseSessionsView: React.FC = () => {
                                             </td>
                                             <td className="py-3 pr-4 text-gray-600 dark:text-gray-400 text-xs">
                                                 {session.venue ? (
-                                                    <>
+                                                    <div className="space-y-0.5">
+                                                        {session.venue.room && <p className="font-medium text-gray-700 dark:text-gray-300">{session.venue.room}</p>}
                                                         <p>{[session.venue.building, session.venue.block && `Blk ${session.venue.block}`].filter(Boolean).join(', ')}</p>
+                                                        {(session.venue.floor || session.venue.unit) && (
+                                                            <p>
+                                                                {[session.venue.floor && `Floor ${session.venue.floor}`, session.venue.unit && `Unit ${session.venue.unit}`].filter(Boolean).join(', ')}
+                                                            </p>
+                                                        )}
                                                         <p>{[session.venue.street, session.venue.postalCode && `S(${session.venue.postalCode})`].filter(Boolean).join(', ')}</p>
-                                                    </>
+                                                        {session.venue.wheelChairAccess && (
+                                                            <p className="text-green-600 dark:text-green-400">♿ Wheelchair Accessible</p>
+                                                        )}
+                                                    </div>
                                                 ) : '—'}
                                             </td>
                                             <td className="py-3 pr-4">
@@ -4838,8 +4812,6 @@ export const CourseSessionAttendanceView: React.FC = () => {
     const [notFound, setNotFound] = useState(false);
     const [parsedData, setParsedData] = useState<any>(null);
 
-    const WEBHOOK_URL = 'https://n8n.srv1231536.hstgr.cloud/webhook/c0d24850-9317-4ccc-b4b8-111e4c114ed8';
-
     const isFormValid = uen.trim() && courseCode.trim() && sessionId.trim() && courseRunId.trim();
 
     const handleSearch = async () => {
@@ -4854,60 +4826,26 @@ export const CourseSessionAttendanceView: React.FC = () => {
         setParsedData(null);
 
         try {
-            const payload = {
+            const params = new URLSearchParams({
                 uen: uen.trim(),
                 courseCode: courseCode.trim(),
-                sessionId: sessionId.trim(),
                 courseRunId: courseRunId.trim(),
-            };
-
-            const response = await fetch(WEBHOOK_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload),
+                sessionId: sessionId.trim(),
             });
 
-            const text = await response.text();
-            let data: any;
-            try {
-                data = text ? JSON.parse(text) : {};
-            } catch {
-                throw new Error('Invalid response from server.');
-            }
+            const response = await fetch(`/api/ssg/session-attendance?${params}`);
+            const data = await response.json();
 
-            // Handle array wrapper from n8n
-            const item = Array.isArray(data) ? data[0] : data;
-
-            // n8n AxiosError — check HTTP status code to determine how to handle
-            if (item?.error && typeof item.error === 'object' && item.error.status) {
-                const httpStatus = item.error.status;
-                if (httpStatus === 404) {
+            if (!data.success) {
+                if (response.status === 404) {
                     setNotFound(true);
-                    return;
+                } else {
+                    setSearchError(data.error || 'Failed to fetch attendance data.');
                 }
-                if (httpStatus === 500) throw new Error('Internal Server Error — The service is temporarily unavailable. Please try again later.');
-                if (httpStatus === 400) throw new Error('Bad Request — The request was invalid. Please check your input and try again.');
-                throw new Error(`Request failed with status ${httpStatus}. Please try again.`);
-            }
-
-            const resultRaw = item?.result;
-
-            // Handle both formats:
-            // 1. n8n wraps SSG response: { "result": "{ JSON string }" }
-            // 2. n8n passes SSG response directly: { "data": { "courseRun": {...} }, ... }
-            let parsedPayload: any = null;
-            if (resultRaw && resultRaw !== '') {
-                parsedPayload = typeof resultRaw === 'string' ? JSON.parse(resultRaw) : resultRaw;
-            } else if (item?.data?.courseRun) {
-                parsedPayload = item;
-            }
-
-            if (!parsedPayload) {
-                setNotFound(true);
                 return;
             }
 
-            setParsedData(parsedPayload);
+            setParsedData(data.data);
         } catch (err) {
             setSearchError(err instanceof Error ? err.message : 'Failed to fetch attendance data.');
         } finally {
@@ -4925,7 +4863,8 @@ export const CourseSessionAttendanceView: React.FC = () => {
         setParsedData(null);
     };
 
-    const courseRun = parsedData?.data?.courseRun;
+    // API returns decrypted SSG data directly — handle both possible nesting levels
+    const courseRun = parsedData?.data?.courseRun ?? parsedData?.courseRun;
     const session = courseRun?.sessions?.[0];
     const attendance: any[] = session?.attendance ?? [];
     const trainees = attendance.filter((a) => a.trainee?.attendeeType === 'Trainee');
@@ -5038,7 +4977,7 @@ export const CourseSessionAttendanceView: React.FC = () => {
             {/* Not Found Error */}
             {notFound && !parsedData && !isSearching && (
                 <Card className="p-6 border-red-200 dark:border-red-700">
-                    <div className="flex items-start gap-3 mb-4">
+                    <div className="flex items-start gap-3">
                         <div className="flex-shrink-0 w-10 h-10 rounded-full bg-red-100 dark:bg-red-900/40 flex items-center justify-center">
                             <Icon name={IconName.Close} className="w-5 h-5 text-red-600 dark:text-red-400" />
                         </div>
@@ -5047,24 +4986,6 @@ export const CourseSessionAttendanceView: React.FC = () => {
                             <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
                                 No course session attendance record could be found for the provided details.
                             </p>
-                        </div>
-                    </div>
-                    <div className="bg-red-50 dark:bg-red-900/20 rounded-lg p-4 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-                        <div>
-                            <span className="font-medium text-gray-700 dark:text-gray-300">Company UEN: </span>
-                            <span className="font-mono text-red-700 dark:text-red-300">{uen}</span>
-                        </div>
-                        <div>
-                            <span className="font-medium text-gray-700 dark:text-gray-300">Course Code: </span>
-                            <span className="font-mono text-red-700 dark:text-red-300">{courseCode}</span>
-                        </div>
-                        <div>
-                            <span className="font-medium text-gray-700 dark:text-gray-300">Session ID: </span>
-                            <span className="font-mono text-red-700 dark:text-red-300">{sessionId}</span>
-                        </div>
-                        <div>
-                            <span className="font-medium text-gray-700 dark:text-gray-300">Course Run ID: </span>
-                            <span className="font-mono text-red-700 dark:text-red-300">{courseRunId}</span>
                         </div>
                     </div>
                 </Card>

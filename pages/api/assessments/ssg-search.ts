@@ -4,19 +4,19 @@ import { HttpClient, HTTPRequestBuilder, HttpMethod } from '../../../lib/ssg/uti
 import crypto from 'crypto';
 
 /**
- * POST /api/grants/search
- * Search grants by course run ID via SSG TPG API.
- * Body: { courseRunId, page?, pageSize? }
+ * POST /api/assessments/ssg-search
+ * Search assessments via SSG TPG API.
+ * Body: { courseRunId, courseReferenceNumber, enrolmentReferenceNumber?, traineeIdNumber? }
  */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { courseRunId } = req.body;
+  const { courseRunId, courseReferenceNumber, enrolmentReferenceNumber, traineeIdNumber } = req.body;
 
-  if (!courseRunId) {
-    return res.status(400).json({ success: false, error: 'courseRunId is required' });
+  if (!courseRunId || !courseReferenceNumber) {
+    return res.status(400).json({ success: false, error: 'courseRunId and courseReferenceNumber are required' });
   }
 
   try {
@@ -29,30 +29,39 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const encKey = Buffer.from(process.env.ENCRYPTION_KEY || credentials.encryptionKey, 'base64');
     const iv = Buffer.from('SSGAPIInitVector', 'utf8');
 
-    const ssgPayload = {
-      grants: {
+    const ssgPayload: any = {
+      parameters: {
+        page: 0,
+        pageSize: 100
+      },
+      assessments: {
         course: {
           run: {
             id: String(courseRunId)
-          }
+          },
+          referenceNumber: String(courseReferenceNumber)
         },
         trainingPartner: {
           uen: credentials.uen || process.env.TRAINING_PARTNER_UEN || '201200696W',
           code: process.env.TRAINING_PARTNER_CODE || '201200696W-01'
         }
-      },
-      parameters: {
-        page: 0,
-        pageSize: 100
       }
     };
+
+    if (enrolmentReferenceNumber?.trim()) {
+      ssgPayload.assessments.enrolment = { referenceNumber: enrolmentReferenceNumber.trim() };
+    }
+
+    if (traineeIdNumber?.trim()) {
+      ssgPayload.assessments.trainee = { id: traineeIdNumber.trim() };
+    }
 
     const cipher = crypto.createCipheriv('aes-256-cbc', encKey, iv);
     let encryptedPayload = cipher.update(JSON.stringify(ssgPayload), 'utf8', 'base64');
     encryptedPayload += cipher.final('base64');
 
     const builder = new HTTPRequestBuilder()
-      .withEndpoint(ssgBaseUrl, '/tpg/grants/search')
+      .withEndpoint(ssgBaseUrl, '/tpg/assessments/search')
       .withMethod(HttpMethod.POST)
       .withBody(encryptedPayload);
 
@@ -68,7 +77,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const httpResponse = await httpClient.request(builder.build());
 
     if (httpResponse.status !== 200) {
-      console.error(`❌ SSG search grants error [${httpResponse.status}]:`, JSON.stringify(httpResponse.data));
+      console.error(`❌ SSG search assessments error [${httpResponse.status}]:`, JSON.stringify(httpResponse.data));
       return res.status(httpResponse.status).json({
         success: false,
         error: `SSG error ${httpResponse.status}`,
@@ -86,14 +95,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     decrypted += decipher.final('utf8');
     const parsed = JSON.parse(decrypted);
 
-    console.log('📦 SSG search grants response:', JSON.stringify(parsed));
+    console.log('📦 SSG search assessments response:', JSON.stringify(parsed));
 
     // SSG always returns "error": {} even on success — only treat as error if code/message present
     const hasError = parsed?.error && (parsed.error.code || parsed.error.message);
     if (hasError) {
       const decryptedStatus = Number(parsed.status) || 400;
       if (decryptedStatus === 403 || decryptedStatus === 404) {
-        return res.status(404).json({ success: false, error: 'No grants found for this Course Run ID.' });
+        return res.status(404).json({ success: false, error: 'No assessments found for the given criteria.' });
       }
       return res.status(decryptedStatus).json({ success: false, error: parsed.error.message });
     }
@@ -101,7 +110,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(200).json({ success: true, data: parsed?.data ?? [], meta: parsed?.meta ?? {} });
 
   } catch (error) {
-    console.error('❌ Search grants error:', error);
+    console.error('❌ Search assessments error:', error);
     return res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : 'Internal server error',

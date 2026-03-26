@@ -49,7 +49,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(400).json({ error: 'Request body is required for creating course runs' });
     }
 
-    console.log('📝 Raw request body received for course run creation:', JSON.stringify(requestData, null, 2));
 
     // The frontend already sends the correct nested structure that matches Python AddRunIndividualInfo.payload()
     // We just need to pass the runs through without transformation, as they match the expected SSG API format
@@ -85,7 +84,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       runs: cleanedRuns // Use the original nested structure from frontend
     };
 
-    console.log('🔄 AddRunInfo structure for course-api.ts:', JSON.stringify(addRunInfo, null, 2));
 
     // Build the final payload structure that matches Python AddRunInfo.payload()
     const finalPayload = {
@@ -98,7 +96,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     };
 
-    console.log('🔄 Final payload for SSG API (matches Python structure):', JSON.stringify(finalPayload, null, 2));
 
     // Build the request manually to bypass TypeScript validation issues
     // This matches exactly what the Python add_course_run.py does
@@ -106,7 +103,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const { Cryptography } = await import('../../../../../lib/ssg/utils/cryptography');
 
     const builder = new HTTPRequestBuilder()
-      .withEndpoint(process.env.SSG_API_BASE_URL!, '/courses/courseRuns/publish')
+      .withEndpoint(process.env.SSG_API_URL || 'https://api.ssg-wsg.sg', '/courses/courseRuns/publish')
       .withMethod(HttpMethod.POST)
       .withHeader('Content-Type', 'application/json');
 
@@ -133,22 +130,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     
     // Create HTTP client and make the request
     const { HttpClient } = await import('../../../../../lib/ssg/utils/http-utils');
-    const httpClient = new HttpClient(process.env.SSG_API_BASE_URL!, {
+    const httpClient = new HttpClient(process.env.SSG_API_URL || 'https://api.ssg-wsg.sg', {
       'Content-Type': 'application/json',
       'Accept': 'application/json'
     });
 
     const result = await handleRequest(httpClient, config);
 
-    if (result.error) {
-      console.log('❌ SSG API error:', result.error);
-      return res.status(result.status || 400).json({
-        error: result.error,
-        status: result.status || 400
-      });
+    // SSG always returns "error": {} even on success — only treat as error if code/message/details present
+    const hasError = result.error && (result.error.code || result.error.message ||
+      (result.error.details && result.error.details.length > 0));
+
+    if (hasError) {
+      const errMsg = result.error.details?.[0]?.message || result.error.message;
+      return res.status(result.status || 400).json({ error: { message: errMsg, details: result.error.details } });
     }
 
-    console.log('✅ SSG API success:', result.data);
+    console.log('✅ SSG create course run response:', JSON.stringify(result.data));
     return res.status(200).json(result.data);
 
   } catch (error) {

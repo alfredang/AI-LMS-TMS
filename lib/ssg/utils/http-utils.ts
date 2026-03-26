@@ -228,7 +228,6 @@ export class HttpClient {
 
   private async requestWithCertificate<T = any>(config: HttpRequestConfig, url: string): Promise<HttpResponse<T>> {
     return new Promise((resolve, reject) => {
-      console.log(`🔐 Making HTTPS request with certificate authentication to: ${url}`);
       
       const parsedUrl = new URL(url);
       const isHttps = parsedUrl.protocol === 'https:';
@@ -246,9 +245,6 @@ export class HttpClient {
         key: config.key,
         rejectUnauthorized: false // For development - should be true in production
       };
-
-      console.log(`🔐 Certificate length: ${config.cert?.length || 0} characters`);
-      console.log(`🔐 Private key length: ${config.key?.length || 0} characters`);
 
       const requestBody = config.body && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(config.method)
         ? (typeof config.body === 'string' ? config.body : JSON.stringify(config.body))

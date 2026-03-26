@@ -137,35 +137,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const raCode        = ra_code ?? null;
   const courseTitle   = course_title ?? '';
 
-  // ── n8n webhook (disabled — trusting caller data directly) ──────────────────
-  // const webhookUrl = "https://n8n.srv1231536.hstgr.cloud/webhook/7f2f5d21-beb6-47a9-8056-e1ccf79a3ea7";
-  // let webhookSuccess = false;
-  // if (webhookUrl) {
-  //   try {
-  //     console.log(`📡 Fetching SSG data for course run ${course_run_id}...`);
-  //     const webhookRes = await rateLimitedFetch(webhookUrl, {
-  //       method: 'POST',
-  //       headers: { 'Content-Type': 'application/json' },
-  //       body: JSON.stringify({ courseRunId: String(course_run_id) }),
-  //     });
-  //     if (webhookRes.ok) {
-  //       const ssgData    = await webhookRes.json();
-  //       const run        = ssgData?.result?.course?.run;
-  //       const courseInfo = ssgData?.result?.course;
-  //       if (run && courseInfo) {
-  //         courseCode     = courseInfo.referenceNumber as string;
-  //         startDateISO   = parseToISO(run.courseStartDate);
-  //         endDateISO     = parseToISO(run.courseEndDate);
-  //         raCode         = extractRaCode(run.qrCodeLink) ?? ra_code ?? null;
-  //         courseTitle    = (courseInfo.title as string) ?? '';
-  //         webhookSuccess = true;
-  //       }
-  //     }
-  //   } catch (err) {
-  //     console.warn('⚠️ Webhook unreachable:', (err as Error).message);
-  //   }
-  // }
-
   const client = await pool.connect();
   try {
     // ── Look up trainer by primary_email, then secondary_email ─────────────

@@ -88,7 +88,6 @@ export class SSGCredentialsService {
         certificatePath: convertToAbsolutePath(row.ssg_self_sign_cert_file),
         privateKeyPath: convertToAbsolutePath(row.ssg_private_key_file)
       };
-      console.log('🔑 Encryption key loaded from:', row.ssg_encryption_key ? 'database' : (process.env.SSG_ENCRYPTION_KEY ? 'SSG_ENCRYPTION_KEY env' : (process.env.ENCRYPTION_KEY ? 'ENCRYPTION_KEY env' : 'NONE')));
 
       // Normalize PEM from env var — handles base64-encoded PEM, literal \n, Windows \r\n
       const resolvePem = (val: string): string => {
@@ -113,13 +112,10 @@ export class SSGCredentialsService {
 
       if (certEnv) {
         credentials.certificateContent = resolvePem(certEnv);
-        console.log('✅ Certificate loaded from CERT_VALUE env var, length:', credentials.certificateContent.length);
-        console.log('🔍 Cert first 40 chars:', JSON.stringify(credentials.certificateContent.slice(0, 40)));
       } else {
         try {
           if (credentials.certificatePath && credentials.certificatePath.trim() !== '' && fs.existsSync(credentials.certificatePath)) {
             credentials.certificateContent = fs.readFileSync(credentials.certificatePath, 'utf8');
-            console.log(`✅ Certificate loaded from file: ${credentials.certificatePath}`);
           } else {
             console.warn(`❌ Certificate not found — set CERT_VALUE or fix path: ${credentials.certificatePath}`);
           }
@@ -130,12 +126,10 @@ export class SSGCredentialsService {
 
       if (keyEnv) {
         credentials.privateKeyContent = resolvePem(keyEnv);
-        console.log('✅ Private key loaded from PRIVATE_KEY_VALUE env var, length:', credentials.privateKeyContent!.length);
       } else {
         try {
           if (credentials.privateKeyPath && credentials.privateKeyPath.trim() !== '' && fs.existsSync(credentials.privateKeyPath)) {
             credentials.privateKeyContent = fs.readFileSync(credentials.privateKeyPath, 'utf8');
-            console.log(`✅ Private key loaded from file: ${credentials.privateKeyPath}`);
           } else {
             console.warn(`❌ Private key not found — set PRIVATE_KEY_VALUE or fix path: ${credentials.privateKeyPath}`);
           }

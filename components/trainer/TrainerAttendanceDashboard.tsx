@@ -756,29 +756,13 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
     setEnrolmentError(null);
     setEnrolmentRecords([]);
     try {
-      const res = await fetch('https://n8n.srv1231536.hstgr.cloud/webhook/246caa5e-bd7e-42e8-82b1-cde2e05e5013', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          courseRunId: courseRunCode,
-          timestamp: new Date().toISOString(),
-          source: 'admin-search-enrolment',
-        }),
-      });
-      if (!res.ok) throw new Error(`Webhook returned ${res.status}`);
-      const raw = await res.json();
-      let records: any[] = [];
-      if (Array.isArray(raw)) {
-        records = raw;
-      } else if (Array.isArray(raw?.result?.data)) {
-        records = raw.result.data;
-      } else if (Array.isArray(raw?.data)) {
-        records = raw.data;
-      } else if (Array.isArray(raw?.data?.enrolments)) {
-        records = raw.data.enrolments;
-      } else if (Array.isArray(raw?.enrolments)) {
-        records = raw.enrolments;
+      const res = await fetch(`/api/enrolments/by-run?courseRunId=${encodeURIComponent(courseRunCode)}`);
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        throw new Error(json.error || `Request failed with status ${res.status}`);
       }
+      const json = await res.json();
+      const records: any[] = Array.isArray(json.data) ? json.data : [];
       setEnrolmentRecords(records);
       if (records.length > 0) checkLearnerAccounts(records, courseOverride ?? selectedCourse);
     } catch (err) {
@@ -926,26 +910,20 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
     setAttendanceRecords([]);
     setAttendanceCourseRun(null);
     try {
-      const response = await fetch(
-        'https://n8n.srv1231536.hstgr.cloud/webhook/c0d24850-9317-4ccc-b4b8-111e4c114ed8',
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            uen: uen || '',
-            courseCode: course.courseCode,
-            sessionId,
-            courseRunId: course.courseRunCode || '',
-          }),
-        }
-      );
+      const params = new URLSearchParams({
+        uen: uen || '',
+        courseCode: course.courseCode || '',
+        courseRunId: course.courseRunCode || '',
+        sessionId,
+      });
+      const response = await fetch(`/api/ssg/session-attendance?${params}`);
       if (!response.ok) {
         const text = await response.text();
-        throw new Error(`Webhook returned ${response.status}: ${text}`);
+        throw new Error(`Request failed ${response.status}: ${text}`);
       }
-      const raw = await response.json();
-      const parsed = typeof raw.result === 'string' ? JSON.parse(raw.result) : raw.result ?? raw;
-      const courseRun = parsed?.data?.courseRun ?? null;
+      const json = await response.json();
+      if (!json.success) throw new Error(json.error || 'Failed to fetch attendance');
+      const courseRun = json.data?.data?.courseRun ?? json.data?.courseRun ?? null;
       setAttendanceCourseRun(courseRun);
       const matchedSession = courseRun?.sessions?.find((s: any) => s.id === sessionId)
         ?? courseRun?.sessions?.[0]

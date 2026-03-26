@@ -24,7 +24,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    console.log(`[Assessment API] Fetching assessments for user: ${userId}`);
 
     // SQL query to get all assessments for courses that a learner is enrolled in
     const query = `
@@ -60,8 +59,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       file_url: row.assessment_file_url
     }));
 
-    console.log(`[Assessment API] Found ${assessments.length} assessments for user ${userId}`);
-    console.log(`[Assessment API] Sample data:`, assessments.slice(0, 2));
 
     res.status(200).json({ 
       success: true, 

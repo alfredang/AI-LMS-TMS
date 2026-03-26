@@ -1,5 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
+import { getSSGCredentialsService } from '../../../lib/ssg/services/credentials-service';
+import { createSSGEnrolmentAPI } from '../../../lib/ssg/api/enrolment-api';
 
 /**
  * External API — Backfill Enrollment Raw Data
@@ -21,8 +23,7 @@ import pool from '../../../lib/db';
  *   5. Returns a full summary of results
  */
 
-const WEBHOOK_URL = 'https://n8n.srv1231536.hstgr.cloud/webhook/638428e2-07e7-4448-88be-f956c5b44620';
-const RATE_LIMIT_MS = 4000; // 4 seconds between webhook calls
+const RATE_LIMIT_MS = 4000; // 4 seconds between SSG API calls
 
 function sleep(ms: number) {
   return new Promise(r => setTimeout(r, ms));
@@ -42,47 +43,6 @@ function mapSponsorshipType(sponsorshipType: string | undefined): string | null 
   return null;
 }
 
-async function fetchEnrolmentFromWebhook(enrolmentId: string): Promise<{
-  success: boolean;
-  status: string;
-  enrolment?: any;
-  error?: string;
-}> {
-  try {
-    const res = await fetch(WEBHOOK_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        enrolmentId,
-        timestamp: new Date().toISOString(),
-        source: 'backfill-enrollments',
-      }),
-    });
-
-    const text = await res.text();
-    let json: any;
-    try {
-      json = JSON.parse(text);
-    } catch {
-      return { success: false, status: 'parse_error', error: `Non-JSON response: ${text.slice(0, 100)}` };
-    }
-
-    const result = json?.result ?? json;
-    const status = String(result?.status ?? '');
-
-    if (status === '200') {
-      const enrolment = result?.data?.enrolment;
-      if (!enrolment) return { success: false, status: '200_no_data', error: 'status 200 but no enrolment object' };
-      return { success: true, status: '200', enrolment };
-    }
-
-    // 403 or other errors
-    const errMsg = result?.error?.message ?? result?.error ?? `HTTP ${status}`;
-    return { success: false, status, error: String(errMsg) };
-  } catch (err) {
-    return { success: false, status: 'network_error', error: err instanceof Error ? err.message : 'Unknown error' };
-  }
-}
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET' && req.method !== 'POST') {
@@ -149,6 +109,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
   }
 
+  const credentials = await getSSGCredentialsService().getSSGCredentials();
+  if (!credentials) {
+    return res.status(500).json({ success: false, error: 'SSG credentials not found' });
+  }
+  const ssgBaseUrl = process.env.SSG_API_URL || 'https://api.ssg-wsg.sg';
+  const enrolmentAPI = createSSGEnrolmentAPI(ssgBaseUrl, credentials);
+
   const results: { enrolmentId: string; status: string; result: string; detail?: string }[] = [];
   let updated = 0;
   let skipped = 0;
@@ -158,7 +125,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const enrolmentId = row.enrolment_id as string;
     console.log(`🔍 Fetching enrolment ${enrolmentId}…`);
 
-    const fetched = await fetchEnrolmentFromWebhook(enrolmentId);
+    let fetched: { success: boolean; status: string; enrolment?: any; error?: string };
+    try {
+      const result = await enrolmentAPI.viewEnrolment(enrolmentId);
+      if (result.error) {
+        const status = String(result.status || '');
+        fetched = { success: false, status: status || 'error', error: result.error.message ?? String(result.error) };
+      } else {
+        const enrolment = result.data?.enrolment ?? result.data;
+        fetched = enrolment ? { success: true, status: '200', enrolment } : { success: false, status: '200_no_data', error: 'No enrolment object' };
+      }
+    } catch (err) {
+      fetched = { success: false, status: 'network_error', error: err instanceof Error ? err.message : 'Unknown' };
+    }
 
     if (!fetched.success) {
       const isForbidden = fetched.status === '403';

@@ -15,12 +15,9 @@ export const SearchAssessmentsView: React.FC = () => {
     const [currentPage, setCurrentPage] = useState(1);
     const resultsPerPage = 10;
 
-    const WEBHOOK_URL = 'https://n8n.srv1231536.hstgr.cloud/webhook/4d22747c-8491-43f3-aa84-5111e9476ea1'; // Update with actual webhook URL
-
     const inputClasses = "block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-500";
 
     const handleSearch = async () => {
-        // Course Run ID and Course Reference Number are required
         if (!courseRunId.trim() || !courseReferenceNumber.trim()) {
             setSearchError('Both Course Run ID and Course Reference Number are required');
             return;
@@ -32,75 +29,25 @@ export const SearchAssessmentsView: React.FC = () => {
         setCurrentPage(1);
 
         try {
-            console.log('🔍 Searching assessments...');
-
-            // Build payload - only include non-empty fields
-            const payload: any = {
-                timestamp: new Date().toISOString(),
-                source: 'admin-search-assessments'
-            };
-
-            if (courseRunId.trim()) {
-                payload.courseRunId = courseRunId.trim();
-            }
-            
-            if (courseReferenceNumber.trim()) {
-                payload.courseReferenceNumber = courseReferenceNumber.trim();
-            }
-            
-            if (enrolmentReferenceNumber.trim()) {
-                payload.enrolmentReferenceNumber = enrolmentReferenceNumber.trim();
-            }
-            
-            if (traineeIdNumber.trim()) {
-                payload.traineeIdNumber = traineeIdNumber.trim();
-            }
-
-            console.log('📤 Search payload:', payload);
-
-            const response = await fetch(WEBHOOK_URL, {
+            const response = await fetch('/api/assessments/ssg-search', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(payload)
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    courseRunId: courseRunId.trim(),
+                    courseReferenceNumber: courseReferenceNumber.trim(),
+                    enrolmentReferenceNumber: enrolmentReferenceNumber.trim() || undefined,
+                    traineeIdNumber: traineeIdNumber.trim() || undefined,
+                })
             });
 
-            if (!response.ok) {
-                if (response.status === 500) {
-                    throw new Error('SSG API server error. The service may be temporarily unavailable. Please try again later.');
-                }
-                throw new Error(`Unable to connect to SSG API (Error ${response.status}). Please check your connection and try again.`);
-            }
-
             const data = await response.json();
-            console.log('✅ Search response:', data);
 
-            // Parse response
-            let results = [];
-            if (data?.result) {
-                const parsedResult = typeof data.result === 'string' ? JSON.parse(data.result) : data.result;
-                
-                // Check for error status
-                if (parsedResult?.status && parsedResult.status !== '200') {
-                    const errorMessage = parsedResult?.error?.details?.[0]?.message || 
-                                        parsedResult?.error?.message || 
-                                        'No assessments found';
-                    setSearchError(errorMessage);
-                    setSearchResults([]);
-                    return;
-                }
-                
-                // Extract data array from result.data
-                if (parsedResult?.data && Array.isArray(parsedResult.data)) {
-                    results = parsedResult.data;
-                } else if (Array.isArray(parsedResult)) {
-                    results = parsedResult;
-                }
-            } else if (Array.isArray(data)) {
-                results = data;
+            if (!data.success) {
+                setSearchError(data.error || 'No assessments found matching your criteria');
+                return;
             }
 
+            const results = Array.isArray(data.data) ? data.data : [];
             setSearchResults(results);
 
             if (results.length === 0) {
@@ -470,11 +417,9 @@ export const SearchAssessmentsView: React.FC = () => {
 export const ViewAssessmentView: React.FC = () => {
     const [assessmentId, setAssessmentId] = useState<string>('');
     const [isSearching, setIsSearching] = useState(false);
-    const [webhookResponse, setWebhookResponse] = useState<any>(null);
+    const [webhookResponse, setWebhookResponse] = useState<any>(null); // kept for raw debug if needed
     const [parsedData, setParsedData] = useState<any>(null);
     const [searchError, setSearchError] = useState<string | null>(null);
-
-    const WEBHOOK_URL = 'https://n8n.srv1231536.hstgr.cloud/webhook/69dcd934-3667-4556-8aef-8d62faba6f95';
 
     const inputClasses = "block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-500";
 
@@ -492,73 +437,17 @@ export const ViewAssessmentView: React.FC = () => {
         try {
             console.log('🔍 Fetching assessment details...');
 
-            const payload = {
-                assessmentReferenceNumber: assessmentId.trim(),
-                timestamp: new Date().toISOString(),
-                source: 'admin-view-assessment'
-            };
-
-            console.log('📤 View assessment payload:', payload);
-
-            const response = await fetch(WEBHOOK_URL, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(payload)
-            });
-
-            if (!response.ok) {
-                if (response.status === 500) {
-                    throw new Error('SSG API server error. The service may be temporarily unavailable. Please try again later.');
-                }
-                throw new Error(`Unable to connect to SSG API (Error ${response.status}). Please check your connection and try again.`);
-            }
-
+            const response = await fetch(`/api/assessments/ssg-view?referenceNumber=${encodeURIComponent(assessmentId.trim())}`);
             const data = await response.json();
-            console.log('✅ Webhook response:', data);
-            setWebhookResponse(data);
 
-            // Parse response
-            try {
-                let resultData = null;
-                let parsedResult = null;
-
-                if (data?.result) {
-                    parsedResult = typeof data.result === 'string' ? JSON.parse(data.result) : data.result;
-                    
-                    // Check for error status
-                    if (parsedResult?.status && parsedResult.status !== '200') {
-                        // Handle error response
-                        const errorMessage = parsedResult?.error?.details?.[0]?.message || parsedResult?.error?.message || 'An error occurred';
-                        setSearchError(errorMessage);
-                        setParsedData(null);
-                        return;
-                    }
-                    
-                    // Extract data from result.data structure if status is 200
-                    if (parsedResult?.data) {
-                        resultData = parsedResult.data;
-                    } else if (Array.isArray(parsedResult) && parsedResult.length > 0) {
-                        resultData = parsedResult[0];
-                    } else {
-                        resultData = parsedResult;
-                    }
-                } else if (Array.isArray(data) && data.length > 0) {
-                    resultData = data[0];
-                } else {
-                    resultData = data;
-                }
-
-                if (resultData) {
-                    console.log('✅ Parsed assessment data:', resultData);
-                    setParsedData(resultData);
-                }
-            } catch (e) {
-                console.error('❌ Error parsing result JSON:', e);
-                setParsedData(null);
-                setSearchError('Failed to parse response data');
+            if (!data.success) {
+                setSearchError(data.error || 'Failed to fetch assessment data');
+                return;
             }
+
+            console.log('✅ Assessment response:', data.data);
+            setWebhookResponse(data);
+            setParsedData(data.data);
         } catch (error) {
             console.error('❌ Error fetching assessment:', error);
             setSearchError(error instanceof Error ? error.message : 'Failed to fetch assessment data');

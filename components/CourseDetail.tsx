@@ -1741,6 +1741,18 @@ export const CourseDetail: React.FC = () => {
     const isLessonPlanExternal = isExternalUrl(convertedCourse.lessonPlanUrl);
     const isLearnerGuideExternal = isExternalUrl(convertedCourse.learnerGuideUrl);
     const isLearnerSlidesExternal = isExternalUrl(convertedCourse.slidesUrl);
+
+    // Gate materials for Learners: accessible only on/after startDate at 08:30 SGT
+    const materialsUnlockTime = (() => {
+        const raw = convertedCourse.startDate;
+        if (!raw) return null;
+        // Convert to SGT date string (handles both DATE strings and TIMESTAMP objects)
+        // en-CA locale reliably returns YYYY-MM-DD format
+        const sgtDateStr = new Date(raw).toLocaleDateString('en-CA', { timeZone: 'Asia/Singapore' });
+        // 08:30 SGT = 00:30 UTC
+        return new Date(`${sgtDateStr}T00:30:00.000Z`);
+    })();
+    const isMaterialsUnlocked = userRole !== UserRole.Learner || !materialsUnlockTime || new Date() >= materialsUnlockTime;
     const isTrainerSlidesExternal = isExternalUrl(convertedCourse.trainerSlidesUrl);
     const isFacilitatorGuideExternal = isExternalUrl(convertedCourse.facilitatorGuideUrl);
     const isAssessmentPlanExternal = isExternalUrl(convertedCourse.assessmentPlanUrl);
@@ -1926,10 +1938,29 @@ export const CourseDetail: React.FC = () => {
                                 </div>
                             )}
 
+                            {/* Materials locked banner for Learners */}
+                            {!isMaterialsUnlocked && materialsUnlockTime && (
+                                <div className="flex items-start gap-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg px-4 py-3 mb-2">
+                                    <svg className="w-5 h-5 text-amber-500 dark:text-amber-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m0 0v2m0-2h2m-2 0H10m2-6a4 4 0 100-8 4 4 0 000 8zm0 0v1" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 11V7a4 4 0 118 0v4M5 11h14a2 2 0 012 2v7a2 2 0 01-2 2H5a2 2 0 01-2-2v-7a2 2 0 012-2z" /></svg>
+                                    <div>
+                                        <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">Course materials are not yet available</p>
+                                        <p className="text-xs text-amber-700 dark:text-amber-400 mt-0.5">
+                                            Materials will be accessible from <span className="font-semibold">8:30 AM SGT</span> on{' '}
+                                            <span className="font-semibold">
+                                                {materialsUnlockTime.toLocaleDateString('en-SG', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Singapore' })}
+                                            </span>
+                                            , the first day of your course.
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
+
                             {/* Lesson Plan */}
                             <div id={toId("Lesson Plan")}>
                                 <ContentSection title="Lesson Plan">
-                                    {convertedCourse.lessonPlanUrl ? (
+                                    {!isMaterialsUnlocked ? (
+                                        <p className="text-sm text-amber-600 dark:text-amber-400 italic">Available from 8:30 AM SGT on your course start date.</p>
+                                    ) : convertedCourse.lessonPlanUrl ? (
                                         isLessonPlanExternal ? (
                                             <a
                                                 href={convertedCourse.lessonPlanUrl}
@@ -1964,7 +1995,9 @@ export const CourseDetail: React.FC = () => {
                             {/* Learner Guide */}
                             <div id={toId("Learner Guide")}>
                                 <ContentSection title="Learner Guide">
-                                    {convertedCourse.learnerGuideUrl ? (
+                                    {!isMaterialsUnlocked ? (
+                                        <p className="text-sm text-amber-600 dark:text-amber-400 italic">Available from 8:30 AM SGT on your course start date.</p>
+                                    ) : convertedCourse.learnerGuideUrl ? (
                                         isLearnerGuideExternal ? (
                                             <a
                                                 href={convertedCourse.learnerGuideUrl}
@@ -2037,7 +2070,9 @@ export const CourseDetail: React.FC = () => {
                             {userRole !== UserRole.Trainer && (
                                 <div id={toId("Learner Slides")}>
                                     <ContentSection title="Learner Slides">
-                                        {convertedCourse.slidesUrl ? (
+                                        {!isMaterialsUnlocked ? (
+                                            <p className="text-sm text-amber-600 dark:text-amber-400 italic">Available from 8:30 AM SGT on your course start date.</p>
+                                        ) : convertedCourse.slidesUrl ? (
                                             isLearnerSlidesExternal ? (
                                                 <a
                                                     href={convertedCourse.slidesUrl}

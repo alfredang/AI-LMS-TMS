@@ -1,7 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
-
-const COURSE_RUN_WEBHOOK = 'https://n8n.srv1231536.hstgr.cloud/webhook/7f2f5d21-beb6-47a9-8056-e1ccf79a3ea7';
+import { getSSGCredentialsService } from '../../../lib/ssg/services/credentials-service';
+import { createSSGCourseAPI } from '../../../lib/ssg/api/course-api';
 
 function extractRaCode(qrCodeLink: string): string | null {
   if (!qrCodeLink) return null;
@@ -55,37 +55,32 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(200).json({ success: true, data: dbResult.rows[0], source: 'db' });
     }
 
-    // 2. Not in DB — call n8n webhook to fetch from SSG
-    const webhookRes = await fetch(COURSE_RUN_WEBHOOK, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ courseRunId: code }),
-    });
-
-    if (!webhookRes.ok) {
-      const errText = await webhookRes.text();
-      return res.status(502).json({ error: `SSG webhook error: ${errText}` });
+    // 2. Not in DB — fetch directly from SSG
+    const credentials = await getSSGCredentialsService().getSSGCredentials();
+    if (!credentials) {
+      return res.status(500).json({ error: 'SSG credentials not found' });
     }
 
-    const webhookData = await webhookRes.json();
+    const ssgBaseUrl = process.env.SSG_API_URL || 'https://api.ssg-wsg.sg';
+    const api = createSSGCourseAPI(ssgBaseUrl, credentials);
+    const ssgResult = await api.viewCourseRun(code);
 
-    // Webhook may return an array [ { result: { course } } ] or { data: { course } }
-    const root = Array.isArray(webhookData) ? webhookData[0] : webhookData;
-    const courseData =
-      root?.result?.course ??
-      root?.data?.course ??
-      root?.course ??
-      null;
+    const hasError = ssgResult.error && (ssgResult.error.code || ssgResult.error.message ||
+      (ssgResult.error.details && ssgResult.error.details.length > 0));
+    if (hasError) {
+      return res.status(ssgResult.status || 404).json({ error: `Course run ${code} not found in SSG.` });
+    }
+
+    const courseData = ssgResult.data?.course;
     const runData = courseData?.run;
 
     if (!courseData || !runData) {
-      console.error('[lookup-course-run] Unexpected webhook shape:', JSON.stringify(webhookData).slice(0, 500));
       return res.status(404).json({ error: `Course run ${code} not found in SSG.` });
     }
 
     const digitalAttendanceId = extractRaCode(runData.qrCodeLink ?? '');
-    const startDate = formatSsgDate(runData.courseStartDate);
-    const endDate   = formatSsgDate(runData.courseEndDate);
+    const startDate = formatSsgDate(runData.courseStartDate ?? runData.courseDates?.start);
+    const endDate   = formatSsgDate(runData.courseEndDate   ?? runData.courseDates?.end);
 
     // 3. Upsert into DB so future lookups are instant
     const client = await pool.connect();

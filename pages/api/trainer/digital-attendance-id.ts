@@ -1,7 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
-
-const COURSE_RUN_WEBHOOK = 'https://n8n.srv1231536.hstgr.cloud/webhook/7f2f5d21-beb6-47a9-8056-e1ccf79a3ea7';
+import { getSSGCredentialsService } from '../../../lib/ssg/services/credentials-service';
+import { createSSGCourseAPI } from '../../../lib/ssg/api/course-api';
 
 // Extract the RA###### code from a qrCodeLink URL
 // e.g. "https://www.myskillsfuture.gov.sg/api/take-attendance/RA740761" → "RA740761"
@@ -72,34 +72,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(200).json({ digitalAttendanceId: existing.rows[0].digital_attendance_id });
     }
 
-    // 2. Not in DB — call the n8n webhook to retrieve course run info
+    // 2. Not in DB — fetch directly from SSG
     if (!courseRunCode) {
       return res.status(400).json({ error: 'courseRunCode is required to fetch from SSG' });
     }
 
-    const webhookRes = await fetch(COURSE_RUN_WEBHOOK, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ courseRunId: courseRunCode }),
-    });
-
-    if (!webhookRes.ok) {
-      const errText = await webhookRes.text();
-      return res.status(502).json({ error: `Webhook error: ${errText}` });
+    const credentials = await getSSGCredentialsService().getSSGCredentials();
+    if (!credentials) {
+      return res.status(500).json({ error: 'SSG credentials not found' });
     }
 
-    const webhookData = await webhookRes.json();
+    const ssgBaseUrl = process.env.SSG_API_URL || 'https://api.ssg-wsg.sg';
+    const api = createSSGCourseAPI(ssgBaseUrl, credentials);
+    const ssgResult = await api.viewCourseRun(courseRunCode);
 
-    console.log('[digital-attendance-id] Raw webhook response:', JSON.stringify(webhookData).slice(0, 2000));
-
-    // Try multiple known paths for qrCodeLink
+    const ssgData = ssgResult.data;
     const qrCodeLink: string | undefined =
-      webhookData?.data?.course?.run?.qrCodeLink ??
-      webhookData?.data?.courseRun?.qrCodeLink ??
-      webhookData?.data?.run?.qrCodeLink ??
-      webhookData?.result?.data?.course?.run?.qrCodeLink ??
-      webhookData?.qrCodeLink ??
-      findQrCodeLinkOrRaCode(webhookData);
+      ssgData?.course?.run?.qrCodeLink ??
+      findQrCodeLinkOrRaCode(ssgData);
 
     if (!qrCodeLink) {
       console.error('[digital-attendance-id] qrCodeLink not found. Full response keys:', Object.keys(webhookData || {}));
@@ -131,8 +121,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       );
 
       if (updateByCode.rowCount === 0) {
-        // course_run doesn't exist at all — insert course + course_run from webhook data
-        const courseData = webhookData?.data?.course;
+        // course_run doesn't exist at all — insert course + course_run from SSG data
+        const courseData = ssgData?.course;
         const runData = courseData?.run;
 
         if (courseData && runData) {
@@ -159,8 +149,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 courseId,
                 String(runData.id),
                 digitalAttendanceId,
-                String(runData.courseStartDate),
-                String(runData.courseEndDate),
+                String(runData.courseStartDate ?? runData.courseDates?.start ?? ''),
+                String(runData.courseEndDate   ?? runData.courseDates?.end   ?? ''),
               ]
             );
 

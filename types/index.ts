@@ -68,6 +68,7 @@ export enum AdminPage {
   CheckAttendance = 'checkAttendance',
   AutomationLogs = 'automationLogs',
   AssignTrainerLogs = 'assignTrainerLogs',
+  CourseRunDateSyncLogs = 'courseRunDateSyncLogs',
   BackfillEnrollments = 'backfillEnrollments',
   FetchUpcomingEnrolments = 'fetchUpcomingEnrolments',
   CreateCertificate = 'createCertificate',

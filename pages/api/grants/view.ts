@@ -30,7 +30,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const builder = new HTTPRequestBuilder()
       .withEndpoint(ssgBaseUrl, `/tpg/grants/details/${grantId.trim()}`)
-      .withMethod(HttpMethod.GET);
+      .withMethod(HttpMethod.GET)
+      .withParam('uen', credentials.uen);
 
     if (credentials.certificateContent && credentials.privateKeyContent) {
       builder.withCertificate(credentials.certificateContent, credentials.privateKeyContent);
