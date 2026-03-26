@@ -26,6 +26,7 @@ import { ClassManagerView, AssignTrainerView, AssignStudentView, AddCourseView, 
 import { CreateCertificateView, DeleteCertificateView } from '../components/admin/CertificateManagement';
 import { CreateNewClassView } from '../components/admin/CreateNewClassView';
 import EnrollLearners from '../components/admin/EnrollLearners';
+import SearchPastLearners from '../components/admin/SearchPastLearners';
 import {
   ApplyNewGrantView,
   ViewGrantStatusView,
@@ -134,6 +135,7 @@ const PAGE_LABELS: Partial<Record<AdminPage, string>> = {
   [AdminPage.ClassDetail]: 'Class Detail',
   [AdminPage.CheckAttendance]: 'Check Attendance',
   [AdminPage.AssignStudent]: 'Assign Learners',
+  [AdminPage.SearchPastLearners]: 'Search Past Learners',
   [AdminPage.AutomationLogs]: 'Automation Logging',
   [AdminPage.AssignTrainerLogs]: 'Assign Trainer Log',
   [AdminPage.BackfillEnrollments]: 'Backfill Enrollments',
@@ -204,6 +206,8 @@ const AdminLayout: React.FC = () => {
         return <AssignTrainerView />;
       case AdminPage.AssignStudent:
         return <AssignStudentView />;
+      case AdminPage.SearchPastLearners:
+        return <SearchPastLearners />;
       case AdminPage.AddCourse:
         return <AddCourseView />;
       case AdminPage.AddCourseRun:

@@ -24,7 +24,7 @@ const PARTNER_CODE = '201200696W-01';
 const IV = Buffer.from('SSGAPIInitVector', 'utf8');
 const PAGE_SIZE = 100;
 const DELAY_MS = 3000; // 3 seconds between API calls
-const CUTOFF_YEAR = 2025; // Stop when grants are older than this
+const CUTOFF_YEAR = parseInt(process.env.CUTOFF_YEAR || '2025', 10); // Stop when grants are older than this
 const REQUEST_TIMEOUT = 90000; // 90 seconds per API call (SSG averages ~57s)
 const RESUME_PAGE = process.env.RESUME_PAGE ? parseInt(process.env.RESUME_PAGE, 10) : 0;
 

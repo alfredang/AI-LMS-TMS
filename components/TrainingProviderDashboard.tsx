@@ -10,10 +10,10 @@ interface AnalyticsData {
   totalClaims: number;
   enrollmentForecast: number;
   grantForecast: number;
-  grantForecastMethod: 'seasonal+growth' | 'seasonal' | 'average' | 'none';
+  grantForecastMethod: 'trend+seasonal' | 'trend' | 'weighted avg' | 'none';
   grantsInPipeline: number;
   claimForecast: number;
-  claimForecastMethod: 'seasonal' | 'average' | 'none';
+  claimForecastMethod: 'trend+seasonal' | 'trend' | 'weighted avg' | 'none';
   claimsInPipeline: number;
   enrollmentByMonth: { label: string; value: number }[];
   courseRanking: { label: string; value: number }[];
@@ -24,10 +24,10 @@ interface AnalyticsData {
 
 // Reusable Components
 const StatCard: React.FC<{ title: string; value: string | number; subtext?: string }> = ({ title, value, subtext }) => (
-    <Card className="p-6 text-center">
-        <p className="text-4xl font-bold text-primary">{value}</p>
-        <p className="font-semibold text-on-surface mt-1">{title}</p>
-        {subtext && <p className="text-sm text-subtle">{subtext}</p>}
+    <Card className="p-4 sm:p-6 text-center overflow-hidden">
+        <p className="text-2xl sm:text-4xl font-bold text-primary truncate">{value}</p>
+        <p className="text-xs sm:text-base font-semibold text-on-surface mt-1">{title}</p>
+        <p className="text-xs sm:text-sm text-subtle">{subtext || '\u00A0'}</p>
     </Card>
 );
 
@@ -38,8 +38,10 @@ const ChartCard: React.FC<{ title: string; children: React.ReactNode }> = ({ tit
     </Card>
 );
 
-const BarChart: React.FC<{ data: { label: string; value: number }[]; color: 'primary' | 'secondary' }> = ({ data, color }) => {
+const BarChart: React.FC<{ data: { label: string; value: number }[]; color: 'primary' | 'secondary'; stackLabel?: boolean }> = ({ data, color, stackLabel = false }) => {
     const maxValue = Math.max(...data.map(d => d.value), 0);
+    const maxChars = maxValue.toLocaleString().length;
+    const minPct = Math.max(maxChars * 5, 12);
     const colorClass = color === 'primary' ? 'bg-primary' : 'bg-secondary';
     
     if (data.length === 0) {
@@ -51,21 +53,20 @@ const BarChart: React.FC<{ data: { label: string; value: number }[]; color: 'pri
     }
     
     return (
-        <div className="space-y-3">
+        <div className="space-y-4">
             {data.map(item => (
-                <div key={item.label} className="flex items-center">
-                    <div className="w-1/3 text-sm font-semibold text-subtle pr-2">{item.label}</div>
-                    <div className="w-2/3 bg-gray-200 rounded-full h-6 relative">
+                <div key={item.label} className={stackLabel ? "flex flex-col sm:flex-row sm:items-center" : "flex items-center"}>
+                    <div className={stackLabel ? "sm:w-1/3 text-sm font-semibold text-subtle pr-2 mb-1 sm:mb-0" : "w-1/3 text-sm font-semibold text-subtle pr-2"}>{item.label}</div>
+                    <div className={stackLabel ? "sm:w-2/3 bg-gray-200 rounded-full h-8 relative" : "w-2/3 bg-gray-200 rounded-full h-8 relative"}>
                         {item.value > 0 ? (
-                            <div 
-                                className={`${colorClass} h-6 rounded-full flex items-center justify-end px-2 text-white text-xs font-bold`}
-                                style={{ width: `${(item.value / maxValue) * 100}%` }}
+                            <div
+                                className={`${colorClass} h-8 rounded-full flex items-center justify-end px-3 text-white text-xs font-bold whitespace-nowrap`}
+                                style={{ width: `${minPct + ((item.value / maxValue) * (100 - minPct))}%` }}
                             >
-                                {item.value}
+                                {item.value.toLocaleString()}
                             </div>
                         ) : (
-                            <div className="bg-gray-200 h-6 rounded-full flex items-center justify-center text-white text-xs font-bold">
-                            </div>
+                            <div className="bg-gray-200 h-8 rounded-full" />
                         )}
                     </div>
                 </div>
@@ -149,25 +150,29 @@ const TrainingProviderDashboard: React.FC = () => {
                 </button>
             </div>
 
-            {/* KPIs */}
-            <div className="grid grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-                <StatCard title="Total Learners Enrolled" value={analyticsData.totalLearners} />
-                <StatCard title="Total Grants Applied" value={`$${Math.round(analyticsData.totalGrants).toLocaleString()}`} />
-                <StatCard title="Total Claims Disbursed" value={`$${Math.round(analyticsData.totalClaims).toLocaleString()}`} />
-                <StatCard title="Enrollment Forecast" value={`~${analyticsData.enrollmentForecast || 0}`} subtext="Next 3 Months" />
-                <StatCard
-                    title="Grant Forecast"
-                    value={`~$${Math.round(analyticsData.grantForecast || 0).toLocaleString()}`}
-                    subtext={`Next 3 Months (${
-                        analyticsData.grantForecastMethod === 'seasonal+growth' ? 'seasonal+growth' :
-                        analyticsData.grantForecastMethod === 'seasonal' ? 'seasonal' : 'avg'
-                    })`}
-                />
-                <StatCard
-                    title="Claim Forecast"
-                    value={`~$${Math.round(analyticsData.claimForecast || 0).toLocaleString()}`}
-                    subtext={`Next 3 Months (${analyticsData.claimForecastMethod === 'seasonal' ? 'seasonal' : 'avg'})`}
-                />
+            {/* KPIs — mobile: 2 cols (actuals left, forecasts right), desktop: 3 cols */}
+            <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-8">
+                {/* Row 1: Enrollment */}
+                <div className="lg:contents"><StatCard title="Total Learners Enrolled" value={analyticsData.totalLearners} /></div>
+                <div className="lg:hidden"><StatCard title="Enrollment Forecast" value={`~${analyticsData.enrollmentForecast || 0}`} subtext="Next 3 Months" /></div>
+                {/* Row 2: Grants */}
+                <div className="lg:contents"><StatCard title="Total Grants Applied" value={`$${Math.round(analyticsData.totalGrants).toLocaleString()}`} /></div>
+                <div className="lg:hidden">
+                    <StatCard title="Grant Forecast" value={`~$${Math.round(analyticsData.grantForecast || 0).toLocaleString()}`} subtext="Next 3 Months" />
+                </div>
+                {/* Row 3: Claims */}
+                <div className="lg:contents"><StatCard title="Total Claims Disbursed" value={`$${Math.round(analyticsData.totalClaims).toLocaleString()}`} /></div>
+                <div className="lg:hidden">
+                    <StatCard title="Claim Forecast" value={`~$${Math.round(analyticsData.claimForecast || 0).toLocaleString()}`} subtext="Next 3 Months" />
+                </div>
+                {/* Desktop-only: forecasts in row 2 */}
+                <div className="hidden lg:block"><StatCard title="Enrollment Forecast" value={`~${analyticsData.enrollmentForecast || 0}`} subtext="Next 3 Months" /></div>
+                <div className="hidden lg:block">
+                    <StatCard title="Grant Forecast" value={`~$${Math.round(analyticsData.grantForecast || 0).toLocaleString()}`} subtext="Next 3 Months" />
+                </div>
+                <div className="hidden lg:block">
+                    <StatCard title="Claim Forecast" value={`~$${Math.round(analyticsData.claimForecast || 0).toLocaleString()}`} subtext="Next 3 Months" />
+                </div>
             </div>
 
             {/* Charts */}
@@ -176,7 +181,7 @@ const TrainingProviderDashboard: React.FC = () => {
                     <BarChart data={analyticsData.enrollmentByMonth} color="primary" />
                 </ChartCard>
                 <ChartCard title="Course Ranking by Enrolment">
-                    <BarChart data={analyticsData.courseRanking} color="primary" />
+                    <BarChart data={analyticsData.courseRanking} color="primary" stackLabel />
                 </ChartCard>
                 <ChartCard title="Learner Age Profile">
                      <BarChart data={analyticsData.ageProfile} color="primary" />

@@ -60,6 +60,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate }) => {
                 <NavItem page={AdminPage.CompletedClasses} label="Completed Classes" isSubItem />
                 <NavItem page={AdminPage.AssignTrainer} label="Assign Trainer" isSubItem />
                 <NavItem page={AdminPage.AssignStudent} label="Assign Learners" isSubItem />
+                <NavItem page={AdminPage.SearchPastLearners} label="Search Past Learners" isSubItem />
             </NavSection>
 
             <NavSection title="Direct Application">

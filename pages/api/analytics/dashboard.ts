@@ -10,38 +10,40 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    // Get total unique learners enrolled across all course runs
+    // Get total unique learners enrolled across all course runs (from SSG data)
     const totalLearnersResult = await pool.query(`
-      SELECT COUNT(DISTINCT e.user_id) AS total_learners
-      FROM enrollment e
-      WHERE e.enrolment_status IS NULL OR LOWER(e.enrolment_status) != 'cancelled';
+      SELECT COUNT(DISTINCT se.trainee_nric) AS total_learners
+      FROM ssg_enrolments se
+      WHERE se.trainee_nric IS NOT NULL
+        AND (se.enrolment_status IS NULL OR LOWER(se.enrolment_status) != 'cancelled');
     `);
 
-    // Get enrollment by month using created_at since enrolment_date is null
+    // Get enrollment by month from SSG enrolment data
     const enrollmentByMonthResult = await pool.query(`
-      SELECT 
-        DATE_TRUNC('month', e.created_at) AS month,
-        COUNT(DISTINCT e.user_id) AS total_learners
-      FROM enrollment e
-      WHERE e.created_at IS NOT NULL
-      GROUP BY DATE_TRUNC('month', e.created_at)
+      SELECT
+        DATE_TRUNC('month', COALESCE(se.enrolment_date, se.created_date)) AS month,
+        COUNT(DISTINCT se.trainee_nric) AS total_learners
+      FROM ssg_enrolments se
+      WHERE se.trainee_nric IS NOT NULL
+        AND (se.enrolment_status IS NULL OR LOWER(se.enrolment_status) != 'cancelled')
+      GROUP BY DATE_TRUNC('month', COALESCE(se.enrolment_date, se.created_date))
       ORDER BY month;
     `);
 
-    // Get top 10 courses by enrollment
+    // Get top 10 courses by enrollment (from SSG data)
     const courseRankingResult = await pool.query(`
-      SELECT 
-        c.id AS course_id,
-        c.title AS course_title,
-        COUNT(e.id) AS total_enrolments
-      FROM course c
-      JOIN enrollment e ON c.id = e.course_id
-      GROUP BY c.id, c.title
+      SELECT
+        se.course_reference AS course_id,
+        se.course_title AS course_title,
+        COUNT(*) AS total_enrolments
+      FROM ssg_enrolments se
+      WHERE se.enrolment_status IS NULL OR LOWER(se.enrolment_status) != 'cancelled'
+      GROUP BY se.course_reference, se.course_title
       ORDER BY total_enrolments DESC
       LIMIT 10;
     `);
 
-    // Get learner age groups using dateOfBirth from raw_data JSONB column
+    // Get learner age groups using dateOfBirth from raw_data JSONB column (from SSG data)
     const ageGroupResult = await pool.query(`
       WITH age_ranges AS (
         SELECT '20-25' AS age_group, 1 AS sort_order
@@ -53,16 +55,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         UNION SELECT '51+', 7
       ),
       learner_ages AS (
-        SELECT DISTINCT ON (e.user_id)
-          e.user_id,
-          (e.raw_data->'trainee'->>'dateOfBirth')::date AS dob
-        FROM enrollment e
-        WHERE e.raw_data->'trainee'->>'dateOfBirth' IS NOT NULL
-          AND e.raw_data->'trainee'->>'dateOfBirth' != ''
+        SELECT DISTINCT ON (se.trainee_nric)
+          se.trainee_nric,
+          (se.raw_data->'trainee'->>'dateOfBirth')::date AS dob
+        FROM ssg_enrolments se
+        WHERE se.raw_data->'trainee'->>'dateOfBirth' IS NOT NULL
+          AND se.raw_data->'trainee'->>'dateOfBirth' != ''
+          AND se.trainee_nric IS NOT NULL
       ),
       learner_age_groups AS (
         SELECT
-          user_id,
+          trainee_nric,
           CASE
             WHEN EXTRACT(YEAR FROM AGE(current_date, dob)) BETWEEN 20 AND 25 THEN '20-25'
             WHEN EXTRACT(YEAR FROM AGE(current_date, dob)) BETWEEN 26 AND 30 THEN '26-30'
@@ -77,64 +80,56 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       )
       SELECT
         ar.age_group,
-        COALESCE(COUNT(DISTINCT la.user_id), 0) AS unique_learners
+        COALESCE(COUNT(DISTINCT la.trainee_nric), 0) AS unique_learners
       FROM age_ranges ar
       LEFT JOIN learner_age_groups la ON ar.age_group = la.age_group
       GROUP BY ar.age_group, ar.sort_order
       ORDER BY ar.sort_order;
     `);
 
-    // Get enrolment status breakdown (Confirmed vs Cancelled)
+    // Get enrolment status breakdown (Confirmed vs Cancelled) from SSG data
     const enrolmentStatusResult = await pool.query(`
       SELECT
         CASE
-          WHEN LOWER(e.enrolment_status) = 'confirmed' THEN 'Confirmed'
-          WHEN LOWER(e.enrolment_status) = 'cancelled' THEN 'Cancelled'
+          WHEN LOWER(se.enrolment_status) = 'confirmed' THEN 'Confirmed'
+          WHEN LOWER(se.enrolment_status) = 'cancelled' THEN 'Cancelled'
           ELSE 'Other'
         END AS status,
-        COUNT(DISTINCT e.user_id) AS total_learners
-      FROM enrollment e
-      WHERE e.enrolment_status IS NOT NULL
+        COUNT(DISTINCT se.trainee_nric) AS total_learners
+      FROM ssg_enrolments se
+      WHERE se.enrolment_status IS NOT NULL
+        AND se.trainee_nric IS NOT NULL
       GROUP BY 1
-      ORDER BY 1;
+      ORDER BY MIN(CASE
+        WHEN LOWER(se.enrolment_status) = 'confirmed' THEN 1
+        WHEN LOWER(se.enrolment_status) = 'cancelled' THEN 2
+        ELSE 3
+      END);
     `);
 
-    // Get sponsorship breakdown with all types
+    // Get sponsorship breakdown (from SSG data) — Employer vs Individual only
     const sponsorshipBreakdownResult = await pool.query(`
-      WITH sponsorship_types AS (
-        SELECT 'Employer' AS sponsorship_type
-        UNION SELECT 'Individual'
-        UNION SELECT 'N/A'
-      ),
-      enrollment_sponsorship AS (
-        SELECT
-          CASE
-            WHEN e.course_sponsorship::text = 'Employer' THEN 'Employer'
-            WHEN e.course_sponsorship::text = 'Individual' THEN 'Individual'
-            ELSE 'N/A'
-          END AS sponsorship_type,
-          e.user_id
-        FROM enrollment e
-      )
-      SELECT 
-        st.sponsorship_type,
-        COALESCE(COUNT(DISTINCT es.user_id), 0) AS total_learners
-      FROM sponsorship_types st
-      LEFT JOIN enrollment_sponsorship es ON st.sponsorship_type = es.sponsorship_type
-      GROUP BY st.sponsorship_type
-      ORDER BY st.sponsorship_type;
+      SELECT
+        CASE
+          WHEN LOWER(se.sponsorship_type) = 'employer' THEN 'Employer'
+          WHEN LOWER(se.sponsorship_type) = 'individual' THEN 'Individual'
+        END AS sponsorship_type,
+        COUNT(DISTINCT se.trainee_nric) AS total_learners
+      FROM ssg_enrolments se
+      WHERE se.trainee_nric IS NOT NULL
+        AND LOWER(se.sponsorship_type) IN ('employer', 'individual')
+      GROUP BY 1
+      ORDER BY 1;
     `);
 
 
     // Format the data
     const currentDate = new Date();
-    const currentYear = currentDate.getFullYear();
-    const currentMonth = currentDate.getMonth(); // 0-based (0 = January, 9 = October)
-    
-    // Create all months up to current month
+
+    // Create last 12 months up to current month
     const allMonths = [];
-    for (let month = 0; month <= currentMonth; month++) {
-      const monthDate = new Date(currentYear, month, 1);
+    for (let i = 0; i <= 11; i++) {
+      const monthDate = new Date(currentDate.getFullYear(), currentDate.getMonth() - i, 1);
       allMonths.push({
         date: monthDate,
         label: monthDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
@@ -157,13 +152,81 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     });
 
-    // Get enrollment forecast from upcoming classes (next 3 months)
+    // Enrollment forecast: trend-seasonal decomposition from SSG enrolment data
     const enrollmentForecastResult = await pool.query(`
-      SELECT COUNT(*) AS forecast_learners
-      FROM enrollment e
-      JOIN course_run cr ON e.course_run_id = cr.id
-      WHERE cr.start_date > CURRENT_DATE
-        AND cr.start_date <= CURRENT_DATE + INTERVAL '3 months';
+      WITH source_months AS (
+        SELECT
+          EXTRACT(YEAR FROM COALESCE(se.enrolment_date, se.created_date))::int AS yr,
+          EXTRACT(MONTH FROM COALESCE(se.enrolment_date, se.created_date))::int AS mo,
+          COUNT(DISTINCT se.trainee_nric)::numeric AS total
+        FROM ssg_enrolments se
+        WHERE se.trainee_nric IS NOT NULL
+          AND (se.enrolment_status IS NULL OR LOWER(se.enrolment_status) != 'cancelled')
+          AND COALESCE(se.enrolment_date, se.created_date) IS NOT NULL
+        GROUP BY yr, mo
+      ),
+      monthly_totals AS (
+        SELECT yr, mo, total, (yr * 12 + mo) AS month_idx
+        FROM source_months
+      ),
+      data_stats AS (
+        SELECT COUNT(*) AS months_of_data, MIN(month_idx) AS min_idx, MAX(month_idx) AS max_idx
+        FROM monthly_totals
+      ),
+      regression AS (
+        SELECT COALESCE(regr_slope(total, month_idx), 0) AS slope,
+               COALESCE(regr_intercept(total, month_idx), 0) AS intercept
+        FROM monthly_totals
+      ),
+      overall_avg AS (
+        SELECT COALESCE(AVG(total), 0) AS avg_total FROM monthly_totals
+      ),
+      seasonal_indices AS (
+        SELECT mo, CASE WHEN oa.avg_total > 0 THEN AVG(mt.total) / oa.avg_total ELSE 1 END AS seasonal_idx
+        FROM monthly_totals mt, overall_avg oa
+        GROUP BY mo, oa.avg_total
+      ),
+      next_months AS (
+        SELECT EXTRACT(MONTH FROM d)::int AS mo, EXTRACT(YEAR FROM d)::int AS yr,
+               (EXTRACT(YEAR FROM d)::int * 12 + EXTRACT(MONTH FROM d)::int) AS month_idx
+        FROM generate_series(
+          DATE_TRUNC('month', CURRENT_DATE) + INTERVAL '1 month',
+          DATE_TRUNC('month', CURRENT_DATE) + INTERVAL '3 months',
+          INTERVAL '1 month'
+        ) AS d
+      ),
+      weighted_avg AS (
+        SELECT CASE WHEN SUM(weight) > 0 THEN SUM(total * weight) / SUM(weight) * 3 ELSE 0 END AS forecast
+        FROM (
+          SELECT total, CASE WHEN month_idx > (SELECT max_idx - 2 FROM data_stats) THEN 2.0 ELSE 1.0 END AS weight
+          FROM monthly_totals
+        ) w
+      ),
+      trend_forecast AS (
+        SELECT COALESCE(SUM(GREATEST(r.intercept + r.slope * nm.month_idx, 0)), 0) AS forecast
+        FROM next_months nm, regression r
+      ),
+      full_forecast AS (
+        SELECT COALESCE(SUM(GREATEST((r.intercept + r.slope * nm.month_idx) * COALESCE(si.seasonal_idx, 1), 0)), 0) AS forecast
+        FROM next_months nm
+        JOIN regression r ON true
+        LEFT JOIN seasonal_indices si ON si.mo = nm.mo
+      )
+      SELECT
+        ds.months_of_data,
+        CASE
+          WHEN ds.months_of_data = 0 THEN 0
+          WHEN ds.months_of_data < 6 THEN wa.forecast
+          WHEN ds.months_of_data < 12 THEN tf.forecast
+          ELSE ff.forecast
+        END AS forecast,
+        CASE
+          WHEN ds.months_of_data = 0 THEN 'none'
+          WHEN ds.months_of_data < 6 THEN 'weighted avg'
+          WHEN ds.months_of_data < 12 THEN 'trend'
+          ELSE 'trend+seasonal'
+        END AS method
+      FROM data_stats ds, weighted_avg wa, trend_forecast tf, full_forecast ff;
     `);
 
     // Get total completed grants (paid amount)
@@ -194,179 +257,170 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       WHERE claim_status IN ('Approved', 'Ready for Payout', 'Pending', 'Pending Disbursement', 'To Be Disbursed');
     `);
 
-    // Smart claim forecast: same approach as grants
-    // Uses course_start_date from raw_data for monthly bucketing
+    // Claim forecast: trend-seasonal decomposition from SSG claims data
     const claimForecastResult = await pool.query(`
-      WITH claim_months AS (
+      WITH source_months AS (
         SELECT
           EXTRACT(YEAR FROM TO_DATE(raw_data->>'Course Start Date', 'DD/MM/YYYY'))::int AS yr,
           EXTRACT(MONTH FROM TO_DATE(raw_data->>'Course Start Date', 'DD/MM/YYYY'))::int AS mo,
-          COALESCE(claim_amount, 0) AS amount
+          SUM(COALESCE(claim_amount, 0)) AS total
         FROM ssg_claims
         WHERE claim_status NOT IN ('Cancelled', 'Rejected', 'Refunded')
           AND raw_data->>'Course Start Date' IS NOT NULL
           AND raw_data->>'Course Start Date' != ''
-      ),
-      monthly_totals AS (
-        SELECT yr, mo, SUM(amount) AS total
-        FROM claim_months
-        WHERE yr >= 2020
         GROUP BY yr, mo
       ),
-      data_range AS (
-        SELECT
-          MIN(yr * 12 + mo) AS earliest,
-          MAX(yr * 12 + mo) AS latest,
-          (MAX(yr * 12 + mo) - MIN(yr * 12 + mo) + 1) AS months_of_data
+      monthly_totals AS (
+        SELECT yr, mo, total, (yr * 12 + mo) AS month_idx
+        FROM source_months
+      ),
+      data_stats AS (
+        SELECT COUNT(*) AS months_of_data, MIN(month_idx) AS min_idx, MAX(month_idx) AS max_idx
         FROM monthly_totals
       ),
-      next_3_months AS (
-        SELECT
-          EXTRACT(MONTH FROM d)::int AS mo,
-          EXTRACT(YEAR FROM d)::int AS yr
+      regression AS (
+        SELECT COALESCE(regr_slope(total, month_idx), 0) AS slope,
+               COALESCE(regr_intercept(total, month_idx), 0) AS intercept
+        FROM monthly_totals
+      ),
+      overall_avg AS (
+        SELECT COALESCE(AVG(total), 0) AS avg_total FROM monthly_totals
+      ),
+      seasonal_indices AS (
+        SELECT mo, CASE WHEN oa.avg_total > 0 THEN AVG(mt.total) / oa.avg_total ELSE 1 END AS seasonal_idx
+        FROM monthly_totals mt, overall_avg oa
+        GROUP BY mo, oa.avg_total
+      ),
+      next_months AS (
+        SELECT EXTRACT(MONTH FROM d)::int AS mo, EXTRACT(YEAR FROM d)::int AS yr,
+               (EXTRACT(YEAR FROM d)::int * 12 + EXTRACT(MONTH FROM d)::int) AS month_idx
         FROM generate_series(
           DATE_TRUNC('month', CURRENT_DATE) + INTERVAL '1 month',
           DATE_TRUNC('month', CURRENT_DATE) + INTERVAL '3 months',
           INTERVAL '1 month'
         ) AS d
       ),
-      simple_forecast AS (
-        SELECT
-          CASE WHEN COUNT(*) > 0
-            THEN (SUM(total) / COUNT(*)) * 3
-            ELSE 0
-          END AS forecast
-        FROM monthly_totals
+      weighted_avg AS (
+        SELECT CASE WHEN SUM(weight) > 0 THEN SUM(total * weight) / SUM(weight) * 3 ELSE 0 END AS forecast
+        FROM (
+          SELECT total, CASE WHEN month_idx > (SELECT max_idx - 2 FROM data_stats) THEN 2.0 ELSE 1.0 END AS weight
+          FROM monthly_totals
+        ) w
       ),
-      seasonal_forecast AS (
-        SELECT COALESCE(SUM(mt.total), 0) AS forecast
-        FROM next_3_months n3
-        LEFT JOIN monthly_totals mt
-          ON mt.mo = n3.mo
-          AND mt.yr = n3.yr - 1
+      trend_forecast AS (
+        SELECT COALESCE(SUM(GREATEST(r.intercept + r.slope * nm.month_idx, 0)), 0) AS forecast
+        FROM next_months nm, regression r
+      ),
+      full_forecast AS (
+        SELECT COALESCE(SUM(GREATEST((r.intercept + r.slope * nm.month_idx) * COALESCE(si.seasonal_idx, 1), 0)), 0) AS forecast
+        FROM next_months nm
+        JOIN regression r ON true
+        LEFT JOIN seasonal_indices si ON si.mo = nm.mo
       )
       SELECT
-        dr.months_of_data,
+        ds.months_of_data,
         CASE
-          WHEN dr.months_of_data >= 12 AND sf.forecast > 0 THEN sf.forecast
-          ELSE smp.forecast
+          WHEN ds.months_of_data = 0 THEN 0
+          WHEN ds.months_of_data < 6 THEN wa.forecast
+          WHEN ds.months_of_data < 12 THEN tf.forecast
+          ELSE ff.forecast
         END AS forecast,
         CASE
-          WHEN dr.months_of_data >= 12 AND sf.forecast > 0 THEN 'seasonal'
-          ELSE 'average'
+          WHEN ds.months_of_data = 0 THEN 'none'
+          WHEN ds.months_of_data < 6 THEN 'weighted avg'
+          WHEN ds.months_of_data < 12 THEN 'trend'
+          ELSE 'trend+seasonal'
         END AS method
-      FROM data_range dr, seasonal_forecast sf, simple_forecast smp;
+      FROM data_stats ds, weighted_avg wa, trend_forecast tf, full_forecast ff;
     `);
 
-    // Smart grant forecast: auto-selects method based on data depth
-    // < 12 months: simple average × 3
-    // 12-23 months: same months last year (seasonal)
-    // 24+ months: seasonal × YoY growth trend
+    // Grant forecast: trend-seasonal decomposition from SSG grants data
     const grantForecastResult = await pool.query(`
-      WITH grant_months AS (
+      WITH source_months AS (
         SELECT
           (2000 + CAST(SUBSTRING(grant_id FROM 5 FOR 2) AS int)) AS yr,
           CAST(SUBSTRING(grant_id FROM 7 FOR 2) AS int) AS mo,
-          COALESCE(approved_grant_amount, estimated_grant_amount, 0) AS amount
+          SUM(COALESCE(approved_grant_amount, estimated_grant_amount, 0)) AS total
         FROM ssg_grants
         WHERE status != 'Cancelled'
           AND grant_id LIKE 'GRN-%'
-      ),
-      monthly_totals AS (
-        SELECT yr, mo, SUM(amount) AS total
-        FROM grant_months
         GROUP BY yr, mo
       ),
-      data_range AS (
-        SELECT
-          MIN(yr * 12 + mo) AS earliest,
-          MAX(yr * 12 + mo) AS latest,
-          (MAX(yr * 12 + mo) - MIN(yr * 12 + mo) + 1) AS months_of_data
+      monthly_totals AS (
+        SELECT yr, mo, total, (yr * 12 + mo) AS month_idx
+        FROM source_months
+      ),
+      data_stats AS (
+        SELECT COUNT(*) AS months_of_data, MIN(month_idx) AS min_idx, MAX(month_idx) AS max_idx
         FROM monthly_totals
       ),
-      next_3_months AS (
-        SELECT
-          EXTRACT(MONTH FROM d)::int AS mo,
-          EXTRACT(YEAR FROM d)::int AS yr
+      regression AS (
+        SELECT COALESCE(regr_slope(total, month_idx), 0) AS slope,
+               COALESCE(regr_intercept(total, month_idx), 0) AS intercept
+        FROM monthly_totals
+      ),
+      overall_avg AS (
+        SELECT COALESCE(AVG(total), 0) AS avg_total FROM monthly_totals
+      ),
+      seasonal_indices AS (
+        SELECT mo, CASE WHEN oa.avg_total > 0 THEN AVG(mt.total) / oa.avg_total ELSE 1 END AS seasonal_idx
+        FROM monthly_totals mt, overall_avg oa
+        GROUP BY mo, oa.avg_total
+      ),
+      next_months AS (
+        SELECT EXTRACT(MONTH FROM d)::int AS mo, EXTRACT(YEAR FROM d)::int AS yr,
+               (EXTRACT(YEAR FROM d)::int * 12 + EXTRACT(MONTH FROM d)::int) AS month_idx
         FROM generate_series(
           DATE_TRUNC('month', CURRENT_DATE) + INTERVAL '1 month',
           DATE_TRUNC('month', CURRENT_DATE) + INTERVAL '3 months',
           INTERVAL '1 month'
         ) AS d
       ),
-      -- Method A: simple average per month × 3 (fallback)
-      simple_forecast AS (
-        SELECT
-          CASE WHEN COUNT(*) > 0
-            THEN (SUM(total) / COUNT(*)) * 3
-            ELSE 0
-          END AS forecast
-        FROM monthly_totals
+      weighted_avg AS (
+        SELECT CASE WHEN SUM(weight) > 0 THEN SUM(total * weight) / SUM(weight) * 3 ELSE 0 END AS forecast
+        FROM (
+          SELECT total, CASE WHEN month_idx > (SELECT max_idx - 2 FROM data_stats) THEN 2.0 ELSE 1.0 END AS weight
+          FROM monthly_totals
+        ) w
       ),
-      -- Method B: same months last year (12+ months)
-      seasonal_forecast AS (
-        SELECT COALESCE(SUM(mt.total), 0) AS forecast
-        FROM next_3_months n3
-        LEFT JOIN monthly_totals mt
-          ON mt.mo = n3.mo
-          AND mt.yr = n3.yr - 1
+      trend_forecast AS (
+        SELECT COALESCE(SUM(GREATEST(r.intercept + r.slope * nm.month_idx, 0)), 0) AS forecast
+        FROM next_months nm, regression r
       ),
-      -- Method C: seasonal × YoY growth (24+ months)
-      -- Growth = avg of recent 6 months / avg of same 6 months last year
-      recent_6 AS (
-        SELECT COALESCE(AVG(total), 0) AS avg_recent
-        FROM monthly_totals
-        WHERE (yr * 12 + mo) > (
-          SELECT latest - 6 FROM data_range
-        )
-      ),
-      prior_6 AS (
-        SELECT COALESCE(AVG(total), 0) AS avg_prior
-        FROM monthly_totals
-        WHERE (yr * 12 + mo) > (
-          SELECT latest - 18 FROM data_range
-        )
-        AND (yr * 12 + mo) <= (
-          SELECT latest - 12 FROM data_range
-        )
-      ),
-      growth AS (
-        SELECT
-          CASE
-            WHEN p.avg_prior > 0 THEN r.avg_recent / p.avg_prior
-            ELSE 1
-          END AS yoy_rate
-        FROM recent_6 r, prior_6 p
-      ),
-      growth_forecast AS (
-        SELECT sf.forecast * g.yoy_rate AS forecast
-        FROM seasonal_forecast sf, growth g
+      full_forecast AS (
+        SELECT COALESCE(SUM(GREATEST((r.intercept + r.slope * nm.month_idx) * COALESCE(si.seasonal_idx, 1), 0)), 0) AS forecast
+        FROM next_months nm
+        JOIN regression r ON true
+        LEFT JOIN seasonal_indices si ON si.mo = nm.mo
       )
       SELECT
-        dr.months_of_data,
+        ds.months_of_data,
         CASE
-          WHEN dr.months_of_data >= 24 AND gf.forecast > 0 THEN gf.forecast
-          WHEN dr.months_of_data >= 12 AND sf.forecast > 0 THEN sf.forecast
-          ELSE smp.forecast
+          WHEN ds.months_of_data = 0 THEN 0
+          WHEN ds.months_of_data < 6 THEN wa.forecast
+          WHEN ds.months_of_data < 12 THEN tf.forecast
+          ELSE ff.forecast
         END AS forecast,
         CASE
-          WHEN dr.months_of_data >= 24 AND gf.forecast > 0 THEN 'seasonal+growth'
-          WHEN dr.months_of_data >= 12 AND sf.forecast > 0 THEN 'seasonal'
-          ELSE 'average'
+          WHEN ds.months_of_data = 0 THEN 'none'
+          WHEN ds.months_of_data < 6 THEN 'weighted avg'
+          WHEN ds.months_of_data < 12 THEN 'trend'
+          ELSE 'trend+seasonal'
         END AS method
-      FROM data_range dr, seasonal_forecast sf, simple_forecast smp, growth_forecast gf;
+      FROM data_stats ds, weighted_avg wa, trend_forecast tf, full_forecast ff;
     `);
 
-    const forecastRow = grantForecastResult.rows[0];
+    const enrollmentForecastRow = enrollmentForecastResult.rows[0];
+    const grantForecastRow = grantForecastResult.rows[0];
     const claimForecastRow = claimForecastResult.rows[0];
 
     const analyticsData = {
       totalLearners: parseInt(totalLearnersResult.rows[0]?.total_learners) || 0,
       totalGrants: parseFloat(totalGrantsResult.rows[0]?.total_grants) || 0,
       totalClaims: parseFloat(totalClaimsResult.rows[0]?.total_claims) || 0,
-      enrollmentForecast: parseInt(enrollmentForecastResult.rows[0]?.forecast_learners) || 0,
-      grantForecast: parseFloat(forecastRow?.forecast) || 0,
-      grantForecastMethod: forecastRow?.method || 'none',
+      enrollmentForecast: Math.round(parseFloat(enrollmentForecastRow?.forecast) || 0),
+      grantForecast: parseFloat(grantForecastRow?.forecast) || 0,
+      grantForecastMethod: grantForecastRow?.method || 'none',
       grantsInPipeline: parseFloat(grantsInPipelineResult.rows[0]?.pipeline_grants) || 0,
       claimForecast: parseFloat(claimForecastRow?.forecast) || 0,
       claimForecastMethod: claimForecastRow?.method || 'none',

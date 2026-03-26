@@ -225,7 +225,7 @@ const AssessmentGrading: React.FC = () => {
                         <span className={`text-xs font-semibold uppercase tracking-wider ${
                             student.is_competent ? 'text-green-600 dark:text-green-400' : 'text-gray-500 dark:text-gray-500'
                           }`}>
-                            {student.is_competent ? 'Competent' : 'Incompetent'}
+                            {student.is_competent ? 'Competent' : 'Not Yet Competent'}
                         </span>
                         
                         {/* iOS-style toggle switch */}

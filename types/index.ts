@@ -64,6 +64,7 @@ export enum AdminPage {
   CourseSessionAttendance = 'courseSessionAttendance',
   CourseSessions = 'courseSessions',
   AssignStudent = 'assignStudent',
+  SearchPastLearners = 'searchPastLearners',
   CheckAttendance = 'checkAttendance',
   AutomationLogs = 'automationLogs',
   AssignTrainerLogs = 'assignTrainerLogs',
