@@ -90,7 +90,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const status = String(result.status || '');
         fetched = { success: false, status: status || 'error', error: result.error.message ?? String(result.error) };
       } else {
-        const enrolment = result.data?.enrolment ?? result.data;
+        const raw: any = result.data;
+        const enrolment = raw?.enrolment ?? raw;
         fetched = enrolment ? { success: true, status: '200', enrolment } : { success: false, status: '200_no_data', error: 'No enrolment object' };
       }
     } catch (err) {
