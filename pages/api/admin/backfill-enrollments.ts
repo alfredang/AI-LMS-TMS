@@ -88,7 +88,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const result = await enrolmentAPI.viewEnrolment(enrolmentId);
       if (result.error) {
         const status = String(result.status || '');
-        fetched = { success: false, status: status || 'error', error: result.error.message ?? String(result.error) };
+        fetched = { success: false, status: status || 'error', error: result.error?.message ?? String(result.error) };
       } else {
         const raw: any = result.data;
         const enrolment = raw?.enrolment ?? raw;

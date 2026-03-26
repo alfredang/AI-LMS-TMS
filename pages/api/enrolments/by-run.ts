@@ -42,7 +42,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (status === 404) {
         return res.status(200).json({ success: true, data: [] });
       }
-      return res.status(status || 500).json({ success: false, error: result.error.message ?? 'SSG error' });
+      return res.status(status || 500).json({ success: false, error: result.error?.message ?? 'SSG error' });
     }
 
     // SSG returns enrolments as data.enrolment[] or data[]

@@ -142,8 +142,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       (result.error.details && result.error.details.length > 0));
 
     if (hasError) {
-      const errMsg = result.error.details?.[0]?.message || result.error.message;
-      return res.status(result.status || 400).json({ error: { message: errMsg, details: result.error.details } });
+      const errMsg = result.error?.details?.[0]?.message || result.error?.message;
+      return res.status(result.status || 400).json({ error: { message: errMsg, details: result.error?.details } });
     }
 
     console.log('✅ SSG create course run response:', JSON.stringify(result.data));

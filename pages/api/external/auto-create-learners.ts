@@ -77,7 +77,7 @@ async function fetchEnrollments(courseRunId: string): Promise<any[]> {
   if (result.error) {
     const status = Number(result.status) || 0;
     if (status === 404) return [];
-    throw new Error(`SSG error ${status}: ${result.error.message ?? 'unknown'}`);
+    throw new Error(`SSG error ${status}: ${result.error?.message ?? 'unknown'}`);
   }
 
   const raw: any = result.data;
