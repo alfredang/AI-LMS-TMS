@@ -80,7 +80,7 @@ async function fetchEnrollments(courseRunId: string): Promise<any[]> {
     throw new Error(`SSG error ${status}: ${result.error.message ?? 'unknown'}`);
   }
 
-  const raw = result.data;
+  const raw: any = result.data;
   if (Array.isArray(raw?.enrolment)) return raw.enrolment;
   if (Array.isArray(raw)) return (raw as any[]).map((item: any) => item.enrolment ?? item);
   return [];
