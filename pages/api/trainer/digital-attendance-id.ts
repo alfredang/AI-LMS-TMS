@@ -86,7 +86,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const api = createSSGCourseAPI(ssgBaseUrl, credentials);
     const ssgResult = await api.viewCourseRun(courseRunCode);
 
-    const ssgData = ssgResult.data;
+    const ssgData: any = ssgResult.data;
     const qrCodeLink: string | undefined =
       ssgData?.course?.run?.qrCodeLink ??
       findQrCodeLinkOrRaCode(ssgData);
