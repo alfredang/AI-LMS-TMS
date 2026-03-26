@@ -77,7 +77,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     );
 
     if (hasError && !isRecordNotFound) {
-      const errMsg = result.error.details?.[0]?.message || result.error.message || 'Failed to delete course run';
+      const errMsg = result.error?.details?.[0]?.message || result.error?.message || 'Failed to delete course run';
       return res.status(result.status || 400).json({ error: errMsg });
     }
 
