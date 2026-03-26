@@ -92,7 +92,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       findQrCodeLinkOrRaCode(ssgData);
 
     if (!qrCodeLink) {
-      console.error('[digital-attendance-id] qrCodeLink not found. Full response keys:', Object.keys(webhookData || {}));
+      console.error('[digital-attendance-id] qrCodeLink not found. Full response keys:', Object.keys(ssgData || {}));
       return res.status(404).json({
         error: 'qrCodeLink not found in webhook response',
         hint: 'Check server logs for the raw webhook response structure',
