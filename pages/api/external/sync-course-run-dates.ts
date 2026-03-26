@@ -133,7 +133,7 @@ export async function runDateSync() {
         errors++;
         console.warn(`  ⚠️ SSG error for ${run.course_run_id}: ${logEntry.errorMessage}`);
       } else {
-        const runData = ssgResult.data?.course?.run;
+        const runData = (ssgResult.data?.course as any)?.run;
         if (!runData) {
           logEntry.status = 'error';
           logEntry.errorMessage = 'No run data returned from SSG';

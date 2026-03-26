@@ -71,7 +71,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(ssgResult.status || 404).json({ error: `Course run ${code} not found in SSG.` });
     }
 
-    const courseData = ssgResult.data?.course;
+    const courseData: any = ssgResult.data?.course;
     const runData = courseData?.run;
 
     if (!courseData || !runData) {

@@ -44,7 +44,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     // Normalise date fields: SSG uses courseDates.start/end; consumers expect courseStartDate/courseEndDate
-    const course = result.data?.course;
+    const course: any = result.data?.course;
     if (course?.run) {
       const run = course.run;
       run.courseStartDate = run.courseStartDate ?? run.courseDates?.start;
