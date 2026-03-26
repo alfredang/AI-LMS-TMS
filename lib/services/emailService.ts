@@ -93,18 +93,27 @@ class EmailService {
 
   async sendOtpEmail(email: string, otp: string, expiryMinutes: number = 10): Promise<{ success: boolean; error?: string; messageId?: string }> {
     const subject = 'Tertiary Infotech LMS - Verification Code';
-    const text = `Your verification code for Tertiary Infotech LMS is: ${otp}\n\nThis code will expire in ${expiryMinutes} minutes.\n\nIf you did not request this code, please ignore this email.\n\nTertiary Infotech Pte Ltd`;
+    const text = `Hi,
+
+Your OTP is ${otp}. 
+
+Please use this to login to your account on the Tertiary Infotech Academy AI LMS TMS https://ai-lms-tms.tertiaryinfo.tech/ within ${expiryMinutes} minutes. 
+
+If your OTP does not work, please request for a new OTP on the login page.
+
+If you did not make this request, you may ignore this email. Do not share this OTP with anyone. This is strictly confidential and to be used by you only. 
+
+Warm regards
+Tertiary Infotech Academy`;
+
     const html = `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-        <h2 style="color: #1a3a69;">Tertiary Infotech LMS</h2>
-        <p>Your verification code is:</p>
-        <div style="background-color: #f5f5f5; padding: 20px; text-align: center; margin: 20px 0; border-radius: 8px;">
-          <span style="font-size: 32px; font-weight: bold; letter-spacing: 8px; color: #1a3a69;">${otp}</span>
-        </div>
-        <p style="color: #666;">This code will expire in <strong>${expiryMinutes} minutes</strong>.</p>
-        <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
-        <p style="color: #999; font-size: 12px;">If you did not request this code, please ignore this email.</p>
-        <p style="color: #999; font-size: 12px;">Tertiary Infotech Pte Ltd</p>
+      <div style="font-family: Arial, sans-serif; font-size: 14px; color: #333; line-height: 1.6;">
+        <p>Hi,</p>
+        <p>Your OTP is <strong>${otp}</strong>.</p>
+        <p>Please use this to login to your account on the Tertiary Infotech Academy AI LMS TMS <a href="https://ai-lms-tms.tertiaryinfo.tech/">https://ai-lms-tms.tertiaryinfo.tech/</a> within ${expiryMinutes} minutes.</p>
+        <p>If your OTP does not work, please request for a new OTP on the login page.</p>
+        <p>If you did not make this request, you may ignore this email. Do not share this OTP with anyone. This is strictly confidential and to be used by you only.</p>
+        <p>Warm regards<br>Tertiary Infotech Academy</p>
       </div>
     `;
 
