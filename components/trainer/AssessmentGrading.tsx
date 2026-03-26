@@ -33,6 +33,7 @@ const AssessmentGrading: React.FC = () => {
   const [students, setStudents] = useState<StudentData[]>([]);
   const [loadingStudents, setLoadingStudents] = useState(false);
   const [savingStatus, setSavingStatus] = useState<Record<string, boolean>>({});
+  const [certVerification, setCertVerification] = useState<Record<string, { checking: boolean; exists?: boolean }>>({});
 
   useEffect(() => {
     if (currentUser?.email) {
@@ -71,10 +72,47 @@ const AssessmentGrading: React.FC = () => {
     fetch(`/api/trainer/class-students?courseRunId=${selectedCourseRunId}`)
       .then(res => res.json())
       .then(data => {
-        if (Array.isArray(data)) setStudents(data);
+        if (Array.isArray(data)) {
+          setStudents(data);
+          // Verify certificates against Google Drive
+          verifyCertificates(data);
+        }
       })
       .finally(() => setLoadingStudents(false));
   }, [selectedCourseRunId]);
+
+  const verifyCertificates = async (studentList: StudentData[]) => {
+    const studentsWithCerts = studentList.filter(s => s.is_competent && s.certificate);
+    if (studentsWithCerts.length === 0) return;
+
+    // Mark all as checking
+    const initialState: Record<string, { checking: boolean; exists?: boolean }> = {};
+    studentsWithCerts.forEach(s => {
+      const sId = s.enrolment_id || s.student_name;
+      initialState[sId] = { checking: true };
+    });
+    setCertVerification(initialState);
+
+    // Verify each certificate in parallel
+    await Promise.allSettled(
+      studentsWithCerts.map(async (s) => {
+        const sId = s.enrolment_id || s.student_name;
+        try {
+          const res = await fetch(`/api/certificates/verify-drive?url=${encodeURIComponent(s.certificate!)}`);
+          const data = await res.json();
+          setCertVerification(prev => ({
+            ...prev,
+            [sId]: { checking: false, exists: data.exists === true }
+          }));
+        } catch {
+          setCertVerification(prev => ({
+            ...prev,
+            [sId]: { checking: false, exists: false }
+          }));
+        }
+      })
+    );
+  };
 
   const handleToggleCompetency = async (student: StudentData, index: number) => {
     const newCompetentState = !student.is_competent;
@@ -107,7 +145,10 @@ const AssessmentGrading: React.FC = () => {
       if (newCompetentState) {
         const refreshRes = await fetch(`/api/trainer/class-students?courseRunId=${selectedCourseRunId}`);
         const refreshData = await refreshRes.json();
-        if (Array.isArray(refreshData)) setStudents(refreshData);
+        if (Array.isArray(refreshData)) {
+          setStudents(refreshData);
+          verifyCertificates(refreshData);
+        }
       }
 
     } catch (e) {
@@ -210,17 +251,41 @@ const AssessmentGrading: React.FC = () => {
                       </div>
 
                       <div className="flex items-center space-x-4">
-                        {/* Certificate Status Badge */}
-                        {student.is_competent && (
-                          <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-full ${
-                            student.certificate
-                              ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-                              : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
-                          }`}>
-                            <Icon name={student.certificate ? IconName.CheckCircle : IconName.Clock} className="w-3.5 h-3.5" />
-                            {student.certificate ? 'Cert Issued' : 'Cert Pending'}
-                          </span>
-                        )}
+                        {/* Certificate Status Badge — verified against Google Drive */}
+                        {student.is_competent && (() => {
+                          const verification = certVerification[sId];
+                          let badgeClass = 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400';
+                          let badgeIcon = IconName.Clock;
+                          let badgeText = 'Cert Pending';
+
+                          if (student.certificate) {
+                            if (verification?.checking) {
+                              badgeClass = 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400';
+                              badgeIcon = IconName.Spinner;
+                              badgeText = 'Verifying...';
+                            } else if (verification?.exists === true) {
+                              badgeClass = 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400';
+                              badgeIcon = IconName.CheckCircle;
+                              badgeText = 'Cert Issued';
+                            } else if (verification?.exists === false) {
+                              badgeClass = 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400';
+                              badgeIcon = IconName.Close;
+                              badgeText = 'Cert Missing';
+                            } else {
+                              // Verification not yet run (e.g. just toggled competent)
+                              badgeClass = 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400';
+                              badgeIcon = IconName.Clock;
+                              badgeText = 'Cert Generating';
+                            }
+                          }
+
+                          return (
+                            <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-full ${badgeClass}`}>
+                              <Icon name={badgeIcon} className={`w-3.5 h-3.5 ${verification?.checking ? 'animate-spin' : ''}`} />
+                              {badgeText}
+                            </span>
+                          );
+                        })()}
 
                         <span className={`text-xs font-semibold uppercase tracking-wider ${
                             student.is_competent ? 'text-green-600 dark:text-green-400' : 'text-gray-500 dark:text-gray-500'
