@@ -63,8 +63,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const hasError = ssgResult.error && (ssgResult.error.code || ssgResult.error.message ||
       (ssgResult.error.details && ssgResult.error.details.length > 0));
 
-    const run = ssgResult.data?.course?.run;
-    const courseInfo = ssgResult.data?.course;
+    const courseData: any = ssgResult.data?.course;
+    const run = courseData?.run;
+    const courseInfo = courseData;
 
     if (hasError || !run || !courseInfo) {
       return res.status(404).json({
