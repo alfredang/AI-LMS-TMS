@@ -46,7 +46,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     // SSG returns enrolments as data.enrolment[] or data[]
-    const raw = result.data;
+    const raw: any = result.data;
     let enrolments: any[];
     if (Array.isArray(raw?.enrolment)) {
       enrolments = raw.enrolment;
