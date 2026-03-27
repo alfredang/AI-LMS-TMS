@@ -311,48 +311,46 @@ const ClassDetailView: React.FC<ClassDetailViewProps> = ({ courseRunId }) => {
         </div>
       </Card>
 
-      {/* Enrolled Learners Section - Using Search Enrolment API Data */}
+      {/* Enrolled Learners Section - Using Local Database Data */}
       <h3 className="text-2xl font-bold mb-4">Enrolled Learners</h3>
       <Card className="p-0 overflow-x-auto">
-        {/* Original database data (commented out) */}
-        {/* 
         {classDetail.enrolledLearners && classDetail.enrolledLearners.length > 0 ? (
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+          <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+            <thead className="bg-gray-50 dark:bg-gray-800">
               <tr>
-                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Learner
                 </th>
-                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Company
                 </th>
-                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Sponsorship
                 </th>
-                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Nationality
                 </th>
-                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Age Group
                 </th>
-                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Payment Details
                 </th>
-                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Assessment
                 </th>
-                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Grant ID
                 </th>
-                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Claim ID
                 </th>
-                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Actions
                 </th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
               {classDetail.enrolledLearners.map((learner, index) => {
                 const ageGroup = getAgeGroup(learner.dob);
                 return (
@@ -403,108 +401,6 @@ const ClassDetailView: React.FC<ClassDetailViewProps> = ({ courseRunId }) => {
           </table>
         ) : (
           <p className="text-center text-subtle py-10">No learners are enrolled in this course yet.</p>
-        )}
-        */}
-
-        {/* New table using Search Enrolment API data */}
-        {Array.isArray(enrolmentData) && enrolmentData.length > 0 ? (
-          <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-            <thead className="bg-gray-50 dark:bg-gray-800">
-              <tr>
-                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Learner
-                </th>
-                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Company
-                </th>
-                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Sponsorship
-                </th>
-                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  ID Type
-                </th>
-                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Age Group
-                </th>
-                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Payment Details
-                </th>
-                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Assessment
-                </th>
-                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Grant ID
-                </th>
-                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Claim ID
-                </th>
-                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
-              {enrolmentData.map((record: any, index: number) => {
-                const trainee = record.enrolment ? record.enrolment.trainee : record.trainee;
-                if (!trainee) return null;
-                const ageGroup = getAgeGroup(trainee.dateOfBirth || '');
-                
-                return (
-                  <tr key={index}>
-                    <td className="px-4 py-4 whitespace-nowrap text-sm">
-                      <p className="font-medium text-gray-900 dark:text-white">{trainee.fullName || 'N/A'}</p>
-                      <p className="text-gray-500 dark:text-gray-400">{trainee.email?.full || 'N/A'}</p>
-                      <p className="text-gray-500 dark:text-gray-400">{trainee.contactNumber?.phoneNumber || 'N/A'}</p>
-                    </td>
-                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                      {trainee.employer?.name || 'N/A'}
-                    </td>
-                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                      {trainee.sponsorshipType || 'N/A'}
-                    </td>
-                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                      {trainee.idType?.type || 'N/A'}
-                    </td>
-                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                      {ageGroup}
-                    </td>
-                    <td className="px-4 py-4 whitespace-nowrap text-sm">
-                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(trainee.fees?.collectionStatus || '')}`}>
-                        {trainee.fees?.collectionStatus || 'N/A'}
-                      </span>
-                    </td>
-                    <td className="px-4 py-4 whitespace-nowrap text-sm">
-                      <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300">
-                        {record.enrolment?.status || 'Pending'}
-                      </span>
-                    </td>
-                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400 font-mono">
-                      N/A
-                    </td>
-                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400 font-mono">
-                      N/A
-                    </td>
-                    <td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
-                      <Button size="sm" variant="ghost">
-                        <Icon name={IconName.Edit} className="w-4 h-4 mr-1" />
-                        Edit
-                      </Button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        ) : (
-          <div className="text-center text-subtle py-10">
-            {Array.isArray(enrolmentData) && enrolmentData.length === 0 ? (
-              <p>No enrolment records found for this course run.</p>
-            ) : enrolmentData ? (
-              <p>Invalid or empty enrolment data received.</p>
-            ) : (
-              <p>Click "Search Enrolment Records" below to load learner data from SSG API.</p>
-            )}
-          </div>
         )}
       </Card>
 
