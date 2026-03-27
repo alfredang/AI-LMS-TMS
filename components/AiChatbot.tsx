@@ -5,20 +5,8 @@ import { Icon, IconName } from './ui/Icon';
 import { ChatMessage } from '@app-types';
 import { getApiUrl } from '@/lib/urlHelpers';
 
-const NEMO_SYSTEM_PROMPT = `You are Nemo, an AI operations assistant for Tertiary Infotech Academy's LMS/TMS platform.
-You help admins and training providers manage courses, trainers, learners, enrollments, and class operations.
-
-Key capabilities:
-- Search and view course runs, trainers, learners, enrollments
-- Assign trainers to course runs
-- Create new classes and course runs
-- Manage learner enrollments
-- View statistics and analytics
-- Help with SSG/TPG grant and claim operations
-
-When a user asks you to perform an action (assign trainer, enroll learner, etc.), explain what you'll do and confirm before executing.
-Be concise, professional, and proactive in suggesting next steps.
-If you don't know something, say so honestly.`;
+// System prompt is managed in the backend (pages/api/ai/nemo.ts)
+// No need to send it from frontend — the backend has the full prompt with all tools
 
 const AiChatbot: React.FC = () => {
     const { isChatOpen, toggleChat, resetInAppChat } = useLms();
@@ -71,7 +59,6 @@ const AiChatbot: React.FC = () => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     messages: conversationMessages,
-                    systemPrompt: NEMO_SYSTEM_PROMPT,
                 }),
             });
 

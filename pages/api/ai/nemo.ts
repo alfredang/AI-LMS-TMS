@@ -1,152 +1,106 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import OpenAI from 'openai';
+import { spawn } from 'child_process';
 import pool from '../../../lib/db';
 
-async function getMiniMaxKey(): Promise<{ apiKey: string; model: string }> {
-    // First try from training_provider_api table
-    const result = await pool.query(`
-        SELECT key_value, selected_model
-        FROM training_provider_api
-        WHERE training_provider_id = (
-            SELECT id FROM training_provider ORDER BY created_at DESC LIMIT 1
-        )
-        AND key_name = 'MINIMAX_API_KEY'
-        AND key_value IS NOT NULL AND key_value != ''
-    `);
-
-    if (result.rows.length > 0) {
-        return {
-            apiKey: result.rows[0].key_value,
-            model: result.rows[0].selected_model || 'MiniMax-M2.7',
-        };
-    }
-
-    // Fallback to environment variable
-    if (process.env.MINIMAX_API_KEY) {
-        return {
-            apiKey: process.env.MINIMAX_API_KEY,
-            model: 'MiniMax-M2.7',
-        };
-    }
-
-    throw new Error('No MiniMax API key configured. Add one in Company Settings or set MINIMAX_API_KEY env var.');
-}
-
-const NEMO_SYSTEM_PROMPT = `You are Nemo, an AI operations assistant for Tertiary Infotech Academy's LMS/TMS platform.
+const NEMO_SYSTEM_PROMPT = `You are Nemo, an AI operations agent for Tertiary Infotech Academy's LMS/TMS platform.
 You help admins and training providers manage courses, trainers, learners, enrollments, and class operations.
 
-You have access to the following tools to perform operations on the platform. Use them when the user asks you to take action.
+You can TAKE ACTIONS on the platform using tools. When the user asks you to do something, respond with a JSON tool call in this exact format:
+{"tool": "tool_name", "params": { ... }}
 
-When a user asks to assign a trainer to a course run:
-1. If they provide the trainer's name (not email), use lookup_trainer_by_name first to find their email.
-2. If multiple trainers match, show the list and ask the user to confirm which one.
-3. Confirm the assignment details (trainer name/email + course run ID) with the user before executing assign_trainer.
+=== AVAILABLE TOOLS ===
 
-When a user asks you to perform a destructive action (delete, remove, cancel), always confirm with them first before executing.
-Be concise, professional, and proactive in suggesting next steps.
-If you don't know something, say so honestly.
-Format your responses clearly — use bullet points for lists, bold for emphasis.`;
+--- READ OPERATIONS (safe, no confirmation needed) ---
 
-// Tool definitions for Nemo (OpenAI function calling format)
-const NEMO_TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
-    {
-        type: 'function',
-        function: {
-            name: 'search_course_runs',
-            description: 'Search for course runs by title, course code, or course run ID. Returns a list of matching course runs with details.',
-            parameters: {
-                type: 'object',
-                properties: {
-                    search: { type: 'string', description: 'Search term (course title, code, or run ID)' },
-                    status: { type: 'string', description: 'Filter by status: upcoming, ongoing, completed, or all', enum: ['upcoming', 'ongoing', 'completed', 'all'] },
-                },
-                required: ['search'],
-            },
-        },
-    },
-    {
-        type: 'function',
-        function: {
-            name: 'list_trainers',
-            description: 'List all trainers with their details including name, email, and assigned classes.',
-            parameters: {
-                type: 'object',
-                properties: {
-                    search: { type: 'string', description: 'Optional search term to filter trainers by name or email' },
-                },
-                required: [],
-            },
-        },
-    },
-    {
-        type: 'function',
-        function: {
-            name: 'list_learners',
-            description: 'List learners with their details. Can search by name or email.',
-            parameters: {
-                type: 'object',
-                properties: {
-                    search: { type: 'string', description: 'Optional search term to filter learners by name or email' },
-                },
-                required: [],
-            },
-        },
-    },
-    {
-        type: 'function',
-        function: {
-            name: 'get_statistics',
-            description: 'Get platform statistics including total learners, trainers, ongoing classes, upcoming classes, and completed classes.',
-            parameters: {
-                type: 'object',
-                properties: {},
-                required: [],
-            },
-        },
-    },
-    {
-        type: 'function',
-        function: {
-            name: 'lookup_trainer_by_name',
-            description: 'Look up a trainer by their name to find their email and details. Use this when a user refers to a trainer by name and you need their email for assignment.',
-            parameters: {
-                type: 'object',
-                properties: {
-                    trainerName: { type: 'string', description: 'The trainer name or partial name to search for' },
-                },
-                required: ['trainerName'],
-            },
-        },
-    },
-    {
-        type: 'function',
-        function: {
-            name: 'assign_trainer',
-            description: 'Assign a trainer to a course run. First use lookup_trainer_by_name to find the trainer email if the user provides a name instead of email. Always confirm with the user before executing this action.',
-            parameters: {
-                type: 'object',
-                properties: {
-                    courseRunId: { type: 'string', description: 'The course run ID (e.g., "1313594")' },
-                    trainerEmail: { type: 'string', description: 'The email address of the trainer to assign' },
-                },
-                required: ['courseRunId', 'trainerEmail'],
-            },
-        },
-    },
-    {
-        type: 'function',
-        function: {
-            name: 'get_course_run_enrollments',
-            description: 'Get the list of enrolled learners for a specific course run.',
-            parameters: {
-                type: 'object',
-                properties: {
-                    courseRunId: { type: 'string', description: 'The course run ID' },
-                },
-                required: ['courseRunId'],
-            },
-        },
-    },
+1. search_course_runs: Search course runs by title, code, or ID
+   Params: search (string, required), status (string, optional: upcoming/ongoing/completed/all)
+
+2. list_trainers: List all trainers with details
+   Params: search (string, optional)
+
+3. list_learners: List all learners with details
+   Params: search (string, optional)
+
+4. get_statistics: Get platform-wide stats (learners, trainers, classes)
+   Params: none
+
+5. lookup_trainer_by_name: Find a trainer by name to get their email/details
+   Params: trainerName (string, required)
+
+6. get_course_run_enrollments: Get enrolled learners for a course run
+   Params: courseRunId (string, required)
+
+7. get_trainer_details: Get detailed info for all trainers
+   Params: none
+
+8. get_learner_details: Get detailed info for all learners
+   Params: none
+
+9. get_certificate_data: Get certificate status for a learner's enrollments. If no learnerId provided, returns list of all learners.
+   Params: learnerId (string, optional)
+
+--- WRITE OPERATIONS (always confirm with user before executing) ---
+
+9. assign_trainer: Assign a trainer to a course run
+   Params: courseRunId (string, required), trainerEmail (string, required)
+
+10. enroll_learner: Enroll a learner into a course run
+    Params: email (string, required), fullName (string, required), courseRunId (string, required), courseId (string, optional), sponsorshipType (string, optional: Individual/Employer)
+
+11. remove_enrollment: Remove a learner from a course run
+    Params: email (string, required), courseRunId (string, required)
+
+12. create_learner_account: Create a new learner account
+    Params: email (string, required), fullName (string, required), nric (string, optional)
+
+13. update_learner_status: Activate or deactivate a learner
+    Params: userId (string, required), newStatus (string, required: active/inactive)
+
+14. update_trainer_status: Activate or deactivate a trainer
+    Params: userId (string, required), newStatus (string, required: Active/Inactive)
+
+15. create_course_run: Create a new course run / class
+    Params: courseCode (string, required), courseRunId (string, required), startDate (string, optional: YYYY-MM-DD), endDate (string, optional: YYYY-MM-DD)
+
+16. delete_course_run: Delete a course run
+    Params: courseRunId (string, required)
+
+18. unassign_trainer: Remove a trainer from a course run
+    Params: courseRunUuid (string, required)
+
+19. generate_certificate: Generate a certificate PDF for a learner enrollment. Learner must be marked Competent.
+    Params: enrolmentId (string, required)
+
+20. send_certificate: Email a certificate to the learner. Certificate must already be generated.
+    Params: enrollmentId (string, required)
+
+=== BEHAVIORAL RULES ===
+
+1. For WRITE operations (tools 10-20), ALWAYS confirm with the user before executing. Show them what you're about to do and ask "Shall I proceed?"
+2. When a user mentions a trainer by name, use lookup_trainer_by_name first to find their email before assigning.
+3. If multiple matches are found, show the list and ask the user to pick one.
+4. For CERTIFICATE operations:
+   - To send a certificate: first use get_certificate_data with the learnerId to check if a certificate exists
+   - If no certificate exists but learner is Competent, offer to generate_certificate first, then send_certificate
+   - If learner is not Competent, inform the user that the learner needs to be marked Competent before a certificate can be issued
+   - When user says "send certificate to [name]", look up the learner first, then check their enrollments
+5. Be concise, professional, and proactive in suggesting next steps.
+6. If you don't know something, say so honestly.
+7. Format responses clearly — use bullet points for lists, bold for emphasis.
+
+IMPORTANT: When you need to call a tool, output ONLY the JSON tool call on a single line. Do not wrap it in code blocks. After the tool result is provided, give your final answer to the user.`;
+
+// Valid tool names for validation
+const VALID_TOOLS = [
+    // Read
+    'search_course_runs', 'list_trainers', 'list_learners',
+    'get_statistics', 'lookup_trainer_by_name', 'get_course_run_enrollments',
+    'get_trainer_details', 'get_learner_details', 'get_certificate_data',
+    // Write
+    'assign_trainer', 'enroll_learner', 'remove_enrollment',
+    'create_learner_account', 'update_learner_status', 'update_trainer_status',
+    'create_course_run', 'delete_course_run', 'unassign_trainer',
+    'generate_certificate', 'send_certificate',
 ];
 
 // Tool execution functions
@@ -154,6 +108,8 @@ async function executeTool(name: string, input: any, req: NextApiRequest): Promi
     const baseUrl = `${req.headers['x-forwarded-proto'] || 'http'}://${req.headers.host}`;
 
     switch (name) {
+        // ==================== READ OPERATIONS ====================
+
         case 'search_course_runs': {
             const status = input.status || 'all';
             let endpoint = '';
@@ -214,6 +170,36 @@ async function executeTool(name: string, input: any, req: NextApiRequest): Promi
             return JSON.stringify(trainerResult.rows, null, 2);
         }
 
+        case 'get_course_run_enrollments': {
+            const url = new URL('/api/admin/course-run-enrollments', baseUrl);
+            url.searchParams.set('courseRunId', input.courseRunId);
+            const res = await fetch(url.toString());
+            const data = await res.json();
+            return JSON.stringify(data, null, 2);
+        }
+
+        case 'get_trainer_details': {
+            const res = await fetch(new URL('/api/admin/trainers-detail', baseUrl).toString());
+            const data = await res.json();
+            return JSON.stringify(data.data || data, null, 2);
+        }
+
+        case 'get_learner_details': {
+            const res = await fetch(new URL('/api/admin/learners-detail', baseUrl).toString());
+            const data = await res.json();
+            return JSON.stringify(data.data || data, null, 2);
+        }
+
+        case 'get_certificate_data': {
+            const url = new URL('/api/admin/certificate-data', baseUrl);
+            if (input.learnerId) url.searchParams.set('learnerId', input.learnerId);
+            const res = await fetch(url.toString());
+            const data = await res.json();
+            return JSON.stringify(data, null, 2);
+        }
+
+        // ==================== WRITE OPERATIONS ====================
+
         case 'assign_trainer': {
             const lookupResult = await pool.query(
                 `SELECT id, course_id FROM course_run WHERE course_run_id = $1`,
@@ -232,10 +218,135 @@ async function executeTool(name: string, input: any, req: NextApiRequest): Promi
             return JSON.stringify({ success: true, message: `Trainer ${input.trainerEmail} assigned to course run ${input.courseRunId}` });
         }
 
-        case 'get_course_run_enrollments': {
-            const url = new URL('/api/admin/course-run-enrollments', baseUrl);
-            url.searchParams.set('courseRunId', input.courseRunId);
-            const res = await fetch(url.toString());
+        case 'enroll_learner': {
+            const res = await fetch(new URL('/api/admin/create-learner-account', baseUrl).toString(), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    email: input.email,
+                    fullName: input.fullName,
+                    courseRunId: input.courseRunId,
+                    courseId: input.courseId || '',
+                    sponsorshipType: input.sponsorshipType || 'Individual',
+                }),
+            });
+            const data = await res.json();
+            return JSON.stringify(data, null, 2);
+        }
+
+        case 'remove_enrollment': {
+            const res = await fetch(new URL('/api/admin/remove-enrollment', baseUrl).toString(), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    email: input.email,
+                    courseRunId: input.courseRunId,
+                }),
+            });
+            const data = await res.json();
+            return JSON.stringify(data, null, 2);
+        }
+
+        case 'create_learner_account': {
+            const res = await fetch(new URL('/api/admin/create-learner-account', baseUrl).toString(), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    email: input.email,
+                    fullName: input.fullName,
+                    nric: input.nric || '',
+                }),
+            });
+            const data = await res.json();
+            return JSON.stringify(data, null, 2);
+        }
+
+        case 'update_learner_status': {
+            const res = await fetch(new URL('/api/admin/update-learner-status', baseUrl).toString(), {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    userId: input.userId,
+                    newStatus: input.newStatus,
+                }),
+            });
+            const data = await res.json();
+            return JSON.stringify(data, null, 2);
+        }
+
+        case 'update_trainer_status': {
+            const res = await fetch(new URL('/api/admin/update-trainer-status', baseUrl).toString(), {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    userId: input.userId,
+                    newStatus: input.newStatus,
+                }),
+            });
+            const data = await res.json();
+            return JSON.stringify(data, null, 2);
+        }
+
+        case 'create_course_run': {
+            const res = await fetch(new URL('/api/admin/add-course-run', baseUrl).toString(), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    courseCode: input.courseCode,
+                    courseRunId: input.courseRunId,
+                    startDate: input.startDate || '',
+                    endDate: input.endDate || '',
+                    classStatus: 'Confirmed',
+                }),
+            });
+            const data = await res.json();
+            return JSON.stringify(data, null, 2);
+        }
+
+        case 'delete_course_run': {
+            const res = await fetch(new URL('/api/admin/delete-course-run', baseUrl).toString(), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    courseRunId: input.courseRunId,
+                }),
+            });
+            const data = await res.json();
+            return JSON.stringify(data, null, 2);
+        }
+
+        case 'unassign_trainer': {
+            const res = await fetch(new URL('/api/admin/remove-trainer', baseUrl).toString(), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    courseRunUuid: input.courseRunUuid,
+                }),
+            });
+            const data = await res.json();
+            return JSON.stringify(data, null, 2);
+        }
+
+        case 'generate_certificate': {
+            const res = await fetch(new URL('/api/learner/generate-certificate', baseUrl).toString(), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    enrolmentId: input.enrolmentId,
+                }),
+            });
+            const data = await res.json();
+            return JSON.stringify(data, null, 2);
+        }
+
+        case 'send_certificate': {
+            const res = await fetch(new URL('/api/admin/send-certificate', baseUrl).toString(), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    enrollmentId: input.enrollmentId,
+                }),
+            });
             const data = await res.json();
             return JSON.stringify(data, null, 2);
         }
@@ -243,6 +354,62 @@ async function executeTool(name: string, input: any, req: NextApiRequest): Promi
         default:
             return JSON.stringify({ error: `Unknown tool: ${name}` });
     }
+}
+
+// Call Claude CLI via stdin pipe and return the text response
+function callClaude(fullPrompt: string): Promise<string> {
+    return new Promise((resolve, reject) => {
+        const isWindows = process.platform === 'win32';
+        const command = isWindows ? 'claude.cmd' : 'claude';
+
+        const child = spawn(command, [
+            '-p', '-',
+            '--output-format', 'text',
+            '--model', 'sonnet',
+        ], {
+            timeout: 60000,
+            env: { ...process.env },
+            shell: isWindows,
+            stdio: ['pipe', 'pipe', 'pipe'],
+        });
+
+        let stdout = '';
+        let stderr = '';
+
+        child.stdout.on('data', (data: Buffer) => { stdout += data.toString(); });
+        child.stderr.on('data', (data: Buffer) => { stderr += data.toString(); });
+
+        child.on('close', (code: number | null) => {
+            if (code === 0) {
+                resolve(stdout.trim());
+            } else {
+                reject(new Error(`Claude CLI exited with code ${code}: ${stderr}`));
+            }
+        });
+
+        child.on('error', (err: Error) => reject(err));
+
+        // Write prompt to stdin and close it
+        child.stdin.write(fullPrompt);
+        child.stdin.end();
+    });
+}
+
+// Try to parse a tool call from Claude's response
+function parseToolCall(text: string): { tool: string; params: any } | null {
+    try {
+        // Match JSON tool call pattern — supports nested params
+        const jsonMatch = text.match(/\{"tool"\s*:\s*"(\w+)"\s*,\s*"params"\s*:\s*(\{[^}]*\})\s*\}/);
+        if (jsonMatch) {
+            const parsed = JSON.parse(jsonMatch[0]);
+            if (parsed.tool && VALID_TOOLS.includes(parsed.tool)) {
+                return parsed;
+            }
+        }
+    } catch {
+        // Not a tool call
+    }
+    return null;
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -257,73 +424,65 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             return res.status(400).json({ error: 'Messages array is required' });
         }
 
-        const { apiKey, model } = await getMiniMaxKey();
-        const client = new OpenAI({ apiKey, baseURL: 'https://api.minimax.io/v1' });
+        // Build conversation history
+        const conversationHistory = messages
+            .map((m: any) => {
+                const role = m.role === 'model' ? 'Assistant' : m.role === 'user' ? 'User' : m.role;
+                return `${role}: ${m.content || m.text}`;
+            })
+            .join('\n\n');
 
-        // Convert messages to OpenAI format
-        const openaiMessages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
-            { role: 'system', content: systemPrompt || NEMO_SYSTEM_PROMPT },
-            ...messages.map((m: any) => ({
-                role: (m.role === 'model' ? 'assistant' : m.role) as 'user' | 'assistant',
-                content: m.content || m.text,
-            })),
-        ];
+        const activeSystemPrompt = systemPrompt || NEMO_SYSTEM_PROMPT;
 
-        // Agentic loop — keep calling until no more tool calls
-        let currentMessages = [...openaiMessages];
+        // Agentic loop — handle tool calls
+        let fullPrompt = `[SYSTEM INSTRUCTIONS]\n${activeSystemPrompt}\n[END SYSTEM INSTRUCTIONS]\n\n${conversationHistory}\n\nRespond as Nemo.`;
         let finalText = '';
         let iterations = 0;
         const maxIterations = 5;
+        const toolHistory: { tool: string; params: any; result: string }[] = [];
 
         while (iterations < maxIterations) {
             iterations++;
 
-            const response = await client.chat.completions.create({
-                model,
-                max_tokens: 4096,
-                messages: currentMessages,
-                tools: NEMO_TOOLS,
-            });
+            // Call Claude via CLI (uses your subscription)
+            const responseText = await callClaude(fullPrompt);
 
-            const choice = response.choices[0];
-            const message = choice.message;
-
-            // Collect assistant text
-            if (message.content) {
-                finalText += message.content;
-            }
-
-            // If no tool calls, we're done
-            if (!message.tool_calls || message.tool_calls.length === 0 || choice.finish_reason !== 'tool_calls') {
+            if (!responseText) {
+                finalText = 'Sorry, I could not generate a response. Please try again.';
                 break;
             }
 
-            // Add assistant message with tool calls to conversation
-            currentMessages.push(message);
+            // Check if Claude wants to call a tool
+            const toolCall = parseToolCall(responseText);
+            if (toolCall) {
+                console.log(`🔧 Nemo executing tool: ${toolCall.tool}`, toolCall.params);
+                const toolResult = await executeTool(toolCall.tool, toolCall.params, req);
+                toolHistory.push({ tool: toolCall.tool, params: toolCall.params, result: toolResult });
 
-            // Execute each tool call and add results
-            for (const toolCall of message.tool_calls) {
-                const tc = toolCall as any;
-                const fnName = tc.function?.name as string;
-                const fnArgs = JSON.parse(tc.function?.arguments ?? '{}');
-                console.log(`🔧 Nemo executing tool: ${fnName}`, fnArgs);
+                // Build context with all tool results so far
+                const toolContext = toolHistory
+                    .map((t, i) => `Tool call ${i + 1}: ${t.tool}(${JSON.stringify(t.params)})\nResult: ${t.result}`)
+                    .join('\n\n');
 
-                const result = await executeTool(fnName, fnArgs, req);
-                currentMessages.push({
-                    role: 'tool',
-                    tool_call_id: toolCall.id,
-                    content: result,
-                });
+                // Continue conversation with tool results
+                fullPrompt = `[SYSTEM INSTRUCTIONS]\n${activeSystemPrompt}\n[END SYSTEM INSTRUCTIONS]\n\n${conversationHistory}\n\n--- Tool Results ---\n${toolContext}\n\nBased on the tool results above, provide your response to the user. If you need another tool, output a tool call. Otherwise, give a clear answer.`;
+            } else {
+                // No tool call — this is the final response
+                finalText = responseText;
+                break;
             }
         }
 
-        // Strip <think>...</think> reasoning tags from model output
-        const cleanedText = finalText.replace(/<think>[\s\S]*?<\/think>\s*/g, '').trim();
+        // Clean up any remaining artifacts
+        const cleanedText = finalText
+            .replace(/<think>[\s\S]*?<\/think>\s*/g, '')
+            .replace(/\{"tool"\s*:\s*"[^"]+"\s*,\s*"params"\s*:\s*\{[^}]*\}\s*\}/g, '')
+            .trim();
 
         return res.status(200).json({
             text: cleanedText,
-            model,
-            provider: 'openai',
+            model: 'claude-cli',
+            provider: 'claude-code',
             agent: 'nemo',
         });
     } catch (error: any) {
