@@ -135,6 +135,8 @@ export interface Course {
   topics: Topic[];
   assessments?: Assessment[];
   learners?: any[];
+  numOfTrainers?: number;
+  trainersList?: string;
 }
 
 export interface CourseDetail {
