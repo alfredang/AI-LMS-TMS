@@ -361,6 +361,15 @@ body {
   color: var(--info);
 }
 
+/* Ghost/outline button text — follows theme */
+.btn-ghost {
+  color: var(--text-primary) !important;
+  border-color: var(--border);
+}
+.btn-ghost:hover {
+  background-color: var(--surface-hover);
+}
+
 /* Smooth transitions for theme changes */
 * {
   transition-property: background-color, border-color, color, fill, stroke;

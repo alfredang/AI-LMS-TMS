@@ -2,11 +2,10 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 
 // API endpoint for submitting link-based assessments (Written Assessment / Practical Performance Assessment)
-// These don't have an assessment_id in the assessment table, so we track them separately
+// Supports multiple file uploads per assessment type
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method === 'GET') {
-    // Get submissions for a specific user and course run
     const { userId, courseRunId } = req.query;
 
     if (!userId || !courseRunId) {
@@ -17,7 +16,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const result = await pool.query(
         `SELECT * FROM link_assessment_submission
          WHERE user_id = $1 AND course_run_id = $2
-         ORDER BY submitted_at DESC`,
+         ORDER BY assessment_type, submitted_at DESC`,
         [userId, courseRunId]
       );
 
@@ -27,6 +26,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       });
     } catch (error: any) {
       console.error('❌ Error fetching link assessment submissions:', error);
+      return res.status(500).json({ success: false, error: error.message });
+    }
+  }
+
+  if (req.method === 'DELETE') {
+    const { submissionId } = req.body;
+
+    if (!submissionId) {
+      return res.status(400).json({ success: false, error: 'Missing required field: submissionId' });
+    }
+
+    try {
+      await pool.query('DELETE FROM link_assessment_submission WHERE id = $1', [submissionId]);
+      return res.status(200).json({ success: true, message: 'Submission deleted' });
+    } catch (error: any) {
+      console.error('❌ Error deleting submission:', error);
       return res.status(500).json({ success: false, error: error.message });
     }
   }
@@ -44,7 +59,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
   }
 
-  // Validate assessment type
   if (!['written', 'practical'].includes(assessmentType)) {
     return res.status(400).json({
       success: false,
@@ -53,66 +67,27 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    // Check if a submission already exists for this user, course run, and assessment type
-    const existingSubmission = await pool.query(
-      `SELECT id FROM link_assessment_submission
-       WHERE user_id = $1 AND course_run_id = $2 AND assessment_type = $3`,
-      [userId, courseRunId, assessmentType]
+    // Always insert a new submission (multiple files allowed)
+    const result = await pool.query(
+      `INSERT INTO link_assessment_submission (user_id, course_run_id, assessment_type, file_name, file_url, submitted_at)
+       VALUES ($1, $2, $3, $4, $5, NOW())
+       RETURNING id`,
+      [userId, courseRunId, assessmentType, fileName, fileUrl]
     );
 
-    if (existingSubmission.rows.length > 0) {
-      // Update existing submission (resubmission)
-      await pool.query(
-        `UPDATE link_assessment_submission
-         SET file_name = $1, file_url = $2, submitted_at = NOW()
-         WHERE user_id = $3 AND course_run_id = $4 AND assessment_type = $5`,
-        [fileName, fileUrl, userId, courseRunId, assessmentType]
-      );
-
-      console.log(`✅ Link assessment resubmitted: ${assessmentType} for user ${userId}`);
-      return res.status(200).json({
-        success: true,
-        message: 'Assessment resubmitted successfully',
-        isResubmission: true
-      });
-    } else {
-      // Create new submission
-      await pool.query(
-        `INSERT INTO link_assessment_submission (user_id, course_run_id, assessment_type, file_name, file_url, submitted_at)
-         VALUES ($1, $2, $3, $4, $5, NOW())`,
-        [userId, courseRunId, assessmentType, fileName, fileUrl]
-      );
-
-      console.log(`✅ Link assessment submitted: ${assessmentType} for user ${userId}`);
-      return res.status(201).json({
-        success: true,
-        message: 'Assessment submitted successfully',
-        isResubmission: false
-      });
-    }
+    console.log(`✅ Link assessment submitted: ${assessmentType} for user ${userId} — file: ${fileName}`);
+    return res.status(201).json({
+      success: true,
+      message: 'Assessment submitted successfully',
+      id: result.rows[0].id
+    });
   } catch (error: any) {
     console.error('❌ Error submitting link assessment:', error);
 
-    // If table doesn't exist, provide helpful error message
     if (error.message.includes('relation "link_assessment_submission" does not exist')) {
       return res.status(500).json({
         success: false,
-        error: 'Database table not found. Please run the migration to create the link_assessment_submission table.',
-        migration: `
-CREATE TABLE IF NOT EXISTS link_assessment_submission (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL REFERENCES app_user(id) ON DELETE CASCADE,
-  course_run_id UUID NOT NULL REFERENCES course_run(id) ON DELETE CASCADE,
-  assessment_type VARCHAR(20) NOT NULL CHECK (assessment_type IN ('written', 'practical')),
-  file_name VARCHAR(255) NOT NULL,
-  file_url TEXT NOT NULL,
-  submitted_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  UNIQUE(user_id, course_run_id, assessment_type)
-);
-
-CREATE INDEX idx_link_assessment_submission_user ON link_assessment_submission(user_id);
-CREATE INDEX idx_link_assessment_submission_course_run ON link_assessment_submission(course_run_id);
-`
+        error: 'Database table not found. Please run the migration to create the link_assessment_submission table.'
       });
     }
 

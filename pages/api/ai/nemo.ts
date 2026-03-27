@@ -147,6 +147,20 @@ const NEMO_TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
             },
         },
     },
+    {
+        type: 'function',
+        function: {
+            name: 'recommend_trainer',
+            description: 'Recommend trainers for a specific course based on their past teaching history. Searches by course title or keyword and returns trainers who have previously taught matching courses.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    courseTitle: { type: 'string', description: 'The course title or keyword to search for (e.g., "Business Innovation", "AI", "Data Analysis")' },
+                },
+                required: ['courseTitle'],
+            },
+        },
+    },
 ];
 
 // Tool execution functions
@@ -172,12 +186,18 @@ async function executeTool(name: string, input: any, req: NextApiRequest): Promi
         }
 
         case 'list_trainers': {
-            const url = new URL('/api/admin/trainers', baseUrl);
-            if (input.search) url.searchParams.set('search', input.search);
+            const url = new URL('/api/admin/trainers-detail', baseUrl);
             const res = await fetch(url.toString());
             const data = await res.json();
-            const trainers = (data.data || data.trainers || []).slice(0, 20);
-            return JSON.stringify(trainers, null, 2);
+            let trainers = data?.data?.trainers || data?.trainers || [];
+            if (input.search) {
+                const searchLower = input.search.toLowerCase();
+                trainers = trainers.filter((t: any) =>
+                    (t.trainer_name || '').toLowerCase().includes(searchLower) ||
+                    (t.email || '').toLowerCase().includes(searchLower)
+                );
+            }
+            return JSON.stringify(trainers.slice(0, 20), null, 2);
         }
 
         case 'list_learners': {
@@ -197,12 +217,13 @@ async function executeTool(name: string, input: any, req: NextApiRequest): Promi
 
         case 'lookup_trainer_by_name': {
             const trainerResult = await pool.query(
-                `SELECT t.id, t.name, t.email, t.phone, t.trainer_type,
+                `SELECT au.id, au.full_name AS name, au.email, tp.tel AS phone, tp.trainer_type,
                         COUNT(cr.id) as assigned_classes
-                 FROM trainer t
-                 LEFT JOIN course_run cr ON cr.assigned_trainer_email = t.email
-                 WHERE LOWER(t.name) LIKE LOWER($1)
-                 GROUP BY t.id, t.name, t.email, t.phone, t.trainer_type
+                 FROM app_user au
+                 JOIN trainer_profile tp ON tp.user_id = au.id
+                 LEFT JOIN course_run cr ON cr.assigned_trainer_email = au.email
+                 WHERE LOWER(au.full_name) LIKE LOWER($1)
+                 GROUP BY au.id, au.full_name, au.email, tp.tel, tp.trainer_type
                  LIMIT 5`,
                 [`%${input.trainerName}%`]
             );
@@ -230,6 +251,65 @@ async function executeTool(name: string, input: any, req: NextApiRequest): Promi
             );
 
             return JSON.stringify({ success: true, message: `Trainer ${input.trainerEmail} assigned to course run ${input.courseRunId}` });
+        }
+
+        case 'recommend_trainer': {
+            // First: find trainers who have previously taught matching courses
+            const taughtResult = await pool.query(
+                `SELECT au.full_name AS trainer_name, au.email, tp.trainer_type,
+                        tp.areas_of_expertise, tp.qualifications,
+                        c.title AS course_title, COUNT(cr.id) AS times_taught
+                 FROM app_user au
+                 JOIN trainer_profile tp ON tp.user_id = au.id
+                 JOIN course_run cr ON cr.assigned_trainer_email = au.email
+                 JOIN course c ON c.id = cr.course_id
+                 WHERE LOWER(c.title) LIKE LOWER($1)
+                 GROUP BY au.full_name, au.email, tp.trainer_type, tp.areas_of_expertise, tp.qualifications, c.title
+                 ORDER BY times_taught DESC
+                 LIMIT 10`,
+                [`%${input.courseTitle}%`]
+            );
+
+            // Second: find trainers by skill/expertise match
+            const searchTerms = input.courseTitle.split(/\s+/).filter((w: string) => w.length > 2);
+            const expertiseConditions = searchTerms.map((_: string, i: number) => `tp.areas_of_expertise::text ILIKE $${i + 1}`).join(' OR ');
+            const expertiseResult = searchTerms.length > 0 ? await pool.query(
+                `SELECT DISTINCT au.full_name AS trainer_name, au.email, tp.trainer_type,
+                        tp.areas_of_expertise, tp.qualifications
+                 FROM app_user au
+                 JOIN trainer_profile tp ON tp.user_id = au.id
+                 WHERE (${expertiseConditions})
+                 AND tp.areas_of_expertise IS NOT NULL
+                 AND tp.areas_of_expertise != '[]'::jsonb
+                 AND tp.areas_of_expertise != '{}'::jsonb
+                 LIMIT 10`,
+                searchTerms.map((t: string) => `%${t}%`)
+            ) : { rows: [] };
+
+            const results: any = {};
+            if (taughtResult.rows.length > 0) {
+                results.previously_taught = taughtResult.rows;
+            }
+            if (expertiseResult.rows.length > 0) {
+                // Filter out trainers already in previously_taught
+                const taughtEmails = new Set(taughtResult.rows.map((r: any) => r.email));
+                const additional = expertiseResult.rows.filter((r: any) => !taughtEmails.has(r.email));
+                if (additional.length > 0) {
+                    results.matching_expertise = additional;
+                }
+            }
+
+            if (!results.previously_taught && !results.matching_expertise) {
+                return JSON.stringify({
+                    message: `No trainers found matching "${input.courseTitle}".`,
+                    suggestion: 'Try a broader search term like the domain (e.g., "AI", "Finance", "Marketing").'
+                });
+            }
+
+            return JSON.stringify({
+                message: `Trainer recommendations for "${input.courseTitle}":`,
+                ...results
+            }, null, 2);
         }
 
         case 'get_course_run_enrollments': {

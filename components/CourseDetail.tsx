@@ -388,11 +388,7 @@ const AssessmentsSection: React.FC<{
                 submitted_at: new Date().toISOString()
             };
 
-            setLinkSubmissions(prev => {
-                // Remove any existing submission for this assessment type and add the new one
-                const filtered = prev.filter(s => s.assessment_type !== assessmentType);
-                return [...filtered, newSubmission];
-            });
+            setLinkSubmissions(prev => [...prev, newSubmission]);
 
             // Auto-verify the uploaded file using the string identifier ('written' or 'practical')
             handleVerifyDrive(assessmentType);
@@ -886,70 +882,63 @@ const AssessmentsSection: React.FC<{
 
                     {/* Learner file submission for Written Assessment */}
                     {userRole === UserRole.Learner && writtenPublished && (() => {
-                        const writtenSubmission = linkSubmissions.find(s => s.assessment_type === 'written');
-                        const canResubmit = isLinkResubmitting['written'];
+                        const writtenSubs = linkSubmissions.filter(s => s.assessment_type === 'written');
 
-                        if (writtenSubmission && !canResubmit) {
-                            const vStatus = verificationStatus['written'];
-                            return (
-                                <div className="bg-green-50 dark:bg-green-900/20 p-3 rounded-md border border-green-200 dark:border-green-800 space-y-3">
-                                    <div className="flex justify-between items-center">
-                                        <div>
-                                            <p className="font-semibold text-green-800 dark:text-green-300">Submitted: {writtenSubmission.file_name}</p>
-                                            <p className="text-xs text-green-600 dark:text-green-400">On: {new Date(writtenSubmission.submitted_at).toLocaleString()}</p>
-                                        </div>
-                                        <Button variant="ghost" size="sm" onClick={() => setIsLinkResubmitting(prev => ({ ...prev, written: true }))}>
-                                            Resubmit
-                                        </Button>
+                        return (
+                            <div className="mt-3 space-y-3">
+                                {/* Show all uploaded files */}
+                                {writtenSubs.length > 0 && (
+                                    <div className="space-y-2">
+                                        <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Uploaded Files ({writtenSubs.length})</p>
+                                        {writtenSubs.map((sub) => (
+                                            <div key={sub.id} className="bg-green-50 dark:bg-green-900/20 p-3 rounded-md border border-green-200 dark:border-green-800 flex justify-between items-center">
+                                                <div className="min-w-0 flex-1">
+                                                    <p className="font-medium text-green-800 dark:text-green-300 truncate">{sub.file_name}</p>
+                                                    <p className="text-xs text-green-600 dark:text-green-400">{new Date(sub.submitted_at).toLocaleString()}</p>
+                                                </div>
+                                                <a href={sub.file_url} target="_blank" rel="noopener noreferrer" className="ml-2 text-blue-600 hover:text-blue-800 dark:text-blue-400 text-sm font-medium flex-shrink-0">
+                                                    View
+                                                </a>
+                                            </div>
+                                        ))}
                                     </div>
-                                    {vStatus && (
-                                        <div className={`text-sm p-2 rounded-md ${vStatus.loading ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30' : vStatus.exists ? 'bg-green-100 text-green-800 dark:bg-green-800/40 dark:text-green-200' : 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200'}`}>
-                                            {vStatus.loading && <span className="flex items-center gap-2"><div className="w-3 h-3 rounded-full border-2 border-blue-600 border-t-transparent animate-spin"></div> Checking Google Drive...</span>}
-                                            {!vStatus.loading && vStatus.exists && `✅ Verified: Found in Drive`}
-                                            {!vStatus.loading && !vStatus.exists && `⚠️ File missing from Google Drive! (${vStatus.error || 'Folder empty or deleted'})`}
+                                )}
+
+                                {/* Upload input — always visible */}
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                        {writtenSubs.length > 0 ? "Upload another file" : "Upload your completed assessment file"}
+                                    </label>
+                                    <input
+                                        type="file"
+                                        id="link-file-upload-written"
+                                        onChange={(e) => handleLinkFileChange('written', e)}
+                                        className="block w-full text-sm text-gray-500 dark:text-gray-400
+                                            file:mr-4 file:py-2 file:px-4
+                                            file:rounded-md file:border-0
+                                            file:text-sm file:font-semibold
+                                            file:bg-blue-50 file:text-blue-700
+                                            hover:file:bg-blue-100
+                                            dark:file:bg-blue-900/20 dark:file:text-blue-300
+                                            dark:hover:file:bg-blue-900/40"
+                                        multiple
+                                    />
+                                    {selectedLinkFiles['written'] && !isLinkUploading['written'] && (
+                                        <div className="mt-3">
+                                            <Button onClick={() => handleLinkSubmit('written')} className="w-full">
+                                                Upload File
+                                            </Button>
+                                        </div>
+                                    )}
+                                    {isLinkUploading['written'] && (
+                                        <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                                            <div className="flex flex-col items-center justify-center space-y-3">
+                                                <Spinner size="md" />
+                                                <p className="text-sm font-medium text-blue-700 dark:text-blue-300">Uploading your file...</p>
+                                            </div>
                                         </div>
                                     )}
                                 </div>
-                            );
-                        }
-
-                        return (
-                            <div className="mt-3">
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                    {canResubmit ? "Upload a new file to replace your previous submission" : "Upload your completed assessment file"}
-                                </label>
-                                <input
-                                    type="file"
-                                    id="link-file-upload-written"
-                                    onChange={(e) => handleLinkFileChange('written', e)}
-                                    className="block w-full text-sm text-gray-500 dark:text-gray-400
-                                        file:mr-4 file:py-2 file:px-4
-                                        file:rounded-md file:border-0
-                                        file:text-sm file:font-semibold
-                                        file:bg-blue-50 file:text-blue-700
-                                        hover:file:bg-blue-100
-                                        dark:file:bg-blue-900/20 dark:file:text-blue-300
-                                        dark:hover:file:bg-blue-900/40"
-                                />
-                                {selectedLinkFiles['written'] && !isLinkUploading['written'] && (
-                                    <div className="mt-3">
-                                        <Button
-                                            onClick={() => handleLinkSubmit('written')}
-                                            className="w-full"
-                                        >
-                                            Submit Assessment
-                                        </Button>
-                                    </div>
-                                )}
-                                {isLinkUploading['written'] && (
-                                    <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
-                                        <div className="flex flex-col items-center justify-center space-y-3">
-                                            <Spinner size="md" />
-                                            <p className="text-sm font-medium text-blue-700 dark:text-blue-300">Uploading your assessment...</p>
-                                            <p className="text-xs text-blue-600 dark:text-blue-400">Please wait while we upload your file...</p>
-                                        </div>
-                                    </div>
-                                )}
                             </div>
                         );
                     })()}
@@ -1005,70 +994,63 @@ const AssessmentsSection: React.FC<{
 
                     {/* Learner file submission for Practical Performance Assessment */}
                     {userRole === UserRole.Learner && practicalPublished && (() => {
-                        const practicalSubmission = linkSubmissions.find(s => s.assessment_type === 'practical');
-                        const canResubmit = isLinkResubmitting['practical'];
+                        const practicalSubs = linkSubmissions.filter(s => s.assessment_type === 'practical');
 
-                        if (practicalSubmission && !canResubmit) {
-                            const vStatus = verificationStatus['practical'];
-                            return (
-                                <div className="bg-green-50 dark:bg-green-900/20 p-3 rounded-md border border-green-200 dark:border-green-800 space-y-3">
-                                    <div className="flex justify-between items-center">
-                                        <div>
-                                            <p className="font-semibold text-green-800 dark:text-green-300">Submitted: {practicalSubmission.file_name}</p>
-                                            <p className="text-xs text-green-600 dark:text-green-400">On: {new Date(practicalSubmission.submitted_at).toLocaleString()}</p>
-                                        </div>
-                                        <Button variant="ghost" size="sm" onClick={() => setIsLinkResubmitting(prev => ({ ...prev, practical: true }))}>
-                                            Resubmit
-                                        </Button>
+                        return (
+                            <div className="mt-3 space-y-3">
+                                {/* Show all uploaded files */}
+                                {practicalSubs.length > 0 && (
+                                    <div className="space-y-2">
+                                        <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Uploaded Files ({practicalSubs.length})</p>
+                                        {practicalSubs.map((sub) => (
+                                            <div key={sub.id} className="bg-green-50 dark:bg-green-900/20 p-3 rounded-md border border-green-200 dark:border-green-800 flex justify-between items-center">
+                                                <div className="min-w-0 flex-1">
+                                                    <p className="font-medium text-green-800 dark:text-green-300 truncate">{sub.file_name}</p>
+                                                    <p className="text-xs text-green-600 dark:text-green-400">{new Date(sub.submitted_at).toLocaleString()}</p>
+                                                </div>
+                                                <a href={sub.file_url} target="_blank" rel="noopener noreferrer" className="ml-2 text-blue-600 hover:text-blue-800 dark:text-blue-400 text-sm font-medium flex-shrink-0">
+                                                    View
+                                                </a>
+                                            </div>
+                                        ))}
                                     </div>
-                                    {vStatus && (
-                                        <div className={`text-sm p-2 rounded-md ${vStatus.loading ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30' : vStatus.exists ? 'bg-green-100 text-green-800 dark:bg-green-800/40 dark:text-green-200' : 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200'}`}>
-                                            {vStatus.loading && <span className="flex items-center gap-2"><div className="w-3 h-3 rounded-full border-2 border-blue-600 border-t-transparent animate-spin"></div> Checking Google Drive...</span>}
-                                            {!vStatus.loading && vStatus.exists && `✅ Verified: Found in Drive`}
-                                            {!vStatus.loading && !vStatus.exists && `⚠️ File missing from Google Drive! (${vStatus.error || 'Folder empty or deleted'})`}
+                                )}
+
+                                {/* Upload input — always visible */}
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                        {practicalSubs.length > 0 ? "Upload another file" : "Upload your completed assessment file"}
+                                    </label>
+                                    <input
+                                        type="file"
+                                        id="link-file-upload-practical"
+                                        onChange={(e) => handleLinkFileChange('practical', e)}
+                                        className="block w-full text-sm text-gray-500 dark:text-gray-400
+                                            file:mr-4 file:py-2 file:px-4
+                                            file:rounded-md file:border-0
+                                            file:text-sm file:font-semibold
+                                            file:bg-blue-50 file:text-blue-700
+                                            hover:file:bg-blue-100
+                                            dark:file:bg-blue-900/20 dark:file:text-blue-300
+                                            dark:hover:file:bg-blue-900/40"
+                                        multiple
+                                    />
+                                    {selectedLinkFiles['practical'] && !isLinkUploading['practical'] && (
+                                        <div className="mt-3">
+                                            <Button onClick={() => handleLinkSubmit('practical')} className="w-full">
+                                                Upload File
+                                            </Button>
+                                        </div>
+                                    )}
+                                    {isLinkUploading['practical'] && (
+                                        <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                                            <div className="flex flex-col items-center justify-center space-y-3">
+                                                <Spinner size="md" />
+                                                <p className="text-sm font-medium text-blue-700 dark:text-blue-300">Uploading your file...</p>
+                                            </div>
                                         </div>
                                     )}
                                 </div>
-                            );
-                        }
-
-                        return (
-                            <div className="mt-3">
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                    {canResubmit ? "Upload a new file to replace your previous submission" : "Upload your completed assessment file"}
-                                </label>
-                                <input
-                                    type="file"
-                                    id="link-file-upload-practical"
-                                    onChange={(e) => handleLinkFileChange('practical', e)}
-                                    className="block w-full text-sm text-gray-500 dark:text-gray-400
-                                        file:mr-4 file:py-2 file:px-4
-                                        file:rounded-md file:border-0
-                                        file:text-sm file:font-semibold
-                                        file:bg-blue-50 file:text-blue-700
-                                        hover:file:bg-blue-100
-                                        dark:file:bg-blue-900/20 dark:file:text-blue-300
-                                        dark:hover:file:bg-blue-900/40"
-                                />
-                                {selectedLinkFiles['practical'] && !isLinkUploading['practical'] && (
-                                    <div className="mt-3">
-                                        <Button
-                                            onClick={() => handleLinkSubmit('practical')}
-                                            className="w-full"
-                                        >
-                                            Submit Assessment
-                                        </Button>
-                                    </div>
-                                )}
-                                {isLinkUploading['practical'] && (
-                                    <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
-                                        <div className="flex flex-col items-center justify-center space-y-3">
-                                            <Spinner size="md" />
-                                            <p className="text-sm font-medium text-blue-700 dark:text-blue-300">Uploading your assessment...</p>
-                                            <p className="text-xs text-blue-600 dark:text-blue-400">Please wait while we upload your file...</p>
-                                        </div>
-                                    </div>
-                                )}
                             </div>
                         );
                     })()}
@@ -2267,6 +2249,9 @@ export const CourseDetail: React.FC = () => {
                                                                         Copy
                                                                     </button>
                                                                 </div>
+                                                                {convertedCourse.courseCode && (
+                                                                    <p className="text-xs text-on-surface-secondary text-center mt-1">Course Ref: <span className="font-medium text-on-surface">{convertedCourse.courseCode}</span></p>
+                                                                )}
                                                             </div>
                                                         </div>
                                                     </div>
@@ -2306,6 +2291,9 @@ export const CourseDetail: React.FC = () => {
                                                                         Copy
                                                                     </button>
                                                                 </div>
+                                                                {convertedCourse.courseRunId && (
+                                                                    <p className="text-xs text-on-surface-secondary text-center mt-1">Course Run ID: <span className="font-medium text-on-surface">{convertedCourse.courseRunId}</span></p>
+                                                                )}
                                                             </div>
                                                         </div>
                                                     </div>

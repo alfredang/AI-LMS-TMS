@@ -509,7 +509,7 @@ export const LearnerProfileCard: React.FC<{
                         )}
                     </div>
                     <div className="text-center sm:text-left flex-grow">
-                        <h1 className="text-2xl font-bold dark:text-white">{isEditing ? 'Editing Profile' : formData.name}</h1>
+                        <h1 className="text-2xl font-bold text-on-surface">{isEditing ? 'Editing Profile' : formData.name}</h1>
                         <p className="text-gray-600 dark:text-gray-400">Learner Profile</p>
                     </div>
                     {isEditing ? (

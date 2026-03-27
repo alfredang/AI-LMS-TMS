@@ -50,12 +50,14 @@ const ManagementCourseList: React.FC = () => {
 
     // Search and filter state
     const [searchQuery, setSearchQuery] = useState('');
-    const [filterCourseType, setFilterCourseType] = useState<'WSQ' | 'IBF' | 'Non-WSQ' | 'All'>('All');
+    const [filterCourseType, setFilterCourseType] = useState<'WSQ' | 'IBF' | 'Non-WSQ' | 'WSQ+IBF' | 'All'>(
+        role === UserRole.Admin ? 'WSQ+IBF' : 'All'
+    );
     const [filterMode, setFilterMode] = useState<string>('All');
     const [filterStartDate, setFilterStartDate] = useState<'All' | 'This Month' | 'Next Month' | 'Last Month' | 'Earlier' | 'Later'>('All');
     const [filterCourseCode, setFilterCourseCode] = useState('');
     const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
-    const [viewMode, setViewMode] = useState<'block' | 'table'>('block');
+    const [viewMode, setViewMode] = useState<'block' | 'table'>(role === UserRole.Admin ? 'table' : 'block');
     const [selectedCourse, setSelectedCourse] = useState<any>(null);
     const [trainerClassView, setTrainerClassView] = useState<'all' | 'current' | 'upcoming' | 'past'>('all');
 
@@ -180,7 +182,8 @@ const ManagementCourseList: React.FC = () => {
             const matchesCourseCode = filterCourseCode === '' ||
                 course.courseCode?.toLowerCase().includes(filterCourseCode.toLowerCase());
 
-            const matchesType = filterCourseType === 'All' || course.courseType === filterCourseType;
+            const matchesType = filterCourseType === 'All' ||
+                (filterCourseType === 'WSQ+IBF' ? (course.courseType === 'WSQ' || course.courseType === 'IBF') : course.courseType === filterCourseType);
             const matchesMode = filterMode === 'All' || (course.modeOfLearning && course.modeOfLearning.includes(filterMode));
 
             // Trainer: apply date tab logic
@@ -201,6 +204,12 @@ const ManagementCourseList: React.FC = () => {
 
             const matchesStartDate = isDateInRange(course.startDate, filterStartDate);
             return matchesSearch && matchesCourseCode && matchesType && matchesMode && matchesStartDate;
+        }).sort((a: any, b: any) => {
+            // Sort by course code descending for Admin
+            if (role === UserRole.Admin) {
+                return (b.courseCode || '').localeCompare(a.courseCode || '');
+            }
+            return 0;
         });
     }, [relevantCourses, searchQuery, filterCourseCode, filterCourseType, filterMode, filterStartDate, role, trainerClassView]);
 
@@ -225,7 +234,7 @@ const ManagementCourseList: React.FC = () => {
     const handleClearFilters = () => {
         setSearchQuery('');
         setFilterCourseCode('');
-        setFilterCourseType('All');
+        setFilterCourseType(role === UserRole.Admin ? 'WSQ+IBF' : 'All');
         setFilterMode('All');
         setFilterStartDate('All');
         setCurrentPage(1);
@@ -424,6 +433,12 @@ const ManagementCourseList: React.FC = () => {
                         <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-on-surface-secondary uppercase tracking-wider">Course</th>
                         <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-on-surface-secondary uppercase tracking-wider">Details</th>
                         <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-on-surface-secondary uppercase tracking-wider">Duration</th>
+                        {(role === UserRole.Admin || role === UserRole.TrainingProvider) && (
+                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-on-surface-secondary uppercase tracking-wider">Validity</th>
+                        )}
+                        {(role === UserRole.Admin || role === UserRole.TrainingProvider) && (
+                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-on-surface-secondary uppercase tracking-wider">Trainers</th>
+                        )}
                         {role === UserRole.Trainer && (
                             <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-on-surface-secondary uppercase tracking-wider">Course Run ID</th>
                         )}
@@ -465,6 +480,21 @@ const ManagementCourseList: React.FC = () => {
                                     <div>{totalHours} Hours</div>
                                     <div className="text-xs">({course.trainingHours}T + {course.assessmentHours}A)</div>
                                 </td>
+                                {(role === UserRole.Admin || role === UserRole.TrainingProvider) && (
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-on-surface-secondary">
+                                        {course.fundingValidity || '—'}
+                                    </td>
+                                )}
+                                {(role === UserRole.Admin || role === UserRole.TrainingProvider) && (
+                                    <td className="px-6 py-4 text-sm text-on-surface-secondary max-w-[200px]">
+                                        <div className="font-medium">{course.numOfTrainers || 0} trainer{(course.numOfTrainers || 0) !== 1 ? 's' : ''}</div>
+                                        {course.trainersList && (
+                                            <div className="text-xs text-gray-500 dark:text-gray-400 mt-1 line-clamp-2" title={course.trainersList}>
+                                                {course.trainersList}
+                                            </div>
+                                        )}
+                                    </td>
+                                )}
                                 {role === UserRole.Trainer && (
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-on-surface-secondary">
                                         {course.courseRunCode || 'N/A'}
@@ -683,8 +713,9 @@ const ManagementCourseList: React.FC = () => {
                         )}
                         <div>
                             <label className="block text-sm font-medium text-on-surface-secondary">Course Type</label>
-                            <select value={filterCourseType} onChange={e => setFilterCourseType(e.target.value as 'WSQ' | 'IBF' | 'Non-WSQ' | 'All')} className={`${inputClasses} mt-1`}>
+                            <select value={filterCourseType} onChange={e => setFilterCourseType(e.target.value as any)} className={`${inputClasses} mt-1`}>
                                 <option value="All">All Types</option>
+                                <option value="WSQ+IBF">WSQ + IBF</option>
                                 <option value="WSQ">WSQ</option>
                                 <option value="IBF">IBF</option>
                                 <option value="Non-WSQ">Non-WSQ</option>

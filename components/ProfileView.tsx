@@ -1442,7 +1442,7 @@ const DeveloperProfileCard: React.FC<{
                         )}
                     </div>
                     <div className="text-center sm:text-left flex-grow">
-                        <h1 className="text-2xl font-bold">{isEditing ? 'Editing Profile' : formData.name}</h1>
+                        <h1 className="text-2xl font-bold text-on-surface">{isEditing ? 'Editing Profile' : formData.name}</h1>
                         <p className="text-subtle">Developer Profile</p>
                     </div>
                     {isEditing ? (
@@ -1918,7 +1918,7 @@ const LearnerProfileView: React.FC = () => {
                         />
                     </div>
                     <div className="text-center sm:text-left flex-grow">
-                        <h1 className="text-2xl font-bold">{isEditing ? 'Editing Profile' : formData.name}</h1>
+                        <h1 className="text-2xl font-bold text-on-surface">{isEditing ? 'Editing Profile' : formData.name}</h1>
                         <p className="text-subtle">Learner Profile</p>
                     </div>
                     {isEditing ? (
