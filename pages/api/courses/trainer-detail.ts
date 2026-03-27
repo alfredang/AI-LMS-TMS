@@ -75,7 +75,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         cr.start_date,
         cr.end_date
       FROM trainer_profile tp
-      JOIN course_run cr ON tp.user_id = cr.assigned_trainer_id
+      JOIN course_run cr ON (
+        tp.user_id = cr.assigned_trainer_id
+        OR EXISTS (
+          SELECT 1 FROM course_run_trainer crt
+          WHERE crt.course_run_id = cr.id AND crt.trainer_id = tp.user_id
+        )
+      )
       JOIN course c ON cr.course_id = c.id
       WHERE tp.user_id = $1 AND cr.id = $2
     `;
