@@ -7,6 +7,52 @@ interface ApiResponse {
   error?: string;
 }
 
+/** Ensure the course_run_trainer junction table exists */
+async function ensureJunctionTable() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS course_run_trainer (
+      id            UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+      course_run_id UUID NOT NULL REFERENCES course_run(id) ON DELETE CASCADE,
+      trainer_id    UUID,
+      trainer_name  TEXT NOT NULL,
+      trainer_email TEXT,
+      assigned_at   TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+  await pool.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS uq_crt_run_trainer
+      ON course_run_trainer(course_run_id, COALESCE(trainer_id, '00000000-0000-0000-0000-000000000000'))
+  `);
+}
+
+/** Sync the legacy single-trainer columns on course_run with the first trainer from the junction table */
+async function syncLegacyColumns(courseRunUuid: string) {
+  const first = await pool.query(
+    `SELECT trainer_id, trainer_name, trainer_email
+     FROM course_run_trainer
+     WHERE course_run_id = $1
+     ORDER BY assigned_at ASC
+     LIMIT 1`,
+    [courseRunUuid]
+  );
+  if (first.rows.length > 0) {
+    const { trainer_id, trainer_name, trainer_email } = first.rows[0];
+    await pool.query(
+      `UPDATE course_run
+       SET assigned_trainer_id = $1, assigned_trainer_name = $2, assigned_trainer_email = $3, updated_at = NOW()
+       WHERE id = $4`,
+      [trainer_id, trainer_name, trainer_email, courseRunUuid]
+    );
+  } else {
+    await pool.query(
+      `UPDATE course_run
+       SET assigned_trainer_id = NULL, assigned_trainer_name = NULL, assigned_trainer_email = NULL, updated_at = NOW()
+       WHERE id = $1`,
+      [courseRunUuid]
+    );
+  }
+}
+
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse<ApiResponse>
@@ -45,59 +91,24 @@ export default async function handler(
     console.log('📧 Trainer email:', trainerEmail);
     console.log('🆔 Trainer UUID:', trainerId || '(none)');
 
-    // Check if the assigned_trainer_name column exists, if not add it
-    const checkNameColumnQuery = `
-      SELECT column_name 
-      FROM information_schema.columns 
-      WHERE table_name = 'course_run' 
-      AND column_name = 'assigned_trainer_name'
-    `;
-    
-    const nameColumnCheck = await pool.query(checkNameColumnQuery);
-    
-    if (nameColumnCheck.rows.length === 0) {
-      console.log('📝 Adding assigned_trainer_name column to course_run table');
-      await pool.query(`
-        ALTER TABLE course_run 
-        ADD COLUMN assigned_trainer_name TEXT
-      `);
+    // Ensure legacy columns exist on course_run (backward compat)
+    for (const col of [
+      { name: 'assigned_trainer_name', type: 'TEXT' },
+      { name: 'assigned_trainer_email', type: 'TEXT' },
+      { name: 'assigned_trainer_id', type: 'UUID' },
+    ]) {
+      const check = await pool.query(
+        `SELECT column_name FROM information_schema.columns WHERE table_name = 'course_run' AND column_name = $1`,
+        [col.name]
+      );
+      if (check.rows.length === 0) {
+        console.log(`📝 Adding ${col.name} column to course_run table`);
+        await pool.query(`ALTER TABLE course_run ADD COLUMN ${col.name} ${col.type}`);
+      }
     }
 
-    // Check if the assigned_trainer_email column exists, if not add it
-    const checkEmailColumnQuery = `
-      SELECT column_name 
-      FROM information_schema.columns 
-      WHERE table_name = 'course_run' 
-      AND column_name = 'assigned_trainer_email'
-    `;
-    
-    const emailColumnCheck = await pool.query(checkEmailColumnQuery);
-    
-    if (emailColumnCheck.rows.length === 0) {
-      console.log('📝 Adding assigned_trainer_email column to course_run table');
-      await pool.query(`
-        ALTER TABLE course_run 
-        ADD COLUMN assigned_trainer_email TEXT
-      `);
-    }
-
-    // Check if the assigned_trainer_id column exists, if not add it
-    const checkIdColumnQuery = `
-      SELECT column_name
-      FROM information_schema.columns
-      WHERE table_name = 'course_run'
-      AND column_name = 'assigned_trainer_id'
-    `;
-
-    const idColumnCheck = await pool.query(checkIdColumnQuery);
-
-    if (idColumnCheck.rows.length === 0) {
-      console.log('📝 Adding assigned_trainer_id column to course_run table');
-      await pool.query(`
-        ALTER TABLE course_run
-        ADD COLUMN assigned_trainer_id UUID
-      `);
-    }
+    // Ensure junction table
+    await ensureJunctionTable();
 
     // If trainerId is provided, verify it exists in trainer_profile (FK target); create profile if missing
     let resolvedTrainerId = trainerId || null;
@@ -151,44 +162,36 @@ export default async function handler(
       }
     }
 
-    // Update the course_run with trainer name, email, and optionally the UUID
-    let updateQuery: string;
-    let updateParams: any[];
-
-    if (resolvedTrainerId) {
-      updateQuery = `
-        UPDATE course_run
-        SET assigned_trainer_name = $1,
-            assigned_trainer_email = $2,
-            assigned_trainer_id = $3,
-            updated_at = NOW()
-        WHERE id = $4
-      `;
-      updateParams = [trainerName, trainerEmail || null, resolvedTrainerId, courseRunUuid];
-    } else {
-      updateQuery = `
-        UPDATE course_run
-        SET assigned_trainer_name = $1,
-            assigned_trainer_email = $2,
-            updated_at = NOW()
-        WHERE id = $3
-      `;
-      updateParams = [trainerName, trainerEmail || null, courseRunUuid];
+    // ── Backfill: migrate existing legacy trainer into junction table if not already there ──
+    const legacyTrainer = await pool.query(
+      `SELECT assigned_trainer_id, assigned_trainer_name, assigned_trainer_email
+       FROM course_run WHERE id = $1`,
+      [courseRunUuid]
+    );
+    if (legacyTrainer.rows.length > 0 && legacyTrainer.rows[0].assigned_trainer_name) {
+      const lt = legacyTrainer.rows[0];
+      await pool.query(
+        `INSERT INTO course_run_trainer (course_run_id, trainer_id, trainer_name, trainer_email)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT (course_run_id, COALESCE(trainer_id, '00000000-0000-0000-0000-000000000000'))
+         DO NOTHING`,
+        [courseRunUuid, lt.assigned_trainer_id || null, lt.assigned_trainer_name, lt.assigned_trainer_email || null]
+      );
     }
 
-    console.log('🔍 Executing update query with params:', updateParams);
-    const result = await pool.query(updateQuery, updateParams);
+    // ── INSERT into junction table (additive — does NOT replace existing trainers) ──
+    await pool.query(
+      `INSERT INTO course_run_trainer (course_run_id, trainer_id, trainer_name, trainer_email)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (course_run_id, COALESCE(trainer_id, '00000000-0000-0000-0000-000000000000'))
+       DO UPDATE SET trainer_name = EXCLUDED.trainer_name, trainer_email = EXCLUDED.trainer_email`,
+      [courseRunUuid, resolvedTrainerId, trainerName, trainerEmail || null]
+    );
 
-    console.log('📊 Query result - rows affected:', result.rowCount);
+    // Sync legacy columns so backward-compat code keeps working
+    await syncLegacyColumns(courseRunUuid);
 
-    if (result.rowCount === 0) {
-      return res.status(404).json({
-        success: false,
-        error: `Course run not found with UUID: ${courseRunUuid}`
-      });
-    }
-
-    console.log('✅ Successfully updated trainer info for course run');
+    console.log('✅ Successfully added trainer to course run (multi-trainer)');
 
     res.status(200).json({
       success: true,

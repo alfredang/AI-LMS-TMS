@@ -206,7 +206,10 @@ const ClassDetailView: React.FC<ClassDetailViewProps> = ({ courseRunId }) => {
 
       // Treat 404 as valid response (no records found), only throw error for other failures
       if (!response.ok || (!result.success && result.status !== "404" && result.status !== 404)) {
-        throw new Error(result.error || 'Failed to search enrolment records');
+        const errMsg = result.error || 'Failed to search enrolment records';
+        setEnrolmentError(errMsg);
+        // Do not throw here so Next.js dev server doesn't intercept it with a redbox overlay
+        return;
       }
 
       // Extract the actual SSG response from the wrapper
@@ -228,7 +231,7 @@ const ClassDetailView: React.FC<ClassDetailViewProps> = ({ courseRunId }) => {
       setShowEnrolmentSearch(true); // Show the search section when data is loaded
       
     } catch (err) {
-      console.error('❌ Error searching enrolment records:', err);
+      console.log('❌ Error searching enrolment records:', err);
       setEnrolmentError(err instanceof Error ? err.message : 'Failed to search enrolment records');
     } finally {
       setEnrolmentLoading(false);

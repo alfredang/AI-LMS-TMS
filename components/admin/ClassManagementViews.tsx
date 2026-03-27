@@ -210,7 +210,9 @@ export const ClassManagerView: React.FC<ClassManagerViewProps> = ({ courseToEdit
     const [dbTrainerAssignMode, setDbTrainerAssignMode] = useState<'dropdown' | 'manual'>('dropdown');
     const [manualTrainerName, setManualTrainerName] = useState('');
     const [manualTrainerEmail, setManualTrainerEmail] = useState('');
-    // Track the currently locally-assigned trainer (initialised from courseToEdit)
+    // Track all locally-assigned trainers from junction table
+    const [assignedTrainersList, setAssignedTrainersList] = useState<any[]>([]);
+    // Legacy single-trainer state (kept for backward compat during transition)
     const [localAssignedTrainerName, setLocalAssignedTrainerName] = useState(courseToEdit?.assignedTrainerName || '');
     const [localAssignedTrainerEmail, setLocalAssignedTrainerEmail] = useState(courseToEdit?.assignedTrainerEmail || '');
 
@@ -1791,10 +1793,36 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=edit
         if (isEditMode && activeTab === 'trainer' && availableTrainers.length === 0) {
             fetchAvailableTrainers();
         }
+        if (isEditMode && activeTab === 'trainer' && courseToEdit?.id) {
+            fetchAssignedTrainers();
+        }
     }, [isEditMode, activeTab]); // eslint-disable-line react-hooks/exhaustive-deps
 
+    // Fetch all trainers assigned to this course run from the junction table
+    const fetchAssignedTrainers = async () => {
+        if (!courseToEdit?.id) return;
+        try {
+            const res = await fetch(`/api/admin/course-run-trainers?courseRunUuid=${courseToEdit.id}`);
+            const json = await res.json();
+            if (json.success && json.data) {
+                setAssignedTrainersList(json.data);
+                // Also sync legacy state for backward compat
+                if (json.data.length > 0) {
+                    setLocalAssignedTrainerName(json.data.map((t: any) => t.trainer_name).join(', '));
+                    setLocalAssignedTrainerEmail(json.data.map((t: any) => t.trainer_email).filter(Boolean).join(', '));
+                }
+            }
+        } catch {
+            // Junction table may not exist yet — no-op
+        }
+    };
+
     // Assign trainer to course run in local DB (sets assigned_trainer_id / name / email)
-    const handleAssignTrainerLocal = async () => {
+    const handleAssignTrainerLocal = async (e?: React.MouseEvent) => {
+        if (e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
         if (!courseToEdit?.id) {
             showErrorPopup('No course run selected');
             return;
@@ -1837,14 +1865,42 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=edit
             });
             const data = await updateResponse.json();
             if (!updateResponse.ok) throw new Error(data.error || 'Failed to assign trainer');
-            showSuccessPopup(`Trainer "${trainerName}" has been assigned to this course run.`);
-            setLocalAssignedTrainerName(trainerName);
-            setLocalAssignedTrainerEmail(trainerEmail);
+            showSuccessPopup(`Trainer "${trainerName}" has been added to this course run.`);
+            // Refresh the trainers list from DB
+            await fetchAssignedTrainers();
             setSelectedDbTrainerId('');
             setManualTrainerName('');
             setManualTrainerEmail('');
         } catch (err) {
             showErrorPopup(err instanceof Error ? err.message : 'Failed to assign trainer');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // Remove a specific trainer from this course run
+    const handleRemoveTrainerLocal = async (junctionId: string, trainerName: string, e?: React.MouseEvent) => {
+        if (e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+        if (!courseToEdit?.id) return;
+        try {
+            setLoading(true);
+            const res = await fetch('/api/admin/remove-trainer', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    courseRunUuid: courseToEdit.id,
+                    junctionId,
+                }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Failed to remove trainer');
+            showSuccessPopup(`Trainer "${trainerName}" has been removed.`);
+            await fetchAssignedTrainers();
+        } catch (err) {
+            showErrorPopup(err instanceof Error ? err.message : 'Failed to remove trainer');
         } finally {
             setLoading(false);
         }
@@ -2980,8 +3036,44 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                 {isEditMode && activeTab === 'trainer' && (
                     <FormSection title="Trainer Management">
                         <div className="space-y-6">
-                            {/* Currently Assigned Local Trainer */}
-                            {localAssignedTrainerName ? (
+                            {/* Currently Assigned Local Trainers */}
+                            {assignedTrainersList.length > 0 ? (
+                                <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-md p-4">
+                                    <h4 className="text-sm font-semibold text-green-800 dark:text-green-300 mb-3">
+                                        Assigned Trainers (Local System) — {assignedTrainersList.length}
+                                    </h4>
+                                    <div className="space-y-2">
+                                        {assignedTrainersList.map((t: any) => (
+                                            <div key={t.id} className="flex items-center justify-between bg-white dark:bg-gray-800 border border-green-200 dark:border-green-700/50 rounded-lg px-4 py-2.5">
+                                                <div className="flex flex-wrap gap-4 text-sm">
+                                                    <div>
+                                                        <span className="font-bold text-gray-700 dark:text-gray-300">Name:</span>{' '}
+                                                        <span className="text-gray-900 dark:text-white">{t.trainer_name}</span>
+                                                    </div>
+                                                    {t.trainer_email && (
+                                                        <div>
+                                                            <span className="font-bold text-gray-700 dark:text-gray-300">Email:</span>{' '}
+                                                            <span className="text-gray-900 dark:text-white">{t.trainer_email}</span>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={(e) => handleRemoveTrainerLocal(t.id, t.trainer_name, e)}
+                                                    disabled={loading}
+                                                    className="ml-3 px-2.5 py-1 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
+                                                    title={`Remove ${t.trainer_name}`}
+                                                >
+                                                    ✕ Remove
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <p className="text-xs text-green-700 dark:text-green-400 mt-2">
+                                        These trainers can view this class in their attendance dashboard.
+                                    </p>
+                                </div>
+                            ) : localAssignedTrainerName ? (
                                 <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-md p-4">
                                     <h4 className="text-sm font-semibold text-green-800 dark:text-green-300 mb-2">Assigned Trainer (Local System)</h4>
                                     <div className="flex flex-wrap gap-6 text-sm">
@@ -3217,7 +3309,8 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
 
                                 <div className="flex justify-end mt-4">
                                     <Button
-                                        onClick={handleAssignTrainerLocal}
+                                        type="button"
+                                        onClick={(e) => handleAssignTrainerLocal(e)}
                                         disabled={loading}
                                         className="bg-green-600 hover:bg-green-700 text-white"
                                     >
@@ -3363,8 +3456,12 @@ export const AssignTrainerView: React.FC = () => {
     const [filterTrainerName, setFilterTrainerName] = useState('');
     const [filterCourse, setFilterCourse] = useState('');
 
-    // Track live assignments without refetching
+    // Track live assignments without refetching the whole table
     const [localAssignments, setLocalAssignments] = useState<Record<string, { name: string; email: string }>>({});
+
+    // Track detailed trainers for the currently expanded row
+    const [expandedRunTrainers, setExpandedRunTrainers] = useState<any[]>([]);
+    const [loadingExpandedTrainers, setLoadingExpandedTrainers] = useState(false);
 
     const fetchCourseRuns = async (q: string) => {
         setLoadingRuns(true);
@@ -3394,30 +3491,70 @@ export const AssignTrainerView: React.FC = () => {
         }
     };
 
+    const fetchExpandedRunTrainers = async (runId: string) => {
+        setLoadingExpandedTrainers(true);
+        try {
+            const res = await fetch(`/api/admin/course-run-trainers?courseRunUuid=${runId}`);
+            const json = await res.json();
+            if (json.success && json.data) {
+                setExpandedRunTrainers(json.data);
+                return json.data;
+            } else {
+                setExpandedRunTrainers([]);
+                return [];
+            }
+        } catch {
+            setExpandedRunTrainers([]);
+            return [];
+        } finally {
+            setLoadingExpandedTrainers(false);
+        }
+    };
+
     useEffect(() => {
         fetchCourseRuns('');
         fetchTrainers();
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // Fetch detailed trainers when a row is expanded
+    useEffect(() => {
+        if (selectedRunId) {
+            fetchExpandedRunTrainers(selectedRunId);
+        } else {
+            setExpandedRunTrainers([]);
+        }
+    }, [selectedRunId]);
 
     const handleSearch = (e: React.FormEvent) => {
         e.preventDefault();
         fetchCourseRuns(search);
     };
 
-    const handleRemoveTrainer = async (run: any) => {
+    const handleRemoveSpecificTrainer = async (runId: string, junctionId: string, trainerName: string) => {
         setMessage(null);
         setSaving(true);
         try {
             const res = await fetch('/api/admin/remove-trainer', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ courseRunUuid: run.id }),
+                body: JSON.stringify({ courseRunUuid: runId, junctionId }),
             });
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || 'Failed to remove trainer');
-            setLocalAssignments(prev => ({ ...prev, [run.id]: { name: '', email: '' } }));
-            setMessage({ type: 'success', text: `Trainer removed from "${run.courseTitle}".` });
-            setSelectedRunId(null);
+
+            setMessage({ type: 'success', text: `Trainer "${trainerName}" removed successfully.` });
+            
+            // Re-fetch the detailed list for the expanded row
+            await fetchExpandedRunTrainers(runId);
+            
+            // Update the local assignment string representation for the main table row
+            setExpandedRunTrainers((prev) => {
+                const updated = prev.filter(t => t.id !== junctionId);
+                const combinedNames = updated.map(t => t.trainer_name).join(', ');
+                const combinedEmails = updated.map(t => t.trainer_email).filter(Boolean).join(', ');
+                setLocalAssignments(curr => ({ ...curr, [runId]: { name: combinedNames, email: combinedEmails } }));
+                return updated;
+            });
         } catch (err) {
             setMessage({ type: 'error', text: err instanceof Error ? err.message : 'Failed to remove trainer' });
         } finally {
@@ -3425,7 +3562,8 @@ export const AssignTrainerView: React.FC = () => {
         }
     };
 
-    const handleAssign = async (run: any) => {
+    const handleAssign = async (e: React.MouseEvent, run: any) => {
+        e.preventDefault();
         setMessage(null);
         let trainerName = '';
         let trainerEmail = '';
@@ -3458,14 +3596,46 @@ export const AssignTrainerView: React.FC = () => {
             });
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || 'Failed to assign trainer');
-            setLocalAssignments(prev => ({ ...prev, [run.id]: { name: trainerName, email: trainerEmail } }));
-            setMessage({ type: 'success', text: `"${trainerName}" assigned to ${run.courseTitle}.` });
-            setSelectedRunId(null);
+            
+            setMessage({ type: 'success', text: `"${trainerName}" assigned successfully.` });
             setSelectedTrainerId('');
             setManualName('');
             setManualEmail('');
+            
+            // Re-fetch detailed trainers
+            const freshTrainers = await fetchExpandedRunTrainers(run.id);
+
+            // Update main view string wrapper with the fresh data from the server
+            const updatedNames = freshTrainers.map((t: any) => t.trainer_name).join(', ');
+            const updatedEmails = freshTrainers.map((t: any) => t.trainer_email).filter(Boolean).join(', ');
+            setLocalAssignments(curr => ({ ...curr, [run.id]: { name: updatedNames, email: updatedEmails } }));
+
         } catch (err) {
             setMessage({ type: 'error', text: err instanceof Error ? err.message : 'Failed to assign trainer' });
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handleRemoveAllTrainers = async (runId: string) => {
+        if (!confirm('Are you sure you want to remove all trainers for this class?')) return;
+        setMessage(null);
+        setSaving(true);
+        try {
+            const res = await fetch('/api/admin/remove-trainer', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ courseRunUuid: runId }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Failed to remove all trainers');
+
+            setMessage({ type: 'success', text: `All trainers removed successfully.` });
+            
+            await fetchExpandedRunTrainers(runId);
+            setLocalAssignments(curr => ({ ...curr, [runId]: { name: '', email: '' } }));
+        } catch (err) {
+            setMessage({ type: 'error', text: err instanceof Error ? err.message : 'Failed to remove trainers' });
         } finally {
             setSaving(false);
         }
@@ -3688,89 +3858,122 @@ export const AssignTrainerView: React.FC = () => {
                                                 <tr>
                                                     <td colSpan={6} className="px-4 py-4 bg-gray-50 dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700">
                                                         <div className="max-w-2xl space-y-4">
-                                                            {currentName && (
-                                                                <p className="text-sm text-gray-600 dark:text-gray-300">
-                                                                    <span className="font-medium">Currently assigned:</span> {currentName}{currentEmail ? ` (${currentEmail})` : ''}
-                                                                </p>
-                                                            )}
-
-                                                            {/* Mode toggle */}
-                                                            <div className="flex gap-2">
-                                                                {(['dropdown', 'manual'] as const).map(mode => (
-                                                                    <button
-                                                                        key={mode}
-                                                                        type="button"
-                                                                        onClick={() => setAssignMode(mode)}
-                                                                        className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${assignMode === mode ? 'bg-blue-600 text-white' : 'border border-gray-300 text-gray-600 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700'}`}
-                                                                    >
-                                                                        {mode === 'dropdown' ? 'Select from list' : 'Enter manually'}
-                                                                    </button>
-                                                                ))}
-                                                            </div>
-
-                                                            {assignMode === 'dropdown' ? (
-                                                                <div>
-                                                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                                                        Trainer <span className="text-red-500">*</span>
-                                                                    </label>
-                                                                    {loadingTrainers ? (
-                                                                        <p className="text-sm text-gray-500 italic">Loading trainers...</p>
-                                                                    ) : (
-                                                                        <SearchableSelect
-                                                                            options={availableTrainers.map(t => ({ value: t.user_id, label: `${t.trainer_name} (${t.email})` }))}
-                                                                            value={selectedTrainerId}
-                                                                            onChange={setSelectedTrainerId}
-                                                                            placeholder="— Search trainer by name or email —"
-                                                                            className={inputClasses}
-                                                                        />
+                                                            {/* Detailed Trainers List (Multi-Trainer) */}
+                                                            <div className="bg-white dark:bg-gray-800 p-4 border border-gray-200 dark:border-gray-700 rounded-lg">
+                                                                <div className="flex justify-between items-center mb-3">
+                                                                    <h4 className="text-sm font-semibold text-gray-800 dark:text-gray-200">
+                                                                        Currently Assigned ({expandedRunTrainers.length})
+                                                                    </h4>
+                                                                    {expandedRunTrainers.length > 0 && (
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => handleRemoveAllTrainers(run.id)}
+                                                                            disabled={saving}
+                                                                            className="text-xs text-red-600 hover:text-red-800 hover:bg-red-50 dark:hover:bg-red-900/30 px-2 py-1 rounded transition-colors"
+                                                                        >
+                                                                            Remove All
+                                                                        </button>
                                                                     )}
                                                                 </div>
-                                                            ) : (
-                                                                <div className="space-y-2">
-                                                                    <div>
-                                                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                                                            Trainer Name <span className="text-red-500">*</span>
-                                                                        </label>
-                                                                        <input
-                                                                            type="text"
-                                                                            placeholder="Full name"
-                                                                            value={manualName}
-                                                                            onChange={e => setManualName(e.target.value)}
-                                                                            className={inputClasses}
-                                                                        />
+                                                                {loadingExpandedTrainers ? (
+                                                                    <div className="text-sm text-gray-500 animate-pulse">Loading trainers...</div>
+                                                                ) : expandedRunTrainers.length > 0 ? (
+                                                                    <div className="space-y-2">
+                                                                        {expandedRunTrainers.map(t => (
+                                                                            <div key={t.id} className="flex justify-between items-center bg-gray-50 dark:bg-gray-700/50 p-2 rounded border border-gray-100 dark:border-gray-600">
+                                                                                <div className="text-sm">
+                                                                                    <span className="font-medium text-gray-900 dark:text-white">{t.trainer_name}</span>
+                                                                                    {t.trainer_email && <span className="text-gray-500 dark:text-gray-400 ml-2">({t.trainer_email})</span>}
+                                                                                </div>
+                                                                                <button
+                                                                                    type="button"
+                                                                                    onClick={() => handleRemoveSpecificTrainer(run.id, t.id, t.trainer_name)}
+                                                                                    disabled={saving}
+                                                                                    className="text-xs text-red-600 hover:text-red-800 hover:bg-red-50 dark:hover:bg-red-900/30 px-2 py-1 rounded transition-colors"
+                                                                                >
+                                                                                    ✕ Remove
+                                                                                </button>
+                                                                            </div>
+                                                                        ))}
                                                                     </div>
-                                                                    <div>
-                                                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                                                            Trainer Email
-                                                                        </label>
-                                                                        <input
-                                                                            type="email"
-                                                                            placeholder="email@example.com"
-                                                                            value={manualEmail}
-                                                                            onChange={e => setManualEmail(e.target.value)}
-                                                                            className={inputClasses}
-                                                                        />
-                                                                    </div>
-                                                                </div>
-                                                            )}
+                                                                ) : (
+                                                                    <div className="text-sm text-gray-500 italic">No trainers assigned. Add one below.</div>
+                                                                )}
+                                                            </div>
 
-                                                            <div className="flex justify-between items-center">
-                                                                {currentName ? (
+                                                            <div className="border-t border-gray-200 dark:border-gray-700 pt-4 mt-4">
+                                                                <h4 className="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-3">Add New Trainer</h4>
+                                                                
+                                                                {/* Mode toggle */}
+                                                                <div className="flex gap-2 mb-4">
+                                                                    {(['dropdown', 'manual'] as const).map(mode => (
+                                                                        <button
+                                                                            key={mode}
+                                                                            type="button"
+                                                                            onClick={() => setAssignMode(mode)}
+                                                                            className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${assignMode === mode ? 'bg-blue-600 text-white' : 'border border-gray-300 text-gray-600 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700'}`}
+                                                                        >
+                                                                            {mode === 'dropdown' ? 'Select from list' : 'Enter manually'}
+                                                                        </button>
+                                                                    ))}
+                                                                </div>
+
+                                                                {assignMode === 'dropdown' ? (
+                                                                    <div>
+                                                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                                            Trainer <span className="text-red-500">*</span>
+                                                                        </label>
+                                                                        {loadingTrainers ? (
+                                                                            <p className="text-sm text-gray-500 italic">Loading trainers...</p>
+                                                                        ) : (
+                                                                            <SearchableSelect
+                                                                                options={availableTrainers.map(t => ({ value: t.user_id, label: `${t.trainer_name} (${t.email})` }))}
+                                                                                value={selectedTrainerId}
+                                                                                onChange={setSelectedTrainerId}
+                                                                                placeholder="— Search trainer by name or email —"
+                                                                                className={inputClasses}
+                                                                            />
+                                                                        )}
+                                                                    </div>
+                                                                ) : (
+                                                                    <div className="space-y-2">
+                                                                        <div>
+                                                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                                                Trainer Name <span className="text-red-500">*</span>
+                                                                            </label>
+                                                                            <input
+                                                                                type="text"
+                                                                                placeholder="Full name"
+                                                                                value={manualName}
+                                                                                onChange={e => setManualName(e.target.value)}
+                                                                                className={inputClasses}
+                                                                            />
+                                                                        </div>
+                                                                        <div>
+                                                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                                                Trainer Email
+                                                                            </label>
+                                                                            <input
+                                                                                type="email"
+                                                                                placeholder="email@example.com"
+                                                                                value={manualEmail}
+                                                                                onChange={e => setManualEmail(e.target.value)}
+                                                                                className={inputClasses}
+                                                                            />
+                                                                        </div>
+                                                                    </div>
+                                                                )}
+
+                                                                <div className="flex justify-end mt-4">
                                                                     <Button
-                                                                        onClick={() => handleRemoveTrainer(run)}
+                                                                        type="button"
+                                                                        onClick={(e) => handleAssign(e, run)}
                                                                         disabled={saving}
-                                                                        className="bg-red-600 hover:bg-red-700 text-white"
+                                                                        className="bg-green-600 hover:bg-green-700 text-white"
                                                                     >
-                                                                        {saving ? 'Removing...' : 'Remove Trainer'}
+                                                                        {saving ? 'Adding...' : 'Add Trainer'}
                                                                     </Button>
-                                                                ) : <span />}
-                                                                <Button
-                                                                    onClick={() => handleAssign(run)}
-                                                                    disabled={saving}
-                                                                    className="bg-green-600 hover:bg-green-700 text-white"
-                                                                >
-                                                                    {saving ? 'Saving...' : 'Assign Trainer'}
-                                                                </Button>
+                                                                </div>
                                                             </div>
                                                         </div>
                                                     </td>

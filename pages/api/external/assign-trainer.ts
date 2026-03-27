@@ -255,6 +255,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     // ── Assign trainer ──────────────────────────────────────────────────────
+    // Legacy columns (backward compat)
     await client.query(
       `UPDATE course_run
        SET assigned_trainer_id    = $1,
@@ -263,6 +264,29 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
            updated_at             = NOW()
        WHERE id = $4`,
       [trainer.id, trainer.full_name, trainer.email, courseRunUuid]
+    );
+
+    // ── Multi-trainer: insert into junction table (additive) ────────────────
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS course_run_trainer (
+        id            UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+        course_run_id UUID NOT NULL REFERENCES course_run(id) ON DELETE CASCADE,
+        trainer_id    UUID,
+        trainer_name  TEXT NOT NULL,
+        trainer_email TEXT,
+        assigned_at   TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await client.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS uq_crt_run_trainer
+        ON course_run_trainer(course_run_id, COALESCE(trainer_id, '00000000-0000-0000-0000-000000000000'))
+    `);
+    await client.query(
+      `INSERT INTO course_run_trainer (course_run_id, trainer_id, trainer_name, trainer_email)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (course_run_id, COALESCE(trainer_id, '00000000-0000-0000-0000-000000000000'))
+       DO UPDATE SET trainer_name = EXCLUDED.trainer_name, trainer_email = EXCLUDED.trainer_email`,
+      [courseRunUuid, trainer.id, trainer.full_name, trainer.email]
     );
 
     await client.query('COMMIT');

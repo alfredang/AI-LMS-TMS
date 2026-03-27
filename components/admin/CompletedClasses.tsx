@@ -103,6 +103,7 @@ const CompletedClasses: React.FC = () => {
       const params = new URLSearchParams({
         page: currentPage.toString(),
         limit: ITEMS_PER_PAGE.toString(),
+        _t: Date.now().toString(),
       });
 
       // Add search and filter parameters

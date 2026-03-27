@@ -16,6 +16,11 @@ interface ClassDetailsResponse {
       overallGrantStatus: string;
       overallClaimStatus: string;
     };
+    trainers: Array<{
+      trainerId: string | null;
+      trainerName: string;
+      trainerEmail: string | null;
+    }>;
     enrolledLearners: Array<{
       learnerName: string;
       learnerEmail: string;
@@ -59,17 +64,13 @@ async function handler(req: NextApiRequest, res: NextApiResponse<ClassDetailsRes
     const basicDataQuery = `
       SELECT 
           c.title AS course_title,
-          au.full_name AS trainer,
+          cr.assigned_trainer_name AS trainer,
           cr.start_date AS start_date,
           cr.mode_of_learning AS mode,
           c.course_code AS tgs_ref,
           cr.course_run_id AS course_run_id,
           cr.id AS course_run_uuid
       FROM course_run cr
-      LEFT JOIN trainer_profile tp 
-          ON cr.assigned_trainer_id = tp.user_id
-      LEFT JOIN app_user au 
-          ON tp.user_id = au.id
       LEFT JOIN course c 
           ON cr.course_id = c.id
       WHERE cr.course_run_id = $1
@@ -185,12 +186,35 @@ async function handler(req: NextApiRequest, res: NextApiResponse<ClassDetailsRes
     const learnersResult = await pool.query(learnersQuery, [basicData.course_run_uuid]);
     console.log('✅ Learners query completed, found:', learnersResult.rows.length, 'learners');
 
+    // 6. Get all assigned trainers from junction table
+    let trainersRows: any[] = [];
+    try {
+      const trainersResult = await pool.query(
+        `SELECT trainer_id, trainer_name, trainer_email
+         FROM course_run_trainer
+         WHERE course_run_id = $1
+         ORDER BY assigned_at ASC`,
+        [basicData.course_run_uuid]
+      );
+      trainersRows = trainersResult.rows;
+    } catch {
+      // Junction table may not exist yet — fall back to legacy column
+    }
+
+    // Build trainer display string
+    let trainerDisplay = 'Not Assigned';
+    if (trainersRows.length > 0) {
+      trainerDisplay = trainersRows.map(t => t.trainer_name).join(', ');
+    } else if (basicData.trainer) {
+      trainerDisplay = basicData.trainer;
+    }
+
     const response = {
       success: true,
       data: {
         courseTitle: basicData.course_title,
         operationalSummary: {
-          trainer: basicData.trainer || 'Not Assigned',
+          trainer: trainerDisplay,
           startDate: basicData.start_date,
           mode: basicData.mode,
           overallAssessment,
@@ -199,6 +223,15 @@ async function handler(req: NextApiRequest, res: NextApiResponse<ClassDetailsRes
           overallGrantStatus,
           overallClaimStatus
         },
+        trainers: trainersRows.length > 0
+          ? trainersRows.map(t => ({
+              trainerId: t.trainer_id,
+              trainerName: t.trainer_name,
+              trainerEmail: t.trainer_email,
+            }))
+          : basicData.trainer
+            ? [{ trainerId: null, trainerName: basicData.trainer, trainerEmail: null }]
+            : [],
         enrolledLearners: learnersResult.rows.map(row => ({
           learnerName: row.learner_name,
           learnerEmail: row.learner_email,

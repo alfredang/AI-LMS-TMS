@@ -13,6 +13,20 @@ interface CompletedClass {
   numOfTrainee: number;
 }
 
+const ensureJunctionTable = async () => {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS course_run_trainer (
+        id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+        course_run_id UUID NOT NULL REFERENCES course_run(id) ON DELETE CASCADE,
+        trainer_id UUID,
+        trainer_name VARCHAR(255) NOT NULL,
+        trainer_email VARCHAR(255),
+        assigned_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(course_run_id, trainer_id)
+    );
+  `);
+};
+
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
@@ -21,6 +35,9 @@ export default async function handler(
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
 
   if (req.method === 'OPTIONS') {
     res.status(200).end();
@@ -32,6 +49,7 @@ export default async function handler(
   }
 
   try {
+    await ensureJunctionTable();
 
     const {
       page = '0',
@@ -77,11 +95,18 @@ export default async function handler(
 
     // 3. Involved Trainers
     const involvedTrainersQuery = `
-      SELECT 
-        COUNT(DISTINCT cr.assigned_trainer_id) AS involved_trainers
-      FROM course_run cr
-      WHERE cr.end_date < CURRENT_DATE
-        AND cr.assigned_trainer_id IS NOT NULL;
+      SELECT COUNT(DISTINCT trainer_name) as involved_trainers
+      FROM (
+        SELECT crt.trainer_name
+        FROM course_run cr
+        JOIN course_run_trainer crt ON cr.id = crt.course_run_id
+        WHERE cr.end_date < CURRENT_DATE
+        UNION
+        SELECT cr.assigned_trainer_name as trainer_name
+        FROM course_run cr
+        WHERE cr.end_date < CURRENT_DATE
+          AND cr.assigned_trainer_name IS NOT NULL
+      ) all_trainers;
     `;
     
     const involvedTrainersResult = await pool.query(involvedTrainersQuery);
@@ -122,7 +147,12 @@ export default async function handler(
     }
 
     if (trainer) {
-      whereConditions.push(`LOWER(au.full_name) LIKE LOWER($${paramCounter})`);
+      whereConditions.push(`(
+        EXISTS (
+          SELECT 1 FROM course_run_trainer crt 
+          WHERE crt.course_run_id = cr.id AND crt.trainer_name ILIKE $${paramCounter}
+        ) OR cr.assigned_trainer_name ILIKE $${paramCounter}
+      )`);
       queryParams.push(`%${trainer}%`);
       paramCounter++;
     }
@@ -146,7 +176,6 @@ export default async function handler(
       SELECT COUNT(*) as total_count
       FROM course_run cr
       LEFT JOIN course c ON cr.course_id = c.id
-      LEFT JOIN app_user au ON cr.assigned_trainer_id = au.id
       WHERE ${whereClause}
     `;
 
@@ -167,7 +196,11 @@ export default async function handler(
         cr.digital_attendance_id as "digitalAttendanceId",
         cr.start_date::text as "startDate",
         cr.end_date::text as "endDate",
-        COALESCE(au.full_name, 'Unassigned') as "trainerName",
+        COALESCE(
+          NULLIF((SELECT STRING_AGG(trainer_name, ', ') FROM course_run_trainer WHERE course_run_id = cr.id), ''),
+          cr.assigned_trainer_name,
+          'Unassigned'
+        ) as "trainerName",
         (
           SELECT COUNT(*)
           FROM enrollment e 
@@ -175,7 +208,6 @@ export default async function handler(
         ) as "numOfTrainee"
       FROM course_run cr
       LEFT JOIN course c ON cr.course_id = c.id
-      LEFT JOIN app_user au ON cr.assigned_trainer_email = au.email
       LEFT JOIN (
         SELECT 
           course_run_id, 

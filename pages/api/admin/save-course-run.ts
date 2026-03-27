@@ -435,6 +435,55 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const newCourseRunId = courseRunInsert.rows[0].id;
         const assignedTrainerId = courseRunInsert.rows[0].assigned_trainer_id;
 
+        // ── Multi-trainer: insert into junction table (additive) ─────────────
+        if (trainerName) {
+            try {
+                await query(`
+                    CREATE TABLE IF NOT EXISTS course_run_trainer (
+                        id            UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+                        course_run_id UUID NOT NULL REFERENCES course_run(id) ON DELETE CASCADE,
+                        trainer_id    UUID,
+                        trainer_name  TEXT NOT NULL,
+                        trainer_email TEXT,
+                        assigned_at   TIMESTAMPTZ DEFAULT NOW()
+                    )
+                `);
+                await query(`
+                    CREATE UNIQUE INDEX IF NOT EXISTS uq_crt_run_trainer
+                        ON course_run_trainer(course_run_id, COALESCE(trainer_id, '00000000-0000-0000-0000-000000000000'))
+                `);
+
+                // Insert ALL trainers from SSG data if multiple exist
+                const ssgTrainers = courseRun.linkCourseRunTrainer || [];
+                for (const trainerLink of ssgTrainers) {
+                    const t = trainerLink?.trainer;
+                    if (t?.name) {
+                        // Try to resolve trainer ID by email
+                        let tid = null;
+                        if (t.email) {
+                            const lookup = await query(
+                                `SELECT u.id FROM app_user u
+                                 JOIN trainer_profile tp ON tp.user_id = u.id
+                                 WHERE LOWER(u.email) = LOWER($1) LIMIT 1`,
+                                [t.email]
+                            );
+                            if (lookup.rows.length > 0) tid = lookup.rows[0].id;
+                        }
+                        await query(
+                            `INSERT INTO course_run_trainer (course_run_id, trainer_id, trainer_name, trainer_email)
+                             VALUES ($1, $2, $3, $4)
+                             ON CONFLICT (course_run_id, COALESCE(trainer_id, '00000000-0000-0000-0000-000000000000'))
+                             DO NOTHING`,
+                            [newCourseRunId, tid, t.name, t.email || null]
+                        );
+                    }
+                }
+                console.log('✅ Trainers inserted into junction table');
+            } catch (junctionError) {
+                console.warn('⚠️ Failed to insert into junction table (non-fatal):', junctionError);
+            }
+        }
+
         console.log('✅ Course run saved successfully:', {
             courseRunId: newCourseRunId,
             ssgCourseRunId: courseRunId,
