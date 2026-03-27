@@ -167,12 +167,12 @@ const OngoingClasses: React.FC = () => {
   // Date formatting function
   const formatDateInput = (value: string) => {
     const numeric = value.replace(/\D/g, '');
-    if (numeric.length <= 4) {
+    if (numeric.length <= 2) {
       return numeric;
-    } else if (numeric.length <= 6) {
-      return `${numeric.slice(0, 4)}/${numeric.slice(4)}`;
+    } else if (numeric.length <= 4) {
+      return `${numeric.slice(0, 2)}/${numeric.slice(2)}`;
     } else {
-      return `${numeric.slice(0, 4)}/${numeric.slice(4, 6)}/${numeric.slice(6, 8)}`;
+      return `${numeric.slice(0, 2)}/${numeric.slice(2, 4)}/${numeric.slice(4, 8)}`;
     }
   };
 
@@ -352,7 +352,7 @@ const OngoingClasses: React.FC = () => {
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Start Date (From)</label>
                   <input
                     type="text"
-                    placeholder="YYYY/MM/DD"
+                    placeholder="DD/MM/YYYY"
                     value={startDateFrom}
                     onChange={handleStartDateChange}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
@@ -363,7 +363,7 @@ const OngoingClasses: React.FC = () => {
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">End Date (Until)</label>
                   <input
                     type="text"
-                    placeholder="YYYY/MM/DD"
+                    placeholder="DD/MM/YYYY"
                     value={endDateUntil}
                     onChange={handleEndDateChange}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"

@@ -39,6 +39,7 @@ function getDriveClient(): drive_v3.Drive {
 
 /**
  * Find a subfolder by name inside a parent folder.
+ * Includes a fallback to handle trailing spaces and case differences.
  */
 async function findSubfolder(
     drive: drive_v3.Drive,
@@ -46,16 +47,34 @@ async function findSubfolder(
     folderName: string
 ): Promise<string | null> {
     const safeName = folderName.replace(/'/g, "\\'");
-    const response = await drive.files.list({
+    // Try exact match first
+    let response = await drive.files.list({
         q: `'${parentFolderId}' in parents and name = '${safeName}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
         fields: 'files(id, name)',
         spaces: 'drive',
     });
 
+    if (response.data.files && response.data.files.length > 0) {
+        return response.data.files[0].id!;
+    }
+
+    // Fallback: search all folders in parent to handle trailing spaces or case differences
+    response = await drive.files.list({
+        q: `'${parentFolderId}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
+        fields: 'files(id, name)',
+        spaces: 'drive',
+        pageSize: 1000,
+    });
+
     const files = response.data.files;
     if (files && files.length > 0) {
-        return files[0].id!;
+        const target = folderName.trim().toLowerCase();
+        const matched = files.find(f => f.name && f.name.trim().toLowerCase() === target);
+        if (matched) {
+            return matched.id!;
+        }
     }
+
     return null;
 }
 

@@ -80,6 +80,7 @@ export default async function handler(
         c.title ILIKE $${paramIndex} OR 
         c.course_code ILIKE $${paramIndex} OR 
         cr.course_run_id ILIKE $${paramIndex} OR
+        (EXISTS (SELECT 1 FROM course_run_trainer crt WHERE crt.course_run_id = cr.id AND crt.trainer_name ILIKE $${paramIndex})) OR
         au.full_name ILIKE $${paramIndex}
       )`;
       params.push(`%${search}%`);
@@ -106,20 +107,23 @@ export default async function handler(
     }
 
     if (trainer && trainer !== '') {
-      upcomingClassesQuery += ` AND au.full_name ILIKE $${paramIndex}`;
+      upcomingClassesQuery += ` AND (EXISTS (SELECT 1 FROM course_run_trainer crt WHERE crt.course_run_id = cr.id AND crt.trainer_name ILIKE $${paramIndex}) OR au.full_name ILIKE $${paramIndex})`;
       params.push(`%${trainer}%`);
       paramIndex++;
     }
 
-    if (startDateFrom && startDateFrom !== '') {
+    const isValidDate = (d: any) => typeof d === 'string' && /^\d{2}[\/\-]\d{2}[\/\-]\d{4}$/.test(d);
+    const parseDDMMYYYY = (d: string) => { const p = d.split(/[\/\-]/); return `${p[2]}-${p[1]}-${p[0]}`; };
+
+    if (isValidDate(startDateFrom)) {
       upcomingClassesQuery += ` AND cr.start_date >= $${paramIndex}`;
-      params.push(startDateFrom);
+      params.push(parseDDMMYYYY(startDateFrom as string));
       paramIndex++;
     }
 
-    if (endDateUntil && endDateUntil !== '') {
+    if (isValidDate(endDateUntil)) {
       upcomingClassesQuery += ` AND cr.end_date <= $${paramIndex}`;
-      params.push(endDateUntil);
+      params.push(parseDDMMYYYY(endDateUntil as string));
       paramIndex++;
     }
 
@@ -168,6 +172,7 @@ export default async function handler(
         c.title ILIKE $${countParamIndex} OR 
         c.course_code ILIKE $${countParamIndex} OR 
         cr.course_run_id ILIKE $${countParamIndex} OR
+        (EXISTS (SELECT 1 FROM course_run_trainer crt WHERE crt.course_run_id = cr.id AND crt.trainer_name ILIKE $${countParamIndex})) OR
         au.full_name ILIKE $${countParamIndex}
       )`;
       countParams.push(`%${search}%`);
@@ -193,20 +198,20 @@ export default async function handler(
     }
 
     if (trainer && trainer !== '') {
-      countQuery += ` AND au.full_name ILIKE $${countParamIndex}`;
+      countQuery += ` AND (EXISTS (SELECT 1 FROM course_run_trainer crt WHERE crt.course_run_id = cr.id AND crt.trainer_name ILIKE $${countParamIndex}) OR au.full_name ILIKE $${countParamIndex})`;
       countParams.push(`%${trainer}%`);
       countParamIndex++;
     }
 
-    if (startDateFrom && startDateFrom !== '') {
+    if (isValidDate(startDateFrom)) {
       countQuery += ` AND cr.start_date >= $${countParamIndex}`;
-      countParams.push(startDateFrom);
+      countParams.push(parseDDMMYYYY(startDateFrom as string));
       countParamIndex++;
     }
 
-    if (endDateUntil && endDateUntil !== '') {
+    if (isValidDate(endDateUntil)) {
       countQuery += ` AND cr.end_date <= $${countParamIndex}`;
-      countParams.push(endDateUntil);
+      countParams.push(parseDDMMYYYY(endDateUntil as string));
       countParamIndex++;
     }
 
@@ -229,15 +234,15 @@ export default async function handler(
     const statsParams = [...countParams];
     let statsParamIndex = 1;
     if (search && search !== '') {
-      statsQuery += ` AND (c.title ILIKE $${statsParamIndex} OR c.course_code ILIKE $${statsParamIndex} OR cr.course_run_id ILIKE $${statsParamIndex} OR au.full_name ILIKE $${statsParamIndex})`;
+      statsQuery += ` AND (c.title ILIKE $${statsParamIndex} OR c.course_code ILIKE $${statsParamIndex} OR cr.course_run_id ILIKE $${statsParamIndex} OR (EXISTS (SELECT 1 FROM course_run_trainer crt WHERE crt.course_run_id = cr.id AND crt.trainer_name ILIKE $${statsParamIndex})) OR au.full_name ILIKE $${statsParamIndex})`;
       statsParamIndex++;
     }
     if (courseTitle && courseTitle !== '') { statsQuery += ` AND c.title ILIKE $${statsParamIndex}`; statsParamIndex++; }
     if (courseCode && courseCode !== '') { statsQuery += ` AND c.course_code ILIKE $${statsParamIndex}`; statsParamIndex++; }
     if (courseRunId && courseRunId !== '') { statsQuery += ` AND cr.course_run_id ILIKE $${statsParamIndex}`; statsParamIndex++; }
-    if (trainer && trainer !== '') { statsQuery += ` AND au.full_name ILIKE $${statsParamIndex}`; statsParamIndex++; }
-    if (startDateFrom && startDateFrom !== '') { statsQuery += ` AND cr.start_date >= $${statsParamIndex}`; statsParamIndex++; }
-    if (endDateUntil && endDateUntil !== '') { statsQuery += ` AND cr.end_date <= $${statsParamIndex}`; statsParamIndex++; }
+    if (trainer && trainer !== '') { statsQuery += ` AND (EXISTS (SELECT 1 FROM course_run_trainer crt WHERE crt.course_run_id = cr.id AND crt.trainer_name ILIKE $${statsParamIndex}) OR au.full_name ILIKE $${statsParamIndex})`; statsParamIndex++; }
+    if (isValidDate(startDateFrom)) { statsQuery += ` AND cr.start_date >= $${statsParamIndex}`; statsParamIndex++; }
+    if (isValidDate(endDateUntil)) { statsQuery += ` AND cr.end_date <= $${statsParamIndex}`; statsParamIndex++; }
 
     const statsResult = await pool.query(statsQuery, statsParams);
     const stats = statsResult.rows[0] || {};

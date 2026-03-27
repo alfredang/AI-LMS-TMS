@@ -69,7 +69,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     if (search && search !== '') {
       params.push(`%${search}%`);
-      conditions.push(`(c.title ILIKE $${params.length} OR c.course_code ILIKE $${params.length} OR cr.course_run_id ILIKE $${params.length})`);
+      conditions.push(`(c.title ILIKE $${params.length} OR c.course_code ILIKE $${params.length} OR cr.course_run_id ILIKE $${params.length} OR (EXISTS (SELECT 1 FROM course_run_trainer crt WHERE crt.course_run_id = cr.id AND crt.trainer_name ILIKE $${params.length})) OR cr.assigned_trainer_name ILIKE $${params.length})`);
     }
 
     if (conditions.length > 0) {

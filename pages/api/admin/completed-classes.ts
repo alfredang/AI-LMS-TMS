@@ -157,15 +157,18 @@ export default async function handler(
       paramCounter++;
     }
 
-    if (startDateFrom) {
+    const isValidDate = (d: any) => typeof d === 'string' && /^\d{2}[\/\-]\d{2}[\/\-]\d{4}$/.test(d);
+    const parseDDMMYYYY = (d: string) => { const p = d.split(/[\/\-]/); return `${p[2]}-${p[1]}-${p[0]}`; };
+
+    if (isValidDate(startDateFrom)) {
       whereConditions.push(`cr.start_date >= $${paramCounter}`);
-      queryParams.push(startDateFrom);
+      queryParams.push(parseDDMMYYYY(startDateFrom as string));
       paramCounter++;
     }
 
-    if (endDateUntil) {
+    if (isValidDate(endDateUntil)) {
       whereConditions.push(`cr.end_date <= $${paramCounter}`);
-      queryParams.push(endDateUntil);
+      queryParams.push(parseDDMMYYYY(endDateUntil as string));
       paramCounter++;
     }
 
