@@ -83,6 +83,7 @@ export enum TrainerPage {
   PastAssessment = 'pastAssessment',
   TaskList = 'taskList',
   GenAIAuthoring = 'genAIAuthoring',
+  EdTools = 'edTools',
 }
 
 // Course related interfaces

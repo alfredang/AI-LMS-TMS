@@ -387,7 +387,7 @@ const CreateView: React.FC = () => {
         return <AiToolPage tool={activeToolData} onBack={() => setActiveTool(null)} role={role} />;
     }
 
-    const title = role === UserRole.Trainer ? "Trainer GenAI Authoring" : "Developer GenAI Authoring";
+    const title = role === UserRole.Trainer ? "GenAI Tools" : "Developer GenAI Authoring";
     const gridCols = role === UserRole.Trainer ? 'lg:grid-cols-3' : 'lg:grid-cols-4';
 
     return (

@@ -160,8 +160,8 @@ const Header: React.FC = () => {
     ],
     [UserRole.Trainer]: [
       { view: View.Dashboard, label: 'E-Attendance', icon: IconName.ClipboardCheck, trainerPage: TrainerPage.EAttendance },
-      { view: View.Dashboard, label: 'Break Timer', icon: IconName.Clock, href: 'https://alfredang.github.io/musical-timer-countdown/' },
-      { view: View.Dashboard, label: 'Pinboard', icon: IconName.Bookmark, href: 'https://alfredang.github.io/pinboard/' },
+      { view: View.Dashboard, label: 'Ed Tools', icon: IconName.BookOpen, trainerPage: TrainerPage.EdTools },
+      { view: View.Dashboard, label: 'GenAI Tools', icon: IconName.Create, trainerPage: TrainerPage.GenAIAuthoring },
     ],
     [UserRole.Developer]: [
       { view: View.Courses, label: 'Courses', icon: IconName.Courses },
