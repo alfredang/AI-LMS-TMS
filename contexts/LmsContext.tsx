@@ -981,8 +981,9 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           practicalAssessmentPublished: trainerData.data.courseDetail.practicalAssessmentPublished ?? false,
           startDate: trainerData.data.courseDetail.startDate || null,
           endDate: trainerData.data.courseDetail.endDate || null,
+          fundingValidity: trainerData.data.courseDetail.fundingValidity || null,
           certificate: ''
-        });
+        } as any);
 
         console.log('✅ LmsContext: Course detail set with courseRunUuid:', trainerData.data.courseDetail.courseRunUuid);
         console.log('✅ LmsContext: Original course.courseRunId was:', course.courseRunId);

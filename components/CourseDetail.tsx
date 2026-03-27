@@ -1737,6 +1737,7 @@ export const CourseDetail: React.FC = () => {
         assessmentRecordLink: effectiveDetail?.assessmentRecordLink,
         writtenAssessmentLink: effectiveDetail?.writtenAssessmentLink,
         practicalPerformanceAssessmentLink: effectiveDetail?.practicalPerformanceAssessmentLink,
+        fundingValidity: (effectiveDetail as any)?.fundingValidity || selectedCourse.fundingValidity || undefined,
         assessmentMethods: effectiveDetail?.assessmentMethods || undefined,
         publishedAssessmentMethods: effectiveDetail?.publishedAssessmentMethods || {},
         writtenAssessmentPublished: userRole === UserRole.Admin || userRole === UserRole.Developer || userRole === UserRole.TrainingProvider

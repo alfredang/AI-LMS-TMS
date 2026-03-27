@@ -74,7 +74,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         cr.course_run_id AS external_course_run_id,
         cr.start_date,
         cr.end_date,
-        c.resource_links
+        c.resource_links,
+        c.funding_validity
       FROM trainer_profile tp
       JOIN course_run cr ON (
         tp.user_id = cr.assigned_trainer_id
@@ -221,7 +222,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           endDate: courseDetail.end_date || null,
           courseId: courseDetail.course_id,
           courseCode: courseDetail.course_code,
-          resourceLinks: courseDetail.resource_links ? (typeof courseDetail.resource_links === 'string' ? JSON.parse(courseDetail.resource_links) : courseDetail.resource_links) : []
+          resourceLinks: courseDetail.resource_links ? (typeof courseDetail.resource_links === 'string' ? JSON.parse(courseDetail.resource_links) : courseDetail.resource_links) : [],
+          fundingValidity: courseDetail.funding_validity || null
         },
         learningUnits,
         bookmarkedSubtopics
