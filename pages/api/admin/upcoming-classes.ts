@@ -112,8 +112,13 @@ export default async function handler(
       paramIndex++;
     }
 
-    const isValidDate = (d: any) => typeof d === 'string' && /^\d{2}[\/\-]\d{2}[\/\-]\d{4}$/.test(d);
     const parseDDMMYYYY = (d: string) => { const p = d.split(/[\/\-]/); return `${p[2]}-${p[1]}-${p[0]}`; };
+    const isValidDate = (d: any) => {
+      if (typeof d !== 'string' || !/^\d{2}[\/\-]\d{2}[\/\-]\d{4}$/.test(d)) return false;
+      const iso = parseDDMMYYYY(d);
+      const parsed = new Date(iso);
+      return !isNaN(parsed.getTime()) && parsed.toISOString().startsWith(iso);
+    };
 
     if (isValidDate(startDateFrom)) {
       upcomingClassesQuery += ` AND cr.start_date >= $${paramIndex}`;

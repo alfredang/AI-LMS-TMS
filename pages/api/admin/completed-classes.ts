@@ -67,51 +67,6 @@ export default async function handler(
     const limitNum = parseInt(limit as string);
     const offset = pageNum * limitNum;
 
-    // Statistics Queries
-
-    // 1. Completed Classes Found
-    const completedClassesQuery = `
-      SELECT 
-        COUNT(*) AS completed_classes_found
-      FROM course_run
-      WHERE end_date < CURRENT_DATE;
-    `;
-    
-    const completedClassesResult = await pool.query(completedClassesQuery);
-    const completedClassesFound = parseInt(completedClassesResult.rows[0].completed_classes_found);
-
-    // 2. Total Graduated Learners
-    const graduatedLearnersQuery = `
-      SELECT 
-        COUNT(e.id) AS total_graduated_learners
-      FROM enrollment e
-      JOIN course_run cr 
-        ON e.course_run_id = cr.id
-      WHERE cr.end_date < CURRENT_DATE;
-    `;
-    
-    const graduatedLearnersResult = await pool.query(graduatedLearnersQuery);
-    const totalGraduatedLearners = parseInt(graduatedLearnersResult.rows[0].total_graduated_learners);
-
-    // 3. Involved Trainers
-    const involvedTrainersQuery = `
-      SELECT COUNT(DISTINCT trainer_name) as involved_trainers
-      FROM (
-        SELECT crt.trainer_name
-        FROM course_run cr
-        JOIN course_run_trainer crt ON cr.id = crt.course_run_id
-        WHERE cr.end_date < CURRENT_DATE
-        UNION
-        SELECT cr.assigned_trainer_name as trainer_name
-        FROM course_run cr
-        WHERE cr.end_date < CURRENT_DATE
-          AND cr.assigned_trainer_name IS NOT NULL
-      ) all_trainers;
-    `;
-    
-    const involvedTrainersResult = await pool.query(involvedTrainersQuery);
-    const involvedTrainers = parseInt(involvedTrainersResult.rows[0].involved_trainers);
-
     // Build WHERE conditions for filtering completed classes
     let whereConditions = ['cr.end_date < CURRENT_DATE'];
     let paramCounter = 1;
@@ -157,8 +112,13 @@ export default async function handler(
       paramCounter++;
     }
 
-    const isValidDate = (d: any) => typeof d === 'string' && /^\d{2}[\/\-]\d{2}[\/\-]\d{4}$/.test(d);
     const parseDDMMYYYY = (d: string) => { const p = d.split(/[\/\-]/); return `${p[2]}-${p[1]}-${p[0]}`; };
+    const isValidDate = (d: any) => {
+      if (typeof d !== 'string' || !/^\d{2}[\/\-]\d{2}[\/\-]\d{4}$/.test(d)) return false;
+      const iso = parseDDMMYYYY(d);
+      const parsed = new Date(iso);
+      return !isNaN(parsed.getTime()) && parsed.toISOString().startsWith(iso);
+    };
 
     if (isValidDate(startDateFrom)) {
       whereConditions.push(`cr.start_date >= $${paramCounter}`);
@@ -174,11 +134,52 @@ export default async function handler(
 
     const whereClause = whereConditions.join(' AND ');
 
+    // Statistics queries (filtered)
+    const completedClassesResult = await pool.query(`
+      SELECT COUNT(*) AS completed_classes_found
+      FROM course_run cr
+      LEFT JOIN course c ON cr.course_id = c.id
+      LEFT JOIN app_user au ON cr.assigned_trainer_email = au.email
+      WHERE ${whereClause}
+    `, queryParams);
+    const completedClassesFound = parseInt(completedClassesResult.rows[0].completed_classes_found);
+
+    const graduatedLearnersResult = await pool.query(`
+      SELECT COUNT(e.id) AS total_graduated_learners
+      FROM enrollment e
+      JOIN course_run cr ON e.course_run_id = cr.id
+      LEFT JOIN course c ON cr.course_id = c.id
+      LEFT JOIN app_user au ON cr.assigned_trainer_email = au.email
+      WHERE ${whereClause}
+    `, queryParams);
+    const totalGraduatedLearners = parseInt(graduatedLearnersResult.rows[0].total_graduated_learners);
+
+    const involvedTrainersResult = await pool.query(`
+      SELECT COUNT(DISTINCT trainer_name) as involved_trainers
+      FROM (
+        SELECT crt.trainer_name
+        FROM course_run cr
+        JOIN course c ON cr.course_id = c.id
+        LEFT JOIN app_user au ON cr.assigned_trainer_email = au.email
+        JOIN course_run_trainer crt ON cr.id = crt.course_run_id
+        WHERE ${whereClause}
+        UNION
+        SELECT cr.assigned_trainer_name as trainer_name
+        FROM course_run cr
+        JOIN course c ON cr.course_id = c.id
+        LEFT JOIN app_user au ON cr.assigned_trainer_email = au.email
+        WHERE ${whereClause}
+          AND cr.assigned_trainer_name IS NOT NULL
+      ) all_trainers
+    `, queryParams);
+    const involvedTrainers = parseInt(involvedTrainersResult.rows[0].involved_trainers);
+
     // Count total matching records
     const countQuery = `
       SELECT COUNT(*) as total_count
       FROM course_run cr
       LEFT JOIN course c ON cr.course_id = c.id
+      LEFT JOIN app_user au ON cr.assigned_trainer_email = au.email
       WHERE ${whereClause}
     `;
 
@@ -211,15 +212,16 @@ export default async function handler(
         ) as "numOfTrainee"
       FROM course_run cr
       LEFT JOIN course c ON cr.course_id = c.id
+      LEFT JOIN app_user au ON cr.assigned_trainer_email = au.email
       LEFT JOIN (
-        SELECT 
-          course_run_id, 
+        SELECT
+          course_run_id,
           COUNT(*) as count
-        FROM enrollment 
+        FROM enrollment
         GROUP BY course_run_id
       ) trainee_count ON cr.id = trainee_count.course_run_id
       WHERE ${whereClause}
-      ORDER BY CAST(cr.course_run_id AS INTEGER) DESC
+      ORDER BY cr.course_run_id DESC
       LIMIT $${paramCounter} OFFSET $${paramCounter + 1}
     `;
 

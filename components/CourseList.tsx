@@ -430,22 +430,22 @@ const ManagementCourseList: React.FC = () => {
             <table className="min-w-full divide-y divide-default">
                 <thead className="bg-surface-elevated">
                     <tr>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-on-surface-secondary uppercase tracking-wider">Course</th>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-on-surface-secondary uppercase tracking-wider">Details</th>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-on-surface-secondary uppercase tracking-wider">Duration</th>
+                        <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-on-surface-secondary uppercase tracking-wider">Course</th>
+                        <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-on-surface-secondary uppercase tracking-wider">Details</th>
+                        <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-on-surface-secondary uppercase tracking-wider">Duration</th>
                         {(role === UserRole.Admin || role === UserRole.TrainingProvider) && (
-                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-on-surface-secondary uppercase tracking-wider">Validity</th>
+                            <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-on-surface-secondary uppercase tracking-wider">Validity</th>
                         )}
                         {(role === UserRole.Admin || role === UserRole.TrainingProvider) && (
-                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-on-surface-secondary uppercase tracking-wider">Trainers</th>
+                            <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-on-surface-secondary uppercase tracking-wider">Trainers</th>
                         )}
                         {role === UserRole.Trainer && (
-                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-on-surface-secondary uppercase tracking-wider">Course Run ID</th>
+                            <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-on-surface-secondary uppercase tracking-wider">Course Run ID</th>
                         )}
                         {(role !== UserRole.Developer && role !== UserRole.Admin && role !== UserRole.TrainingProvider) && (
-                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-on-surface-secondary uppercase tracking-wider">Start Date</th>
+                            <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-on-surface-secondary uppercase tracking-wider">Start Date</th>
                         )}
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-on-surface-secondary uppercase tracking-wider">Actions</th>
+                        <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-on-surface-secondary uppercase tracking-wider">Actions</th>
                     </tr>
                 </thead>
                 <tbody className="bg-surface divide-y divide-default">
@@ -453,7 +453,7 @@ const ManagementCourseList: React.FC = () => {
                         const totalHours = Number(course.trainingHours) + Number(course.assessmentHours);
                         return (
                             <tr key={course.id} className="hover:bg-surface-elevated transition-colors">
-                                <td className="px-6 py-4 whitespace-nowrap">
+                                <td className="px-4 py-4 whitespace-nowrap">
                                     <div className="flex items-center">
                                         <div className="flex-shrink-0 h-10 w-10">
                                             <img
@@ -472,21 +472,21 @@ const ManagementCourseList: React.FC = () => {
                                         </div>
                                     </div>
                                 </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-on-surface-secondary">
+                                <td className="px-4 py-4 whitespace-nowrap text-sm text-on-surface-secondary">
                                     <span className={`font-semibold px-2 py-0.5 rounded-full text-xs ${getTypeColor(course.courseType)}`}>{course.courseType}</span>
                                     <div className="mt-1">{course.modeOfLearning.join(', ')}</div>
                                 </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-on-surface-secondary">
+                                <td className="px-4 py-4 whitespace-nowrap text-sm text-on-surface-secondary">
                                     <div>{totalHours} Hours</div>
                                     <div className="text-xs">({course.trainingHours}T + {course.assessmentHours}A)</div>
                                 </td>
                                 {(role === UserRole.Admin || role === UserRole.TrainingProvider) && (
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-on-surface-secondary">
+                                    <td className="px-4 py-4 whitespace-nowrap text-sm text-on-surface-secondary">
                                         {course.fundingValidity || '—'}
                                     </td>
                                 )}
                                 {(role === UserRole.Admin || role === UserRole.TrainingProvider) && (
-                                    <td className="px-6 py-4 text-sm text-on-surface-secondary max-w-[200px]">
+                                    <td className="px-4 py-4 text-sm text-on-surface-secondary max-w-[200px]">
                                         <div className="font-medium">{course.numOfTrainers || 0} trainer{(course.numOfTrainers || 0) !== 1 ? 's' : ''}</div>
                                         {course.trainersList && (
                                             <div className="text-xs text-gray-500 dark:text-gray-400 mt-1 line-clamp-2" title={course.trainersList}>
@@ -496,12 +496,12 @@ const ManagementCourseList: React.FC = () => {
                                     </td>
                                 )}
                                 {role === UserRole.Trainer && (
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-on-surface-secondary">
+                                    <td className="px-4 py-4 whitespace-nowrap text-sm text-on-surface-secondary">
                                         {course.courseRunCode || 'N/A'}
                                     </td>
                                 )}
                                 {(role !== UserRole.Developer && role !== UserRole.Admin && role !== UserRole.TrainingProvider) && (
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-on-surface-secondary">
+                                    <td className="px-4 py-4 whitespace-nowrap text-sm text-on-surface-secondary">
                                         {course.startDate ? (
                                             new Date(course.startDate).toLocaleDateString('en-SG', {
                                                 year: 'numeric',
@@ -513,7 +513,7 @@ const ManagementCourseList: React.FC = () => {
                                         )}
                                     </td>
                                 )}
-                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                <td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
                                     <div className="flex items-center space-x-2">
                                         <Button size="sm" onClick={() => {
                                             setSelectedCourse(course);
@@ -1184,10 +1184,10 @@ const CourseList: React.FC = () => {
     const title = role === UserRole.Trainer ? "My Assigned Classes" : "Course Management";
     return (
         <div>
-            <div className="flex items-center justify-between mb-6">
+            <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
                 <h2 className="text-3xl font-bold dark:text-white">{title}</h2>
                 {role === UserRole.Admin && (
-                    <div className="flex items-center gap-3">
+                    <div className="flex flex-wrap items-center gap-3">
                         <Button variant="ghost" onClick={() => setShowBulkUpload(true)} className="border border-blue-500 text-blue-600 hover:bg-blue-50 dark:border-blue-400 dark:text-blue-400 dark:hover:bg-blue-900/20">
                             <Icon name={IconName.Upload} className="w-4 h-4 mr-2" />
                             Bulk Upload Courses

@@ -79,6 +79,14 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
     const [startDateFrom, setStartDateFrom] = useState('');
     const [endDateUntil, setEndDateUntil] = useState('');
 
+    // Debounced filter values
+    const [debouncedSearch, setDebouncedSearch] = useState('');
+    const [debouncedCourseTitle, setDebouncedCourseTitle] = useState('');
+    const [debouncedCourseCode, setDebouncedCourseCode] = useState('');
+    const [debouncedCourseRunId, setDebouncedCourseRunId] = useState('');
+    const [debouncedStartDate, setDebouncedStartDate] = useState('');
+    const [debouncedEndDate, setDebouncedEndDate] = useState('');
+
     // Data states
     const [upcomingClasses, setUpcomingClasses] = useState<UpcomingClass[]>([]);
     const [trainers, setTrainers] = useState<Trainer[]>([]);
@@ -126,14 +134,14 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                 _t: Date.now().toString(),
             });
 
-            // Add search and filter parameters
-            if (searchQuery) params.append('search', searchQuery);
-            if (courseTitle) params.append('courseTitle', courseTitle);
-            if (courseCode) params.append('courseCode', courseCode);
-            if (courseRunId) params.append('courseRunId', courseRunId);
+            // Add search and filter parameters (use debounced values for text inputs)
+            if (debouncedSearch) params.append('search', debouncedSearch);
+            if (debouncedCourseTitle) params.append('courseTitle', debouncedCourseTitle);
+            if (debouncedCourseCode) params.append('courseCode', debouncedCourseCode);
+            if (debouncedCourseRunId) params.append('courseRunId', debouncedCourseRunId);
             if (selectedTrainer) params.append('trainer', selectedTrainer);
-            if (startDateFrom) params.append('startDateFrom', startDateFrom);
-            if (endDateUntil) params.append('endDateUntil', endDateUntil);
+            if (debouncedStartDate) params.append('startDateFrom', debouncedStartDate);
+            if (debouncedEndDate) params.append('endDateUntil', debouncedEndDate);
 
             console.log('📝 Query params:', params.toString());
 
@@ -158,17 +166,34 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
         }
     };
 
-    // Initial data fetch
+    // Fetch trainers on mount
     useEffect(() => {
-        console.log('🚀 UpcomingClassesTable mounted - fetching initial data');
         fetchTrainers();
-        fetchUpcomingClasses();
     }, []);
 
-    // Refetch when filters or pagination change
+    // Debounce text filter inputs (300ms) and reset page
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setDebouncedSearch(searchQuery);
+            setDebouncedCourseTitle(courseTitle);
+            setDebouncedCourseCode(courseCode);
+            setDebouncedCourseRunId(courseRunId);
+            setDebouncedStartDate(startDateFrom);
+            setDebouncedEndDate(endDateUntil);
+            setCurrentPage(0);
+        }, 300);
+        return () => clearTimeout(timer);
+    }, [searchQuery, courseTitle, courseCode, courseRunId, startDateFrom, endDateUntil]);
+
+    // Reset page immediately for non-debounced filters (dropdowns)
+    useEffect(() => {
+        setCurrentPage(0);
+    }, [selectedTrainer]);
+
+    // Fetch data when debounced filters or pagination change
     useEffect(() => {
         fetchUpcomingClasses();
-    }, [currentPage, searchQuery, courseTitle, courseCode, courseRunId, selectedTrainer, startDateFrom, endDateUntil]);
+    }, [currentPage, debouncedSearch, debouncedCourseTitle, debouncedCourseCode, debouncedCourseRunId, selectedTrainer, debouncedStartDate, debouncedEndDate]);
 
     // Date formatting function
     const formatDateInput = (value: string) => {
@@ -221,7 +246,7 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
 
     const formatDate = (dateString: string) => {
         if (!dateString) return 'N/A';
-        return new Date(dateString).toLocaleDateString();
+        return new Date(dateString).toLocaleDateString('en-GB');
     };
 
     const handleImportRun = async () => {
