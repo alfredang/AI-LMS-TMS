@@ -97,7 +97,7 @@ const ClassDetailView: React.FC<ClassDetailViewProps> = ({ courseRunId }) => {
         setLoading(true);
         console.log('🔍 Fetching class details for course run:', courseRunId);
 
-        const response = await fetch(getApiUrl(`/api/admin/class-details?courseRunId=${courseRunId}`));
+        const response = await fetch(`/api/admin/class-details?courseRunId=${courseRunId}`);
         const result = await response.json();
 
         if (!response.ok || !result.success) {
@@ -174,7 +174,7 @@ const ClassDetailView: React.FC<ClassDetailViewProps> = ({ courseRunId }) => {
       console.log('🔍 Searching enrolment records for course run:', courseRunIdToUse);
 
       // Fetch UEN from database
-      const uenResponse = await fetch(getApiUrl('/api/training-provider/uen'));
+      const uenResponse = await fetch('/api/training-provider/uen');
       if (!uenResponse.ok) {
         throw new Error('Failed to fetch UEN from database');
       }
@@ -194,7 +194,7 @@ const ClassDetailView: React.FC<ClassDetailViewProps> = ({ courseRunId }) => {
 
       console.log('📤 Enrolment search request:', searchRequest);
 
-      const response = await fetch(getApiUrl('/api/enrolment/search'), {
+      const response = await fetch('/api/enrolment/search', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -407,7 +407,7 @@ const ClassDetailView: React.FC<ClassDetailViewProps> = ({ courseRunId }) => {
         */}
 
         {/* New table using Search Enrolment API data */}
-        {enrolmentData && (enrolmentData.status === "200" || enrolmentData.status === 200) && enrolmentData.data && Array.isArray(enrolmentData.data) && enrolmentData.data.length > 0 ? (
+        {Array.isArray(enrolmentData) && enrolmentData.length > 0 ? (
           <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
             <thead className="bg-gray-50 dark:bg-gray-800">
               <tr>
@@ -444,37 +444,38 @@ const ClassDetailView: React.FC<ClassDetailViewProps> = ({ courseRunId }) => {
               </tr>
             </thead>
             <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
-              {enrolmentData.data.map((record: any, index: number) => {
-                const trainee = record.enrolment.trainee;
+              {enrolmentData.map((record: any, index: number) => {
+                const trainee = record.enrolment ? record.enrolment.trainee : record.trainee;
+                if (!trainee) return null;
                 const ageGroup = getAgeGroup(trainee.dateOfBirth || '');
                 
                 return (
                   <tr key={index}>
                     <td className="px-4 py-4 whitespace-nowrap text-sm">
                       <p className="font-medium text-gray-900 dark:text-white">{trainee.fullName || 'N/A'}</p>
-                      <p className="text-gray-500 dark:text-gray-400">{trainee.email.full || 'N/A'}</p>
-                      <p className="text-gray-500 dark:text-gray-400">{trainee.contactNumber.phoneNumber || 'N/A'}</p>
+                      <p className="text-gray-500 dark:text-gray-400">{trainee.email?.full || 'N/A'}</p>
+                      <p className="text-gray-500 dark:text-gray-400">{trainee.contactNumber?.phoneNumber || 'N/A'}</p>
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                      {trainee.employer.name || 'N/A'}
+                      {trainee.employer?.name || 'N/A'}
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                       {trainee.sponsorshipType || 'N/A'}
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                      {trainee.idType.type || 'N/A'}
+                      {trainee.idType?.type || 'N/A'}
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                       {ageGroup}
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap text-sm">
-                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(trainee.fees.collectionStatus || '')}`}>
-                        {trainee.fees.collectionStatus || 'N/A'}
+                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(trainee.fees?.collectionStatus || '')}`}>
+                        {trainee.fees?.collectionStatus || 'N/A'}
                       </span>
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap text-sm">
                       <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300">
-                        Pending
+                        {record.enrolment?.status || 'Pending'}
                       </span>
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400 font-mono">
@@ -496,14 +497,10 @@ const ClassDetailView: React.FC<ClassDetailViewProps> = ({ courseRunId }) => {
           </table>
         ) : (
           <div className="text-center text-subtle py-10">
-            {enrolmentData && (enrolmentData.status === "200" || enrolmentData.status === 200) && enrolmentData.data && Array.isArray(enrolmentData.data) && enrolmentData.data.length === 0 ? (
-              <p>No enrolment records found for this course run.</p>
-            ) : enrolmentData && (enrolmentData.status === "200" || enrolmentData.status === 200) ? (
-              <p>Data received but no valid enrolment records found.</p>
-            ) : enrolmentData && (enrolmentData.status === "404" || enrolmentData.status === 404) ? (
+            {Array.isArray(enrolmentData) && enrolmentData.length === 0 ? (
               <p>No enrolment records found for this course run.</p>
             ) : enrolmentData ? (
-              <p>Invalid response status: {enrolmentData.status || 'Unknown'} (Type: {typeof enrolmentData.status})</p>
+              <p>Invalid or empty enrolment data received.</p>
             ) : (
               <p>Click "Search Enrolment Records" below to load learner data from SSG API.</p>
             )}
@@ -559,60 +556,41 @@ const ClassDetailView: React.FC<ClassDetailViewProps> = ({ courseRunId }) => {
               </div>
             )}
 
-            {enrolmentData && (
+            {Array.isArray(enrolmentData) && (
               <div className="space-y-6">
-                {/* Request Details */}
+                {/* Search Info */}
                 <div>
-                  <h4 className="text-lg font-semibold mb-3">Search Parameters</h4>
+                  <h4 className="text-lg font-semibold mb-3">Search Status</h4>
                   <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-md">
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                      <div>
-                        <span className="font-medium text-gray-600 dark:text-gray-300">Course Run ID:</span>
-                        <p className="font-mono">{enrolmentData.requestBody?.enrolment?.course?.run?.id || 'N/A'}</p>
-                      </div>
-                      <div>
-                        <span className="font-medium text-gray-600 dark:text-gray-300">Training Partner UEN:</span>
-                        <p className="font-mono">{enrolmentData.requestBody?.enrolment?.trainingPartner?.uen || 'N/A'}</p>
-                      </div>
-                      <div>
-                        <span className="font-medium text-gray-600 dark:text-gray-300">Training Partner Code:</span>
-                        <p className="font-mono">{enrolmentData.requestBody?.enrolment?.trainingPartner?.code || 'N/A'}</p>
-                      </div>
-                      <div>
-                        <span className="font-medium text-gray-600 dark:text-gray-300">Page Size:</span>
-                        <p className="font-mono">{enrolmentData.requestBody?.parameters?.pageSize || 'N/A'}</p>
-                      </div>
+                    <div className="text-sm">
+                      <span className="font-medium text-gray-600 dark:text-gray-300">Course Run ID:</span>
+                      <p className="font-mono mt-1">{classDetail?.operationalSummary?.courseRunId || 'N/A'}</p>
                     </div>
                   </div>
                 </div>
 
                 {/* Response Data */}
                 <div>
-                  <h4 className="text-lg font-semibold mb-3">Search Results</h4>
+                  <h4 className="text-lg font-semibold mb-3">Search Results Raw Data</h4>
                   <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-md max-h-96 overflow-auto">
                     <pre className="text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap">
-                      {JSON.stringify(enrolmentData.data, null, 2)}
+                      {JSON.stringify(enrolmentData, null, 2)}
                     </pre>
                   </div>
                 </div>
 
                 {/* Summary */}
-                {enrolmentData.data && (
-                  <div>
-                    <h4 className="text-lg font-semibold mb-3">Summary</h4>
-                    <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-md border border-blue-100 dark:border-blue-800">
-                      <div className="flex items-center">
-                        <Icon name={IconName.InfoCircle} className="w-5 h-5 text-blue-400 dark:text-blue-300 mr-2" />
-                        <span className="text-blue-800 dark:text-blue-300">
-                          {enrolmentData.data.count !== undefined 
-                            ? `Found ${enrolmentData.data.count} enrolment record(s)`
-                            : 'Enrolment search completed'
-                          }
-                        </span>
-                      </div>
+                <div>
+                  <h4 className="text-lg font-semibold mb-3">Summary</h4>
+                  <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-md border border-blue-100 dark:border-blue-800">
+                    <div className="flex items-center">
+                      <Icon name={IconName.InfoCircle} className="w-5 h-5 text-blue-400 dark:text-blue-300 mr-2" />
+                      <span className="text-blue-800 dark:text-blue-300">
+                        Found {enrolmentData.length} enrolment record(s)
+                      </span>
                     </div>
                   </div>
-                )}
+                </div>
               </div>
             )}
 
