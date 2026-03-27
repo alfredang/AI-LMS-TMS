@@ -855,34 +855,29 @@ const AssessmentsSection: React.FC<{
                     {/* Show Link-based assessment */}
                     {course.writtenAssessmentLink && (
                         <>
-                            <a
-                                href={course.writtenAssessmentLink}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors mb-3"
-                            >
-                                <Icon name={IconName.ExternalLink} className="w-6 h-6 text-blue-600 flex-shrink-0" />
-                                <div className="flex-1 min-w-0">
-                                    <p className="font-medium text-gray-900 dark:text-white">Open Assessment Link</p>
-                                    <p className="text-xs text-gray-500 dark:text-gray-400">Click to open external form</p>
-                                </div>
-                            </a>
-
-                            {/* Publish/Unpublish buttons for trainer */}
-                            {userRole === UserRole.Trainer && (
-                                writtenPublished ? (
-                                    <div className="space-y-2">
-                                        <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-md border border-blue-200 dark:border-blue-800 text-center">
-                                            <p className="text-sm font-semibold text-blue-800 dark:text-blue-300">Assessment is Live</p>
-                                        </div>
-                                        <Button onClick={() => handlePublishLink('written', false)} variant="secondary" className="w-full">
+                            <div className="flex items-center gap-3 mb-3">
+                                <a
+                                    href={course.writtenAssessmentLink}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex items-center gap-3 p-3 flex-1 min-w-0 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+                                >
+                                    <Icon name={IconName.ExternalLink} className="w-6 h-6 text-blue-600 flex-shrink-0" />
+                                    <div className="flex-1 min-w-0">
+                                        <p className="font-medium text-gray-900 dark:text-white">Open Assessment Link</p>
+                                        <p className="text-xs text-gray-500 dark:text-gray-400">Click to open external form</p>
+                                    </div>
+                                </a>
+                                {userRole === UserRole.Trainer && (
+                                    writtenPublished ? (
+                                        <Button onClick={() => handlePublishLink('written', false)} variant="secondary" className="flex-shrink-0">
                                             Unpublish
                                         </Button>
-                                    </div>
-                                ) : (
-                                    <Button onClick={() => handlePublishLink('written', true)} className="w-full">Publish Assessment</Button>
-                                )
-                            )}
+                                    ) : (
+                                        <Button onClick={() => handlePublishLink('written', true)} className="flex-shrink-0">Publish</Button>
+                                    )
+                                )}
+                            </div>
                         </>
                     )}
 
@@ -967,34 +962,29 @@ const AssessmentsSection: React.FC<{
                     {/* Show Link-based assessment */}
                     {course.practicalPerformanceAssessmentLink && (
                         <>
-                            <a
-                                href={course.practicalPerformanceAssessmentLink}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors mb-3"
-                            >
-                                <Icon name={IconName.ExternalLink} className="w-6 h-6 text-blue-600 flex-shrink-0" />
-                                <div className="flex-1 min-w-0">
-                                    <p className="font-medium text-gray-900 dark:text-white">Open Assessment Link</p>
-                                    <p className="text-xs text-gray-500 dark:text-gray-400">Click to open external form</p>
-                                </div>
-                            </a>
-
-                            {/* Publish/Unpublish buttons for trainer */}
-                            {userRole === UserRole.Trainer && (
-                                practicalPublished ? (
-                                    <div className="space-y-2">
-                                        <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-md border border-blue-200 dark:border-blue-800 text-center">
-                                            <p className="text-sm font-semibold text-blue-800 dark:text-blue-300">Assessment is Live</p>
-                                        </div>
-                                        <Button onClick={() => handlePublishLink('practical', false)} variant="secondary" className="w-full">
+                            <div className="flex items-center gap-3 mb-3">
+                                <a
+                                    href={course.practicalPerformanceAssessmentLink}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex items-center gap-3 p-3 flex-1 min-w-0 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+                                >
+                                    <Icon name={IconName.ExternalLink} className="w-6 h-6 text-blue-600 flex-shrink-0" />
+                                    <div className="flex-1 min-w-0">
+                                        <p className="font-medium text-gray-900 dark:text-white">Open Assessment Link</p>
+                                        <p className="text-xs text-gray-500 dark:text-gray-400">Click to open external form</p>
+                                    </div>
+                                </a>
+                                {userRole === UserRole.Trainer && (
+                                    practicalPublished ? (
+                                        <Button onClick={() => handlePublishLink('practical', false)} variant="secondary" className="flex-shrink-0">
                                             Unpublish
                                         </Button>
-                                    </div>
-                                ) : (
-                                    <Button onClick={() => handlePublishLink('practical', true)} className="w-full">Publish Assessment</Button>
-                                )
-                            )}
+                                    ) : (
+                                        <Button onClick={() => handlePublishLink('practical', true)} className="flex-shrink-0">Publish</Button>
+                                    )
+                                )}
+                            </div>
                         </>
                     )}
 
@@ -1085,34 +1075,29 @@ const AssessmentsSection: React.FC<{
                             )}
                         </div>
 
-                        <a
-                            href={config.link}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors mb-3"
-                        >
-                            <Icon name={IconName.ExternalLink} className="w-6 h-6 text-blue-600 flex-shrink-0" />
-                            <div className="flex-1 min-w-0">
-                                <p className="font-medium text-gray-900 dark:text-white">Open Assessment Link</p>
-                                <p className="text-xs text-gray-500 dark:text-gray-400">Click to open external form</p>
-                            </div>
-                        </a>
-
-                        {/* Publish/Unpublish buttons for trainer */}
-                        {userRole === UserRole.Trainer && (
-                            isPublished ? (
-                                <div className="space-y-2">
-                                    <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-md border border-blue-200 dark:border-blue-800 text-center">
-                                        <p className="text-sm font-semibold text-blue-800 dark:text-blue-300">Assessment is Live</p>
-                                    </div>
-                                    <Button onClick={() => handlePublishLink(methodKey as any, false)} variant="secondary" className="w-full">
+                        <div className="flex items-center gap-3 mb-3">
+                            <a
+                                href={config.link}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center gap-3 p-3 flex-1 min-w-0 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+                            >
+                                <Icon name={IconName.ExternalLink} className="w-6 h-6 text-blue-600 flex-shrink-0" />
+                                <div className="flex-1 min-w-0">
+                                    <p className="font-medium text-gray-900 dark:text-white">Open Assessment Link</p>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400">Click to open external form</p>
+                                </div>
+                            </a>
+                            {userRole === UserRole.Trainer && (
+                                isPublished ? (
+                                    <Button onClick={() => handlePublishLink(methodKey as any, false)} variant="secondary" className="flex-shrink-0">
                                         Unpublish
                                     </Button>
-                                </div>
-                            ) : (
-                                <Button onClick={() => handlePublishLink(methodKey as any, true)} className="w-full">Publish Assessment</Button>
-                            )
-                        )}
+                                ) : (
+                                    <Button onClick={() => handlePublishLink(methodKey as any, true)} className="flex-shrink-0">Publish</Button>
+                                )
+                            )}
+                        </div>
 
                         {/* Learner file submission */}
                         {userRole === UserRole.Learner && isPublished && (() => {
