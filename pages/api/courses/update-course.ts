@@ -54,6 +54,7 @@ interface CourseData {
   fundingValidity?: string;
   writtenAssessmentLink?: string;
   practicalPerformanceAssessmentLink?: string;
+  assessmentMethods?: Record<string, { enabled: boolean; link: string }>;
   learningUnits: {
     id?: string;
     title: string;
@@ -519,6 +520,19 @@ export default async function handler(
         courseData.resourceLinks ? JSON.stringify(courseData.resourceLinks) : null,
         courseId
       ]);
+
+      // Safely attempt to update assessment_methods column
+      // This column may not exist if the migration hasn't been run yet
+      if (courseData.assessmentMethods) {
+        try {
+          await client.query(
+            'UPDATE course SET assessment_methods = COALESCE($1, assessment_methods) WHERE id = $2',
+            [JSON.stringify(courseData.assessmentMethods), courseId]
+          );
+        } catch (e) {
+          console.log('⚠️ Could not update assessment_methods (column may not exist yet)');
+        }
+      }
 
       if (courseResult.rows.length === 0) {
         throw new Error('Course not found or update failed');

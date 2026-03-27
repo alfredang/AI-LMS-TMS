@@ -91,6 +91,7 @@ interface CourseData {
   practicalPerformanceAssessmentLink?: string;
   courseLink?: string;
   assessmentRecordLink?: string;
+  assessmentMethods?: Record<string, { enabled: boolean; link: string }>;
   isGamified: boolean;
   learningUnits: Array<{
     title: string;
@@ -219,6 +220,19 @@ export default function handler(req: NextApiRequest & { files?: any }, res: Next
         const courseResult = await client.query(courseInsertQuery, courseValues);
         const courseId = courseResult.rows[0].id;
         console.log('✅ Course created with ID:', courseId);
+
+        // Safely attempt to set assessment_methods column
+        // This column may not exist if the migration hasn't been run yet
+        if (courseData.assessmentMethods) {
+          try {
+            await client.query(
+              'UPDATE course SET assessment_methods = $1 WHERE id = $2',
+              [JSON.stringify(courseData.assessmentMethods), courseId]
+            );
+          } catch (e) {
+            console.log('⚠️ Could not set assessment_methods (column may not exist yet)');
+          }
+        }
 
         // 2. Insert learning units and subtopics
         if (courseData.learningUnits && courseData.learningUnits.length > 0) {

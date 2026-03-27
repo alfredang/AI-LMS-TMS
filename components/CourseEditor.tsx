@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLms } from '@contexts/LmsContext';
-import { Course, Topic, Subtopic, ModeOfLearning, UserRole } from '@app-types';
+import { Course, Topic, Subtopic, ModeOfLearning, UserRole, AssessmentMethodKey, ASSESSMENT_METHOD_LABELS, DEFAULT_ASSESSMENT_METHODS } from '@app-types';
 import { Button } from './ui/Button';
 import { Card } from './ui/Card';
 import { Icon, IconName } from './ui/Icon';
@@ -193,10 +193,18 @@ const CourseEditor: React.FC = () => {
         return <div className="flex items-center justify-center h-full"><Spinner text="Loading course editor..." /></div>;
     }
 
+    // Auto-migrate legacy written/practical links into assessmentMethods if not yet set
+    const initialAssessmentMethods = editingCourse.assessmentMethods || {
+        ...DEFAULT_ASSESSMENT_METHODS,
+        writtenAssessment: { enabled: true, link: editingCourse.writtenAssessmentLink || '' },
+        practicalExam: { enabled: true, link: editingCourse.practicalPerformanceAssessmentLink || '' },
+    };
+
     const [course, setCourse] = useState<Course>({
         ...editingCourse,
         topics: editingCourse.topics || [],
         assessments: editingCourse.assessments || [],
+        assessmentMethods: initialAssessmentMethods,
         modeOfLearning: editingCourse.modeOfLearning?.length ? editingCourse.modeOfLearning : [ModeOfLearning.Physical],
         // Ensure imageUrl is set - use existing or generate default
         imageUrl: editingCourse.imageUrl || `https://picsum.photos/seed/${editingCourse.id || 'new'}/400/225`
@@ -539,6 +547,7 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                 assessmentRecordLink: course.assessmentRecordLink || undefined,
                 writtenAssessmentLink: writtenAssessmentInputType === 'link' ? (course.writtenAssessmentLink || undefined) : undefined,
                 practicalPerformanceAssessmentLink: practicalPerformanceInputType === 'link' ? (course.practicalPerformanceAssessmentLink || undefined) : undefined,
+                assessmentMethods: course.assessmentMethods || undefined,
                 resourceLinks: resourceLinks.filter(rl => rl.url.trim() !== ''),
                 // Convert topics to learning units with position
                 learningUnits: course.topics.map((topic, index) => ({
@@ -1287,30 +1296,43 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
 
                     {(role === UserRole.Trainer || role === UserRole.Developer) && (
                     <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
-                        <h3 className="text-xl font-bold mb-4">Assessment</h3>
-                        <div className="space-y-4">
-                            <div>
-                                <label htmlFor="writtenAssessmentLink" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Written Assessment URL</label>
-                                <input
-                                    type="url"
-                                    id="writtenAssessmentLink"
-                                    value={course.writtenAssessmentLink || ''}
-                                    onChange={(e) => setCourse(prev => ({ ...prev, writtenAssessmentLink: e.target.value }))}
-                                    className={inputClasses}
-                                    placeholder="https://..."
-                                />
-                            </div>
-                            <div>
-                                <label htmlFor="practicalPerformanceAssessmentLink" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Practical Performance Assessment URL</label>
-                                <input
-                                    type="url"
-                                    id="practicalPerformanceAssessmentLink"
-                                    value={course.practicalPerformanceAssessmentLink || ''}
-                                    onChange={(e) => setCourse(prev => ({ ...prev, practicalPerformanceAssessmentLink: e.target.value }))}
-                                    className={inputClasses}
-                                    placeholder="https://..."
-                                />
-                            </div>
+                        <h3 className="text-xl font-bold mb-4">Assessment Methods</h3>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">Select the assessment methods for this course. A link field will appear for each selected method.</p>
+                        <div className="space-y-3">
+                            {(Object.keys(ASSESSMENT_METHOD_LABELS) as AssessmentMethodKey[]).map((methodKey) => {
+                                const methods = course.assessmentMethods || DEFAULT_ASSESSMENT_METHODS;
+                                const method = methods[methodKey] || { enabled: false, link: '' };
+                                return (
+                                    <div key={methodKey} className="border dark:border-gray-700 rounded-lg p-3">
+                                        <label className="flex items-center gap-3 cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                checked={method.enabled}
+                                                onChange={(e) => {
+                                                    const updated = { ...methods, [methodKey]: { ...method, enabled: e.target.checked } };
+                                                    setCourse(prev => ({ ...prev, assessmentMethods: updated }));
+                                                }}
+                                                className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                            />
+                                            <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">{ASSESSMENT_METHOD_LABELS[methodKey]}</span>
+                                        </label>
+                                        {method.enabled && (
+                                            <div className="mt-2 ml-7">
+                                                <input
+                                                    type="url"
+                                                    value={method.link}
+                                                    onChange={(e) => {
+                                                        const updated = { ...methods, [methodKey]: { ...method, link: e.target.value } };
+                                                        setCourse(prev => ({ ...prev, assessmentMethods: updated }));
+                                                    }}
+                                                    className={inputClasses}
+                                                    placeholder="https://docs.google.com/..."
+                                                />
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })}
                         </div>
                     </Card>
                     )}

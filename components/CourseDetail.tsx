@@ -4,7 +4,7 @@ import { Button } from './ui/Button';
 import { Icon, IconName } from './ui/Icon';
 import { Card } from './ui/Card';
 import Spinner from './ui/Spinner';
-import { UserRole, CourseAssessment, AdminPage, TrainerPage } from '@app-types';
+import { UserRole, CourseAssessment, AdminPage, TrainerPage, AssessmentMethodKey, ASSESSMENT_METHOD_LABELS } from '@app-types';
 import GradingView from './GradingView';
 import { extractFilenameFromPath } from '@utils/fileUtils';
 import { courseService } from '@lib/services/courseService';
@@ -76,6 +76,8 @@ interface Course {
     practicalPerformanceAssessmentLink?: string;
     writtenAssessmentPublished?: boolean;
     practicalAssessmentPublished?: boolean;
+    assessmentMethods?: Record<string, { enabled: boolean; link: string }>;
+    publishedAssessmentMethods?: Record<string, boolean>;
     fundingValidity?: string;
 }
 
@@ -243,6 +245,7 @@ const AssessmentsSection: React.FC<{
 
     const [writtenPublished, setWrittenPublished] = useState<boolean>(course.writtenAssessmentPublished ?? false);
     const [practicalPublished, setPracticalPublished] = useState<boolean>(course.practicalAssessmentPublished ?? false);
+    const [methodPublishState, setMethodPublishState] = useState<Record<string, boolean>>((course as any).publishedAssessmentMethods || {});
 
     // Filter out file-based assessments that match the link-based types (Written/Practical)
     // Only show URL/link-based assessments for these types
@@ -313,7 +316,7 @@ const AssessmentsSection: React.FC<{
         }
     };
 
-    const handleLinkSubmit = async (assessmentType: 'written' | 'practical') => {
+    const handleLinkSubmit = async (assessmentType: string) => {
         const file = selectedLinkFiles[assessmentType];
         if (!file) {
             alert('Please select a file to submit.');
@@ -410,7 +413,7 @@ const AssessmentsSection: React.FC<{
         }
     };
 
-    const handlePublishLink = async (field: 'written' | 'practical', published: boolean) => {
+    const handlePublishLink = async (field: string, published: boolean) => {
         if (!courseRunId) return;
         try {
             const response = await fetch('/api/assessments/publish-link', {
@@ -422,8 +425,10 @@ const AssessmentsSection: React.FC<{
 
             if (field === 'written') {
                 setWrittenPublished(published);
-            } else {
+            } else if (field === 'practical') {
                 setPracticalPublished(published);
+            } else {
+                setMethodPublishState(prev => ({ ...prev, [field]: published }));
             }
         } catch (error) {
             console.error('❌ Failed to publish link assessment:', error);
@@ -432,7 +437,8 @@ const AssessmentsSection: React.FC<{
     };
 
     // Show "No Assessments" message if there are no assessments and no links
-    if ((!effectiveAssessments || effectiveAssessments.length === 0) && !course.writtenAssessmentLink && !course.practicalPerformanceAssessmentLink) {
+    const hasEnabledMethods = course.assessmentMethods && Object.values(course.assessmentMethods).some(m => m.enabled && m.link);
+    if ((!effectiveAssessments || effectiveAssessments.length === 0) && !course.writtenAssessmentLink && !course.practicalPerformanceAssessmentLink && !hasEnabledMethods) {
         return (
             <ContentSection title="Assessment">
                 <div className="text-center p-6 bg-gray-50 dark:bg-gray-800 rounded-lg border dark:border-gray-700">
@@ -833,13 +839,13 @@ const AssessmentsSection: React.FC<{
                 </ul>
             )}
 
-            {/* Written Assessment - Show only when link exists */}
+            {/* Written Exam - Show only when link exists */}
             {course.writtenAssessmentLink && (userRole === UserRole.Trainer || userRole === UserRole.Admin || userRole === UserRole.Developer || userRole === UserRole.TrainingProvider || writtenPublished) && (
                 <div className="mt-4 p-4 bg-gray-100/60 dark:bg-gray-800/60 rounded-lg">
                     <div className="flex items-center justify-between mb-3">
                         <h4 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
                             <Icon name={IconName.ClipboardCheck} className="w-5 h-5 text-blue-600" />
-                            Written Assessment
+                            Written Exam
                         </h4>
                         {writtenPublished && (
                             <span className="text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 px-2 py-1 rounded-full">Published</span>
@@ -880,7 +886,7 @@ const AssessmentsSection: React.FC<{
                         </>
                     )}
 
-                    {/* Learner file submission for Written Assessment */}
+                    {/* Learner file submission for Written Exam */}
                     {userRole === UserRole.Learner && writtenPublished && (() => {
                         const writtenSubs = linkSubmissions.filter(s => s.assessment_type === 'written');
 
@@ -945,13 +951,13 @@ const AssessmentsSection: React.FC<{
                 </div>
             )}
 
-            {/* Practical Performance Assessment - Show only when link exists */}
+            {/* Practical Exam - Show only when link exists */}
             {course.practicalPerformanceAssessmentLink && (userRole === UserRole.Trainer || userRole === UserRole.Admin || userRole === UserRole.Developer || userRole === UserRole.TrainingProvider || practicalPublished) && (
                 <div className="mt-4 p-4 bg-gray-100/60 dark:bg-gray-800/60 rounded-lg">
                     <div className="flex items-center justify-between mb-3">
                         <h4 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
                             <Icon name={IconName.ClipboardCheck} className="w-5 h-5 text-blue-600" />
-                            Practical Performance Assessment
+                            Practical Exam
                         </h4>
                         {practicalPublished && (
                             <span className="text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 px-2 py-1 rounded-full">Published</span>
@@ -992,7 +998,7 @@ const AssessmentsSection: React.FC<{
                         </>
                     )}
 
-                    {/* Learner file submission for Practical Performance Assessment */}
+                    {/* Learner file submission for Practical Exam */}
                     {userRole === UserRole.Learner && practicalPublished && (() => {
                         const practicalSubs = linkSubmissions.filter(s => s.assessment_type === 'practical');
 
@@ -1056,6 +1062,118 @@ const AssessmentsSection: React.FC<{
                     })()}
                 </div>
             )}
+
+            {/* Dynamic Assessment Methods */}
+            {course.assessmentMethods && Object.entries(course.assessmentMethods).map(([methodKey, config]) => {
+                if (!config.enabled || !config.link) return null;
+                const label = ASSESSMENT_METHOD_LABELS[methodKey as AssessmentMethodKey] || methodKey;
+                const isPublished = methodPublishState[methodKey] === true;
+                const isPrivileged = userRole === UserRole.Trainer || userRole === UserRole.Admin || userRole === UserRole.Developer || userRole === UserRole.TrainingProvider;
+
+                // Learners can only see published methods
+                if (userRole === UserRole.Learner && !isPublished) return null;
+
+                return (
+                    <div key={methodKey} className="mt-4 p-4 bg-gray-100/60 dark:bg-gray-800/60 rounded-lg">
+                        <div className="flex items-center justify-between mb-3">
+                            <h4 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                                <Icon name={IconName.ClipboardCheck} className="w-5 h-5 text-blue-600" />
+                                {label}
+                            </h4>
+                            {isPublished && (
+                                <span className="text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 px-2 py-1 rounded-full">Published</span>
+                            )}
+                        </div>
+
+                        <a
+                            href={config.link}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors mb-3"
+                        >
+                            <Icon name={IconName.ExternalLink} className="w-6 h-6 text-blue-600 flex-shrink-0" />
+                            <div className="flex-1 min-w-0">
+                                <p className="font-medium text-gray-900 dark:text-white">Open Assessment Link</p>
+                                <p className="text-xs text-gray-500 dark:text-gray-400">Click to open external form</p>
+                            </div>
+                        </a>
+
+                        {/* Publish/Unpublish buttons for trainer */}
+                        {userRole === UserRole.Trainer && (
+                            isPublished ? (
+                                <div className="space-y-2">
+                                    <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-md border border-blue-200 dark:border-blue-800 text-center">
+                                        <p className="text-sm font-semibold text-blue-800 dark:text-blue-300">Assessment is Live</p>
+                                    </div>
+                                    <Button onClick={() => handlePublishLink(methodKey as any, false)} variant="secondary" className="w-full">
+                                        Unpublish
+                                    </Button>
+                                </div>
+                            ) : (
+                                <Button onClick={() => handlePublishLink(methodKey as any, true)} className="w-full">Publish Assessment</Button>
+                            )
+                        )}
+
+                        {/* Learner file submission */}
+                        {userRole === UserRole.Learner && isPublished && (() => {
+                            const methodSubs = linkSubmissions.filter(s => s.assessment_type === methodKey);
+                            return (
+                                <div className="mt-3 space-y-3">
+                                    {methodSubs.length > 0 && (
+                                        <div className="space-y-2">
+                                            <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Uploaded Files ({methodSubs.length})</p>
+                                            {methodSubs.map((sub) => (
+                                                <div key={sub.id} className="bg-green-50 dark:bg-green-900/20 p-3 rounded-md border border-green-200 dark:border-green-800 flex justify-between items-center">
+                                                    <div className="min-w-0 flex-1">
+                                                        <p className="font-medium text-green-800 dark:text-green-300 truncate">{sub.file_name}</p>
+                                                        <p className="text-xs text-green-600 dark:text-green-400">{new Date(sub.submitted_at).toLocaleString()}</p>
+                                                    </div>
+                                                    <a href={sub.file_url} target="_blank" rel="noopener noreferrer" className="ml-2 text-blue-600 hover:text-blue-800 dark:text-blue-400 text-sm font-medium flex-shrink-0">
+                                                        View
+                                                    </a>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                            {methodSubs.length > 0 ? "Upload another file" : "Upload your completed assessment file"}
+                                        </label>
+                                        <input
+                                            type="file"
+                                            id={`link-file-upload-${methodKey}`}
+                                            onChange={(e) => handleLinkFileChange(methodKey, e)}
+                                            className="block w-full text-sm text-gray-500 dark:text-gray-400
+                                                file:mr-4 file:py-2 file:px-4
+                                                file:rounded-md file:border-0
+                                                file:text-sm file:font-semibold
+                                                file:bg-blue-50 file:text-blue-700
+                                                hover:file:bg-blue-100
+                                                dark:file:bg-blue-900/20 dark:file:text-blue-300
+                                                dark:hover:file:bg-blue-900/40"
+                                        />
+                                        {selectedLinkFiles[methodKey] && !isLinkUploading[methodKey] && (
+                                            <div className="mt-3">
+                                                <Button onClick={() => handleLinkSubmit(methodKey as any)} className="w-full">
+                                                    Upload File
+                                                </Button>
+                                            </div>
+                                        )}
+                                        {isLinkUploading[methodKey] && (
+                                            <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                                                <div className="flex flex-col items-center justify-center space-y-3">
+                                                    <Spinner size="md" />
+                                                    <p className="text-sm font-medium text-blue-700 dark:text-blue-300">Uploading your file...</p>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            );
+                        })()}
+                    </div>
+                );
+            })}
         </ContentSection>
     );
 };
@@ -1611,6 +1729,8 @@ export const CourseDetail: React.FC = () => {
         assessmentRecordLink: effectiveDetail?.assessmentRecordLink,
         writtenAssessmentLink: effectiveDetail?.writtenAssessmentLink,
         practicalPerformanceAssessmentLink: effectiveDetail?.practicalPerformanceAssessmentLink,
+        assessmentMethods: effectiveDetail?.assessmentMethods || undefined,
+        publishedAssessmentMethods: effectiveDetail?.publishedAssessmentMethods || {},
         writtenAssessmentPublished: userRole === UserRole.Admin || userRole === UserRole.Developer || userRole === UserRole.TrainingProvider
             ? true
             : effectiveDetail?.writtenAssessmentPublished ?? false,

@@ -92,6 +92,17 @@ export default async function handler(
 
     const courseResult = await pool.query(courseQuery, [courseId]);
 
+    // Try to fetch assessment_methods (column may not exist yet)
+    let assessmentMethodsData = null;
+    try {
+      const amResult = await pool.query('SELECT assessment_methods FROM course WHERE id = $1', [courseId]);
+      if (amResult.rows.length > 0) {
+        assessmentMethodsData = amResult.rows[0].assessment_methods;
+      }
+    } catch (e) {
+      // Column doesn't exist yet - that's fine
+    }
+
     if (courseResult.rows.length === 0) {
       return res.status(404).json({ message: 'Course not found' });
     }
@@ -189,6 +200,7 @@ export default async function handler(
       isLeaderboardEnabled: courseData.is_leaderboard_enabled,
       imageUrl: courseData.image_url,
       fundingValidity: courseData.funding_validity || null,
+      assessmentMethods: assessmentMethodsData ? (typeof assessmentMethodsData === 'string' ? JSON.parse(assessmentMethodsData) : assessmentMethodsData) : null,
       resourceLinks: courseData.resource_links ? (typeof courseData.resource_links === 'string' ? JSON.parse(courseData.resource_links) : courseData.resource_links) : [],
       // Convert learning units to topics format expected by the editor
       topics: learningUnits.map(unit => ({

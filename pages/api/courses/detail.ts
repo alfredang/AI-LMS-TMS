@@ -119,6 +119,39 @@ export default async function handler(
 
     const result = await pool.query(courseDetailQuery, queryParams);
 
+    // Safely fetch assessment_methods and published_assessment_methods columns
+    // These columns may not exist if the migration hasn't been run yet
+    let assessmentMethodsValue: any = null;
+    let publishedAssessmentMethodsValue: any = {};
+    if (result.rows.length > 0) {
+      const row = result.rows[0];
+      try {
+        const amResult = await pool.query(
+          'SELECT c.assessment_methods FROM course c JOIN course_run cr ON cr.course_id = c.id JOIN enrollment e ON e.course_run_id = cr.id WHERE e.user_id = $1 AND c.id = $2 LIMIT 1',
+          [userId, courseId]
+        );
+        if (amResult.rows.length > 0 && amResult.rows[0].assessment_methods) {
+          const am = amResult.rows[0].assessment_methods;
+          assessmentMethodsValue = typeof am === 'string' ? JSON.parse(am) : am;
+        }
+      } catch (e) {
+        // Column doesn't exist yet, use default null
+      }
+      try {
+        const courseRunUuid = courseRunId || row.course_run_uuid;
+        const pamResult = await pool.query(
+          'SELECT published_assessment_methods FROM course_run WHERE id = $1 LIMIT 1',
+          [courseRunUuid]
+        );
+        if (pamResult.rows.length > 0 && pamResult.rows[0].published_assessment_methods) {
+          const pam = pamResult.rows[0].published_assessment_methods;
+          publishedAssessmentMethodsValue = typeof pam === 'string' ? JSON.parse(pam) : pam;
+        }
+      } catch (e) {
+        // Column doesn't exist yet, use default empty object
+      }
+    }
+
     if (result.rows.length === 0) {
       return res.status(404).json({
         success: false,
@@ -154,6 +187,8 @@ export default async function handler(
         practicalPerformanceAssessmentLink: courseDetail.practical_performance_assessment_link,
         writtenAssessmentPublished: courseDetail.written_assessment_published ?? false,
         practicalAssessmentPublished: courseDetail.practical_assessment_published ?? false,
+        assessmentMethods: assessmentMethodsValue,
+        publishedAssessmentMethods: publishedAssessmentMethodsValue,
         startDate: (courseDetail as any).start_date || null,
         endDate: (courseDetail as any).end_date || null,
         certificate: courseDetail.certificate

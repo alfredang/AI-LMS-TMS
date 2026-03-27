@@ -97,6 +97,35 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const courseDetail = courseDetailResult.rows[0];
 
+    // Safely fetch assessment_methods and published_assessment_methods columns
+    // These columns may not exist if the migration hasn't been run yet
+    let assessmentMethodsValue: any = null;
+    let publishedAssessmentMethodsValue: any = {};
+    try {
+      const amResult = await pool.query(
+        'SELECT assessment_methods FROM course WHERE id = $1 LIMIT 1',
+        [courseDetail.course_id]
+      );
+      if (amResult.rows.length > 0 && amResult.rows[0].assessment_methods) {
+        const am = amResult.rows[0].assessment_methods;
+        assessmentMethodsValue = typeof am === 'string' ? JSON.parse(am) : am;
+      }
+    } catch (e) {
+      // Column doesn't exist yet, use default null
+    }
+    try {
+      const pamResult = await pool.query(
+        'SELECT published_assessment_methods FROM course_run WHERE id = $1 LIMIT 1',
+        [courseDetail.course_run_id]
+      );
+      if (pamResult.rows.length > 0 && pamResult.rows[0].published_assessment_methods) {
+        const pam = pamResult.rows[0].published_assessment_methods;
+        publishedAssessmentMethodsValue = typeof pam === 'string' ? JSON.parse(pam) : pam;
+      }
+    } catch (e) {
+      // Column doesn't exist yet, use default empty object
+    }
+
     // Get learning units and subtopics for this course
     const learningUnitsQuery = `
       SELECT 
@@ -185,6 +214,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           practicalPerformanceAssessmentLink: courseDetail.practical_performance_assessment_link,
           writtenAssessmentPublished: courseDetail.written_assessment_published ?? false,
           practicalAssessmentPublished: courseDetail.practical_assessment_published ?? false,
+          assessmentMethods: assessmentMethodsValue,
+          publishedAssessmentMethods: publishedAssessmentMethodsValue,
           startDate: courseDetail.start_date || null,
           endDate: courseDetail.end_date || null,
           courseId: courseDetail.course_id,
