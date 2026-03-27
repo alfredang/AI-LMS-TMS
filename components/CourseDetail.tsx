@@ -1416,9 +1416,10 @@ interface TopicAccordionProps {
     onToggleCompletion: (subtopicId: string) => void;
     completedTopics: Set<string>;
     onToggleTopicCompletion: (topicId: string) => void;
+    resourceLinks?: { id: string; topicId: string; type: string; title: string; url: string }[];
 }
 
-const TopicAccordion: React.FC<TopicAccordionProps> = ({ topic, progress, bookmarkedSubtopics, onToggleBookmark, userRole, completedSubtopics, onToggleCompletion, completedTopics, onToggleTopicCompletion }) => {
+const TopicAccordion: React.FC<TopicAccordionProps> = ({ topic, progress, bookmarkedSubtopics, onToggleBookmark, userRole, completedSubtopics, onToggleCompletion, completedTopics, onToggleTopicCompletion, resourceLinks = [] }) => {
     const [isOpen, setIsOpen] = React.useState(true);
     const displayTitle = topic.title.replace('Module', 'Learning Unit');
 
@@ -1480,47 +1481,69 @@ const TopicAccordion: React.FC<TopicAccordionProps> = ({ topic, progress, bookma
                                 const isBookmarked = bookmarkedSubtopics.has(subtopic.id);
                                 const isCompleted = completedSubtopics.has(subtopic.id);
                                 const titleIsUrl = isUrl(subtopic.title);
+                                const subtopicLinks = resourceLinks.filter(rl => rl.topicId === subtopic.id);
                                 return (
-                                    <li key={subtopic.id} className="flex items-center justify-between py-3">
-                                        <label htmlFor={`subtopic-complete-${subtopic.id}`} className="flex items-center flex-grow cursor-pointer group min-w-0">
-                                            {userRole === UserRole.Learner && (
-                                                <input
-                                                    id={`subtopic-complete-${subtopic.id}`}
-                                                    type="checkbox"
-                                                    checked={isCompleted}
-                                                    onChange={(e) => {
-                                                        e.stopPropagation();
-                                                        onToggleCompletion(subtopic.id);
-                                                    }}
-                                                    className="h-5 w-5 rounded border-gray-300 text-primary focus:ring-primary mr-3 flex-shrink-0"
-                                                    aria-label={`Mark '${subtopic.title}' as complete`}
-                                                />
-                                            )}
-                                            <Icon name={IconName.FileText} className="w-5 h-5 text-green-500 mr-3 flex-shrink-0" />
-                                            {titleIsUrl ? (
-                                                <a
-                                                    href={subtopic.title}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    onClick={e => e.stopPropagation()}
-                                                    className={`font-medium text-primary hover:underline truncate transition-colors ${isCompleted ? 'line-through opacity-50' : ''}`}
+                                    <li key={subtopic.id} className="py-3">
+                                        <div className="flex items-center justify-between">
+                                            <label htmlFor={`subtopic-complete-${subtopic.id}`} className="flex items-center flex-grow cursor-pointer group min-w-0">
+                                                {userRole === UserRole.Learner && (
+                                                    <input
+                                                        id={`subtopic-complete-${subtopic.id}`}
+                                                        type="checkbox"
+                                                        checked={isCompleted}
+                                                        onChange={(e) => {
+                                                            e.stopPropagation();
+                                                            onToggleCompletion(subtopic.id);
+                                                        }}
+                                                        className="h-5 w-5 rounded border-gray-300 text-primary focus:ring-primary mr-3 flex-shrink-0"
+                                                        aria-label={`Mark '${subtopic.title}' as complete`}
+                                                    />
+                                                )}
+                                                <Icon name={IconName.FileText} className="w-5 h-5 text-green-500 mr-3 flex-shrink-0" />
+                                                {titleIsUrl ? (
+                                                    <a
+                                                        href={subtopic.title}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        onClick={e => e.stopPropagation()}
+                                                        className={`font-medium text-primary hover:underline truncate transition-colors ${isCompleted ? 'line-through opacity-50' : ''}`}
+                                                    >
+                                                        {subtopic.title}
+                                                    </a>
+                                                ) : (
+                                                    <span className={`font-medium text-gray-800 dark:text-gray-200 group-hover:text-primary transition-colors ${isCompleted ? 'line-through text-gray-500 dark:text-gray-500' : ''}`}>
+                                                        {subtopic.title}
+                                                    </span>
+                                                )}
+                                            </label>
+                                            {(userRole === UserRole.Learner || userRole === UserRole.Trainer) && (
+                                                <button
+                                                    onClick={(e) => onToggleBookmark(e, subtopic.id)}
+                                                    className={`p-2 rounded-full transition-colors flex-shrink-0 ${isBookmarked ? 'text-primary bg-primary/10' : 'text-gray-500 hover:text-primary hover:bg-gray-100 dark:hover:bg-gray-700'}`}
+                                                    aria-label={isBookmarked ? 'Remove bookmark' : 'Add bookmark'}
                                                 >
-                                                    {subtopic.title}
-                                                </a>
-                                            ) : (
-                                                <span className={`font-medium text-gray-800 dark:text-gray-200 group-hover:text-primary transition-colors ${isCompleted ? 'line-through text-gray-500 dark:text-gray-500' : ''}`}>
-                                                    {subtopic.title}
-                                                </span>
+                                                    <Icon name={isBookmarked ? IconName.Bookmark : IconName.Bookmark} className="w-5 h-5" />
+                                                </button>
                                             )}
-                                        </label>
-                                        {(userRole === UserRole.Learner || userRole === UserRole.Trainer) && (
-                                            <button
-                                                onClick={(e) => onToggleBookmark(e, subtopic.id)}
-                                                className={`p-2 rounded-full transition-colors flex-shrink-0 ${isBookmarked ? 'text-primary bg-primary/10' : 'text-gray-500 hover:text-primary hover:bg-gray-100 dark:hover:bg-gray-700'}`}
-                                                aria-label={isBookmarked ? 'Remove bookmark' : 'Add bookmark'}
-                                            >
-                                                <Icon name={isBookmarked ? IconName.Bookmark : IconName.Bookmark} className="w-5 h-5" />
-                                            </button>
+                                        </div>
+                                        {subtopicLinks.length > 0 && (
+                                            <div className="ml-11 mt-2 space-y-1.5">
+                                                {subtopicLinks.map(rl => (
+                                                    <a
+                                                        key={rl.id}
+                                                        href={rl.url}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="flex items-center gap-2 text-sm text-blue-500 hover:text-blue-400 hover:underline"
+                                                    >
+                                                        <Icon
+                                                            name={rl.type === 'youtube' ? IconName.Video : rl.type === 'quiz' ? IconName.FileText : IconName.ExternalLink}
+                                                            className="w-3.5 h-3.5 flex-shrink-0"
+                                                        />
+                                                        <span className="truncate">{rl.title || rl.url}</span>
+                                                    </a>
+                                                ))}
+                                            </div>
                                         )}
                                     </li>
                                 );
@@ -1538,6 +1561,7 @@ export const CourseDetail: React.FC = () => {
         selectedCourse,
         setSelectedCourse,
         courseDetail,
+        resourceLinks,
         learningUnits,
         courseAssessments,
         bookmarkedSubtopics,
@@ -2291,6 +2315,7 @@ export const CourseDetail: React.FC = () => {
                                                         onToggleCompletion={handleToggleCompletion}
                                                         completedTopics={completedTopicsSet}
                                                         onToggleTopicCompletion={toggleTopicCompletion}
+                                                        resourceLinks={resourceLinks.filter(rl => topic.subtopics.some(st => st.id === rl.topicId))}
                                                     />
                                                 );
                                             })}

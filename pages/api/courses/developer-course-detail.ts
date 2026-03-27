@@ -33,7 +33,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           c.assessment_record_link,
           c.written_assessment_link,
           c.practical_performance_assessment_link,
-          c.funding_validity
+          c.funding_validity,
+          c.resource_links
       FROM course c
       WHERE c.id = $1
     `;
@@ -90,6 +91,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         practicalPerformanceAssessmentLink: courseDetail.practical_performance_assessment_link,
         assessmentMethods: assessmentMethodsValue,
         fundingValidity: courseDetail.funding_validity || null,
+        resourceLinks: courseDetail.resource_links ? (typeof courseDetail.resource_links === 'string' ? JSON.parse(courseDetail.resource_links) : courseDetail.resource_links) : [],
         certificate: ''
       }
     });

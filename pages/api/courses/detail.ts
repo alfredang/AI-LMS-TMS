@@ -74,7 +74,8 @@ export default async function handler(
           cr.practical_assessment_published,
           cr.start_date,
           cr.end_date,
-          e.certificate
+          e.certificate,
+          c.resource_links
         FROM enrollment e
         JOIN course_run cr
           ON e.course_run_id = cr.id
@@ -106,7 +107,8 @@ export default async function handler(
           cr.practical_assessment_published,
           cr.start_date,
           cr.end_date,
-          e.certificate
+          e.certificate,
+          c.resource_links
         FROM enrollment e
         JOIN course_run cr
           ON e.course_run_id = cr.id
@@ -191,7 +193,8 @@ export default async function handler(
         publishedAssessmentMethods: publishedAssessmentMethodsValue,
         startDate: (courseDetail as any).start_date || null,
         endDate: (courseDetail as any).end_date || null,
-        certificate: courseDetail.certificate
+        certificate: courseDetail.certificate,
+        resourceLinks: (courseDetail as any).resource_links ? (typeof (courseDetail as any).resource_links === 'string' ? JSON.parse((courseDetail as any).resource_links) : (courseDetail as any).resource_links) : []
       }
     });
 

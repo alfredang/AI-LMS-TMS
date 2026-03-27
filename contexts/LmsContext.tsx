@@ -243,6 +243,7 @@ interface LmsContextType {
   courseListPage: number;
   setCourseListPage: (page: number) => void;
   courseDetail: CourseDetail | null;
+  resourceLinks: { id: string; topicId: string; type: string; title: string; url: string }[];
   learningUnits: LearningUnit[];
   courseAssessments: CourseAssessment[];
   bookmarkedSubtopics: string[];
@@ -305,6 +306,7 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [editingCourseRun, setEditingCourseRun] = useState<any | null>(null);
   const [courseListPage, setCourseListPage] = useState(1);
   const [courseDetail, setCourseDetail] = useState<CourseDetail | null>(null);
+  const [resourceLinks, setResourceLinks] = useState<{ id: string; topicId: string; type: string; title: string; url: string }[]>([]);
   const [learningUnits, setLearningUnits] = useState<LearningUnit[]>([]);
   const [courseAssessments, setCourseAssessments] = useState<CourseAssessment[]>([]);
   const [bookmarkedSubtopics, setBookmarkedSubtopics] = useState<string[]>([]);
@@ -784,6 +786,7 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setCurrentView(View.Dashboard);
     setSelectedCourse(null);
     setCourseDetail(null);
+    setResourceLinks([]);
     setLearningUnits([]);
     setCourseAssessments([]);
     setBookmarkedSubtopics([]);
@@ -929,6 +932,7 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // Clear previous data
       console.log('🧹 Clearing previous course data before loading new course');
       setCourseDetail(null);
+      setResourceLinks([]);
       setLearningUnits([]);
       setCourseAssessments([]);
       console.log('🧹 Clearing bookmarked subtopics - was:', bookmarkedSubtopics);
@@ -983,7 +987,8 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         console.log('✅ LmsContext: Course detail set with courseRunUuid:', trainerData.data.courseDetail.courseRunUuid);
         console.log('✅ LmsContext: Original course.courseRunId was:', course.courseRunId);
 
-        // Set learning units and bookmarks from trainer API
+        // Set resource links, learning units and bookmarks from trainer API
+        setResourceLinks(trainerData.data.courseDetail.resourceLinks || []);
         setLearningUnits(trainerData.data.learningUnits);
         setBookmarkedSubtopics(trainerData.data.bookmarkedSubtopics);
 
@@ -1026,6 +1031,7 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
           if (detailResult.success) {
             setCourseDetail(detailResult.data);
+            setResourceLinks(detailResult.data.resourceLinks || []);
             console.log('✅ LmsContext: Developer course detail loaded:', detailResult.data);
           }
 
@@ -1063,6 +1069,7 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             if (detailResult.success) {
               const detail = detailResult.data;
               setCourseDetail(detail);
+              setResourceLinks(detail.resourceLinks || []);
               console.log(`✅ LmsContext: Learner course detail loaded:`, detail);
               console.log(`🔍 LmsContext: courseRunId (string):`, detail.courseRunId);
               console.log(`🔍 LmsContext: courseRunUuid (UUID):`, detail.courseRunUuid);
@@ -1571,6 +1578,7 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     courseListPage,
     setCourseListPage,
     courseDetail,
+    resourceLinks,
     learningUnits,
     courseAssessments,
     bookmarkedSubtopics,
