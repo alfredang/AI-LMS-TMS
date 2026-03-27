@@ -194,11 +194,19 @@ const TrainerMyClasses: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  const today = new Date(new Date().toISOString().split('T')[0]);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const parseLocalDate = (dateStr: string | null | undefined) => {
+    if (!dateStr) return null;
+    const d = new Date(dateStr);
+    d.setHours(0, 0, 0, 0);
+    return d;
+  };
 
   const filteredCourses = useMemo(() => {
     let filtered = courses.filter((c) => {
-      const end = c.endDate ? new Date(c.endDate) : null;
+      const end = parseLocalDate(c.endDate);
       if (classView === 'past') {
         return end !== null && end < today;
       }

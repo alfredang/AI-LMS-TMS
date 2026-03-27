@@ -156,7 +156,16 @@ const ManagementCourseList: React.FC = () => {
     const filteredCourses = useMemo(() => {
         if (!relevantCourses) return [];
 
-        const todayDate = new Date(new Date().toDateString());
+        const todayDate = new Date();
+        todayDate.setHours(0, 0, 0, 0);
+
+        const parseLocalDate = (dateStr: string | null | undefined) => {
+            if (!dateStr) return null;
+            const d = new Date(dateStr);
+            d.setHours(0, 0, 0, 0);
+            return d;
+        };
+
         const nextWeekDate = new Date(todayDate);
         nextWeekDate.setDate(nextWeekDate.getDate() + 7);
 
@@ -176,8 +185,8 @@ const ManagementCourseList: React.FC = () => {
 
             // Trainer: apply date tab logic
             if (role === UserRole.Trainer) {
-                const end = course.endDate ? new Date(course.endDate) : null;
-                const start = course.startDate ? new Date(course.startDate) : null;
+                const end = parseLocalDate(course.endDate);
+                const start = parseLocalDate(course.startDate);
                 let matchesDateView = true;
                 if (trainerClassView === 'current') {
                     matchesDateView = (start !== null && start <= todayDate) && (end !== null && end >= todayDate);
@@ -551,18 +560,27 @@ const ManagementCourseList: React.FC = () => {
 
             {/* Trainer KPI cards and class tabs */}
             {role === UserRole.Trainer && (() => {
-                const todayKpi = new Date(new Date().toDateString());
+                const todayKpi = new Date();
+                todayKpi.setHours(0, 0, 0, 0);
+
+                const parseLocalDate = (dateStr: string | null | undefined) => {
+                    if (!dateStr) return null;
+                    const d = new Date(dateStr);
+                    d.setHours(0, 0, 0, 0);
+                    return d;
+                };
+
                 const trainerCurrentClasses = (relevantCourses || []).filter(c => {
-                    const s = c.startDate ? new Date(c.startDate) : null;
-                    const e = c.endDate ? new Date(c.endDate) : null;
+                    const s = parseLocalDate(c.startDate);
+                    const e = parseLocalDate(c.endDate);
                     return s && s <= todayKpi && e && e >= todayKpi;
                 }).length;
                 const trainerUpcomingClasses = (relevantCourses || []).filter(c => {
-                    const s = c.startDate ? new Date(c.startDate) : null;
+                    const s = parseLocalDate(c.startDate);
                     return s && s > todayKpi;
                 }).length;
                 const trainerPastClasses = (relevantCourses || []).filter(c => {
-                    const e = c.endDate ? new Date(c.endDate) : null;
+                    const e = parseLocalDate(c.endDate);
                     return e && e < todayKpi;
                 }).length;
                 return (
