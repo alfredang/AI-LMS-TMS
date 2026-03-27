@@ -119,7 +119,7 @@ export default async function handler(
       paramIndex++;
     }
 
-    searchQuery += ` ORDER BY e.enrolment_date DESC`;
+    searchQuery += ` ORDER BY cr.start_date DESC`;
 
     const result = await pool.query(searchQuery, params);
 

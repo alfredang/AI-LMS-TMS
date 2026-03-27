@@ -87,7 +87,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       `;
     }
 
-    sqlQuery += ` ORDER BY cr.start_date ASC`;
+    sqlQuery += ` ORDER BY cr.start_date DESC`;
 
     const result = await pool.query(sqlQuery, params);
 

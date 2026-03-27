@@ -72,6 +72,7 @@ interface CourseData {
     status?: string;
     action?: 'create' | 'update' | 'delete';
   }[];
+  resourceLinks?: Array<{ id: string; topicId: string; type: string; title: string; url: string }>;
 }
 
 // Ensure upload directories exist
@@ -484,8 +485,9 @@ export default async function handler(
           courseware_link = COALESCE($22, courseware_link),
           assessment_record_link = COALESCE($23, assessment_record_link),
           funding_validity = $24,
+          resource_links = $25,
           updated_at = now()
-        WHERE id = $25
+        WHERE id = $26
         RETURNING id
       `;
 
@@ -514,6 +516,7 @@ export default async function handler(
         courseData.courseLink || null,
         courseData.assessmentRecordLink || null,
         courseData.fundingValidity || null,
+        courseData.resourceLinks ? JSON.stringify(courseData.resourceLinks) : null,
         courseId
       ]);
 
@@ -540,7 +543,8 @@ export default async function handler(
 
       console.log('🗑️ Existing learning units and subtopics deleted');
 
-      // Insert new learning units and subtopics
+      // Insert new learning units and subtopics, tracking old→new subtopic ID mapping
+      const subtopicIdMap: { [oldId: string]: string } = {};
       for (const unit of courseData.learningUnits) {
         const unitResult = await client.query(`
           INSERT INTO learning_unit (course_id, title, position)
@@ -552,14 +556,34 @@ export default async function handler(
 
         // Insert subtopics for this unit
         for (const subtopic of unit.subtopics) {
-          await client.query(`
+          const subtopicResult = await client.query(`
             INSERT INTO subtopic (learning_unit_id, title, position)
             VALUES ($1, $2, $3)
+            RETURNING id
           `, [unitId, subtopic.title, subtopic.position]);
+
+          // Map old subtopic ID to new database ID
+          if (subtopic.id) {
+            subtopicIdMap[subtopic.id] = subtopicResult.rows[0].id;
+          }
         }
       }
 
       console.log(`✅ ${courseData.learningUnits.length} learning units recreated`);
+      console.log('📎 Subtopic ID mapping:', subtopicIdMap);
+
+      // Update resource_links with new subtopic IDs
+      if (courseData.resourceLinks && courseData.resourceLinks.length > 0) {
+        const updatedResourceLinks = courseData.resourceLinks.map(rl => ({
+          ...rl,
+          topicId: subtopicIdMap[rl.topicId] || rl.topicId
+        }));
+        await client.query(
+          `UPDATE course SET resource_links = $1 WHERE id = $2`,
+          [JSON.stringify(updatedResourceLinks), courseId]
+        );
+        console.log('✅ Resource links updated with new subtopic IDs');
+      }
 
       // 3. Handle assessments (create, update, delete)
       console.log('\n📝 ASSESSMENT PROCESSING:');

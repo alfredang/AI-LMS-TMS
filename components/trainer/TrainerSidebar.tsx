@@ -18,6 +18,7 @@ const NAV_ITEMS: { page: TrainerPage; label: string; icon: IconName }[] = [
 const ED_TOOLS: { page?: TrainerPage; label: string; icon: IconName; href?: string }[] = [
   { label: 'Break Timer',    icon: IconName.Clock,    href: 'https://alfredang.github.io/musical-timer-countdown/' },
   { label: 'Pinboard',       icon: IconName.Bookmark, href: 'https://alfredang.github.io/pinboard/' },
+  { label: 'Google Meet',    icon: IconName.Video,    href: 'https://meet.google.com/landing' },
   { page: TrainerPage.GenAIAuthoring, label: 'GenAI Authoring', icon: IconName.Create },
 ];
 

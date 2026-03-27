@@ -84,7 +84,8 @@ export default async function handler(
         c.assessment_record_link,
         c.is_gamified          AS is_leaderboard_enabled,
         c.image_url,
-        c.funding_validity
+        c.funding_validity,
+        c.resource_links
       FROM course c
       WHERE c.id = $1
     `;
@@ -188,6 +189,7 @@ export default async function handler(
       isLeaderboardEnabled: courseData.is_leaderboard_enabled,
       imageUrl: courseData.image_url,
       fundingValidity: courseData.funding_validity || null,
+      resourceLinks: courseData.resource_links ? (typeof courseData.resource_links === 'string' ? JSON.parse(courseData.resource_links) : courseData.resource_links) : [],
       // Convert learning units to topics format expected by the editor
       topics: learningUnits.map(unit => ({
         id: unit.id,

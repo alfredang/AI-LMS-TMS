@@ -226,7 +226,7 @@ const TrainerMyClasses: React.FC = () => {
     return filtered.sort((a, b) => {
       const aTime = new Date(a.startDate ?? '').getTime();
       const bTime = new Date(b.startDate ?? '').getTime();
-      return classView === 'past' ? bTime - aTime : aTime - bTime;
+      return bTime - aTime;
     });
   }, [courses, classView, searchQuery]);
 

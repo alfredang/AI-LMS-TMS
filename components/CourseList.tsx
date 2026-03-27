@@ -205,8 +205,8 @@ const ManagementCourseList: React.FC = () => {
             const matchesStartDate = isDateInRange(course.startDate, filterStartDate);
             return matchesSearch && matchesCourseCode && matchesType && matchesMode && matchesStartDate;
         }).sort((a: any, b: any) => {
-            // Sort by course code descending for Admin
-            if (role === UserRole.Admin) {
+            // Sort by course code descending for Admin and Developer
+            if (role === UserRole.Admin || role === UserRole.Developer) {
                 return (b.courseCode || '').localeCompare(a.courseCode || '');
             }
             return 0;

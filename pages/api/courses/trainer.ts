@@ -44,7 +44,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       )
       ORDER BY
         CASE WHEN cr.end_date >= CURRENT_DATE THEN 0 ELSE 1 END,
-        cr.start_date ASC
+        cr.start_date DESC
     `;
 
     const result = await pool.query(sqlQuery, [trainerId]);
