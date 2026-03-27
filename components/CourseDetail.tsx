@@ -841,7 +841,7 @@ const AssessmentsSection: React.FC<{
 
             {/* Written Exam - Show only when link exists */}
             {course.writtenAssessmentLink && (userRole === UserRole.Trainer || userRole === UserRole.Admin || userRole === UserRole.Developer || userRole === UserRole.TrainingProvider || writtenPublished) && (
-                <div className="mt-4 p-4 bg-gray-100/60 dark:bg-gray-800/60 rounded-lg">
+                <div className="mt-2 p-4 bg-gray-100/60 dark:bg-gray-800/60 rounded-lg">
                     <div className="flex items-center justify-between mb-3">
                         <h4 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
                             <Icon name={IconName.ClipboardCheck} className="w-5 h-5 text-blue-600" />
@@ -948,7 +948,7 @@ const AssessmentsSection: React.FC<{
 
             {/* Practical Exam - Show only when link exists */}
             {course.practicalPerformanceAssessmentLink && (userRole === UserRole.Trainer || userRole === UserRole.Admin || userRole === UserRole.Developer || userRole === UserRole.TrainingProvider || practicalPublished) && (
-                <div className="mt-4 p-4 bg-gray-100/60 dark:bg-gray-800/60 rounded-lg">
+                <div className="mt-2 p-4 bg-gray-100/60 dark:bg-gray-800/60 rounded-lg">
                     <div className="flex items-center justify-between mb-3">
                         <h4 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
                             <Icon name={IconName.ClipboardCheck} className="w-5 h-5 text-blue-600" />
@@ -1064,7 +1064,7 @@ const AssessmentsSection: React.FC<{
                 if (userRole === UserRole.Learner && !isPublished) return null;
 
                 return (
-                    <div key={methodKey} className="mt-4 p-4 bg-gray-100/60 dark:bg-gray-800/60 rounded-lg">
+                    <div key={methodKey} className="mt-2 p-4 bg-gray-100/60 dark:bg-gray-800/60 rounded-lg">
                         <div className="flex items-center justify-between mb-3">
                             <h4 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
                                 <Icon name={IconName.ClipboardCheck} className="w-5 h-5 text-blue-600" />
