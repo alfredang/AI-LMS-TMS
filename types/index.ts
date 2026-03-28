@@ -73,6 +73,7 @@ export enum AdminPage {
   FetchUpcomingEnrolments = 'fetchUpcomingEnrolments',
   CreateCertificate = 'createCertificate',
   DeleteCertificate = 'deleteCertificate',
+  SendCertificateSG = 'sendCertificateSG',
   Calendar = 'calendar'
 }
 

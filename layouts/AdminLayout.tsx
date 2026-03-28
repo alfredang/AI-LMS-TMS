@@ -24,6 +24,7 @@ import ClassDetailView from '../components/admin/ClassDetailView';
 import { UpcomingClassesTable } from '../components/UpcomingClassesTable';
 import { ClassManagerView, AssignTrainerView, AssignStudentView, AddCourseView, AddCourseRunView, AutomationLogsView, AssignTrainerLogsView, BackfillEnrollmentsView, FetchUpcomingEnrolmentsView, CourseRunDateSyncLogsView } from '../components/admin/ClassManagementViews';
 import { CreateCertificateView, DeleteCertificateView } from '../components/admin/CertificateManagement';
+import { SendCertificateSGView } from '../components/admin/SendCertificateSG';
 import { CreateNewClassView } from '../components/admin/CreateNewClassView';
 import EnrollLearners from '../components/admin/EnrollLearners';
 import SearchPastLearners from '../components/admin/SearchPastLearners';
@@ -144,6 +145,7 @@ const PAGE_LABELS: Partial<Record<AdminPage, string>> = {
   [AdminPage.FetchUpcomingEnrolments]: 'Fetch Upcoming Classes Enrolment',
   [AdminPage.CreateCertificate]: 'Create Certificate',
   [AdminPage.DeleteCertificate]: 'Delete Certificate',
+  [AdminPage.SendCertificateSG]: 'Send Certificate (SG)',
   [AdminPage.Calendar]: 'Calendar',
 };
 
@@ -285,6 +287,8 @@ const AdminLayout: React.FC = () => {
         return <CreateCertificateView />;
       case AdminPage.DeleteCertificate:
         return <DeleteCertificateView />;
+      case AdminPage.SendCertificateSG:
+        return <SendCertificateSGView />;
       case AdminPage.Calendar:
         return <AdminCalendarView />;
       default:
