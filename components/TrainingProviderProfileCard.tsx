@@ -1409,30 +1409,6 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                         )}
                     </div>
 
-                    {/* Auto Delete After 6 Months */}
-                    <div className="flex justify-between items-center p-3 bg-surface-elevated rounded-md border border-default">
-                        <p className="font-semibold text-sm text-on-surface">Auto Delete After 6 Months</p>
-                        {isEditing ? (
-                            <button
-                                type="button"
-                                onClick={() => handleToggleChange('securitySettings', 'autoDeleteAfter6Months')}
-                                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${formData.securitySettings.autoDeleteAfter6Months ? 'bg-primary' : 'bg-gray-200'
-                                    }`}
-                            >
-                                <span
-                                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${formData.securitySettings.autoDeleteAfter6Months ? 'translate-x-6' : 'translate-x-1'
-                                        }`}
-                                />
-                            </button>
-                        ) : (
-                            <span
-                                className={`text-sm font-medium ${formData.securitySettings.autoDeleteAfter6Months ? 'text-green-600' : 'text-gray-400'
-                                    }`}
-                            >
-                                {formData.securitySettings.autoDeleteAfter6Months ? 'Enabled' : 'Disabled'}
-                            </span>
-                        )}
-                    </div>
 
                     {/* Enable OTP Login */}
                     <div className="flex justify-between items-center p-3 bg-surface-elevated rounded-md border border-default">
