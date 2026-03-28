@@ -244,11 +244,14 @@ export interface TrainingProviderProfile extends BaseProfile {
   ssgEncryptionKey?: string;
   integrations: {
     syncGoogleCalendar: boolean;
-    syncMicrosoftCalendar: boolean;
     googleCalendarUrl?: string;
-    msCalendarUrl?: string;
     googleDrive: boolean;
     microsoftOneDrive: boolean;
+    emailUser?: string;
+    googleClientId?: string;
+    googleClientSecret?: string;
+    googleRefreshToken?: string;
+    googleSlidesTemplateId?: string;
   };
   adminSettings: {
     autoSendProFormaInvoice: boolean;

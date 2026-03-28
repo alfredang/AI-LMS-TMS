@@ -216,8 +216,7 @@ const LoginDetailsCard: React.FC<{
     };
 
     return (
-        <Card className="p-8 mt-8">
-            <h2 className="text-xl font-bold mb-4">Login Details</h2>
+        <div>
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4 flex-grow">
                     <div>
@@ -281,7 +280,7 @@ const LoginDetailsCard: React.FC<{
                     </div>
                 </div>
             </div>
-        </Card>
+        </div>
     );
 };
 
@@ -326,6 +325,17 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
     const [isGeneratingLogo, setIsGeneratingLogo] = useState(false);
     const [visibleApiKeys, setVisibleApiKeys] = useState<{ [key: string]: boolean }>({});
     const [isApiKeysOpen, setIsApiKeysOpen] = useState(false);
+    const [isCompanyOpen, setIsCompanyOpen] = useState(false);
+    const [isContactOpen, setIsContactOpen] = useState(false);
+    const [isDocTemplatesOpen, setIsDocTemplatesOpen] = useState(false);
+    const [isSsgOpen, setIsSsgOpen] = useState(false);
+    const [isIntegrationsOpen, setIsIntegrationsOpen] = useState(false);
+    const [isAdminSettingsOpen, setIsAdminSettingsOpen] = useState(false);
+    const [isSecurityOpen, setIsSecurityOpen] = useState(false);
+    const [isGamificationOpen, setIsGamificationOpen] = useState(false);
+    const [isFundingOpen, setIsFundingOpen] = useState(false);
+    const [isAppearanceOpen, setIsAppearanceOpen] = useState(false);
+    const [isLoginDetailsOpen, setIsLoginDetailsOpen] = useState(false);
     const [isEncryptionKeyVisible, setIsEncryptionKeyVisible] = useState(false);
     const [themeMode, setThemeMode] = useState<ThemeMode>(() => getCurrentTheme());
 
@@ -767,8 +777,11 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                 </div>
 
                 <div className="border-t my-6 dark:border-gray-700"></div>
-                <h2 className="text-xl font-bold mb-4 dark:text-white">Company Details</h2>
-                {isEditing ? (
+                <button type="button" onClick={() => setIsCompanyOpen(prev => !prev)} className="w-full flex items-center justify-between group">
+                    <h2 className="text-xl font-bold dark:text-white">Company Details</h2>
+                    <Icon name={IconName.ChevronDown} className={`w-5 h-5 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 transition-transform duration-200 flex-shrink-0 ml-4 ${isCompanyOpen ? 'rotate-180' : ''}`} />
+                </button>
+                {isCompanyOpen && (isEditing ? (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
                             <label className="block text-sm font-medium text-on-surface-secondary mb-1">Company Name</label>
@@ -796,12 +809,15 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                             <ProfileBioItem label="Company Address" value={formData.companyAddress} />
                         </div>
                     </div>
-                )}
+                ))}
 
                 <div className="border-t my-6"></div>
-                <h2 className="text-xl font-bold mb-4">Contact Person</h2>
-                {isEditing ? (
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <button type="button" onClick={() => setIsContactOpen(prev => !prev)} className="w-full flex items-center justify-between group">
+                    <h2 className="text-xl font-bold">Contact Person</h2>
+                    <Icon name={IconName.ChevronDown} className={`w-5 h-5 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 transition-transform duration-200 flex-shrink-0 ml-4 ${isContactOpen ? 'rotate-180' : ''}`} />
+                </button>
+                {isContactOpen && (isEditing ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-4">
                         <div>
                             <label className="block text-sm font-medium text-on-surface-secondary mb-1">Name</label>
                             <input type="text" name="name" value={formData.contactPerson.name} onChange={handleContactChange} placeholder="Name" className={inputClasses} />
@@ -816,12 +832,693 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                         </div>
                     </div>
                 ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mt-4">
                         <ProfileBioItem label="Name" value={formData.contactPerson.name} />
                         <ProfileBioItem label="Email" value={formData.contactPerson.email} />
                         <ProfileBioItem label="Telephone" value={formData.contactPerson.tel} />
                     </div>
-                )}
+                ))}
+
+                <div className="border-t my-6"></div>
+                <button type="button" onClick={() => setIsLoginDetailsOpen(prev => !prev)} className="w-full flex items-center justify-between group">
+                    <h2 className="text-xl font-bold">Login Details</h2>
+                    <Icon name={IconName.ChevronDown} className={`w-5 h-5 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 transition-transform duration-200 flex-shrink-0 ml-4 ${isLoginDetailsOpen ? 'rotate-180' : ''}`} />
+                </button>
+                {isLoginDetailsOpen && <div className="mt-4">
+                    <LoginDetailsCard
+                        loginId={formData.loginId}
+                        password={formData.password}
+                        userId={profile.id}
+                        onPasswordUpdate={(newPassword) => {
+                            setFormData(prev => ({ ...prev, password: newPassword }));
+                        }}
+                    />
+                </div>}
+
+                <div className="border-t my-6"></div>
+                <button type="button" onClick={() => setIsFundingOpen(prev => !prev)} className="w-full flex items-center justify-between group">
+                    <h2 className="text-xl font-bold">Funding & Tax Settings</h2>
+                    <Icon name={IconName.ChevronDown} className={`w-5 h-5 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 transition-transform duration-200 flex-shrink-0 ml-4 ${isFundingOpen ? 'rotate-180' : ''}`} />
+                </button>
+                {isFundingOpen && (isEditing ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                        {/* Normal Funding Rate */}
+                        <div>
+                            <label className="block text-sm font-medium text-on-surface-secondary mb-1">
+                                Normal Funding Rate
+                            </label>
+                            <select
+                                name="normalFunding"
+                                value={formData.fundingSettings.normalFunding}
+                                onChange={handleFundingChange}
+                                className={inputClasses}
+                            >
+                                <option value={50}>50%</option>
+                                <option value={70}>70%</option>
+                            </select>
+                        </div>
+
+                        {/* Enhanced Funding Rate */}
+                        <div>
+                            <label className="block text-sm font-medium text-on-surface-secondary mb-1">
+                                Enhanced Funding Rate (%)
+                            </label>
+                            <input
+                                type="number"
+                                name="enhancedFunding"
+                                value={formData.fundingSettings.enhancedFunding}
+                                onChange={handleFundingChange}
+                                className={inputClasses}
+                                min="0"
+                            />
+                        </div>
+
+                        {/* GST Rate */}
+                        <div>
+                            <label className="block text-sm font-medium text-on-surface-secondary mb-1">
+                                GST Rate (%)
+                            </label>
+                            <input
+                                type="number"
+                                step="0.1"
+                                name="gstRate"
+                                value={formData.fundingSettings.gstRate}
+                                onChange={handleFundingChange}
+                                className={inputClasses}
+                                min="0"
+                            />
+                        </div>
+
+                        {/* GST Registered Toggle */}
+                        <div className="flex justify-between items-center p-3 bg-surface-elevated rounded-md border border-default">
+                            <label className="text-sm text-on-surface">GST Registered</label>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    const newValue = !formData.fundingSettings.isGstRegistered;
+                                    setFormData((prev) => ({
+                                        ...prev,
+                                        fundingSettings: {
+                                            ...prev.fundingSettings,
+                                            isGstRegistered: newValue,
+                                        },
+                                    }));
+                                }}
+                                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${formData.fundingSettings.isGstRegistered ? 'bg-primary' : 'bg-gray-200'
+                                    }`}
+                            >
+                                <span
+                                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${formData.fundingSettings.isGstRegistered ? 'translate-x-6' : 'translate-x-1'
+                                        }`}
+                                />
+                            </button>
+                        </div>
+                    </div>
+                ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                        <ProfileBioItem
+                            label="Normal Funding Rate"
+                            value={`${formData.fundingSettings.normalFunding}%`}
+                        />
+                        <ProfileBioItem
+                            label="Enhanced Funding Rate"
+                            value={`${formData.fundingSettings.enhancedFunding}%`}
+                        />
+                        <ProfileBioItem
+                            label="GST Registered"
+                            value={formData.fundingSettings.isGstRegistered ? 'Yes' : 'No'}
+                        />
+                        <ProfileBioItem
+                            label="GST Rate"
+                            value={`${formData.fundingSettings.gstRate}%`}
+                        />
+                    </div>
+                ))}
+
+
+                <div className="border-t my-6"></div>
+                <button type="button" onClick={() => setIsIntegrationsOpen(prev => !prev)} className="w-full flex items-center justify-between group">
+                    <h2 className="text-xl font-bold">Google Integration</h2>
+                    <Icon name={IconName.ChevronDown} className={`w-5 h-5 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 transition-transform duration-200 flex-shrink-0 ml-4 ${isIntegrationsOpen ? 'rotate-180' : ''}`} />
+                </button>
+                {isIntegrationsOpen && <div className="space-y-4 font-semibold mt-4">
+                    <ToggleSwitch
+                        checked={formData.integrations.syncGoogleCalendar}
+                        onChange={(checked) => handleToggleChange('integrations', 'syncGoogleCalendar')}
+                        label="Set Calendar"
+                        isEditing={isEditing}
+                    />
+                    {formData.integrations.syncGoogleCalendar && (
+                        <div className="p-3 bg-surface-elevated rounded-md border border-default ml-4">
+                            <label className="block text-sm font-medium text-on-surface-secondary mb-1">
+                                Calendar Embed URL
+                            </label>
+                            {isEditing ? (
+                                <input
+                                    type="text"
+                                    value={formData.integrations.googleCalendarUrl || ''}
+                                    onChange={(e) =>
+                                        setFormData((prev) => ({
+                                            ...prev,
+                                            integrations: {
+                                                ...prev.integrations,
+                                                googleCalendarUrl: e.target.value,
+                                            },
+                                        }))
+                                    }
+                                    className={inputClasses}
+                                    placeholder="Paste your calendar embed URL (Google Calendar, Outlook, etc.)"
+                                />
+                            ) : (
+                                <p className="text-sm text-on-surface truncate">
+                                    {formData.integrations.googleCalendarUrl || 'Not Set'}
+                                </p>
+                            )}
+                        </div>
+                    )}
+                    {/* Email Configuration */}
+                    <div className="mt-4 p-3 bg-surface-elevated rounded-md border border-default">
+                        <h3 className="text-sm font-bold text-on-surface mb-3">Email Configuration (Google OAuth2)</h3>
+                        <div className="space-y-3">
+                            {[
+                                { key: 'emailUser', label: 'Email User', placeholder: 'e.g. sales@yourcompany.com' },
+                                { key: 'googleClientId', label: 'Google Client ID', placeholder: 'From Google Cloud Console' },
+                                { key: 'googleClientSecret', label: 'Google Client Secret', placeholder: 'From Google Cloud Console' },
+                                { key: 'googleRefreshToken', label: 'Google Refresh Token', placeholder: 'OAuth2 refresh token' },
+                                { key: 'googleSlidesTemplateId', label: 'Google Slides Template ID', placeholder: 'Google Slides template ID for certificates' },
+                            ].map(({ key, label, placeholder }) => (
+                                <div key={key}>
+                                    <label className="block text-sm font-medium text-on-surface-secondary mb-1">{label}</label>
+                                    {isEditing ? (
+                                        <input
+                                            type={key === 'googleClientSecret' || key === 'googleRefreshToken' ? 'password' : 'text'}
+                                            value={(formData.integrations as any)[key] || ''}
+                                            onChange={(e) =>
+                                                setFormData((prev) => ({
+                                                    ...prev,
+                                                    integrations: {
+                                                        ...prev.integrations,
+                                                        [key]: e.target.value,
+                                                    },
+                                                }))
+                                            }
+                                            className={inputClasses}
+                                            placeholder={placeholder}
+                                        />
+                                    ) : (
+                                        <p className="text-sm text-on-surface truncate">
+                                            {key === 'googleClientSecret' || key === 'googleRefreshToken'
+                                                ? ((formData.integrations as any)[key] ? '••••••••' : 'Not Set')
+                                                : ((formData.integrations as any)[key] || 'Not Set')}
+                                        </p>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>}
+
+                <div className="border-t my-6"></div>
+
+                <button type="button" onClick={() => setIsSsgOpen(prev => !prev)} className="w-full flex items-center justify-between group">
+                    <h2 className="text-xl font-bold">SSG API Setting</h2>
+                    <Icon name={IconName.ChevronDown} className={`w-5 h-5 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 transition-transform duration-200 flex-shrink-0 ml-4 ${isSsgOpen ? 'rotate-180' : ''}`} />
+                </button>
+                {isSsgOpen && (isEditing ? (
+                    <div className="space-y-4">
+                        {/* Cert File */}
+                        <div>
+                            <label className="block text-sm font-medium text-on-surface-secondary mb-1 font-semibold">
+                                Self Signing Cert File
+                            </label>
+                            <div className="flex items-center gap-2 p-2 bg-surface-elevated rounded-md border border-default">
+                                <span className="text-sm text-on-surface-secondary flex-grow">
+                                    {ssgCertFile
+                                        ? getCleanDisplayName(ssgCertFile.name)
+                                        : formData.ssgCertFile?.split('/').pop() ? getCleanDisplayName(formData.ssgCertFile.split('/').pop() || '') : 'No file uploaded'}
+                                </span>
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => document.getElementById('ssg-cert-upload')?.click()}
+                                >
+                                    <Icon name={IconName.Upload} className="w-4 h-4 mr-2" />
+                                    Upload
+                                </Button>
+                                <input
+                                    type="file"
+                                    id="ssg-cert-upload"
+                                    accept="*/*"
+                                    className="hidden"
+                                    onChange={(e) => handleTemplateUpload(e, 'ssgCertFile' as any)}
+                                />
+                            </div>
+                        </div>
+
+                        {/* Private Key File */}
+                        <div>
+                            <label className="block text-sm font-medium text-on-surface-secondary mb-1 font-semibold">
+                                Private Key File
+                            </label>
+                            <div className="flex items-center gap-2 p-2 bg-surface-elevated rounded-md border border-default">
+                                <span className="text-sm text-on-surface-secondary flex-grow">
+                                    {ssgPrivateKeyFile
+                                        ? getCleanDisplayName(ssgPrivateKeyFile.name)
+                                        : formData.ssgPrivateKeyFile?.split('/').pop() ? getCleanDisplayName(formData.ssgPrivateKeyFile.split('/').pop() || '') : 'No file uploaded'}
+                                </span>
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() =>
+                                        document.getElementById('ssg-privatekey-upload')?.click()
+                                    }
+                                >
+                                    <Icon name={IconName.Upload} className="w-4 h-4 mr-2" />
+                                    Upload
+                                </Button>
+                                <input
+                                    type="file"
+                                    id="ssg-privatekey-upload"
+                                    accept="*/*"
+                                    className="hidden"
+                                    onChange={(e) => handleTemplateUpload(e, 'ssgPrivateKeyFile' as any)}
+                                />
+                            </div>
+                        </div>
+
+                        {/* Encryption Key */}
+                        <div>
+                            <label
+                                htmlFor="ssgEncryptionKey"
+                                className="block text-sm font-medium text-on-surface-secondary mb-1 font-semibold"
+                            >
+                                Encryption Key
+                            </label>
+                            <div className="relative">
+                                <input
+                                    type={isEncryptionKeyVisible ? "text" : "password"}
+                                    id="ssgEncryptionKey"
+                                    name="ssgEncryptionKey"
+                                    value={formData.ssgEncryptionKey || ''}
+                                    onChange={(e) =>
+                                        setFormData((prev) => ({ ...prev, ssgEncryptionKey: e.target.value }))
+                                    }
+                                    className={`${inputClasses} pr-10`}
+                                    placeholder="Enter your encryption key"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => setIsEncryptionKeyVisible(!isEncryptionKeyVisible)}
+                                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-subtle hover:text-primary"
+                                >
+                                    <Icon
+                                        name={isEncryptionKeyVisible ? IconName.EyeOff : IconName.Eye}
+                                        className="w-4 h-4"
+                                    />
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                        <ProfileBioItem
+                            label="Self Signing Cert File"
+                            value={formData.ssgCertFile ? getCleanDisplayName(formData.ssgCertFile.split('/').pop() || '') : 'Not Uploaded'}
+                        />
+                        <ProfileBioItem
+                            label="Private Key File"
+                            value={formData.ssgPrivateKeyFile ? getCleanDisplayName(formData.ssgPrivateKeyFile.split('/').pop() || '') : 'Not Uploaded'}
+                        />
+                        <ProfileBioItem
+                            label="Encryption Key"
+                            value={
+                                <div className="flex items-center gap-2">
+                                    <span className="font-semibold text-on-surface break-words">
+                                        {formData.ssgEncryptionKey
+                                            ? (isEncryptionKeyVisible ? formData.ssgEncryptionKey : '••••••••••••••••')
+                                            : 'Not Set'
+                                        }
+                                    </span>
+                                    {formData.ssgEncryptionKey && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setIsEncryptionKeyVisible(!isEncryptionKeyVisible)}
+                                            className="text-subtle hover:text-primary p-1 rounded-full"
+                                        >
+                                            <Icon
+                                                name={isEncryptionKeyVisible ? IconName.EyeOff : IconName.Eye}
+                                                className="w-4 h-4"
+                                            />
+                                        </button>
+                                    )}
+                                </div>
+                            }
+                        />
+                    </div>
+                ))}
+
+                <div className="border-t my-6"></div>
+
+                <button type="button" onClick={() => setIsDocTemplatesOpen(prev => !prev)} className="w-full flex items-center justify-between group">
+                    <h2 className="text-xl font-bold">Document Templates</h2>
+                    <Icon name={IconName.ChevronDown} className={`w-5 h-5 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 transition-transform duration-200 flex-shrink-0 ml-4 ${isDocTemplatesOpen ? 'rotate-180' : ''}`} />
+                </button>
+                {isDocTemplatesOpen && <div className="space-y-4 mt-4">
+                    {/* Invoice Template */}
+                    <div className="flex justify-between items-center p-3 bg-surface-elevated rounded-md border border-default">
+                        <div>
+                            <p className="font-semibold">Invoice Template</p>
+                            <p className="text-xs text-subtle">
+                                {(() => {
+                                    let displayText;
+                                    if (invoiceTemplateFile) {
+                                        // For newly selected files, clean the name to remove double extensions
+                                        displayText = getCleanDisplayName(invoiceTemplateFile.name);
+                                        console.log(`🔍 Display - invoiceTemplateFile.name: "${invoiceTemplateFile.name}" -> cleaned: "${displayText}"`);
+                                    } else if (formData.invoiceTemplateUrl) {
+                                        // For existing files, get filename from URL and clean it (remove timestamp and double extensions)
+                                        const filename = formData.invoiceTemplateUrl.split('/').pop() || '';
+                                        displayText = getCleanDisplayName(filename);
+                                        console.log(`🔍 Display - formData.invoiceTemplateUrl: "${formData.invoiceTemplateUrl}" -> filename: "${filename}" -> cleaned: "${displayText}"`);
+                                    } else {
+                                        displayText = 'No template uploaded';
+                                    }
+                                    return displayText;
+                                })()}
+                            </p>
+                        </div>
+                        {isEditing && (
+                            <>
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => document.getElementById('invoice-upload')?.click()}
+                                >
+                                    <Icon name={IconName.Upload} className="w-4 h-4 mr-2" />
+                                    Upload
+                                </Button>
+                                <input
+                                    type="file"
+                                    id="invoice-upload"
+                                    className="hidden"
+                                    accept="*/*"
+                                    onChange={(e) => handleTemplateUpload(e, 'invoiceTemplateUrl')}
+                                />
+                            </>
+                        )}
+                    </div>
+
+                    {/* Receipt Template */}
+                    <div className="flex justify-between items-center p-3 bg-surface-elevated rounded-md border border-default">
+                        <div>
+                            <p className="font-semibold">Receipt Template</p>
+                            <p className="text-xs text-subtle">
+                                {receiptTemplateFile
+                                    ? getCleanDisplayName(receiptTemplateFile.name)
+                                    : formData.receiptTemplateUrl
+                                        ? getCleanDisplayName(formData.receiptTemplateUrl.split('/').pop() || '')
+                                        : 'No template uploaded'}
+                            </p>
+                        </div>
+                        {isEditing && (
+                            <>
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => document.getElementById('receipt-upload')?.click()}
+                                >
+                                    <Icon name={IconName.Upload} className="w-4 h-4 mr-2" />
+                                    Upload
+                                </Button>
+                                <input
+                                    type="file"
+                                    id="receipt-upload"
+                                    className="hidden"
+                                    accept="*/*"
+                                    onChange={(e) => handleTemplateUpload(e, 'receiptTemplateUrl')}
+                                />
+                            </>
+                        )}
+                    </div>
+
+                    {/* Certificate Template */}
+                    <div className="flex justify-between items-center p-3 bg-surface-elevated rounded-md border border-default">
+                        <div>
+                            <p className="font-semibold">Certificate Template</p>
+                            <p className="text-xs text-subtle">
+                                {certificateTemplateFile
+                                    ? getCleanDisplayName(certificateTemplateFile.name)
+                                    : formData.certificateTemplateUrl
+                                        ? getCleanDisplayName(formData.certificateTemplateUrl.split('/').pop() || '')
+                                        : 'No template uploaded'}
+                            </p>
+                        </div>
+                        {isEditing && (
+                            <>
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => document.getElementById('certificate-upload')?.click()}
+                                >
+                                    <Icon name={IconName.Upload} className="w-4 h-4 mr-2" />
+                                    Upload
+                                </Button>
+                                <input
+                                    type="file"
+                                    id="certificate-upload"
+                                    className="hidden"
+                                    accept="*/*"
+                                    onChange={(e) => handleTemplateUpload(e, 'certificateTemplateUrl')}
+                                />
+                            </>
+                        )}
+                    </div>
+
+                    {/* Pro Forma Invoice Template */}
+                    <div className="flex justify-between items-center p-3 bg-surface-elevated rounded-md border border-default">
+                        <div>
+                            <p className="font-semibold">Pro Forma Invoice Template</p>
+                            <p className="text-xs text-subtle">
+                                {proFormaTemplateFile
+                                    ? getCleanDisplayName(proFormaTemplateFile.name)
+                                    : formData.proFormaInvoiceTemplateUrl
+                                        ? getCleanDisplayName(formData.proFormaInvoiceTemplateUrl.split('/').pop() || '')
+                                        : 'No template uploaded'}
+                            </p>
+                        </div>
+                        {isEditing && (
+                            <>
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() =>
+                                        document.getElementById('pro-forma-invoice-upload')?.click()
+                                    }
+                                >
+                                    <Icon name={IconName.Upload} className="w-4 h-4 mr-2" />
+                                    Upload
+                                </Button>
+                                <input
+                                    type="file"
+                                    id="pro-forma-invoice-upload"
+                                    className="hidden"
+                                    accept="*/*"
+                                    onChange={(e) =>
+                                        handleTemplateUpload(e, 'proFormaInvoiceTemplateUrl')
+                                    }
+                                />
+                            </>
+                        )}
+                    </div>
+                </div>}
+
+                <div className="border-t my-6"></div>
+                <button type="button" onClick={() => setIsAdminSettingsOpen(prev => !prev)} className="w-full flex items-center justify-between group">
+                    <h2 className="text-xl font-bold">Admin Setting</h2>
+                    <Icon name={IconName.ChevronDown} className={`w-5 h-5 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 transition-transform duration-200 flex-shrink-0 ml-4 ${isAdminSettingsOpen ? 'rotate-180' : ''}`} />
+                </button>
+                {isAdminSettingsOpen && <div className="space-y-4 font-semibold mt-4">
+                    {Object.entries(adminSettingLabels).map(([key, label]) => (
+                        <ToggleSwitch
+                            key={key}
+                            checked={formData.adminSettings[key as keyof typeof formData.adminSettings]}
+                            onChange={(checked) => handleToggleChange('adminSettings', key)}
+                            label={label}
+                            isEditing={isEditing}
+                        />
+                    ))}
+                </div>}
+
+                <div className="border-t my-6"></div>
+                <button type="button" onClick={() => setIsSecurityOpen(prev => !prev)} className="w-full flex items-center justify-between group">
+                    <h2 className="text-xl font-bold">Security Setting</h2>
+                    <Icon name={IconName.ChevronDown} className={`w-5 h-5 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 transition-transform duration-200 flex-shrink-0 ml-4 ${isSecurityOpen ? 'rotate-180' : ''}`} />
+                </button>
+                {isSecurityOpen && <div className="space-y-4 mt-4">
+                    {/* Auto Mask Sensitive Data */}
+                    <div className="flex justify-between items-center p-3 bg-surface-elevated rounded-md border border-default">
+                        <p className="font-semibold text-sm text-on-surface">Auto Mask Sensitive Data</p>
+                        {isEditing ? (
+                            <button
+                                type="button"
+                                onClick={() => handleToggleChange('securitySettings', 'autoMaskSensitiveData')}
+                                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${formData.securitySettings.autoMaskSensitiveData ? 'bg-primary' : 'bg-gray-200'
+                                    }`}
+                            >
+                                <span
+                                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${formData.securitySettings.autoMaskSensitiveData ? 'translate-x-6' : 'translate-x-1'
+                                        }`}
+                                />
+                            </button>
+                        ) : (
+                            <span
+                                className={`text-sm font-medium ${formData.securitySettings.autoMaskSensitiveData ? 'text-green-600' : 'text-gray-400'
+                                    }`}
+                            >
+                                {formData.securitySettings.autoMaskSensitiveData ? 'Enabled' : 'Disabled'}
+                            </span>
+                        )}
+                    </div>
+
+
+                    {/* Enable OTP Login */}
+                    <div className="flex justify-between items-center p-3 bg-surface-elevated rounded-md border border-default">
+                        <p className="font-semibold text-sm text-on-surface">Enable OTP Login</p>
+                        {isEditing ? (
+                            <button
+                                type="button"
+                                onClick={() => handleToggleChange('securitySettings', 'enableOtpLogin')}
+                                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${formData.securitySettings.enableOtpLogin ? 'bg-primary' : 'bg-gray-200'
+                                    }`}
+                            >
+                                <span
+                                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${formData.securitySettings.enableOtpLogin ? 'translate-x-6' : 'translate-x-1'
+                                        }`}
+                                />
+                            </button>
+                        ) : (
+                            <span
+                                className={`text-sm font-medium ${formData.securitySettings.enableOtpLogin ? 'text-green-600' : 'text-gray-400'
+                                    }`}
+                            >
+                                {formData.securitySettings.enableOtpLogin ? 'Enabled' : 'Disabled'}
+                            </span>
+                        )}
+                    </div>
+
+                    {/* Set Default OTP (only if OTP login enabled) */}
+                    {formData.securitySettings.enableOtpLogin && (
+                        <>
+                            <div className="flex justify-between items-center p-3 bg-surface-elevated rounded-md border border-default">
+                                <p className="font-semibold text-sm text-on-surface">Set Default OTP</p>
+                                {isEditing ? (
+                                    <button
+                                        type="button"
+                                        onClick={() => handleToggleChange('securitySettings', 'enableDefaultOtp')}
+                                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${formData.securitySettings.enableDefaultOtp ? 'bg-primary' : 'bg-gray-200'
+                                            }`}
+                                    >
+                                        <span
+                                            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${formData.securitySettings.enableDefaultOtp ? 'translate-x-6' : 'translate-x-1'
+                                                }`}
+                                        />
+                                    </button>
+                                ) : (
+                                    <span
+                                        className={`text-sm font-medium ${formData.securitySettings.enableDefaultOtp ? 'text-green-600' : 'text-gray-400'
+                                            }`}
+                                    >
+                                        {formData.securitySettings.enableDefaultOtp ? 'Enabled' : 'Disabled'}
+                                    </span>
+                                )}
+                            </div>
+
+                            {/* Default OTP Value (only if both OTP and default OTP enabled) */}
+                            {formData.securitySettings.enableDefaultOtp && (
+                                <div className="p-3 bg-surface-elevated rounded-md border border-default">
+                                    <label className="block text-sm font-medium text-on-surface-secondary mb-1 font-semibold">
+                                        Default OTP Value
+                                    </label>
+                                    {isEditing ? (
+                                        <input
+                                            type="text"
+                                            value={formData.securitySettings.defaultOtpValue || ''}
+                                            onChange={(e) =>
+                                                setFormData((prev) => ({
+                                                    ...prev,
+                                                    securitySettings: {
+                                                        ...prev.securitySettings,
+                                                        defaultOtpValue: e.target.value,
+                                                    },
+                                                }))
+                                            }
+                                            className={inputClasses}
+                                            placeholder="Enter default OTP (e.g. 12345)"
+                                        />
+                                    ) : (
+                                        <p className="font-mono text-sm">
+                                            {formData.securitySettings.defaultOtpValue || 'Not Set'}
+                                        </p>
+                                    )}
+                                </div>
+                            )}
+                        </>
+                    )}
+
+                    {/* Forced First Time Password Change */}
+                    <div className="flex justify-between items-center p-3 bg-surface-elevated rounded-md border border-default">
+                        <p className="font-semibold text-sm text-on-surface">Forced First Time Password Change</p>
+                        {isEditing ? (
+                            <button
+                                type="button"
+                                onClick={() => handleToggleChange('securitySettings', 'forceFirstPasswordChange')}
+                                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${formData.securitySettings.forceFirstPasswordChange ? 'bg-primary' : 'bg-gray-200'
+                                    }`}
+                            >
+                                <span
+                                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${formData.securitySettings.forceFirstPasswordChange ? 'translate-x-6' : 'translate-x-1'
+                                        }`}
+                                />
+                            </button>
+                        ) : (
+                            <span
+                                className={`text-sm font-medium ${formData.securitySettings.forceFirstPasswordChange ? 'text-green-600' : 'text-gray-400'
+                                    }`}
+                            >
+                                {formData.securitySettings.forceFirstPasswordChange ? 'Enabled' : 'Disabled'}
+                            </span>
+                        )}
+                    </div>
+
+                    {/* Default Password */}
+                    <div className="p-3 bg-surface-elevated rounded-md border border-default">
+                        <label className="block text-sm font-medium text-on-surface-secondary mb-1 font-semibold">
+                            Set Default Password
+                        </label>
+                        {isEditing ? (
+                            <input
+                                type="text"
+                                value={formData.securitySettings.defaultPassword || ''}
+                                onChange={(e) =>
+                                    setFormData((prev) => ({
+                                        ...prev,
+                                        securitySettings: {
+                                            ...prev.securitySettings,
+                                            defaultPassword: e.target.value,
+                                        },
+                                    }))
+                                }
+                                className={inputClasses}
+                                placeholder="Enter default password (e.g. password123)"
+                            />
+                        ) : (
+                            <p className="font-mono text-sm">
+                                {formData.securitySettings.defaultPassword || 'Not Set'}
+                            </p>
+                        )}
+                    </div>
+                </div>}
+
 
                 <div className="border-t my-6"></div>
                 <button
@@ -829,12 +1526,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                     onClick={() => setIsApiKeysOpen(prev => !prev)}
                     className="w-full flex items-center justify-between group"
                 >
-                    <div className="text-left">
-                        <h2 className="text-xl font-bold">API Keys & Model Selection</h2>
-                        <p className="text-sm text-subtle mt-1">
-                            Configure your API keys and select the model to use for each provider.
-                        </p>
-                    </div>
+                    <h2 className="text-xl font-bold">LLM API Keys & Model Selection</h2>
                     <Icon
                         name={IconName.ChevronDown}
                         className={`w-5 h-5 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 transition-transform duration-200 flex-shrink-0 ml-4 ${isApiKeysOpen ? 'rotate-180' : ''}`}
@@ -1051,563 +1743,11 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                 </>}
 
                 <div className="border-t my-6"></div>
-
-                <h2 className="text-xl font-bold mb-4">Document Templates</h2>
-                <div className="space-y-4">
-                    {/* Invoice Template */}
-                    <div className="flex justify-between items-center p-3 bg-surface-elevated rounded-md border border-default">
-                        <div>
-                            <p className="font-semibold">Invoice Template</p>
-                            <p className="text-xs text-subtle">
-                                {(() => {
-                                    let displayText;
-                                    if (invoiceTemplateFile) {
-                                        // For newly selected files, clean the name to remove double extensions
-                                        displayText = getCleanDisplayName(invoiceTemplateFile.name);
-                                        console.log(`🔍 Display - invoiceTemplateFile.name: "${invoiceTemplateFile.name}" -> cleaned: "${displayText}"`);
-                                    } else if (formData.invoiceTemplateUrl) {
-                                        // For existing files, get filename from URL and clean it (remove timestamp and double extensions)
-                                        const filename = formData.invoiceTemplateUrl.split('/').pop() || '';
-                                        displayText = getCleanDisplayName(filename);
-                                        console.log(`🔍 Display - formData.invoiceTemplateUrl: "${formData.invoiceTemplateUrl}" -> filename: "${filename}" -> cleaned: "${displayText}"`);
-                                    } else {
-                                        displayText = 'No template uploaded';
-                                    }
-                                    return displayText;
-                                })()}
-                            </p>
-                        </div>
-                        {isEditing && (
-                            <>
-                                <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => document.getElementById('invoice-upload')?.click()}
-                                >
-                                    <Icon name={IconName.Upload} className="w-4 h-4 mr-2" />
-                                    Upload
-                                </Button>
-                                <input
-                                    type="file"
-                                    id="invoice-upload"
-                                    className="hidden"
-                                    accept="*/*"
-                                    onChange={(e) => handleTemplateUpload(e, 'invoiceTemplateUrl')}
-                                />
-                            </>
-                        )}
-                    </div>
-
-                    {/* Receipt Template */}
-                    <div className="flex justify-between items-center p-3 bg-surface-elevated rounded-md border border-default">
-                        <div>
-                            <p className="font-semibold">Receipt Template</p>
-                            <p className="text-xs text-subtle">
-                                {receiptTemplateFile
-                                    ? getCleanDisplayName(receiptTemplateFile.name)
-                                    : formData.receiptTemplateUrl
-                                        ? getCleanDisplayName(formData.receiptTemplateUrl.split('/').pop() || '')
-                                        : 'No template uploaded'}
-                            </p>
-                        </div>
-                        {isEditing && (
-                            <>
-                                <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => document.getElementById('receipt-upload')?.click()}
-                                >
-                                    <Icon name={IconName.Upload} className="w-4 h-4 mr-2" />
-                                    Upload
-                                </Button>
-                                <input
-                                    type="file"
-                                    id="receipt-upload"
-                                    className="hidden"
-                                    accept="*/*"
-                                    onChange={(e) => handleTemplateUpload(e, 'receiptTemplateUrl')}
-                                />
-                            </>
-                        )}
-                    </div>
-
-                    {/* Certificate Template */}
-                    <div className="flex justify-between items-center p-3 bg-surface-elevated rounded-md border border-default">
-                        <div>
-                            <p className="font-semibold">Certificate Template</p>
-                            <p className="text-xs text-subtle">
-                                {certificateTemplateFile
-                                    ? getCleanDisplayName(certificateTemplateFile.name)
-                                    : formData.certificateTemplateUrl
-                                        ? getCleanDisplayName(formData.certificateTemplateUrl.split('/').pop() || '')
-                                        : 'No template uploaded'}
-                            </p>
-                        </div>
-                        {isEditing && (
-                            <>
-                                <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => document.getElementById('certificate-upload')?.click()}
-                                >
-                                    <Icon name={IconName.Upload} className="w-4 h-4 mr-2" />
-                                    Upload
-                                </Button>
-                                <input
-                                    type="file"
-                                    id="certificate-upload"
-                                    className="hidden"
-                                    accept="*/*"
-                                    onChange={(e) => handleTemplateUpload(e, 'certificateTemplateUrl')}
-                                />
-                            </>
-                        )}
-                    </div>
-
-                    {/* Pro Forma Invoice Template */}
-                    <div className="flex justify-between items-center p-3 bg-surface-elevated rounded-md border border-default">
-                        <div>
-                            <p className="font-semibold">Pro Forma Invoice Template</p>
-                            <p className="text-xs text-subtle">
-                                {proFormaTemplateFile
-                                    ? getCleanDisplayName(proFormaTemplateFile.name)
-                                    : formData.proFormaInvoiceTemplateUrl
-                                        ? getCleanDisplayName(formData.proFormaInvoiceTemplateUrl.split('/').pop() || '')
-                                        : 'No template uploaded'}
-                            </p>
-                        </div>
-                        {isEditing && (
-                            <>
-                                <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() =>
-                                        document.getElementById('pro-forma-invoice-upload')?.click()
-                                    }
-                                >
-                                    <Icon name={IconName.Upload} className="w-4 h-4 mr-2" />
-                                    Upload
-                                </Button>
-                                <input
-                                    type="file"
-                                    id="pro-forma-invoice-upload"
-                                    className="hidden"
-                                    accept="*/*"
-                                    onChange={(e) =>
-                                        handleTemplateUpload(e, 'proFormaInvoiceTemplateUrl')
-                                    }
-                                />
-                            </>
-                        )}
-                    </div>
-                </div>
-
-                <div className="border-t my-6"></div>
-
-                <h2 className="text-xl font-bold mb-4">SSG Developer Authorisation</h2>
-                {isEditing ? (
-                    <div className="space-y-4">
-                        {/* Cert File */}
-                        <div>
-                            <label className="block text-sm font-medium text-on-surface-secondary mb-1 font-semibold">
-                                Self Signing Cert File
-                            </label>
-                            <div className="flex items-center gap-2 p-2 bg-surface-elevated rounded-md border border-default">
-                                <span className="text-sm text-on-surface-secondary flex-grow">
-                                    {ssgCertFile
-                                        ? getCleanDisplayName(ssgCertFile.name)
-                                        : formData.ssgCertFile?.split('/').pop() ? getCleanDisplayName(formData.ssgCertFile.split('/').pop() || '') : 'No file uploaded'}
-                                </span>
-                                <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => document.getElementById('ssg-cert-upload')?.click()}
-                                >
-                                    <Icon name={IconName.Upload} className="w-4 h-4 mr-2" />
-                                    Upload
-                                </Button>
-                                <input
-                                    type="file"
-                                    id="ssg-cert-upload"
-                                    accept="*/*"
-                                    className="hidden"
-                                    onChange={(e) => handleTemplateUpload(e, 'ssgCertFile' as any)}
-                                />
-                            </div>
-                        </div>
-
-                        {/* Private Key File */}
-                        <div>
-                            <label className="block text-sm font-medium text-on-surface-secondary mb-1 font-semibold">
-                                Private Key File
-                            </label>
-                            <div className="flex items-center gap-2 p-2 bg-surface-elevated rounded-md border border-default">
-                                <span className="text-sm text-on-surface-secondary flex-grow">
-                                    {ssgPrivateKeyFile
-                                        ? getCleanDisplayName(ssgPrivateKeyFile.name)
-                                        : formData.ssgPrivateKeyFile?.split('/').pop() ? getCleanDisplayName(formData.ssgPrivateKeyFile.split('/').pop() || '') : 'No file uploaded'}
-                                </span>
-                                <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() =>
-                                        document.getElementById('ssg-privatekey-upload')?.click()
-                                    }
-                                >
-                                    <Icon name={IconName.Upload} className="w-4 h-4 mr-2" />
-                                    Upload
-                                </Button>
-                                <input
-                                    type="file"
-                                    id="ssg-privatekey-upload"
-                                    accept="*/*"
-                                    className="hidden"
-                                    onChange={(e) => handleTemplateUpload(e, 'ssgPrivateKeyFile' as any)}
-                                />
-                            </div>
-                        </div>
-
-                        {/* Encryption Key */}
-                        <div>
-                            <label
-                                htmlFor="ssgEncryptionKey"
-                                className="block text-sm font-medium text-on-surface-secondary mb-1 font-semibold"
-                            >
-                                Encryption Key
-                            </label>
-                            <div className="relative">
-                                <input
-                                    type={isEncryptionKeyVisible ? "text" : "password"}
-                                    id="ssgEncryptionKey"
-                                    name="ssgEncryptionKey"
-                                    value={formData.ssgEncryptionKey || ''}
-                                    onChange={(e) =>
-                                        setFormData((prev) => ({ ...prev, ssgEncryptionKey: e.target.value }))
-                                    }
-                                    className={`${inputClasses} pr-10`}
-                                    placeholder="Enter your encryption key"
-                                />
-                                <button
-                                    type="button"
-                                    onClick={() => setIsEncryptionKeyVisible(!isEncryptionKeyVisible)}
-                                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-subtle hover:text-primary"
-                                >
-                                    <Icon
-                                        name={isEncryptionKeyVisible ? IconName.EyeOff : IconName.Eye}
-                                        className="w-4 h-4"
-                                    />
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                        <ProfileBioItem
-                            label="Self Signing Cert File"
-                            value={formData.ssgCertFile ? getCleanDisplayName(formData.ssgCertFile.split('/').pop() || '') : 'Not Uploaded'}
-                        />
-                        <ProfileBioItem
-                            label="Private Key File"
-                            value={formData.ssgPrivateKeyFile ? getCleanDisplayName(formData.ssgPrivateKeyFile.split('/').pop() || '') : 'Not Uploaded'}
-                        />
-                        <ProfileBioItem
-                            label="Encryption Key"
-                            value={
-                                <div className="flex items-center gap-2">
-                                    <span className="font-semibold text-on-surface break-words">
-                                        {formData.ssgEncryptionKey
-                                            ? (isEncryptionKeyVisible ? formData.ssgEncryptionKey : '••••••••••••••••')
-                                            : 'Not Set'
-                                        }
-                                    </span>
-                                    {formData.ssgEncryptionKey && (
-                                        <button
-                                            type="button"
-                                            onClick={() => setIsEncryptionKeyVisible(!isEncryptionKeyVisible)}
-                                            className="text-subtle hover:text-primary p-1 rounded-full"
-                                        >
-                                            <Icon
-                                                name={isEncryptionKeyVisible ? IconName.EyeOff : IconName.Eye}
-                                                className="w-4 h-4"
-                                            />
-                                        </button>
-                                    )}
-                                </div>
-                            }
-                        />
-                    </div>
-                )}
-
-                <div className="border-t my-6"></div>
-                <h2 className="text-xl font-bold mb-4">Integrations</h2>
-                <div className="space-y-4 font-semibold">
-                    <ToggleSwitch
-                        checked={formData.integrations.syncGoogleCalendar}
-                        onChange={(checked) => handleToggleChange('integrations', 'syncGoogleCalendar')}
-                        label="Set Google Calendar"
-                        isEditing={isEditing}
-                    />
-                    {formData.integrations.syncGoogleCalendar && (
-                        <div className="p-3 bg-surface-elevated rounded-md border border-default ml-4">
-                            <label className="block text-sm font-medium text-on-surface-secondary mb-1">
-                                Google Calendar Embed URL
-                            </label>
-                            {isEditing ? (
-                                <input
-                                    type="text"
-                                    value={formData.integrations.googleCalendarUrl || ''}
-                                    onChange={(e) =>
-                                        setFormData((prev) => ({
-                                            ...prev,
-                                            integrations: {
-                                                ...prev.integrations,
-                                                googleCalendarUrl: e.target.value,
-                                            },
-                                        }))
-                                    }
-                                    className={inputClasses}
-                                    placeholder="Paste your Google Calendar embed URL or Calendar ID"
-                                />
-                            ) : (
-                                <p className="text-sm text-on-surface truncate">
-                                    {formData.integrations.googleCalendarUrl || 'Not Set'}
-                                </p>
-                            )}
-                        </div>
-                    )}
-                    <ToggleSwitch
-                        checked={formData.integrations.syncMicrosoftCalendar}
-                        onChange={(checked) => handleToggleChange('integrations', 'syncMicrosoftCalendar')}
-                        label="Set Microsoft Calendar"
-                        isEditing={isEditing}
-                    />
-                    {formData.integrations.syncMicrosoftCalendar && (
-                        <div className="p-3 bg-surface-elevated rounded-md border border-default ml-4">
-                            <label className="block text-sm font-medium text-on-surface-secondary mb-1">
-                                Microsoft Outlook Calendar Embed URL
-                            </label>
-                            {isEditing ? (
-                                <input
-                                    type="text"
-                                    value={formData.integrations.msCalendarUrl || ''}
-                                    onChange={(e) =>
-                                        setFormData((prev) => ({
-                                            ...prev,
-                                            integrations: {
-                                                ...prev.integrations,
-                                                msCalendarUrl: e.target.value,
-                                            },
-                                        }))
-                                    }
-                                    className={inputClasses}
-                                    placeholder="Paste your Outlook Calendar embed URL"
-                                />
-                            ) : (
-                                <p className="text-sm text-on-surface truncate">
-                                    {formData.integrations.msCalendarUrl || 'Not Set'}
-                                </p>
-                            )}
-                        </div>
-                    )}
-                    <ToggleSwitch
-                        checked={formData.integrations.googleDrive}
-                        onChange={(checked) => handleToggleChange('integrations', 'googleDrive')}
-                        label="Integrate Google Drive"
-                        isEditing={isEditing}
-                    />
-                    <ToggleSwitch
-                        checked={formData.integrations.microsoftOneDrive}
-                        onChange={(checked) => handleToggleChange('integrations', 'microsoftOneDrive')}
-                        label="Integrate Microsoft OneDrive"
-                        isEditing={isEditing}
-                    />
-                </div>
-
-                <div className="border-t my-6"></div>
-                <h2 className="text-xl font-bold mb-4">Admin Setting</h2>
-                <div className="space-y-4 font-semibold">
-                    {Object.entries(adminSettingLabels).map(([key, label]) => (
-                        <ToggleSwitch
-                            key={key}
-                            checked={formData.adminSettings[key as keyof typeof formData.adminSettings]}
-                            onChange={(checked) => handleToggleChange('adminSettings', key)}
-                            label={label}
-                            isEditing={isEditing}
-                        />
-                    ))}
-                </div>
-
-                <div className="border-t my-6"></div>
-                <h2 className="text-xl font-bold mb-4">Security</h2>
-                <div className="space-y-4">
-                    {/* Auto Mask Sensitive Data */}
-                    <div className="flex justify-between items-center p-3 bg-surface-elevated rounded-md border border-default">
-                        <p className="font-semibold text-sm text-on-surface">Auto Mask Sensitive Data</p>
-                        {isEditing ? (
-                            <button
-                                type="button"
-                                onClick={() => handleToggleChange('securitySettings', 'autoMaskSensitiveData')}
-                                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${formData.securitySettings.autoMaskSensitiveData ? 'bg-primary' : 'bg-gray-200'
-                                    }`}
-                            >
-                                <span
-                                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${formData.securitySettings.autoMaskSensitiveData ? 'translate-x-6' : 'translate-x-1'
-                                        }`}
-                                />
-                            </button>
-                        ) : (
-                            <span
-                                className={`text-sm font-medium ${formData.securitySettings.autoMaskSensitiveData ? 'text-green-600' : 'text-gray-400'
-                                    }`}
-                            >
-                                {formData.securitySettings.autoMaskSensitiveData ? 'Enabled' : 'Disabled'}
-                            </span>
-                        )}
-                    </div>
-
-
-                    {/* Enable OTP Login */}
-                    <div className="flex justify-between items-center p-3 bg-surface-elevated rounded-md border border-default">
-                        <p className="font-semibold text-sm text-on-surface">Enable OTP Login</p>
-                        {isEditing ? (
-                            <button
-                                type="button"
-                                onClick={() => handleToggleChange('securitySettings', 'enableOtpLogin')}
-                                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${formData.securitySettings.enableOtpLogin ? 'bg-primary' : 'bg-gray-200'
-                                    }`}
-                            >
-                                <span
-                                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${formData.securitySettings.enableOtpLogin ? 'translate-x-6' : 'translate-x-1'
-                                        }`}
-                                />
-                            </button>
-                        ) : (
-                            <span
-                                className={`text-sm font-medium ${formData.securitySettings.enableOtpLogin ? 'text-green-600' : 'text-gray-400'
-                                    }`}
-                            >
-                                {formData.securitySettings.enableOtpLogin ? 'Enabled' : 'Disabled'}
-                            </span>
-                        )}
-                    </div>
-
-                    {/* Set Default OTP (only if OTP login enabled) */}
-                    {formData.securitySettings.enableOtpLogin && (
-                        <>
-                            <div className="flex justify-between items-center p-3 bg-surface-elevated rounded-md border border-default">
-                                <p className="font-semibold text-sm text-on-surface">Set Default OTP</p>
-                                {isEditing ? (
-                                    <button
-                                        type="button"
-                                        onClick={() => handleToggleChange('securitySettings', 'enableDefaultOtp')}
-                                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${formData.securitySettings.enableDefaultOtp ? 'bg-primary' : 'bg-gray-200'
-                                            }`}
-                                    >
-                                        <span
-                                            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${formData.securitySettings.enableDefaultOtp ? 'translate-x-6' : 'translate-x-1'
-                                                }`}
-                                        />
-                                    </button>
-                                ) : (
-                                    <span
-                                        className={`text-sm font-medium ${formData.securitySettings.enableDefaultOtp ? 'text-green-600' : 'text-gray-400'
-                                            }`}
-                                    >
-                                        {formData.securitySettings.enableDefaultOtp ? 'Enabled' : 'Disabled'}
-                                    </span>
-                                )}
-                            </div>
-
-                            {/* Default OTP Value (only if both OTP and default OTP enabled) */}
-                            {formData.securitySettings.enableDefaultOtp && (
-                                <div className="p-3 bg-surface-elevated rounded-md border border-default">
-                                    <label className="block text-sm font-medium text-on-surface-secondary mb-1 font-semibold">
-                                        Default OTP Value
-                                    </label>
-                                    {isEditing ? (
-                                        <input
-                                            type="text"
-                                            value={formData.securitySettings.defaultOtpValue || ''}
-                                            onChange={(e) =>
-                                                setFormData((prev) => ({
-                                                    ...prev,
-                                                    securitySettings: {
-                                                        ...prev.securitySettings,
-                                                        defaultOtpValue: e.target.value,
-                                                    },
-                                                }))
-                                            }
-                                            className={inputClasses}
-                                            placeholder="Enter default OTP (e.g. 12345)"
-                                        />
-                                    ) : (
-                                        <p className="font-mono text-sm">
-                                            {formData.securitySettings.defaultOtpValue || 'Not Set'}
-                                        </p>
-                                    )}
-                                </div>
-                            )}
-                        </>
-                    )}
-
-                    {/* Forced First Time Password Change */}
-                    <div className="flex justify-between items-center p-3 bg-surface-elevated rounded-md border border-default">
-                        <p className="font-semibold text-sm text-on-surface">Forced First Time Password Change</p>
-                        {isEditing ? (
-                            <button
-                                type="button"
-                                onClick={() => handleToggleChange('securitySettings', 'forceFirstPasswordChange')}
-                                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${formData.securitySettings.forceFirstPasswordChange ? 'bg-primary' : 'bg-gray-200'
-                                    }`}
-                            >
-                                <span
-                                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${formData.securitySettings.forceFirstPasswordChange ? 'translate-x-6' : 'translate-x-1'
-                                        }`}
-                                />
-                            </button>
-                        ) : (
-                            <span
-                                className={`text-sm font-medium ${formData.securitySettings.forceFirstPasswordChange ? 'text-green-600' : 'text-gray-400'
-                                    }`}
-                            >
-                                {formData.securitySettings.forceFirstPasswordChange ? 'Enabled' : 'Disabled'}
-                            </span>
-                        )}
-                    </div>
-
-                    {/* Default Password */}
-                    <div className="p-3 bg-surface-elevated rounded-md border border-default">
-                        <label className="block text-sm font-medium text-on-surface-secondary mb-1 font-semibold">
-                            Set Default Password
-                        </label>
-                        {isEditing ? (
-                            <input
-                                type="text"
-                                value={formData.securitySettings.defaultPassword || ''}
-                                onChange={(e) =>
-                                    setFormData((prev) => ({
-                                        ...prev,
-                                        securitySettings: {
-                                            ...prev.securitySettings,
-                                            defaultPassword: e.target.value,
-                                        },
-                                    }))
-                                }
-                                className={inputClasses}
-                                placeholder="Enter default password (e.g. password123)"
-                            />
-                        ) : (
-                            <p className="font-mono text-sm">
-                                {formData.securitySettings.defaultPassword || 'Not Set'}
-                            </p>
-                        )}
-                    </div>
-                </div>
-
-
-                <div className="border-t my-6"></div>
-                <h2 className="text-xl font-bold mb-4">Gamification Settings</h2>
-                <div className="space-y-4 font-semibold">
+                <button type="button" onClick={() => setIsGamificationOpen(prev => !prev)} className="w-full flex items-center justify-between group">
+                    <h2 className="text-xl font-bold">Gamification Setting</h2>
+                    <Icon name={IconName.ChevronDown} className={`w-5 h-5 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 transition-transform duration-200 flex-shrink-0 ml-4 ${isGamificationOpen ? 'rotate-180' : ''}`} />
+                </button>
+                {isGamificationOpen && <div className="space-y-4 font-semibold mt-4">
                     <ToggleSwitch
                         checked={formData.gamingSettings.enableLeaderboard}
                         onChange={(checked) => handleToggleChange('gamingSettings', 'enableLeaderboard')}
@@ -1620,110 +1760,15 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                         label="Enable Points System"
                         isEditing={isEditing}
                     />
-                </div>
+                </div>}
 
                 <div className="border-t my-6"></div>
-                <h2 className="text-xl font-bold mb-4">Funding & Tax Settings</h2>
-                {isEditing ? (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                        {/* Normal Funding Rate */}
-                        <div>
-                            <label className="block text-sm font-medium text-on-surface-secondary mb-1">
-                                Normal Funding Rate
-                            </label>
-                            <select
-                                name="normalFunding"
-                                value={formData.fundingSettings.normalFunding}
-                                onChange={handleFundingChange}
-                                className={inputClasses}
-                            >
-                                <option value={50}>50%</option>
-                                <option value={70}>70%</option>
-                            </select>
-                        </div>
+                <button type="button" onClick={() => setIsAppearanceOpen(prev => !prev)} className="w-full flex items-center justify-between group">
+                    <h2 className="text-xl font-bold">Appearance</h2>
+                    <Icon name={IconName.ChevronDown} className={`w-5 h-5 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 transition-transform duration-200 flex-shrink-0 ml-4 ${isAppearanceOpen ? 'rotate-180' : ''}`} />
+                </button>
 
-                        {/* Enhanced Funding Rate */}
-                        <div>
-                            <label className="block text-sm font-medium text-on-surface-secondary mb-1">
-                                Enhanced Funding Rate (%)
-                            </label>
-                            <input
-                                type="number"
-                                name="enhancedFunding"
-                                value={formData.fundingSettings.enhancedFunding}
-                                onChange={handleFundingChange}
-                                className={inputClasses}
-                                min="0"
-                            />
-                        </div>
-
-                        {/* GST Rate */}
-                        <div>
-                            <label className="block text-sm font-medium text-on-surface-secondary mb-1">
-                                GST Rate (%)
-                            </label>
-                            <input
-                                type="number"
-                                step="0.1"
-                                name="gstRate"
-                                value={formData.fundingSettings.gstRate}
-                                onChange={handleFundingChange}
-                                className={inputClasses}
-                                min="0"
-                            />
-                        </div>
-
-                        {/* GST Registered Toggle */}
-                        <div className="flex justify-between items-center p-3 bg-surface-elevated rounded-md border border-default">
-                            <label className="text-sm text-on-surface">GST Registered</label>
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    const newValue = !formData.fundingSettings.isGstRegistered;
-                                    setFormData((prev) => ({
-                                        ...prev,
-                                        fundingSettings: {
-                                            ...prev.fundingSettings,
-                                            isGstRegistered: newValue,
-                                        },
-                                    }));
-                                }}
-                                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${formData.fundingSettings.isGstRegistered ? 'bg-primary' : 'bg-gray-200'
-                                    }`}
-                            >
-                                <span
-                                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${formData.fundingSettings.isGstRegistered ? 'translate-x-6' : 'translate-x-1'
-                                        }`}
-                                />
-                            </button>
-                        </div>
-                    </div>
-                ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                        <ProfileBioItem
-                            label="Normal Funding Rate"
-                            value={`${formData.fundingSettings.normalFunding}%`}
-                        />
-                        <ProfileBioItem
-                            label="Enhanced Funding Rate"
-                            value={`${formData.fundingSettings.enhancedFunding}%`}
-                        />
-                        <ProfileBioItem
-                            label="GST Registered"
-                            value={formData.fundingSettings.isGstRegistered ? 'Yes' : 'No'}
-                        />
-                        <ProfileBioItem
-                            label="GST Rate"
-                            value={`${formData.fundingSettings.gstRate}%`}
-                        />
-                    </div>
-                )}
-
-
-                <div className="border-t my-6"></div>
-                <h2 className="text-xl font-bold mb-4">Appearance</h2>
-
-                {/* Theme Mode Toggle */}
+                {isAppearanceOpen && <>{/* Theme Mode Toggle */}
                 <div className="space-y-4">
                     <div className="flex justify-between items-center p-4 bg-surface-elevated rounded-lg border border-default">
                         <div className="flex items-center gap-3">
@@ -1792,16 +1837,9 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                         </div>
                     </div>
                 </div>
+                </>}
 
             </Card>
-            <LoginDetailsCard
-                loginId={formData.loginId}
-                password={formData.password}
-                userId={profile.id}
-                onPasswordUpdate={(newPassword) => {
-                    setFormData(prev => ({ ...prev, password: newPassword }));
-                }}
-            />
         </>
     );
 };

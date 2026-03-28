@@ -1,20 +1,25 @@
 import React, { useEffect, useState } from 'react';
 
 interface CalendarConfig {
-  syncGoogleCalendar: boolean;
-  syncMicrosoftCalendar: boolean;
-  googleCalendarUrl: string;
-  msCalendarUrl: string;
+  enabled: boolean;
+  calendarUrl: string;
 }
 
-function getGoogleCalendarEmbedUrl(input: string): string {
-  // If it's already an embed URL, use as-is
+function getCalendarEmbedUrl(input: string): string {
+  if (!input) return '';
+
+  // Google Calendar: embed URL — set to AGENDA mode
   if (input.includes('calendar.google.com/calendar/embed')) {
-    const url = new URL(input);
-    url.searchParams.set('mode', 'AGENDA');
-    return url.toString();
+    try {
+      const url = new URL(input);
+      url.searchParams.set('mode', 'AGENDA');
+      return url.toString();
+    } catch {
+      return input;
+    }
   }
-  // If it's a ?cid= URL, extract the base64-encoded calendar ID and decode it
+
+  // Google Calendar: ?cid= subscribe link — decode base64 calendar ID
   if (input.includes('calendar.google.com') && input.includes('cid=')) {
     try {
       const url = new URL(input);
@@ -23,27 +28,29 @@ function getGoogleCalendarEmbedUrl(input: string): string {
         const calendarId = encodeURIComponent(atob(cid));
         return `https://calendar.google.com/calendar/embed?src=${calendarId}&mode=AGENDA&showTitle=1&showNav=1&showDate=1&showPrint=0&showTabs=1&showCalendars=0&showTz=1`;
       }
-    } catch (e) {
-      // Fall through to default handling
+    } catch {
+      // Fall through
     }
   }
-  // If it's a calendar ID (e.g. email), build the embed URL
-  const calendarId = encodeURIComponent(input.trim());
-  return `https://calendar.google.com/calendar/embed?src=${calendarId}&mode=AGENDA&showTitle=1&showNav=1&showDate=1&showPrint=0&showTabs=1&showCalendars=0&showTz=1`;
-}
 
-function getMsCalendarEmbedUrl(input: string): string {
-  // If it's already an Outlook embed URL, use as-is
+  // Outlook / Microsoft — use as-is
   if (input.includes('outlook.office365.com') || input.includes('outlook.live.com')) {
     return input;
   }
-  return input;
+
+  // Any other embed URL — use as-is
+  if (input.startsWith('http://') || input.startsWith('https://')) {
+    return input;
+  }
+
+  // Assume it's a Google Calendar ID (e.g. email)
+  const calendarId = encodeURIComponent(input.trim());
+  return `https://calendar.google.com/calendar/embed?src=${calendarId}&mode=AGENDA&showTitle=1&showNav=1&showDate=1&showPrint=0&showTabs=1&showCalendars=0&showTz=1`;
 }
 
 const AdminCalendarView: React.FC = () => {
   const [config, setConfig] = useState<CalendarConfig | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'google' | 'microsoft'>('google');
 
   useEffect(() => {
     const fetchConfig = async () => {
@@ -52,12 +59,6 @@ const AdminCalendarView: React.FC = () => {
         const data = await res.json();
         if (data.success) {
           setConfig(data.data);
-          // Default to whichever calendar is enabled
-          if (data.data.syncGoogleCalendar) {
-            setActiveTab('google');
-          } else if (data.data.syncMicrosoftCalendar) {
-            setActiveTab('microsoft');
-          }
         }
       } catch (err) {
         console.error('Failed to fetch calendar config:', err);
@@ -76,21 +77,17 @@ const AdminCalendarView: React.FC = () => {
     );
   }
 
-  if (!config || (!config.syncGoogleCalendar && !config.syncMicrosoftCalendar)) {
+  if (!config || !config.enabled || !config.calendarUrl) {
     return (
       <div className="max-w-2xl mx-auto text-center py-16">
         <div className="text-6xl mb-4">📅</div>
         <h2 className="text-xl font-bold text-on-surface mb-2">No Calendar Configured</h2>
         <p className="text-on-surface-secondary">
-          Enable Google Calendar or Microsoft Calendar sync in the Training Provider profile settings and add the calendar embed URL.
+          Enable the calendar and add an embed URL in the Training Provider profile settings.
         </p>
       </div>
     );
   }
-
-  const hasGoogle = config.syncGoogleCalendar && config.googleCalendarUrl;
-  const hasMicrosoft = config.syncMicrosoftCalendar && config.msCalendarUrl;
-  const showTabs = hasGoogle && hasMicrosoft;
 
   return (
     <div className="space-y-4">
@@ -101,64 +98,16 @@ const AdminCalendarView: React.FC = () => {
         </span>
       </div>
 
-      {showTabs && (
-        <div className="flex gap-2 border-b border-gray-200 dark:border-gray-700">
-          <button
-            onClick={() => setActiveTab('google')}
-            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-              activeTab === 'google'
-                ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-                : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
-            }`}
-          >
-            Google Calendar
-          </button>
-          <button
-            onClick={() => setActiveTab('microsoft')}
-            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-              activeTab === 'microsoft'
-                ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-                : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
-            }`}
-          >
-            Microsoft Calendar
-          </button>
-        </div>
-      )}
-
       <div className="bg-white dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
-        {activeTab === 'google' && hasGoogle && (
-          <iframe
-            src={getGoogleCalendarEmbedUrl(config.googleCalendarUrl)}
-            style={{ border: 0 }}
-            width="100%"
-            height="700"
-            frameBorder="0"
-            scrolling="no"
-            title="Google Calendar"
-          />
-        )}
-        {activeTab === 'microsoft' && hasMicrosoft && (
-          <iframe
-            src={getMsCalendarEmbedUrl(config.msCalendarUrl)}
-            style={{ border: 0 }}
-            width="100%"
-            height="700"
-            frameBorder="0"
-            scrolling="no"
-            title="Microsoft Calendar"
-          />
-        )}
-        {activeTab === 'google' && !hasGoogle && config.syncGoogleCalendar && (
-          <div className="flex items-center justify-center h-96 text-on-surface-secondary">
-            Google Calendar URL not configured. Add the embed URL in Training Provider settings.
-          </div>
-        )}
-        {activeTab === 'microsoft' && !hasMicrosoft && config.syncMicrosoftCalendar && (
-          <div className="flex items-center justify-center h-96 text-on-surface-secondary">
-            Microsoft Calendar URL not configured. Add the embed URL in Training Provider settings.
-          </div>
-        )}
+        <iframe
+          src={getCalendarEmbedUrl(config.calendarUrl)}
+          style={{ border: 0 }}
+          width="100%"
+          height="700"
+          frameBorder="0"
+          scrolling="no"
+          title="Calendar"
+        />
       </div>
     </div>
   );
