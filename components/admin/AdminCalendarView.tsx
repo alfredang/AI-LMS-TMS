@@ -10,10 +10,22 @@ interface CalendarConfig {
 function getGoogleCalendarEmbedUrl(input: string): string {
   // If it's already an embed URL, use as-is
   if (input.includes('calendar.google.com/calendar/embed')) {
-    // Ensure mode=AGENDA is set for today's events view
     const url = new URL(input);
     url.searchParams.set('mode', 'AGENDA');
     return url.toString();
+  }
+  // If it's a ?cid= URL, extract the base64-encoded calendar ID and decode it
+  if (input.includes('calendar.google.com') && input.includes('cid=')) {
+    try {
+      const url = new URL(input);
+      const cid = url.searchParams.get('cid');
+      if (cid) {
+        const calendarId = encodeURIComponent(atob(cid));
+        return `https://calendar.google.com/calendar/embed?src=${calendarId}&mode=AGENDA&showTitle=1&showNav=1&showDate=1&showPrint=0&showTabs=1&showCalendars=0&showTz=1`;
+      }
+    } catch (e) {
+      // Fall through to default handling
+    }
   }
   // If it's a calendar ID (e.g. email), build the embed URL
   const calendarId = encodeURIComponent(input.trim());
