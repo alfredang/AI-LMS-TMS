@@ -51,6 +51,10 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate }) => {
         <nav className="space-y-6 p-4 bg-white dark:bg-slate-800 text-gray-900 dark:text-white h-full">
             <NavItem page={AdminPage.Dashboard} label="Admin Dashboard" />
 
+            <NavSection title="Calendar">
+                <NavItem page={AdminPage.Calendar} label="View Calendar" isSubItem />
+            </NavSection>
+
             <NavSection title="Class Management">
                 <NavItem page={AdminPage.ViewCourses} label="View Courses" isSubItem />
                 <NavItem page={AdminPage.ViewTrainers} label="View Trainers" isSubItem />
@@ -119,10 +123,6 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate }) => {
             <NavSection title="Certificate">
                 <NavItem page={AdminPage.CreateCertificate} label="Create Certificate" isSubItem />
                 <NavItem page={AdminPage.DeleteCertificate} label="Delete Certificate" isSubItem />
-            </NavSection>
-
-            <NavSection title="Calendar">
-                <NavItem page={AdminPage.Calendar} label="View Calendar" isSubItem />
             </NavSection>
 
             {/* Tools section hidden
