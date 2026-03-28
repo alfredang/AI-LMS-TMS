@@ -245,6 +245,8 @@ export interface TrainingProviderProfile extends BaseProfile {
   integrations: {
     syncGoogleCalendar: boolean;
     syncMicrosoftCalendar: boolean;
+    googleCalendarUrl?: string;
+    msCalendarUrl?: string;
     googleDrive: boolean;
     microsoftOneDrive: boolean;
   };

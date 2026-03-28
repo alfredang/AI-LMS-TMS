@@ -16,10 +16,12 @@ const NAV_ITEMS: { page: TrainerPage; label: string; icon: IconName }[] = [
 ];
 
 const ED_TOOL_ITEMS: { label: string; icon: IconName; href: string }[] = [
-  { label: 'Break Timer',  icon: IconName.Clock,    href: 'https://alfredang.github.io/musical-timer-countdown/' },
-  { label: 'Pinboard',     icon: IconName.Bookmark, href: 'https://alfredang.github.io/pinboard/' },
-  { label: 'Whiteboard',   icon: IconName.Edit,     href: 'https://alfredang.github.io/whiteboard/' },
-  { label: 'Google Meet',  icon: IconName.Video,    href: 'https://meet.google.com/landing' },
+  { label: 'Ice Breaker',    icon: IconName.Users,    href: 'https://alfredang.github.io/ice-breaker/' },
+  { label: 'Pinboard',       icon: IconName.Bookmark, href: 'https://alfredang.github.io/pinboard/' },
+  { label: 'Break Timer',    icon: IconName.Clock,    href: 'https://alfredang.github.io/musical-timer-countdown/' },
+  { label: 'Whiteboard',     icon: IconName.Edit,     href: 'https://alfredang.github.io/whiteboard/' },
+  { label: 'Spinning Wheel', icon: IconName.Spinner,  href: 'https://alfredang.github.io/spinning-wheel/' },
+  { label: 'Google Meet',    icon: IconName.Video,    href: 'https://meet.google.com/landing' },
 ];
 
 const GENAI_TOOL_ITEMS: { label: string; icon: IconName }[] = [

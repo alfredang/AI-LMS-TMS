@@ -72,7 +72,8 @@ export enum AdminPage {
   BackfillEnrollments = 'backfillEnrollments',
   FetchUpcomingEnrolments = 'fetchUpcomingEnrolments',
   CreateCertificate = 'createCertificate',
-  DeleteCertificate = 'deleteCertificate'
+  DeleteCertificate = 'deleteCertificate',
+  Calendar = 'calendar'
 }
 
 export enum TrainerPage {

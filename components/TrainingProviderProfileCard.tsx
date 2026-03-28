@@ -1347,12 +1347,68 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                         label="Sync Google Calendar"
                         isEditing={isEditing}
                     />
+                    {formData.integrations.syncGoogleCalendar && (
+                        <div className="p-3 bg-surface-elevated rounded-md border border-default ml-4">
+                            <label className="block text-sm font-medium text-on-surface-secondary mb-1">
+                                Google Calendar Embed URL
+                            </label>
+                            {isEditing ? (
+                                <input
+                                    type="text"
+                                    value={formData.integrations.googleCalendarUrl || ''}
+                                    onChange={(e) =>
+                                        setFormData((prev) => ({
+                                            ...prev,
+                                            integrations: {
+                                                ...prev.integrations,
+                                                googleCalendarUrl: e.target.value,
+                                            },
+                                        }))
+                                    }
+                                    className={inputClasses}
+                                    placeholder="Paste your Google Calendar embed URL or Calendar ID"
+                                />
+                            ) : (
+                                <p className="text-sm text-on-surface truncate">
+                                    {formData.integrations.googleCalendarUrl || 'Not Set'}
+                                </p>
+                            )}
+                        </div>
+                    )}
                     <ToggleSwitch
                         checked={formData.integrations.syncMicrosoftCalendar}
                         onChange={(checked) => handleToggleChange('integrations', 'syncMicrosoftCalendar')}
                         label="Sync Microsoft Calendar"
                         isEditing={isEditing}
                     />
+                    {formData.integrations.syncMicrosoftCalendar && (
+                        <div className="p-3 bg-surface-elevated rounded-md border border-default ml-4">
+                            <label className="block text-sm font-medium text-on-surface-secondary mb-1">
+                                Microsoft Outlook Calendar Embed URL
+                            </label>
+                            {isEditing ? (
+                                <input
+                                    type="text"
+                                    value={formData.integrations.msCalendarUrl || ''}
+                                    onChange={(e) =>
+                                        setFormData((prev) => ({
+                                            ...prev,
+                                            integrations: {
+                                                ...prev.integrations,
+                                                msCalendarUrl: e.target.value,
+                                            },
+                                        }))
+                                    }
+                                    className={inputClasses}
+                                    placeholder="Paste your Outlook Calendar embed URL"
+                                />
+                            ) : (
+                                <p className="text-sm text-on-surface truncate">
+                                    {formData.integrations.msCalendarUrl || 'Not Set'}
+                                </p>
+                            )}
+                        </div>
+                    )}
                     <ToggleSwitch
                         checked={formData.integrations.googleDrive}
                         onChange={(checked) => handleToggleChange('integrations', 'googleDrive')}

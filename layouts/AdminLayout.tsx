@@ -52,6 +52,7 @@ import { CourseRunView } from '../components/admin/CourseRunView';
 import { UploadDirectApplicationView, ViewDirectApplicationView, UpdateDirectApplicationView } from '../components/admin/DirectApplicationViews';
 import { BulkUploadEnrolmentView } from '../components/admin/BulkEnrolmentViews';
 import TrainerAttendanceDashboard from '../components/trainer/TrainerAttendanceDashboard';
+import AdminCalendarView from '../components/admin/AdminCalendarView';
 
 // Management Dashboard Component
 interface ManagementDashboardProps {
@@ -143,6 +144,7 @@ const PAGE_LABELS: Partial<Record<AdminPage, string>> = {
   [AdminPage.FetchUpcomingEnrolments]: 'Fetch Upcoming Classes Enrolment',
   [AdminPage.CreateCertificate]: 'Create Certificate',
   [AdminPage.DeleteCertificate]: 'Delete Certificate',
+  [AdminPage.Calendar]: 'Calendar',
 };
 
 const AdminLayout: React.FC = () => {
@@ -283,6 +285,8 @@ const AdminLayout: React.FC = () => {
         return <CreateCertificateView />;
       case AdminPage.DeleteCertificate:
         return <DeleteCertificateView />;
+      case AdminPage.Calendar:
+        return <AdminCalendarView />;
       default:
         return <AdminDashboard />;
     }

@@ -4,10 +4,10 @@ import { Icon, IconName } from '../ui/Icon';
 
 const ED_TOOLS = [
   {
-    title: 'Break Timer',
-    description: 'Musical countdown timer for class breaks',
-    icon: IconName.Clock,
-    href: 'https://alfredang.github.io/musical-timer-countdown/',
+    title: 'Ice Breaker',
+    description: 'Fun ice breaker activities to engage learners',
+    icon: IconName.Users,
+    href: 'https://alfredang.github.io/ice-breaker/',
   },
   {
     title: 'Pinboard',
@@ -16,10 +16,22 @@ const ED_TOOLS = [
     href: 'https://alfredang.github.io/pinboard/',
   },
   {
+    title: 'Break Timer',
+    description: 'Musical countdown timer for class breaks',
+    icon: IconName.Clock,
+    href: 'https://alfredang.github.io/musical-timer-countdown/',
+  },
+  {
     title: 'Whiteboard',
     description: 'Interactive whiteboard for drawing and annotations',
     icon: IconName.Edit,
     href: 'https://alfredang.github.io/whiteboard/',
+  },
+  {
+    title: 'Spinning Wheel',
+    description: 'Random selection spinner for classroom activities',
+    icon: IconName.Spinner,
+    href: 'https://alfredang.github.io/spinning-wheel/',
   },
   {
     title: 'Google Meet',

@@ -276,6 +276,8 @@ async function getTrainingProviderProfile(userId: string) {
         tp.ssg_encryption_key,
         tp.sync_google_calendar,
         tp.sync_ms_calendar,
+        tp.google_calendar_url,
+        tp.ms_calendar_url,
         tp.integrate_google_drive,
         tp.integrate_ms_onedrive,
         tp.auto_send_proforma_invoice,
@@ -497,6 +499,8 @@ async function getTrainingProviderProfile(userId: string) {
     integrations: {
       syncGoogleCalendar: profileData.sync_google_calendar || false,
       syncMicrosoftCalendar: profileData.sync_ms_calendar || false,
+      googleCalendarUrl: profileData.google_calendar_url || '',
+      msCalendarUrl: profileData.ms_calendar_url || '',
       googleDrive: profileData.integrate_google_drive || false,
       microsoftOneDrive: profileData.integrate_ms_onedrive || false
     },

@@ -610,6 +610,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         // Columns don't exist yet, skip
       }
 
+      // Safely update calendar URLs (columns may not exist yet)
+      try {
+        await pool.query(
+          `UPDATE training_provider SET google_calendar_url = $1, ms_calendar_url = $2 WHERE id = $3`,
+          [profileData.integrations?.googleCalendarUrl || null, profileData.integrations?.msCalendarUrl || null, trainingProviderId]
+        );
+      } catch (e) {
+        // Columns don't exist yet, skip
+      }
+
       // Handle API keys - delete existing and insert new ones (with selected model)
       console.log('🔑 Processing API keys...');
       const deleteResult = await pool.query('DELETE FROM training_provider_api WHERE training_provider_id = $1', [trainingProviderId]);
