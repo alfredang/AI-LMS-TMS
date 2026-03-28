@@ -1344,7 +1344,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                     <ToggleSwitch
                         checked={formData.integrations.syncGoogleCalendar}
                         onChange={(checked) => handleToggleChange('integrations', 'syncGoogleCalendar')}
-                        label="Sync Google Calendar"
+                        label="Set Google Calendar"
                         isEditing={isEditing}
                     />
                     {formData.integrations.syncGoogleCalendar && (
@@ -1378,7 +1378,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                     <ToggleSwitch
                         checked={formData.integrations.syncMicrosoftCalendar}
                         onChange={(checked) => handleToggleChange('integrations', 'syncMicrosoftCalendar')}
-                        label="Sync Microsoft Calendar"
+                        label="Set Microsoft Calendar"
                         isEditing={isEditing}
                     />
                     {formData.integrations.syncMicrosoftCalendar && (
