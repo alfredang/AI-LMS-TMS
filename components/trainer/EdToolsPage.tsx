@@ -28,6 +28,12 @@ const ED_TOOLS = [
     href: 'https://alfredang.github.io/wordcloud/',
   },
   {
+    title: 'Live Q&A',
+    description: 'Real-time question and answer board for classroom interaction',
+    icon: IconName.Help,
+    href: 'https://alfredang.github.io/live-qna/',
+  },
+  {
     title: 'Whiteboard',
     description: 'Interactive whiteboard for drawing and annotations',
     icon: IconName.Edit,
