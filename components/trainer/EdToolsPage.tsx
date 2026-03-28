@@ -22,6 +22,12 @@ const ED_TOOLS = [
     href: 'https://alfredang.github.io/musical-timer-countdown/',
   },
   {
+    title: 'Word Cloud',
+    description: 'Generate word clouds from learner responses in real time',
+    icon: IconName.Cloud,
+    href: 'https://alfredang.github.io/wordcloud/',
+  },
+  {
     title: 'Whiteboard',
     description: 'Interactive whiteboard for drawing and annotations',
     icon: IconName.Edit,
@@ -32,6 +38,12 @@ const ED_TOOLS = [
     description: 'Shared notes for real-time collaboration in class',
     icon: IconName.FileText,
     href: 'https://alfredang.github.io/collabnote/',
+  },
+  {
+    title: 'Collaborative Kanban',
+    description: 'Shared kanban board for organizing tasks and ideas',
+    icon: IconName.ClipboardCheck,
+    href: 'https://alfredang.github.io/kanban/',
   },
   {
     title: 'Live Poll',
