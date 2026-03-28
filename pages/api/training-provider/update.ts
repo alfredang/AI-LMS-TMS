@@ -5,6 +5,7 @@ import path from 'path';
 import { cors } from '../../../lib/cors';
 import { NextApiRequest, NextApiResponse } from 'next';
 
+
 // Map field names to specific folder paths with your exact folder structure
 const FOLDER_MAPPING: { [key: string]: string } = {
   'logo': 'company_logo',
@@ -598,6 +599,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const providerUpdateResult = await pool.query(updateQuery, queryParams);
 
       console.log('✅ training_provider updated, rows affected:', providerUpdateResult.rowCount);
+
+      // Safely update force_first_password_change and default_password (columns may not exist yet)
+      try {
+        await pool.query(
+          `UPDATE training_provider SET force_first_password_change = $1, default_password = $2 WHERE id = $3`,
+          [profileData.securitySettings?.forceFirstPasswordChange || false, profileData.securitySettings?.defaultPassword || null, trainingProviderId]
+        );
+      } catch (e) {
+        // Columns don't exist yet, skip
+      }
 
       // Handle API keys - delete existing and insert new ones (with selected model)
       console.log('🔑 Processing API keys...');

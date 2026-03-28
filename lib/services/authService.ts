@@ -24,6 +24,7 @@ export interface AuthResponse {
     role: UserRole; // Primary/selected role
     roles: UserRole[]; // All available roles
     token?: string;
+    forcePasswordChange?: boolean;
   };
   error?: string;
 }

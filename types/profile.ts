@@ -262,6 +262,8 @@ export interface TrainingProviderProfile extends BaseProfile {
     enableOtpLogin: boolean;
     enableDefaultOtp: boolean;
     defaultOtpValue?: string;
+    forceFirstPasswordChange: boolean;
+    defaultPassword?: string;
   };
   gamingSettings: {
     enableLeaderboard: boolean;

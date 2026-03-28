@@ -39,7 +39,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           tp.enable_otp_login,
           tp.enable_default_otp,
           tp.default_otp,
-          tp.color_scheme
+          tp.color_scheme,
+          tp.force_first_password_change
         FROM training_provider_member tpm
         JOIN training_provider tp ON tpm.provider_id = tp.id
         WHERE tpm.user_id = $1
@@ -56,7 +57,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             tp.enable_otp_login,
             tp.enable_default_otp,
             tp.default_otp,
-            tp.color_scheme
+            tp.color_scheme,
+            tp.force_first_password_change
           FROM training_provider tp
           WHERE tp.id = $1
         `, [userId]);
@@ -73,7 +75,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             tp.enable_otp_login,
             tp.enable_default_otp,
             tp.default_otp,
-            tp.color_scheme
+            tp.color_scheme,
+            tp.force_first_password_change
           FROM provider_admin_user pau
           JOIN training_provider tp ON pau.provider_id = tp.id
           WHERE pau.user_id = $1
@@ -88,10 +91,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           companyShortname: trainingProvider.company_shortname || 'TP',
           enableOtpLogin: trainingProvider.enable_otp_login || false,
           enableDefaultOtp: trainingProvider.enable_default_otp || false,
-          defaultOtp: trainingProvider.default_otp || '123456',
-          colorScheme: trainingProvider.color_scheme || null
+          defaultOtp: trainingProvider.default_otp || '',
+          colorScheme: trainingProvider.color_scheme || null,
+          forceFirstPasswordChange: trainingProvider.force_first_password_change || false
         };
-        
+
         console.log('✅ Training provider info fetched for user:', responseData);
         return res.status(200).json({
           success: true,
@@ -113,7 +117,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           tp.enable_otp_login,
           tp.enable_default_otp,
           tp.default_otp,
-          tp.color_scheme
+          tp.color_scheme,
+          tp.force_first_password_change
         FROM user_role_map urm
         JOIN app_user au ON au.id = urm.user_id
         CROSS JOIN training_provider tp
@@ -146,9 +151,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         companyName: 'Training Provider',
         companyShortname: 'TP',
         enableOtpLogin: true,
-        enableDefaultOtp: true,
-        defaultOtp: '123456',
-        colorScheme: null
+        enableDefaultOtp: false,
+        defaultOtp: '',
+        colorScheme: null,
+        forceFirstPasswordChange: false
       };
 
       console.log('✅ Training provider info (default):', responseData);
@@ -167,8 +173,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       companyShortname: trainingProvider.company_shortname || 'TP',
       enableOtpLogin: trainingProvider.enable_otp_login || false,
       enableDefaultOtp: trainingProvider.enable_default_otp || false,
-      defaultOtp: trainingProvider.default_otp || '123456',
-      colorScheme: trainingProvider.color_scheme || null
+      defaultOtp: trainingProvider.default_otp || '',
+      colorScheme: trainingProvider.color_scheme || null,
+      forceFirstPasswordChange: trainingProvider.force_first_password_change || false
     };
 
     console.log('✅ Training provider info fetched:', responseData);

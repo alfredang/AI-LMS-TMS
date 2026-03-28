@@ -1435,11 +1435,11 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                         )}
                     </div>
 
-                    {/* Enable Default OTP (only if OTP login enabled) */}
+                    {/* Set Default OTP (only if OTP login enabled) */}
                     {formData.securitySettings.enableOtpLogin && (
                         <>
                             <div className="flex justify-between items-center p-3 bg-surface-elevated rounded-md border border-default">
-                                <p className="font-semibold text-sm text-on-surface">Enable Default OTP</p>
+                                <p className="font-semibold text-sm text-on-surface">Set Default OTP</p>
                                 {isEditing ? (
                                     <button
                                         type="button"
@@ -1482,7 +1482,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                                 }))
                                             }
                                             className={inputClasses}
-                                            placeholder="Enter default OTP value"
+                                            placeholder="Enter default OTP (e.g. 12345)"
                                         />
                                     ) : (
                                         <p className="font-mono text-sm">
@@ -1493,6 +1493,59 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                             )}
                         </>
                     )}
+
+                    {/* Forced First Time Password Change */}
+                    <div className="flex justify-between items-center p-3 bg-surface-elevated rounded-md border border-default">
+                        <p className="font-semibold text-sm text-on-surface">Forced First Time Password Change</p>
+                        {isEditing ? (
+                            <button
+                                type="button"
+                                onClick={() => handleToggleChange('securitySettings', 'forceFirstPasswordChange')}
+                                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${formData.securitySettings.forceFirstPasswordChange ? 'bg-primary' : 'bg-gray-200'
+                                    }`}
+                            >
+                                <span
+                                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${formData.securitySettings.forceFirstPasswordChange ? 'translate-x-6' : 'translate-x-1'
+                                        }`}
+                                />
+                            </button>
+                        ) : (
+                            <span
+                                className={`text-sm font-medium ${formData.securitySettings.forceFirstPasswordChange ? 'text-green-600' : 'text-gray-400'
+                                    }`}
+                            >
+                                {formData.securitySettings.forceFirstPasswordChange ? 'Enabled' : 'Disabled'}
+                            </span>
+                        )}
+                    </div>
+
+                    {/* Default Password */}
+                    <div className="p-3 bg-surface-elevated rounded-md border border-default">
+                        <label className="block text-sm font-medium text-on-surface-secondary mb-1 font-semibold">
+                            Set Default Password
+                        </label>
+                        {isEditing ? (
+                            <input
+                                type="text"
+                                value={formData.securitySettings.defaultPassword || ''}
+                                onChange={(e) =>
+                                    setFormData((prev) => ({
+                                        ...prev,
+                                        securitySettings: {
+                                            ...prev.securitySettings,
+                                            defaultPassword: e.target.value,
+                                        },
+                                    }))
+                                }
+                                className={inputClasses}
+                                placeholder="Enter default password (e.g. password123)"
+                            />
+                        ) : (
+                            <p className="font-mono text-sm">
+                                {formData.securitySettings.defaultPassword || 'Not Set'}
+                            </p>
+                        )}
+                    </div>
                 </div>
 
 

@@ -38,7 +38,7 @@ interface LoginScreenProps {
 const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
   const { login, courses } = useLms();
 
-  const [step, setStep] = useState<'email' | 'otp' | 'password' | 'roleSelect'>('email');
+  const [step, setStep] = useState<'email' | 'otp' | 'password' | 'roleSelect' | 'changePassword'>('email');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState(''); // Pre-fill for testing
   const [otp, setOtp] = useState('');
@@ -50,6 +50,9 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [trainingProviderData, setTrainingProviderData] = useState<TrainingProviderData | null>(null);
   const [isLoadingProviderData, setIsLoadingProviderData] = useState(true);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showNewPassword, setShowNewPassword] = useState(false);
 
   // Multi-role state
   const [pendingUser, setPendingUser] = useState<User | null>(null);
@@ -96,7 +99,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
   // Training provider security settings from database (no fallbacks)
   const securitySettings = {
     enableOtpLogin: trainingProviderData?.enableOtpLogin ?? true,
-    enableDefaultOtp: trainingProviderData?.enableDefaultOtp ?? true,
+    enableDefaultOtp: trainingProviderData?.enableDefaultOtp ?? false,
     defaultOtp: trainingProviderData?.defaultOtp
   };
 
@@ -167,6 +170,15 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
       if (result.success && result.data) {
         console.log('Login successful:', result.data.user);
         const roles = result.data.roles || [result.data.role];
+
+        // Check if user needs to change default password
+        if (result.data.forcePasswordChange) {
+          console.log('User must change default password');
+          setPendingUser(result.data.user);
+          setAvailableRoles(roles);
+          setStep('changePassword');
+          return;
+        }
 
         // If user has multiple roles, show role selector
         if (roles.length > 1) {
@@ -261,6 +273,50 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
       setError('Failed to resend OTP. Please try again.');
     } finally {
       setTimeout(() => setIsResending(false), 5000);
+    }
+  };
+
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+
+    if (newPassword.length < 6) {
+      setError('New password must be at least 6 characters.');
+      return;
+    }
+    if (newPassword === password) {
+      setError('New password must be different from your current password.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setError('Passwords do not match.');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const response = await fetch('/api/auth/update-password', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: pendingUser?.id, newPassword }),
+      });
+      const result = await response.json();
+
+      if (result.success) {
+        // Password changed, now proceed with login
+        if (availableRoles.length > 1) {
+          setStep('roleSelect');
+        } else {
+          completeLogin(pendingUser!, availableRoles[0] || (pendingUser as any).role);
+        }
+      } else {
+        setError(result.message || 'Failed to update password.');
+      }
+    } catch (err) {
+      console.error('Password change error:', err);
+      setError('An unexpected error occurred.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -490,8 +546,66 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
     </div>
   );
 
+  const renderChangePasswordStep = () => (
+    <form onSubmit={handleChangePassword} className="space-y-4">
+      <div className="text-center mb-4">
+        <h3 className="text-lg font-bold text-gray-900 dark:text-white">Change Your Password</h3>
+        <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+          You are using the default password. Please set a new password to continue.
+        </p>
+      </div>
+
+      {error && (
+        <div className="p-3 bg-red-100 dark:bg-red-900/30 border border-red-300 dark:border-red-700 rounded-lg text-sm text-red-700 dark:text-red-300">
+          {error}
+        </div>
+      )}
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">New Password</label>
+        <div className="relative">
+          <input
+            type={showNewPassword ? 'text' : 'password'}
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+            className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+            placeholder="Enter new password"
+            required
+            minLength={6}
+          />
+          <button
+            type="button"
+            onClick={() => setShowNewPassword(!showNewPassword)}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 dark:text-gray-400"
+          >
+            {showNewPassword ? 'Hide' : 'Show'}
+          </button>
+        </div>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Confirm Password</label>
+        <input
+          type="password"
+          value={confirmPassword}
+          onChange={(e) => setConfirmPassword(e.target.value)}
+          className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+          placeholder="Confirm new password"
+          required
+          minLength={6}
+        />
+      </div>
+
+      <Button type="submit" variant="primary" className="w-full py-3" disabled={isLoading}>
+        {isLoading ? 'Updating...' : 'Set New Password'}
+      </Button>
+    </form>
+  );
+
   const renderCurrentStep = () => {
-    if (step === 'roleSelect') {
+    if (step === 'changePassword') {
+      return renderChangePasswordStep();
+    } else if (step === 'roleSelect') {
       return renderRoleSelectStep();
     } else if (securitySettings.enableOtpLogin && step === 'otp') {
       return renderOtpStep();

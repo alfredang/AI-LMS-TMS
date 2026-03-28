@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next'
 import pool from '../../lib/db';
 import { cors } from '../../lib/cors';
 
+
 // Local utility function for API responses
 function createApiResponse(success: boolean, message: string, data?: any, error?: string) {
   return {
@@ -296,6 +297,8 @@ async function getTrainingProviderProfile(userId: string) {
         tp.gst_register,
         tp.color_scheme AS primary_color,
         tp.id as provider_id,
+        tp.force_first_password_change,
+        tp.default_password,
         'member' as access_type
     FROM app_user au
     INNER JOIN training_provider_member tpm ON au.id = tpm.user_id
@@ -350,6 +353,8 @@ async function getTrainingProviderProfile(userId: string) {
           tp.gst_register,
           tp.color_scheme AS primary_color,
           tp.id as provider_id,
+          tp.force_first_password_change,
+          tp.default_password,
           'owner' as access_type
       FROM app_user au
       INNER JOIN training_provider tp ON au.id = tp.id
@@ -404,6 +409,8 @@ async function getTrainingProviderProfile(userId: string) {
           tp.gst_register,
           tp.color_scheme AS primary_color,
           tp.id as provider_id,
+          tp.force_first_password_change,
+          tp.default_password,
           'admin' as access_type
       FROM app_user au
       INNER JOIN provider_admin_user pau ON au.id = pau.user_id
@@ -506,7 +513,9 @@ async function getTrainingProviderProfile(userId: string) {
       autoDeleteAfter6Months: profileData.auto_delete_after_six_months || false,
       enableOtpLogin: profileData.enable_otp_login || false,
       enableDefaultOtp: profileData.enable_default_otp || false,
-      defaultOtpValue: profileData.default_otp || ''
+      defaultOtpValue: profileData.default_otp || '',
+      forceFirstPasswordChange: profileData.force_first_password_change || false,
+      defaultPassword: profileData.default_password || ''
     },
     gamingSettings: {
       enableLeaderboard: profileData.enable_leaderboard || false,

@@ -13,7 +13,10 @@ build/
 
 # Environment variables
 .env.local
-.env.example 
+.env.example
+
+# Local settings (sensitive config, not uploaded to GitHub)
+config/local-settings.json
 
 # IDE and editor files
 .vscode/
