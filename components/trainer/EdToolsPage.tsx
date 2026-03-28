@@ -28,6 +28,12 @@ const ED_TOOLS = [
     href: 'https://alfredang.github.io/whiteboard/',
   },
   {
+    title: 'Collaborative Note',
+    description: 'Shared notes for real-time collaboration in class',
+    icon: IconName.FileText,
+    href: 'https://alfredang.github.io/collabnote/',
+  },
+  {
     title: 'Live Poll',
     description: 'Real-time polling and voting for classroom engagement',
     icon: IconName.ClipboardCheck,
