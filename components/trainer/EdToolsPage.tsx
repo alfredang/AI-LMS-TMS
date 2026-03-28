@@ -28,6 +28,12 @@ const ED_TOOLS = [
     href: 'https://alfredang.github.io/whiteboard/',
   },
   {
+    title: 'Live Poll',
+    description: 'Real-time polling and voting for classroom engagement',
+    icon: IconName.ClipboardCheck,
+    href: 'https://alfredang.github.io/livepoll/',
+  },
+  {
     title: 'Spinning Wheel',
     description: 'Random selection spinner for classroom activities',
     icon: IconName.Spinner,
