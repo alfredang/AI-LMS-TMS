@@ -958,59 +958,131 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
 
                 <div className="border-t my-6"></div>
                 <button type="button" onClick={() => setIsIntegrationsOpen(prev => !prev)} className="w-full flex items-center justify-between group">
-                    <h2 className="text-xl font-bold">Google Integration</h2>
+                    <h2 className="text-xl font-bold">Integration</h2>
                     <Icon name={IconName.ChevronDown} className={`w-5 h-5 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 transition-transform duration-200 flex-shrink-0 ml-4 ${isIntegrationsOpen ? 'rotate-180' : ''}`} />
                 </button>
-                {isIntegrationsOpen && <div className="space-y-4 font-semibold mt-4">
-                    <ToggleSwitch
-                        checked={formData.integrations.syncGoogleCalendar}
-                        onChange={(checked) => handleToggleChange('integrations', 'syncGoogleCalendar')}
-                        label="Set Calendar"
-                        isEditing={isEditing}
-                    />
-                    {formData.integrations.syncGoogleCalendar && (
-                        <div className="p-3 bg-surface-elevated rounded-md border border-default ml-4">
-                            <label className="block text-sm font-medium text-on-surface-secondary mb-1">
-                                Calendar Embed URL
-                            </label>
-                            {isEditing ? (
-                                <input
-                                    type="text"
-                                    value={formData.integrations.googleCalendarUrl || ''}
-                                    onChange={(e) =>
-                                        setFormData((prev) => ({
-                                            ...prev,
-                                            integrations: {
-                                                ...prev.integrations,
-                                                googleCalendarUrl: e.target.value,
-                                            },
-                                        }))
-                                    }
-                                    className={inputClasses}
-                                    placeholder="Paste your calendar embed URL (Google Calendar, Outlook, etc.)"
-                                />
-                            ) : (
-                                <p className="text-sm text-on-surface truncate">
-                                    {formData.integrations.googleCalendarUrl || 'Not Set'}
-                                </p>
+                {isIntegrationsOpen && <div className="space-y-6 font-semibold mt-4">
+
+                    {/* ===== Google Subsection ===== */}
+                    <div className="p-4 bg-surface-elevated rounded-lg border border-default">
+                        <h3 className="text-lg font-bold text-on-surface mb-4">Google</h3>
+                        <div className="space-y-4">
+                            <ToggleSwitch
+                                checked={formData.integrations.syncGoogleCalendar}
+                                onChange={(checked) => handleToggleChange('integrations', 'syncGoogleCalendar')}
+                                label="Set Calendar"
+                                isEditing={isEditing}
+                            />
+                            {formData.integrations.syncGoogleCalendar && (
+                                <div className="p-3 bg-surface rounded-md border border-default ml-4">
+                                    <label className="block text-sm font-medium text-on-surface-secondary mb-1">
+                                        Calendar Embed URL
+                                    </label>
+                                    {isEditing ? (
+                                        <input
+                                            type="text"
+                                            value={formData.integrations.googleCalendarUrl || ''}
+                                            onChange={(e) =>
+                                                setFormData((prev) => ({
+                                                    ...prev,
+                                                    integrations: {
+                                                        ...prev.integrations,
+                                                        googleCalendarUrl: e.target.value,
+                                                    },
+                                                }))
+                                            }
+                                            className={inputClasses}
+                                            placeholder="Paste your calendar embed URL (Google Calendar, Outlook, etc.)"
+                                        />
+                                    ) : (
+                                        <p className="text-sm text-on-surface truncate">
+                                            {formData.integrations.googleCalendarUrl || 'Not Set'}
+                                        </p>
+                                    )}
+                                </div>
                             )}
+
+                            {/* Email Configuration */}
+                            <div className="p-3 bg-surface rounded-md border border-default">
+                                <h4 className="text-sm font-bold text-on-surface mb-3">Email Configuration (Google OAuth2)</h4>
+                                <div className="space-y-3">
+                                    {[
+                                        { key: 'emailUser', label: 'Email User', placeholder: 'e.g. sales@yourcompany.com' },
+                                        { key: 'googleClientId', label: 'Google Client ID', placeholder: 'From Google Cloud Console' },
+                                        { key: 'googleClientSecret', label: 'Google Client Secret', placeholder: 'From Google Cloud Console' },
+                                        { key: 'googleRefreshToken', label: 'Google Refresh Token', placeholder: 'OAuth2 refresh token' },
+                                    ].map(({ key, label, placeholder }) => (
+                                        <div key={key}>
+                                            <label className="block text-sm font-medium text-on-surface-secondary mb-1">{label}</label>
+                                            {isEditing ? (
+                                                <input
+                                                    type={key === 'googleClientSecret' || key === 'googleRefreshToken' ? 'password' : 'text'}
+                                                    value={(formData.integrations as any)[key] || ''}
+                                                    onChange={(e) =>
+                                                        setFormData((prev) => ({
+                                                            ...prev,
+                                                            integrations: {
+                                                                ...prev.integrations,
+                                                                [key]: e.target.value,
+                                                            },
+                                                        }))
+                                                    }
+                                                    className={inputClasses}
+                                                    placeholder={placeholder}
+                                                />
+                                            ) : (
+                                                <p className="text-sm text-on-surface truncate">
+                                                    {key === 'googleClientSecret' || key === 'googleRefreshToken'
+                                                        ? ((formData.integrations as any)[key] ? '••••••••' : 'Not Set')
+                                                        : ((formData.integrations as any)[key] || 'Not Set')}
+                                                </p>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Certificate Folder */}
+                            <div>
+                                <label className="block text-sm font-medium text-on-surface-secondary mb-1">Certificate Folder URL</label>
+                                {isEditing ? (
+                                    <input
+                                        type="text"
+                                        value={formData.integrations.certificateFolderUrl || ''}
+                                        onChange={(e) =>
+                                            setFormData((prev) => ({
+                                                ...prev,
+                                                integrations: {
+                                                    ...prev.integrations,
+                                                    certificateFolderUrl: e.target.value,
+                                                },
+                                            }))
+                                        }
+                                        className={inputClasses}
+                                        placeholder="Google Drive folder URL for storing certificates"
+                                    />
+                                ) : (
+                                    <p className="text-sm text-on-surface truncate">
+                                        {formData.integrations.certificateFolderUrl || 'Not Set'}
+                                    </p>
+                                )}
+                            </div>
                         </div>
-                    )}
-                    {/* Email Configuration */}
-                    <div className="mt-4 p-3 bg-surface-elevated rounded-md border border-default">
-                        <h3 className="text-sm font-bold text-on-surface mb-3">Email Configuration (Google OAuth2)</h3>
+                    </div>
+
+                    {/* ===== n8n Subsection ===== */}
+                    <div className="p-4 bg-surface-elevated rounded-lg border border-default">
+                        <h3 className="text-lg font-bold text-on-surface mb-4">n8n</h3>
                         <div className="space-y-3">
                             {[
-                                { key: 'emailUser', label: 'Email User', placeholder: 'e.g. sales@yourcompany.com' },
-                                { key: 'googleClientId', label: 'Google Client ID', placeholder: 'From Google Cloud Console' },
-                                { key: 'googleClientSecret', label: 'Google Client Secret', placeholder: 'From Google Cloud Console' },
-                                { key: 'googleRefreshToken', label: 'Google Refresh Token', placeholder: 'OAuth2 refresh token' },
+                                { key: 'n8nHost1Url' as const, label: 'Host 1 URL', placeholder: 'e.g. https://n8n-host1.example.com' },
+                                { key: 'n8nHost2Url' as const, label: 'Host 2 URL', placeholder: 'e.g. https://n8n-host2.example.com' },
                             ].map(({ key, label, placeholder }) => (
                                 <div key={key}>
                                     <label className="block text-sm font-medium text-on-surface-secondary mb-1">{label}</label>
                                     {isEditing ? (
                                         <input
-                                            type={key === 'googleClientSecret' || key === 'googleRefreshToken' ? 'password' : 'text'}
+                                            type="text"
                                             value={(formData.integrations as any)[key] || ''}
                                             onChange={(e) =>
                                                 setFormData((prev) => ({
@@ -1026,81 +1098,57 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                         />
                                     ) : (
                                         <p className="text-sm text-on-surface truncate">
-                                            {key === 'googleClientSecret' || key === 'googleRefreshToken'
-                                                ? ((formData.integrations as any)[key] ? '••••••••' : 'Not Set')
-                                                : ((formData.integrations as any)[key] || 'Not Set')}
+                                            {(formData.integrations as any)[key] || 'Not Set'}
                                         </p>
                                     )}
                                 </div>
                             ))}
                         </div>
                     </div>
-                    {/* Certificate Folder */}
-                    <div className="mt-4 p-3 bg-surface-elevated rounded-md border border-default">
-                        <label className="block text-sm font-medium text-on-surface-secondary mb-1 font-semibold">Certificate Folder URL</label>
-                        {isEditing ? (
-                            <input
-                                type="text"
-                                value={formData.integrations.certificateFolderUrl || ''}
-                                onChange={(e) =>
-                                    setFormData((prev) => ({
-                                        ...prev,
-                                        integrations: {
-                                            ...prev.integrations,
-                                            certificateFolderUrl: e.target.value,
-                                        },
-                                    }))
-                                }
-                                className={inputClasses}
-                                placeholder="Google Drive folder URL for storing certificates"
-                            />
-                        ) : (
-                            <p className="text-sm text-on-surface truncate">
-                                {formData.integrations.certificateFolderUrl || 'Not Set'}
-                            </p>
-                        )}
+
+                    {/* ===== Reference Subsection ===== */}
+                    <div className="p-4 bg-surface-elevated rounded-lg border border-default">
+                        <h3 className="text-lg font-bold text-on-surface mb-4">Reference</h3>
+                        <div className="space-y-3">
+                            {[
+                                { key: 'masterListUrl' as const, label: 'Master List' },
+                                { key: 'tertiaryTmsUrl' as const, label: 'Tertiary TMS' },
+                                { key: 'tertiaryFmsUrl' as const, label: 'Tertiary FMS' },
+                                { key: 'tertiaryMmsUrl' as const, label: 'Tertiary MMS' },
+                                { key: 'tertiaryTpmsUrl' as const, label: 'Tertiary TPMS' },
+                            ].map(({ key, label }) => (
+                                <div key={key}>
+                                    <label className="block text-sm font-medium text-on-surface-secondary mb-1">{label}</label>
+                                    {isEditing ? (
+                                        <input
+                                            type="text"
+                                            value={formData.integrations[key] || ''}
+                                            onChange={(e) =>
+                                                setFormData((prev) => ({
+                                                    ...prev,
+                                                    integrations: {
+                                                        ...prev.integrations,
+                                                        [key]: e.target.value,
+                                                    },
+                                                }))
+                                            }
+                                            className={inputClasses}
+                                            placeholder={`${label} URL`}
+                                        />
+                                    ) : (
+                                        <p className="text-sm text-on-surface truncate">
+                                            {formData.integrations[key] ? (
+                                                <a href={formData.integrations[key]} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">
+                                                    {formData.integrations[key]}
+                                                </a>
+                                            ) : 'Not Set'}
+                                        </p>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
                     </div>
 
-                    {/* Reference Links */}
-                    <div className="mt-4 p-3 bg-surface-elevated rounded-md border border-default">
-                        <label className="block text-sm font-medium text-on-surface-secondary mb-2 font-semibold">Reference Links</label>
-                        {[
-                            { key: 'masterListUrl' as const, label: 'Master List' },
-                            { key: 'tertiaryTmsUrl' as const, label: 'Tertiary TMS' },
-                            { key: 'tertiaryFmsUrl' as const, label: 'Tertiary FMS' },
-                            { key: 'tertiaryMmsUrl' as const, label: 'Tertiary MMS' },
-                            { key: 'tertiaryTpmsUrl' as const, label: 'Tertiary TPMS' },
-                        ].map(({ key, label }) => (
-                            <div key={key} className="mb-2">
-                                <label className="block text-xs text-on-surface-secondary mb-1">{label}</label>
-                                {isEditing ? (
-                                    <input
-                                        type="text"
-                                        value={formData.integrations[key] || ''}
-                                        onChange={(e) =>
-                                            setFormData((prev) => ({
-                                                ...prev,
-                                                integrations: {
-                                                    ...prev.integrations,
-                                                    [key]: e.target.value,
-                                                },
-                                            }))
-                                        }
-                                        className="w-full border border-default rounded px-2 py-1 text-sm bg-surface text-on-surface"
-                                        placeholder={`${label} URL`}
-                                    />
-                                ) : (
-                                    <p className="text-sm text-on-surface truncate">
-                                        {formData.integrations[key] ? (
-                                            <a href={formData.integrations[key]} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">
-                                                {formData.integrations[key]}
-                                            </a>
-                                        ) : 'Not Set'}
-                                    </p>
-                                )}
-                            </div>
-                        ))}
-                    </div>
                 </div>}
 
                 <div className="border-t my-6"></div>

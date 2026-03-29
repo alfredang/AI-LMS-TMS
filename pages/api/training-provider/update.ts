@@ -645,14 +645,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             tertiary_tms_url = $2,
             tertiary_fms_url = $3,
             tertiary_mms_url = $4,
-            tertiary_tpms_url = $5
-          WHERE id = $6`,
+            tertiary_tpms_url = $5,
+            n8n_host1_url = $6,
+            n8n_host2_url = $7
+          WHERE id = $8`,
           [
             profileData.integrations?.masterListUrl || null,
             profileData.integrations?.tertiaryTmsUrl || null,
             profileData.integrations?.tertiaryFmsUrl || null,
             profileData.integrations?.tertiaryMmsUrl || null,
             profileData.integrations?.tertiaryTpmsUrl || null,
+            profileData.integrations?.n8nHost1Url || null,
+            profileData.integrations?.n8nHost2Url || null,
             trainingProviderId,
           ]
         );
@@ -665,6 +669,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             ALTER TABLE training_provider ADD COLUMN IF NOT EXISTS tertiary_fms_url text;
             ALTER TABLE training_provider ADD COLUMN IF NOT EXISTS tertiary_mms_url text;
             ALTER TABLE training_provider ADD COLUMN IF NOT EXISTS tertiary_tpms_url text;
+            ALTER TABLE training_provider ADD COLUMN IF NOT EXISTS n8n_host1_url text;
+            ALTER TABLE training_provider ADD COLUMN IF NOT EXISTS n8n_host2_url text;
           `);
           await pool.query(
             `UPDATE training_provider SET
@@ -672,19 +678,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               tertiary_tms_url = $2,
               tertiary_fms_url = $3,
               tertiary_mms_url = $4,
-              tertiary_tpms_url = $5
-            WHERE id = $6`,
+              tertiary_tpms_url = $5,
+              n8n_host1_url = $6,
+              n8n_host2_url = $7
+            WHERE id = $8`,
             [
               profileData.integrations?.masterListUrl || null,
               profileData.integrations?.tertiaryTmsUrl || null,
               profileData.integrations?.tertiaryFmsUrl || null,
               profileData.integrations?.tertiaryMmsUrl || null,
               profileData.integrations?.tertiaryTpmsUrl || null,
+              profileData.integrations?.n8nHost1Url || null,
+              profileData.integrations?.n8nHost2Url || null,
               trainingProviderId,
             ]
           );
         } catch (e2) {
-          console.error('Failed to create reference link columns:', e2);
+          console.error('Failed to create reference/n8n columns:', e2);
         }
       }
 
