@@ -253,6 +253,11 @@ export interface TrainingProviderProfile extends BaseProfile {
     googleRefreshToken?: string;
     googleSlidesTemplateId?: string;
     certificateFolderUrl?: string;
+    masterListUrl?: string;
+    tertiaryTmsUrl?: string;
+    tertiaryFmsUrl?: string;
+    tertiaryMmsUrl?: string;
+    tertiaryTpmsUrl?: string;
   };
   adminSettings: {
     autoSendProFormaInvoice: boolean;

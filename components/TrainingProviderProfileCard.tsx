@@ -1060,6 +1060,47 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                             </p>
                         )}
                     </div>
+
+                    {/* Reference Links */}
+                    <div className="mt-4 p-3 bg-surface-elevated rounded-md border border-default">
+                        <label className="block text-sm font-medium text-on-surface-secondary mb-2 font-semibold">Reference Links</label>
+                        {[
+                            { key: 'masterListUrl' as const, label: 'Master List' },
+                            { key: 'tertiaryTmsUrl' as const, label: 'Tertiary TMS' },
+                            { key: 'tertiaryFmsUrl' as const, label: 'Tertiary FMS' },
+                            { key: 'tertiaryMmsUrl' as const, label: 'Tertiary MMS' },
+                            { key: 'tertiaryTpmsUrl' as const, label: 'Tertiary TPMS' },
+                        ].map(({ key, label }) => (
+                            <div key={key} className="mb-2">
+                                <label className="block text-xs text-on-surface-secondary mb-1">{label}</label>
+                                {isEditing ? (
+                                    <input
+                                        type="text"
+                                        value={formData.integrations[key] || ''}
+                                        onChange={(e) =>
+                                            setFormData((prev) => ({
+                                                ...prev,
+                                                integrations: {
+                                                    ...prev.integrations,
+                                                    [key]: e.target.value,
+                                                },
+                                            }))
+                                        }
+                                        className="w-full border border-default rounded px-2 py-1 text-sm bg-surface text-on-surface"
+                                        placeholder={`${label} URL`}
+                                    />
+                                ) : (
+                                    <p className="text-sm text-on-surface truncate">
+                                        {formData.integrations[key] ? (
+                                            <a href={formData.integrations[key]} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">
+                                                {formData.integrations[key]}
+                                            </a>
+                                        ) : 'Not Set'}
+                                    </p>
+                                )}
+                            </div>
+                        ))}
+                    </div>
                 </div>}
 
                 <div className="border-t my-6"></div>

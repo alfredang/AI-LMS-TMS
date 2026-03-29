@@ -620,8 +620,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             google_client_secret = $4,
             google_refresh_token = $5,
             google_slides_template_id = $6,
-            certificate_folder_url = $7
-          WHERE id = $8`,
+            certificate_folder_url = $7,
+            master_list_url = $8,
+            tertiary_tms_url = $9,
+            tertiary_fms_url = $10,
+            tertiary_mms_url = $11,
+            tertiary_tpms_url = $12
+          WHERE id = $13`,
           [
             profileData.integrations?.googleCalendarUrl || null,
             profileData.integrations?.emailUser || null,
@@ -630,6 +635,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             profileData.integrations?.googleRefreshToken || null,
             profileData.integrations?.googleSlidesTemplateId || null,
             profileData.integrations?.certificateFolderUrl || null,
+            profileData.integrations?.masterListUrl || null,
+            profileData.integrations?.tertiaryTmsUrl || null,
+            profileData.integrations?.tertiaryFmsUrl || null,
+            profileData.integrations?.tertiaryMmsUrl || null,
+            profileData.integrations?.tertiaryTpmsUrl || null,
             trainingProviderId,
           ]
         );
