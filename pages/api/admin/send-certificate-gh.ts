@@ -2,7 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { google } from 'googleapis';
 import pool from '@lib/db';
 
-const CC_RECIPIENTS = [
+const DEFAULT_CC = [
   'iris@tertiaryinfotech.com',
   'angch@tertiaryinfotech.com',
   'siraj@tertiarycourses.com.gh',
@@ -13,7 +13,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { studentName, studentEmail, courseName, courseDates, userId } = req.body;
+  const { studentName, studentEmail, courseName, courseDates, userId, ccEmails } = req.body;
+
+  // Parse CC list: use provided value or fall back to defaults
+  const ccList: string[] = typeof ccEmails === 'string' && ccEmails.trim()
+    ? ccEmails.split(',').map((e: string) => e.trim()).filter(Boolean)
+    : DEFAULT_CC;
 
   if (!studentName || !studentEmail || !courseName || !courseDates || !userId) {
     return res.status(400).json({ error: 'All fields are required' });
@@ -128,7 +133,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const rawEmail = [
       `From: ${emailUser}`,
       `To: ${studentEmail}`,
-      `Cc: ${CC_RECIPIENTS.join(', ')}`,
+      `Cc: ${ccList.join(', ')}`,
       `Subject: ${subject}`,
       `MIME-Version: 1.0`,
       `Content-Type: multipart/mixed; boundary="${boundary}"`,
@@ -169,7 +174,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       requestBody: { raw: encodedMessage },
     });
 
-    return res.status(200).json({ success: true, message: `Certificate sent to ${studentEmail} (CC: ${CC_RECIPIENTS.join(', ')})`, fileName });
+    return res.status(200).json({ success: true, message: `Certificate sent to ${studentEmail} (CC: ${ccList.join(', ')})`, fileName });
   } catch (err: any) {
     if (tempFileId) {
       try {
