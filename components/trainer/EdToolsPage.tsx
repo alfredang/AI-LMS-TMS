@@ -46,6 +46,12 @@ const ED_TOOLS = [
     href: 'https://alfredang.github.io/collabnote/',
   },
   {
+    title: 'CollabFlow',
+    description: 'Visual workflow and flowchart collaboration tool',
+    icon: IconName.Link,
+    href: 'https://alfredang.github.io/collabflow/',
+  },
+  {
     title: 'Collaborative Kanban',
     description: 'Shared kanban board for organizing tasks and ideas',
     icon: IconName.ClipboardCheck,
