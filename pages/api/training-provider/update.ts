@@ -647,8 +647,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             tertiary_mms_url = $4,
             tertiary_tpms_url = $5,
             n8n_host1_url = $6,
-            n8n_host2_url = $7
-          WHERE id = $8`,
+            n8n_host2_url = $7,
+            magento_backend_url = $8
+          WHERE id = $9`,
           [
             profileData.integrations?.masterListUrl || null,
             profileData.integrations?.tertiaryTmsUrl || null,
@@ -657,6 +658,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             profileData.integrations?.tertiaryTpmsUrl || null,
             profileData.integrations?.n8nHost1Url || null,
             profileData.integrations?.n8nHost2Url || null,
+            profileData.integrations?.magentoBackendUrl || null,
             trainingProviderId,
           ]
         );
@@ -671,6 +673,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             ALTER TABLE training_provider ADD COLUMN IF NOT EXISTS tertiary_tpms_url text;
             ALTER TABLE training_provider ADD COLUMN IF NOT EXISTS n8n_host1_url text;
             ALTER TABLE training_provider ADD COLUMN IF NOT EXISTS n8n_host2_url text;
+            ALTER TABLE training_provider ADD COLUMN IF NOT EXISTS magento_backend_url text;
           `);
           await pool.query(
             `UPDATE training_provider SET
@@ -680,8 +683,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               tertiary_mms_url = $4,
               tertiary_tpms_url = $5,
               n8n_host1_url = $6,
-              n8n_host2_url = $7
-            WHERE id = $8`,
+              n8n_host2_url = $7,
+              magento_backend_url = $8
+            WHERE id = $9`,
             [
               profileData.integrations?.masterListUrl || null,
               profileData.integrations?.tertiaryTmsUrl || null,
@@ -690,6 +694,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               profileData.integrations?.tertiaryTpmsUrl || null,
               profileData.integrations?.n8nHost1Url || null,
               profileData.integrations?.n8nHost2Url || null,
+              profileData.integrations?.magentoBackendUrl || null,
               trainingProviderId,
             ]
           );

@@ -477,7 +477,7 @@ async function getTrainingProviderProfile(userId: string) {
   let refLinks: any = {};
   try {
     const refResult = await pool.query(
-      `SELECT master_list_url, tertiary_tms_url, tertiary_fms_url, tertiary_mms_url, tertiary_tpms_url, n8n_host1_url, n8n_host2_url FROM training_provider WHERE id = $1`,
+      `SELECT master_list_url, tertiary_tms_url, tertiary_fms_url, tertiary_mms_url, tertiary_tpms_url, n8n_host1_url, n8n_host2_url, magento_backend_url FROM training_provider WHERE id = $1`,
       [profileData.provider_id]
     );
     if (refResult.rows.length > 0) refLinks = refResult.rows[0];
@@ -544,6 +544,7 @@ async function getTrainingProviderProfile(userId: string) {
       tertiaryTpmsUrl: refLinks.tertiary_tpms_url || '',
       n8nHost1Url: refLinks.n8n_host1_url || '',
       n8nHost2Url: refLinks.n8n_host2_url || '',
+      magentoBackendUrl: refLinks.magento_backend_url || '',
     },
     adminSettings: {
       autoSendProFormaInvoice: profileData.auto_send_proforma_invoice || false,

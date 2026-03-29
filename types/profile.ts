@@ -260,6 +260,7 @@ export interface TrainingProviderProfile extends BaseProfile {
     tertiaryTpmsUrl?: string;
     n8nHost1Url?: string;
     n8nHost2Url?: string;
+    magentoBackendUrl?: string;
   };
   adminSettings: {
     autoSendProFormaInvoice: boolean;

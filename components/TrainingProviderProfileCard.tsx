@@ -1106,6 +1106,37 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                         </div>
                     </div>
 
+                    {/* ===== Magento Subsection ===== */}
+                    <div className="p-4 bg-surface-elevated rounded-lg border border-default">
+                        <h3 className="text-lg font-bold text-on-surface mb-4">Magento</h3>
+                        <div className="space-y-3">
+                            <div>
+                                <label className="block text-sm font-medium text-on-surface-secondary mb-1">Magento Backend URL</label>
+                                {isEditing ? (
+                                    <input
+                                        type="text"
+                                        value={(formData.integrations as any).magentoBackendUrl || ''}
+                                        onChange={(e) =>
+                                            setFormData((prev) => ({
+                                                ...prev,
+                                                integrations: {
+                                                    ...prev.integrations,
+                                                    magentoBackendUrl: e.target.value,
+                                                },
+                                            }))
+                                        }
+                                        className={inputClasses}
+                                        placeholder="e.g. https://magento.example.com/admin"
+                                    />
+                                ) : (
+                                    <p className="text-sm text-on-surface truncate">
+                                        {(formData.integrations as any).magentoBackendUrl || 'Not Set'}
+                                    </p>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
                     {/* ===== Reference Subsection ===== */}
                     <div className="p-4 bg-surface-elevated rounded-lg border border-default">
                         <h3 className="text-lg font-bold text-on-surface mb-4">Reference</h3>
