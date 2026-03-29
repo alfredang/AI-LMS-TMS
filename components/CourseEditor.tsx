@@ -959,7 +959,7 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
     return (
         <div>
             {/* Header */}
-            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-6 pb-4 border-b border-gray-200 dark:border-gray-700">
+            <div className="sticky top-14 sm:top-16 z-20 bg-background pt-4 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-6 pb-4 border-b border-gray-200 dark:border-gray-700">
                 <div>
                     <h2 className="text-2xl font-bold dark:text-white">{isNewCourse ? 'Create Course' : 'Edit Course'}</h2>
                     {!isNewCourse && course.courseCode && (
