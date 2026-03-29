@@ -1105,145 +1105,6 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
 
                 <div className="border-t my-6"></div>
 
-                <button type="button" onClick={() => setIsSsgOpen(prev => !prev)} className="w-full flex items-center justify-between group">
-                    <h2 className="text-xl font-bold">SSG API Setting</h2>
-                    <Icon name={IconName.ChevronDown} className={`w-5 h-5 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 transition-transform duration-200 flex-shrink-0 ml-4 ${isSsgOpen ? 'rotate-180' : ''}`} />
-                </button>
-                {isSsgOpen && (isEditing ? (
-                    <div className="space-y-4">
-                        {/* Cert File */}
-                        <div>
-                            <label className="block text-sm font-medium text-on-surface-secondary mb-1 font-semibold">
-                                Self Signing Cert File
-                            </label>
-                            <div className="flex items-center gap-2 p-2 bg-surface-elevated rounded-md border border-default">
-                                <span className="text-sm text-on-surface-secondary flex-grow">
-                                    {ssgCertFile
-                                        ? getCleanDisplayName(ssgCertFile.name)
-                                        : formData.ssgCertFile?.split('/').pop() ? getCleanDisplayName(formData.ssgCertFile.split('/').pop() || '') : 'No file uploaded'}
-                                </span>
-                                <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => document.getElementById('ssg-cert-upload')?.click()}
-                                >
-                                    <Icon name={IconName.Upload} className="w-4 h-4 mr-2" />
-                                    Upload
-                                </Button>
-                                <input
-                                    type="file"
-                                    id="ssg-cert-upload"
-                                    accept="*/*"
-                                    className="hidden"
-                                    onChange={(e) => handleTemplateUpload(e, 'ssgCertFile' as any)}
-                                />
-                            </div>
-                        </div>
-
-                        {/* Private Key File */}
-                        <div>
-                            <label className="block text-sm font-medium text-on-surface-secondary mb-1 font-semibold">
-                                Private Key File
-                            </label>
-                            <div className="flex items-center gap-2 p-2 bg-surface-elevated rounded-md border border-default">
-                                <span className="text-sm text-on-surface-secondary flex-grow">
-                                    {ssgPrivateKeyFile
-                                        ? getCleanDisplayName(ssgPrivateKeyFile.name)
-                                        : formData.ssgPrivateKeyFile?.split('/').pop() ? getCleanDisplayName(formData.ssgPrivateKeyFile.split('/').pop() || '') : 'No file uploaded'}
-                                </span>
-                                <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() =>
-                                        document.getElementById('ssg-privatekey-upload')?.click()
-                                    }
-                                >
-                                    <Icon name={IconName.Upload} className="w-4 h-4 mr-2" />
-                                    Upload
-                                </Button>
-                                <input
-                                    type="file"
-                                    id="ssg-privatekey-upload"
-                                    accept="*/*"
-                                    className="hidden"
-                                    onChange={(e) => handleTemplateUpload(e, 'ssgPrivateKeyFile' as any)}
-                                />
-                            </div>
-                        </div>
-
-                        {/* Encryption Key */}
-                        <div>
-                            <label
-                                htmlFor="ssgEncryptionKey"
-                                className="block text-sm font-medium text-on-surface-secondary mb-1 font-semibold"
-                            >
-                                Encryption Key
-                            </label>
-                            <div className="relative">
-                                <input
-                                    type={isEncryptionKeyVisible ? "text" : "password"}
-                                    id="ssgEncryptionKey"
-                                    name="ssgEncryptionKey"
-                                    value={formData.ssgEncryptionKey || ''}
-                                    onChange={(e) =>
-                                        setFormData((prev) => ({ ...prev, ssgEncryptionKey: e.target.value }))
-                                    }
-                                    className={`${inputClasses} pr-10`}
-                                    placeholder="Enter your encryption key"
-                                />
-                                <button
-                                    type="button"
-                                    onClick={() => setIsEncryptionKeyVisible(!isEncryptionKeyVisible)}
-                                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-subtle hover:text-primary"
-                                >
-                                    <Icon
-                                        name={isEncryptionKeyVisible ? IconName.EyeOff : IconName.Eye}
-                                        className="w-4 h-4"
-                                    />
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                        <ProfileBioItem
-                            label="Self Signing Cert File"
-                            value={formData.ssgCertFile ? getCleanDisplayName(formData.ssgCertFile.split('/').pop() || '') : 'Not Uploaded'}
-                        />
-                        <ProfileBioItem
-                            label="Private Key File"
-                            value={formData.ssgPrivateKeyFile ? getCleanDisplayName(formData.ssgPrivateKeyFile.split('/').pop() || '') : 'Not Uploaded'}
-                        />
-                        <ProfileBioItem
-                            label="Encryption Key"
-                            value={
-                                <div className="flex items-center gap-2">
-                                    <span className="font-semibold text-on-surface break-words">
-                                        {formData.ssgEncryptionKey
-                                            ? (isEncryptionKeyVisible ? formData.ssgEncryptionKey : '••••••••••••••••')
-                                            : 'Not Set'
-                                        }
-                                    </span>
-                                    {formData.ssgEncryptionKey && (
-                                        <button
-                                            type="button"
-                                            onClick={() => setIsEncryptionKeyVisible(!isEncryptionKeyVisible)}
-                                            className="text-subtle hover:text-primary p-1 rounded-full"
-                                        >
-                                            <Icon
-                                                name={isEncryptionKeyVisible ? IconName.EyeOff : IconName.Eye}
-                                                className="w-4 h-4"
-                                            />
-                                        </button>
-                                    )}
-                                </div>
-                            }
-                        />
-                    </div>
-                ))}
-
-                <div className="border-t my-6"></div>
-
                 <button type="button" onClick={() => setIsDocTemplatesOpen(prev => !prev)} className="w-full flex items-center justify-between group">
                     <h2 className="text-xl font-bold">Document Templates</h2>
                     <Icon name={IconName.ChevronDown} className={`w-5 h-5 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 transition-transform duration-200 flex-shrink-0 ml-4 ${isDocTemplatesOpen ? 'rotate-180' : ''}`} />
@@ -1513,12 +1374,151 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
 
 
                 <div className="border-t my-6"></div>
+
+                <button type="button" onClick={() => setIsSsgOpen(prev => !prev)} className="w-full flex items-center justify-between group">
+                    <h2 className="text-xl font-bold">SSG Authentication Setting</h2>
+                    <Icon name={IconName.ChevronDown} className={`w-5 h-5 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 transition-transform duration-200 flex-shrink-0 ml-4 ${isSsgOpen ? 'rotate-180' : ''}`} />
+                </button>
+                {isSsgOpen && (isEditing ? (
+                    <div className="space-y-4">
+                        {/* Cert File */}
+                        <div>
+                            <label className="block text-sm font-medium text-on-surface-secondary mb-1 font-semibold">
+                                Self Signing Cert File
+                            </label>
+                            <div className="flex items-center gap-2 p-2 bg-surface-elevated rounded-md border border-default">
+                                <span className="text-sm text-on-surface-secondary flex-grow">
+                                    {ssgCertFile
+                                        ? getCleanDisplayName(ssgCertFile.name)
+                                        : formData.ssgCertFile?.split('/').pop() ? getCleanDisplayName(formData.ssgCertFile.split('/').pop() || '') : 'No file uploaded'}
+                                </span>
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => document.getElementById('ssg-cert-upload')?.click()}
+                                >
+                                    <Icon name={IconName.Upload} className="w-4 h-4 mr-2" />
+                                    Upload
+                                </Button>
+                                <input
+                                    type="file"
+                                    id="ssg-cert-upload"
+                                    accept="*/*"
+                                    className="hidden"
+                                    onChange={(e) => handleTemplateUpload(e, 'ssgCertFile' as any)}
+                                />
+                            </div>
+                        </div>
+
+                        {/* Private Key File */}
+                        <div>
+                            <label className="block text-sm font-medium text-on-surface-secondary mb-1 font-semibold">
+                                Private Key File
+                            </label>
+                            <div className="flex items-center gap-2 p-2 bg-surface-elevated rounded-md border border-default">
+                                <span className="text-sm text-on-surface-secondary flex-grow">
+                                    {ssgPrivateKeyFile
+                                        ? getCleanDisplayName(ssgPrivateKeyFile.name)
+                                        : formData.ssgPrivateKeyFile?.split('/').pop() ? getCleanDisplayName(formData.ssgPrivateKeyFile.split('/').pop() || '') : 'No file uploaded'}
+                                </span>
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() =>
+                                        document.getElementById('ssg-privatekey-upload')?.click()
+                                    }
+                                >
+                                    <Icon name={IconName.Upload} className="w-4 h-4 mr-2" />
+                                    Upload
+                                </Button>
+                                <input
+                                    type="file"
+                                    id="ssg-privatekey-upload"
+                                    accept="*/*"
+                                    className="hidden"
+                                    onChange={(e) => handleTemplateUpload(e, 'ssgPrivateKeyFile' as any)}
+                                />
+                            </div>
+                        </div>
+
+                        {/* Encryption Key */}
+                        <div>
+                            <label
+                                htmlFor="ssgEncryptionKey"
+                                className="block text-sm font-medium text-on-surface-secondary mb-1 font-semibold"
+                            >
+                                Encryption Key
+                            </label>
+                            <div className="relative">
+                                <input
+                                    type={isEncryptionKeyVisible ? "text" : "password"}
+                                    id="ssgEncryptionKey"
+                                    name="ssgEncryptionKey"
+                                    value={formData.ssgEncryptionKey || ''}
+                                    onChange={(e) =>
+                                        setFormData((prev) => ({ ...prev, ssgEncryptionKey: e.target.value }))
+                                    }
+                                    className={`${inputClasses} pr-10`}
+                                    placeholder="Enter your encryption key"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => setIsEncryptionKeyVisible(!isEncryptionKeyVisible)}
+                                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-subtle hover:text-primary"
+                                >
+                                    <Icon
+                                        name={isEncryptionKeyVisible ? IconName.EyeOff : IconName.Eye}
+                                        className="w-4 h-4"
+                                    />
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                        <ProfileBioItem
+                            label="Self Signing Cert File"
+                            value={formData.ssgCertFile ? getCleanDisplayName(formData.ssgCertFile.split('/').pop() || '') : 'Not Uploaded'}
+                        />
+                        <ProfileBioItem
+                            label="Private Key File"
+                            value={formData.ssgPrivateKeyFile ? getCleanDisplayName(formData.ssgPrivateKeyFile.split('/').pop() || '') : 'Not Uploaded'}
+                        />
+                        <ProfileBioItem
+                            label="Encryption Key"
+                            value={
+                                <div className="flex items-center gap-2">
+                                    <span className="font-semibold text-on-surface break-words">
+                                        {formData.ssgEncryptionKey
+                                            ? (isEncryptionKeyVisible ? formData.ssgEncryptionKey : '••••••••••••••••')
+                                            : 'Not Set'
+                                        }
+                                    </span>
+                                    {formData.ssgEncryptionKey && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setIsEncryptionKeyVisible(!isEncryptionKeyVisible)}
+                                            className="text-subtle hover:text-primary p-1 rounded-full"
+                                        >
+                                            <Icon
+                                                name={isEncryptionKeyVisible ? IconName.EyeOff : IconName.Eye}
+                                                className="w-4 h-4"
+                                            />
+                                        </button>
+                                    )}
+                                </div>
+                            }
+                        />
+                    </div>
+                ))}
+
+                <div className="border-t my-6"></div>
                 <button
                     type="button"
                     onClick={() => setIsApiKeysOpen(prev => !prev)}
                     className="w-full flex items-center justify-between group"
                 >
-                    <h2 className="text-xl font-bold">LLM API Keys & Model Selection</h2>
+                    <h2 className="text-xl font-bold">API Keys Setting</h2>
                     <Icon
                         name={IconName.ChevronDown}
                         className={`w-5 h-5 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 transition-transform duration-200 flex-shrink-0 ml-4 ${isApiKeysOpen ? 'rotate-180' : ''}`}
