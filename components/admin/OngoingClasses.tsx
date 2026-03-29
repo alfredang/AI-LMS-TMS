@@ -70,6 +70,14 @@ const OngoingClasses: React.FC = () => {
   const [startDateFrom, setStartDateFrom] = useState('');
   const [endDateUntil, setEndDateUntil] = useState('');
 
+  // Debounced filter values
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [debouncedCourseTitle, setDebouncedCourseTitle] = useState('');
+  const [debouncedCourseCode, setDebouncedCourseCode] = useState('');
+  const [debouncedCourseRunId, setDebouncedCourseRunId] = useState('');
+  const [debouncedStartDate, setDebouncedStartDate] = useState('');
+  const [debouncedEndDate, setDebouncedEndDate] = useState('');
+
   const [currentPage, setCurrentPage] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
@@ -107,14 +115,14 @@ const OngoingClasses: React.FC = () => {
         _t: Date.now().toString(),
       });
 
-      // Add search and filter parameters
-      if (searchQuery) params.append('search', searchQuery);
-      if (courseTitle) params.append('courseTitle', courseTitle);
-      if (courseCode) params.append('courseCode', courseCode);
-      if (courseRunId) params.append('courseRunId', courseRunId);
+      // Add search and filter parameters (use debounced values for text inputs)
+      if (debouncedSearch) params.append('search', debouncedSearch);
+      if (debouncedCourseTitle) params.append('courseTitle', debouncedCourseTitle);
+      if (debouncedCourseCode) params.append('courseCode', debouncedCourseCode);
+      if (debouncedCourseRunId) params.append('courseRunId', debouncedCourseRunId);
       if (selectedTrainer) params.append('trainer', selectedTrainer);
-      if (startDateFrom) params.append('startDateFrom', startDateFrom);
-      if (endDateUntil) params.append('endDateUntil', endDateUntil);
+      if (debouncedStartDate) params.append('startDateFrom', debouncedStartDate);
+      if (debouncedEndDate) params.append('endDateUntil', debouncedEndDate);
 
       console.log('📝 Query params:', params.toString());
 
@@ -152,27 +160,44 @@ const OngoingClasses: React.FC = () => {
     }
   };
 
-  // Initial data fetch
+  // Fetch trainers on mount
   useEffect(() => {
-    console.log('🚀 OngoingClasses mounted - fetching initial data');
     fetchTrainers();
-    fetchOngoingClasses();
   }, []);
 
-  // Refetch when filters or pagination change
+  // Debounce text filter inputs (300ms) and reset page
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+      setDebouncedCourseTitle(courseTitle);
+      setDebouncedCourseCode(courseCode);
+      setDebouncedCourseRunId(courseRunId);
+      setDebouncedStartDate(startDateFrom);
+      setDebouncedEndDate(endDateUntil);
+      setCurrentPage(0);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery, courseTitle, courseCode, courseRunId, startDateFrom, endDateUntil]);
+
+  // Reset page immediately for non-debounced filters (dropdowns)
+  useEffect(() => {
+    setCurrentPage(0);
+  }, [selectedTrainer]);
+
+  // Fetch data when debounced filters or pagination change
   useEffect(() => {
     fetchOngoingClasses();
-  }, [currentPage, searchQuery, courseTitle, courseCode, courseRunId, selectedTrainer, startDateFrom, endDateUntil]);
+  }, [currentPage, debouncedSearch, debouncedCourseTitle, debouncedCourseCode, debouncedCourseRunId, selectedTrainer, debouncedStartDate, debouncedEndDate]);
 
   // Date formatting function
   const formatDateInput = (value: string) => {
     const numeric = value.replace(/\D/g, '');
-    if (numeric.length <= 4) {
+    if (numeric.length <= 2) {
       return numeric;
-    } else if (numeric.length <= 6) {
-      return `${numeric.slice(0, 4)}/${numeric.slice(4)}`;
+    } else if (numeric.length <= 4) {
+      return `${numeric.slice(0, 2)}/${numeric.slice(2)}`;
     } else {
-      return `${numeric.slice(0, 4)}/${numeric.slice(4, 6)}/${numeric.slice(6, 8)}`;
+      return `${numeric.slice(0, 2)}/${numeric.slice(2, 4)}/${numeric.slice(4, 8)}`;
     }
   };
 
@@ -219,8 +244,9 @@ const OngoingClasses: React.FC = () => {
   };
 
   const formatDate = (dateString: string) => {
+    if (!dateString) return 'N/A';
     const date = new Date(dateString);
-    return date.toLocaleDateString();
+    return date.toLocaleDateString('en-GB');
   };
 
   const getStatusColor = (status: string) => {
@@ -352,7 +378,7 @@ const OngoingClasses: React.FC = () => {
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Start Date (From)</label>
                   <input
                     type="text"
-                    placeholder="YYYY/MM/DD"
+                    placeholder="DD/MM/YYYY"
                     value={startDateFrom}
                     onChange={handleStartDateChange}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
@@ -363,7 +389,7 @@ const OngoingClasses: React.FC = () => {
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">End Date (Until)</label>
                   <input
                     type="text"
-                    placeholder="YYYY/MM/DD"
+                    placeholder="DD/MM/YYYY"
                     value={endDateUntil}
                     onChange={handleEndDateChange}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"

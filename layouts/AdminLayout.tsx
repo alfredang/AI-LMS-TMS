@@ -24,6 +24,8 @@ import ClassDetailView from '../components/admin/ClassDetailView';
 import { UpcomingClassesTable } from '../components/UpcomingClassesTable';
 import { ClassManagerView, AssignTrainerView, AssignStudentView, AddCourseView, AddCourseRunView, AutomationLogsView, AssignTrainerLogsView, BackfillEnrollmentsView, FetchUpcomingEnrolmentsView, CourseRunDateSyncLogsView } from '../components/admin/ClassManagementViews';
 import { CreateCertificateView, DeleteCertificateView } from '../components/admin/CertificateManagement';
+import { SendCertificateSGView } from '../components/admin/SendCertificateSG';
+import { SendCertificateGHView } from '../components/admin/SendCertificateGH';
 import { CreateNewClassView } from '../components/admin/CreateNewClassView';
 import EnrollLearners from '../components/admin/EnrollLearners';
 import SearchPastLearners from '../components/admin/SearchPastLearners';
@@ -52,6 +54,7 @@ import { CourseRunView } from '../components/admin/CourseRunView';
 import { UploadDirectApplicationView, ViewDirectApplicationView, UpdateDirectApplicationView } from '../components/admin/DirectApplicationViews';
 import { BulkUploadEnrolmentView } from '../components/admin/BulkEnrolmentViews';
 import TrainerAttendanceDashboard from '../components/trainer/TrainerAttendanceDashboard';
+import AdminCalendarView from '../components/admin/AdminCalendarView';
 
 // Management Dashboard Component
 interface ManagementDashboardProps {
@@ -143,6 +146,9 @@ const PAGE_LABELS: Partial<Record<AdminPage, string>> = {
   [AdminPage.FetchUpcomingEnrolments]: 'Fetch Upcoming Classes Enrolment',
   [AdminPage.CreateCertificate]: 'Create Certificate',
   [AdminPage.DeleteCertificate]: 'Delete Certificate',
+  [AdminPage.SendCertificateSG]: 'Send Certificate (SG)',
+  [AdminPage.SendCertificateGH]: 'Send Certificate (GH)',
+  [AdminPage.Calendar]: 'Calendar',
 };
 
 const AdminLayout: React.FC = () => {
@@ -283,6 +289,12 @@ const AdminLayout: React.FC = () => {
         return <CreateCertificateView />;
       case AdminPage.DeleteCertificate:
         return <DeleteCertificateView />;
+      case AdminPage.SendCertificateSG:
+        return <SendCertificateSGView />;
+      case AdminPage.SendCertificateGH:
+        return <SendCertificateGHView />;
+      case AdminPage.Calendar:
+        return <AdminCalendarView />;
       default:
         return <AdminDashboard />;
     }
@@ -355,7 +367,7 @@ const AdminLayout: React.FC = () => {
         </aside>
 
         {/* Main Content Area */}
-        <main className="flex-1 overflow-x-hidden">
+        <main className="flex-1 min-w-0 overflow-x-hidden">
           <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
             {renderContent()}
           </div>

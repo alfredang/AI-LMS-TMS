@@ -90,7 +90,7 @@ export default async function handler(
         GROUP BY course_id
       ) assessment_count ON c.id = assessment_count.course_id
       WHERE u.id = $1
-      ORDER BY e.enrolment_date DESC
+      ORDER BY cr.start_date DESC
     `;
 
     const result = await pool.query(enrolledCoursesQuery, [userId]);

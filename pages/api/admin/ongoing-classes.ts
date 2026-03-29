@@ -79,46 +79,6 @@ export default async function handler(
       endDateUntil
     });
 
-    // First, get the statistics for ongoing classes
-    console.log('📊 Calculating ongoing classes statistics...');
-
-    // 1. Ongoing Classes Found
-    const ongoingClassesQuery = `
-      SELECT COUNT(*) as ongoing_classes_found
-      FROM course_run
-      WHERE CURRENT_DATE BETWEEN start_date AND end_date
-    `;
-    const ongoingClassesResult = await pool.query(ongoingClassesQuery);
-    const ongoingClassesFound = parseInt(ongoingClassesResult.rows[0].ongoing_classes_found);
-
-    // 2. Learners In Session
-    const learnersInSessionQuery = `
-      SELECT COUNT(e.id) as learners_in_session
-      FROM enrollment e
-      JOIN course_run cr ON e.course_run_id = cr.id
-      WHERE CURRENT_DATE BETWEEN cr.start_date AND cr.end_date
-    `;
-    const learnersInSessionResult = await pool.query(learnersInSessionQuery);
-    const learnersInSession = parseInt(learnersInSessionResult.rows[0].learners_in_session);
-
-    // 3. Active Trainers
-    const activeTrainersQuery = `
-      SELECT COUNT(DISTINCT trainer_name) as active_trainers
-      FROM (
-        SELECT crt.trainer_name
-        FROM course_run cr
-        JOIN course_run_trainer crt ON cr.id = crt.course_run_id
-        WHERE CURRENT_DATE BETWEEN cr.start_date AND cr.end_date
-        UNION
-        SELECT cr.assigned_trainer_name as trainer_name
-        FROM course_run cr
-        WHERE CURRENT_DATE BETWEEN cr.start_date AND cr.end_date
-          AND cr.assigned_trainer_name IS NOT NULL
-      ) all_trainers
-    `;
-    const activeTrainersResult = await pool.query(activeTrainersQuery);
-    const activeTrainers = parseInt(activeTrainersResult.rows[0].active_trainers);
-
     // Build the WHERE clause for filtering ongoing classes
     let whereConditions = ['CURRENT_DATE BETWEEN cr.start_date AND cr.end_date'];
     const queryParams: any[] = [];
@@ -164,19 +124,71 @@ export default async function handler(
       paramCounter++;
     }
 
-    if (startDateFrom) {
+    const parseDDMMYYYY = (d: string) => { const p = d.split(/[\/\-]/); return `${p[2]}-${p[1]}-${p[0]}`; };
+    const isValidDate = (d: any) => {
+      if (typeof d !== 'string' || !/^\d{2}[\/\-]\d{2}[\/\-]\d{4}$/.test(d)) return false;
+      const iso = parseDDMMYYYY(d);
+      const parsed = new Date(iso);
+      return !isNaN(parsed.getTime()) && parsed.toISOString().startsWith(iso);
+    };
+
+    if (isValidDate(startDateFrom)) {
       whereConditions.push(`cr.start_date >= $${paramCounter}`);
-      queryParams.push(startDateFrom);
+      queryParams.push(parseDDMMYYYY(startDateFrom as string));
       paramCounter++;
     }
 
-    if (endDateUntil) {
+    if (isValidDate(endDateUntil)) {
       whereConditions.push(`cr.end_date <= $${paramCounter}`);
-      queryParams.push(endDateUntil);
+      queryParams.push(parseDDMMYYYY(endDateUntil as string));
       paramCounter++;
     }
 
     const whereClause = whereConditions.join(' AND ');
+
+    // First, get the statistics for ongoing classes with filters applied
+    console.log('📊 Calculating ongoing classes statistics...');
+
+    // 1. Ongoing Classes Found
+    const ongoingClassesQuery = `
+      SELECT COUNT(*) as ongoing_classes_found
+      FROM course_run cr
+      JOIN course c ON cr.course_id = c.id
+      WHERE ${whereClause}
+    `;
+    const ongoingClassesResult = await pool.query(ongoingClassesQuery, queryParams);
+    const ongoingClassesFound = parseInt(ongoingClassesResult.rows[0].ongoing_classes_found);
+
+    // 2. Learners In Session
+    const learnersInSessionQuery = `
+      SELECT COUNT(e.id) as learners_in_session
+      FROM enrollment e
+      JOIN course_run cr ON e.course_run_id = cr.id
+      JOIN course c ON cr.course_id = c.id
+      WHERE ${whereClause}
+    `;
+    const learnersInSessionResult = await pool.query(learnersInSessionQuery, queryParams);
+    const learnersInSession = parseInt(learnersInSessionResult.rows[0].learners_in_session);
+
+    // 3. Active Trainers
+    const activeTrainersQuery = `
+      SELECT COUNT(DISTINCT trainer_name) as active_trainers
+      FROM (
+        SELECT crt.trainer_name
+        FROM course_run cr
+        JOIN course c ON cr.course_id = c.id
+        JOIN course_run_trainer crt ON cr.id = crt.course_run_id
+        WHERE ${whereClause}
+        UNION
+        SELECT cr.assigned_trainer_name as trainer_name
+        FROM course_run cr
+        JOIN course c ON cr.course_id = c.id
+        WHERE ${whereClause}
+          AND cr.assigned_trainer_name IS NOT NULL
+      ) all_trainers
+    `;
+    const activeTrainersResult = await pool.query(activeTrainersQuery, queryParams);
+    const activeTrainers = parseInt(activeTrainersResult.rows[0].active_trainers);
 
     // Get total count for pagination
     const countQuery = `

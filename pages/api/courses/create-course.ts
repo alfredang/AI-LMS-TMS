@@ -91,6 +91,7 @@ interface CourseData {
   practicalPerformanceAssessmentLink?: string;
   courseLink?: string;
   assessmentRecordLink?: string;
+  assessmentMethods?: Record<string, { enabled: boolean; link: string }>;
   isGamified: boolean;
   learningUnits: Array<{
     title: string;
@@ -106,6 +107,7 @@ interface CourseData {
     category: string;
     fileName?: string;
   }>;
+  resourceLinks?: Array<{ id: string; topicId: string; type: string; title: string; url: string }>;
 }
 
 export default function handler(req: NextApiRequest & { files?: any }, res: NextApiResponse) {
@@ -182,8 +184,8 @@ export default function handler(req: NextApiRequest & { files?: any }, res: Next
             learning_outcomes, is_gamified, learner_guide_url, slides_url,
             lesson_plan_url, assessment_plan_url, facilitator_guide_url, trainer_slides_url,
             written_assessment_link, practical_performance_assessment_link,
-            courseware_link, assessment_record_link
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
+            courseware_link, assessment_record_link, resource_links
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
           RETURNING id
         `;
 
@@ -209,6 +211,7 @@ export default function handler(req: NextApiRequest & { files?: any }, res: Next
           filesByFieldname?.practicalPerformanceAssessment ? `/uploads/assessments/${filesByFieldname.practicalPerformanceAssessment[0].filename}` : courseData.practicalPerformanceAssessmentLink || null,
           courseData.courseLink || null,
           courseData.assessmentRecordLink || null,
+          courseData.resourceLinks ? JSON.stringify(courseData.resourceLinks) : null,
         ];
 
         console.log('🔍 About to execute course insert with values:', courseValues);
@@ -217,6 +220,19 @@ export default function handler(req: NextApiRequest & { files?: any }, res: Next
         const courseResult = await client.query(courseInsertQuery, courseValues);
         const courseId = courseResult.rows[0].id;
         console.log('✅ Course created with ID:', courseId);
+
+        // Safely attempt to set assessment_methods column
+        // This column may not exist if the migration hasn't been run yet
+        if (courseData.assessmentMethods) {
+          try {
+            await client.query(
+              'UPDATE course SET assessment_methods = $1 WHERE id = $2',
+              [JSON.stringify(courseData.assessmentMethods), courseId]
+            );
+          } catch (e) {
+            console.log('⚠️ Could not set assessment_methods (column may not exist yet)');
+          }
+        }
 
         // 2. Insert learning units and subtopics
         if (courseData.learningUnits && courseData.learningUnits.length > 0) {

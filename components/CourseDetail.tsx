@@ -4,7 +4,7 @@ import { Button } from './ui/Button';
 import { Icon, IconName } from './ui/Icon';
 import { Card } from './ui/Card';
 import Spinner from './ui/Spinner';
-import { UserRole, CourseAssessment, AdminPage, TrainerPage } from '@app-types';
+import { UserRole, CourseAssessment, AdminPage, TrainerPage, AssessmentMethodKey, ASSESSMENT_METHOD_LABELS } from '@app-types';
 import GradingView from './GradingView';
 import { extractFilenameFromPath } from '@utils/fileUtils';
 import { courseService } from '@lib/services/courseService';
@@ -76,6 +76,8 @@ interface Course {
     practicalPerformanceAssessmentLink?: string;
     writtenAssessmentPublished?: boolean;
     practicalAssessmentPublished?: boolean;
+    assessmentMethods?: Record<string, { enabled: boolean; link: string }>;
+    publishedAssessmentMethods?: Record<string, boolean>;
     fundingValidity?: string;
 }
 
@@ -243,6 +245,7 @@ const AssessmentsSection: React.FC<{
 
     const [writtenPublished, setWrittenPublished] = useState<boolean>(course.writtenAssessmentPublished ?? false);
     const [practicalPublished, setPracticalPublished] = useState<boolean>(course.practicalAssessmentPublished ?? false);
+    const [methodPublishState, setMethodPublishState] = useState<Record<string, boolean>>((course as any).publishedAssessmentMethods || {});
 
     // Filter out file-based assessments that match the link-based types (Written/Practical)
     // Only show URL/link-based assessments for these types
@@ -263,7 +266,7 @@ const AssessmentsSection: React.FC<{
         id: string;
         user_id: string;
         course_run_id: string;
-        assessment_type: 'written' | 'practical';
+        assessment_type: string;
         file_name: string;
         file_url: string;
         submitted_at: string;
@@ -313,7 +316,7 @@ const AssessmentsSection: React.FC<{
         }
     };
 
-    const handleLinkSubmit = async (assessmentType: 'written' | 'practical') => {
+    const handleLinkSubmit = async (assessmentType: string) => {
         const file = selectedLinkFiles[assessmentType];
         if (!file) {
             alert('Please select a file to submit.');
@@ -388,11 +391,7 @@ const AssessmentsSection: React.FC<{
                 submitted_at: new Date().toISOString()
             };
 
-            setLinkSubmissions(prev => {
-                // Remove any existing submission for this assessment type and add the new one
-                const filtered = prev.filter(s => s.assessment_type !== assessmentType);
-                return [...filtered, newSubmission];
-            });
+            setLinkSubmissions(prev => [...prev, newSubmission]);
 
             // Auto-verify the uploaded file using the string identifier ('written' or 'practical')
             handleVerifyDrive(assessmentType);
@@ -414,7 +413,7 @@ const AssessmentsSection: React.FC<{
         }
     };
 
-    const handlePublishLink = async (field: 'written' | 'practical', published: boolean) => {
+    const handlePublishLink = async (field: string, published: boolean) => {
         if (!courseRunId) return;
         try {
             const response = await fetch('/api/assessments/publish-link', {
@@ -426,8 +425,10 @@ const AssessmentsSection: React.FC<{
 
             if (field === 'written') {
                 setWrittenPublished(published);
-            } else {
+            } else if (field === 'practical') {
                 setPracticalPublished(published);
+            } else {
+                setMethodPublishState(prev => ({ ...prev, [field]: published }));
             }
         } catch (error) {
             console.error('❌ Failed to publish link assessment:', error);
@@ -436,7 +437,8 @@ const AssessmentsSection: React.FC<{
     };
 
     // Show "No Assessments" message if there are no assessments and no links
-    if ((!effectiveAssessments || effectiveAssessments.length === 0) && !course.writtenAssessmentLink && !course.practicalPerformanceAssessmentLink) {
+    const hasEnabledMethods = course.assessmentMethods && Object.values(course.assessmentMethods).some(m => m.enabled && m.link);
+    if ((!effectiveAssessments || effectiveAssessments.length === 0) && !course.writtenAssessmentLink && !course.practicalPerformanceAssessmentLink && !hasEnabledMethods) {
         return (
             <ContentSection title="Assessment">
                 <div className="text-center p-6 bg-gray-50 dark:bg-gray-800 rounded-lg border dark:border-gray-700">
@@ -837,13 +839,13 @@ const AssessmentsSection: React.FC<{
                 </ul>
             )}
 
-            {/* Written Assessment - Show only when link exists */}
+            {/* Written Exam - Show only when link exists */}
             {course.writtenAssessmentLink && (userRole === UserRole.Trainer || userRole === UserRole.Admin || userRole === UserRole.Developer || userRole === UserRole.TrainingProvider || writtenPublished) && (
-                <div className="mt-4 p-4 bg-gray-100/60 dark:bg-gray-800/60 rounded-lg">
-                    <div className="flex items-center justify-between mb-3">
+                <div className="mt-1 p-3 bg-gray-100/60 dark:bg-gray-800/60 rounded-lg">
+                    <div className="flex items-center justify-between mb-2">
                         <h4 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
                             <Icon name={IconName.ClipboardCheck} className="w-5 h-5 text-blue-600" />
-                            Written Assessment
+                            Written Exam
                         </h4>
                         {writtenPublished && (
                             <span className="text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 px-2 py-1 rounded-full">Published</span>
@@ -853,116 +855,104 @@ const AssessmentsSection: React.FC<{
                     {/* Show Link-based assessment */}
                     {course.writtenAssessmentLink && (
                         <>
-                            <a
-                                href={course.writtenAssessmentLink}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors mb-3"
-                            >
-                                <Icon name={IconName.ExternalLink} className="w-6 h-6 text-blue-600 flex-shrink-0" />
-                                <div className="flex-1 min-w-0">
-                                    <p className="font-medium text-gray-900 dark:text-white">Open Assessment Link</p>
-                                    <p className="text-xs text-gray-500 dark:text-gray-400">Click to open external form</p>
-                                </div>
-                            </a>
-
-                            {/* Publish/Unpublish buttons for trainer */}
-                            {userRole === UserRole.Trainer && (
-                                writtenPublished ? (
-                                    <div className="space-y-2">
-                                        <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-md border border-blue-200 dark:border-blue-800 text-center">
-                                            <p className="text-sm font-semibold text-blue-800 dark:text-blue-300">Assessment is Live</p>
-                                        </div>
-                                        <Button onClick={() => handlePublishLink('written', false)} variant="secondary" className="w-full">
+                            <div className="flex items-center gap-3 mb-3">
+                                <a
+                                    href={course.writtenAssessmentLink}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex items-center gap-3 p-3 flex-1 min-w-0 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+                                >
+                                    <Icon name={IconName.ExternalLink} className="w-6 h-6 text-blue-600 flex-shrink-0" />
+                                    <div className="flex-1 min-w-0">
+                                        <p className="font-medium text-gray-900 dark:text-white">Open Assessment Link</p>
+                                        <p className="text-xs text-gray-500 dark:text-gray-400">Click to open external form</p>
+                                    </div>
+                                </a>
+                                {userRole === UserRole.Trainer && (
+                                    writtenPublished ? (
+                                        <Button onClick={() => handlePublishLink('written', false)} variant="secondary" className="flex-shrink-0">
                                             Unpublish
                                         </Button>
-                                    </div>
-                                ) : (
-                                    <Button onClick={() => handlePublishLink('written', true)} className="w-full">Publish Assessment</Button>
-                                )
-                            )}
+                                    ) : (
+                                        <Button onClick={() => handlePublishLink('written', true)} className="flex-shrink-0">Publish</Button>
+                                    )
+                                )}
+                            </div>
                         </>
                     )}
 
-                    {/* Learner file submission for Written Assessment */}
+                    {/* Learner file submission for Written Exam */}
                     {userRole === UserRole.Learner && writtenPublished && (() => {
-                        const writtenSubmission = linkSubmissions.find(s => s.assessment_type === 'written');
-                        const canResubmit = isLinkResubmitting['written'];
+                        const writtenSubs = linkSubmissions.filter(s => s.assessment_type === 'written');
 
-                        if (writtenSubmission && !canResubmit) {
-                            const vStatus = verificationStatus['written'];
-                            return (
-                                <div className="bg-green-50 dark:bg-green-900/20 p-3 rounded-md border border-green-200 dark:border-green-800 space-y-3">
-                                    <div className="flex justify-between items-center">
-                                        <div>
-                                            <p className="font-semibold text-green-800 dark:text-green-300">Submitted: {writtenSubmission.file_name}</p>
-                                            <p className="text-xs text-green-600 dark:text-green-400">On: {new Date(writtenSubmission.submitted_at).toLocaleString()}</p>
-                                        </div>
-                                        <Button variant="ghost" size="sm" onClick={() => setIsLinkResubmitting(prev => ({ ...prev, written: true }))}>
-                                            Resubmit
-                                        </Button>
+                        return (
+                            <div className="mt-3 space-y-3">
+                                {/* Show all uploaded files */}
+                                {writtenSubs.length > 0 && (
+                                    <div className="space-y-2">
+                                        <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Uploaded Files ({writtenSubs.length})</p>
+                                        {writtenSubs.map((sub) => (
+                                            <div key={sub.id} className="bg-green-50 dark:bg-green-900/20 p-3 rounded-md border border-green-200 dark:border-green-800 flex justify-between items-center">
+                                                <div className="min-w-0 flex-1">
+                                                    <p className="font-medium text-green-800 dark:text-green-300 truncate">{sub.file_name}</p>
+                                                    <p className="text-xs text-green-600 dark:text-green-400">{new Date(sub.submitted_at).toLocaleString()}</p>
+                                                </div>
+                                                <a href={sub.file_url} target="_blank" rel="noopener noreferrer" className="ml-2 text-blue-600 hover:text-blue-800 dark:text-blue-400 text-sm font-medium flex-shrink-0">
+                                                    View
+                                                </a>
+                                            </div>
+                                        ))}
                                     </div>
-                                    {vStatus && (
-                                        <div className={`text-sm p-2 rounded-md ${vStatus.loading ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30' : vStatus.exists ? 'bg-green-100 text-green-800 dark:bg-green-800/40 dark:text-green-200' : 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200'}`}>
-                                            {vStatus.loading && <span className="flex items-center gap-2"><div className="w-3 h-3 rounded-full border-2 border-blue-600 border-t-transparent animate-spin"></div> Checking Google Drive...</span>}
-                                            {!vStatus.loading && vStatus.exists && `✅ Verified: Found in Drive`}
-                                            {!vStatus.loading && !vStatus.exists && `⚠️ File missing from Google Drive! (${vStatus.error || 'Folder empty or deleted'})`}
+                                )}
+
+                                {/* Upload input — always visible */}
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                        {writtenSubs.length > 0 ? "Upload another file" : "Upload your completed assessment file"}
+                                    </label>
+                                    <input
+                                        type="file"
+                                        id="link-file-upload-written"
+                                        onChange={(e) => handleLinkFileChange('written', e)}
+                                        className="block w-full text-sm text-gray-500 dark:text-gray-400
+                                            file:mr-4 file:py-2 file:px-4
+                                            file:rounded-md file:border-0
+                                            file:text-sm file:font-semibold
+                                            file:bg-blue-50 file:text-blue-700
+                                            hover:file:bg-blue-100
+                                            dark:file:bg-blue-900/20 dark:file:text-blue-300
+                                            dark:hover:file:bg-blue-900/40"
+                                        multiple
+                                    />
+                                    {selectedLinkFiles['written'] && !isLinkUploading['written'] && (
+                                        <div className="mt-3">
+                                            <Button onClick={() => handleLinkSubmit('written')} className="w-full">
+                                                Upload File
+                                            </Button>
+                                        </div>
+                                    )}
+                                    {isLinkUploading['written'] && (
+                                        <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                                            <div className="flex flex-col items-center justify-center space-y-3">
+                                                <Spinner size="md" />
+                                                <p className="text-sm font-medium text-blue-700 dark:text-blue-300">Uploading your file...</p>
+                                            </div>
                                         </div>
                                     )}
                                 </div>
-                            );
-                        }
-
-                        return (
-                            <div className="mt-3">
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                    {canResubmit ? "Upload a new file to replace your previous submission" : "Upload your completed assessment file"}
-                                </label>
-                                <input
-                                    type="file"
-                                    id="link-file-upload-written"
-                                    onChange={(e) => handleLinkFileChange('written', e)}
-                                    className="block w-full text-sm text-gray-500 dark:text-gray-400
-                                        file:mr-4 file:py-2 file:px-4
-                                        file:rounded-md file:border-0
-                                        file:text-sm file:font-semibold
-                                        file:bg-blue-50 file:text-blue-700
-                                        hover:file:bg-blue-100
-                                        dark:file:bg-blue-900/20 dark:file:text-blue-300
-                                        dark:hover:file:bg-blue-900/40"
-                                />
-                                {selectedLinkFiles['written'] && !isLinkUploading['written'] && (
-                                    <div className="mt-3">
-                                        <Button
-                                            onClick={() => handleLinkSubmit('written')}
-                                            className="w-full"
-                                        >
-                                            Submit Assessment
-                                        </Button>
-                                    </div>
-                                )}
-                                {isLinkUploading['written'] && (
-                                    <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
-                                        <div className="flex flex-col items-center justify-center space-y-3">
-                                            <Spinner size="md" />
-                                            <p className="text-sm font-medium text-blue-700 dark:text-blue-300">Uploading your assessment...</p>
-                                            <p className="text-xs text-blue-600 dark:text-blue-400">Please wait while we upload your file...</p>
-                                        </div>
-                                    </div>
-                                )}
                             </div>
                         );
                     })()}
                 </div>
             )}
 
-            {/* Practical Performance Assessment - Show only when link exists */}
+            {/* Practical Exam - Show only when link exists */}
             {course.practicalPerformanceAssessmentLink && (userRole === UserRole.Trainer || userRole === UserRole.Admin || userRole === UserRole.Developer || userRole === UserRole.TrainingProvider || practicalPublished) && (
-                <div className="mt-4 p-4 bg-gray-100/60 dark:bg-gray-800/60 rounded-lg">
-                    <div className="flex items-center justify-between mb-3">
+                <div className="mt-1 p-3 bg-gray-100/60 dark:bg-gray-800/60 rounded-lg">
+                    <div className="flex items-center justify-between mb-2">
                         <h4 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
                             <Icon name={IconName.ClipboardCheck} className="w-5 h-5 text-blue-600" />
-                            Practical Performance Assessment
+                            Practical Exam
                         </h4>
                         {practicalPublished && (
                             <span className="text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 px-2 py-1 rounded-full">Published</span>
@@ -972,11 +962,125 @@ const AssessmentsSection: React.FC<{
                     {/* Show Link-based assessment */}
                     {course.practicalPerformanceAssessmentLink && (
                         <>
+                            <div className="flex items-center gap-3 mb-3">
+                                <a
+                                    href={course.practicalPerformanceAssessmentLink}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex items-center gap-3 p-3 flex-1 min-w-0 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+                                >
+                                    <Icon name={IconName.ExternalLink} className="w-6 h-6 text-blue-600 flex-shrink-0" />
+                                    <div className="flex-1 min-w-0">
+                                        <p className="font-medium text-gray-900 dark:text-white">Open Assessment Link</p>
+                                        <p className="text-xs text-gray-500 dark:text-gray-400">Click to open external form</p>
+                                    </div>
+                                </a>
+                                {userRole === UserRole.Trainer && (
+                                    practicalPublished ? (
+                                        <Button onClick={() => handlePublishLink('practical', false)} variant="secondary" className="flex-shrink-0">
+                                            Unpublish
+                                        </Button>
+                                    ) : (
+                                        <Button onClick={() => handlePublishLink('practical', true)} className="flex-shrink-0">Publish</Button>
+                                    )
+                                )}
+                            </div>
+                        </>
+                    )}
+
+                    {/* Learner file submission for Practical Exam */}
+                    {userRole === UserRole.Learner && practicalPublished && (() => {
+                        const practicalSubs = linkSubmissions.filter(s => s.assessment_type === 'practical');
+
+                        return (
+                            <div className="mt-3 space-y-3">
+                                {/* Show all uploaded files */}
+                                {practicalSubs.length > 0 && (
+                                    <div className="space-y-2">
+                                        <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Uploaded Files ({practicalSubs.length})</p>
+                                        {practicalSubs.map((sub) => (
+                                            <div key={sub.id} className="bg-green-50 dark:bg-green-900/20 p-3 rounded-md border border-green-200 dark:border-green-800 flex justify-between items-center">
+                                                <div className="min-w-0 flex-1">
+                                                    <p className="font-medium text-green-800 dark:text-green-300 truncate">{sub.file_name}</p>
+                                                    <p className="text-xs text-green-600 dark:text-green-400">{new Date(sub.submitted_at).toLocaleString()}</p>
+                                                </div>
+                                                <a href={sub.file_url} target="_blank" rel="noopener noreferrer" className="ml-2 text-blue-600 hover:text-blue-800 dark:text-blue-400 text-sm font-medium flex-shrink-0">
+                                                    View
+                                                </a>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+
+                                {/* Upload input — always visible */}
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                        {practicalSubs.length > 0 ? "Upload another file" : "Upload your completed assessment file"}
+                                    </label>
+                                    <input
+                                        type="file"
+                                        id="link-file-upload-practical"
+                                        onChange={(e) => handleLinkFileChange('practical', e)}
+                                        className="block w-full text-sm text-gray-500 dark:text-gray-400
+                                            file:mr-4 file:py-2 file:px-4
+                                            file:rounded-md file:border-0
+                                            file:text-sm file:font-semibold
+                                            file:bg-blue-50 file:text-blue-700
+                                            hover:file:bg-blue-100
+                                            dark:file:bg-blue-900/20 dark:file:text-blue-300
+                                            dark:hover:file:bg-blue-900/40"
+                                        multiple
+                                    />
+                                    {selectedLinkFiles['practical'] && !isLinkUploading['practical'] && (
+                                        <div className="mt-3">
+                                            <Button onClick={() => handleLinkSubmit('practical')} className="w-full">
+                                                Upload File
+                                            </Button>
+                                        </div>
+                                    )}
+                                    {isLinkUploading['practical'] && (
+                                        <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                                            <div className="flex flex-col items-center justify-center space-y-3">
+                                                <Spinner size="md" />
+                                                <p className="text-sm font-medium text-blue-700 dark:text-blue-300">Uploading your file...</p>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        );
+                    })()}
+                </div>
+            )}
+
+            {/* Dynamic Assessment Methods */}
+            {course.assessmentMethods && Object.entries(course.assessmentMethods).map(([methodKey, config]) => {
+                if (!config.enabled || !config.link) return null;
+                const label = ASSESSMENT_METHOD_LABELS[methodKey as AssessmentMethodKey] || methodKey;
+                const isPublished = methodPublishState[methodKey] === true;
+                const isPrivileged = userRole === UserRole.Trainer || userRole === UserRole.Admin || userRole === UserRole.Developer || userRole === UserRole.TrainingProvider;
+
+                // Learners can only see published methods
+                if (userRole === UserRole.Learner && !isPublished) return null;
+
+                return (
+                    <div key={methodKey} className="mt-1 p-3 bg-gray-100/60 dark:bg-gray-800/60 rounded-lg">
+                        <div className="flex items-center justify-between mb-2">
+                            <h4 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                                <Icon name={IconName.ClipboardCheck} className="w-5 h-5 text-blue-600" />
+                                {label}
+                            </h4>
+                            {isPublished && (
+                                <span className="text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 px-2 py-1 rounded-full">Published</span>
+                            )}
+                        </div>
+
+                        <div className="flex items-center gap-3 mb-3">
                             <a
-                                href={course.practicalPerformanceAssessmentLink}
+                                href={config.link}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors mb-3"
+                                className="flex items-center gap-3 p-3 flex-1 min-w-0 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
                             >
                                 <Icon name={IconName.ExternalLink} className="w-6 h-6 text-blue-600 flex-shrink-0" />
                                 <div className="flex-1 min-w-0">
@@ -984,96 +1088,77 @@ const AssessmentsSection: React.FC<{
                                     <p className="text-xs text-gray-500 dark:text-gray-400">Click to open external form</p>
                                 </div>
                             </a>
-
-                            {/* Publish/Unpublish buttons for trainer */}
                             {userRole === UserRole.Trainer && (
-                                practicalPublished ? (
-                                    <div className="space-y-2">
-                                        <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-md border border-blue-200 dark:border-blue-800 text-center">
-                                            <p className="text-sm font-semibold text-blue-800 dark:text-blue-300">Assessment is Live</p>
-                                        </div>
-                                        <Button onClick={() => handlePublishLink('practical', false)} variant="secondary" className="w-full">
-                                            Unpublish
-                                        </Button>
-                                    </div>
+                                isPublished ? (
+                                    <Button onClick={() => handlePublishLink(methodKey as any, false)} variant="secondary" className="flex-shrink-0">
+                                        Unpublish
+                                    </Button>
                                 ) : (
-                                    <Button onClick={() => handlePublishLink('practical', true)} className="w-full">Publish Assessment</Button>
+                                    <Button onClick={() => handlePublishLink(methodKey as any, true)} className="flex-shrink-0">Publish</Button>
                                 )
                             )}
-                        </>
-                    )}
+                        </div>
 
-                    {/* Learner file submission for Practical Performance Assessment */}
-                    {userRole === UserRole.Learner && practicalPublished && (() => {
-                        const practicalSubmission = linkSubmissions.find(s => s.assessment_type === 'practical');
-                        const canResubmit = isLinkResubmitting['practical'];
-
-                        if (practicalSubmission && !canResubmit) {
-                            const vStatus = verificationStatus['practical'];
+                        {/* Learner file submission */}
+                        {userRole === UserRole.Learner && isPublished && (() => {
+                            const methodSubs = linkSubmissions.filter(s => s.assessment_type === methodKey);
                             return (
-                                <div className="bg-green-50 dark:bg-green-900/20 p-3 rounded-md border border-green-200 dark:border-green-800 space-y-3">
-                                    <div className="flex justify-between items-center">
-                                        <div>
-                                            <p className="font-semibold text-green-800 dark:text-green-300">Submitted: {practicalSubmission.file_name}</p>
-                                            <p className="text-xs text-green-600 dark:text-green-400">On: {new Date(practicalSubmission.submitted_at).toLocaleString()}</p>
-                                        </div>
-                                        <Button variant="ghost" size="sm" onClick={() => setIsLinkResubmitting(prev => ({ ...prev, practical: true }))}>
-                                            Resubmit
-                                        </Button>
-                                    </div>
-                                    {vStatus && (
-                                        <div className={`text-sm p-2 rounded-md ${vStatus.loading ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30' : vStatus.exists ? 'bg-green-100 text-green-800 dark:bg-green-800/40 dark:text-green-200' : 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200'}`}>
-                                            {vStatus.loading && <span className="flex items-center gap-2"><div className="w-3 h-3 rounded-full border-2 border-blue-600 border-t-transparent animate-spin"></div> Checking Google Drive...</span>}
-                                            {!vStatus.loading && vStatus.exists && `✅ Verified: Found in Drive`}
-                                            {!vStatus.loading && !vStatus.exists && `⚠️ File missing from Google Drive! (${vStatus.error || 'Folder empty or deleted'})`}
+                                <div className="mt-3 space-y-3">
+                                    {methodSubs.length > 0 && (
+                                        <div className="space-y-2">
+                                            <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Uploaded Files ({methodSubs.length})</p>
+                                            {methodSubs.map((sub) => (
+                                                <div key={sub.id} className="bg-green-50 dark:bg-green-900/20 p-3 rounded-md border border-green-200 dark:border-green-800 flex justify-between items-center">
+                                                    <div className="min-w-0 flex-1">
+                                                        <p className="font-medium text-green-800 dark:text-green-300 truncate">{sub.file_name}</p>
+                                                        <p className="text-xs text-green-600 dark:text-green-400">{new Date(sub.submitted_at).toLocaleString()}</p>
+                                                    </div>
+                                                    <a href={sub.file_url} target="_blank" rel="noopener noreferrer" className="ml-2 text-blue-600 hover:text-blue-800 dark:text-blue-400 text-sm font-medium flex-shrink-0">
+                                                        View
+                                                    </a>
+                                                </div>
+                                            ))}
                                         </div>
                                     )}
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                            {methodSubs.length > 0 ? "Upload another file" : "Upload your completed assessment file"}
+                                        </label>
+                                        <input
+                                            type="file"
+                                            id={`link-file-upload-${methodKey}`}
+                                            onChange={(e) => handleLinkFileChange(methodKey, e)}
+                                            className="block w-full text-sm text-gray-500 dark:text-gray-400
+                                                file:mr-4 file:py-2 file:px-4
+                                                file:rounded-md file:border-0
+                                                file:text-sm file:font-semibold
+                                                file:bg-blue-50 file:text-blue-700
+                                                hover:file:bg-blue-100
+                                                dark:file:bg-blue-900/20 dark:file:text-blue-300
+                                                dark:hover:file:bg-blue-900/40"
+                                        />
+                                        {selectedLinkFiles[methodKey] && !isLinkUploading[methodKey] && (
+                                            <div className="mt-3">
+                                                <Button onClick={() => handleLinkSubmit(methodKey as any)} className="w-full">
+                                                    Upload File
+                                                </Button>
+                                            </div>
+                                        )}
+                                        {isLinkUploading[methodKey] && (
+                                            <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                                                <div className="flex flex-col items-center justify-center space-y-3">
+                                                    <Spinner size="md" />
+                                                    <p className="text-sm font-medium text-blue-700 dark:text-blue-300">Uploading your file...</p>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                             );
-                        }
-
-                        return (
-                            <div className="mt-3">
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                    {canResubmit ? "Upload a new file to replace your previous submission" : "Upload your completed assessment file"}
-                                </label>
-                                <input
-                                    type="file"
-                                    id="link-file-upload-practical"
-                                    onChange={(e) => handleLinkFileChange('practical', e)}
-                                    className="block w-full text-sm text-gray-500 dark:text-gray-400
-                                        file:mr-4 file:py-2 file:px-4
-                                        file:rounded-md file:border-0
-                                        file:text-sm file:font-semibold
-                                        file:bg-blue-50 file:text-blue-700
-                                        hover:file:bg-blue-100
-                                        dark:file:bg-blue-900/20 dark:file:text-blue-300
-                                        dark:hover:file:bg-blue-900/40"
-                                />
-                                {selectedLinkFiles['practical'] && !isLinkUploading['practical'] && (
-                                    <div className="mt-3">
-                                        <Button
-                                            onClick={() => handleLinkSubmit('practical')}
-                                            className="w-full"
-                                        >
-                                            Submit Assessment
-                                        </Button>
-                                    </div>
-                                )}
-                                {isLinkUploading['practical'] && (
-                                    <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
-                                        <div className="flex flex-col items-center justify-center space-y-3">
-                                            <Spinner size="md" />
-                                            <p className="text-sm font-medium text-blue-700 dark:text-blue-300">Uploading your assessment...</p>
-                                            <p className="text-xs text-blue-600 dark:text-blue-400">Please wait while we upload your file...</p>
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                        );
-                    })()}
-                </div>
-            )}
+                        })()}
+                    </div>
+                );
+            })}
         </ContentSection>
     );
 };
@@ -1247,7 +1332,6 @@ const CourseSidebar: React.FC<CourseSidebarProps> = ({ userRole, onSetGradingVie
     let trainerNavItems: NavItem[] = [
         { type: 'link', label: "E-Attendance", icon: IconName.ClipboardCheck },
         { type: 'link', label: "Courseware Link", icon: IconName.Link },
-        { type: 'link', label: "Assessment Record Link", icon: IconName.ClipboardCheck },
         { type: 'link', label: "Assessment Grading", icon: IconName.Edit },
         { type: 'link', label: "Lesson Plan", icon: IconName.BookOpen },
         { type: 'link', label: "Learner Guide", icon: IconName.FileText },
@@ -1316,9 +1400,10 @@ interface TopicAccordionProps {
     onToggleCompletion: (subtopicId: string) => void;
     completedTopics: Set<string>;
     onToggleTopicCompletion: (topicId: string) => void;
+    resourceLinks?: { id: string; topicId: string; type: string; title: string; url: string }[];
 }
 
-const TopicAccordion: React.FC<TopicAccordionProps> = ({ topic, progress, bookmarkedSubtopics, onToggleBookmark, userRole, completedSubtopics, onToggleCompletion, completedTopics, onToggleTopicCompletion }) => {
+const TopicAccordion: React.FC<TopicAccordionProps> = ({ topic, progress, bookmarkedSubtopics, onToggleBookmark, userRole, completedSubtopics, onToggleCompletion, completedTopics, onToggleTopicCompletion, resourceLinks = [] }) => {
     const [isOpen, setIsOpen] = React.useState(true);
     const displayTitle = topic.title.replace('Module', 'Learning Unit');
 
@@ -1380,47 +1465,69 @@ const TopicAccordion: React.FC<TopicAccordionProps> = ({ topic, progress, bookma
                                 const isBookmarked = bookmarkedSubtopics.has(subtopic.id);
                                 const isCompleted = completedSubtopics.has(subtopic.id);
                                 const titleIsUrl = isUrl(subtopic.title);
+                                const subtopicLinks = resourceLinks.filter(rl => rl.topicId === subtopic.id);
                                 return (
-                                    <li key={subtopic.id} className="flex items-center justify-between py-3">
-                                        <label htmlFor={`subtopic-complete-${subtopic.id}`} className="flex items-center flex-grow cursor-pointer group min-w-0">
-                                            {userRole === UserRole.Learner && (
-                                                <input
-                                                    id={`subtopic-complete-${subtopic.id}`}
-                                                    type="checkbox"
-                                                    checked={isCompleted}
-                                                    onChange={(e) => {
-                                                        e.stopPropagation();
-                                                        onToggleCompletion(subtopic.id);
-                                                    }}
-                                                    className="h-5 w-5 rounded border-gray-300 text-primary focus:ring-primary mr-3 flex-shrink-0"
-                                                    aria-label={`Mark '${subtopic.title}' as complete`}
-                                                />
-                                            )}
-                                            <Icon name={IconName.FileText} className="w-5 h-5 text-green-500 mr-3 flex-shrink-0" />
-                                            {titleIsUrl ? (
-                                                <a
-                                                    href={subtopic.title}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    onClick={e => e.stopPropagation()}
-                                                    className={`font-medium text-primary hover:underline truncate transition-colors ${isCompleted ? 'line-through opacity-50' : ''}`}
+                                    <li key={subtopic.id} className="py-3">
+                                        <div className="flex items-center justify-between">
+                                            <label htmlFor={`subtopic-complete-${subtopic.id}`} className="flex items-center flex-grow cursor-pointer group min-w-0">
+                                                {userRole === UserRole.Learner && (
+                                                    <input
+                                                        id={`subtopic-complete-${subtopic.id}`}
+                                                        type="checkbox"
+                                                        checked={isCompleted}
+                                                        onChange={(e) => {
+                                                            e.stopPropagation();
+                                                            onToggleCompletion(subtopic.id);
+                                                        }}
+                                                        className="h-5 w-5 rounded border-gray-300 text-primary focus:ring-primary mr-3 flex-shrink-0"
+                                                        aria-label={`Mark '${subtopic.title}' as complete`}
+                                                    />
+                                                )}
+                                                <Icon name={IconName.FileText} className="w-5 h-5 text-green-500 mr-3 flex-shrink-0" />
+                                                {titleIsUrl ? (
+                                                    <a
+                                                        href={subtopic.title}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        onClick={e => e.stopPropagation()}
+                                                        className={`font-medium text-primary hover:underline truncate transition-colors ${isCompleted ? 'line-through opacity-50' : ''}`}
+                                                    >
+                                                        {subtopic.title}
+                                                    </a>
+                                                ) : (
+                                                    <span className={`font-medium text-gray-800 dark:text-gray-200 group-hover:text-primary transition-colors ${isCompleted ? 'line-through text-gray-500 dark:text-gray-500' : ''}`}>
+                                                        {subtopic.title}
+                                                    </span>
+                                                )}
+                                            </label>
+                                            {(userRole === UserRole.Learner || userRole === UserRole.Trainer) && (
+                                                <button
+                                                    onClick={(e) => onToggleBookmark(e, subtopic.id)}
+                                                    className={`p-2 rounded-full transition-colors flex-shrink-0 ${isBookmarked ? 'text-primary bg-primary/10' : 'text-gray-500 hover:text-primary hover:bg-gray-100 dark:hover:bg-gray-700'}`}
+                                                    aria-label={isBookmarked ? 'Remove bookmark' : 'Add bookmark'}
                                                 >
-                                                    {subtopic.title}
-                                                </a>
-                                            ) : (
-                                                <span className={`font-medium text-gray-800 dark:text-gray-200 group-hover:text-primary transition-colors ${isCompleted ? 'line-through text-gray-500 dark:text-gray-500' : ''}`}>
-                                                    {subtopic.title}
-                                                </span>
+                                                    <Icon name={isBookmarked ? IconName.Bookmark : IconName.Bookmark} className="w-5 h-5" />
+                                                </button>
                                             )}
-                                        </label>
-                                        {(userRole === UserRole.Learner || userRole === UserRole.Trainer) && (
-                                            <button
-                                                onClick={(e) => onToggleBookmark(e, subtopic.id)}
-                                                className={`p-2 rounded-full transition-colors flex-shrink-0 ${isBookmarked ? 'text-primary bg-primary/10' : 'text-gray-500 hover:text-primary hover:bg-gray-100 dark:hover:bg-gray-700'}`}
-                                                aria-label={isBookmarked ? 'Remove bookmark' : 'Add bookmark'}
-                                            >
-                                                <Icon name={isBookmarked ? IconName.Bookmark : IconName.Bookmark} className="w-5 h-5" />
-                                            </button>
+                                        </div>
+                                        {subtopicLinks.length > 0 && (
+                                            <div className="ml-11 mt-2 space-y-1.5">
+                                                {subtopicLinks.map(rl => (
+                                                    <a
+                                                        key={rl.id}
+                                                        href={rl.url}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="flex items-center gap-2 text-sm text-blue-500 hover:text-blue-400 hover:underline"
+                                                    >
+                                                        <Icon
+                                                            name={rl.type === 'youtube' ? IconName.Video : rl.type === 'quiz' ? IconName.FileText : IconName.ExternalLink}
+                                                            className="w-3.5 h-3.5 flex-shrink-0"
+                                                        />
+                                                        <span className="truncate">{rl.title || rl.url}</span>
+                                                    </a>
+                                                ))}
+                                            </div>
                                         )}
                                     </li>
                                 );
@@ -1438,6 +1545,7 @@ export const CourseDetail: React.FC = () => {
         selectedCourse,
         setSelectedCourse,
         courseDetail,
+        resourceLinks,
         learningUnits,
         courseAssessments,
         bookmarkedSubtopics,
@@ -1629,6 +1737,9 @@ export const CourseDetail: React.FC = () => {
         assessmentRecordLink: effectiveDetail?.assessmentRecordLink,
         writtenAssessmentLink: effectiveDetail?.writtenAssessmentLink,
         practicalPerformanceAssessmentLink: effectiveDetail?.practicalPerformanceAssessmentLink,
+        fundingValidity: (effectiveDetail as any)?.fundingValidity || selectedCourse.fundingValidity || undefined,
+        assessmentMethods: effectiveDetail?.assessmentMethods || undefined,
+        publishedAssessmentMethods: effectiveDetail?.publishedAssessmentMethods || {},
         writtenAssessmentPublished: userRole === UserRole.Admin || userRole === UserRole.Developer || userRole === UserRole.TrainingProvider
             ? true
             : effectiveDetail?.writtenAssessmentPublished ?? false,
@@ -1914,26 +2025,137 @@ export const CourseDetail: React.FC = () => {
                                 </div>
                             )}
 
-                            {/* Courseware Link */}
+                            {/* Courseware - grouped container for Trainer/Developer/Admin/TrainingProvider */}
                             {(userRole === UserRole.Trainer || userRole === UserRole.Developer || userRole === UserRole.Admin || userRole === UserRole.TrainingProvider) && (
                                 <div id={toId("Courseware Link")}>
                                     <ContentSection title="Courseware">
-                                        {convertedCourse.courseLink ? (
-                                            <a
-                                                href={convertedCourse.courseLink}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
-                                            >
-                                                <Icon name={IconName.ExternalLink} className="w-6 h-6 text-blue-600 flex-shrink-0" />
-                                                <div className="flex-1 min-w-0">
-                                                    <p className="font-semibold text-gray-900 dark:text-white">Courseware Link</p>
-                                                    <p className="text-xs text-gray-500 dark:text-gray-400">Click to open</p>
-                                                </div>
-                                            </a>
-                                        ) : (
-                                            <p className="text-gray-500 dark:text-gray-400 text-sm">No course link available.</p>
-                                        )}
+                                        <div className="space-y-3">
+                                            {/* Courseware Link */}
+                                            {convertedCourse.courseLink && (
+                                                <a
+                                                    href={convertedCourse.courseLink}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+                                                >
+                                                    <Icon name={IconName.ExternalLink} className="w-6 h-6 text-blue-600 flex-shrink-0" />
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="font-semibold text-gray-900 dark:text-white">Courseware Link</p>
+                                                        <p className="text-xs text-gray-500 dark:text-gray-400">Click to open</p>
+                                                    </div>
+                                                </a>
+                                            )}
+
+                                            {/* Lesson Plan */}
+                                            {convertedCourse.lessonPlanUrl && (
+                                                isLessonPlanExternal ? (
+                                                    <a href={convertedCourse.lessonPlanUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
+                                                        <Icon name={IconName.ExternalLink} className="w-6 h-6 text-blue-600 flex-shrink-0" />
+                                                        <div className="flex-1 min-w-0">
+                                                            <p className="font-semibold text-gray-900 dark:text-white">Lesson Plan</p>
+                                                            <p className="text-xs text-gray-500 dark:text-gray-400">Click to open</p>
+                                                        </div>
+                                                    </a>
+                                                ) : (
+                                                    <div onClick={(e) => handleFileDownload(convertedCourse.lessonPlanUrl!, e)} className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors cursor-pointer">
+                                                        <Icon name={IconName.FileText} className="w-6 h-6 text-red-600 flex-shrink-0" />
+                                                        <div className="flex-1 min-w-0">
+                                                            <p className="font-semibold text-gray-900 dark:text-white">Lesson Plan</p>
+                                                            <p className="text-xs text-gray-500 dark:text-gray-400">Click to download</p>
+                                                        </div>
+                                                    </div>
+                                                )
+                                            )}
+
+                                            {/* Learner Guide */}
+                                            {convertedCourse.learnerGuideUrl && (
+                                                isLearnerGuideExternal ? (
+                                                    <a href={convertedCourse.learnerGuideUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
+                                                        <Icon name={IconName.ExternalLink} className="w-6 h-6 text-blue-600 flex-shrink-0" />
+                                                        <div className="flex-1 min-w-0">
+                                                            <p className="font-semibold text-gray-900 dark:text-white">Learner Guide</p>
+                                                            <p className="text-xs text-gray-500 dark:text-gray-400">Click to open</p>
+                                                        </div>
+                                                    </a>
+                                                ) : (
+                                                    <div onClick={(e) => handleFileDownload(convertedCourse.learnerGuideUrl!, e)} className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors cursor-pointer">
+                                                        <Icon name={IconName.FileText} className="w-6 h-6 text-red-600 flex-shrink-0" />
+                                                        <div className="flex-1 min-w-0">
+                                                            <p className="font-semibold text-gray-900 dark:text-white">Learner Guide</p>
+                                                            <p className="text-xs text-gray-500 dark:text-gray-400">Click to download</p>
+                                                        </div>
+                                                    </div>
+                                                )
+                                            )}
+
+                                            {/* Facilitator Guide */}
+                                            {convertedCourse.facilitatorGuideUrl && (
+                                                isFacilitatorGuideExternal ? (
+                                                    <a href={convertedCourse.facilitatorGuideUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
+                                                        <Icon name={IconName.ExternalLink} className="w-6 h-6 text-blue-600 flex-shrink-0" />
+                                                        <div className="flex-1 min-w-0">
+                                                            <p className="font-semibold text-gray-900 dark:text-white">Facilitator Guide</p>
+                                                            <p className="text-xs text-gray-500 dark:text-gray-400">Click to open</p>
+                                                        </div>
+                                                    </a>
+                                                ) : (
+                                                    <div onClick={(e) => handleFileDownload(convertedCourse.facilitatorGuideUrl!, e)} className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors cursor-pointer">
+                                                        <Icon name={IconName.FileText} className="w-6 h-6 text-red-600 flex-shrink-0" />
+                                                        <div className="flex-1 min-w-0">
+                                                            <p className="font-semibold text-gray-900 dark:text-white">Facilitator Guide</p>
+                                                            <p className="text-xs text-gray-500 dark:text-gray-400">Click to download</p>
+                                                        </div>
+                                                    </div>
+                                                )
+                                            )}
+
+                                            {/* Trainer Slides */}
+                                            {convertedCourse.trainerSlidesUrl && (
+                                                isTrainerSlidesExternal ? (
+                                                    <a href={convertedCourse.trainerSlidesUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
+                                                        <Icon name={IconName.ExternalLink} className="w-6 h-6 text-blue-600 flex-shrink-0" />
+                                                        <div className="flex-1 min-w-0">
+                                                            <p className="font-semibold text-gray-900 dark:text-white">Trainer Slides</p>
+                                                            <p className="text-xs text-gray-500 dark:text-gray-400">Click to open</p>
+                                                        </div>
+                                                    </a>
+                                                ) : (
+                                                    <div onClick={(e) => handleFileDownload(convertedCourse.trainerSlidesUrl!, e)} className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors cursor-pointer">
+                                                        <Icon name={IconName.FileText} className="w-6 h-6 text-orange-600 flex-shrink-0" />
+                                                        <div className="flex-1 min-w-0">
+                                                            <p className="font-semibold text-gray-900 dark:text-white">Trainer Slides</p>
+                                                            <p className="text-xs text-gray-500 dark:text-gray-400">Click to download</p>
+                                                        </div>
+                                                    </div>
+                                                )
+                                            )}
+
+                                            {/* Assessment Plan */}
+                                            {convertedCourse.assessmentPlanUrl && (
+                                                isAssessmentPlanExternal ? (
+                                                    <a href={convertedCourse.assessmentPlanUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
+                                                        <Icon name={IconName.ExternalLink} className="w-6 h-6 text-blue-600 flex-shrink-0" />
+                                                        <div className="flex-1 min-w-0">
+                                                            <p className="font-semibold text-gray-900 dark:text-white">Assessment Plan</p>
+                                                            <p className="text-xs text-gray-500 dark:text-gray-400">Click to open</p>
+                                                        </div>
+                                                    </a>
+                                                ) : (
+                                                    <div onClick={(e) => handleFileDownload(convertedCourse.assessmentPlanUrl!, e)} className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors cursor-pointer">
+                                                        <Icon name={IconName.FileText} className="w-6 h-6 text-red-600 flex-shrink-0" />
+                                                        <div className="flex-1 min-w-0">
+                                                            <p className="font-semibold text-gray-900 dark:text-white">Assessment Plan</p>
+                                                            <p className="text-xs text-gray-500 dark:text-gray-400">Click to download</p>
+                                                        </div>
+                                                    </div>
+                                                )
+                                            )}
+
+                                            {/* Show message if nothing available */}
+                                            {!convertedCourse.courseLink && !convertedCourse.lessonPlanUrl && !convertedCourse.learnerGuideUrl && !convertedCourse.facilitatorGuideUrl && !convertedCourse.trainerSlidesUrl && !convertedCourse.assessmentPlanUrl && (
+                                                <p className="text-gray-500 dark:text-gray-400 text-sm">No courseware available.</p>
+                                            )}
+                                        </div>
                                     </ContentSection>
                                 </div>
                             )}
@@ -1955,131 +2177,77 @@ export const CourseDetail: React.FC = () => {
                                 </div>
                             )}
 
-                            {/* Lesson Plan */}
-                            <div id={toId("Lesson Plan")}>
-                                <ContentSection title="Lesson Plan">
-                                    {!isMaterialsUnlocked ? (
-                                        <p className="text-sm text-amber-600 dark:text-amber-400 italic">Available from 8:30 AM SGT on your course start date.</p>
-                                    ) : convertedCourse.lessonPlanUrl ? (
-                                        isLessonPlanExternal ? (
-                                            <a
-                                                href={convertedCourse.lessonPlanUrl}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
-                                            >
-                                                <Icon name={IconName.ExternalLink} className="w-6 h-6 text-blue-600 flex-shrink-0" />
-                                                <div className="flex-1 min-w-0">
-                                                    <p className="font-semibold text-gray-900 dark:text-white">Lesson Plan</p>
-                                                    <p className="text-xs text-gray-500 dark:text-gray-400">Click to open</p>
-                                                </div>
-                                            </a>
-                                        ) : (
-                                            <div
-                                                onClick={(e) => handleFileDownload(convertedCourse.lessonPlanUrl!, e)}
-                                                className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors cursor-pointer"
-                                            >
-                                                <Icon name={IconName.FileText} className="w-6 h-6 text-red-600 flex-shrink-0" />
-                                                <div className="flex-1 min-w-0">
-                                                    <p className="font-semibold text-gray-900 dark:text-white">Lesson Plan</p>
-                                                    <p className="text-xs text-gray-500 dark:text-gray-400">Click to download</p>
-                                                </div>
-                                            </div>
-                                        )
-                                    ) : (
-                                        <p className="text-gray-500 dark:text-gray-400">No lesson plan available for this course.</p>
-                                    )}
-                                </ContentSection>
-                            </div>
-
-                            {/* Learner Guide */}
-                            <div id={toId("Learner Guide")}>
-                                <ContentSection title="Learner Guide">
-                                    {!isMaterialsUnlocked ? (
-                                        <p className="text-sm text-amber-600 dark:text-amber-400 italic">Available from 8:30 AM SGT on your course start date.</p>
-                                    ) : convertedCourse.learnerGuideUrl ? (
-                                        isLearnerGuideExternal ? (
-                                            <a
-                                                href={convertedCourse.learnerGuideUrl}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
-                                            >
-                                                <Icon name={IconName.ExternalLink} className="w-6 h-6 text-blue-600 flex-shrink-0" />
-                                                <div className="flex-1 min-w-0">
-                                                    <p className="font-semibold text-gray-900 dark:text-white">Learner Guide</p>
-                                                    <p className="text-xs text-gray-500 dark:text-gray-400">Click to open</p>
-                                                </div>
-                                            </a>
-                                        ) : (
-                                            <div
-                                                onClick={(e) => handleFileDownload(convertedCourse.learnerGuideUrl!, e)}
-                                                className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors cursor-pointer"
-                                            >
-                                                <Icon name={IconName.FileText} className="w-6 h-6 text-red-600 flex-shrink-0" />
-                                                <div className="flex-1 min-w-0">
-                                                    <p className="font-semibold text-gray-900 dark:text-white">Learner Guide</p>
-                                                    <p className="text-xs text-gray-500 dark:text-gray-400">Click to download</p>
-                                                </div>
-                                            </div>
-                                        )
-                                    ) : (
-                                        <p className="text-gray-500 dark:text-gray-400">No learner guide available for this course.</p>
-                                    )}
-                                </ContentSection>
-                            </div>
-
-                            {/* Facilitator Guide */}
-                            {(userRole === UserRole.Trainer || userRole === UserRole.Developer || userRole === UserRole.TrainingProvider || userRole === UserRole.Admin) && (
-                                <div id={toId("Facilitator Guide")}>
-                                    <ContentSection title="Facilitator Guide">
-                                        {convertedCourse.facilitatorGuideUrl ? (
-                                            isFacilitatorGuideExternal ? (
-                                                <a
-                                                    href={convertedCourse.facilitatorGuideUrl}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
-                                                >
+                            {/* Learner-only: Lesson Plan */}
+                            {userRole !== UserRole.Trainer && userRole !== UserRole.Developer && userRole !== UserRole.Admin && userRole !== UserRole.TrainingProvider && (
+                                <div id={toId("Lesson Plan")}>
+                                    <ContentSection title="Lesson Plan">
+                                        {!isMaterialsUnlocked ? (
+                                            <p className="text-sm text-amber-600 dark:text-amber-400 italic">Available from 8:30 AM SGT on your course start date.</p>
+                                        ) : convertedCourse.lessonPlanUrl ? (
+                                            isLessonPlanExternal ? (
+                                                <a href={convertedCourse.lessonPlanUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
                                                     <Icon name={IconName.ExternalLink} className="w-6 h-6 text-blue-600 flex-shrink-0" />
                                                     <div className="flex-1 min-w-0">
-                                                        <p className="font-semibold text-gray-900 dark:text-white">Facilitator Guide</p>
+                                                        <p className="font-semibold text-gray-900 dark:text-white">Lesson Plan</p>
                                                         <p className="text-xs text-gray-500 dark:text-gray-400">Click to open</p>
                                                     </div>
                                                 </a>
                                             ) : (
-                                                <div
-                                                    onClick={(e) => handleFileDownload(convertedCourse.facilitatorGuideUrl!, e)}
-                                                    className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors cursor-pointer"
-                                                >
+                                                <div onClick={(e) => handleFileDownload(convertedCourse.lessonPlanUrl!, e)} className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors cursor-pointer">
                                                     <Icon name={IconName.FileText} className="w-6 h-6 text-red-600 flex-shrink-0" />
                                                     <div className="flex-1 min-w-0">
-                                                        <p className="font-semibold text-gray-900 dark:text-white">Facilitator Guide</p>
+                                                        <p className="font-semibold text-gray-900 dark:text-white">Lesson Plan</p>
                                                         <p className="text-xs text-gray-500 dark:text-gray-400">Click to download</p>
                                                     </div>
                                                 </div>
                                             )
                                         ) : (
-                                            <p className="text-gray-500 dark:text-gray-400">No facilitator guide available for this course.</p>
+                                            <p className="text-gray-500 dark:text-gray-400">No lesson plan available for this course.</p>
                                         )}
                                     </ContentSection>
                                 </div>
                             )}
 
-                            {/* Learner Slides */}
-                            {userRole !== UserRole.Trainer && (
+                            {/* Learner-only: Learner Guide */}
+                            {userRole !== UserRole.Trainer && userRole !== UserRole.Developer && userRole !== UserRole.Admin && userRole !== UserRole.TrainingProvider && (
+                                <div id={toId("Learner Guide")}>
+                                    <ContentSection title="Learner Guide">
+                                        {!isMaterialsUnlocked ? (
+                                            <p className="text-sm text-amber-600 dark:text-amber-400 italic">Available from 8:30 AM SGT on your course start date.</p>
+                                        ) : convertedCourse.learnerGuideUrl ? (
+                                            isLearnerGuideExternal ? (
+                                                <a href={convertedCourse.learnerGuideUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
+                                                    <Icon name={IconName.ExternalLink} className="w-6 h-6 text-blue-600 flex-shrink-0" />
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="font-semibold text-gray-900 dark:text-white">Learner Guide</p>
+                                                        <p className="text-xs text-gray-500 dark:text-gray-400">Click to open</p>
+                                                    </div>
+                                                </a>
+                                            ) : (
+                                                <div onClick={(e) => handleFileDownload(convertedCourse.learnerGuideUrl!, e)} className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors cursor-pointer">
+                                                    <Icon name={IconName.FileText} className="w-6 h-6 text-red-600 flex-shrink-0" />
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="font-semibold text-gray-900 dark:text-white">Learner Guide</p>
+                                                        <p className="text-xs text-gray-500 dark:text-gray-400">Click to download</p>
+                                                    </div>
+                                                </div>
+                                            )
+                                        ) : (
+                                            <p className="text-gray-500 dark:text-gray-400">No learner guide available for this course.</p>
+                                        )}
+                                    </ContentSection>
+                                </div>
+                            )}
+
+                            {/* Learner Slides - non-trainer only */}
+                            {userRole !== UserRole.Trainer && userRole !== UserRole.Developer && userRole !== UserRole.Admin && userRole !== UserRole.TrainingProvider && (
                                 <div id={toId("Learner Slides")}>
                                     <ContentSection title="Learner Slides">
                                         {!isMaterialsUnlocked ? (
                                             <p className="text-sm text-amber-600 dark:text-amber-400 italic">Available from 8:30 AM SGT on your course start date.</p>
                                         ) : convertedCourse.slidesUrl ? (
                                             isLearnerSlidesExternal ? (
-                                                <a
-                                                    href={convertedCourse.slidesUrl}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
-                                                >
+                                                <a href={convertedCourse.slidesUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
                                                     <Icon name={IconName.ExternalLink} className="w-6 h-6 text-blue-600 flex-shrink-0" />
                                                     <div className="flex-1 min-w-0">
                                                         <p className="font-semibold text-gray-900 dark:text-white">Learner Slides</p>
@@ -2087,10 +2255,7 @@ export const CourseDetail: React.FC = () => {
                                                     </div>
                                                 </a>
                                             ) : (
-                                                <div
-                                                    onClick={(e) => handleFileDownload(convertedCourse.slidesUrl!, e)}
-                                                    className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors cursor-pointer"
-                                                >
+                                                <div onClick={(e) => handleFileDownload(convertedCourse.slidesUrl!, e)} className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors cursor-pointer">
                                                     <Icon name={IconName.FileText} className="w-6 h-6 text-red-600 flex-shrink-0" />
                                                     <div className="flex-1 min-w-0">
                                                         <p className="font-semibold text-gray-900 dark:text-white">Learner Slides</p>
@@ -2100,80 +2265,6 @@ export const CourseDetail: React.FC = () => {
                                             )
                                         ) : (
                                             <p className="text-gray-500 dark:text-gray-400">No learner slides available for this course.</p>
-                                        )}
-                                    </ContentSection>
-                                </div>
-                            )}
-
-                            {/* Trainer Slides */}
-                            {(userRole === UserRole.Trainer || userRole === UserRole.Developer || userRole === UserRole.TrainingProvider || userRole === UserRole.Admin) && (
-                                <div id={toId("Trainer Slides")}>
-                                    <ContentSection title="Trainer Slides">
-                                        {convertedCourse.trainerSlidesUrl ? (
-                                            isTrainerSlidesExternal ? (
-                                                <a
-                                                    href={convertedCourse.trainerSlidesUrl}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
-                                                >
-                                                    <Icon name={IconName.ExternalLink} className="w-6 h-6 text-blue-600 flex-shrink-0" />
-                                                    <div className="flex-1 min-w-0">
-                                                        <p className="font-semibold text-gray-900 dark:text-white">Trainer Slides</p>
-                                                        <p className="text-xs text-gray-500 dark:text-gray-400">Click to open</p>
-                                                    </div>
-                                                </a>
-                                            ) : (
-                                                <div
-                                                    onClick={(e) => handleFileDownload(convertedCourse.trainerSlidesUrl!, e)}
-                                                    className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors cursor-pointer"
-                                                >
-                                                    <Icon name={IconName.FileText} className="w-6 h-6 text-orange-600 flex-shrink-0" />
-                                                    <div className="flex-1 min-w-0">
-                                                        <p className="font-semibold text-gray-900 dark:text-white">Trainer Slides</p>
-                                                        <p className="text-xs text-gray-500 dark:text-gray-400">Click to download</p>
-                                                    </div>
-                                                </div>
-                                            )
-                                        ) : (
-                                            <p className="text-gray-500 dark:text-gray-400">No trainer slides available for this course.</p>
-                                        )}
-                                    </ContentSection>
-                                </div>
-                            )}
-
-                            {/* Assessment Plan */}
-                            {(userRole === UserRole.Trainer || userRole === UserRole.Developer || userRole === UserRole.TrainingProvider || userRole === UserRole.Admin) && (
-                                <div id={toId("Assessment Plan")}>
-                                    <ContentSection title="Assessment Plan">
-                                        {convertedCourse.assessmentPlanUrl ? (
-                                            isAssessmentPlanExternal ? (
-                                                <a
-                                                    href={convertedCourse.assessmentPlanUrl}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
-                                                >
-                                                    <Icon name={IconName.ExternalLink} className="w-6 h-6 text-blue-600 flex-shrink-0" />
-                                                    <div className="flex-1 min-w-0">
-                                                        <p className="font-semibold text-gray-900 dark:text-white">Assessment Plan</p>
-                                                        <p className="text-xs text-gray-500 dark:text-gray-400">Click to open</p>
-                                                    </div>
-                                                </a>
-                                            ) : (
-                                                <div
-                                                    onClick={(e) => handleFileDownload(convertedCourse.assessmentPlanUrl!, e)}
-                                                    className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors cursor-pointer"
-                                                >
-                                                    <Icon name={IconName.FileText} className="w-6 h-6 text-red-600 flex-shrink-0" />
-                                                    <div className="flex-1 min-w-0">
-                                                        <p className="font-semibold text-gray-900 dark:text-white">Assessment Plan</p>
-                                                        <p className="text-xs text-gray-500 dark:text-gray-400">Click to download</p>
-                                                    </div>
-                                                </div>
-                                            )
-                                        ) : (
-                                            <p className="text-gray-500 dark:text-gray-400">No assessment plan available for this course.</p>
                                         )}
                                     </ContentSection>
                                 </div>
@@ -2209,6 +2300,7 @@ export const CourseDetail: React.FC = () => {
                                                         onToggleCompletion={handleToggleCompletion}
                                                         completedTopics={completedTopicsSet}
                                                         onToggleTopicCompletion={toggleTopicCompletion}
+                                                        resourceLinks={resourceLinks.filter(rl => topic.subtopics.some(st => st.id === rl.topicId))}
                                                     />
                                                 );
                                             })}
@@ -2267,6 +2359,9 @@ export const CourseDetail: React.FC = () => {
                                                                         Copy
                                                                     </button>
                                                                 </div>
+                                                                {convertedCourse.courseCode && (
+                                                                    <p className="text-xs text-on-surface-secondary text-center mt-1">Course Ref: <span className="font-medium text-on-surface">{convertedCourse.courseCode}</span></p>
+                                                                )}
                                                             </div>
                                                         </div>
                                                     </div>
@@ -2306,6 +2401,9 @@ export const CourseDetail: React.FC = () => {
                                                                         Copy
                                                                     </button>
                                                                 </div>
+                                                                {convertedCourse.courseRunId && (
+                                                                    <p className="text-xs text-on-surface-secondary text-center mt-1">Course Run ID: <span className="font-medium text-on-surface">{convertedCourse.courseRunId}</span></p>
+                                                                )}
                                                             </div>
                                                         </div>
                                                     </div>
@@ -2329,52 +2427,49 @@ export const CourseDetail: React.FC = () => {
                                 />
                             </div>
 
-                            {/* Assessment Record Link */}
+                            {/* Assessment Grading (includes Assessment Record + Grading button) */}
                             {(userRole === UserRole.Trainer || userRole === UserRole.Developer || userRole === UserRole.Admin || userRole === UserRole.TrainingProvider) && (
-                                <div id={toId("Assessment Record Link")}>
-                                    <ContentSection title="Assessment Records">
-                                        {convertedCourse.assessmentRecordLink ? (
-                                            <a
-                                                href={convertedCourse.assessmentRecordLink}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
-                                            >
-                                                <Icon name={IconName.ExternalLink} className="w-6 h-6 text-blue-600 flex-shrink-0" />
-                                                <div className="flex-1 min-w-0">
-                                                    <p className="font-semibold text-gray-900 dark:text-white">Assessment Record Link</p>
-                                                    <p className="text-xs text-gray-500 dark:text-gray-400">Click to open</p>
-                                                </div>
-                                            </a>
-                                        ) : (
-                                            <p className="text-gray-500 dark:text-gray-400 text-sm">No assessment record link available.</p>
-                                        )}
-                                    </ContentSection>
-                                </div>
-                            )}
-
-                            {/* Assessment Grading */}
-                            {userRole === UserRole.Trainer && (
                                 <div id={toId("Assessment Grading")}>
                                     <ContentSection title="Assessment Grading">
-                                        <button
-                                            onClick={() => {
-                                                const runUuid = effectiveDetail?.courseRunUuid || selectedCourse?.courseRunId || '';
-                                                setPendingGradingCourseRunId(String(runUuid));
-                                                setSelectedCourse(null);
-                                                setTrainerPage(TrainerPage.AssessmentGrading);
-                                            }}
-                                            className="flex items-center gap-3 p-3 w-full text-left bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
-                                        >
-                                            <Icon name={IconName.Edit} className="w-6 h-6 text-blue-600 flex-shrink-0" />
-                                            <div className="flex-1 min-w-0">
-                                                <p className="font-semibold text-gray-900 dark:text-white">Assessment Grading</p>
-                                                <p className="text-xs text-gray-500 dark:text-gray-400">
-                                                    Open Assessment Grading for Course Run {selectedCourse?.courseRunCode || selectedCourse?.courseRunId || convertedCourse.courseRunId || ''}
-                                                </p>
-                                            </div>
-                                            <Icon name={IconName.ExternalLink} className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                                        </button>
+                                        <div className="space-y-3">
+                                            {convertedCourse.assessmentRecordLink && (
+                                                <a
+                                                    href={convertedCourse.assessmentRecordLink}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+                                                >
+                                                    <Icon name={IconName.ExternalLink} className="w-6 h-6 text-blue-600 flex-shrink-0" />
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="font-semibold text-gray-900 dark:text-white">Assessment Record Link</p>
+                                                        <p className="text-xs text-gray-500 dark:text-gray-400">Click to open</p>
+                                                    </div>
+                                                </a>
+                                            )}
+                                            {userRole === UserRole.Trainer && (
+                                                <button
+                                                    onClick={() => {
+                                                        const runUuid = effectiveDetail?.courseRunUuid || selectedCourse?.courseRunId || '';
+                                                        setPendingGradingCourseRunId(String(runUuid));
+                                                        setSelectedCourse(null);
+                                                        setTrainerPage(TrainerPage.AssessmentGrading);
+                                                    }}
+                                                    className="flex items-center gap-3 p-3 w-full text-left bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+                                                >
+                                                    <Icon name={IconName.Edit} className="w-6 h-6 text-blue-600 flex-shrink-0" />
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="font-semibold text-gray-900 dark:text-white">Assessment Grading</p>
+                                                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                                                            Open Assessment Grading for Course Run {selectedCourse?.courseRunCode || selectedCourse?.courseRunId || convertedCourse.courseRunId || ''}
+                                                        </p>
+                                                    </div>
+                                                    <Icon name={IconName.ExternalLink} className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                                                </button>
+                                            )}
+                                            {!convertedCourse.assessmentRecordLink && userRole !== UserRole.Trainer && (
+                                                <p className="text-gray-500 dark:text-gray-400 text-sm">No assessment grading available.</p>
+                                            )}
+                                        </div>
                                     </ContentSection>
                                 </div>
                             )}

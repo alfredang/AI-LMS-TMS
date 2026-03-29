@@ -7,6 +7,7 @@ export interface TrainingProviderData {
   enableDefaultOtp: boolean;
   defaultOtp: string;
   colorScheme: string | null;
+  forceFirstPasswordChange: boolean;
 }
 
 export interface TrainingProviderResponse {

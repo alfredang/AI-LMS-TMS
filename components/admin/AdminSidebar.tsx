@@ -1,18 +1,34 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useLms } from '@contexts/LmsContext';
 import { AdminPage } from '@app-types';
 
 interface NavSectionProps {
     title: string;
     children: React.ReactNode;
+    isOpen: boolean;
+    onToggle: () => void;
 }
 
-const NavSection: React.FC<NavSectionProps> = ({ title, children }) => (
+const NavSection: React.FC<NavSectionProps> = ({ title, children, isOpen, onToggle }) => (
     <div>
-        <h3 className="px-3 text-xs font-semibold uppercase text-gray-500 dark:text-gray-400 tracking-wider">{title}</h3>
-        <div className="mt-2 space-y-1" role="group" aria-labelledby={`${title}-heading`}>
-            {children}
-        </div>
+        <button
+            type="button"
+            onClick={onToggle}
+            className="w-full flex items-center justify-between px-3 py-1 group cursor-pointer"
+        >
+            <h3 className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400 tracking-wider">{title}</h3>
+            <svg
+                className={`w-3.5 h-3.5 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
+                fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+            >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+            </svg>
+        </button>
+        {isOpen && (
+            <div className="mt-2 space-y-1" role="group" aria-labelledby={`${title}-heading`}>
+                {children}
+            </div>
+        )}
     </div>
 );
 
@@ -22,6 +38,19 @@ interface AdminSidebarProps {
 
 const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate }) => {
     const { adminPage, setAdminPage, setEditingCourseRun } = useLms();
+
+    const [openSections, setOpenSections] = useState<Record<string, boolean>>({
+        calendar: false,
+        classManagement: false,
+        directApplication: false,
+        tpgManagement: false,
+        logging: false,
+        certificate: false,
+    });
+
+    const toggleSection = (key: string) => {
+        setOpenSections(prev => ({ ...prev, [key]: !prev[key] }));
+    };
 
     const NavItem: React.FC<{ page: AdminPage; isSubItem?: boolean; label?: string }> = ({ page, isSubItem = false, label }) => (
         <a
@@ -51,7 +80,11 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate }) => {
         <nav className="space-y-6 p-4 bg-white dark:bg-slate-800 text-gray-900 dark:text-white h-full">
             <NavItem page={AdminPage.Dashboard} label="Admin Dashboard" />
 
-            <NavSection title="Class Management">
+            <NavSection title="Calendar" isOpen={openSections.calendar} onToggle={() => toggleSection('calendar')}>
+                <NavItem page={AdminPage.Calendar} label="View Calendar" isSubItem />
+            </NavSection>
+
+            <NavSection title="Class Management" isOpen={openSections.classManagement} onToggle={() => toggleSection('classManagement')}>
                 <NavItem page={AdminPage.ViewCourses} label="View Courses" isSubItem />
                 <NavItem page={AdminPage.ViewTrainers} label="View Trainers" isSubItem />
                 <NavItem page={AdminPage.ViewLearners} label="View Learners" isSubItem />
@@ -63,13 +96,12 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate }) => {
                 <NavItem page={AdminPage.SearchPastLearners} label="Search Past Learners" isSubItem />
             </NavSection>
 
-            <NavSection title="Direct Application">
+            <NavSection title="Direct Application" isOpen={openSections.directApplication} onToggle={() => toggleSection('directApplication')}>
                 <NavItem page={AdminPage.UploadDirectApplication} label="Upload Direct Application" isSubItem />
                 <NavItem page={AdminPage.ViewDirectApplication} label="View Direct Application" isSubItem />
-                {/* <NavItem page={AdminPage.UpdateDirectApplication} label="Update Direct Application" isSubItem /> */}
             </NavSection>
 
-            <NavSection title="TPG Management">
+            <NavSection title="TPG Management" isOpen={openSections.tpgManagement} onToggle={() => toggleSection('tpgManagement')}>
                 {/* Course Run */}
                 <p className="pl-8 pt-2 pb-1 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">Course Run</p>
                 <NavItem page={AdminPage.CreateNewClass} label="Create New Class" isSubItem />
@@ -110,23 +142,18 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate }) => {
                 <NavItem page={AdminPage.ViewGrantStatus} label="View Grant Status" isSubItem />
             </NavSection>
 
-            <NavSection title="Logging">
+            <NavSection title="Logging" isOpen={openSections.logging} onToggle={() => toggleSection('logging')}>
                 <NavItem page={AdminPage.AutomationLogs} label="Auto Create Learner Log" isSubItem />
                 <NavItem page={AdminPage.AssignTrainerLogs} label="Assign Trainer Log" isSubItem />
                 <NavItem page={AdminPage.CourseRunDateSyncLogs} label="Course Run Date Sync Log" isSubItem />
             </NavSection>
 
-            <NavSection title="Certificate">
+            <NavSection title="Certificate" isOpen={openSections.certificate} onToggle={() => toggleSection('certificate')}>
                 <NavItem page={AdminPage.CreateCertificate} label="Create Certificate" isSubItem />
                 <NavItem page={AdminPage.DeleteCertificate} label="Delete Certificate" isSubItem />
+                <NavItem page={AdminPage.SendCertificateSG} label="Send Certificate (SG)" isSubItem />
+                <NavItem page={AdminPage.SendCertificateGH} label="Send Certificate (GH)" isSubItem />
             </NavSection>
-
-            {/* Tools section hidden
-            <NavSection title="Tools">
-                <NavItem page={AdminPage.BackfillEnrollments} label="Backfill Enrollments" isSubItem />
-                <NavItem page={AdminPage.FetchUpcomingEnrolments} label="Fetch Upcoming Classes Enrolment" isSubItem />
-            </NavSection>
-            */}
 
         </nav>
     );

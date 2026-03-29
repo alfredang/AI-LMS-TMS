@@ -9,7 +9,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     // SQL query to get only courses for developer management (no course runs)
     const sqlQuery = `
-      SELECT 
+      SELECT
           c.id AS course_id,
           c.title AS course_title,
           c.course_code,
@@ -20,9 +20,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           c.training_hours,
           c.assessment_hours,
           c.mode_of_learning,
-          c.funding_validity
+          c.funding_validity,
+          c.num_of_trainers,
+          c.trainers_list
       FROM course c
-      ORDER BY c.title
+      ORDER BY c.course_code DESC
     `;
 
     const result = await pool.query(sqlQuery);
@@ -41,11 +43,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       imageUrl: row.course_image || null,
       modeOfLearning: row.mode_of_learning ? [row.mode_of_learning] : ['Hybrid'],
       fundingValidity: row.funding_validity || null,
-      courseRunId: null, // No course run for developers
-      startDate: null,   // No start date for developers
-      endDate: null,     // No end date for developers
-      classStatus: 'Published', // Default status for developers
-      topics: [] // Empty topics for now
+      numOfTrainers: row.num_of_trainers || 0,
+      trainersList: row.trainers_list || null,
+      courseRunId: null,
+      startDate: null,
+      endDate: null,
+      classStatus: 'Published',
+      topics: []
     }));
 
     console.log('📊 Developer courses endpoint - returning', courses.length, 'courses');

@@ -72,7 +72,10 @@ export enum AdminPage {
   BackfillEnrollments = 'backfillEnrollments',
   FetchUpcomingEnrolments = 'fetchUpcomingEnrolments',
   CreateCertificate = 'createCertificate',
-  DeleteCertificate = 'deleteCertificate'
+  DeleteCertificate = 'deleteCertificate',
+  SendCertificateSG = 'sendCertificateSG',
+  SendCertificateGH = 'sendCertificateGH',
+  Calendar = 'calendar'
 }
 
 export enum TrainerPage {
@@ -83,6 +86,7 @@ export enum TrainerPage {
   PastAssessment = 'pastAssessment',
   TaskList = 'taskList',
   GenAIAuthoring = 'genAIAuthoring',
+  EdTools = 'edTools',
 }
 
 // Course related interfaces
@@ -126,6 +130,7 @@ export interface Course {
   practicalPerformanceAssessmentLink?: string;
   writtenAssessmentPublished?: boolean;
   practicalAssessmentPublished?: boolean;
+  assessmentMethods?: AssessmentMethods;
   courseFee?: number;
   taxPercent?: number;
   fundingValidity?: string;
@@ -135,6 +140,8 @@ export interface Course {
   topics: Topic[];
   assessments?: Assessment[];
   learners?: any[];
+  numOfTrainers?: number;
+  trainersList?: string;
 }
 
 export interface CourseDetail {
@@ -271,6 +278,42 @@ export enum AssessmentCategory {
   OralQuestioning = 'Oral Questioning',
 }
 
+// Assessment method keys used in assessmentMethods JSON field
+export type AssessmentMethodKey =
+  | 'writtenAssessment'
+  | 'practicalExam'
+  | 'caseStudy'
+  | 'rolePlay'
+  | 'oralQuestioning'
+  | 'project'
+  | 'assignment';
+
+export interface AssessmentMethodConfig {
+  enabled: boolean;
+  link: string;
+}
+
+export type AssessmentMethods = Record<AssessmentMethodKey, AssessmentMethodConfig>;
+
+export const ASSESSMENT_METHOD_LABELS: Record<AssessmentMethodKey, string> = {
+  writtenAssessment: 'Written Exam',
+  practicalExam: 'Practical Exam',
+  caseStudy: 'Case Study',
+  rolePlay: 'Role Play',
+  oralQuestioning: 'Oral Questioning',
+  project: 'Project',
+  assignment: 'Assignment',
+};
+
+export const DEFAULT_ASSESSMENT_METHODS: AssessmentMethods = {
+  writtenAssessment: { enabled: true, link: '' },
+  practicalExam: { enabled: true, link: '' },
+  caseStudy: { enabled: false, link: '' },
+  rolePlay: { enabled: false, link: '' },
+  oralQuestioning: { enabled: false, link: '' },
+  project: { enabled: false, link: '' },
+  assignment: { enabled: false, link: '' },
+};
 
 export enum ModeOfLearning {
   Physical = 'Physical',

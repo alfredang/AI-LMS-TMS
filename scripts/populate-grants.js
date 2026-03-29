@@ -27,6 +27,7 @@ const DELAY_MS = 3000; // 3 seconds between API calls
 const CUTOFF_YEAR = parseInt(process.env.CUTOFF_YEAR || '2025', 10); // Stop when grants are older than this
 const REQUEST_TIMEOUT = 90000; // 90 seconds per API call (SSG averages ~57s)
 const RESUME_PAGE = process.env.RESUME_PAGE ? parseInt(process.env.RESUME_PAGE, 10) : 0;
+const MAX_PAGES = process.env.MAX_PAGES ? parseInt(process.env.MAX_PAGES, 10) : 0; // 0 = unlimited
 
 // --- DB ---
 const pool = new Pool({
@@ -313,6 +314,13 @@ async function main() {
       // Check if this was the last page
       if (grants.length < PAGE_SIZE) {
         console.log('\n✅ Last page reached (fewer results than page size)');
+        break;
+      }
+
+      // Check max pages limit
+      const pagesFetched = page - RESUME_PAGE + 1;
+      if (MAX_PAGES > 0 && pagesFetched >= MAX_PAGES) {
+        console.log(`\n✅ Reached MAX_PAGES limit (${MAX_PAGES} pages)`);
         break;
       }
 

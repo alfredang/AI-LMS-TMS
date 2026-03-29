@@ -244,9 +244,14 @@ export interface TrainingProviderProfile extends BaseProfile {
   ssgEncryptionKey?: string;
   integrations: {
     syncGoogleCalendar: boolean;
-    syncMicrosoftCalendar: boolean;
+    googleCalendarUrl?: string;
     googleDrive: boolean;
     microsoftOneDrive: boolean;
+    emailUser?: string;
+    googleClientId?: string;
+    googleClientSecret?: string;
+    googleRefreshToken?: string;
+    googleSlidesTemplateId?: string;
   };
   adminSettings: {
     autoSendProFormaInvoice: boolean;
@@ -262,6 +267,8 @@ export interface TrainingProviderProfile extends BaseProfile {
     enableOtpLogin: boolean;
     enableDefaultOtp: boolean;
     defaultOtpValue?: string;
+    forceFirstPasswordChange: boolean;
+    defaultPassword?: string;
   };
   gamingSettings: {
     enableLeaderboard: boolean;

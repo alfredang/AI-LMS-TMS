@@ -16,25 +16,33 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).json({ success: false, error: 'Missing required fields: courseRunId, field, published' });
   }
 
-  const validFields: Record<string, string> = {
+  const legacyFields: Record<string, string> = {
     written: 'written_assessment_published',
     practical: 'practical_assessment_published',
   };
 
-  const dbField = validFields[field];
-  if (!dbField) {
-    return res.status(400).json({ success: false, error: 'Invalid field. Use "written" or "practical".' });
-  }
+  const dbField = legacyFields[field];
 
   try {
-    await pool.query(
-      `UPDATE course_run SET ${dbField} = $1 WHERE id = $2`,
-      [published, courseRunId]
-    );
+    if (dbField) {
+      // Legacy written/practical fields
+      await pool.query(
+        `UPDATE course_run SET ${dbField} = $1 WHERE id = $2`,
+        [published, courseRunId]
+      );
+    } else {
+      // New assessment methods - store in published_assessment_methods JSONB
+      await pool.query(
+        `UPDATE course_run
+         SET published_assessment_methods = COALESCE(published_assessment_methods, '{}'::jsonb) || $1::jsonb
+         WHERE id = $2`,
+        [JSON.stringify({ [field]: published }), courseRunId]
+      );
+    }
 
     return res.status(200).json({
       success: true,
-      message: `${dbField} set to ${published}`,
+      message: `${field} publish set to ${published}`,
     });
   } catch (error: any) {
     console.error('❌ Error updating assessment link publish status:', error);

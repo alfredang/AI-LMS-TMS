@@ -16,6 +16,7 @@ import TrainerSidebar from '../components/trainer/TrainerSidebar';
 import AssessmentGrading from '../components/trainer/AssessmentGrading';
 import PastAttendance from '../components/trainer/PastAttendance';
 import PastAssessment from '../components/trainer/PastAssessment';
+import EdToolsPage from '../components/trainer/EdToolsPage';
 
 const PAGE_LABELS: Record<TrainerPage, string> = {
   [TrainerPage.EAttendance]: 'E-Attendance',
@@ -24,7 +25,8 @@ const PAGE_LABELS: Record<TrainerPage, string> = {
   [TrainerPage.PastAttendance]: 'Past Attendance',
   [TrainerPage.PastAssessment]: 'Past Assessment',
   [TrainerPage.TaskList]: 'Task List',
-  [TrainerPage.GenAIAuthoring]: 'Trainer GenAI Authoring',
+  [TrainerPage.GenAIAuthoring]: 'GenAI Tools',
+  [TrainerPage.EdTools]: 'Ed Tools',
 };
 
 const TrainerLayout: React.FC = () => {
@@ -52,6 +54,8 @@ const TrainerLayout: React.FC = () => {
         return <CalendarView />;
       case TrainerPage.GenAIAuthoring:
         return <CreateView />;
+      case TrainerPage.EdTools:
+        return <EdToolsPage />;
       default:
         return <TrainerHomePage />;
     }

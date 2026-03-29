@@ -39,44 +39,47 @@ You can TAKE ACTIONS on the platform using tools. When the user asks you to do s
 9. get_certificate_data: Get certificate status for a learner's enrollments. If no learnerId provided, returns list of all learners.
    Params: learnerId (string, optional)
 
+10. recommend_trainer: Recommend trainers for a course based on past teaching history and expertise
+    Params: courseTitle (string, required)
+
 --- WRITE OPERATIONS (always confirm with user before executing) ---
 
-9. assign_trainer: Assign a trainer to a course run
-   Params: courseRunId (string, required), trainerEmail (string, required)
+11. assign_trainer: Assign a trainer to a course run
+    Params: courseRunId (string, required), trainerEmail (string, required)
 
-10. enroll_learner: Enroll a learner into a course run
+12. enroll_learner: Enroll a learner into a course run
     Params: email (string, required), fullName (string, required), courseRunId (string, required), courseId (string, optional), sponsorshipType (string, optional: Individual/Employer)
 
-11. remove_enrollment: Remove a learner from a course run
+13. remove_enrollment: Remove a learner from a course run
     Params: email (string, required), courseRunId (string, required)
 
-12. create_learner_account: Create a new learner account
+14. create_learner_account: Create a new learner account
     Params: email (string, required), fullName (string, required), nric (string, optional)
 
-13. update_learner_status: Activate or deactivate a learner
+15. update_learner_status: Activate or deactivate a learner
     Params: userId (string, required), newStatus (string, required: active/inactive)
 
-14. update_trainer_status: Activate or deactivate a trainer
+16. update_trainer_status: Activate or deactivate a trainer
     Params: userId (string, required), newStatus (string, required: Active/Inactive)
 
-15. create_course_run: Create a new course run / class
+17. create_course_run: Create a new course run / class
     Params: courseCode (string, required), courseRunId (string, required), startDate (string, optional: YYYY-MM-DD), endDate (string, optional: YYYY-MM-DD)
 
-16. delete_course_run: Delete a course run
+18. delete_course_run: Delete a course run
     Params: courseRunId (string, required)
 
-18. unassign_trainer: Remove a trainer from a course run
+19. unassign_trainer: Remove a trainer from a course run
     Params: courseRunUuid (string, required)
 
-19. generate_certificate: Generate a certificate PDF for a learner enrollment. Learner must be marked Competent.
+20. generate_certificate: Generate a certificate PDF for a learner enrollment. Learner must be marked Competent.
     Params: enrolmentId (string, required)
 
-20. send_certificate: Email a certificate to the learner. Certificate must already be generated.
+21. send_certificate: Email a certificate to the learner. Certificate must already be generated.
     Params: enrollmentId (string, required)
 
 === BEHAVIORAL RULES ===
 
-1. For WRITE operations (tools 10-20), ALWAYS confirm with the user before executing. Show them what you're about to do and ask "Shall I proceed?"
+1. For WRITE operations (tools 11-21), ALWAYS confirm with the user before executing. Show them what you're about to do and ask "Shall I proceed?"
 2. When a user mentions a trainer by name, use lookup_trainer_by_name first to find their email before assigning.
 3. If multiple matches are found, show the list and ask the user to pick one.
 4. For CERTIFICATE operations:
@@ -96,6 +99,7 @@ const VALID_TOOLS = [
     'search_course_runs', 'list_trainers', 'list_learners',
     'get_statistics', 'lookup_trainer_by_name', 'get_course_run_enrollments',
     'get_trainer_details', 'get_learner_details', 'get_certificate_data',
+    'recommend_trainer',
     // Write
     'assign_trainer', 'enroll_learner', 'remove_enrollment',
     'create_learner_account', 'update_learner_status', 'update_trainer_status',
@@ -128,12 +132,18 @@ async function executeTool(name: string, input: any, req: NextApiRequest): Promi
         }
 
         case 'list_trainers': {
-            const url = new URL('/api/admin/trainers', baseUrl);
-            if (input.search) url.searchParams.set('search', input.search);
+            const url = new URL('/api/admin/trainers-detail', baseUrl);
             const res = await fetch(url.toString());
             const data = await res.json();
-            const trainers = (data.data || data.trainers || []).slice(0, 20);
-            return JSON.stringify(trainers, null, 2);
+            let trainers = data?.data?.trainers || data?.trainers || [];
+            if (input.search) {
+                const searchLower = input.search.toLowerCase();
+                trainers = trainers.filter((t: any) =>
+                    (t.trainer_name || '').toLowerCase().includes(searchLower) ||
+                    (t.email || '').toLowerCase().includes(searchLower)
+                );
+            }
+            return JSON.stringify(trainers.slice(0, 20), null, 2);
         }
 
         case 'list_learners': {
@@ -153,12 +163,13 @@ async function executeTool(name: string, input: any, req: NextApiRequest): Promi
 
         case 'lookup_trainer_by_name': {
             const trainerResult = await pool.query(
-                `SELECT t.id, t.name, t.email, t.phone, t.trainer_type,
+                `SELECT au.id, au.full_name AS name, au.email, tp.tel AS phone, tp.trainer_type,
                         COUNT(cr.id) as assigned_classes
-                 FROM trainer t
-                 LEFT JOIN course_run cr ON cr.assigned_trainer_email = t.email
-                 WHERE LOWER(t.name) LIKE LOWER($1)
-                 GROUP BY t.id, t.name, t.email, t.phone, t.trainer_type
+                 FROM app_user au
+                 JOIN trainer_profile tp ON tp.user_id = au.id
+                 LEFT JOIN course_run cr ON cr.assigned_trainer_email = au.email
+                 WHERE LOWER(au.full_name) LIKE LOWER($1)
+                 GROUP BY au.id, au.full_name, au.email, tp.tel, tp.trainer_type
                  LIMIT 5`,
                 [`%${input.trainerName}%`]
             );
@@ -196,6 +207,62 @@ async function executeTool(name: string, input: any, req: NextApiRequest): Promi
             const res = await fetch(url.toString());
             const data = await res.json();
             return JSON.stringify(data, null, 2);
+        }
+
+        case 'recommend_trainer': {
+            const taughtResult = await pool.query(
+                `SELECT au.full_name AS trainer_name, au.email, tp.trainer_type,
+                        tp.areas_of_expertise, tp.qualifications,
+                        c.title AS course_title, COUNT(cr.id) AS times_taught
+                 FROM app_user au
+                 JOIN trainer_profile tp ON tp.user_id = au.id
+                 JOIN course_run cr ON cr.assigned_trainer_email = au.email
+                 JOIN course c ON c.id = cr.course_id
+                 WHERE LOWER(c.title) LIKE LOWER($1)
+                 GROUP BY au.full_name, au.email, tp.trainer_type, tp.areas_of_expertise, tp.qualifications, c.title
+                 ORDER BY times_taught DESC
+                 LIMIT 10`,
+                [`%${input.courseTitle}%`]
+            );
+
+            const searchTerms = input.courseTitle.split(/\s+/).filter((w: string) => w.length > 2);
+            const expertiseConditions = searchTerms.map((_: string, i: number) => `tp.areas_of_expertise::text ILIKE $${i + 1}`).join(' OR ');
+            const expertiseResult = searchTerms.length > 0 ? await pool.query(
+                `SELECT DISTINCT au.full_name AS trainer_name, au.email, tp.trainer_type,
+                        tp.areas_of_expertise, tp.qualifications
+                 FROM app_user au
+                 JOIN trainer_profile tp ON tp.user_id = au.id
+                 WHERE (${expertiseConditions})
+                 AND tp.areas_of_expertise IS NOT NULL
+                 AND tp.areas_of_expertise != '[]'::jsonb
+                 AND tp.areas_of_expertise != '{}'::jsonb
+                 LIMIT 10`,
+                searchTerms.map((t: string) => `%${t}%`)
+            ) : { rows: [] };
+
+            const results: any = {};
+            if (taughtResult.rows.length > 0) {
+                results.previously_taught = taughtResult.rows;
+            }
+            if (expertiseResult.rows.length > 0) {
+                const taughtEmails = new Set(taughtResult.rows.map((r: any) => r.email));
+                const additional = expertiseResult.rows.filter((r: any) => !taughtEmails.has(r.email));
+                if (additional.length > 0) {
+                    results.matching_expertise = additional;
+                }
+            }
+
+            if (!results.previously_taught && !results.matching_expertise) {
+                return JSON.stringify({
+                    message: `No trainers found matching "${input.courseTitle}".`,
+                    suggestion: 'Try a broader search term like the domain (e.g., "AI", "Finance", "Marketing").'
+                });
+            }
+
+            return JSON.stringify({
+                message: `Trainer recommendations for "${input.courseTitle}":`,
+                ...results
+            }, null, 2);
         }
 
         // ==================== WRITE OPERATIONS ====================

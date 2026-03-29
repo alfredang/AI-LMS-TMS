@@ -1146,7 +1146,7 @@ export const TrainerProfileCard: React.FC<{
                         )}
                     </div>
                     <div className="text-center sm:text-left flex-grow">
-                        <h1 className="text-2xl font-bold">{formData.name}</h1>
+                        <h1 className="text-2xl font-bold text-on-surface">{formData.name}</h1>
                         <p className="text-subtle">Trainer Profile</p>
                     </div>
                     {isEditing ? (

@@ -33,7 +33,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           c.assessment_record_link,
           c.written_assessment_link,
           c.practical_performance_assessment_link,
-          c.funding_validity
+          c.funding_validity,
+          c.resource_links
       FROM course c
       WHERE c.id = $1
     `;
@@ -48,6 +49,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     const courseDetail = result.rows[0];
+
+    // Safely fetch assessment_methods column
+    // This column may not exist if the migration hasn't been run yet
+    let assessmentMethodsValue: any = null;
+    try {
+      const amResult = await pool.query(
+        'SELECT assessment_methods FROM course WHERE id = $1 LIMIT 1',
+        [courseId]
+      );
+      if (amResult.rows.length > 0 && amResult.rows[0].assessment_methods) {
+        const am = amResult.rows[0].assessment_methods;
+        assessmentMethodsValue = typeof am === 'string' ? JSON.parse(am) : am;
+      }
+    } catch (e) {
+      // Column doesn't exist yet, use default null
+    }
 
     res.status(200).json({
       success: true,
@@ -72,7 +89,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         assessmentRecordLink: courseDetail.assessment_record_link,
         writtenAssessmentLink: courseDetail.written_assessment_link,
         practicalPerformanceAssessmentLink: courseDetail.practical_performance_assessment_link,
+        assessmentMethods: assessmentMethodsValue,
         fundingValidity: courseDetail.funding_validity || null,
+        resourceLinks: courseDetail.resource_links ? (typeof courseDetail.resource_links === 'string' ? JSON.parse(courseDetail.resource_links) : courseDetail.resource_links) : [],
         certificate: ''
       }
     });

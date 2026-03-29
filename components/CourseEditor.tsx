@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLms } from '@contexts/LmsContext';
-import { Course, Topic, Subtopic, ModeOfLearning, UserRole } from '@app-types';
+import { Course, Topic, Subtopic, ModeOfLearning, UserRole, AssessmentMethodKey, ASSESSMENT_METHOD_LABELS, DEFAULT_ASSESSMENT_METHODS } from '@app-types';
 import { Button } from './ui/Button';
 import { Card } from './ui/Card';
 import { Icon, IconName } from './ui/Icon';
@@ -32,10 +32,17 @@ const EditableTopicAccordion: React.FC<{
     // Drag-and-drop props for the topic itself
     onSelfDragStart: (e: React.DragEvent) => void;
     onSelfDragEnd: (e: React.DragEvent) => void;
+    // Resource links props
+    resourceLinks: { id: string; topicId: string; type: 'file' | 'youtube' | 'quiz'; title: string; url: string }[];
+    onAddResourceLink: (topicId: string, type: 'file' | 'youtube' | 'quiz') => void;
+    onUpdateResourceLink: (id: string, field: 'title' | 'url', value: string) => void;
+    onDeleteResourceLink: (id: string) => void;
+    onReorderResourceLink: (draggedId: string, targetId: string, parentId: string) => void;
 }> = ({
     topic, onUpdateTitle, onDelete, onAddSubtopic, onUpdateSubtopic, onDeleteSubtopic,
     draggedSubtopic, dropTargetSubtopic, onSubtopicDragStart, onSubtopicDrop, onSubtopicDragOver, onSubtopicDragLeave, onSubtopicDragEnd,
-    onSelfDragStart, onSelfDragEnd
+    onSelfDragStart, onSelfDragEnd,
+    resourceLinks, onAddResourceLink, onUpdateResourceLink, onDeleteResourceLink, onReorderResourceLink
 }) => {
         const [isSubtopicsOpen, setSubtopicsOpen] = useState(true);
 
@@ -72,37 +79,99 @@ const EditableTopicAccordion: React.FC<{
                 {isSubtopicsOpen && (
                     <div className="px-4 pb-4">
                         <ul className="pt-2 space-y-2">
-                            {topic.subtopics.map(subtopic => (
-                                <li
-                                    key={subtopic.id}
-                                    onDragOver={(e) => onSubtopicDragOver(e, topic.id, subtopic.id)}
-                                    onDragLeave={onSubtopicDragLeave}
-                                    onDrop={(e) => onSubtopicDrop(e, topic.id, subtopic.id)}
-                                    className={`relative flex items-center justify-between p-1 rounded-md group transition-all duration-200 ${draggedSubtopic?.subtopicId === subtopic.id ? 'opacity-30' : 'hover:bg-gray-100/70 dark:hover:bg-gray-700/70'
-                                        } ${dropTargetSubtopic?.subtopicId === subtopic.id ? 'pt-2 border-t-2 border-blue-500' : 'border-t-2 border-transparent'
-                                        }`}
-                                >
+                            {topic.subtopics.map(subtopic => {
+                                const subtopicLinks = resourceLinks.filter(rl => rl.topicId === subtopic.id);
+                                return (
+                                <li key={subtopic.id}>
                                     <div
-                                        draggable
-                                        onDragStart={(e) => onSubtopicDragStart(e, topic.id, subtopic.id)}
-                                        onDragEnd={onSubtopicDragEnd}
-                                        className="cursor-grab p-1"
+                                        onDragOver={(e) => onSubtopicDragOver(e, topic.id, subtopic.id)}
+                                        onDragLeave={onSubtopicDragLeave}
+                                        onDrop={(e) => onSubtopicDrop(e, topic.id, subtopic.id)}
+                                        className={`relative flex items-center justify-between p-1 rounded-md group transition-all duration-200 ${draggedSubtopic?.subtopicId === subtopic.id ? 'opacity-30' : 'hover:bg-gray-100/70 dark:hover:bg-gray-700/70'
+                                            } ${dropTargetSubtopic?.subtopicId === subtopic.id ? 'pt-2 border-t-2 border-blue-500' : 'border-t-2 border-transparent'
+                                            }`}
                                     >
-                                        <Icon name={IconName.Menu} className="w-5 h-5 text-gray-400" />
+                                        <div
+                                            draggable
+                                            onDragStart={(e) => onSubtopicDragStart(e, topic.id, subtopic.id)}
+                                            onDragEnd={onSubtopicDragEnd}
+                                            className="cursor-grab p-1"
+                                        >
+                                            <Icon name={IconName.Menu} className="w-5 h-5 text-gray-400" />
+                                        </div>
+                                        <Icon name={IconName.FileText} className="w-5 h-5 text-green-500 mr-2 flex-shrink-0" />
+                                        <input
+                                            type="text"
+                                            value={subtopic.title}
+                                            onChange={e => onUpdateSubtopic(topic.id, subtopic.id, e.target.value)}
+                                            className={inputGhostClasses(false)}
+                                            placeholder="Topic title"
+                                        />
+                                        <button onClick={() => onDeleteSubtopic(topic.id, subtopic.id)} className="p-1.5 text-gray-400 dark:text-gray-500 hover:text-red-500 hover:bg-red-100 dark:hover:bg-red-900/30 rounded-full ml-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <Icon name={IconName.Delete} className="w-4 h-4" />
+                                        </button>
                                     </div>
-                                    <Icon name={IconName.FileText} className="w-5 h-5 text-green-500 mr-2 flex-shrink-0" />
-                                    <input
-                                        type="text"
-                                        value={subtopic.title}
-                                        onChange={e => onUpdateSubtopic(topic.id, subtopic.id, e.target.value)}
-                                        className={inputGhostClasses(false)}
-                                        placeholder="Topic title"
-                                    />
-                                    <button onClick={() => onDeleteSubtopic(topic.id, subtopic.id)} className="p-1.5 text-gray-400 dark:text-gray-500 hover:text-red-500 hover:bg-red-100 dark:hover:bg-red-900/30 rounded-full ml-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <Icon name={IconName.Delete} className="w-4 h-4" />
-                                    </button>
+                                    {/* Resource links + buttons for this topic */}
+                                    <div className="ml-10 mt-1 space-y-1">
+                                        {subtopicLinks.map((rl, rlIndex) => (
+                                            <div
+                                                key={rl.id}
+                                                draggable
+                                                onDragStart={(e) => { e.dataTransfer.setData('resourceLinkId', rl.id); e.dataTransfer.setData('parentId', subtopic.id); e.dataTransfer.effectAllowed = 'move'; }}
+                                                onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add('border-t-2', 'border-blue-400'); }}
+                                                onDragLeave={(e) => { e.currentTarget.classList.remove('border-t-2', 'border-blue-400'); }}
+                                                onDrop={(e) => {
+                                                    e.preventDefault();
+                                                    e.currentTarget.classList.remove('border-t-2', 'border-blue-400');
+                                                    const draggedId = e.dataTransfer.getData('resourceLinkId');
+                                                    if (draggedId && draggedId !== rl.id) {
+                                                        onReorderResourceLink(draggedId, rl.id, subtopic.id);
+                                                    }
+                                                }}
+                                                className={`flex items-center gap-1.5 p-1.5 rounded cursor-grab group/rl ${
+                                                    rl.type === 'file' ? 'bg-blue-50/50 dark:bg-blue-900/10' :
+                                                    rl.type === 'youtube' ? 'bg-red-50/50 dark:bg-red-900/10' :
+                                                    'bg-green-50/50 dark:bg-green-900/10'
+                                                }`}
+                                            >
+                                                <Icon name={IconName.Menu} className="w-3.5 h-3.5 text-gray-300 dark:text-gray-600 flex-shrink-0" />
+                                                <span className={`text-[9px] font-bold uppercase px-1 py-0.5 rounded flex-shrink-0 ${
+                                                    rl.type === 'file' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
+                                                    rl.type === 'youtube' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' :
+                                                    'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                                                }`}>
+                                                    {rl.type === 'file' ? 'File' : rl.type === 'youtube' ? 'YT' : 'Quiz'}
+                                                </span>
+                                                <input
+                                                    type="text"
+                                                    placeholder="Title"
+                                                    value={rl.title}
+                                                    onClick={(e) => e.stopPropagation()}
+                                                    onChange={e => onUpdateResourceLink(rl.id, 'title', e.target.value)}
+                                                    className="flex-1 min-w-0 px-1.5 py-0.5 text-xs border-0 border-b border-transparent hover:border-gray-300 dark:hover:border-gray-600 bg-transparent dark:text-white focus:outline-none focus:border-blue-500"
+                                                />
+                                                <input
+                                                    type="url"
+                                                    placeholder="URL"
+                                                    value={rl.url}
+                                                    onClick={(e) => e.stopPropagation()}
+                                                    onChange={e => onUpdateResourceLink(rl.id, 'url', e.target.value)}
+                                                    className="flex-1 min-w-0 px-1.5 py-0.5 text-xs border-0 border-b border-transparent hover:border-gray-300 dark:hover:border-gray-600 bg-transparent dark:text-white focus:outline-none focus:border-blue-500"
+                                                />
+                                                <button onClick={() => onDeleteResourceLink(rl.id)} className="p-0.5 text-gray-400 hover:text-red-500 rounded opacity-0 group-hover/rl:opacity-100 transition-opacity flex-shrink-0">
+                                                    <Icon name={IconName.Delete} className="w-3 h-3" />
+                                                </button>
+                                            </div>
+                                        ))}
+                                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 hover:!opacity-100 transition-opacity">
+                                            <button onClick={() => onAddResourceLink(subtopic.id, 'file')} className="text-[10px] text-gray-400 hover:text-blue-500 px-1 py-0.5 rounded hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors">+ File</button>
+                                            <button onClick={() => onAddResourceLink(subtopic.id, 'youtube')} className="text-[10px] text-gray-400 hover:text-red-500 px-1 py-0.5 rounded hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">+ YouTube</button>
+                                            <button onClick={() => onAddResourceLink(subtopic.id, 'quiz')} className="text-[10px] text-gray-400 hover:text-green-500 px-1 py-0.5 rounded hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors">+ Quiz</button>
+                                        </div>
+                                    </div>
                                 </li>
-                            ))}
+                                );
+                            })}
                             <li className="pt-2">
                                 <Button size="sm" variant="ghost" onClick={() => onAddSubtopic(topic.id)} className="text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400">
                                     <Icon name={IconName.Add} className="w-4 h-4 mr-2" />
@@ -124,10 +193,18 @@ const CourseEditor: React.FC = () => {
         return <div className="flex items-center justify-center h-full"><Spinner text="Loading course editor..." /></div>;
     }
 
+    // Auto-migrate legacy written/practical links into assessmentMethods if not yet set
+    const initialAssessmentMethods = editingCourse.assessmentMethods || {
+        ...DEFAULT_ASSESSMENT_METHODS,
+        writtenAssessment: { enabled: true, link: editingCourse.writtenAssessmentLink || '' },
+        practicalExam: { enabled: true, link: editingCourse.practicalPerformanceAssessmentLink || '' },
+    };
+
     const [course, setCourse] = useState<Course>({
         ...editingCourse,
         topics: editingCourse.topics || [],
         assessments: editingCourse.assessments || [],
+        assessmentMethods: initialAssessmentMethods,
         modeOfLearning: editingCourse.modeOfLearning?.length ? editingCourse.modeOfLearning : [ModeOfLearning.Physical],
         // Ensure imageUrl is set - use existing or generate default
         imageUrl: editingCourse.imageUrl || `https://picsum.photos/seed/${editingCourse.id || 'new'}/400/225`
@@ -163,6 +240,11 @@ const CourseEditor: React.FC = () => {
         assessmentFiles: [],
         assessmentFilesById: {}
     });
+
+    // Resource links state (file links, YouTube links, quiz links) — each link belongs to a topic
+    const [resourceLinks, setResourceLinks] = useState<{ id: string; topicId: string; type: 'file' | 'youtube' | 'quiz'; title: string; url: string }[]>(
+        (course as any).resourceLinks || []
+    );
 
     // Drag and Drop state for Topics (Learning Units)
     const [draggedTopicId, setDraggedTopicId] = useState<string | null>(null);
@@ -465,6 +547,8 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                 assessmentRecordLink: course.assessmentRecordLink || undefined,
                 writtenAssessmentLink: writtenAssessmentInputType === 'link' ? (course.writtenAssessmentLink || undefined) : undefined,
                 practicalPerformanceAssessmentLink: practicalPerformanceInputType === 'link' ? (course.practicalPerformanceAssessmentLink || undefined) : undefined,
+                assessmentMethods: course.assessmentMethods || undefined,
+                resourceLinks: resourceLinks.filter(rl => rl.url.trim() !== ''),
                 // Convert topics to learning units with position
                 learningUnits: course.topics.map((topic, index) => ({
                     id: topic.id,
@@ -713,6 +797,33 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
             ...prev,
             topics: prev.topics.map(t => t.id === topicId ? { ...t, subtopics: t.subtopics.filter(st => st.id !== subtopicId) } : t)
         }));
+    };
+
+    const addResourceLink = (topicId: string, type: 'file' | 'youtube' | 'quiz') => {
+        setResourceLinks(prev => [...prev, { id: `rl_${Date.now()}`, topicId, type, title: '', url: '' }]);
+    };
+
+    const updateResourceLink = (id: string, field: 'title' | 'url', value: string) => {
+        setResourceLinks(prev => prev.map(rl => rl.id === id ? { ...rl, [field]: value } : rl));
+    };
+
+    const deleteResourceLink = (id: string) => {
+        setResourceLinks(prev => prev.filter(rl => rl.id !== id));
+    };
+
+    const reorderResourceLink = (draggedId: string, targetId: string, parentId: string) => {
+        setResourceLinks(prev => {
+            const newLinks = [...prev];
+            const draggedIndex = newLinks.findIndex(rl => rl.id === draggedId);
+            const targetIndex = newLinks.findIndex(rl => rl.id === targetId);
+            if (draggedIndex === -1 || targetIndex === -1) return prev;
+            // Move dragged item to parent if different
+            newLinks[draggedIndex] = { ...newLinks[draggedIndex], topicId: parentId };
+            const [dragged] = newLinks.splice(draggedIndex, 1);
+            const newTargetIndex = newLinks.findIndex(rl => rl.id === targetId);
+            newLinks.splice(newTargetIndex, 0, dragged);
+            return newLinks;
+        });
     };
 
     const handleUpdateAssessment = (id: string, field: 'title' | 'category' | 'fileUrl', value: string) => {
@@ -1136,28 +1247,6 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                 />
                             </div>
                             <div>
-                                <label htmlFor="courseLink" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Courseware Link</label>
-                                <input
-                                    type="url"
-                                    id="courseLink"
-                                    value={course.courseLink || ''}
-                                    onChange={(e) => setCourse(prev => ({ ...prev, courseLink: e.target.value }))}
-                                    className={inputClasses}
-                                    placeholder="https://..."
-                                />
-                            </div>
-                            <div>
-                                <label htmlFor="assessmentRecordLink" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Assessment Record Link</label>
-                                <input
-                                    type="url"
-                                    id="assessmentRecordLink"
-                                    value={course.assessmentRecordLink || ''}
-                                    onChange={(e) => setCourse(prev => ({ ...prev, assessmentRecordLink: e.target.value }))}
-                                    className={inputClasses}
-                                    placeholder="https://..."
-                                />
-                            </div>
-                            <div>
                                 <label htmlFor="learnerSlidesUrl" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Learner Slides URL</label>
                                 <input
                                     type="url"
@@ -1180,35 +1269,70 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                     placeholder="https://docs.google.com/presentation/..."
                                 />
                             </div>
+                            <div>
+                                <label htmlFor="courseLink" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Courseware Link</label>
+                                <input
+                                    type="url"
+                                    id="courseLink"
+                                    value={course.courseLink || ''}
+                                    onChange={(e) => setCourse(prev => ({ ...prev, courseLink: e.target.value }))}
+                                    className={inputClasses}
+                                    placeholder="https://..."
+                                />
+                            </div>
+                            <div>
+                                <label htmlFor="assessmentRecordLink" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Assessment Record Link</label>
+                                <input
+                                    type="url"
+                                    id="assessmentRecordLink"
+                                    value={course.assessmentRecordLink || ''}
+                                    onChange={(e) => setCourse(prev => ({ ...prev, assessmentRecordLink: e.target.value }))}
+                                    className={inputClasses}
+                                    placeholder="https://..."
+                                />
+                            </div>
                         </div>
                     </Card>
 
                     {(role === UserRole.Trainer || role === UserRole.Developer) && (
                     <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
-                        <h3 className="text-xl font-bold mb-4">Assessment</h3>
-                        <div className="space-y-4">
-                            <div>
-                                <label htmlFor="writtenAssessmentLink" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Written Assessment URL</label>
-                                <input
-                                    type="url"
-                                    id="writtenAssessmentLink"
-                                    value={course.writtenAssessmentLink || ''}
-                                    onChange={(e) => setCourse(prev => ({ ...prev, writtenAssessmentLink: e.target.value }))}
-                                    className={inputClasses}
-                                    placeholder="https://..."
-                                />
-                            </div>
-                            <div>
-                                <label htmlFor="practicalPerformanceAssessmentLink" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Practical Performance Assessment URL</label>
-                                <input
-                                    type="url"
-                                    id="practicalPerformanceAssessmentLink"
-                                    value={course.practicalPerformanceAssessmentLink || ''}
-                                    onChange={(e) => setCourse(prev => ({ ...prev, practicalPerformanceAssessmentLink: e.target.value }))}
-                                    className={inputClasses}
-                                    placeholder="https://..."
-                                />
-                            </div>
+                        <h3 className="text-xl font-bold mb-4">Assessment Methods</h3>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">Select the assessment methods for this course. A link field will appear for each selected method.</p>
+                        <div className="space-y-3">
+                            {(Object.keys(ASSESSMENT_METHOD_LABELS) as AssessmentMethodKey[]).map((methodKey) => {
+                                const methods = course.assessmentMethods || DEFAULT_ASSESSMENT_METHODS;
+                                const method = methods[methodKey] || { enabled: false, link: '' };
+                                return (
+                                    <div key={methodKey} className="border dark:border-gray-700 rounded-lg p-3">
+                                        <label className="flex items-center gap-3 cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                checked={method.enabled}
+                                                onChange={(e) => {
+                                                    const updated = { ...methods, [methodKey]: { ...method, enabled: e.target.checked } };
+                                                    setCourse(prev => ({ ...prev, assessmentMethods: updated }));
+                                                }}
+                                                className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                            />
+                                            <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">{ASSESSMENT_METHOD_LABELS[methodKey]}</span>
+                                        </label>
+                                        {method.enabled && (
+                                            <div className="mt-2 ml-7">
+                                                <input
+                                                    type="url"
+                                                    value={method.link}
+                                                    onChange={(e) => {
+                                                        const updated = { ...methods, [methodKey]: { ...method, link: e.target.value } };
+                                                        setCourse(prev => ({ ...prev, assessmentMethods: updated }));
+                                                    }}
+                                                    className={inputClasses}
+                                                    placeholder="https://docs.google.com/..."
+                                                />
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })}
                         </div>
                     </Card>
                     )}
@@ -1240,6 +1364,11 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                     onSubtopicDragOver={handleSubtopicDragOver}
                                     onSubtopicDragLeave={handleSubtopicDragLeave}
                                     onSubtopicDragEnd={handleSubtopicDragEnd}
+                                    resourceLinks={resourceLinks.filter(rl => topic.subtopics.some(st => st.id === rl.topicId))}
+                                    onAddResourceLink={addResourceLink}
+                                    onUpdateResourceLink={updateResourceLink}
+                                    onDeleteResourceLink={deleteResourceLink}
+                                    onReorderResourceLink={reorderResourceLink}
                                 />
                             </div>
                         ))}

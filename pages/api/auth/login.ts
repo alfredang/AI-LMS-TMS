@@ -3,6 +3,7 @@ import { cors } from '../../../lib/cors';
 import bcrypt from 'bcryptjs';
 import pool from '../../../lib/db';
 
+
 interface LoginRequest {
   email: string;
   password?: string;
@@ -25,6 +26,7 @@ interface LoginResponse {
     role: string; // Primary/selected role
     roles: string[]; // All available roles for role selection
     token?: string;
+    forcePasswordChange?: boolean;
   };
   error?: string;
 }
@@ -283,6 +285,27 @@ async function handler(req: NextApiRequest, res: NextApiResponse<LoginResponse>)
 
     console.log(`✅ User roles determined: ${userRoles.join(', ')}, primary: ${primaryRole}`);
 
+    // Check if forced first-time password change is enabled and user still has default password
+    let forcePasswordChange = false;
+    if (loginType === 'password') {
+      try {
+        const tpSettingsQuery = `SELECT force_first_password_change, default_password FROM training_provider LIMIT 1`;
+        const tpSettings = await pool.query(tpSettingsQuery);
+        if (tpSettings.rows.length > 0 && tpSettings.rows[0].force_first_password_change) {
+          const defaultPwd = tpSettings.rows[0].default_password;
+          if (defaultPwd) {
+            const isDefaultPassword = await bcrypt.compare(defaultPwd, user.password);
+            if (isDefaultPassword) {
+              forcePasswordChange = true;
+              console.log(`🔐 User ${email} still has default password, forcing change`);
+            }
+          }
+        }
+      } catch (e) {
+        // Column may not exist yet, skip
+      }
+    }
+
     // Successful login response
     const loginResponse = {
       success: true,
@@ -297,7 +320,8 @@ async function handler(req: NextApiRequest, res: NextApiResponse<LoginResponse>)
         },
         role: primaryRole,
         roles: userRoles,
-        token: `mock-jwt-token-${user.id}` // In production, generate a real JWT
+        token: `mock-jwt-token-${user.id}`, // In production, generate a real JWT
+        forcePasswordChange
       }
     };
 

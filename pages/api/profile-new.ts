@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next'
 import pool from '../../lib/db';
 import { cors } from '../../lib/cors';
 
+
 // Local utility function for API responses
 function createApiResponse(success: boolean, message: string, data?: any, error?: string) {
   return {
@@ -275,8 +276,15 @@ async function getTrainingProviderProfile(userId: string) {
         tp.ssg_encryption_key,
         tp.sync_google_calendar,
         tp.sync_ms_calendar,
+        tp.google_calendar_url,
+        tp.ms_calendar_url,
         tp.integrate_google_drive,
         tp.integrate_ms_onedrive,
+        tp.email_user,
+        tp.google_client_id,
+        tp.google_client_secret,
+        tp.google_refresh_token,
+        tp.google_slides_template_id,
         tp.auto_send_proforma_invoice,
         tp.auto_send_confirm_email,
         tp.auto_send_invoice,
@@ -296,6 +304,8 @@ async function getTrainingProviderProfile(userId: string) {
         tp.gst_register,
         tp.color_scheme AS primary_color,
         tp.id as provider_id,
+        tp.force_first_password_change,
+        tp.default_password,
         'member' as access_type
     FROM app_user au
     INNER JOIN training_provider_member tpm ON au.id = tpm.user_id
@@ -331,6 +341,11 @@ async function getTrainingProviderProfile(userId: string) {
           tp.sync_ms_calendar,
           tp.integrate_google_drive,
           tp.integrate_ms_onedrive,
+          tp.email_user,
+          tp.google_client_id,
+          tp.google_client_secret,
+          tp.google_refresh_token,
+          tp.google_slides_template_id,
           tp.auto_send_proforma_invoice,
           tp.auto_send_confirm_email,
           tp.auto_send_invoice,
@@ -350,6 +365,8 @@ async function getTrainingProviderProfile(userId: string) {
           tp.gst_register,
           tp.color_scheme AS primary_color,
           tp.id as provider_id,
+          tp.force_first_password_change,
+          tp.default_password,
           'owner' as access_type
       FROM app_user au
       INNER JOIN training_provider tp ON au.id = tp.id
@@ -385,6 +402,11 @@ async function getTrainingProviderProfile(userId: string) {
           tp.sync_ms_calendar,
           tp.integrate_google_drive,
           tp.integrate_ms_onedrive,
+          tp.email_user,
+          tp.google_client_id,
+          tp.google_client_secret,
+          tp.google_refresh_token,
+          tp.google_slides_template_id,
           tp.auto_send_proforma_invoice,
           tp.auto_send_confirm_email,
           tp.auto_send_invoice,
@@ -404,6 +426,8 @@ async function getTrainingProviderProfile(userId: string) {
           tp.gst_register,
           tp.color_scheme AS primary_color,
           tp.id as provider_id,
+          tp.force_first_password_change,
+          tp.default_password,
           'admin' as access_type
       FROM app_user au
       INNER JOIN provider_admin_user pau ON au.id = pau.user_id
@@ -489,9 +513,14 @@ async function getTrainingProviderProfile(userId: string) {
     ssgEncryptionKey: profileData.ssg_encryption_key || '',
     integrations: {
       syncGoogleCalendar: profileData.sync_google_calendar || false,
-      syncMicrosoftCalendar: profileData.sync_ms_calendar || false,
+      googleCalendarUrl: profileData.google_calendar_url || '',
       googleDrive: profileData.integrate_google_drive || false,
-      microsoftOneDrive: profileData.integrate_ms_onedrive || false
+      microsoftOneDrive: profileData.integrate_ms_onedrive || false,
+      emailUser: profileData.email_user || '',
+      googleClientId: profileData.google_client_id || '',
+      googleClientSecret: profileData.google_client_secret || '',
+      googleRefreshToken: profileData.google_refresh_token || '',
+      googleSlidesTemplateId: profileData.google_slides_template_id || '',
     },
     adminSettings: {
       autoSendProFormaInvoice: profileData.auto_send_proforma_invoice || false,
@@ -506,7 +535,9 @@ async function getTrainingProviderProfile(userId: string) {
       autoDeleteAfter6Months: profileData.auto_delete_after_six_months || false,
       enableOtpLogin: profileData.enable_otp_login || false,
       enableDefaultOtp: profileData.enable_default_otp || false,
-      defaultOtpValue: profileData.default_otp || ''
+      defaultOtpValue: profileData.default_otp || '',
+      forceFirstPasswordChange: profileData.force_first_password_change || false,
+      defaultPassword: profileData.default_password || ''
     },
     gamingSettings: {
       enableLeaderboard: profileData.enable_leaderboard || false,
