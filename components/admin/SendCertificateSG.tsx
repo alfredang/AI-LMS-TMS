@@ -6,13 +6,15 @@ interface FormData {
   studentEmail: string;
   courseName: string;
   courseDates: string;
+  ccEmails: string;
 }
 
+const DEFAULT_CC = 'angch@tertiaryinfotech.com, iris@tertiaryinfotech.com, marcus@tertiaryinfotech.com, sylvia@tertiaryinfotech.com';
 const STORAGE_KEY = 'send-cert-sg-form';
 
 export const SendCertificateSGView: React.FC = () => {
   const { currentUser } = useLms();
-  const [form, setForm] = useState<FormData>({ studentName: '', studentEmail: '', courseName: '', courseDates: '' });
+  const [form, setForm] = useState<FormData>({ studentName: '', studentEmail: '', courseName: '', courseDates: '', ccEmails: DEFAULT_CC });
   const [sending, setSending] = useState(false);
   const [result, setResult] = useState<{ success: boolean; message: string } | null>(null);
 
@@ -52,6 +54,7 @@ export const SendCertificateSGView: React.FC = () => {
           courseName: form.courseName,
           courseDates: form.courseDates,
           userId: currentUser.id,
+          ccEmails: form.ccEmails,
         }),
       });
 
@@ -128,6 +131,18 @@ export const SendCertificateSGView: React.FC = () => {
               placeholder="e.g. 25 - 27 Mar 2026"
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">CC Email List</label>
+            <input
+              type="text"
+              value={form.ccEmails}
+              onChange={e => handleChange('ccEmails', e.target.value)}
+              placeholder="Comma-separated email addresses"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            />
+            <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">Comma-separated. Leave empty for no CC.</p>
           </div>
 
           <button

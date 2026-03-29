@@ -7,7 +7,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { studentName, studentEmail, courseName, courseDates, userId } = req.body;
+  const { studentName, studentEmail, courseName, courseDates, userId, ccEmails } = req.body;
+
+  // Parse CC list from request
+  const ccList: string[] = typeof ccEmails === 'string' && ccEmails.trim()
+    ? ccEmails.split(',').map((e: string) => e.trim()).filter(Boolean)
+    : [];
 
   if (!studentName || !studentEmail || !courseName || !courseDates || !userId) {
     return res.status(400).json({ error: 'All fields are required' });
@@ -123,6 +128,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const rawEmail = [
       `From: ${emailUser}`,
       `To: ${studentEmail}`,
+      ...(ccList.length > 0 ? [`Cc: ${ccList.join(', ')}`] : []),
       `Subject: ${subject}`,
       `MIME-Version: 1.0`,
       `Content-Type: multipart/mixed; boundary="${boundary}"`,
@@ -163,7 +169,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       requestBody: { raw: encodedMessage },
     });
 
-    return res.status(200).json({ success: true, message: `Certificate sent to ${studentEmail}`, fileName });
+    return res.status(200).json({ success: true, message: `Certificate sent to ${studentEmail}${ccList.length > 0 ? ` (CC: ${ccList.join(', ')})` : ''}`, fileName });
   } catch (err: any) {
     // Clean up temp file if it exists
     if (tempFileId) {
