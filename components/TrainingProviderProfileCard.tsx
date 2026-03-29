@@ -958,7 +958,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
 
                 <div className="border-t my-6"></div>
                 <button type="button" onClick={() => setIsIntegrationsOpen(prev => !prev)} className="w-full flex items-center justify-between group">
-                    <h2 className="text-xl font-bold">Integration</h2>
+                    <h2 className="text-xl font-bold">Integrations</h2>
                     <Icon name={IconName.ChevronDown} className={`w-5 h-5 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 transition-transform duration-200 flex-shrink-0 ml-4 ${isIntegrationsOpen ? 'rotate-180' : ''}`} />
                 </button>
                 {isIntegrationsOpen && <div className="space-y-6 font-semibold mt-4">
