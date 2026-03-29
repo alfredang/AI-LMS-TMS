@@ -20,6 +20,12 @@
 
 ---
 
+<p align="center">
+  <img src="public/screenshots/login-screen.png" alt="AI-LMS-TMS Login Screen" width="800" />
+</p>
+
+---
+
 ## Overview
 
 AI-LMS-TMS is a **full-stack, enterprise-grade web application** that manages the complete training lifecycle - from course creation and scheduling to learner enrollment, progress tracking, assessments, and certification. Built with modern technologies and deep integration with Singapore's SkillsFuture ecosystem, it provides a seamless experience for training providers, trainers, and learners.
