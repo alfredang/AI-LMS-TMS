@@ -1183,41 +1183,9 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                     <Icon name={IconName.ChevronDown} className={`w-5 h-5 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 transition-transform duration-200 flex-shrink-0 ml-4 ${isDocTemplatesOpen ? 'rotate-180' : ''}`} />
                 </button>
                 {isDocTemplatesOpen && <div className="space-y-4 mt-4">
-                    {/* Invoice Template */}
+                    {/* Proforma Invoice Template ID */}
                     <div className="p-3 bg-surface-elevated rounded-md border border-default">
-                        <label className="block text-sm font-medium text-on-surface-secondary mb-1 font-semibold">Invoice Template</label>
-                        {isEditing ? (
-                            <input
-                                type="text"
-                                value={formData.invoiceTemplateUrl || ''}
-                                onChange={(e) => setFormData((prev) => ({ ...prev, invoiceTemplateUrl: e.target.value }))}
-                                className={inputClasses}
-                                placeholder="Google Docs URL or template ID"
-                            />
-                        ) : (
-                            <p className="text-sm text-on-surface truncate">{formData.invoiceTemplateUrl || 'Not Set'}</p>
-                        )}
-                    </div>
-
-                    {/* Receipt Template */}
-                    <div className="p-3 bg-surface-elevated rounded-md border border-default">
-                        <label className="block text-sm font-medium text-on-surface-secondary mb-1 font-semibold">Receipt Template</label>
-                        {isEditing ? (
-                            <input
-                                type="text"
-                                value={formData.receiptTemplateUrl || ''}
-                                onChange={(e) => setFormData((prev) => ({ ...prev, receiptTemplateUrl: e.target.value }))}
-                                className={inputClasses}
-                                placeholder="Google Docs URL or template ID"
-                            />
-                        ) : (
-                            <p className="text-sm text-on-surface truncate">{formData.receiptTemplateUrl || 'Not Set'}</p>
-                        )}
-                    </div>
-
-                    {/* Pro Forma Invoice Template */}
-                    <div className="p-3 bg-surface-elevated rounded-md border border-default">
-                        <label className="block text-sm font-medium text-on-surface-secondary mb-1 font-semibold">Pro Forma Invoice Template</label>
+                        <label className="block text-sm font-medium text-on-surface-secondary mb-1 font-semibold">Proforma Invoice Template ID</label>
                         {isEditing ? (
                             <input
                                 type="text"
@@ -1231,9 +1199,41 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                         )}
                     </div>
 
-                    {/* Google Certificate Template ID */}
+                    {/* Invoice Template ID */}
                     <div className="p-3 bg-surface-elevated rounded-md border border-default">
-                        <label className="block text-sm font-medium text-on-surface-secondary mb-1 font-semibold">Google Certificate Template ID</label>
+                        <label className="block text-sm font-medium text-on-surface-secondary mb-1 font-semibold">Invoice Template ID</label>
+                        {isEditing ? (
+                            <input
+                                type="text"
+                                value={formData.invoiceTemplateUrl || ''}
+                                onChange={(e) => setFormData((prev) => ({ ...prev, invoiceTemplateUrl: e.target.value }))}
+                                className={inputClasses}
+                                placeholder="Google Docs URL or template ID"
+                            />
+                        ) : (
+                            <p className="text-sm text-on-surface truncate">{formData.invoiceTemplateUrl || 'Not Set'}</p>
+                        )}
+                    </div>
+
+                    {/* Receipt Template ID */}
+                    <div className="p-3 bg-surface-elevated rounded-md border border-default">
+                        <label className="block text-sm font-medium text-on-surface-secondary mb-1 font-semibold">Receipt Template ID</label>
+                        {isEditing ? (
+                            <input
+                                type="text"
+                                value={formData.receiptTemplateUrl || ''}
+                                onChange={(e) => setFormData((prev) => ({ ...prev, receiptTemplateUrl: e.target.value }))}
+                                className={inputClasses}
+                                placeholder="Google Docs URL or template ID"
+                            />
+                        ) : (
+                            <p className="text-sm text-on-surface truncate">{formData.receiptTemplateUrl || 'Not Set'}</p>
+                        )}
+                    </div>
+
+                    {/* Certificate Template ID */}
+                    <div className="p-3 bg-surface-elevated rounded-md border border-default">
+                        <label className="block text-sm font-medium text-on-surface-secondary mb-1 font-semibold">Certificate Template ID</label>
                         {isEditing ? (
                             <input
                                 type="text"
