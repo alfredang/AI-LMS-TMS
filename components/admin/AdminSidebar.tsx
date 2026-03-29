@@ -37,11 +37,11 @@ interface AdminSidebarProps {
 }
 
 const REFERENCE_LINKS = [
-    { key: 'masterListUrl', label: 'Master List', defaultUrl: 'https://docs.google.com/spreadsheets/u/2/d/1Y5zO4LLc4jlLOxl7nT6HQzsfPt4tRoQe_sR2asFd5a8/edit?gid=979275912#gid=979275912' },
-    { key: 'tertiaryTmsUrl', label: 'Tertiary TMS', defaultUrl: 'https://docs.google.com/spreadsheets/d/1lLphFYcwV_h2gyYeviO4kbF0yb4AfMZ4TKzy9DqW3b8/edit?gid=665902982#gid=665902982' },
-    { key: 'tertiaryFmsUrl', label: 'Tertiary FMS', defaultUrl: 'https://docs.google.com/spreadsheets/d/14IjSXJ0pHG23evfULhrLJEFXXsegx3hBNJoNSgRcp1k/edit?gid=1766632069#gid=1766632069' },
-    { key: 'tertiaryMmsUrl', label: 'Tertiary MMS', defaultUrl: 'https://docs.google.com/spreadsheets/d/1dUK5Kpsrvq7gdKcTdczd8F1Ppd67PR7hrnf625bGLTQ/edit?gid=1090092806#gid=1090092806' },
-    { key: 'tertiaryTpmsUrl', label: 'Tertiary TPMS', defaultUrl: 'https://docs.google.com/spreadsheets/d/1pxBjm0EM5D0FaGcrQ-LrM_ceoJdaIoJwlql9QPFqPxM/edit?gid=1513502276#gid=1513502276' },
+    { key: 'masterListUrl', label: 'Master List' },
+    { key: 'tertiaryTmsUrl', label: 'Tertiary TMS' },
+    { key: 'tertiaryFmsUrl', label: 'Tertiary FMS' },
+    { key: 'tertiaryMmsUrl', label: 'Tertiary MMS' },
+    { key: 'tertiaryTpmsUrl', label: 'Tertiary TPMS' },
 ];
 
 const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate }) => {
@@ -159,8 +159,9 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate }) => {
             </NavSection>
 
             <NavSection title="Reference Links" isOpen={openSections.referenceLinks} onToggle={() => toggleSection('referenceLinks')}>
-                {REFERENCE_LINKS.map(({ key, label, defaultUrl }) => {
-                    const url = (trainingProviderProfile?.integrations as any)?.[key] || defaultUrl;
+                {REFERENCE_LINKS.map(({ key, label }) => {
+                    const url = (trainingProviderProfile?.integrations as any)?.[key];
+                    if (!url) return null;
                     return (
                         <a
                             key={key}
