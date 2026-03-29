@@ -1,21 +1,22 @@
 import { Pool } from 'pg';
-import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
-import fs from 'fs';
-import path from 'path';
 import { Readable } from 'stream';
 import { google, drive_v3 } from 'googleapis';
 
+// --- Helper to extract folder ID from Google Drive URL or raw ID ---
+function extractFolderId(input: string): string {
+    // Handle: https://drive.google.com/drive/folders/{id}?...
+    const folderMatch = input.match(/\/folders\/([a-zA-Z0-9_-]+)/);
+    if (folderMatch) return folderMatch[1];
+    // Handle: https://drive.google.com/drive/u/0/folders/{id}
+    const folderMatch2 = input.match(/\/folders\/([a-zA-Z0-9_-]+)/);
+    if (folderMatch2) return folderMatch2[1];
+    // Assume raw folder ID
+    return input.trim();
+}
+
 // --- Google Drive Helpers ---
-function getDriveClient(): drive_v3.Drive {
-    const clientId = process.env.GOOGLE_OAUTH_CLIENT_ID;
-    const clientSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET;
-    const refreshToken = process.env.GOOGLE_OAUTH_REFRESH_TOKEN;
-
-    if (!clientId || !clientSecret || !refreshToken) {
-        throw new Error('Missing Google OAuth credentials. Ensure GOOGLE_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET, and GOOGLE_OAUTH_REFRESH_TOKEN are set.');
-    }
-
-    const oauth2Client = new google.auth.OAuth2(clientId, clientSecret, 'http://localhost:9876');
+function createDriveClient(clientId: string, clientSecret: string, refreshToken: string): drive_v3.Drive {
+    const oauth2Client = new google.auth.OAuth2(clientId, clientSecret, 'https://developers.google.com/oauthplayground');
     oauth2Client.setCredentials({ refresh_token: refreshToken });
     return google.drive({ version: 'v3', auth: oauth2Client });
 }
@@ -23,7 +24,6 @@ function getDriveClient(): drive_v3.Drive {
 async function findSubfolder(drive: drive_v3.Drive, parentFolderId: string, folderName: string): Promise<string | null> {
     const safeName = folderName.replace(/'/g, "\\'");
     const response = await drive.files.list({
-        // Fix for missing single-quotes around safeName inside the query string
         q: `'${parentFolderId}' in parents and name = '${safeName}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
         fields: 'files(id, name)',
         spaces: 'drive',
@@ -32,8 +32,65 @@ async function findSubfolder(drive: drive_v3.Drive, parentFolderId: string, fold
     return (files && files.length > 0) ? files[0].id! : null;
 }
 
+// --- Fetch training provider settings from DB ---
+async function getTrainingProviderSettings(pool: Pool, enrolmentId: string) {
+    // Get training provider via enrollment -> course -> training provider
+    const result = await pool.query(`
+        SELECT
+            tp.google_client_id,
+            tp.google_client_secret,
+            tp.google_refresh_token,
+            tp.google_slides_template_id,
+            tp.certificate_folder_url,
+            tp.certificate_template_url
+        FROM enrollment e
+        JOIN course c ON e.course_id = c.id
+        JOIN training_provider tp ON c.training_provider_id = tp.id
+        WHERE e.id = $1
+    `, [enrolmentId]);
+
+    if (result.rows.length === 0) {
+        // Fallback: try via course_run
+        const fallback = await pool.query(`
+            SELECT
+                tp.google_client_id,
+                tp.google_client_secret,
+                tp.google_refresh_token,
+                tp.google_slides_template_id,
+                tp.certificate_folder_url,
+                tp.certificate_template_url
+            FROM enrollment e
+            JOIN course_run cr ON e.course_run_id = cr.id
+            JOIN course c ON cr.course_id = c.id
+            JOIN training_provider tp ON c.training_provider_id = tp.id
+            WHERE e.id = $1
+        `, [enrolmentId]);
+        if (fallback.rows.length === 0) {
+            // Last fallback: get the first training provider
+            const lastFallback = await pool.query(`
+                SELECT
+                    google_client_id,
+                    google_client_secret,
+                    google_refresh_token,
+                    google_slides_template_id,
+                    certificate_folder_url,
+                    certificate_template_url
+                FROM training_provider
+                LIMIT 1
+            `);
+            if (lastFallback.rows.length === 0) {
+                throw new Error('No training provider found');
+            }
+            return lastFallback.rows[0];
+        }
+        return fallback.rows[0];
+    }
+    return result.rows[0];
+}
+
 /**
  * Generates a PDF certificate for an Enrollment and securely uploads it to Google Drive.
+ * Uses Google Slides template from Company Settings and stores in the configured certificate folder.
  * @param enrolmentId The UUID of the specific enrollment
  * @param pool Database connection pool
  * @returns The webViewLink (URL) of the uploaded PDF
@@ -41,7 +98,7 @@ async function findSubfolder(drive: drive_v3.Drive, parentFolderId: string, fold
 export async function generateAndUploadCertificate(enrolmentId: string, pool: Pool): Promise<string> {
     // 1. Fetch the enrollment details
     const enrollQuery = `
-        SELECT 
+        SELECT
             e.id as enrolment_id,
             e.assessment_status,
             u.full_name,
@@ -63,12 +120,30 @@ export async function generateAndUploadCertificate(enrolmentId: string, pool: Po
 
     const data = enrollRes.rows[0];
 
-    // Note: We only generate certificates for strictly Competent/Passed students 
     if (data.assessment_status !== 'Competent' && data.assessment_status !== 'Passed') {
         throw new Error(`Student status is ${data.assessment_status}. Cannot generate certificate.`);
     }
 
-    // 2. Format dates: (start date)-(end date) or (date) if same
+    // 2. Get training provider settings from DB
+    const tpSettings = await getTrainingProviderSettings(pool, enrolmentId);
+
+    const clientId = tpSettings.google_client_id;
+    const clientSecret = tpSettings.google_client_secret;
+    const refreshToken = tpSettings.google_refresh_token;
+    const slidesTemplateId = tpSettings.google_slides_template_id || tpSettings.certificate_template_url;
+    const certificateFolderUrl = tpSettings.certificate_folder_url;
+
+    if (!clientId || !clientSecret || !refreshToken) {
+        throw new Error('Google OAuth credentials are not configured in Company Settings. Please set Google Client ID, Client Secret, and Refresh Token under Google Integration.');
+    }
+    if (!slidesTemplateId) {
+        throw new Error('Certificate Template ID is not configured in Company Settings. Please set it under Document Templates.');
+    }
+    if (!certificateFolderUrl) {
+        throw new Error('Certificate Folder URL is not configured in Company Settings. Please set it under Google Integration.');
+    }
+
+    // 3. Format dates
     const sDate = new Date(data.start_date);
     const eDate = new Date(data.end_date);
     let dateString = '';
@@ -83,168 +158,134 @@ export async function generateAndUploadCertificate(enrolmentId: string, pool: Po
         dateString = new Date(dateToUse).toLocaleDateString('en-SG', formatOptions);
     }
 
-    // 3. Load the PDF template
-    const templatePath = path.join(process.cwd(), 'public', 'certificate_template', 'Certificate Template (n8n Automation) Blank.pdf');
-    let templateBytes: Buffer;
+    // 4. Generate PDF from Google Slides template
+    const drive = createDriveClient(clientId, clientSecret, refreshToken);
+    const oauth2Client = new google.auth.OAuth2(clientId, clientSecret, 'https://developers.google.com/oauthplayground');
+    oauth2Client.setCredentials({ refresh_token: refreshToken });
+    const slides = google.slides({ version: 'v1', auth: oauth2Client });
+
+    let tempFileId: string | null = null;
+
     try {
-        templateBytes = fs.readFileSync(templatePath);
-    } catch (e) {
-        throw new Error('PDF Certificate template not found. Please upload it to public/certificate_template/Certificate Template (n8n Automation) Blank.pdf');
-    }
-
-    const pdfDoc = await PDFDocument.load(templateBytes);
-    const pages = pdfDoc.getPages();
-    const page = pages[0]; // Assuming template is a 1-page PDF
-
-    const helveticaBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-
-    // --- Student Name (Centered over the underline) ---
-    const studentName = data.full_name;
-    const nameFontSize = 32;
-    const nameWidth = helveticaBold.widthOfTextAtSize(studentName, nameFontSize);
-    // The block is approx 256 points wide starting at 18. Center is 18 + 256/2 = 146.
-    const nameX = Math.max(18, 146 - (nameWidth / 2));
-    
-    page.drawText(studentName, {
-        x: nameX,
-        y: 442, // Shifted up (+10 from 432) to hover correctly over the line
-        size: nameFontSize,
-        font: helveticaBold,
-        color: rgb(0.1, 0.1, 0.1),
-    });
-
-    // --- Course Name (Wrapped to max 2 lines, Left Aligned) ---
-    const courseText = data.course_name;
-    const maxCourseWidth = 330;
-    let courseFontSize = 26;
-    let lines: string[] = [];
-    
-    while (courseFontSize >= 12) {
-        const words = courseText.split(' ');
-        lines = [words[0] || ''];
-        let lineIdx = 0;
-        for (let i = 1; i < words.length; i++) {
-            const word = words[i];
-            const currentWidth = helveticaBold.widthOfTextAtSize(lines[lineIdx] + ' ' + word, courseFontSize);
-            if (currentWidth <= maxCourseWidth) {
-                lines[lineIdx] += ' ' + word;
-            } else {
-                lineIdx++;
-                lines[lineIdx] = word;
-            }
-        }
-        if (lines.length <= 2) break; // fits in 2 lines!
-        courseFontSize -= 2;
-    }
-
-    // Draw course lines
-    const courseStartY = 350; // Shifted up (+5 from 345)
-    const lineHeight = courseFontSize * 1.3;
-    lines.forEach((line, index) => {
-        page.drawText(line, {
-            x: 22, // Moved right (+4 from 18)
-            y: courseStartY - (index * lineHeight),
-            size: courseFontSize,
-            font: helveticaBold,
-            color: rgb(0.043, 0.302, 0.533), // Exact #0b4d88
+        // 4a. Copy the Google Slides template
+        const copyResponse = await drive.files.copy({
+            fileId: slidesTemplateId,
+            requestBody: { name: `Certificate - ${data.full_name}` },
         });
-    });
+        tempFileId = copyResponse.data.id!;
 
-    // --- Course Dates ---
-    page.drawText(dateString, {
-        x: 102, // Moved right (+4 from 98)
-        y: 290, // Shifted up (+2 from 288)
-        size: 24,
-        font: helveticaBold,
-        color: rgb(0.1, 0.1, 0.1),
-    });
+        // 4b. Replace placeholders
+        await slides.presentations.batchUpdate({
+            presentationId: tempFileId,
+            requestBody: {
+                requests: [
+                    { replaceAllText: { containsText: { text: '[Student Name]', matchCase: true }, replaceText: data.full_name } },
+                    { replaceAllText: { containsText: { text: '[Course Name]', matchCase: true }, replaceText: data.course_name } },
+                    { replaceAllText: { containsText: { text: '[Course Dates]', matchCase: true }, replaceText: dateString } },
+                ],
+            },
+        });
 
-    const pdfBytes = await pdfDoc.save();
-    const fileName = `Certificate_${data.full_name.replace(/\\s+/g, '_')}_${data.course_name.replace(/\\s+/g, '_')}.pdf`;
-    
-    // 4. --- Google Drive Upload Pipeline ---
-    const drive = getDriveClient();
-    const rootFolderId = process.env.GOOGLE_DRIVE_FOLDER_ID;
-    if (!rootFolderId) throw new Error('GOOGLE_DRIVE_FOLDER_ID is not configured.');
+        // 4c. Export as PDF
+        const pdfResponse = await drive.files.export(
+            { fileId: tempFileId, mimeType: 'application/pdf' },
+            { responseType: 'arraybuffer' }
+        );
+        const pdfBuffer = Buffer.from(pdfResponse.data as ArrayBuffer);
 
-    // 4a. Locate specific Course Folder mathematically 
-    let courseFolderId = null;
-    let tgsRef = data.course_code;
-    if (!tgsRef) {
-        const tgsMatch = data.course_name.match(/(TGS-\d+)/);
-        if (tgsMatch) tgsRef = tgsMatch[1];
-    }
+        // 4d. Delete the temp Slides copy
+        await drive.files.delete({ fileId: tempFileId });
+        tempFileId = null;
 
-    const expectedCourseFolderName = tgsRef && data.course_name && !data.course_name.includes(tgsRef)
-        ? `${tgsRef} ${data.course_name}`.trim()
-        : (`${data.course_code || ''} ${data.course_name}`).trim() || 'Unknown Course';
+        // 5. Upload PDF to Google Drive certificate folder
+        const rootFolderId = extractFolderId(certificateFolderUrl);
+        const fileName = `Certificate_${data.full_name.replace(/\s+/g, '_')}_${data.course_name.replace(/\s+/g, '_')}.pdf`;
 
-    if (tgsRef) {
-        const safeTgsRef = tgsRef.replace(/'/g, "\\'");
-        const tgsResponse = await drive.files.list({
-            q: `'${rootFolderId}' in parents and name contains '${safeTgsRef}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
-            fields: 'files(id, name)',
+        // 5a. Locate course folder
+        let courseFolderId = null;
+        let tgsRef = data.course_code;
+        if (!tgsRef) {
+            const tgsMatch = data.course_name.match(/(TGS-\d+)/);
+            if (tgsMatch) tgsRef = tgsMatch[1];
+        }
+
+        const expectedCourseFolderName = tgsRef && data.course_name && !data.course_name.includes(tgsRef)
+            ? `${tgsRef} ${data.course_name}`.trim()
+            : (`${data.course_code || ''} ${data.course_name}`).trim() || 'Unknown Course';
+
+        if (tgsRef) {
+            const safeTgsRef = tgsRef.replace(/'/g, "\\'");
+            const tgsResponse = await drive.files.list({
+                q: `'${rootFolderId}' in parents and name contains '${safeTgsRef}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
+                fields: 'files(id, name)',
+                spaces: 'drive',
+            });
+            if (tgsResponse.data.files && tgsResponse.data.files.length > 0) {
+                courseFolderId = tgsResponse.data.files[0].id!;
+            }
+        } else {
+            courseFolderId = await findSubfolder(drive, rootFolderId, expectedCourseFolderName);
+        }
+
+        if (!courseFolderId) {
+            const createRes = await drive.files.create({
+                requestBody: { name: expectedCourseFolderName, mimeType: 'application/vnd.google-apps.folder', parents: [rootFolderId] },
+                fields: 'id',
+            });
+            courseFolderId = createRes.data.id!;
+        }
+
+        // 5b. Locate 'Certificates' subfolder
+        let certificatesFolderId = await findSubfolder(drive, courseFolderId, 'Certificates');
+        if (!certificatesFolderId) {
+            const createCertRes = await drive.files.create({
+                requestBody: { name: 'Certificates', mimeType: 'application/vnd.google-apps.folder', parents: [courseFolderId] },
+                fields: 'id',
+            });
+            certificatesFolderId = createCertRes.data.id!;
+        }
+
+        // 5c. Upload & overwrite existing PDF
+        const safeFileName = fileName.replace(/'/g, "\\'");
+        const existingFileRes = await drive.files.list({
+            q: `'${certificatesFolderId}' in parents and name = '${safeFileName}' and trashed = false`,
+            fields: 'files(id)',
             spaces: 'drive',
         });
-        if (tgsResponse.data.files && tgsResponse.data.files.length > 0) {
-            courseFolderId = tgsResponse.data.files[0].id!;
+
+        let fileUrl = '';
+        if (existingFileRes.data.files && existingFileRes.data.files.length > 0) {
+            const existingFileId = existingFileRes.data.files[0].id!;
+            await drive.files.update({
+                fileId: existingFileId,
+                media: { mimeType: 'application/pdf', body: Readable.from(pdfBuffer) },
+            });
+            fileUrl = `https://drive.google.com/file/d/${existingFileId}/view`;
+        } else {
+            const driveResponse = await drive.files.create({
+                requestBody: { name: fileName, parents: [certificatesFolderId] },
+                media: { mimeType: 'application/pdf', body: Readable.from(pdfBuffer) },
+                fields: 'id, webViewLink',
+            });
+
+            await drive.permissions.create({
+                fileId: driveResponse.data.id!,
+                requestBody: { role: 'reader', type: 'anyone' },
+            });
+            fileUrl = driveResponse.data.webViewLink!;
         }
-    } else {
-        courseFolderId = await findSubfolder(drive, rootFolderId, expectedCourseFolderName);
+
+        // 6. Save Drive link to DB
+        await pool.query(`UPDATE enrollment SET certificate = $1 WHERE id = $2`, [fileUrl, enrolmentId]);
+
+        return fileUrl;
+    } catch (err) {
+        // Clean up temp file if it exists
+        if (tempFileId) {
+            try {
+                await drive.files.delete({ fileId: tempFileId });
+            } catch {}
+        }
+        throw err;
     }
-
-    if (!courseFolderId) {
-        const createRes = await drive.files.create({
-            requestBody: { name: expectedCourseFolderName, mimeType: 'application/vnd.google-apps.folder', parents: [rootFolderId] },
-            fields: 'id',
-        });
-        courseFolderId = createRes.data.id!;
-    }
-
-    // 4b. Firmly locate 'Certificates' subfolder (prevent duplicates)
-    let certificatesFolderId = await findSubfolder(drive, courseFolderId, 'Certificates');
-    if (!certificatesFolderId) {
-        const createCertRes = await drive.files.create({
-            requestBody: { name: 'Certificates', mimeType: 'application/vnd.google-apps.folder', parents: [courseFolderId] },
-            fields: 'id',
-        });
-        certificatesFolderId = createCertRes.data.id!;
-    }
-
-    // 4c. Upload & intelligently overwrite PDF to avoid duplicated file bloat
-    const safeFileName = fileName.replace(/'/g, "\\'");
-    const existingFileRes = await drive.files.list({
-        q: `'${certificatesFolderId}' in parents and name = '${safeFileName}' and trashed = false`,
-        fields: 'files(id)',
-        spaces: 'drive',
-    });
-
-    let fileUrl = '';
-    if (existingFileRes.data.files && existingFileRes.data.files.length > 0) {
-        // Update identically named existing file cleanly
-        const existingFileId = existingFileRes.data.files[0].id!;
-        await drive.files.update({
-            fileId: existingFileId,
-            media: { mimeType: 'application/pdf', body: Readable.from(Buffer.from(pdfBytes)) },
-        });
-        fileUrl = `https://drive.google.com/file/d/${existingFileId}/view`;
-    } else {
-        // Upload directly as completely new file with public visibility
-        const driveResponse = await drive.files.create({
-            requestBody: { name: fileName, parents: [certificatesFolderId] },
-            media: { mimeType: 'application/pdf', body: Readable.from(Buffer.from(pdfBytes)) },
-            fields: 'id, webViewLink',
-        });
-        
-        await drive.permissions.create({
-            fileId: driveResponse.data.id!,
-            requestBody: { role: 'reader', type: 'anyone' },
-        });
-        fileUrl = driveResponse.data.webViewLink!;
-    }
-
-    // 5. Save Drive link to DB natively
-    await pool.query(`UPDATE enrollment SET certificate = $1 WHERE id = $2`, [fileUrl, enrolmentId]);
-
-    return fileUrl;
 }
