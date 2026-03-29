@@ -21,7 +21,7 @@
 ---
 
 <p align="center">
-  <img src="public/screenshots/login-screen-v2.png" alt="AI-LMS-TMS Login Screen" width="800" />
+  <img src="public/screenshots/login-screen-v3.png" alt="AI-LMS-TMS Login Screen" width="800" />
 </p>
 
 ---
