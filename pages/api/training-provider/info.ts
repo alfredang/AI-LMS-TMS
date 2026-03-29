@@ -85,6 +85,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       
       if (result.rows.length > 0) {
         const trainingProvider = result.rows[0];
+
+        // Safely fetch reference links (columns may not exist)
+        let refLinks: any = {};
+        try {
+          const refResult = await pool.query(
+            `SELECT master_list_url, tertiary_tms_url, tertiary_fms_url, tertiary_mms_url, tertiary_tpms_url FROM training_provider WHERE id = $1`,
+            [trainingProvider.id]
+          );
+          if (refResult.rows.length > 0) refLinks = refResult.rows[0];
+        } catch (e) { /* columns don't exist yet */ }
+
         const responseData = {
           companyLogoUrl: getAbsoluteImageUrl(trainingProvider.profile_picture_url),
           companyName: trainingProvider.company_name || 'Training Provider',
@@ -93,7 +104,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           enableDefaultOtp: trainingProvider.enable_default_otp || false,
           defaultOtp: trainingProvider.default_otp || '',
           colorScheme: trainingProvider.color_scheme || null,
-          forceFirstPasswordChange: trainingProvider.force_first_password_change || false
+          forceFirstPasswordChange: trainingProvider.force_first_password_change || false,
+          referenceLinks: {
+            masterListUrl: refLinks.master_list_url || '',
+            tertiaryTmsUrl: refLinks.tertiary_tms_url || '',
+            tertiaryFmsUrl: refLinks.tertiary_fms_url || '',
+            tertiaryMmsUrl: refLinks.tertiary_mms_url || '',
+            tertiaryTpmsUrl: refLinks.tertiary_tpms_url || '',
+          },
         };
 
         console.log('✅ Training provider info fetched for user:', responseData);

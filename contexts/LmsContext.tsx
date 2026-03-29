@@ -8,7 +8,7 @@ import { resetTutorChat } from '@lib/services/geminiService';
 import { initializeColorScheme } from '@utils/colorUtils';
 
 // Function to fetch training provider info for all users
-const fetchTrainingProviderInfo = async (userId?: string): Promise<{ companyLogoUrl: string; companyName: string; companyShortname?: string }> => {
+const fetchTrainingProviderInfo = async (userId?: string): Promise<{ companyLogoUrl: string; companyName: string; companyShortname?: string; referenceLinks?: any }> => {
   try {
     // If userId is provided, fetch specific organization info
     const url = userId 
@@ -37,6 +37,7 @@ const fetchTrainingProviderInfo = async (userId?: string): Promise<{ companyLogo
       companyLogoUrl: result.data.companyLogoUrl || '/images/default-company-logo.png',
       companyName: result.data.companyName || 'Training Provider',
       companyShortname: result.data.companyShortname,
+      referenceLinks: result.data.referenceLinks,
     };
   } catch (error) {
     console.error('Error fetching training provider info:', error);
@@ -391,6 +392,7 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               companyLogoUrl: providerInfo.companyLogoUrl,
               companyName: providerInfo.companyName,
               companyShortname: providerInfo.companyShortname,
+              integrations: providerInfo.referenceLinks || {},
             } as TrainingProviderProfile);
           } catch (error) {
             console.error('❌ LmsContext: Failed to load training provider info:', error);
@@ -705,7 +707,8 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           const providerInfo = await fetchTrainingProviderInfo(user.id);
           setTrainingProviderProfile({
             companyLogoUrl: providerInfo.companyLogoUrl,
-            companyName: providerInfo.companyName
+            companyName: providerInfo.companyName,
+            integrations: providerInfo.referenceLinks || {},
           } as TrainingProviderProfile);
           console.log('✅ LmsContext: Training provider info loaded after login');
         } catch (error) {
@@ -746,6 +749,7 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               companyLogoUrl: providerInfo.companyLogoUrl,
               companyName: providerInfo.companyName,
               companyShortname: providerInfo.companyShortname,
+              integrations: providerInfo.referenceLinks || {},
             } as TrainingProviderProfile);
             console.log('✅ LmsContext: Training provider info loaded after login');
           } catch (error) {
