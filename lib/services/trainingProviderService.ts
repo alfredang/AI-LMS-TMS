@@ -3,6 +3,7 @@ import { apiClient } from './apiClient';
 export interface TrainingProviderData {
   companyLogoUrl: string;
   companyName: string;
+  companyShortname: string;
   enableOtpLogin: boolean;
   enableDefaultOtp: boolean;
   defaultOtp: string;
