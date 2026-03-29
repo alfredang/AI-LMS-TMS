@@ -1005,7 +1005,6 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                 { key: 'googleClientId', label: 'Google Client ID', placeholder: 'From Google Cloud Console' },
                                 { key: 'googleClientSecret', label: 'Google Client Secret', placeholder: 'From Google Cloud Console' },
                                 { key: 'googleRefreshToken', label: 'Google Refresh Token', placeholder: 'OAuth2 refresh token' },
-                                { key: 'googleSlidesTemplateId', label: 'Google Slides Template ID', placeholder: 'Google Slides template ID for certificates' },
                             ].map(({ key, label, placeholder }) => (
                                 <div key={key}>
                                     <label className="block text-sm font-medium text-on-surface-secondary mb-1">{label}</label>
@@ -1328,6 +1327,32 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                     }
                                 />
                             </>
+                        )}
+                    </div>
+
+                    {/* Google Slides Template ID */}
+                    <div className="p-3 bg-surface-elevated rounded-md border border-default">
+                        <label className="block text-sm font-medium text-on-surface-secondary mb-1 font-semibold">Google Slides Template ID</label>
+                        {isEditing ? (
+                            <input
+                                type="text"
+                                value={formData.integrations.googleSlidesTemplateId || ''}
+                                onChange={(e) =>
+                                    setFormData((prev) => ({
+                                        ...prev,
+                                        integrations: {
+                                            ...prev.integrations,
+                                            googleSlidesTemplateId: e.target.value,
+                                        },
+                                    }))
+                                }
+                                className={inputClasses}
+                                placeholder="Google Slides template ID for certificates"
+                            />
+                        ) : (
+                            <p className="text-sm text-on-surface truncate">
+                                {formData.integrations.googleSlidesTemplateId || 'Not Set'}
+                            </p>
                         )}
                     </div>
                 </div>}
