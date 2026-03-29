@@ -649,6 +649,12 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
               <a href="#privacy" className="hover:underline">Privacy Policy</a>
               <a href="#acceptable-use" className="hover:underline">Acceptable Use Policy</a>
             </div>
+            <p className="mt-3">
+              Browse our WSQ courses at{' '}
+              <a href="https://www.tertiarycourses.com.sg/" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">
+                https://www.tertiarycourses.com.sg/
+              </a>
+            </p>
           </div>
         </Card>
       </div>
