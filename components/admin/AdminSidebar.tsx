@@ -142,17 +142,17 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate }) => {
                 <NavItem page={AdminPage.ViewGrantStatus} label="View Grant Status" isSubItem />
             </NavSection>
 
-            <NavSection title="Logging" isOpen={openSections.logging} onToggle={() => toggleSection('logging')}>
-                <NavItem page={AdminPage.AutomationLogs} label="Auto Create Learner Log" isSubItem />
-                <NavItem page={AdminPage.AssignTrainerLogs} label="Assign Trainer Log" isSubItem />
-                <NavItem page={AdminPage.CourseRunDateSyncLogs} label="Course Run Date Sync Log" isSubItem />
-            </NavSection>
-
             <NavSection title="Certificate" isOpen={openSections.certificate} onToggle={() => toggleSection('certificate')}>
                 <NavItem page={AdminPage.CreateCertificate} label="Create Certificate" isSubItem />
                 <NavItem page={AdminPage.DeleteCertificate} label="Delete Certificate" isSubItem />
                 <NavItem page={AdminPage.SendCertificateSG} label="Send Certificate (SG)" isSubItem />
                 <NavItem page={AdminPage.SendCertificateGH} label="Send Certificate (GH)" isSubItem />
+            </NavSection>
+
+            <NavSection title="Logging" isOpen={openSections.logging} onToggle={() => toggleSection('logging')}>
+                <NavItem page={AdminPage.AutomationLogs} label="Auto Create Learner Log" isSubItem />
+                <NavItem page={AdminPage.AssignTrainerLogs} label="Assign Trainer Log" isSubItem />
+                <NavItem page={AdminPage.CourseRunDateSyncLogs} label="Course Run Date Sync Log" isSubItem />
             </NavSection>
 
         </nav>
