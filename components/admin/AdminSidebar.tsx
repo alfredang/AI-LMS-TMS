@@ -49,6 +49,10 @@ const N8N_LINKS = [
     { key: 'n8nHost2Url', label: 'n8n Host 2' },
 ];
 
+const USEFUL_LINKS = [
+    { key: 'magentoBackendUrl', label: 'Magento Backend' },
+];
+
 const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate }) => {
     const { adminPage, setAdminPage, setEditingCourseRun, trainingProviderProfile } = useLms();
 
@@ -61,6 +65,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate }) => {
         certificate: false,
         referenceLinks: false,
         n8nLinks: false,
+        usefulLinks: false,
     });
 
     const toggleSection = (key: string) => {
@@ -187,6 +192,27 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate }) => {
 
             <NavSection title="n8n Links" isOpen={openSections.n8nLinks} onToggle={() => toggleSection('n8nLinks')}>
                 {N8N_LINKS.map(({ key, label }) => {
+                    const url = (trainingProviderProfile?.integrations as any)?.[key];
+                    if (!url) return null;
+                    return (
+                        <a
+                            key={key}
+                            href={url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center rounded-md px-3 py-2 text-sm font-medium transition-colors pl-8 text-gray-700 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-slate-700 dark:hover:text-white"
+                        >
+                            {label}
+                            <svg className="w-3 h-3 ml-1.5 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                            </svg>
+                        </a>
+                    );
+                })}
+            </NavSection>
+
+            <NavSection title="Useful Links" isOpen={openSections.usefulLinks} onToggle={() => toggleSection('usefulLinks')}>
+                {USEFUL_LINKS.map(({ key, label }) => {
                     const url = (trainingProviderProfile?.integrations as any)?.[key];
                     if (!url) return null;
                     return (
