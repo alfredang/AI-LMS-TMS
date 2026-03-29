@@ -1297,9 +1297,9 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                         )}
                     </div>
 
-                    {/* Google Slides Template ID */}
+                    {/* Google Certificate Template ID */}
                     <div className="p-3 bg-surface-elevated rounded-md border border-default">
-                        <label className="block text-sm font-medium text-on-surface-secondary mb-1 font-semibold">Google Slides Template ID</label>
+                        <label className="block text-sm font-medium text-on-surface-secondary mb-1 font-semibold">Google Certificate Template ID</label>
                         {isEditing ? (
                             <input
                                 type="text"
