@@ -74,6 +74,7 @@ export enum AdminPage {
   CreateCertificate = 'createCertificate',
   DeleteCertificate = 'deleteCertificate',
   SendCertificateSG = 'sendCertificateSG',
+  SendCertificateGH = 'sendCertificateGH',
   Calendar = 'calendar'
 }
 

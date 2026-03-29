@@ -152,6 +152,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate }) => {
                 <NavItem page={AdminPage.CreateCertificate} label="Create Certificate" isSubItem />
                 <NavItem page={AdminPage.DeleteCertificate} label="Delete Certificate" isSubItem />
                 <NavItem page={AdminPage.SendCertificateSG} label="Send Certificate (SG)" isSubItem />
+                <NavItem page={AdminPage.SendCertificateGH} label="Send Certificate (GH)" isSubItem />
             </NavSection>
 
         </nav>
