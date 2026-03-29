@@ -250,10 +250,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                         } else {
                             // Create new trainer user
                             console.log('📝 Creating new trainer user:', trainerEmail);
-                            
+
+                            // Fetch default password from Company Settings
+                            let defaultPassword = 'password123'; // fallback
+                            try {
+                              const tpResult = await query('SELECT default_password FROM training_provider LIMIT 1');
+                              if (tpResult.rows.length > 0 && tpResult.rows[0].default_password) {
+                                defaultPassword = tpResult.rows[0].default_password;
+                              }
+                            } catch (e) { /* column may not exist */ }
+
                             // Hash the default password for password_hash column
-                            const hashedPassword = await bcrypt.hash('password123', 10);
-                            
+                            const hashedPassword = await bcrypt.hash(defaultPassword, 10);
+
                             const newTrainer = await query(
                                 `INSERT INTO app_user (
                                     email,
@@ -265,7 +274,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                                 ) VALUES ($1, $2, $3, $4, NOW(), NOW()) RETURNING id`,
                                 [
                                     trainerEmail,
-                                    'password123',      // Plain text password
+                                    defaultPassword,    // Plain text password
                                     hashedPassword,     // Hashed password
                                     trainerName || 'Trainer'
                                 ]

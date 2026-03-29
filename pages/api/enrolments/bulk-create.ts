@@ -19,6 +19,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     await client.query('BEGIN');
 
+    // Fetch default password from Company Settings
+    let defaultPassword = 'password123'; // fallback
+    try {
+      const tpResult = await client.query('SELECT default_password FROM training_provider LIMIT 1');
+      if (tpResult.rows.length > 0 && tpResult.rows[0].default_password) {
+        defaultPassword = tpResult.rows[0].default_password;
+      }
+    } catch (e) { /* column may not exist */ }
+
     // Extract enrolment data
     const {
       traineeEmail: rawEmail,
@@ -83,15 +92,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // Create learner account
       userId = crypto.randomUUID();
 
-      const DEFAULT_PASSWORD = 'password123';
       const salt = await bcrypt.genSalt(10);
-      const hashedPassword = await bcrypt.hash(DEFAULT_PASSWORD, salt);
+      const hashedPassword = await bcrypt.hash(defaultPassword, salt);
 
       await client.query(
         `INSERT INTO app_user (
           id, email, full_name, password, password_hash, account_status, created_at
         ) VALUES ($1, $2, $3, $4, $5, 'active', NOW())`,
-        [userId, traineeEmail, traineeName || traineeEmail, DEFAULT_PASSWORD, hashedPassword]
+        [userId, traineeEmail, traineeName || traineeEmail, defaultPassword, hashedPassword]
       );
 
       // Assign Learner role

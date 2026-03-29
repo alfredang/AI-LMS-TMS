@@ -168,6 +168,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     try {
       await client.query('BEGIN');
 
+      // Fetch default password from Company Settings
+      let defaultPassword = 'password123'; // fallback
+      try {
+        const tpResult = await client.query('SELECT default_password FROM training_provider LIMIT 1');
+        if (tpResult.rows.length > 0 && tpResult.rows[0].default_password) {
+          defaultPassword = tpResult.rows[0].default_password;
+        }
+      } catch (e) { /* column may not exist */ }
+
       for (const record of enrolments) {
         const enrolment = record?.enrolment ?? {};
         const trainee   = enrolment?.trainee ?? {};
@@ -186,8 +195,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         let userId: string;
         if (userRow.rows.length === 0) {
           const ins = await client.query(
-            `INSERT INTO app_user (email, password, password_hash, full_name) VALUES ($1, 'password123', 'password123', $2) ON CONFLICT (email) DO NOTHING RETURNING id`,
-            [email, fullName || email]
+            `INSERT INTO app_user (email, password, password_hash, full_name) VALUES ($1, $3, $3, $2) ON CONFLICT (email) DO NOTHING RETURNING id`,
+            [email, fullName || email, defaultPassword]
           );
           if (ins.rows.length > 0) {
             userId = ins.rows[0].id;

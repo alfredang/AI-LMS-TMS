@@ -388,7 +388,7 @@ export const BulkUploadTrainersView: React.FC<BulkUploadTrainersViewProps> = ({ 
           <li><strong className="text-gray-800 dark:text-gray-200">Gender</strong> defaults to "Prefer not to say" if not provided.</li>
           <li><strong className="text-gray-800 dark:text-gray-200">Status</strong> defaults to "Active" if not provided.</li>
           <li>If the trainer email already exists, their information will be updated.</li>
-          <li>New trainers will have their account created with the default password <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">password123</code>.</li>
+          <li>New trainers will have their account created with the default password configured in <strong>Company Settings</strong>.</li>
         </ol>
         <div className="mt-4">
           <Button variant="ghost" onClick={downloadTemplate}>

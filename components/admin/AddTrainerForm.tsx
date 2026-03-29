@@ -370,7 +370,7 @@ const AddTrainerForm: React.FC<AddTrainerFormProps> = ({ onCancel, onSuccess }) 
                 readOnly
                 disabled
               />
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">This default password will be assigned to the new trainer</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Default password from Company Settings will be assigned to the new trainer</p>
             </div>
 
             {/* Telephone */}

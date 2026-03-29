@@ -375,7 +375,7 @@ const UserManagementView: React.FC = () => {
             // Real API call
             const payload = {
                 ...newUser,
-                password: 'password123' // Default password per requirement
+                password: 'default' // Default password from Company Settings will be applied server-side
             };
 
             const response = await fetch('/api/training-provider/add-user', {
@@ -1043,7 +1043,7 @@ const UserManagementView: React.FC = () => {
                         <div className="p-6 border-b border-gray-200 dark:border-gray-700">
                             <h3 className="text-xl font-bold text-gray-900 dark:text-white">Add New User</h3>
                             <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                                Default password will be set to: <strong>password123</strong>
+                                Default password will be set from <strong>Company Settings</strong>
                             </p>
                         </div>
                         <div className="p-6 space-y-4">
