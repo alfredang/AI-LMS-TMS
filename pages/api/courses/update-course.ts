@@ -486,9 +486,8 @@ export default async function handler(
           courseware_link = COALESCE($22, courseware_link),
           assessment_record_link = COALESCE($23, assessment_record_link),
           funding_validity = $24,
-          resource_links = $25,
           updated_at = now()
-        WHERE id = $26
+        WHERE id = $25
         RETURNING id
       `;
 
@@ -517,19 +516,22 @@ export default async function handler(
         courseData.courseLink || null,
         courseData.assessmentRecordLink || null,
         courseData.fundingValidity || null,
-        courseData.resourceLinks ? JSON.stringify(courseData.resourceLinks) : null,
         courseId
       ]);
 
       // Safely attempt to update assessment_methods column
       // This column may not exist if the migration hasn't been run yet
+      // Use SAVEPOINT so a failure doesn't abort the entire transaction
       if (courseData.assessmentMethods) {
         try {
+          await client.query('SAVEPOINT update_assessment_methods');
           await client.query(
             'UPDATE course SET assessment_methods = COALESCE($1, assessment_methods) WHERE id = $2',
             [JSON.stringify(courseData.assessmentMethods), courseId]
           );
+          await client.query('RELEASE SAVEPOINT update_assessment_methods');
         } catch (e) {
+          await client.query('ROLLBACK TO SAVEPOINT update_assessment_methods');
           console.log('⚠️ Could not update assessment_methods (column may not exist yet)');
         }
       }
@@ -597,6 +599,12 @@ export default async function handler(
           [JSON.stringify(updatedResourceLinks), courseId]
         );
         console.log('✅ Resource links updated with new subtopic IDs');
+      } else {
+        // Clear resource_links if none provided
+        await client.query(
+          `UPDATE course SET resource_links = $1 WHERE id = $2`,
+          [courseData.resourceLinks ? '[]' : null, courseId]
+        );
       }
 
       // 3. Handle assessments (create, update, delete)

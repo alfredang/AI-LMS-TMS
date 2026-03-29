@@ -90,6 +90,7 @@ export enum TrainerPage {
   TaskList = 'taskList',
   GenAIAuthoring = 'genAIAuthoring',
   EdTools = 'edTools',
+  AssessmentGuide = 'assessmentGuide',
 }
 
 // Course related interfaces

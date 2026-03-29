@@ -223,13 +223,17 @@ export default function handler(req: NextApiRequest & { files?: any }, res: Next
 
         // Safely attempt to set assessment_methods column
         // This column may not exist if the migration hasn't been run yet
+        // Use SAVEPOINT so a failure doesn't abort the entire transaction
         if (courseData.assessmentMethods) {
           try {
+            await client.query('SAVEPOINT set_assessment_methods');
             await client.query(
               'UPDATE course SET assessment_methods = $1 WHERE id = $2',
               [JSON.stringify(courseData.assessmentMethods), courseId]
             );
+            await client.query('RELEASE SAVEPOINT set_assessment_methods');
           } catch (e) {
+            await client.query('ROLLBACK TO SAVEPOINT set_assessment_methods');
             console.log('⚠️ Could not set assessment_methods (column may not exist yet)');
           }
         }

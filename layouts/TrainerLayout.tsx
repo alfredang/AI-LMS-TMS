@@ -17,6 +17,7 @@ import AssessmentGrading from '../components/trainer/AssessmentGrading';
 import PastAttendance from '../components/trainer/PastAttendance';
 import PastAssessment from '../components/trainer/PastAssessment';
 import EdToolsPage from '../components/trainer/EdToolsPage';
+import AssessmentGuidePage from '../components/trainer/AssessmentGuidePage';
 
 const PAGE_LABELS: Record<TrainerPage, string> = {
   [TrainerPage.EAttendance]: 'E-Attendance',
@@ -27,6 +28,7 @@ const PAGE_LABELS: Record<TrainerPage, string> = {
   [TrainerPage.TaskList]: 'Task List',
   [TrainerPage.GenAIAuthoring]: 'GenAI Tools',
   [TrainerPage.EdTools]: 'Ed Tools',
+  [TrainerPage.AssessmentGuide]: 'Assessment Guide',
 };
 
 const TrainerLayout: React.FC = () => {
@@ -56,6 +58,8 @@ const TrainerLayout: React.FC = () => {
         return <CreateView />;
       case TrainerPage.EdTools:
         return <EdToolsPage />;
+      case TrainerPage.AssessmentGuide:
+        return <AssessmentGuidePage />;
       default:
         return <TrainerHomePage />;
     }
