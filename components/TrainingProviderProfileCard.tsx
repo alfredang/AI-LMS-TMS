@@ -1260,39 +1260,6 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                         )}
                     </div>
 
-                    {/* Certificate Template */}
-                    <div className="flex justify-between items-center p-3 bg-surface-elevated rounded-md border border-default">
-                        <div>
-                            <p className="font-semibold">Certificate Template</p>
-                            <p className="text-xs text-subtle">
-                                {certificateTemplateFile
-                                    ? getCleanDisplayName(certificateTemplateFile.name)
-                                    : formData.certificateTemplateUrl
-                                        ? getCleanDisplayName(formData.certificateTemplateUrl.split('/').pop() || '')
-                                        : 'No template uploaded'}
-                            </p>
-                        </div>
-                        {isEditing && (
-                            <>
-                                <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => document.getElementById('certificate-upload')?.click()}
-                                >
-                                    <Icon name={IconName.Upload} className="w-4 h-4 mr-2" />
-                                    Upload
-                                </Button>
-                                <input
-                                    type="file"
-                                    id="certificate-upload"
-                                    className="hidden"
-                                    accept="*/*"
-                                    onChange={(e) => handleTemplateUpload(e, 'certificateTemplateUrl')}
-                                />
-                            </>
-                        )}
-                    </div>
-
                     {/* Pro Forma Invoice Template */}
                     <div className="flex justify-between items-center p-3 bg-surface-elevated rounded-md border border-default">
                         <div>
