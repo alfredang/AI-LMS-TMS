@@ -1184,116 +1184,50 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                 </button>
                 {isDocTemplatesOpen && <div className="space-y-4 mt-4">
                     {/* Invoice Template */}
-                    <div className="flex justify-between items-center p-3 bg-surface-elevated rounded-md border border-default">
-                        <div>
-                            <p className="font-semibold">Invoice Template</p>
-                            <p className="text-xs text-subtle">
-                                {(() => {
-                                    let displayText;
-                                    if (invoiceTemplateFile) {
-                                        // For newly selected files, clean the name to remove double extensions
-                                        displayText = getCleanDisplayName(invoiceTemplateFile.name);
-                                        console.log(`🔍 Display - invoiceTemplateFile.name: "${invoiceTemplateFile.name}" -> cleaned: "${displayText}"`);
-                                    } else if (formData.invoiceTemplateUrl) {
-                                        // For existing files, get filename from URL and clean it (remove timestamp and double extensions)
-                                        const filename = formData.invoiceTemplateUrl.split('/').pop() || '';
-                                        displayText = getCleanDisplayName(filename);
-                                        console.log(`🔍 Display - formData.invoiceTemplateUrl: "${formData.invoiceTemplateUrl}" -> filename: "${filename}" -> cleaned: "${displayText}"`);
-                                    } else {
-                                        displayText = 'No template uploaded';
-                                    }
-                                    return displayText;
-                                })()}
-                            </p>
-                        </div>
-                        {isEditing && (
-                            <>
-                                <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => document.getElementById('invoice-upload')?.click()}
-                                >
-                                    <Icon name={IconName.Upload} className="w-4 h-4 mr-2" />
-                                    Upload
-                                </Button>
-                                <input
-                                    type="file"
-                                    id="invoice-upload"
-                                    className="hidden"
-                                    accept="*/*"
-                                    onChange={(e) => handleTemplateUpload(e, 'invoiceTemplateUrl')}
-                                />
-                            </>
+                    <div className="p-3 bg-surface-elevated rounded-md border border-default">
+                        <label className="block text-sm font-medium text-on-surface-secondary mb-1 font-semibold">Invoice Template</label>
+                        {isEditing ? (
+                            <input
+                                type="text"
+                                value={formData.invoiceTemplateUrl || ''}
+                                onChange={(e) => setFormData((prev) => ({ ...prev, invoiceTemplateUrl: e.target.value }))}
+                                className={inputClasses}
+                                placeholder="Google Docs URL or template ID"
+                            />
+                        ) : (
+                            <p className="text-sm text-on-surface truncate">{formData.invoiceTemplateUrl || 'Not Set'}</p>
                         )}
                     </div>
 
                     {/* Receipt Template */}
-                    <div className="flex justify-between items-center p-3 bg-surface-elevated rounded-md border border-default">
-                        <div>
-                            <p className="font-semibold">Receipt Template</p>
-                            <p className="text-xs text-subtle">
-                                {receiptTemplateFile
-                                    ? getCleanDisplayName(receiptTemplateFile.name)
-                                    : formData.receiptTemplateUrl
-                                        ? getCleanDisplayName(formData.receiptTemplateUrl.split('/').pop() || '')
-                                        : 'No template uploaded'}
-                            </p>
-                        </div>
-                        {isEditing && (
-                            <>
-                                <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => document.getElementById('receipt-upload')?.click()}
-                                >
-                                    <Icon name={IconName.Upload} className="w-4 h-4 mr-2" />
-                                    Upload
-                                </Button>
-                                <input
-                                    type="file"
-                                    id="receipt-upload"
-                                    className="hidden"
-                                    accept="*/*"
-                                    onChange={(e) => handleTemplateUpload(e, 'receiptTemplateUrl')}
-                                />
-                            </>
+                    <div className="p-3 bg-surface-elevated rounded-md border border-default">
+                        <label className="block text-sm font-medium text-on-surface-secondary mb-1 font-semibold">Receipt Template</label>
+                        {isEditing ? (
+                            <input
+                                type="text"
+                                value={formData.receiptTemplateUrl || ''}
+                                onChange={(e) => setFormData((prev) => ({ ...prev, receiptTemplateUrl: e.target.value }))}
+                                className={inputClasses}
+                                placeholder="Google Docs URL or template ID"
+                            />
+                        ) : (
+                            <p className="text-sm text-on-surface truncate">{formData.receiptTemplateUrl || 'Not Set'}</p>
                         )}
                     </div>
 
                     {/* Pro Forma Invoice Template */}
-                    <div className="flex justify-between items-center p-3 bg-surface-elevated rounded-md border border-default">
-                        <div>
-                            <p className="font-semibold">Pro Forma Invoice Template</p>
-                            <p className="text-xs text-subtle">
-                                {proFormaTemplateFile
-                                    ? getCleanDisplayName(proFormaTemplateFile.name)
-                                    : formData.proFormaInvoiceTemplateUrl
-                                        ? getCleanDisplayName(formData.proFormaInvoiceTemplateUrl.split('/').pop() || '')
-                                        : 'No template uploaded'}
-                            </p>
-                        </div>
-                        {isEditing && (
-                            <>
-                                <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() =>
-                                        document.getElementById('pro-forma-invoice-upload')?.click()
-                                    }
-                                >
-                                    <Icon name={IconName.Upload} className="w-4 h-4 mr-2" />
-                                    Upload
-                                </Button>
-                                <input
-                                    type="file"
-                                    id="pro-forma-invoice-upload"
-                                    className="hidden"
-                                    accept="*/*"
-                                    onChange={(e) =>
-                                        handleTemplateUpload(e, 'proFormaInvoiceTemplateUrl')
-                                    }
-                                />
-                            </>
+                    <div className="p-3 bg-surface-elevated rounded-md border border-default">
+                        <label className="block text-sm font-medium text-on-surface-secondary mb-1 font-semibold">Pro Forma Invoice Template</label>
+                        {isEditing ? (
+                            <input
+                                type="text"
+                                value={formData.proFormaInvoiceTemplateUrl || ''}
+                                onChange={(e) => setFormData((prev) => ({ ...prev, proFormaInvoiceTemplateUrl: e.target.value }))}
+                                className={inputClasses}
+                                placeholder="Google Docs URL or template ID"
+                            />
+                        ) : (
+                            <p className="text-sm text-on-surface truncate">{formData.proFormaInvoiceTemplateUrl || 'Not Set'}</p>
                         )}
                     </div>
 
