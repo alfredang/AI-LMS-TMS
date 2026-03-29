@@ -90,7 +90,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         let refLinks: any = {};
         try {
           const refResult = await pool.query(
-            `SELECT master_list_url, tertiary_tms_url, tertiary_fms_url, tertiary_mms_url, tertiary_tpms_url FROM training_provider WHERE id = $1`,
+            `SELECT master_list_url, tertiary_tms_url, tertiary_fms_url, tertiary_mms_url, tertiary_tpms_url, n8n_host1_url, n8n_host2_url FROM training_provider WHERE id = $1`,
             [trainingProvider.id]
           );
           if (refResult.rows.length > 0) refLinks = refResult.rows[0];
@@ -111,6 +111,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             tertiaryFmsUrl: refLinks.tertiary_fms_url || '',
             tertiaryMmsUrl: refLinks.tertiary_mms_url || '',
             tertiaryTpmsUrl: refLinks.tertiary_tpms_url || '',
+            n8nHost1Url: refLinks.n8n_host1_url || '',
+            n8nHost2Url: refLinks.n8n_host2_url || '',
           },
         };
 
