@@ -146,7 +146,9 @@ const EditableTopicAccordion: React.FC<{
                                                     type="text"
                                                     placeholder="Title"
                                                     value={rl.title}
+                                                    draggable={false}
                                                     onClick={(e) => e.stopPropagation()}
+                                                    onMouseDown={(e) => e.stopPropagation()}
                                                     onChange={e => onUpdateResourceLink(rl.id, 'title', e.target.value)}
                                                     className="flex-1 min-w-0 px-1.5 py-0.5 text-xs border-0 border-b border-transparent hover:border-gray-300 dark:hover:border-gray-600 bg-transparent dark:text-white focus:outline-none focus:border-blue-500"
                                                 />
@@ -154,7 +156,9 @@ const EditableTopicAccordion: React.FC<{
                                                     type="url"
                                                     placeholder="URL"
                                                     value={rl.url}
+                                                    draggable={false}
                                                     onClick={(e) => e.stopPropagation()}
+                                                    onMouseDown={(e) => e.stopPropagation()}
                                                     onChange={e => onUpdateResourceLink(rl.id, 'url', e.target.value)}
                                                     className="flex-1 min-w-0 px-1.5 py-0.5 text-xs border-0 border-b border-transparent hover:border-gray-300 dark:hover:border-gray-600 bg-transparent dark:text-white focus:outline-none focus:border-blue-500"
                                                 />
