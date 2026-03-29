@@ -252,6 +252,7 @@ export interface TrainingProviderProfile extends BaseProfile {
     googleClientSecret?: string;
     googleRefreshToken?: string;
     googleSlidesTemplateId?: string;
+    certificateFolderUrl?: string;
   };
   adminSettings: {
     autoSendProFormaInvoice: boolean;

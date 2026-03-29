@@ -1035,6 +1035,31 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                             ))}
                         </div>
                     </div>
+                    {/* Certificate Folder */}
+                    <div className="mt-4 p-3 bg-surface-elevated rounded-md border border-default">
+                        <label className="block text-sm font-medium text-on-surface-secondary mb-1 font-semibold">Certificate Folder URL</label>
+                        {isEditing ? (
+                            <input
+                                type="text"
+                                value={formData.integrations.certificateFolderUrl || ''}
+                                onChange={(e) =>
+                                    setFormData((prev) => ({
+                                        ...prev,
+                                        integrations: {
+                                            ...prev.integrations,
+                                            certificateFolderUrl: e.target.value,
+                                        },
+                                    }))
+                                }
+                                className={inputClasses}
+                                placeholder="Google Drive folder URL for storing certificates"
+                            />
+                        ) : (
+                            <p className="text-sm text-on-surface truncate">
+                                {formData.integrations.certificateFolderUrl || 'Not Set'}
+                            </p>
+                        )}
+                    </div>
                 </div>}
 
                 <div className="border-t my-6"></div>

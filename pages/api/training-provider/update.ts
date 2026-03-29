@@ -619,8 +619,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             google_client_id = $3,
             google_client_secret = $4,
             google_refresh_token = $5,
-            google_slides_template_id = $6
-          WHERE id = $7`,
+            google_slides_template_id = $6,
+            certificate_folder_url = $7
+          WHERE id = $8`,
           [
             profileData.integrations?.googleCalendarUrl || null,
             profileData.integrations?.emailUser || null,
@@ -628,6 +629,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             profileData.integrations?.googleClientSecret || null,
             profileData.integrations?.googleRefreshToken || null,
             profileData.integrations?.googleSlidesTemplateId || null,
+            profileData.integrations?.certificateFolderUrl || null,
             trainingProviderId,
           ]
         );
