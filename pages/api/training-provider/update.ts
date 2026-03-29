@@ -637,7 +637,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         // Columns don't exist yet, skip
       }
 
-      // Safely update reference link columns (may not exist if migration not run)
+      // Safely update reference link columns (auto-create if migration not run)
       try {
         await pool.query(
           `UPDATE training_provider SET
@@ -657,7 +657,35 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           ]
         );
       } catch (e) {
-        // Columns don't exist yet, skip
+        // Auto-create columns and retry
+        try {
+          await pool.query(`
+            ALTER TABLE training_provider ADD COLUMN IF NOT EXISTS master_list_url text;
+            ALTER TABLE training_provider ADD COLUMN IF NOT EXISTS tertiary_tms_url text;
+            ALTER TABLE training_provider ADD COLUMN IF NOT EXISTS tertiary_fms_url text;
+            ALTER TABLE training_provider ADD COLUMN IF NOT EXISTS tertiary_mms_url text;
+            ALTER TABLE training_provider ADD COLUMN IF NOT EXISTS tertiary_tpms_url text;
+          `);
+          await pool.query(
+            `UPDATE training_provider SET
+              master_list_url = $1,
+              tertiary_tms_url = $2,
+              tertiary_fms_url = $3,
+              tertiary_mms_url = $4,
+              tertiary_tpms_url = $5
+            WHERE id = $6`,
+            [
+              profileData.integrations?.masterListUrl || null,
+              profileData.integrations?.tertiaryTmsUrl || null,
+              profileData.integrations?.tertiaryFmsUrl || null,
+              profileData.integrations?.tertiaryMmsUrl || null,
+              profileData.integrations?.tertiaryTpmsUrl || null,
+              trainingProviderId,
+            ]
+          );
+        } catch (e2) {
+          console.error('Failed to create reference link columns:', e2);
+        }
       }
 
       // Handle API keys - delete existing and insert new ones (with selected model)
