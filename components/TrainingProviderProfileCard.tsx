@@ -1566,7 +1566,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                     onClick={() => setIsApiKeysOpen(prev => !prev)}
                     className="w-full flex items-center justify-between group"
                 >
-                    <h2 className="text-xl font-bold">API Keys Setting</h2>
+                    <h2 className="text-xl font-bold">Credentials</h2>
                     <Icon
                         name={IconName.ChevronDown}
                         className={`w-5 h-5 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 transition-transform duration-200 flex-shrink-0 ml-4 ${isApiKeysOpen ? 'rotate-180' : ''}`}
