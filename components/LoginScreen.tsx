@@ -4,7 +4,6 @@ import { Button } from './ui/Button';
 import { Card } from './ui/Card';
 import { authService, LoginCredentials, User } from '@lib/services/authService';
 import { useLms } from '@contexts/LmsContext';
-import HomePageChatbot from './HomePageChatbot';
 import { trainingProviderService, TrainingProviderData } from '@lib/services/trainingProviderService';
 
 // Helper to get display name for a role
@@ -653,7 +652,6 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
           </div>
         </Card>
       </div>
-      <HomePageChatbot courses={courses} />
     </div>
   );
 };
