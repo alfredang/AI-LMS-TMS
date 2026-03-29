@@ -637,11 +637,8 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
               />
             )}
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-              {isLoadingProviderData ? '...' : trainingProviderData?.companyName}
+              {isLoadingProviderData ? '...' : (trainingProviderData?.companyShortname || trainingProviderData?.companyName)}
             </h1>
-            {trainingProviderData?.companyShortname && (
-              <p className="text-sm font-medium text-gray-500 dark:text-gray-400 mt-1">({trainingProviderData.companyShortname})</p>
-            )}
             <p className="text-gray-600 mt-2 dark:text-gray-400">LMS cum TMS for WSQ Courses</p>
           </div>
 
