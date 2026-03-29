@@ -46,7 +46,7 @@ const ED_TOOLS = [
     href: 'https://alfredang.github.io/collabnote/',
   },
   {
-    title: 'CollabFlow',
+    title: 'Collaborative Flow',
     description: 'Visual workflow and flowchart collaboration tool',
     icon: IconName.Link,
     href: 'https://alfredang.github.io/collabflow/',
