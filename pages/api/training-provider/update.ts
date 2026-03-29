@@ -637,71 +637,42 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         // Columns don't exist yet, skip
       }
 
-      // Safely update reference link columns (auto-create if migration not run)
-      try {
-        await pool.query(
-          `UPDATE training_provider SET
-            master_list_url = $1,
-            tertiary_tms_url = $2,
-            tertiary_fms_url = $3,
-            tertiary_mms_url = $4,
-            tertiary_tpms_url = $5,
-            n8n_host1_url = $6,
-            n8n_host2_url = $7,
-            magento_backend_url = $8
-          WHERE id = $9`,
-          [
-            profileData.integrations?.masterListUrl || null,
-            profileData.integrations?.tertiaryTmsUrl || null,
-            profileData.integrations?.tertiaryFmsUrl || null,
-            profileData.integrations?.tertiaryMmsUrl || null,
-            profileData.integrations?.tertiaryTpmsUrl || null,
-            profileData.integrations?.n8nHost1Url || null,
-            profileData.integrations?.n8nHost2Url || null,
-            profileData.integrations?.magentoBackendUrl || null,
-            trainingProviderId,
-          ]
-        );
-      } catch (e) {
-        // Auto-create columns and retry
+      // Safely update extra integration columns (each group independent so missing columns don't block others)
+      const autoCreateAndUpdate = async (columns: { name: string; value: any }[]) => {
+        const setClauses = columns.map((c, i) => `${c.name} = $${i + 1}`).join(', ');
+        const values = [...columns.map(c => c.value), trainingProviderId];
+        const whereIdx = columns.length + 1;
         try {
-          await pool.query(`
-            ALTER TABLE training_provider ADD COLUMN IF NOT EXISTS master_list_url text;
-            ALTER TABLE training_provider ADD COLUMN IF NOT EXISTS tertiary_tms_url text;
-            ALTER TABLE training_provider ADD COLUMN IF NOT EXISTS tertiary_fms_url text;
-            ALTER TABLE training_provider ADD COLUMN IF NOT EXISTS tertiary_mms_url text;
-            ALTER TABLE training_provider ADD COLUMN IF NOT EXISTS tertiary_tpms_url text;
-            ALTER TABLE training_provider ADD COLUMN IF NOT EXISTS n8n_host1_url text;
-            ALTER TABLE training_provider ADD COLUMN IF NOT EXISTS n8n_host2_url text;
-            ALTER TABLE training_provider ADD COLUMN IF NOT EXISTS magento_backend_url text;
-          `);
-          await pool.query(
-            `UPDATE training_provider SET
-              master_list_url = $1,
-              tertiary_tms_url = $2,
-              tertiary_fms_url = $3,
-              tertiary_mms_url = $4,
-              tertiary_tpms_url = $5,
-              n8n_host1_url = $6,
-              n8n_host2_url = $7,
-              magento_backend_url = $8
-            WHERE id = $9`,
-            [
-              profileData.integrations?.masterListUrl || null,
-              profileData.integrations?.tertiaryTmsUrl || null,
-              profileData.integrations?.tertiaryFmsUrl || null,
-              profileData.integrations?.tertiaryMmsUrl || null,
-              profileData.integrations?.tertiaryTpmsUrl || null,
-              profileData.integrations?.n8nHost1Url || null,
-              profileData.integrations?.n8nHost2Url || null,
-              profileData.integrations?.magentoBackendUrl || null,
-              trainingProviderId,
-            ]
-          );
-        } catch (e2) {
-          console.error('Failed to create reference/n8n columns:', e2);
+          await pool.query(`UPDATE training_provider SET ${setClauses} WHERE id = $${whereIdx}`, values);
+        } catch (e) {
+          try {
+            for (const c of columns) {
+              await pool.query(`ALTER TABLE training_provider ADD COLUMN IF NOT EXISTS ${c.name} text`);
+            }
+            await pool.query(`UPDATE training_provider SET ${setClauses} WHERE id = $${whereIdx}`, values);
+          } catch (e2) {
+            console.error(`Failed to save columns ${columns.map(c => c.name).join(', ')}:`, e2);
+          }
         }
-      }
+      };
+
+      // Reference links
+      await autoCreateAndUpdate([
+        { name: 'master_list_url', value: profileData.integrations?.masterListUrl || null },
+        { name: 'tertiary_tms_url', value: profileData.integrations?.tertiaryTmsUrl || null },
+        { name: 'tertiary_fms_url', value: profileData.integrations?.tertiaryFmsUrl || null },
+        { name: 'tertiary_mms_url', value: profileData.integrations?.tertiaryMmsUrl || null },
+        { name: 'tertiary_tpms_url', value: profileData.integrations?.tertiaryTpmsUrl || null },
+      ]);
+      // n8n
+      await autoCreateAndUpdate([
+        { name: 'n8n_host1_url', value: profileData.integrations?.n8nHost1Url || null },
+        { name: 'n8n_host2_url', value: profileData.integrations?.n8nHost2Url || null },
+      ]);
+      // Magento
+      await autoCreateAndUpdate([
+        { name: 'magento_backend_url', value: profileData.integrations?.magentoBackendUrl || null },
+      ]);
 
       // Handle API keys - delete existing and insert new ones (with selected model)
       console.log('🔑 Processing API keys...');

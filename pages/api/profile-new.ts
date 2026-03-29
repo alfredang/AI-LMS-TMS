@@ -473,17 +473,23 @@ async function getTrainingProviderProfile(userId: string) {
     }
   });
 
-  // Safely fetch reference link and n8n columns (may not exist if migration not run)
+  // Safely fetch extra integration columns (each group independent so missing columns don't wipe others)
   let refLinks: any = {};
+  // Reference links
   try {
-    const refResult = await pool.query(
-      `SELECT master_list_url, tertiary_tms_url, tertiary_fms_url, tertiary_mms_url, tertiary_tpms_url, n8n_host1_url, n8n_host2_url, magento_backend_url FROM training_provider WHERE id = $1`,
-      [profileData.provider_id]
-    );
-    if (refResult.rows.length > 0) refLinks = refResult.rows[0];
-  } catch (e) {
-    // Columns don't exist yet, skip
-  }
+    const r = await pool.query(`SELECT master_list_url, tertiary_tms_url, tertiary_fms_url, tertiary_mms_url, tertiary_tpms_url FROM training_provider WHERE id = $1`, [profileData.provider_id]);
+    if (r.rows.length > 0) refLinks = { ...refLinks, ...r.rows[0] };
+  } catch (e) { /* columns don't exist */ }
+  // n8n
+  try {
+    const r = await pool.query(`SELECT n8n_host1_url, n8n_host2_url FROM training_provider WHERE id = $1`, [profileData.provider_id]);
+    if (r.rows.length > 0) refLinks = { ...refLinks, ...r.rows[0] };
+  } catch (e) { /* columns don't exist */ }
+  // Magento
+  try {
+    const r = await pool.query(`SELECT magento_backend_url FROM training_provider WHERE id = $1`, [profileData.provider_id]);
+    if (r.rows.length > 0) refLinks = { ...refLinks, ...r.rows[0] };
+  } catch (e) { /* columns don't exist */ }
 
   // Parse color scheme - now returning as string instead of object
   let colorScheme;
