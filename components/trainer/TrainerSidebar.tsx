@@ -28,6 +28,7 @@ const ED_TOOL_ITEMS: { label: string; icon: IconName; href: string }[] = [
   { label: 'Collaborative Kanban', icon: IconName.ClipboardCheck, href: 'https://alfredang.github.io/kanban/' },
   { label: 'Live Poll',      icon: IconName.ClipboardCheck, href: 'https://alfredang.github.io/livepoll/' },
   { label: 'Spinning Wheel', icon: IconName.Spinner,  href: 'https://alfredang.github.io/spinning-wheel/' },
+  { label: '5 Whys',         icon: IconName.Help,     href: 'https://alfredang.github.io/5whys/' },
   { label: 'Google Meet',    icon: IconName.Video,    href: 'https://meet.google.com/landing' },
 ];
 

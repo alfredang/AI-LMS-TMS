@@ -70,6 +70,12 @@ const ED_TOOLS = [
     href: 'https://alfredang.github.io/spinning-wheel/',
   },
   {
+    title: '5 Whys',
+    description: 'Root cause analysis tool using the 5 Whys technique',
+    icon: IconName.Help,
+    href: 'https://alfredang.github.io/5whys/',
+  },
+  {
     title: 'Google Meet',
     description: 'Start or join a video meeting with learners',
     icon: IconName.Video,
