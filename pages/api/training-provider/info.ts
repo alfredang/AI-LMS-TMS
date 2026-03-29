@@ -101,6 +101,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           if (r.rows.length > 0) refLinks = { ...refLinks, ...r.rows[0] };
         } catch (e) { /* columns don't exist */ }
 
+        let privacyPolicy: string | null = null;
+        let acceptableUsePolicy: string | null = null;
+        try {
+          const r = await pool.query(`SELECT privacy_policy, acceptable_use_policy FROM training_provider WHERE id = $1`, [trainingProvider.id]);
+          if (r.rows.length > 0) {
+            privacyPolicy = r.rows[0].privacy_policy;
+            acceptableUsePolicy = r.rows[0].acceptable_use_policy;
+          }
+        } catch (e) { /* columns don't exist */ }
+
         const responseData = {
           companyLogoUrl: getAbsoluteImageUrl(trainingProvider.profile_picture_url),
           companyName: trainingProvider.company_name || 'Training Provider',
@@ -110,6 +120,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           defaultOtp: trainingProvider.default_otp || '',
           colorScheme: trainingProvider.color_scheme || null,
           forceFirstPasswordChange: trainingProvider.force_first_password_change || false,
+          privacyPolicy: privacyPolicy || null,
+          acceptableUsePolicy: acceptableUsePolicy || null,
           referenceLinks: {
             masterListUrl: refLinks.master_list_url || '',
             tertiaryTmsUrl: refLinks.tertiary_tms_url || '',
@@ -180,7 +192,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         enableDefaultOtp: false,
         defaultOtp: '',
         colorScheme: null,
-        forceFirstPasswordChange: false
+        forceFirstPasswordChange: false,
+        privacyPolicy: null,
+        acceptableUsePolicy: null
       };
 
       console.log('✅ Training provider info (default):', responseData);
@@ -193,6 +207,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const trainingProvider = result.rows[0];
 
+    let fallbackPrivacyPolicy: string | null = null;
+    let fallbackAcceptableUsePolicy: string | null = null;
+    try {
+      const r = await pool.query('SELECT privacy_policy, acceptable_use_policy FROM training_provider LIMIT 1');
+      if (r.rows.length > 0) {
+        fallbackPrivacyPolicy = r.rows[0].privacy_policy;
+        fallbackAcceptableUsePolicy = r.rows[0].acceptable_use_policy;
+      }
+    } catch (e) { /* columns don't exist */ }
+
     const responseData = {
       companyLogoUrl: getAbsoluteImageUrl(trainingProvider.profile_picture_url),
       companyName: trainingProvider.company_name || 'Training Provider',
@@ -201,7 +225,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       enableDefaultOtp: trainingProvider.enable_default_otp || false,
       defaultOtp: trainingProvider.default_otp || '',
       colorScheme: trainingProvider.color_scheme || null,
-      forceFirstPasswordChange: trainingProvider.force_first_password_change || false
+      forceFirstPasswordChange: trainingProvider.force_first_password_change || false,
+      privacyPolicy: fallbackPrivacyPolicy || null,
+      acceptableUsePolicy: fallbackAcceptableUsePolicy || null
     };
 
     console.log('✅ Training provider info fetched:', responseData);

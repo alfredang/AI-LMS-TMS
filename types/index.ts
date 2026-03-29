@@ -11,7 +11,10 @@ export enum View {
   UserManagement = 'userManagement',
   ApiEndpoints = 'apiEndpoints',
   AdminManagement = 'adminManagement',
-  Documents = 'documents'
+  Documents = 'documents',
+  PrivacyPolicy = 'privacyPolicy',
+  AcceptableUsePolicy = 'acceptableUsePolicy',
+  OtpEmailTemplate = 'otpEmailTemplate'
 }
 
 export enum UserRole {

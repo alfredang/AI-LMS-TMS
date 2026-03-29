@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useLms } from '@contexts/LmsContext';
 import { View } from '@app-types';
 import { Icon, IconName } from '../ui/Icon';
@@ -10,6 +10,9 @@ interface TrainingProviderSidebarProps {
 const TrainingProviderSidebar: React.FC<TrainingProviderSidebarProps> = ({ onNavigate }) => {
     const { currentView, handleNavigation, selectedCourse } = useLms();
 
+    const templateViews = [View.OtpEmailTemplate, View.PrivacyPolicy, View.AcceptableUsePolicy];
+    const [templatesOpen, setTemplatesOpen] = useState(templateViews.includes(currentView));
+
     const navItems = [
         { view: View.Dashboard, label: 'Dashboard', icon: IconName.Dashboard },
         { view: View.Courses, label: 'Courses', icon: IconName.Courses },
@@ -18,6 +21,12 @@ const TrainingProviderSidebar: React.FC<TrainingProviderSidebarProps> = ({ onNav
         { view: View.Profile, label: 'Company Setting', icon: IconName.MyAccount },
         { view: View.ApiEndpoints, label: 'API Endpoints', icon: IconName.Link },
         { view: View.Documents, label: 'Documents', icon: IconName.FileText },
+    ];
+
+    const templateItems = [
+        { view: View.OtpEmailTemplate, label: 'OTP Email', icon: IconName.Mail },
+        { view: View.PrivacyPolicy, label: 'Privacy Policy', icon: IconName.Shield },
+        { view: View.AcceptableUsePolicy, label: 'Acceptable Use Policy', icon: IconName.ClipboardCheck },
     ];
 
     const handleClick = (view: View) => {
@@ -30,6 +39,12 @@ const TrainingProviderSidebar: React.FC<TrainingProviderSidebarProps> = ({ onNav
     // Determine active view - if a course is selected, highlight Courses
     const activeView = selectedCourse ? View.Courses : currentView;
 
+    const linkClass = (view: View) =>
+        `flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors ${activeView === view
+            ? 'bg-blue-50 text-blue-600 border-l-3 border-blue-500 dark:bg-blue-600/20 dark:text-blue-400 dark:border-blue-500'
+            : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-slate-700 dark:hover:text-white'
+        }`;
+
     return (
         <nav className="space-y-2 p-4 bg-white dark:bg-slate-800 text-gray-900 dark:text-white h-full">
             {navItems.map((item) => (
@@ -40,15 +55,47 @@ const TrainingProviderSidebar: React.FC<TrainingProviderSidebarProps> = ({ onNav
                         e.preventDefault();
                         handleClick(item.view);
                     }}
-                    className={`flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors ${activeView === item.view
-                        ? 'bg-blue-50 text-blue-600 border-l-3 border-blue-500 dark:bg-blue-600/20 dark:text-blue-400 dark:border-blue-500'
-                        : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-slate-700 dark:hover:text-white'
-                        }`}
+                    className={linkClass(item.view)}
                 >
                     <Icon name={item.icon} className="w-5 h-5" />
                     <span>{item.label}</span>
                 </a>
             ))}
+
+            {/* Templates Section - Collapsible */}
+            <div>
+                <button
+                    onClick={() => setTemplatesOpen(!templatesOpen)}
+                    className="flex items-center justify-between w-full rounded-md px-3 py-2.5 text-sm font-medium transition-colors text-gray-700 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-slate-700 dark:hover:text-white"
+                >
+                    <div className="flex items-center gap-3">
+                        <Icon name={IconName.FileText} className="w-5 h-5" />
+                        <span>Templates</span>
+                    </div>
+                    <Icon
+                        name={IconName.ChevronDown}
+                        className={`w-4 h-4 transition-transform ${templatesOpen ? 'rotate-180' : ''}`}
+                    />
+                </button>
+                {templatesOpen && (
+                    <div className="ml-4 mt-1 space-y-1">
+                        {templateItems.map((item) => (
+                            <a
+                                key={item.view}
+                                href="#"
+                                onClick={(e) => {
+                                    e.preventDefault();
+                                    handleClick(item.view);
+                                }}
+                                className={linkClass(item.view)}
+                            >
+                                <Icon name={item.icon} className="w-4 h-4" />
+                                <span>{item.label}</span>
+                            </a>
+                        ))}
+                    </div>
+                )}
+            </div>
 
             {/* Provider Access Info */}
             <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">

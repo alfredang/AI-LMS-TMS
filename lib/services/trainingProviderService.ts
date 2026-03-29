@@ -9,6 +9,8 @@ export interface TrainingProviderData {
   defaultOtp: string;
   colorScheme: string | null;
   forceFirstPasswordChange: boolean;
+  privacyPolicy: string | null;
+  acceptableUsePolicy: string | null;
 }
 
 export interface TrainingProviderResponse {

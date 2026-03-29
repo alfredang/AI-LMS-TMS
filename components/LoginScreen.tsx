@@ -52,6 +52,12 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showPrivacyPolicy, setShowPrivacyPolicy] = useState(false);
+  const [showAcceptableUsePolicy, setShowAcceptableUsePolicy] = useState(false);
+  const [showFeedback, setShowFeedback] = useState(false);
+  const [feedbackForm, setFeedbackForm] = useState({ name: '', email: '', tel: '', message: '' });
+  const [feedbackStatus, setFeedbackStatus] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [isSendingFeedback, setIsSendingFeedback] = useState(false);
 
   // Multi-role state
   const [pendingUser, setPendingUser] = useState<User | null>(null);
@@ -401,6 +407,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
         </div>
         {error && <p className="text-red-500 text-sm text-center">{error}</p>}
         {successMessage && <p className="text-green-600 text-sm text-center">{successMessage}</p>}
+        <p className="text-green-600 text-xs text-center">If you don&apos;t see the OTP email in your inbox, please check the spam/all emails.</p>
         <Button type="submit" className="w-full !py-3" size="lg" disabled={isLoading}>
           {isLoading ? 'Verifying...' : 'Verify & Log In'}
         </Button>
@@ -646,8 +653,9 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
 
           <div className="mt-8 text-center text-xs text-gray-500 dark:text-gray-400">
             <div className="flex justify-center space-x-4">
-              <a href="#privacy" className="hover:underline">Privacy Policy</a>
-              <a href="#acceptable-use" className="hover:underline">Acceptable Use Policy</a>
+              <button onClick={() => setShowPrivacyPolicy(true)} className="hover:underline cursor-pointer">Privacy Policy</button>
+              <button onClick={() => setShowAcceptableUsePolicy(true)} className="hover:underline cursor-pointer">Acceptable Use Policy</button>
+              <button onClick={() => { setShowFeedback(true); setFeedbackStatus(null); setFeedbackForm({ name: '', email: '', tel: '', message: '' }); }} className="hover:underline cursor-pointer">Feedback</button>
             </div>
             <p className="mt-3">
               Browse our WSQ courses at{' '}
@@ -658,6 +666,192 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
           </div>
         </Card>
       </div>
+
+      {/* Privacy Policy Modal */}
+      {showPrivacyPolicy && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setShowPrivacyPolicy(false)}>
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-4 border-b dark:border-gray-700">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Privacy Policy</h2>
+              <button onClick={() => setShowPrivacyPolicy(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-2xl leading-none">&times;</button>
+            </div>
+            <div className="p-6 overflow-y-auto text-sm text-gray-700 dark:text-gray-300 space-y-2">
+              {(() => {
+                const companyName = trainingProviderData?.companyName || 'The Company';
+                const policyText = (trainingProviderData?.privacyPolicy || '')
+                  .replace(/\{COMPANY_NAME\}/g, companyName);
+                if (!policyText.trim()) {
+                  return <p className="text-gray-400 italic">No privacy policy has been configured.</p>;
+                }
+                return policyText.split('\n').map((line: string, i: number) => {
+                  const trimmed = line.trim();
+                  if (!trimmed) return <br key={i} />;
+                  if (/^\d+\.\s+/.test(trimmed)) {
+                    return <h3 key={i} className="font-semibold text-gray-900 dark:text-white mt-3">{trimmed}</h3>;
+                  }
+                  if (trimmed.startsWith('- ')) {
+                    return <li key={i} className="ml-5 list-disc">{trimmed.substring(2)}</li>;
+                  }
+                  return <p key={i}>{trimmed}</p>;
+                });
+              })()}
+            </div>
+            <div className="p-4 border-t dark:border-gray-700 flex justify-end">
+              <button
+                onClick={() => setShowPrivacyPolicy(false)}
+                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm font-medium"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Acceptable Use Policy Modal */}
+      {showAcceptableUsePolicy && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setShowAcceptableUsePolicy(false)}>
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-4 border-b dark:border-gray-700">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Acceptable Use Policy</h2>
+              <button onClick={() => setShowAcceptableUsePolicy(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-2xl leading-none">&times;</button>
+            </div>
+            <div className="p-6 overflow-y-auto text-sm text-gray-700 dark:text-gray-300 space-y-2">
+              {(() => {
+                const companyName = trainingProviderData?.companyName || 'The Company';
+                const policyText = (trainingProviderData?.acceptableUsePolicy || '')
+                  .replace(/\{COMPANY_NAME\}/g, companyName);
+                if (!policyText.trim()) {
+                  return <p className="text-gray-400 italic">No acceptable use policy has been configured.</p>;
+                }
+                return policyText.split('\n').map((line: string, i: number) => {
+                  const trimmed = line.trim();
+                  if (!trimmed) return <br key={i} />;
+                  if (/^\d+\.\s+/.test(trimmed)) {
+                    return <h3 key={i} className="font-semibold text-gray-900 dark:text-white mt-3">{trimmed}</h3>;
+                  }
+                  if (trimmed.startsWith('- ')) {
+                    return <li key={i} className="ml-5 list-disc">{trimmed.substring(2)}</li>;
+                  }
+                  return <p key={i}>{trimmed}</p>;
+                });
+              })()}
+            </div>
+            <div className="p-4 border-t dark:border-gray-700 flex justify-end">
+              <button
+                onClick={() => setShowAcceptableUsePolicy(false)}
+                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm font-medium"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Feedback Modal */}
+      {showFeedback && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setShowFeedback(false)}>
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full mx-4 flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-4 border-b dark:border-gray-700">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Feedback</h2>
+              <button onClick={() => setShowFeedback(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-2xl leading-none">&times;</button>
+            </div>
+            <div className="p-6 space-y-4">
+              {feedbackStatus && (
+                <div className={`p-3 rounded-md text-sm ${feedbackStatus.type === 'success' ? 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-400'}`}>
+                  {feedbackStatus.text}
+                </div>
+              )}
+              {feedbackStatus?.type !== 'success' && (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Name <span className="text-red-500">*</span></label>
+                    <input
+                      type="text"
+                      value={feedbackForm.name}
+                      onChange={(e) => setFeedbackForm(prev => ({ ...prev, name: e.target.value }))}
+                      className="block w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-slate-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="Your name"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Email <span className="text-red-500">*</span></label>
+                    <input
+                      type="email"
+                      value={feedbackForm.email}
+                      onChange={(e) => setFeedbackForm(prev => ({ ...prev, email: e.target.value }))}
+                      className="block w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-slate-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="your@email.com"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Tel</label>
+                    <input
+                      type="tel"
+                      value={feedbackForm.tel}
+                      onChange={(e) => setFeedbackForm(prev => ({ ...prev, tel: e.target.value }))}
+                      className="block w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-slate-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="Your phone number"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Message <span className="text-red-500">*</span></label>
+                    <textarea
+                      value={feedbackForm.message}
+                      onChange={(e) => setFeedbackForm(prev => ({ ...prev, message: e.target.value }))}
+                      rows={4}
+                      className="block w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-slate-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y"
+                      placeholder="Your feedback or message..."
+                    />
+                  </div>
+                </>
+              )}
+            </div>
+            <div className="p-4 border-t dark:border-gray-700 flex justify-end gap-3">
+              <button
+                onClick={() => setShowFeedback(false)}
+                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700"
+              >
+                {feedbackStatus?.type === 'success' ? 'Close' : 'Cancel'}
+              </button>
+              {feedbackStatus?.type !== 'success' && (
+                <button
+                  onClick={async () => {
+                    if (!feedbackForm.name.trim() || !feedbackForm.email.trim() || !feedbackForm.message.trim()) {
+                      setFeedbackStatus({ type: 'error', text: 'Please fill in all required fields.' });
+                      return;
+                    }
+                    setIsSendingFeedback(true);
+                    setFeedbackStatus(null);
+                    try {
+                      const response = await fetch('/api/training-provider/send-feedback', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(feedbackForm),
+                      });
+                      const data = await response.json();
+                      if (data.success) {
+                        setFeedbackStatus({ type: 'success', text: 'Thank you! Your feedback has been sent successfully.' });
+                      } else {
+                        setFeedbackStatus({ type: 'error', text: data.error || 'Failed to send feedback.' });
+                      }
+                    } catch (error) {
+                      setFeedbackStatus({ type: 'error', text: 'Failed to send feedback. Please try again.' });
+                    } finally {
+                      setIsSendingFeedback(false);
+                    }
+                  }}
+                  disabled={isSendingFeedback}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm font-medium disabled:opacity-50"
+                >
+                  {isSendingFeedback ? 'Sending...' : 'Send Feedback'}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

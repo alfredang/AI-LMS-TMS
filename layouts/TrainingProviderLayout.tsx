@@ -14,6 +14,9 @@ import UserManagementView from '../components/training-provider/UserManagementVi
 import AdminManagementView from '../components/training-provider/AdminManagementView';
 import ApiEndpointsView from '../components/training-provider/ApiEndpointsView';
 import DocumentsView from '../components/training-provider/DocumentsView';
+import PrivacyPolicyView from '../components/training-provider/PrivacyPolicyView';
+import AcceptableUsePolicyView from '../components/training-provider/AcceptableUsePolicyView';
+import OtpEmailTemplateView from '../components/training-provider/OtpEmailTemplateView';
 import TrainingProviderSidebar from '../components/training-provider/TrainingProviderSidebar';
 import { Card } from '../components/ui/Card';
 
@@ -53,6 +56,12 @@ const TrainingProviderLayout: React.FC = () => {
         return <ApiEndpointsView />;
       case View.Documents:
         return <DocumentsView />;
+      case View.PrivacyPolicy:
+        return <PrivacyPolicyView />;
+      case View.AcceptableUsePolicy:
+        return <AcceptableUsePolicyView />;
+      case View.OtpEmailTemplate:
+        return <OtpEmailTemplateView />;
       default:
         return <TrainingProviderDashboard />;
     }
@@ -70,6 +79,9 @@ const TrainingProviderLayout: React.FC = () => {
       case View.HelpAndSupport: return 'Help & Support';
       case View.ApiEndpoints: return 'API Endpoints';
       case View.Documents: return 'Documents';
+      case View.PrivacyPolicy: return 'Privacy Policy';
+      case View.AcceptableUsePolicy: return 'Acceptable Use Policy';
+      case View.OtpEmailTemplate: return 'OTP Email Template';
       default: return 'Dashboard';
     }
   };
