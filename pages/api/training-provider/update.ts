@@ -620,13 +620,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             google_client_secret = $4,
             google_refresh_token = $5,
             google_slides_template_id = $6,
-            certificate_folder_url = $7,
-            master_list_url = $8,
-            tertiary_tms_url = $9,
-            tertiary_fms_url = $10,
-            tertiary_mms_url = $11,
-            tertiary_tpms_url = $12
-          WHERE id = $13`,
+            certificate_folder_url = $7
+          WHERE id = $8`,
           [
             profileData.integrations?.googleCalendarUrl || null,
             profileData.integrations?.emailUser || null,
@@ -635,6 +630,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             profileData.integrations?.googleRefreshToken || null,
             profileData.integrations?.googleSlidesTemplateId || null,
             profileData.integrations?.certificateFolderUrl || null,
+            trainingProviderId,
+          ]
+        );
+      } catch (e) {
+        // Columns don't exist yet, skip
+      }
+
+      // Safely update reference link columns (may not exist if migration not run)
+      try {
+        await pool.query(
+          `UPDATE training_provider SET
+            master_list_url = $1,
+            tertiary_tms_url = $2,
+            tertiary_fms_url = $3,
+            tertiary_mms_url = $4,
+            tertiary_tpms_url = $5
+          WHERE id = $6`,
+          [
             profileData.integrations?.masterListUrl || null,
             profileData.integrations?.tertiaryTmsUrl || null,
             profileData.integrations?.tertiaryFmsUrl || null,

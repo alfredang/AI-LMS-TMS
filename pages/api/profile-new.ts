@@ -286,11 +286,6 @@ async function getTrainingProviderProfile(userId: string) {
         tp.google_refresh_token,
         tp.google_slides_template_id,
         tp.certificate_folder_url,
-        tp.master_list_url,
-        tp.tertiary_tms_url,
-        tp.tertiary_fms_url,
-        tp.tertiary_mms_url,
-        tp.tertiary_tpms_url,
         tp.auto_send_proforma_invoice,
         tp.auto_send_confirm_email,
         tp.auto_send_invoice,
@@ -478,6 +473,18 @@ async function getTrainingProviderProfile(userId: string) {
     }
   });
 
+  // Safely fetch reference link columns (may not exist if migration not run)
+  let refLinks: any = {};
+  try {
+    const refResult = await pool.query(
+      `SELECT master_list_url, tertiary_tms_url, tertiary_fms_url, tertiary_mms_url, tertiary_tpms_url FROM training_provider WHERE id = $1`,
+      [profileData.provider_id]
+    );
+    if (refResult.rows.length > 0) refLinks = refResult.rows[0];
+  } catch (e) {
+    // Columns don't exist yet, skip
+  }
+
   // Parse color scheme - now returning as string instead of object
   let colorScheme;
   try {
@@ -530,11 +537,11 @@ async function getTrainingProviderProfile(userId: string) {
       googleRefreshToken: profileData.google_refresh_token || '',
       googleSlidesTemplateId: profileData.google_slides_template_id || '',
       certificateFolderUrl: profileData.certificate_folder_url || '',
-      masterListUrl: profileData.master_list_url || '',
-      tertiaryTmsUrl: profileData.tertiary_tms_url || '',
-      tertiaryFmsUrl: profileData.tertiary_fms_url || '',
-      tertiaryMmsUrl: profileData.tertiary_mms_url || '',
-      tertiaryTpmsUrl: profileData.tertiary_tpms_url || '',
+      masterListUrl: refLinks.master_list_url || '',
+      tertiaryTmsUrl: refLinks.tertiary_tms_url || '',
+      tertiaryFmsUrl: refLinks.tertiary_fms_url || '',
+      tertiaryMmsUrl: refLinks.tertiary_mms_url || '',
+      tertiaryTpmsUrl: refLinks.tertiary_tpms_url || '',
     },
     adminSettings: {
       autoSendProFormaInvoice: profileData.auto_send_proforma_invoice || false,
