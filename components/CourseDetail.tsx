@@ -1163,6 +1163,156 @@ const AssessmentsSection: React.FC<{
     );
 };
 
+// --- Additional Documents Section Component ---
+const AdditionalDocumentsSection: React.FC<{ userRole: UserRole, courseRunId: string, currentUser: any }> = ({ userRole, courseRunId, currentUser }) => {
+    const [documents, setDocuments] = React.useState<any[]>([]);
+    const [loading, setLoading] = React.useState(true);
+    const [uploading, setUploading] = React.useState(false);
+    const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+    const fetchDocuments = React.useCallback(async () => {
+        if (!courseRunId) return;
+        setLoading(true);
+        try {
+            const res = await fetch(`/api/course/additional-documents?courseRunId=${courseRunId}`);
+            const data = await res.json();
+            if (data.success) {
+                setDocuments(data.documents);
+            }
+        } catch (err) {
+            console.error(err);
+        } finally {
+            setLoading(false);
+        }
+    }, [courseRunId]);
+
+    React.useEffect(() => {
+        fetchDocuments();
+    }, [fetchDocuments]);
+
+    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (!e.target.files || e.target.files.length === 0) return;
+        
+        setUploading(true);
+        for (let i = 0; i < e.target.files.length; i++) {
+            const file = e.target.files[i];
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            try {
+                const res = await fetch(`/api/trainer/upload-additional-document?courseRunId=${courseRunId}&uploadedBy=${encodeURIComponent(currentUser?.name || currentUser?.email || 'Trainer')}`, {
+                    method: 'POST',
+                    body: formData
+                });
+                if (!res.ok) throw new Error('Upload failed');
+            } catch (err) {
+                console.error(err);
+                alert(`Failed to upload ${file.name}`);
+            }
+        }
+        
+        if (fileInputRef.current) fileInputRef.current.value = '';
+        setUploading(false);
+        fetchDocuments();
+    };
+
+    const handleDelete = async (id: string) => {
+        if (!confirm('Are you sure you want to delete this document?')) return;
+        try {
+            const res = await fetch(`/api/course/additional-documents?id=${id}`, { method: 'DELETE' });
+            if (res.ok) {
+                setDocuments(prev => prev.filter(d => d.id !== id));
+            } else {
+                alert('Failed to delete document');
+            }
+        } catch (err) {
+            console.error(err);
+        }
+    };
+
+    if (!courseRunId) return null;
+
+    const isTrainerOrAdmin = userRole === UserRole.Trainer || userRole === UserRole.Admin || userRole === UserRole.Developer || userRole === UserRole.TrainingProvider;
+
+    return (
+        <ContentSection title="Additional Documents">
+            <div className="space-y-4">
+                {isTrainerOrAdmin && (
+                    <div className="flex justify-between items-center mb-4">
+                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                            Upload personalized course materials for learners.
+                        </p>
+                        <input 
+                            type="file" 
+                            multiple 
+                            ref={fileInputRef} 
+                            onChange={handleFileChange} 
+                            style={{ display: 'none' }} 
+                        />
+                        <button 
+                            onClick={() => fileInputRef.current?.click()}
+                            disabled={uploading}
+                            className={`flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 transition-colors ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        >
+                            <Icon name={uploading ? IconName.Spinner : IconName.FileText} className={`w-4 h-4 ${uploading ? 'animate-spin' : ''}`} />
+                            {uploading ? 'Uploading...' : 'Upload Files'}
+                        </button>
+                    </div>
+                )}
+                
+                {loading ? (
+                    <div className="flex justify-center p-8">
+                        <Icon name={IconName.Spinner} className="w-8 h-8 text-blue-500 animate-spin" />
+                    </div>
+                ) : documents.length === 0 ? (
+                    <div className="text-center p-8 bg-gray-50 dark:bg-gray-800 rounded-lg border border-dashed border-gray-300 dark:border-gray-700">
+                        <Icon name={IconName.FileText} className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+                        <p className="text-gray-600 dark:text-gray-300 font-medium">No additional documents</p>
+                        {isTrainerOrAdmin && <p className="text-sm text-gray-500 mt-1">Click "Upload Files" to add materials.</p>}
+                    </div>
+                ) : (
+                    <ul className="space-y-2">
+                        {documents.map(doc => (
+                            <li key={doc.id} className="flex items-center justify-between p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md hover:shadow-sm transition-shadow">
+                                <div className="flex items-center flex-1 min-w-0">
+                                    <Icon name={IconName.FileText} className="w-5 h-5 text-blue-500 mr-3 flex-shrink-0" />
+                                    <div className="min-w-0">
+                                        <p className="font-medium text-gray-900 dark:text-white truncate" title={doc.fileName}>{doc.fileName}</p>
+                                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                                            Uploaded by {doc.uploadedBy} • {new Date(doc.createdAt).toLocaleDateString()}
+                                        </p>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-2 ml-4 flex-shrink-0">
+                                    <a 
+                                        href={doc.fileUrl} 
+                                        target="_blank" 
+                                        rel="noopener noreferrer"
+                                        download={doc.fileName}
+                                        className="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-md transition-colors"
+                                        title="Download"
+                                    >
+                                        <Icon name={IconName.ExternalLink} className="w-5 h-5" />
+                                    </a>
+                                    {isTrainerOrAdmin && (
+                                        <button 
+                                            onClick={() => handleDelete(doc.id)}
+                                            className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-md transition-colors"
+                                            title="Delete"
+                                        >
+                                            <Icon name={IconName.Delete} className="w-5 h-5" />
+                                        </button>
+                                    )}
+                                </div>
+                            </li>
+                        ))}
+                    </ul>
+                )}
+            </div>
+        </ContentSection>
+    );
+};
+
 // --- Certificate Section Component ---
 const CertificateSection: React.FC<{ userRole: UserRole }> = ({ userRole }) => {
     const { certificate, selectedCourse } = useLms();
@@ -1336,6 +1486,7 @@ const CourseSidebar: React.FC<CourseSidebarProps> = ({ userRole, onSetGradingVie
         if (label === 'Lesson' || label === 'Lessons' || label === 'Learning Outcomes') targetId = 'lessons';
         else if (label === 'Assessment' || label === 'Assessments') targetId = 'assessments';
         else if (label === 'Certificate') targetId = 'certificate';
+        else if (label === 'Additional Documents') targetId = 'additional-documents';
         else if (label === 'Grading') targetId = 'assessment-grading';
 
             const element = document.getElementById(targetId);
@@ -1356,6 +1507,7 @@ const CourseSidebar: React.FC<CourseSidebarProps> = ({ userRole, onSetGradingVie
         { type: 'link', label: "Learning Outcomes", icon: IconName.BookOpen },
         { type: 'link', label: "TRAQOM Survey", icon: IconName.Edit },
         { type: 'link', label: "Assessment", icon: IconName.ClipboardCheck },
+        { type: 'link', label: "Additional Documents", icon: IconName.FileText },
         { type: 'link', label: "Certificate", icon: IconName.FileText },
     ];
 
@@ -1374,6 +1526,7 @@ const CourseSidebar: React.FC<CourseSidebarProps> = ({ userRole, onSetGradingVie
         { type: 'link', label: "TRAQOM Survey", icon: IconName.Edit },
         { type: 'link', label: "Assessment", icon: IconName.ClipboardCheck },
         { type: 'link', label: "Grading", icon: IconName.Edit },
+        { type: 'link', label: "Additional Documents", icon: IconName.FileText },
     ];
 
     if (userRole === UserRole.Developer || userRole === UserRole.TrainingProvider || userRole === UserRole.Admin) {
@@ -2503,6 +2656,15 @@ export const CourseDetail: React.FC = () => {
                                     </ContentSection>
                                 </div>
                             )}
+
+                            {/* Additional Documents */}
+                            <div id={toId("Additional Documents")}>
+                                <AdditionalDocumentsSection 
+                                    userRole={userRole} 
+                                    courseRunId={convertedCourse.courseRunId || selectedCourse?.courseRunId || ''} 
+                                    currentUser={currentUser}
+                                />
+                            </div>
 
                             {/* Certificate */}
                             <div id="certificate">
