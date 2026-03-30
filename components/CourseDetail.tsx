@@ -1053,8 +1053,13 @@ const AssessmentsSection: React.FC<{
                 </div>
             )}
 
-            {/* Dynamic Assessment Methods */}
-            {course.assessmentMethods && Object.entries(course.assessmentMethods).map(([methodKey, config]) => {
+            {/* Dynamic Assessment Methods — ordered so Written Exam is always first */}
+            {course.assessmentMethods && Object.entries(course.assessmentMethods)
+            .sort(([a], [b]) => {
+                const order = ['writtenAssessment', 'practicalExam', 'caseStudy', 'rolePlay', 'oralQuestioning', 'project', 'assignment'];
+                return (order.indexOf(a) === -1 ? 99 : order.indexOf(a)) - (order.indexOf(b) === -1 ? 99 : order.indexOf(b));
+            })
+            .map(([methodKey, config]) => {
                 if (!config.enabled || !config.link) return null;
                 const label = ASSESSMENT_METHOD_LABELS[methodKey as AssessmentMethodKey] || methodKey;
                 const isPublished = methodPublishState[methodKey] === true;
