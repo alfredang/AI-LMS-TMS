@@ -209,7 +209,7 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
   const [manualAttendanceMsg, setManualAttendanceMsg]  = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [showManualNric, setShowManualNric]             = useState(false);
   const [manualPage, setManualPage]                    = useState(1);
-  const MANUAL_PAGE_SIZE = 5;
+  const MANUAL_PAGE_SIZE = 20;
   const manualAttendanceFetchRef = useRef<AbortController | null>(null);
   // Manually added learners (not in SSG enrolments)
   const [extraAttendees, setExtraAttendees]            = useState<Array<{ nric: string; fullName: string; email: string; isPresent: boolean; reasonOfAbsence: string }>>([]);
