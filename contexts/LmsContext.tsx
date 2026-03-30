@@ -988,6 +988,8 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           practicalPerformanceAssessmentLink: trainerData.data.courseDetail.practicalPerformanceAssessmentLink,
           writtenAssessmentPublished: trainerData.data.courseDetail.writtenAssessmentPublished ?? false,
           practicalAssessmentPublished: trainerData.data.courseDetail.practicalAssessmentPublished ?? false,
+          assessmentMethods: trainerData.data.courseDetail.assessmentMethods || null,
+          publishedAssessmentMethods: trainerData.data.courseDetail.publishedAssessmentMethods || {},
           startDate: trainerData.data.courseDetail.startDate || null,
           endDate: trainerData.data.courseDetail.endDate || null,
           fundingValidity: trainerData.data.courseDetail.fundingValidity || null,

@@ -172,8 +172,11 @@ export interface CourseDetail {
   practicalPerformanceAssessmentLink?: string;
   writtenAssessmentPublished?: boolean;
   practicalAssessmentPublished?: boolean;
+  assessmentMethods?: Record<string, { enabled: boolean; link: string }>;
+  publishedAssessmentMethods?: Record<string, boolean>;
   startDate?: string;
   endDate?: string;
+  fundingValidity?: string;
   certificate: string;
 }
 
