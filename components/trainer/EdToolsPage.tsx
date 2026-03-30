@@ -76,6 +76,12 @@ const ED_TOOLS = [
     href: 'https://alfredang.github.io/5whys/',
   },
   {
+    title: 'System Thinking',
+    description: 'Visualise cause-and-effect feedback loops for systems analysis',
+    icon: IconName.Link,
+    href: 'https://alfredang.github.io/systemloop/',
+  },
+  {
     title: 'Google Meet',
     description: 'Start or join a video meeting with learners',
     icon: IconName.Video,
