@@ -1521,7 +1521,7 @@ const TopicAccordion: React.FC<TopicAccordionProps> = ({ topic, progress, bookma
                                                         className="flex items-center gap-2 text-sm text-blue-500 hover:text-blue-400 hover:underline"
                                                     >
                                                         <Icon
-                                                            name={rl.type === 'youtube' ? IconName.Video : rl.type === 'quiz' ? IconName.FileText : IconName.ExternalLink}
+                                                            name={rl.type === 'youtube' ? IconName.Video : rl.type === 'quiz' ? IconName.FileText : rl.type === 'document' ? IconName.FileText : IconName.ExternalLink}
                                                             className="w-3.5 h-3.5 flex-shrink-0"
                                                         />
                                                         <span className="truncate">{rl.title || rl.url}</span>

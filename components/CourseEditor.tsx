@@ -130,6 +130,7 @@ const EditableTopicAccordion: React.FC<{
                                                 }}
                                                 className={`flex items-center gap-1.5 p-1.5 rounded cursor-grab group/rl ${
                                                     rl.type === 'file' ? 'bg-blue-50/50 dark:bg-blue-900/10' :
+                                                    rl.type === 'document' ? 'bg-amber-50/50 dark:bg-amber-900/10' :
                                                     rl.type === 'youtube' ? 'bg-red-50/50 dark:bg-red-900/10' :
                                                     'bg-green-50/50 dark:bg-green-900/10'
                                                 }`}
@@ -137,10 +138,11 @@ const EditableTopicAccordion: React.FC<{
                                                 <Icon name={IconName.Menu} className="w-3.5 h-3.5 text-gray-300 dark:text-gray-600 flex-shrink-0" />
                                                 <span className={`text-[9px] font-bold uppercase px-1 py-0.5 rounded flex-shrink-0 ${
                                                     rl.type === 'file' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
+                                                    rl.type === 'document' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' :
                                                     rl.type === 'youtube' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' :
                                                     'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
                                                 }`}>
-                                                    {rl.type === 'file' ? 'File' : rl.type === 'youtube' ? 'YT' : 'Quiz'}
+                                                    {rl.type === 'file' ? 'Web' : rl.type === 'document' ? 'Doc' : rl.type === 'youtube' ? 'YT' : 'Quiz'}
                                                 </span>
                                                 <input
                                                     type="text"
@@ -168,7 +170,8 @@ const EditableTopicAccordion: React.FC<{
                                             </div>
                                         ))}
                                         <div className="flex gap-1 opacity-0 group-hover:opacity-100 hover:!opacity-100 transition-opacity">
-                                            <button onClick={() => onAddResourceLink(subtopic.id, 'file')} className="text-[10px] text-gray-400 hover:text-blue-500 px-1 py-0.5 rounded hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors">+ File</button>
+                                            <button onClick={() => onAddResourceLink(subtopic.id, 'file')} className="text-[10px] text-gray-400 hover:text-blue-500 px-1 py-0.5 rounded hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors">+ Web</button>
+                                            <button onClick={() => onAddResourceLink(subtopic.id, 'document')} className="text-[10px] text-gray-400 hover:text-amber-500 px-1 py-0.5 rounded hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors">+ Document</button>
                                             <button onClick={() => onAddResourceLink(subtopic.id, 'youtube')} className="text-[10px] text-gray-400 hover:text-red-500 px-1 py-0.5 rounded hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">+ YouTube</button>
                                             <button onClick={() => onAddResourceLink(subtopic.id, 'quiz')} className="text-[10px] text-gray-400 hover:text-green-500 px-1 py-0.5 rounded hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors">+ Quiz</button>
                                         </div>

@@ -76,6 +76,12 @@ const ED_TOOLS = [
     href: 'https://alfredang.github.io/5whys/',
   },
   {
+    title: 'Fishbone Diagram',
+    description: 'Cause-and-effect fishbone (Ishikawa) diagram for root cause analysis',
+    icon: IconName.Link,
+    href: 'https://alfredang.github.io/fishbone/',
+  },
+  {
     title: 'System Thinking',
     description: 'Visualise cause-and-effect feedback loops for systems analysis',
     icon: IconName.Link,
