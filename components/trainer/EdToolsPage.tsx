@@ -82,6 +82,12 @@ const ED_TOOLS = [
     href: 'https://alfredang.github.io/fishbone/',
   },
   {
+    title: 'Pareto Chart',
+    description: 'Pareto chart for identifying the most significant factors',
+    icon: IconName.Link,
+    href: 'https://alfredang.github.io/paretochart/',
+  },
+  {
     title: 'System Thinking',
     description: 'Visualise cause-and-effect feedback loops for systems analysis',
     icon: IconName.Link,

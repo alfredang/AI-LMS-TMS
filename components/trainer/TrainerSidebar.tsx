@@ -30,6 +30,7 @@ const ED_TOOL_ITEMS: { label: string; icon: IconName; href: string }[] = [
   { label: 'Spinning Wheel', icon: IconName.Spinner,  href: 'https://alfredang.github.io/spinning-wheel/' },
   { label: '5 Whys',         icon: IconName.Help,     href: 'https://alfredang.github.io/5whys/' },
   { label: 'Fishbone Diagram', icon: IconName.Link,  href: 'https://alfredang.github.io/fishbone/' },
+  { label: 'Pareto Chart',    icon: IconName.Link,   href: 'https://alfredang.github.io/paretochart/' },
   { label: 'System Thinking', icon: IconName.Link,   href: 'https://alfredang.github.io/systemloop/' },
   { label: 'Google Meet',    icon: IconName.Video,    href: 'https://meet.google.com/landing' },
 ];

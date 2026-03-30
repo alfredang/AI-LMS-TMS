@@ -86,6 +86,7 @@ AI-LMS-TMS is a **full-stack, enterprise-grade web application** that manages th
   - [Spinning Wheel](https://alfredang.github.io/spinning-wheel/) - Random selection spinner
   - [5 Whys](https://alfredang.github.io/5whys/) - Root cause analysis tool
   - [Fishbone Diagram](https://alfredang.github.io/fishbone/) - Cause-and-effect (Ishikawa) diagram
+  - [Pareto Chart](https://alfredang.github.io/paretochart/) - Identify the most significant factors
   - [System Thinking](https://alfredang.github.io/systemloop/) - Cause-and-effect feedback loop visualisation
   - [Google Meet](https://meet.google.com/landing) - Video meetings with learners
 
