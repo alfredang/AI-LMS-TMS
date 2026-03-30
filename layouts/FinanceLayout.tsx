@@ -51,8 +51,8 @@ const FinanceLayout: React.FC = () => {
   const activeClass = 'bg-primary/10 text-primary font-semibold';
   const inactiveClass = 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700/50 hover:text-gray-900 dark:hover:text-white';
 
-  const Sidebar = () => (
-    <div className="flex flex-col h-full bg-surface border-r border-default">
+  const sidebarContent = (
+    <div className="flex flex-col h-full bg-white dark:bg-slate-800">
       <div className="flex-1 px-3 py-4 space-y-1">
         {/* Finance Management */}
         <a
@@ -132,7 +132,7 @@ const FinanceLayout: React.FC = () => {
               </button>
             </div>
             <div className="flex-1 overflow-y-auto">
-              <Sidebar />
+              {sidebarContent}
             </div>
           </div>
         </div>
@@ -142,9 +142,9 @@ const FinanceLayout: React.FC = () => {
       <div className="flex flex-1">
         {/* Desktop Sidebar */}
         {!isDesktopSidebarCollapsed && (
-          <aside className="hidden md:flex w-64 flex-shrink-0 bg-white dark:bg-slate-800 border-r border-gray-200 dark:border-slate-700">
+          <aside className="hidden md:block w-64 flex-shrink-0 bg-white dark:bg-slate-800 border-r border-gray-200 dark:border-slate-700">
             <div className="w-full">
-              <Sidebar />
+              {sidebarContent}
             </div>
           </aside>
         )}
