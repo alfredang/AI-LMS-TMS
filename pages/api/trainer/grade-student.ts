@@ -1,6 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { Pool } from 'pg';
-import { generateAndUploadCertificate } from '../../../lib/services/certificateService';
+import { generateAndUploadCertificate, deleteCertificate } from '../../../lib/services/certificateService';
 
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
@@ -25,6 +25,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }
 
         if (!isCompetent) {
+            // First check if there's a certificate to delete
+            const currentRes = await pool.query(`SELECT certificate FROM enrollment WHERE id = $1`, [enrolmentId]);
+            const currentCert = currentRes.rows[0]?.certificate;
+
+            if (currentCert) {
+                try {
+                    await deleteCertificate(currentCert, pool);
+                } catch (delError) {
+                    console.error(`Failed to delete certificate for enrolment ${enrolmentId}:`, delError);
+                }
+            }
+
             await pool.query(
                 `UPDATE enrollment SET assessment_status = $1, certificate = NULL, updated_at = NOW() WHERE id = $2`,
                 [newStatus, enrolmentId]

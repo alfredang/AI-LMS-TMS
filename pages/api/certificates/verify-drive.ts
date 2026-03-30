@@ -49,16 +49,34 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const drive = getDriveClient();
         const file = await drive.files.get({
             fileId,
-            fields: 'id, name, trashed',
+            fields: 'id, name, trashed, parents',
         });
 
-        const exists = !!file.data.id && !file.data.trashed;
+        let inCertificatesFolder = false;
+        
+        // Ensure the file is inside a folder literally named "Certificates"
+        if (file.data.parents && file.data.parents.length > 0) {
+            try {
+                const parent = await drive.files.get({
+                    fileId: file.data.parents[0],
+                    fields: 'id, name, trashed'
+                });
+                if (parent.data.name === 'Certificates' && !parent.data.trashed) {
+                    inCertificatesFolder = true;
+                }
+            } catch (parentErr) {
+                console.error(`Could not verify parent folder for cert ${fileId}:`, parentErr);
+            }
+        }
+
+        const exists = !!file.data.id && !file.data.trashed && inCertificatesFolder;
 
         return res.status(200).json({
             success: true,
             exists,
             fileId,
             fileName: file.data.name,
+            reason: (!exists && !file.data.trashed) ? 'File exists but is not in the Certificates folder' : undefined
         });
     } catch (error: any) {
         // 404 means the file doesn't exist or was permanently deleted

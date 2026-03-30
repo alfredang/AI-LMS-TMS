@@ -1,6 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { searchEnrolment } from '../../../lib/ssg/services/enrolment-service';
+import { inferIdType } from '../../../lib/utils/id-type';
 
 // Increase body size limit to 50MB (default is 1MB, which causes HTTP 413 for large Excel uploads)
 export const config = {
@@ -144,10 +145,8 @@ function buildEnrolmentPayload(record: Record<string, any>): Record<string, any>
     const idTypeRaw = String(record.trainee_id_type || '').toUpperCase();
     const sponsorshipRaw = String(record.sponsorship_type || '').toUpperCase();
 
-    // Convert ID Type: Singaporean/PR → NRIC, FIN → FIN, etc.
-    let idType = 'NRIC';
-    if (idTypeRaw.includes('FIN')) idType = 'FIN';
-    if (idTypeRaw.includes('PASSPORT')) idType = 'PASSPORT';
+    // Convert ID Type using inferIdType utility
+    const idType = inferIdType(traineeId, idTypeRaw);
 
     // Sponsorship type mapping
     let sponsorshipType = 'INDIVIDUAL';

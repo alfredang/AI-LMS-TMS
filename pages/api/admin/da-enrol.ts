@@ -3,6 +3,7 @@ import pool from '../../../lib/db';
 import { getSSGCredentialsService } from '../../../lib/ssg/services/credentials-service';
 import { HttpClient, HTTPRequestBuilder, HttpMethod } from '../../../lib/ssg/utils/http-utils';
 import crypto from 'crypto';
+import { inferIdType } from '../../../lib/utils/id-type';
 
 /**
  * POST /api/admin/da-enrol
@@ -17,11 +18,8 @@ import crypto from 'crypto';
  * Returns: { results: [{ application_id, success, error? }] }
  */
 
-function buildIdType(raw: string): string {
-  const upper = (raw || '').toUpperCase();
-  if (upper.includes('FIN')) return 'FIN';
-  if (upper.includes('PASSPORT')) return 'PASSPORT';
-  return 'NRIC';
+function buildIdType(id: string, raw: string): string {
+  return inferIdType(id, raw);
 }
 
 function buildSponsorshipType(raw: string): string {
@@ -32,7 +30,7 @@ function buildEnrolmentPayload(app: Record<string, any>, uen: string): object {
   const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Singapore' });
 
   const trainee: Record<string, any> = {
-    idType: { type: buildIdType(app.trainee_id_type) },
+    idType: { type: buildIdType(String(app.trainee_id || ''), app.trainee_id_type) },
     id: String(app.trainee_id || ''),
     dateOfBirth: app.date_of_birth ? String(app.date_of_birth).split('T')[0] : undefined,
     fullName: String(app.trainee_name || ''),

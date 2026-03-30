@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
+import { inferIdType } from '../../../lib/utils/id-type';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -209,7 +210,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               collectionStatus: ssgData?.trainee?.fees?.collectionStatus || 'Pending Payment',
             },
             email: { full: traineeEmail },
-            idType: { type: ssgData?.trainee?.idType?.type || 'NRIC' },
+            idType: { type: inferIdType(traineeNric || '', ssgData?.trainee?.idType?.type) },
             employer: ssgData?.trainee?.employer || {
               uen: '', name: '',
               contact: { email: { full: '' }, fullName: '', contactNumber: { areaCode: '', countryCode: '', phoneNumber: '' } }

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Icon, IconName } from '../ui/Icon';
+import { inferIdType } from '@/lib/utils/id-type';
 
 // Helper function to format error messages in a user-friendly way with React component
 const ErrorMessageDisplay: React.FC<{ error: any }> = ({ error }) => {
@@ -351,7 +352,7 @@ export const BulkUploadEnrolmentView: React.FC = () => {
 
                 const trainee: any = {
                     id: String(row[COL.traineeId] || '').trim(),
-                    idType: { type: (row[COL.traineeIdType] || 'NRIC').trim() },
+                    idType: { type: inferIdType(String(row[COL.traineeId] || '').trim(), (row[COL.traineeIdType] || '').trim()) },
                     fullName: (row[COL.traineeName] || '').trim(),
                     dateOfBirth: convertDobToISO(row[COL.traineeDob] || ''),
                     emailAddress: (row[COL.traineeEmail] || '').trim(),

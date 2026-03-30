@@ -10,6 +10,7 @@
 import { PoolClient } from 'pg';
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
+import { inferIdType } from '../../utils/id-type';
 
 function mapSponsorship(type: string | undefined): 'Individual' | 'Employer' {
   if (!type) return 'Individual';
@@ -201,7 +202,7 @@ export async function syncEnrolmentToDB(
         collectionStatus: trainee.fees?.collectionStatus ?? 'Pending Payment',
       },
       email: { full: trainee.email?.full ?? traineeEmail },
-      idType: { type: trainee.idType?.type ?? 'NRIC' },
+      idType: { type: inferIdType(traineeNric ?? '', trainee.idType?.type) },
       employer: trainee.employer ?? {
         uen: '', name: '',
         contact: {

@@ -2,6 +2,7 @@ import { getApiUrl, getFileUrl } from '@/lib/urlHelpers';
 import React, { useState, useEffect, useRef } from 'react';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
+import { detectIdType } from '@/lib/utils/id-type';
 
 // Enums based on the Python constants
 enum IdTypeSummary {
@@ -500,6 +501,15 @@ const EnrollLearners: React.FC = () => {
     // Clear course run ID when course reference number changes
     if (field === 'courseReferenceNumber') {
       setFormData(prev => ({ ...prev, courseRunId: '' }));
+    }
+
+    // Auto-detect ID type when trainee ID changes
+    if (field === 'traineeId' && typeof value === 'string' && value.trim()) {
+      const detectedType = detectIdType(value);
+      // Only switch to NRIC or FIN if detected. Don't auto-switch back to OTHERS if they're typing a passport.
+      if (detectedType !== IdTypeSummary.OTHERS) {
+        setFormData(prev => ({ ...prev, traineeIdType: detectedType as IdTypeSummary }));
+      }
     }
 
     // Fetch course code when course run ID is entered

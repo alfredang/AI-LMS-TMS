@@ -279,12 +279,29 @@ const AssessmentGrading: React.FC = () => {
                             }
                           }
 
-                          return (
+                          const badgeContent = (
                             <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-full ${badgeClass}`}>
                               <Icon name={badgeIcon} className={`w-3.5 h-3.5 ${verification?.checking ? 'animate-spin' : ''}`} />
                               {badgeText}
                             </span>
                           );
+
+                          // Make it clickable if there is a certificate URL
+                          if (student.certificate && verification?.exists === true) {
+                            return (
+                              <a
+                                href={student.certificate}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="hover:opacity-80 transition-opacity"
+                                title="Click to view file in Google Drive"
+                              >
+                                {badgeContent}
+                              </a>
+                            );
+                          }
+                          
+                          return badgeContent;
                         })()}
 
                         <span className={`text-xs font-semibold uppercase tracking-wider ${

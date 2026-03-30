@@ -33,57 +33,22 @@ async function findSubfolder(drive: drive_v3.Drive, parentFolderId: string, fold
 }
 
 // --- Fetch training provider settings from DB ---
-async function getTrainingProviderSettings(pool: Pool, enrolmentId: string) {
-    // Get training provider via enrollment -> course -> training provider
+async function getTrainingProviderSettings(pool: Pool, _enrolmentId: string) {
+    // The course table does not have a training_provider_id FK,
+    // so we fetch the single training provider directly.
     const result = await pool.query(`
         SELECT
-            tp.google_client_id,
-            tp.google_client_secret,
-            tp.google_refresh_token,
-            tp.google_slides_template_id,
-            tp.certificate_folder_url,
-            tp.certificate_template_url
-        FROM enrollment e
-        JOIN course c ON e.course_id = c.id
-        JOIN training_provider tp ON c.training_provider_id = tp.id
-        WHERE e.id = $1
-    `, [enrolmentId]);
-
+            google_client_id,
+            google_client_secret,
+            google_refresh_token,
+            google_slides_template_id,
+            certificate_folder_url,
+            certificate_template_url
+        FROM training_provider
+        LIMIT 1
+    `);
     if (result.rows.length === 0) {
-        // Fallback: try via course_run
-        const fallback = await pool.query(`
-            SELECT
-                tp.google_client_id,
-                tp.google_client_secret,
-                tp.google_refresh_token,
-                tp.google_slides_template_id,
-                tp.certificate_folder_url,
-                tp.certificate_template_url
-            FROM enrollment e
-            JOIN course_run cr ON e.course_run_id = cr.id
-            JOIN course c ON cr.course_id = c.id
-            JOIN training_provider tp ON c.training_provider_id = tp.id
-            WHERE e.id = $1
-        `, [enrolmentId]);
-        if (fallback.rows.length === 0) {
-            // Last fallback: get the first training provider
-            const lastFallback = await pool.query(`
-                SELECT
-                    google_client_id,
-                    google_client_secret,
-                    google_refresh_token,
-                    google_slides_template_id,
-                    certificate_folder_url,
-                    certificate_template_url
-                FROM training_provider
-                LIMIT 1
-            `);
-            if (lastFallback.rows.length === 0) {
-                throw new Error('No training provider found');
-            }
-            return lastFallback.rows[0];
-        }
-        return fallback.rows[0];
+        throw new Error('No training provider found');
     }
     return result.rows[0];
 }
@@ -287,5 +252,38 @@ export async function generateAndUploadCertificate(enrolmentId: string, pool: Po
             } catch {}
         }
         throw err;
+    }
+}
+
+/**
+ * Deletes a previously generated certificate from Google Drive.
+ * Expected to be called when a learner is downgraded from 'Competent'.
+ * @param certificateUrl The URL or file ID of the certificate to delete
+ * @param pool Database connection pool
+ */
+export async function deleteCertificate(certificateUrl: string, pool: Pool) {
+    if (!certificateUrl) return;
+
+    // Extract fileId from the URL
+    const match = certificateUrl.match(/\/file\/d\/([^/]+)/) || certificateUrl.match(/[?&]id=([^&]+)/);
+    const fileId = match ? match[1] : certificateUrl.trim();
+
+    if (!fileId) return;
+
+    try {
+        const tpSettings = await getTrainingProviderSettings(pool, '');
+        const drive = createDriveClient(
+            tpSettings.google_client_id,
+            tpSettings.google_client_secret,
+            tpSettings.google_refresh_token
+        );
+        
+        await drive.files.delete({ fileId });
+        console.log(`Deleted certificate ${fileId} from Google Drive.`);
+    } catch (error: any) {
+        // Ignore 404s (already deleted or not found)
+        if (error.code !== 404) {
+            console.error(`Failed to delete Google Drive certificate ${fileId}:`, error);
+        }
     }
 }

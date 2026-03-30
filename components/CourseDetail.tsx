@@ -1167,12 +1167,27 @@ const AssessmentsSection: React.FC<{
 const CertificateSection: React.FC<{ userRole: UserRole }> = ({ userRole }) => {
     const { certificate, selectedCourse } = useLms();
     const [localCertUrl, setLocalCertUrl] = React.useState<string | null>(null);
+    const [verification, setVerification] = React.useState<{ checking: boolean, exists?: boolean }>({ checking: false });
 
     React.useEffect(() => {
         if (certificate?.certificate_url) {
             setLocalCertUrl(certificate.certificate_url);
         }
     }, [certificate?.certificate_url]);
+
+    React.useEffect(() => {
+        if (localCertUrl) {
+            setVerification({ checking: true });
+            fetch(`/api/certificates/verify-drive?url=${encodeURIComponent(localCertUrl)}`)
+                .then(res => res.json())
+                .then(data => {
+                    setVerification({ checking: false, exists: data.exists === true });
+                })
+                .catch(() => {
+                    setVerification({ checking: false, exists: false });
+                });
+        }
+    }, [localCertUrl]);
 
     // Only show certificate section for learners
     if (userRole !== UserRole.Learner) {
@@ -1186,19 +1201,34 @@ const CertificateSection: React.FC<{ userRole: UserRole }> = ({ userRole }) => {
             {isCompetent ? (
                 <>
                     {localCertUrl ? (
-                        <div className="text-center p-8 bg-green-50 dark:bg-green-900/30 rounded-xl border border-green-200 dark:border-green-800">
-                            <Icon name={IconName.CheckCircle} className="w-16 h-16 text-green-500 mx-auto mb-4" />
-                            <h4 className="text-xl font-bold text-gray-900 dark:text-white">Certificate Ready</h4>
-                            <p className="text-green-700 dark:text-green-400 mt-1 mb-6">Your certificate has been formally issued.</p>
-                            <a href={localCertUrl} target="_blank" rel="noopener noreferrer" className="inline-block bg-primary text-white font-semibold py-2 px-6 rounded-lg hover:bg-secondary transition-colors shadow-md hover:shadow-lg">
-                                Download Certificate
-                            </a>
-                        </div>
+                        verification.checking ? (
+                            <div className="text-center p-8 bg-blue-50 dark:bg-blue-900/30 rounded-xl border border-blue-200 dark:border-blue-800">
+                                <Icon name={IconName.Spinner} className="w-16 h-16 text-blue-500 mx-auto mb-4 animate-spin" />
+                                <h4 className="text-xl font-bold text-gray-900 dark:text-white">Verifying Certificate...</h4>
+                                <p className="text-blue-700 dark:text-blue-400 mt-1 mb-4">Please wait while we locate your secure certificate record.</p>
+                            </div>
+                        ) : verification.exists ? (
+                            <div className="text-center p-8 bg-green-50 dark:bg-green-900/30 rounded-xl border border-green-200 dark:border-green-800">
+                                <Icon name={IconName.CheckCircle} className="w-16 h-16 text-green-500 mx-auto mb-4" />
+                                <h4 className="text-xl font-bold text-gray-900 dark:text-white">Certificate Ready</h4>
+                                <p className="text-green-700 dark:text-green-400 mt-1 mb-6">Your certificate has been formally issued and verified in the secure folder.</p>
+                                <a href={localCertUrl} target="_blank" rel="noopener noreferrer" className="inline-block bg-primary text-white font-semibold py-2 px-6 rounded-lg hover:bg-secondary transition-colors shadow-md hover:shadow-lg">
+                                    Download Certificate
+                                </a>
+                            </div>
+                        ) : (
+                            <div className="text-center p-8 bg-red-50 dark:bg-red-900/30 rounded-xl border border-red-200 dark:border-red-800">
+                                <Icon name={IconName.Close} className="w-16 h-16 text-red-500 mx-auto mb-4" />
+                                <h4 className="text-xl font-bold text-gray-900 dark:text-white">Certificate Missing</h4>
+                                <p className="text-red-700 dark:text-red-400 mt-1 mb-4">You have achieved competency, but your certificate file could not be found in the secure folder.</p>
+                                <p className="text-sm font-semibold text-gray-500">Please contact your training provider for assistance.</p>
+                            </div>
+                        )
                     ) : (
-                        <div className="text-center p-8 bg-blue-50 dark:bg-blue-900/30 rounded-xl border border-blue-200 dark:border-blue-800">
-                            <Icon name={IconName.Clock} className="w-16 h-16 text-blue-500 mx-auto mb-4 animate-pulse" />
+                        <div className="text-center p-8 bg-amber-50 dark:bg-amber-900/30 rounded-xl border border-amber-200 dark:border-amber-800">
+                            <Icon name={IconName.Clock} className="w-16 h-16 text-amber-500 mx-auto mb-4 animate-pulse" />
                             <h4 className="text-xl font-bold text-gray-900 dark:text-white">Certificate Generating</h4>
-                            <p className="text-blue-700 dark:text-blue-400 mt-1 mb-4">You have achieved competency! Your certificate is currently being securely generated.</p>
+                            <p className="text-amber-700 dark:text-amber-400 mt-1 mb-4">You have achieved competency! Your certificate is currently being securely generated.</p>
                             <p className="text-sm font-semibold text-gray-500 line-clamp-2">Please refresh the page in a few moments.</p>
                         </div>
                     )}
