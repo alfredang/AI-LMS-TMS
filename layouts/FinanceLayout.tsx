@@ -1,20 +1,20 @@
 import React, { useState } from 'react';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
-import { useLms } from '../contexts/LmsContext';
-import { View, AdminPage } from '@app-types';
 import { Icon, IconName } from '../components/ui/Icon';
-import FinanceSidebar from '../components/finance/FinanceSidebar';
 import FinanceManagementView from '../components/training-provider/FinanceManagementView';
 import {
   SearchGrantView,
   ViewGrantStatusView,
 } from '../components/admin/GrantManagementViews';
 
+type FinancePage = 'dashboard' | 'searchGrant' | 'viewGrant';
+
 const FinanceLayout: React.FC = () => {
-  const { currentView, adminPage } = useLms();
+  const [page, setPage] = useState<FinancePage>('dashboard');
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isDesktopSidebarCollapsed, setIsDesktopSidebarCollapsed] = useState(false);
+  const [grantOpen, setGrantOpen] = useState(false);
 
   const handleToggleSidebar = () => {
     if (typeof window !== 'undefined' && window.innerWidth >= 768) {
@@ -24,27 +24,89 @@ const FinanceLayout: React.FC = () => {
     }
   };
 
+  const navigateTo = (p: FinancePage) => {
+    setPage(p);
+    setIsMobileSidebarOpen(false);
+  };
+
   const renderContent = () => {
-    if (currentView === View.Admin) {
-      switch (adminPage) {
-        case AdminPage.SearchGrant:
-          return <SearchGrantView />;
-        case AdminPage.ViewGrantStatus:
-          return <ViewGrantStatusView />;
-      }
+    switch (page) {
+      case 'searchGrant':
+        return <SearchGrantView />;
+      case 'viewGrant':
+        return <ViewGrantStatusView />;
+      default:
+        return <FinanceManagementView />;
     }
-    return <FinanceManagementView />;
   };
 
   const getPageTitle = () => {
-    if (currentView === View.Admin) {
-      switch (adminPage) {
-        case AdminPage.SearchGrant: return 'Search Grant';
-        case AdminPage.ViewGrantStatus: return 'View Grant';
-      }
+    switch (page) {
+      case 'searchGrant': return 'Search Grant';
+      case 'viewGrant': return 'View Grant';
+      default: return 'Finance Management';
     }
-    return 'Finance Management';
   };
+
+  const activeClass = 'bg-primary/10 text-primary font-semibold';
+  const inactiveClass = 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700/50 hover:text-gray-900 dark:hover:text-white';
+
+  const Sidebar = () => (
+    <div className="flex flex-col h-full bg-surface border-r border-default">
+      <div className="flex-1 px-3 py-4 space-y-1">
+        {/* Finance Management */}
+        <a
+          href="#"
+          onClick={(e) => { e.preventDefault(); navigateTo('dashboard'); }}
+          className={`group flex items-center gap-3 w-full rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-150 ${
+            page === 'dashboard' ? activeClass : inactiveClass
+          }`}
+        >
+          <Icon name={IconName.DollarSign} className={`w-[18px] h-[18px] flex-shrink-0 transition-colors ${page === 'dashboard' ? 'text-primary' : 'text-gray-400 dark:text-gray-500'}`} />
+          <span className="truncate">Finance Management</span>
+        </a>
+
+        {/* Grant Management — collapsible */}
+        <div className="pt-3">
+          <button
+            onClick={() => setGrantOpen(prev => !prev)}
+            className="flex items-center justify-between w-full px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-muted select-none"
+          >
+            <span>Grant Management</span>
+            <Icon
+              name={IconName.ChevronDown}
+              className={`w-4 h-4 transition-transform duration-200 ${grantOpen ? 'rotate-0' : '-rotate-90'}`}
+            />
+          </button>
+
+          {grantOpen && (
+            <div className="space-y-0.5">
+              <a
+                href="#"
+                onClick={(e) => { e.preventDefault(); navigateTo('searchGrant'); }}
+                className={`group flex items-center gap-3 w-full rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-150 ${
+                  page === 'searchGrant' ? activeClass : inactiveClass
+                }`}
+              >
+                <Icon name={IconName.Search} className={`w-[18px] h-[18px] flex-shrink-0 transition-colors ${page === 'searchGrant' ? 'text-primary' : 'text-gray-400 dark:text-gray-500'}`} />
+                <span className="truncate">Search Grant</span>
+              </a>
+              <a
+                href="#"
+                onClick={(e) => { e.preventDefault(); navigateTo('viewGrant'); }}
+                className={`group flex items-center gap-3 w-full rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-150 ${
+                  page === 'viewGrant' ? activeClass : inactiveClass
+                }`}
+              >
+                <Icon name={IconName.Eye} className={`w-[18px] h-[18px] flex-shrink-0 transition-colors ${page === 'viewGrant' ? 'text-primary' : 'text-gray-400 dark:text-gray-500'}`} />
+                <span className="truncate">View Grant</span>
+              </a>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 
   return (
     <div className="min-h-screen flex flex-col bg-background font-sans text-on-surface">
@@ -70,7 +132,7 @@ const FinanceLayout: React.FC = () => {
               </button>
             </div>
             <div className="flex-1 overflow-y-auto">
-              <FinanceSidebar onNavigate={() => setIsMobileSidebarOpen(false)} />
+              <Sidebar />
             </div>
           </div>
         </div>
@@ -82,7 +144,7 @@ const FinanceLayout: React.FC = () => {
         {!isDesktopSidebarCollapsed && (
           <aside className="hidden md:flex w-64 flex-shrink-0 bg-white dark:bg-slate-800 border-r border-gray-200 dark:border-slate-700">
             <div className="w-full">
-              <FinanceSidebar />
+              <Sidebar />
             </div>
           </aside>
         )}
