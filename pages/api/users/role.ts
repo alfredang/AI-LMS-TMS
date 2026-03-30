@@ -45,8 +45,9 @@ async function handler(req: NextApiRequest, res: NextApiResponse<UserRoleRespons
           WHEN 'Trainer' THEN 2
           WHEN 'Developer' THEN 3
           WHEN 'Admin' THEN 4
-          WHEN 'Training Provider' THEN 5
-          ELSE 6
+          WHEN 'Finance' THEN 5
+          WHEN 'Training Provider' THEN 6
+          ELSE 7
         END
     `;
 
