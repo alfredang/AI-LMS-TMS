@@ -28,6 +28,12 @@ const ED_TOOLS = [
     href: 'https://alfredang.github.io/wordcloud/',
   },
   {
+    title: 'Flash Cards',
+    description: 'Interactive flash cards for learner review and memorisation',
+    icon: IconName.FileText,
+    href: 'https://alfredang.github.io/flashcard/',
+  },
+  {
     title: 'Live Q&A',
     description: 'Real-time question and answer board for classroom interaction',
     icon: IconName.Help,
