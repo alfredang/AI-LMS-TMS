@@ -33,8 +33,8 @@ const EditableTopicAccordion: React.FC<{
     onSelfDragStart: (e: React.DragEvent) => void;
     onSelfDragEnd: (e: React.DragEvent) => void;
     // Resource links props
-    resourceLinks: { id: string; topicId: string; type: 'file' | 'document' | 'youtube' | 'quiz'; title: string; url: string }[];
-    onAddResourceLink: (topicId: string, type: 'file' | 'document' | 'youtube' | 'quiz') => void;
+    resourceLinks: { id: string; topicId: string; type: 'file' | 'document' | 'youtube' | 'activity' | 'quiz'; title: string; url: string }[];
+    onAddResourceLink: (topicId: string, type: 'file' | 'document' | 'youtube' | 'activity' | 'quiz') => void;
     onUpdateResourceLink: (id: string, field: 'title' | 'url', value: string) => void;
     onDeleteResourceLink: (id: string) => void;
     onReorderResourceLink: (draggedId: string, targetId: string, parentId: string) => void;
@@ -132,6 +132,7 @@ const EditableTopicAccordion: React.FC<{
                                                     rl.type === 'file' ? 'bg-blue-50/50 dark:bg-blue-900/10' :
                                                     rl.type === 'document' ? 'bg-amber-50/50 dark:bg-amber-900/10' :
                                                     rl.type === 'youtube' ? 'bg-red-50/50 dark:bg-red-900/10' :
+                                                    rl.type === 'activity' ? 'bg-purple-50/50 dark:bg-purple-900/10' :
                                                     'bg-green-50/50 dark:bg-green-900/10'
                                                 }`}
                                             >
@@ -140,9 +141,10 @@ const EditableTopicAccordion: React.FC<{
                                                     rl.type === 'file' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
                                                     rl.type === 'document' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' :
                                                     rl.type === 'youtube' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' :
+                                                    rl.type === 'activity' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400' :
                                                     'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
                                                 }`}>
-                                                    {rl.type === 'file' ? 'Web' : rl.type === 'document' ? 'Doc' : rl.type === 'youtube' ? 'YT' : 'Quiz'}
+                                                    {rl.type === 'file' ? 'Web' : rl.type === 'document' ? 'Doc' : rl.type === 'youtube' ? 'YT' : rl.type === 'activity' ? 'Act' : 'Quiz'}
                                                 </span>
                                                 <input
                                                     type="text"
@@ -173,6 +175,7 @@ const EditableTopicAccordion: React.FC<{
                                             <button onClick={() => onAddResourceLink(subtopic.id, 'file')} className="text-[10px] text-gray-400 hover:text-blue-500 px-1 py-0.5 rounded hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors">+ Web</button>
                                             <button onClick={() => onAddResourceLink(subtopic.id, 'document')} className="text-[10px] text-gray-400 hover:text-amber-500 px-1 py-0.5 rounded hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors">+ Document</button>
                                             <button onClick={() => onAddResourceLink(subtopic.id, 'youtube')} className="text-[10px] text-gray-400 hover:text-red-500 px-1 py-0.5 rounded hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">+ YouTube</button>
+                                            <button onClick={() => onAddResourceLink(subtopic.id, 'activity')} className="text-[10px] text-gray-400 hover:text-purple-500 px-1 py-0.5 rounded hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-colors">+ Activity</button>
                                             <button onClick={() => onAddResourceLink(subtopic.id, 'quiz')} className="text-[10px] text-gray-400 hover:text-green-500 px-1 py-0.5 rounded hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors">+ Quiz</button>
                                         </div>
                                     </div>
@@ -249,7 +252,7 @@ const CourseEditor: React.FC = () => {
     });
 
     // Resource links state (file links, YouTube links, quiz links) — each link belongs to a topic
-    const [resourceLinks, setResourceLinks] = useState<{ id: string; topicId: string; type: 'file' | 'document' | 'youtube' | 'quiz'; title: string; url: string }[]>(
+    const [resourceLinks, setResourceLinks] = useState<{ id: string; topicId: string; type: 'file' | 'document' | 'youtube' | 'activity' | 'quiz'; title: string; url: string }[]>(
         (course as any).resourceLinks || []
     );
 
@@ -806,7 +809,7 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
         }));
     };
 
-    const addResourceLink = (topicId: string, type: 'file' | 'document' | 'youtube' | 'quiz') => {
+    const addResourceLink = (topicId: string, type: 'file' | 'document' | 'youtube' | 'activity' | 'quiz') => {
         setResourceLinks(prev => [...prev, { id: `rl_${Date.now()}`, topicId, type, title: '', url: '' }]);
     };
 
