@@ -12,6 +12,7 @@ const getRoleDisplayName = (role: UserRole): string => {
     case UserRole.Trainer: return 'Trainer';
     case UserRole.Developer: return 'Developer';
     case UserRole.Admin: return 'Admin';
+    case UserRole.Finance: return 'Finance';
     case UserRole.TrainingProvider: return 'Training Provider';
     default: return role;
   }
@@ -24,6 +25,7 @@ const getRoleIcon = (role: UserRole): string => {
     case UserRole.Trainer: return '👨‍🏫';
     case UserRole.Developer: return '💻';
     case UserRole.Admin: return '⚙️';
+    case UserRole.Finance: return '💰';
     case UserRole.TrainingProvider: return '🏢';
     default: return '👤';
   }
@@ -173,6 +175,7 @@ const Header: React.FC = () => {
       { view: View.Admin, label: 'Class Management', icon: IconName.Courses, page: AdminPage.ClassManagement },
       { view: View.Admin, label: 'TPG Management', icon: IconName.DollarSign, page: AdminPage.TpgManagement },
     ],
+    [UserRole.Finance]: [],
     [UserRole.TrainingProvider]: []
   };
 

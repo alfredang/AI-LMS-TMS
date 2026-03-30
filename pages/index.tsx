@@ -5,6 +5,7 @@ import LearnerLayout from '@/layouts/LearnerLayout'
 import TrainerLayout from '@/layouts/TrainerLayout'
 import DeveloperLayout from '@/layouts/DeveloperLayout'
 import AdminLayout from '@/layouts/AdminLayout'
+import FinanceLayout from '@/layouts/FinanceLayout'
 import TrainingProviderLayout from '@/layouts/TrainingProviderLayout'
 import { useLms } from '@contexts/LmsContext'
 import { UserRole } from '@app-types'
@@ -117,6 +118,19 @@ const Home: NextPage = () => {
           <link rel="icon" href="/favicon.ico" />
         </Head>
         <AdminLayout />
+      </>
+    );
+  }
+
+  if (role === UserRole.Finance) {
+    return (
+      <>
+        <Head>
+          <title>Tertiary Infotech Academy LMS TMS - Finance Dashboard</title>
+          <meta name="description" content="Finance management dashboard" />
+          <link rel="icon" href="/favicon.ico" />
+        </Head>
+        <FinanceLayout />
       </>
     );
   }
