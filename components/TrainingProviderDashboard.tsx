@@ -140,7 +140,7 @@ const TrainingProviderDashboard: React.FC = () => {
     return (
         <div>
             <div className="flex items-center justify-between mb-6">
-                <h2 className="text-3xl font-bold">AI Analytics Dashboard</h2>
+                <h2 className="text-3xl font-bold">Training Analytics Dashboard</h2>
                 <button
                     onClick={() => fetchAnalyticsData(true)}
                     disabled={refreshing}
