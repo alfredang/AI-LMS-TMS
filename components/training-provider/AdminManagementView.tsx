@@ -3,7 +3,7 @@ import { Card } from '../ui/Card';
 import { Icon, IconName } from '../ui/Icon';
 import { useLms } from '@contexts/LmsContext';
 
-const ALL_ROLES = ['Learner', 'Trainer', 'Admin', 'Developer', 'Training Provider'];
+const ALL_ROLES = ['Learner', 'Trainer', 'Admin', 'Developer', 'Finance', 'Training Provider'];
 
 interface AdminAccount {
   id: string;
@@ -19,6 +19,8 @@ const getRoleBadge = (role: string): { classes: string; dot: string } => {
   switch (role) {
     case 'Admin':
       return { classes: 'bg-red-50 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-300 dark:border-red-700', dot: 'bg-red-500' };
+    case 'Finance':
+      return { classes: 'bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-900/30 dark:text-teal-300 dark:border-teal-700', dot: 'bg-teal-500' };
     case 'Training Provider':
       return { classes: 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-900/30 dark:text-purple-300 dark:border-purple-700', dot: 'bg-purple-500' };
     case 'Developer':

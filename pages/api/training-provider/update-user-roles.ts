@@ -2,7 +2,7 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { cors } from '../../../lib/cors';
 
-const VALID_ROLES = ['Learner', 'Trainer', 'Developer', 'Admin', 'Training Provider'];
+const VALID_ROLES = ['Learner', 'Trainer', 'Developer', 'Admin', 'Finance', 'Training Provider'];
 
 async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (cors(req, res)) return;
