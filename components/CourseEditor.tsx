@@ -204,10 +204,12 @@ const CourseEditor: React.FC = () => {
     }
 
     // Auto-migrate legacy written/practical links into assessmentMethods if not yet set
+    // Treat "No file" as empty (legacy placeholder value)
+    const cleanLink = (link?: string) => (link && link !== 'No file' && link.startsWith('http')) ? link : '';
     const initialAssessmentMethods = editingCourse.assessmentMethods || {
         ...DEFAULT_ASSESSMENT_METHODS,
-        writtenAssessment: { enabled: true, link: editingCourse.writtenAssessmentLink || '' },
-        practicalExam: { enabled: true, link: editingCourse.practicalPerformanceAssessmentLink || '' },
+        writtenAssessment: { enabled: !!cleanLink(editingCourse.writtenAssessmentLink), link: cleanLink(editingCourse.writtenAssessmentLink) },
+        practicalExam: { enabled: !!cleanLink(editingCourse.practicalPerformanceAssessmentLink), link: cleanLink(editingCourse.practicalPerformanceAssessmentLink) },
     };
 
     const [course, setCourse] = useState<Course>({
