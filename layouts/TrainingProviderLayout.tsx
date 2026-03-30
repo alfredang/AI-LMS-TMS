@@ -17,6 +17,7 @@ import DocumentsView from '../components/training-provider/DocumentsView';
 import PrivacyPolicyView from '../components/training-provider/PrivacyPolicyView';
 import AcceptableUsePolicyView from '../components/training-provider/AcceptableUsePolicyView';
 import OtpEmailTemplateView from '../components/training-provider/OtpEmailTemplateView';
+import FinanceManagementView from '../components/training-provider/FinanceManagementView';
 import TrainingProviderSidebar from '../components/training-provider/TrainingProviderSidebar';
 import { Card } from '../components/ui/Card';
 
@@ -62,6 +63,8 @@ const TrainingProviderLayout: React.FC = () => {
         return <AcceptableUsePolicyView />;
       case View.OtpEmailTemplate:
         return <OtpEmailTemplateView />;
+      case View.FinanceManagement:
+        return <FinanceManagementView />;
       default:
         return <TrainingProviderDashboard />;
     }
@@ -82,6 +85,7 @@ const TrainingProviderLayout: React.FC = () => {
       case View.PrivacyPolicy: return 'Privacy Policy';
       case View.AcceptableUsePolicy: return 'Acceptable Use Policy';
       case View.OtpEmailTemplate: return 'OTP Email Template';
+      case View.FinanceManagement: return 'Finance Management';
       default: return 'Dashboard';
     }
   };

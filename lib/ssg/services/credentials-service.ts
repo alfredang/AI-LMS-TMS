@@ -84,7 +84,7 @@ export class SSGCredentialsService {
       
       const credentials: SSGCredentials = {
         uen: process.env.TRAINING_PARTNER_UEN || row.uen,
-        encryptionKey: row.ssg_encryption_key || process.env.SSG_ENCRYPTION_KEY || process.env.ENCRYPTION_KEY || '',
+        encryptionKey: process.env.SSG_ENCRYPTION_KEY || process.env.ENCRYPTION_KEY || process.env.CERT_1_ENCRYPTION_KEY || row.ssg_encryption_key || '',
         certificatePath: convertToAbsolutePath(row.ssg_self_sign_cert_file),
         privateKeyPath: convertToAbsolutePath(row.ssg_private_key_file)
       };
@@ -107,8 +107,8 @@ export class SSGCredentialsService {
       };
 
       // Read certificate and private key — env vars take priority over file paths
-      const certEnv = process.env.CERT_VALUE;
-      const keyEnv  = process.env.PRIVATE_KEY_VALUE;
+      const certEnv = process.env.CERT_VALUE || process.env.CERT_1_CERT;
+      const keyEnv  = process.env.PRIVATE_KEY_VALUE || process.env.CERT_1_KEY;
 
       if (certEnv) {
         credentials.certificateContent = resolvePem(certEnv);

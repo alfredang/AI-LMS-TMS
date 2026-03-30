@@ -14,7 +14,8 @@ export enum View {
   Documents = 'documents',
   PrivacyPolicy = 'privacyPolicy',
   AcceptableUsePolicy = 'acceptableUsePolicy',
-  OtpEmailTemplate = 'otpEmailTemplate'
+  OtpEmailTemplate = 'otpEmailTemplate',
+  FinanceManagement = 'financeManagement'
 }
 
 export enum UserRole {
