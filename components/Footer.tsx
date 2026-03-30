@@ -8,9 +8,9 @@ const Footer: React.FC = () => {
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
         <p className="text-center text-sm text-on-surface-secondary">
           Powered by{' '}
-          <span className="font-semibold text-on-surface">
+          <a href="https://www.tertiarycourses.com.sg/" target="_blank" rel="noopener noreferrer" className="font-semibold text-on-surface hover:text-primary transition-colors">
             Tertiary Infotech Academy Pte Ltd
-          </span>
+          </a>
           {' '}&copy; {currentYear}
         </p>
       </div>
