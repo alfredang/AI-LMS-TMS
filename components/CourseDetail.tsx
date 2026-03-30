@@ -839,8 +839,8 @@ const AssessmentsSection: React.FC<{
                 </ul>
             )}
 
-            {/* Written Exam - Show only when link exists */}
-            {course.writtenAssessmentLink && (userRole === UserRole.Trainer || userRole === UserRole.Admin || userRole === UserRole.Developer || userRole === UserRole.TrainingProvider || writtenPublished) && (
+            {/* Written Exam - Show only when link exists AND developer has it enabled (or no assessmentMethods configured) */}
+            {course.writtenAssessmentLink && (!course.assessmentMethods || course.assessmentMethods.writtenAssessment?.enabled) && (userRole === UserRole.Trainer || userRole === UserRole.Admin || userRole === UserRole.Developer || userRole === UserRole.TrainingProvider || writtenPublished) && (
                 <div className="mt-1 p-3 bg-gray-100/60 dark:bg-gray-800/60 rounded-lg">
                     <div className="flex items-center justify-between mb-2">
                         <h4 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
@@ -946,8 +946,8 @@ const AssessmentsSection: React.FC<{
                 </div>
             )}
 
-            {/* Practical Exam - Show only when link exists */}
-            {course.practicalPerformanceAssessmentLink && (userRole === UserRole.Trainer || userRole === UserRole.Admin || userRole === UserRole.Developer || userRole === UserRole.TrainingProvider || practicalPublished) && (
+            {/* Practical Exam - Show only when link exists AND developer has it enabled (or no assessmentMethods configured) */}
+            {course.practicalPerformanceAssessmentLink && (!course.assessmentMethods || course.assessmentMethods.practicalExam?.enabled) && (userRole === UserRole.Trainer || userRole === UserRole.Admin || userRole === UserRole.Developer || userRole === UserRole.TrainingProvider || practicalPublished) && (
                 <div className="mt-1 p-3 bg-gray-100/60 dark:bg-gray-800/60 rounded-lg">
                     <div className="flex items-center justify-between mb-2">
                         <h4 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
