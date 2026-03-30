@@ -159,6 +159,7 @@ const Header: React.FC = () => {
       { view: View.Courses, label: 'TRAQOM Survey', icon: IconName.ClipboardCheck, href: 'https://ssgtraqom.qualtrics.com/jfe/form/SV_3K9i7rTJ9OLsauW?Q_CHL=qr' },
     ],
     [UserRole.Trainer]: [
+      { view: View.Dashboard, label: 'My Classes', icon: IconName.BookOpen, trainerPage: TrainerPage.MyClasses },
       { view: View.Dashboard, label: 'E-Attendance', icon: IconName.ClipboardCheck, trainerPage: TrainerPage.EAttendance },
       { view: View.Dashboard, label: 'Ed Tools', icon: IconName.BookOpen, trainerPage: TrainerPage.EdTools },
       { view: View.Dashboard, label: 'GenAI Tools', icon: IconName.Create, trainerPage: TrainerPage.GenAIAuthoring },
