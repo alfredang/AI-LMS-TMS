@@ -72,7 +72,22 @@ AI-LMS-TMS is a **full-stack, enterprise-grade web application** that manages th
 - Past attendance and assessment history
 - Task list management
 - **GenAI Authoring** - AI-powered content generation tools
-- **EdTools** - Educational tools integration (Whiteboard, etc.)
+- **Ed Tools** - Suite of interactive educational tools:
+  - [Ice Breaker](https://alfredang.github.io/ice-breaker/) - Fun activities to engage learners
+  - [Pinboard](https://alfredang.github.io/pinboard/) - Collaborative idea sharing board
+  - [Break Timer](https://alfredang.github.io/musical-timer-countdown/) - Musical countdown timer for breaks
+  - [Word Cloud](https://alfredang.github.io/wordcloud/) - Real-time word clouds from learner responses
+  - [Live Q&A](https://alfredang.github.io/live-qna/) - Real-time question and answer board
+  - [Whiteboard](https://alfredang.github.io/whiteboard/) - Interactive drawing and annotations
+  - [Collaborative Note](https://alfredang.github.io/collabnote/) - Shared real-time notes
+  - [Collaborative Flow](https://alfredang.github.io/collabflow/) - Visual workflow collaboration
+  - [Collaborative Kanban](https://alfredang.github.io/kanban/) - Shared kanban task board
+  - [Live Poll](https://alfredang.github.io/livepoll/) - Real-time polling and voting
+  - [Spinning Wheel](https://alfredang.github.io/spinning-wheel/) - Random selection spinner
+  - [5 Whys](https://alfredang.github.io/5whys/) - Root cause analysis tool
+  - [Fishbone Diagram](https://alfredang.github.io/fishbone/) - Cause-and-effect (Ishikawa) diagram
+  - [System Thinking](https://alfredang.github.io/systemloop/) - Cause-and-effect feedback loop visualisation
+  - [Google Meet](https://meet.google.com/landing) - Video meetings with learners
 
 ### Admin Features
 - **Calendar Management** - View and manage training calendar
