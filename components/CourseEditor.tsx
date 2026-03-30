@@ -33,8 +33,8 @@ const EditableTopicAccordion: React.FC<{
     onSelfDragStart: (e: React.DragEvent) => void;
     onSelfDragEnd: (e: React.DragEvent) => void;
     // Resource links props
-    resourceLinks: { id: string; topicId: string; type: 'file' | 'youtube' | 'quiz'; title: string; url: string }[];
-    onAddResourceLink: (topicId: string, type: 'file' | 'youtube' | 'quiz') => void;
+    resourceLinks: { id: string; topicId: string; type: 'file' | 'document' | 'youtube' | 'quiz'; title: string; url: string }[];
+    onAddResourceLink: (topicId: string, type: 'file' | 'document' | 'youtube' | 'quiz') => void;
     onUpdateResourceLink: (id: string, field: 'title' | 'url', value: string) => void;
     onDeleteResourceLink: (id: string) => void;
     onReorderResourceLink: (draggedId: string, targetId: string, parentId: string) => void;
@@ -249,7 +249,7 @@ const CourseEditor: React.FC = () => {
     });
 
     // Resource links state (file links, YouTube links, quiz links) — each link belongs to a topic
-    const [resourceLinks, setResourceLinks] = useState<{ id: string; topicId: string; type: 'file' | 'youtube' | 'quiz'; title: string; url: string }[]>(
+    const [resourceLinks, setResourceLinks] = useState<{ id: string; topicId: string; type: 'file' | 'document' | 'youtube' | 'quiz'; title: string; url: string }[]>(
         (course as any).resourceLinks || []
     );
 
@@ -806,7 +806,7 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
         }));
     };
 
-    const addResourceLink = (topicId: string, type: 'file' | 'youtube' | 'quiz') => {
+    const addResourceLink = (topicId: string, type: 'file' | 'document' | 'youtube' | 'quiz') => {
         setResourceLinks(prev => [...prev, { id: `rl_${Date.now()}`, topicId, type, title: '', url: '' }]);
     };
 
