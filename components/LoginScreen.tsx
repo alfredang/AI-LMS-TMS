@@ -13,6 +13,7 @@ const getRoleDisplayName = (role: UserRole): string => {
     case UserRole.Trainer: return 'Trainer';
     case UserRole.Developer: return 'Developer';
     case UserRole.Admin: return 'Admin';
+    case UserRole.Finance: return 'Finance';
     case UserRole.TrainingProvider: return 'Training Provider';
     default: return role;
   }
@@ -25,6 +26,7 @@ const getRoleIcon = (role: UserRole): string => {
     case UserRole.Trainer: return '👨‍🏫';
     case UserRole.Developer: return '💻';
     case UserRole.Admin: return '⚙️';
+    case UserRole.Finance: return '💰';
     case UserRole.TrainingProvider: return '🏢';
     default: return '👤';
   }
@@ -526,6 +528,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
                   {role === UserRole.Trainer && 'Manage classes and grade assessments'}
                   {role === UserRole.Developer && 'Create and edit course content'}
                   {role === UserRole.Admin && 'Manage users, classes, and system settings'}
+                  {role === UserRole.Finance && 'Manage grants, claims, and financial records'}
                   {role === UserRole.TrainingProvider && 'Manage organization and SSG integration'}
                 </p>
               </div>
