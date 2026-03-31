@@ -60,12 +60,12 @@ async function handler(req: NextApiRequest, res: NextApiResponse<SendOtpResponse
     let tpResult;
     try {
       tpResult = await pool.query(
-        'SELECT email_user, google_client_id, google_client_secret, google_refresh_token, company_name, company_shortname, otp_email_subject, otp_email_body FROM training_provider LIMIT 1'
+        'SELECT email_user, company_email, google_client_id, google_client_secret, google_refresh_token, company_name, company_shortname, otp_email_subject, otp_email_body FROM training_provider LIMIT 1'
       );
     } catch (e) {
       // otp_email_subject/otp_email_body columns may not exist yet
       tpResult = await pool.query(
-        'SELECT email_user, google_client_id, google_client_secret, google_refresh_token, company_name, company_shortname FROM training_provider LIMIT 1'
+        'SELECT email_user, company_email, google_client_id, google_client_secret, google_refresh_token, company_name, company_shortname FROM training_provider LIMIT 1'
       );
     }
 
@@ -75,7 +75,8 @@ async function handler(req: NextApiRequest, res: NextApiResponse<SendOtpResponse
     }
 
     const tp = tpResult.rows[0];
-    const { email_user, google_client_id, google_client_secret, google_refresh_token, company_name } = tp;
+    const { email_user, company_email, google_client_id, google_client_secret, google_refresh_token, company_name } = tp;
+    const senderEmail = company_email || email_user;
 
     if (!email_user || !google_client_id || !google_client_secret || !google_refresh_token) {
       console.error('❌ Gmail OAuth not configured in Company Settings');
@@ -139,7 +140,8 @@ Warm regards
     `;
 
     const rawEmail = [
-      `From: ${email_user}`,
+      `From: ${companyShortName} <${senderEmail}>`,
+      `Reply-To: ${senderEmail}`,
       `To: ${email}`,
       `Subject: ${subject}`,
       'MIME-Version: 1.0',

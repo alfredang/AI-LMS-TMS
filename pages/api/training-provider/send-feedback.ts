@@ -21,7 +21,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     // Fetch training provider Gmail OAuth credentials and contact person email
     const result = await pool.query(
-      `SELECT email_user, google_client_id, google_client_secret, google_refresh_token,
+      `SELECT email_user, company_email, google_client_id, google_client_secret, google_refresh_token,
               contact_person_name, contact_tel, company_name
        FROM training_provider LIMIT 1`
     );
@@ -31,7 +31,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     const tp = result.rows[0];
-    const { email_user, google_client_id, google_client_secret, google_refresh_token, company_name } = tp;
+    const { email_user, company_email, google_client_id, google_client_secret, google_refresh_token, company_name } = tp;
+    const senderEmail = company_email || email_user;
+    const senderName = tp.contact_person_name || '';
 
     // Get contact person email from app_user table (linked via training_provider_member or provider_admin_user)
     let contactEmail: string | null = null;
@@ -129,7 +131,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const ccList = dbCc ? dbCc.split(',').map((e: string) => e.trim()).filter(Boolean) : [];
 
     const rawEmail = [
-      `From: ${email_user}`,
+      `From: ${senderName ? `${senderName} <${senderEmail}>` : senderEmail}`,
       `To: ${recipientEmail}`,
       ...(ccList.length > 0 ? [`Cc: ${ccList.join(', ')}`] : []),
       `Reply-To: ${email}`,

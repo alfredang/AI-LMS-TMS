@@ -27,9 +27,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   // Resolve training provider from user ID (via member table or direct ownership)
   let emailUser: string, clientId: string, clientSecret: string, refreshToken: string, slidesTemplateId: string;
+  let senderName = '';
+  let senderEmail = '';
   try {
     let result = await pool.query(
-      `SELECT tp.email_user, tp.google_client_id, tp.google_client_secret, tp.google_refresh_token, tp.google_slides_template_id
+      `SELECT tp.email_user, tp.google_client_id, tp.google_client_secret, tp.google_refresh_token, tp.google_slides_template_id, tp.contact_person_name, tp.company_email
        FROM training_provider tp
        INNER JOIN training_provider_member tpm ON tpm.provider_id = tp.id
        WHERE tpm.user_id = $1`,
@@ -37,7 +39,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     );
     if (result.rows.length === 0) {
       result = await pool.query(
-        'SELECT email_user, google_client_id, google_client_secret, google_refresh_token, google_slides_template_id FROM training_provider WHERE id = $1',
+        'SELECT email_user, google_client_id, google_client_secret, google_refresh_token, google_slides_template_id, contact_person_name, company_email FROM training_provider WHERE id = $1',
         [userId]
       );
     }
@@ -50,6 +52,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     clientSecret = tp.google_client_secret;
     refreshToken = tp.google_refresh_token;
     slidesTemplateId = tp.google_slides_template_id;
+    senderName = tp.contact_person_name || '';
+    senderEmail = tp.company_email || emailUser;
 
     if (!emailUser || !clientId || !clientSecret || !refreshToken || !slidesTemplateId) {
       return res.status(400).json({ error: 'Google Integration settings are incomplete. Please configure Email User, Client ID, Client Secret, Refresh Token, and Slides Template ID in Company Settings.' });
@@ -152,7 +156,8 @@ Best regards,
     `;
 
     const rawEmail = [
-      `From: ${emailUser}`,
+      `From: ${senderName ? `${senderName} <${senderEmail}>` : senderEmail}`,
+      `Reply-To: ${senderEmail}`,
       `To: ${studentEmail}`,
       `Cc: ${ccList.join(', ')}`,
       `Subject: ${subject}`,

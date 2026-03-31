@@ -54,9 +54,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       await pool.query('UPDATE app_user SET must_change_password = TRUE WHERE id = $1', [user.id]);
     }
 
-    // Fetch Gmail OAuth credentials, company info, and email template
+    // Fetch Gmail OAuth credentials, company info, contact person, and email template
     const tpResult = await pool.query(
-      'SELECT email_user, google_client_id, google_client_secret, google_refresh_token, company_name, company_shortname FROM training_provider LIMIT 1'
+      'SELECT email_user, company_email, contact_person_name, google_client_id, google_client_secret, google_refresh_token, company_name, company_shortname FROM training_provider LIMIT 1'
     );
 
     // Try to fetch customised email template
@@ -81,7 +81,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     const tp = tpResult.rows[0];
-    const { email_user, google_client_id, google_client_secret, google_refresh_token } = tp;
+    const { email_user, company_email, contact_person_name, google_client_id, google_client_secret, google_refresh_token } = tp;
+    const senderEmail = company_email || email_user;
+    const senderName = contact_person_name || '';
 
     if (!email_user || !google_client_id || !google_client_secret || !google_refresh_token) {
       console.error('❌ Gmail OAuth not configured for forgot password emails');
@@ -130,7 +132,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const htmlBody = replaceVars(dbBody || defaultBody);
 
     const rawEmail = [
-      `From: ${email_user}`,
+      `From: ${senderName ? `${senderName} <${senderEmail}>` : senderEmail}`,
+      `Reply-To: ${senderEmail}`,
       `To: ${user.email}`,
       `Subject: ${subject}`,
       'MIME-Version: 1.0',
