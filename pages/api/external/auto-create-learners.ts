@@ -15,7 +15,7 @@ import { createSSGEnrolmentAPI } from '../../../lib/ssg/api/enrolment-api';
  * Flow:
  *   1. Validate API key
  *   2. Find all course runs where start_date = today
- *   3. Fetch SSG enrollments via n8n webhook for each run
+ *   3. Fetch SSG enrollments directly from SSG API for each run
  *   4. Create learner accounts (skip if already exists)
  *   5. Upsert enrollment records
  *   6. Log results to auto_create_learner_log

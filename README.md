@@ -36,7 +36,7 @@ AI-LMS-TMS is a **full-stack, enterprise-grade web application** that manages th
 - **SSG Integration**: Full SkillsFuture Singapore API support for course runs, enrolments, assessments, grants, and claims
 - **Multi-Role System**: 5 roles with dedicated dashboards - Learner, Trainer, Admin, Developer, Training Provider
 - **Singapore-Ready**: NRIC/FIN validation, UEN verification, WSQ/IBF course support, funding calculations
-- **Automation**: Auto-create learner accounts, auto-assign trainers, auto-sync course run dates via n8n workflows
+- **Automation**: Auto-create learner accounts, auto-assign trainers, auto-sync course run dates via Next.js background workers
 - **External API**: 8 REST endpoints for third-party bot and automation integration
 - **Modern Stack**: Next.js 14, TypeScript, Tailwind CSS, PostgreSQL, deployed on Coolify
 
@@ -102,7 +102,7 @@ AI-LMS-TMS is a **full-stack, enterprise-grade web application** that manages th
 - **Certificate Management** - Create, delete, and send certificates (SG and GH variants) with configurable CC email lists
 - **Automation Logs** - Auto-create learner logs, assign trainer logs, course run date sync logs
 - **Reference Links** - Configurable external links (Master List, TMS, FMS, MMS, TPMS)
-- **n8n Links** - Quick access to n8n workflow hosts
+
 - **Useful Links** - Quick access to Magento backend and other tools
 
 ### Developer Features
@@ -118,7 +118,7 @@ AI-LMS-TMS is a **full-stack, enterprise-grade web application** that manages th
 - **Company Settings**
   - Company profile (name, UEN, address, logo, color scheme)
   - Contact person management
-  - **Integrations** - Google (Calendar, OAuth, Certificate Folder), n8n (Host URLs), Magento (Backend URL), Reference Links
+  - **Integrations** - Google (Calendar, OAuth, Certificate Folder), Magento (Backend URL), Reference Links
   - **SSG Authentication** - SSG certificate, private key, and encryption key
   - **Credentials** - LLM API keys with model selection
   - **Security Settings** - OTP login, default OTP, force first password change, default password, sensitive data masking
@@ -135,7 +135,7 @@ AI-LMS-TMS is a **full-stack, enterprise-grade web application** that manages th
 - **Quiz Generator** - AI-generated quizzes based on course content
 
 ### Automation Features
-- **Auto-Create Learners** - Automatically creates learner accounts for course runs starting today (via n8n)
+- **Auto-Create Learners** - Automatically creates learner accounts for course runs starting today
 - **Auto-Assign Trainers** - Bot-driven trainer assignment to course runs
 - **Course Run Date Sync** - Automatic synchronization of dates with SSG
 - **Enrolment Backfill** - Batch sync of enrollment data from SSG
@@ -178,7 +178,7 @@ AI-LMS-TMS is a **full-stack, enterprise-grade web application** that manages th
 | **Icons** | Lucide React |
 | **Database Client** | pg (node-postgres) |
 | **Deployment** | Coolify (self-hosted) |
-| **Automation** | n8n workflows |
+| **Automation** | Next.js background workers |
 | **E-commerce** | Magento integration |
 
 ## API Documentation

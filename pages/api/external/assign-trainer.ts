@@ -23,7 +23,7 @@ import pool from '../../../lib/db';
  *
  * Flow:
  *   1. Validate API key
- *   2. Use data provided in request body directly (n8n webhook disabled)
+ *   2. Use data provided in request body directly
  *   3. Upsert course_run in DB (create if not exists, update if exists)
  *   4. Assign the trainer
  */
@@ -63,13 +63,7 @@ function parseToISO(d: number | string | undefined): string | null {
   return null;
 }
 
-// ── extractRaCode (commented out — was used by n8n webhook response) ──────────
-// Extract RA code from qrCodeLink e.g. ".../take-attendance/RA741642" → "RA741642"
-// function extractRaCode(qrCodeLink: string | undefined): string | null {
-//   if (!qrCodeLink) return null;
-//   const parts = qrCodeLink.split('/');
-//   return parts[parts.length - 1] || null;
-// }
+
 
 async function ensureLogTable() {
   await pool.query(`

@@ -22,4 +22,4 @@ pdfParser.on("pdfParser_dataReady", pdfData => {
     });
 });
 
-pdfParser.loadPDF('public/certificate_template/Certificate Template (n8n Automation).pdf');
+pdfParser.loadPDF('public/certificate_template/Certificate Template.pdf');
