@@ -60,13 +60,19 @@ async function handler(req: NextApiRequest, res: NextApiResponse<SendOtpResponse
     let tpResult;
     try {
       tpResult = await pool.query(
-        'SELECT email_user, company_email, google_client_id, google_client_secret, google_refresh_token, company_name, company_shortname, otp_email_subject, otp_email_body FROM training_provider LIMIT 1'
+        'SELECT email_user, company_email, google_client_id, google_client_secret, google_refresh_token, company_name, company_shortname, otp_email_subject, otp_email_body, support_email FROM training_provider LIMIT 1'
       );
     } catch (e) {
-      // otp_email_subject/otp_email_body columns may not exist yet
-      tpResult = await pool.query(
-        'SELECT email_user, company_email, google_client_id, google_client_secret, google_refresh_token, company_name, company_shortname FROM training_provider LIMIT 1'
-      );
+      // support_email or otp_email columns may not exist yet
+      try {
+        tpResult = await pool.query(
+          'SELECT email_user, company_email, google_client_id, google_client_secret, google_refresh_token, company_name, company_shortname, otp_email_subject, otp_email_body FROM training_provider LIMIT 1'
+        );
+      } catch (e2) {
+        tpResult = await pool.query(
+          'SELECT email_user, company_email, google_client_id, google_client_secret, google_refresh_token, company_name, company_shortname FROM training_provider LIMIT 1'
+        );
+      }
     }
 
     if (tpResult.rows.length === 0) {
@@ -76,14 +82,9 @@ async function handler(req: NextApiRequest, res: NextApiResponse<SendOtpResponse
 
     const tp = tpResult.rows[0];
     const { email_user, company_email, google_client_id, google_client_secret, google_refresh_token, company_name } = tp;
-
-    // Safely fetch support_email (column may not exist yet)
-    let supportEmail = '';
-    try {
-      const seResult = await pool.query('SELECT support_email FROM training_provider LIMIT 1');
-      if (seResult.rows.length > 0 && seResult.rows[0].support_email) supportEmail = seResult.rows[0].support_email;
-    } catch (e) { /* column doesn't exist yet */ }
+    const supportEmail = tp.support_email || '';
     const replyToEmail = supportEmail || company_email || email_user;
+    console.log('📧 OTP reply-to:', replyToEmail, '(support_email:', supportEmail, ', company_email:', company_email, ')');
 
     if (!email_user || !google_client_id || !google_client_secret || !google_refresh_token) {
       console.error('❌ Gmail OAuth not configured in Company Settings');

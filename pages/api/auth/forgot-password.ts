@@ -55,9 +55,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     // Fetch Gmail OAuth credentials, company info, contact person, and email template
-    const tpResult = await pool.query(
-      'SELECT email_user, company_email, contact_person_name, google_client_id, google_client_secret, google_refresh_token, company_name, company_shortname FROM training_provider LIMIT 1'
-    );
+    let tpResult;
+    try {
+      tpResult = await pool.query(
+        'SELECT email_user, company_email, contact_person_name, google_client_id, google_client_secret, google_refresh_token, company_name, company_shortname, support_email FROM training_provider LIMIT 1'
+      );
+    } catch (e) {
+      tpResult = await pool.query(
+        'SELECT email_user, company_email, contact_person_name, google_client_id, google_client_secret, google_refresh_token, company_name, company_shortname FROM training_provider LIMIT 1'
+      );
+    }
 
     // Try to fetch customised email template
     let dbSubject = '';
@@ -83,13 +90,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const tp = tpResult.rows[0];
     const { email_user, company_email, contact_person_name, google_client_id, google_client_secret, google_refresh_token } = tp;
 
-    // Safely fetch support_email (column may not exist yet)
-    let supportEmail = '';
-    try {
-      const seResult = await pool.query('SELECT support_email FROM training_provider LIMIT 1');
-      if (seResult.rows.length > 0 && seResult.rows[0].support_email) supportEmail = seResult.rows[0].support_email;
-    } catch (e) { /* column doesn't exist yet */ }
+    const supportEmail = tp.support_email || '';
     const replyToEmail = supportEmail || company_email || email_user;
+    console.log('📧 Password reset reply-to:', replyToEmail, '(support_email:', supportEmail, ', company_email:', company_email, ')');
     const senderName = contact_person_name || '';
 
     if (!email_user || !google_client_id || !google_client_secret || !google_refresh_token) {
