@@ -1,6 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import bcrypt from 'bcryptjs';
+import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdentifiers';
 
 interface TrainerRow {
   full_name: string;
@@ -27,17 +28,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).json({ success: false, message: 'No trainer data provided.' });
   }
 
-  // Fetch default password from Company Settings
-  let defaultPassword = 'password123'; // fallback
-  try {
-    const tpResult = await pool.query('SELECT default_password FROM training_provider LIMIT 1');
-    if (tpResult.rows.length > 0 && tpResult.rows[0].default_password) {
-      defaultPassword = tpResult.rows[0].default_password;
-    }
-  } catch (e) { /* column may not exist */ }
+  const tp = await getTrainingPartnerIdentifiers();
 
   const saltRounds = 10;
-  const hashedPassword = await bcrypt.hash(defaultPassword, saltRounds);
+  const hashedPassword = await bcrypt.hash(tp.defaultPassword, saltRounds);
 
   const results: Array<{
     email: string;
@@ -154,7 +148,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             `INSERT INTO app_user (email, secondary_email, password, password_hash, full_name, created_at, updated_at)
              VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
              RETURNING id`,
-            [email, secondaryEmail, defaultPassword, hashedPassword, full_name]
+            [email, secondaryEmail, tp.defaultPassword, hashedPassword, full_name]
           );
 
           const userId = userResult.rows[0].id;

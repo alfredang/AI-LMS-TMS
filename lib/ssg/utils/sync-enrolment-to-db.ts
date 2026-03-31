@@ -64,15 +64,6 @@ export async function syncEnrolmentToDB(
 
   if (!traineeEmail || !courseCode || !courseRunId) return 'skipped';
 
-  // Fetch default password from Company Settings
-  let defaultPassword = 'password123'; // fallback
-  try {
-    const tpResult = await client.query('SELECT default_password FROM training_provider LIMIT 1');
-    if (tpResult.rows.length > 0 && tpResult.rows[0].default_password) {
-      defaultPassword = tpResult.rows[0].default_password;
-    }
-  } catch (e) { /* column may not exist */ }
-
   // ── 1. Upsert learner ────────────────────────────────────────────────────
   let userRow = await client.query(
     `SELECT id FROM app_user WHERE email = $1 LIMIT 1`,
@@ -83,14 +74,14 @@ export async function syncEnrolmentToDB(
   if (userRow.rows.length === 0) {
     const newId = crypto.randomUUID();
     const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(defaultPassword, salt);
+    const hashedPassword = await bcrypt.hash(tpIdentifiers.defaultPassword, salt);
 
     const inserted = await client.query(
       `INSERT INTO app_user (id, email, full_name, password, password_hash, account_status, created_at)
        VALUES ($1, $2, $3, $4, $5, 'active', NOW())
        ON CONFLICT (email) DO NOTHING
        RETURNING id`,
-      [newId, traineeEmail, traineeName || traineeEmail, defaultPassword, hashedPassword]
+      [newId, traineeEmail, traineeName || traineeEmail, tpIdentifiers.defaultPassword, hashedPassword]
     );
 
     if (inserted.rows.length > 0) {

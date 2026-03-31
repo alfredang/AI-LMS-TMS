@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import bcrypt from 'bcryptjs';
+import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdentifiers';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -22,14 +23,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     await client.query('BEGIN');
 
-    // Fetch default password from Company Settings
-    let defaultPassword = 'password123'; // fallback
-    try {
-      const tpResult = await client.query('SELECT default_password FROM training_provider LIMIT 1');
-      if (tpResult.rows.length > 0 && tpResult.rows[0].default_password) {
-        defaultPassword = tpResult.rows[0].default_password;
-      }
-    } catch (e) { /* column may not exist */ }
+    const tp = await getTrainingPartnerIdentifiers();
 
     // Fetch the course_id for this course run
     const runResult = await client.query(
@@ -93,7 +87,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           }
         } else {
           // Create app_user with default password
-          const passwordHash = await bcrypt.hash(defaultPassword, 10);
+          const passwordHash = await bcrypt.hash(tp.defaultPassword, 10);
           const newUser = await client.query(
             `INSERT INTO app_user (id, email, full_name, password_hash, account_status, created_at, updated_at)
              VALUES (gen_random_uuid(), $1, $2, $3, 'active', NOW(), NOW())
@@ -115,7 +109,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       } else {
         // No email — generate placeholder and create account
         const placeholderEmail = manualName.toLowerCase().replace(/\s+/g, '.') + '@manual.entry';
-        const passwordHash = await bcrypt.hash(defaultPassword, 10);
+        const passwordHash = await bcrypt.hash(tp.defaultPassword, 10);
         const newUser = await client.query(
           `INSERT INTO app_user (id, email, full_name, password_hash, account_status, created_at, updated_at)
            VALUES (gen_random_uuid(), $1, $2, $3, 'active', NOW(), NOW())

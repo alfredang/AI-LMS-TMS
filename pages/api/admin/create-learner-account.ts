@@ -1,6 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import bcrypt from 'bcryptjs';
+import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdentifiers';
 // POST { email, fullName, nric?, courseRunId?, courseId?, enrolmentId? }
 // Creates a Learner account if one doesn't already exist for that email.
 // If courseRunId + courseId are provided, also enrolls the learner into the course run.
@@ -68,15 +69,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   const client = await pool.connect();
-
-  // Fetch default password from Company Settings
-  let defaultPassword = 'password123'; // fallback
-  try {
-    const tpResult = await pool.query('SELECT default_password FROM training_provider LIMIT 1');
-    if (tpResult.rows.length > 0 && tpResult.rows[0].default_password) {
-      defaultPassword = tpResult.rows[0].default_password;
-    }
-  } catch (e) { /* column may not exist */ }
+  const tp = await getTrainingPartnerIdentifiers();
 
   // Helper: enroll user into a course run, or update missing fields on an existing row
   // Returns 'inserted' | 'updated' | 'skipped'
@@ -164,12 +157,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       });
     }
 
-    const passwordHash = await bcrypt.hash(defaultPassword, 10);
+    const passwordHash = await bcrypt.hash(tp.defaultPassword, 10);
     const insertUser = await client.query(
       `INSERT INTO app_user (email, full_name, password, password_hash, account_status, created_at, updated_at)
        VALUES ($1, $2, $3, $4, 'active', NOW(), NOW())
        RETURNING id`,
-      [email.trim().toLowerCase(), fullName.trim(), defaultPassword, passwordHash]
+      [email.trim().toLowerCase(), fullName.trim(), tp.defaultPassword, passwordHash]
     );
     const userId = insertUser.rows[0].id;
 

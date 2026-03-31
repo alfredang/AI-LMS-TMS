@@ -2,6 +2,7 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import bcrypt from 'bcryptjs';
 import { google, drive_v3 } from 'googleapis';
+import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdentifiers';
 
 // Helper function for database queries
 const query = (text: string, params?: any[]) => pool.query(text, params);
@@ -251,17 +252,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                             // Create new trainer user
                             console.log('📝 Creating new trainer user:', trainerEmail);
 
-                            // Fetch default password from Company Settings
-                            let defaultPassword = 'password123'; // fallback
-                            try {
-                              const tpResult = await query('SELECT default_password FROM training_provider LIMIT 1');
-                              if (tpResult.rows.length > 0 && tpResult.rows[0].default_password) {
-                                defaultPassword = tpResult.rows[0].default_password;
-                              }
-                            } catch (e) { /* column may not exist */ }
+                            const tp = await getTrainingPartnerIdentifiers();
 
                             // Hash the default password for password_hash column
-                            const hashedPassword = await bcrypt.hash(defaultPassword, 10);
+                            const hashedPassword = await bcrypt.hash(tp.defaultPassword, 10);
 
                             const newTrainer = await query(
                                 `INSERT INTO app_user (
@@ -274,7 +268,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                                 ) VALUES ($1, $2, $3, $4, NOW(), NOW()) RETURNING id`,
                                 [
                                     trainerEmail,
-                                    defaultPassword,    // Plain text password
+                                    tp.defaultPassword,    // Plain text password
                                     hashedPassword,     // Hashed password
                                     trainerName || 'Trainer'
                                 ]

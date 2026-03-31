@@ -3,6 +3,7 @@ import pool from '../../../lib/db';
 import bcrypt from 'bcryptjs';
 import { getSSGCredentialsService } from '../../../lib/ssg/services/credentials-service';
 import { createSSGEnrolmentAPI } from '../../../lib/ssg/api/enrolment-api';
+import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdentifiers';
 
 /**
  * External API — Auto Create Learners
@@ -131,14 +132,7 @@ async function upsertLearner(
   try {
     await client.query('BEGIN');
 
-    // Fetch default password from Company Settings
-    let defaultPassword = 'password123'; // fallback
-    try {
-      const tpResult = await client.query('SELECT default_password FROM training_provider LIMIT 1');
-      if (tpResult.rows.length > 0 && tpResult.rows[0].default_password) {
-        defaultPassword = tpResult.rows[0].default_password;
-      }
-    } catch (e) { /* column may not exist */ }
+    const tp = await getTrainingPartnerIdentifiers();
 
     const existing = await client.query(
       'SELECT id FROM app_user WHERE email = $1',
@@ -151,12 +145,12 @@ async function upsertLearner(
     if (existing.rows.length > 0) {
       userId = existing.rows[0].id;
     } else {
-      const hash = await bcrypt.hash(defaultPassword, 10);
+      const hash = await bcrypt.hash(tp.defaultPassword, 10);
       const ins = await client.query(
         `INSERT INTO app_user (email, full_name, password, password_hash, account_status, created_at, updated_at)
          VALUES ($1, $2, $3, $4, 'active', NOW(), NOW())
          RETURNING id`,
-        [email.trim().toLowerCase(), fullName.trim(), defaultPassword, hash],
+        [email.trim().toLowerCase(), fullName.trim(), tp.defaultPassword, hash],
       );
       userId = ins.rows[0].id;
       await client.query(

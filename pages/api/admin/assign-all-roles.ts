@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import bcrypt from 'bcryptjs';
+import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdentifiers';
 
 const ALL_ROLES = ['Learner', 'Trainer', 'Admin', 'Developer', 'Training Provider'];
 
@@ -29,20 +30,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     let userId: string;
 
     if (result.rows.length === 0) {
-      // Fetch default password from training provider settings
-      let defaultPassword = 'password123';
-      const tpResult = await client.query('SELECT default_password FROM training_provider LIMIT 1');
-      if (tpResult.rows.length > 0 && tpResult.rows[0].default_password) {
-        defaultPassword = tpResult.rows[0].default_password;
-      }
-      const hashedPassword = await bcrypt.hash(defaultPassword, 10);
+      const tp = await getTrainingPartnerIdentifiers();
+      const hashedPassword = await bcrypt.hash(tp.defaultPassword, 10);
 
       const name = fullName || email.split('@')[0];
       const createResult = await client.query(
         `INSERT INTO public.app_user (id, email, password, password_hash, full_name, account_status, created_at, updated_at)
          VALUES (gen_random_uuid(), $1, $2, $3, $4, 'active', NOW(), NOW())
          RETURNING id`,
-        [email.toLowerCase().trim(), defaultPassword, hashedPassword, name]
+        [email.toLowerCase().trim(), tp.defaultPassword, hashedPassword, name]
       );
       userId = createResult.rows[0].id;
     } else {
