@@ -834,23 +834,23 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                 {isContactOpen && (isEditing ? (
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-4">
                         <div>
-                            <label className="block text-sm font-medium text-on-surface-secondary mb-1">Sender Name</label>
-                            <input type="text" name="name" value={formData.contactPerson.name} onChange={handleContactChange} placeholder="Sender Name" className={inputClasses} />
+                            <label className="block text-sm font-medium text-on-surface-secondary mb-1">Support Name</label>
+                            <input type="text" name="name" value={formData.contactPerson.name} onChange={handleContactChange} placeholder="Support Name" className={inputClasses} />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-on-surface-secondary mb-1">Sender Email</label>
-                            <input type="email" name="email" value={formData.contactPerson.email} onChange={handleContactChange} placeholder="Sender Email" className={inputClasses} />
+                            <label className="block text-sm font-medium text-on-surface-secondary mb-1">Support Email</label>
+                            <input type="email" name="email" value={formData.contactPerson.email} onChange={handleContactChange} placeholder="Support Email" className={inputClasses} />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-on-surface-secondary mb-1">Telephone</label>
-                            <input type="tel" name="tel" value={formData.contactPerson.tel} onChange={handleContactChange} placeholder="Telephone" className={inputClasses} />
+                            <label className="block text-sm font-medium text-on-surface-secondary mb-1">Support Telephone</label>
+                            <input type="tel" name="tel" value={formData.contactPerson.tel} onChange={handleContactChange} placeholder="Support Telephone" className={inputClasses} />
                         </div>
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mt-4">
-                        <ProfileBioItem label="Sender Name" value={formData.contactPerson.name} />
-                        <ProfileBioItem label="Sender Email" value={formData.contactPerson.email} />
-                        <ProfileBioItem label="Telephone" value={formData.contactPerson.tel} />
+                        <ProfileBioItem label="Support Name" value={formData.contactPerson.name} />
+                        <ProfileBioItem label="Support Email" value={formData.contactPerson.email} />
+                        <ProfileBioItem label="Support Telephone" value={formData.contactPerson.tel} />
                     </div>
                 ))}
 
