@@ -67,7 +67,8 @@ async function findSubfolder(drive: drive_v3.Drive, parentFolderId: string, fold
 async function findSessionFolderByStartDate(
     drive: drive_v3.Drive,
     parentFolderId: string,
-    startDatePrefix: string
+    startDatePrefix: string,
+    trainerCommonName?: string
 ): Promise<string | null> {
     const response = await drive.files.list({
         q: `'${parentFolderId}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
@@ -77,6 +78,16 @@ async function findSessionFolderByStartDate(
 
     const files = response.data.files;
     if (files && files.length > 0) {
+        // Try matching by start date + trainer common name first
+        if (trainerCommonName) {
+            const commonLower = trainerCommonName.trim().toLowerCase();
+            const matched = files.find(f => {
+                if (!f.name?.startsWith(startDatePrefix)) return false;
+                return f.name.toLowerCase().includes(commonLower);
+            });
+            if (matched) return matched.id!;
+        }
+        // Fallback: match by start date prefix only
         const matched = files.find(f => f.name?.startsWith(startDatePrefix));
         if (matched) return matched.id!;
     }
@@ -93,9 +104,11 @@ function buildStartDatePrefix(startDate: Date): string {
 async function getCourseRunDetails(courseRunId: string) {
     const result = await pool.query(
         `SELECT cr.start_date, cr.end_date, cr.assigned_trainer_name,
-                c.course_code, c.title as course_title
+                c.course_code, c.title as course_title,
+                tp.common_name as trainer_common_name
          FROM course_run cr
          JOIN course c ON cr.course_id = c.id
+         LEFT JOIN trainer_profile tp ON tp.user_id = cr.assigned_trainer_id
          WHERE cr.id::text = $1 OR cr.course_run_id = $1
          LIMIT 1`,
         [courseRunId]
@@ -176,8 +189,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const assessmentRecordsId = await findSubfolder(drive, courseFolderId, 'Assessment Records');
         if (!assessmentRecordsId) return res.status(200).json({ success: true, exists: false, count: 0, reason: 'Assessment Records folder not found' });
 
-        // 4. Find Session Subfolder
-        const sessionFolderId = await findSessionFolderByStartDate(drive, assessmentRecordsId, startDatePrefix);
+        // 4. Find Session Subfolder (match by start date + trainer common name)
+        const trainerCommonName = runDetails.trainer_common_name || '';
+        const sessionFolderId = await findSessionFolderByStartDate(drive, assessmentRecordsId, startDatePrefix, trainerCommonName);
         if (!sessionFolderId) return res.status(200).json({ success: true, exists: false, count: 0, reason: 'Session folder not found' });
 
         // 5. Find Learner Subfolder
