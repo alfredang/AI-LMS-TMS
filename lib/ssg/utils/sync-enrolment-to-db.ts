@@ -11,6 +11,7 @@ import { PoolClient } from 'pg';
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import { inferIdType } from '../../utils/id-type';
+import { getTrainingPartnerIdentifiers } from '../../trainingPartnerIdentifiers';
 
 function mapSponsorship(type: string | undefined): 'Individual' | 'Employer' {
   if (!type) return 'Individual';
@@ -55,9 +56,10 @@ export async function syncEnrolmentToDB(
   const enrolmentDate   = trainee.enrolmentDate ?? new Date().toISOString().split('T')[0];
   const enrolmentStatus = record.status     ?? 'Confirmed';
   const sponsorship     = mapSponsorship(trainee.sponsorshipType);
-  const tpCode          = tp.code ?? '201200696W-01';
-  const tpUen           = tp.uen  ?? '201200696W';
-  const tpName          = tp.name ?? 'TERTIARY INFOTECH ACADEMY PTE. LTD.';
+  const tpIdentifiers   = await getTrainingPartnerIdentifiers();
+  const tpCode          = tp.code ?? tpIdentifiers.code;
+  const tpUen           = tp.uen  ?? tpIdentifiers.uen;
+  const tpName          = tp.name ?? tpIdentifiers.name;
   const completionDate  = record.completionDate ?? null;
 
   if (!traineeEmail || !courseCode || !courseRunId) return 'skipped';

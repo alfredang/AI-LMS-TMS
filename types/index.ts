@@ -233,6 +233,7 @@ export interface Submission {
 
 // Interface definitions
 export interface TrainingProviderProfile {
+  uen?: string;
   companyLogoUrl: string;
   companyName: string;
   companyShortname?: string;

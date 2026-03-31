@@ -3,6 +3,7 @@ import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Icon, IconName } from '../ui/Icon';
 import { getApiUrl } from '@/lib/urlHelpers';
+import { useLms } from '@contexts/LmsContext';
 
 // Helper functions for consistent styling
 const getStatusColor = (status: string) => {
@@ -513,6 +514,7 @@ export const ViewGrantStatusView: React.FC = () => {
 };
 
 export const SubmitAssessmentView: React.FC = () => {
+    const { trainingProviderProfile } = useLms();
     const [courseRunId, setCourseRunId] = useState<string>('');
     const [courseReferenceNumber, setCourseReferenceNumber] = useState<string>('');
     const [assessmentResult, setAssessmentResult] = useState<string>('Pass');
@@ -520,8 +522,8 @@ export const SubmitAssessmentView: React.FC = () => {
     const [traineeFullName, setTraineeFullName] = useState<string>('');
     const [skillCode, setSkillCode] = useState<string>('');
     const [assessmentDate, setAssessmentDate] = useState<string>('');
-    const [trainingPartnerUen, setTrainingPartnerUen] = useState<string>('201200696W');
-    const [trainingPartnerCode, setTrainingPartnerCode] = useState<string>('201200696W-01');
+    const [trainingPartnerUen, setTrainingPartnerUen] = useState<string>(trainingProviderProfile?.uen || '');
+    const [trainingPartnerCode, setTrainingPartnerCode] = useState<string>(trainingProviderProfile?.uen ? `${trainingProviderProfile.uen}-01` : '');
     const [enrolmentNumber, setEnrolmentNumber] = useState<string>('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [result, setResult] = useState<any>(null);
@@ -599,8 +601,8 @@ export const SubmitAssessmentView: React.FC = () => {
         setTraineeFullName('');
         setSkillCode('');
         setAssessmentDate('');
-        setTrainingPartnerUen('201200696W');
-        setTrainingPartnerCode('201200696W-01');
+        setTrainingPartnerUen(trainingProviderProfile?.uen || '');
+        setTrainingPartnerCode(trainingProviderProfile?.uen ? `${trainingProviderProfile.uen}-01` : '');
         setEnrolmentNumber('');
         setResult(null);
         setError(null);
@@ -1161,10 +1163,11 @@ export const UpdateAssessmentView: React.FC = () => {
 };
 
 export const UpdateEnrolmentFeesView: React.FC = () => {
+    const { trainingProviderProfile } = useLms();
     const [enrolmentReferenceNumber, setEnrolmentReferenceNumber] = useState<string>('');
     const [collectionStatus, setCollectionStatus] = useState<string>('Pending Payment');
-    const [trainingPartnerUen, setTrainingPartnerUen] = useState<string>('201200696W');
-    const [trainingPartnerCode, setTrainingPartnerCode] = useState<string>('201200696W-01');
+    const [trainingPartnerUen, setTrainingPartnerUen] = useState<string>(trainingProviderProfile?.uen || '');
+    const [trainingPartnerCode, setTrainingPartnerCode] = useState<string>(trainingProviderProfile?.uen ? `${trainingProviderProfile.uen}-01` : '');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [result, setResult] = useState<any>(null);
     const [error, setError] = useState<string | null>(null);
@@ -1230,8 +1233,8 @@ export const UpdateEnrolmentFeesView: React.FC = () => {
     const handleClear = () => {
         setEnrolmentReferenceNumber('');
         setCollectionStatus('Pending Payment');
-        setTrainingPartnerUen('201200696W');
-        setTrainingPartnerCode('201200696W-01');
+        setTrainingPartnerUen(trainingProviderProfile?.uen || '');
+        setTrainingPartnerCode(trainingProviderProfile?.uen ? `${trainingProviderProfile.uen}-01` : '');
         setResult(null);
         setError(null);
     };
@@ -4511,7 +4514,8 @@ export { SearchAssessmentsView, ViewAssessmentView } from './AssessmentViews';
 // ─── Course Sessions View ─────────────────────────────────────────────────────
 
 export const CourseSessionsView: React.FC = () => {
-    const [uen, setUen] = useState<string>('201200696W');
+    const { trainingProviderProfile } = useLms();
+    const [uen, setUen] = useState<string>(trainingProviderProfile?.uen || '');
     const [courseCode, setCourseCode] = useState<string>('');
     const [courseRunId, setCourseRunId] = useState<string>('');
     const [isSearching, setIsSearching] = useState(false);
@@ -4559,7 +4563,7 @@ export const CourseSessionsView: React.FC = () => {
     };
 
     const handleClear = () => {
-        setUen('201200696W');
+        setUen(trainingProviderProfile?.uen || '');
         setCourseCode('');
         setCourseRunId('');
         setSearchError(null);
@@ -4803,7 +4807,8 @@ const modeOfTrainingLabel = (code: string): string => {
 };
 
 export const CourseSessionAttendanceView: React.FC = () => {
-    const [uen, setUen] = useState<string>('201200696W');
+    const { trainingProviderProfile } = useLms();
+    const [uen, setUen] = useState<string>(trainingProviderProfile?.uen || '');
     const [courseCode, setCourseCode] = useState<string>('');
     const [sessionId, setSessionId] = useState<string>('');
     const [courseRunId, setCourseRunId] = useState<string>('');
@@ -4854,7 +4859,7 @@ export const CourseSessionAttendanceView: React.FC = () => {
     };
 
     const handleClear = () => {
-        setUen('201200696W');
+        setUen(trainingProviderProfile?.uen || '');
         setCourseCode('');
         setSessionId('');
         setCourseRunId('');

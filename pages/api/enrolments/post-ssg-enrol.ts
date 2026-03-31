@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '@/lib/db';
+import { getTrainingPartnerIdentifiers } from '@/lib/trainingPartnerIdentifiers';
 
 // Maps SSG sponsorship values to the course_sponsorship DB enum
 function mapSponsorshipType(ssgType: string): 'Individual' | 'Employer' {
@@ -38,6 +39,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
   }
 
+  const tp = await getTrainingPartnerIdentifiers();
   const client = await pool.connect();
 
   try {
@@ -185,9 +187,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       },
       referenceNumber: enrolmentId || '',
       trainingPartner: {
-        uen: '201200696W',
-        code: '201200696W-01',
-        name: 'TERTIARY INFOTECH ACADEMY PTE. LTD.',
+        uen: tp.uen,
+        code: tp.code,
+        name: tp.name,
       },
     });
 
@@ -198,7 +200,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           enrolment_id, enrolment_status, nric, email, course_reference,
           training_partner_code, raw_data)
        VALUES ($1, $2, $3, 'Unpaid', 'Pending', 0, $4, NOW(),
-               $5, $6, $7, $8, $9, '201200696W-01', $10)
+               $5, $6, $7, $8, $9, $11, $10)
        ON CONFLICT (user_id, course_run_id) DO UPDATE SET
          enrolment_id     = COALESCE(EXCLUDED.enrolment_id,     enrollment.enrolment_id),
          enrolment_status = COALESCE(EXCLUDED.enrolment_status, enrollment.enrolment_status),
@@ -213,6 +215,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         traineeEmail,
         courseReferenceNumber,
         rawData,
+        tp.code,
       ]
     );
 

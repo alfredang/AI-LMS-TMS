@@ -3,6 +3,7 @@ import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Icon, IconName } from '../ui/Icon';
 import { inferIdType } from '@/lib/utils/id-type';
+import { useLms } from '@contexts/LmsContext';
 
 // Helper function to format error messages in a user-friendly way with React component
 const ErrorMessageDisplay: React.FC<{ error: any }> = ({ error }) => {
@@ -83,6 +84,7 @@ const COL = {
 } as const;
 
 export const BulkUploadEnrolmentView: React.FC = () => {
+    const { trainingProviderProfile } = useLms();
     const [file, setFile] = useState<File | null>(null);
     const [isUploading, setIsUploading] = useState(false);
     const [uploadResult, setUploadResult] = useState<any>(null);
@@ -341,8 +343,8 @@ export const BulkUploadEnrolmentView: React.FC = () => {
                 return dob;
             };
 
-            const trainingPartnerUen = '201200696W';
-            const trainingPartnerCode = '201200696W-01';
+            const trainingPartnerUen = trainingProviderProfile?.uen || '';
+            const trainingPartnerCode = trainingProviderProfile?.uen ? `${trainingProviderProfile.uen}-01` : '';
 
             const allItems: any[] = [];
 
@@ -453,7 +455,7 @@ export const BulkUploadEnrolmentView: React.FC = () => {
                                     courseTitle: '',
                                     courseRunId: item.courseRunId,
                                     courseReferenceNumber: item.courseReferenceNumber,
-                                    trainingPartnerCode: '201200696W-01',
+                                    trainingPartnerCode: trainingProviderProfile?.uen ? `${trainingProviderProfile.uen}-01` : '',
                                     sponsorshipType: item.sponsorshipType,
                                     enrolmentDate: new Date().toISOString().split('T')[0],
                                     enrolmentStatus,

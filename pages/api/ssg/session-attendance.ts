@@ -10,6 +10,7 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import { getSSGCredentialsService } from '../../../lib/ssg/services/credentials-service';
 import { HttpClient, HTTPRequestBuilder, HttpMethod } from '../../../lib/ssg/utils/http-utils';
 import crypto from 'crypto';
+import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdentifiers';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {
@@ -33,10 +34,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const encKey = Buffer.from(process.env.ENCRYPTION_KEY || credentials.encryptionKey, 'base64');
     const iv = Buffer.from('SSGAPIInitVector', 'utf8');
 
+    const tp = await getTrainingPartnerIdentifiers();
     const uen = (typeof uenParam === 'string' ? uenParam : null)
       || credentials.uen
-      || process.env.TRAINING_PARTNER_UEN
-      || '201200696W';
+      || tp.uen;
 
     const builder = new HTTPRequestBuilder()
       .withEndpoint(ssgBaseUrl, `/courses/runs/${courseRunId}/sessions/attendance`)

@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { detectIdType } from '@/lib/utils/id-type';
+import { useLms } from '@contexts/LmsContext';
 
 // Enums based on the Python constants
 enum IdTypeSummary {
@@ -81,6 +82,7 @@ interface EnrolmentFormData {
 }
 
 const EnrollLearners: React.FC = () => {
+  const { trainingProviderProfile } = useLms();
   const [formData, setFormData] = useState<EnrolmentFormData>({
     courseReferenceNumber: '',
     courseRunId: '',
@@ -94,8 +96,8 @@ const EnrollLearners: React.FC = () => {
     traineeContactNumberPhoneNumber: '',
     traineeSponsorshipType: SponsorshipType.INDIVIDUAL,
     employerCountryCode: '+65',
-    trainingPartnerUen: '201200696W',
-    trainingPartnerCode: '201200696W-01'
+    trainingPartnerUen: trainingProviderProfile?.uen || '',
+    trainingPartnerCode: trainingProviderProfile?.uen ? `${trainingProviderProfile.uen}-01` : ''
   });
 
   // Course management state
@@ -784,8 +786,8 @@ const EnrollLearners: React.FC = () => {
           traineeContactNumberPhoneNumber: '',
           traineeSponsorshipType: SponsorshipType.INDIVIDUAL,
           employerCountryCode: '+65',
-          trainingPartnerUen: '201200696W',
-          trainingPartnerCode: '201200696W-01'
+          trainingPartnerUen: trainingProviderProfile?.uen || '',
+          trainingPartnerCode: trainingProviderProfile?.uen ? `${trainingProviderProfile.uen}-01` : ''
         });
       } else {
         const errorMessages: string[] =
@@ -845,8 +847,8 @@ const EnrollLearners: React.FC = () => {
       traineeContactNumberPhoneNumber: '',
       traineeSponsorshipType: SponsorshipType.INDIVIDUAL,
       employerCountryCode: '+65',
-      trainingPartnerUen: '201200696W',
-      trainingPartnerCode: '201200696W-01'
+      trainingPartnerUen: trainingProviderProfile?.uen || '',
+      trainingPartnerCode: trainingProviderProfile?.uen ? `${trainingProviderProfile.uen}-01` : ''
     });
     setErrors([]);
     setWarnings([]);
@@ -1656,8 +1658,8 @@ const EnrollLearners: React.FC = () => {
                     traineeContactNumberCountryCode: '+65',
                     traineeContactNumberPhoneNumber: '',
                     traineeSponsorshipType: SponsorshipType.INDIVIDUAL,
-                    trainingPartnerUen: '201200696W',
-                    trainingPartnerCode: '201200696W-01'
+                    trainingPartnerUen: trainingProviderProfile?.uen || '',
+                    trainingPartnerCode: trainingProviderProfile?.uen ? `${trainingProviderProfile.uen}-01` : ''
                   });
                   setShowOptionalFields({
                     feeDiscount: false,

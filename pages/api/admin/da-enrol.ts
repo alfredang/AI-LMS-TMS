@@ -4,6 +4,7 @@ import { getSSGCredentialsService } from '../../../lib/ssg/services/credentials-
 import { HttpClient, HTTPRequestBuilder, HttpMethod } from '../../../lib/ssg/utils/http-utils';
 import crypto from 'crypto';
 import { inferIdType } from '../../../lib/utils/id-type';
+import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdentifiers';
 
 /**
  * POST /api/admin/da-enrol
@@ -26,7 +27,7 @@ function buildSponsorshipType(raw: string): string {
   return (raw || '').toUpperCase().includes('EMPLOYER') ? 'EMPLOYER' : 'INDIVIDUAL';
 }
 
-function buildEnrolmentPayload(app: Record<string, any>, uen: string): object {
+function buildEnrolmentPayload(app: Record<string, any>, uen: string, tpCode: string): object {
   const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Singapore' });
 
   const trainee: Record<string, any> = {
@@ -55,7 +56,7 @@ function buildEnrolmentPayload(app: Record<string, any>, uen: string): object {
     enrolment: {
       trainingPartner: {
         uen,
-        code: process.env.TRAINING_PARTNER_CODE || '201200696W-01',
+        code: tpCode,
       },
       course: {
         referenceNumber: String(app.course_reference_number || ''),
@@ -85,7 +86,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const ssgBaseUrl = process.env.SSG_API_URL || 'https://api.ssg-wsg.sg';
     const encKey = Buffer.from(process.env.ENCRYPTION_KEY || credentials.encryptionKey, 'base64');
     const iv = Buffer.from('SSGAPIInitVector', 'utf8');
-    const uen = credentials.uen || process.env.TRAINING_PARTNER_UEN || '201200696W';
+    const tp = await getTrainingPartnerIdentifiers();
+    const uen = credentials.uen || tp.uen;
 
     const httpClient = new HttpClient(ssgBaseUrl, {
       'Content-Type': 'application/json',
@@ -98,7 +100,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const applicationId = app.application_id;
 
       try {
-        const payload = buildEnrolmentPayload(app, uen);
+        const payload = buildEnrolmentPayload(app, uen, tp.code);
 
         const cipher = crypto.createCipheriv('aes-256-cbc', encKey, iv);
         let encryptedPayload = cipher.update(JSON.stringify(payload), 'utf8', 'base64');

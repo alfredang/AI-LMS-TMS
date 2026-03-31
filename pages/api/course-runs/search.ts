@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { getSSGCredentialsService } from '../../../lib/ssg/services/credentials-service';
 import { HttpClient, HTTPRequestBuilder, HttpMethod } from '../../../lib/ssg/utils/http-utils';
+import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdentifiers';
 
 /**
  * GET /api/course-runs/search?courseCode=TGS-XXXXXXXXX&page=0&pageSize=100&includeExpired=true
@@ -24,11 +25,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     const ssgBaseUrl = process.env.SSG_API_URL || 'https://api.ssg-wsg.sg';
+    const tp = await getTrainingPartnerIdentifiers();
 
     const builder = new HTTPRequestBuilder()
       .withEndpoint(ssgBaseUrl, '/courses/courseRuns/reference')
       .withMethod(HttpMethod.GET)
-      .withParam('uen', credentials.uen || '201200696W')
+      .withParam('uen', credentials.uen || tp.uen)
       .withParam('courseReferenceNumber', courseCode.trim())
       .withParam('pageSize', String(pageSize))
       .withParam('page', String(page))

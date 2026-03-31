@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { getSSGCredentialsService } from '../../../lib/ssg/services/credentials-service';
 import { HttpClient, HTTPRequestBuilder, HttpMethod } from '../../../lib/ssg/utils/http-utils';
 import crypto from 'crypto';
+import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdentifiers';
 
 /**
  * POST /api/assessments/ssg-search
@@ -28,6 +29,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const ssgBaseUrl = process.env.SSG_API_URL || 'https://api.ssg-wsg.sg';
     const encKey = Buffer.from(process.env.ENCRYPTION_KEY || credentials.encryptionKey, 'base64');
     const iv = Buffer.from('SSGAPIInitVector', 'utf8');
+    const tp = await getTrainingPartnerIdentifiers();
 
     const ssgPayload: any = {
       parameters: {
@@ -42,8 +44,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           referenceNumber: String(courseReferenceNumber)
         },
         trainingPartner: {
-          uen: credentials.uen || process.env.TRAINING_PARTNER_UEN || '201200696W',
-          code: process.env.TRAINING_PARTNER_CODE || '201200696W-01'
+          uen: credentials.uen || tp.uen,
+          code: tp.code
         }
       }
     };

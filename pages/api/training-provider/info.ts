@@ -33,6 +33,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       result = await pool.query(`
         SELECT
           tp.id,
+          tp.uen,
           tp.company_logo_url AS profile_picture_url,
           tp.company_name,
           tp.company_shortname,
@@ -51,6 +52,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         result = await pool.query(`
           SELECT
             tp.id,
+            tp.uen,
             tp.company_logo_url AS profile_picture_url,
             tp.company_name,
             tp.company_shortname,
@@ -69,6 +71,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         result = await pool.query(`
           SELECT
             tp.id,
+            tp.uen,
             tp.company_logo_url AS profile_picture_url,
             tp.company_name,
             tp.company_shortname,
@@ -112,6 +115,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         } catch (e) { /* columns don't exist */ }
 
         const responseData = {
+          uen: trainingProvider.uen || '',
           companyLogoUrl: getAbsoluteImageUrl(trainingProvider.profile_picture_url),
           companyName: trainingProvider.company_name || 'Training Provider',
           companyShortname: trainingProvider.company_shortname || 'TP',
@@ -149,6 +153,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       result = await pool.query(`
         SELECT
           au.id AS user_id,
+          tp.uen,
           tp.company_logo_url AS profile_picture_url,
           tp.company_name,
           tp.company_shortname,
@@ -183,7 +188,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       // Use default training provider info
       const responseData = {
-        companyLogoUrl: trainingProviderUser.rows.length > 0 && trainingProviderUser.rows[0].profile_picture_url 
+        uen: '',
+        companyLogoUrl: trainingProviderUser.rows.length > 0 && trainingProviderUser.rows[0].profile_picture_url
           ? getAbsoluteImageUrl(trainingProviderUser.rows[0].profile_picture_url)
           : '/images/default-company-logo.png',
         companyName: 'Training Provider',
@@ -218,6 +224,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     } catch (e) { /* columns don't exist */ }
 
     const responseData = {
+      uen: trainingProvider.uen || '',
       companyLogoUrl: getAbsoluteImageUrl(trainingProvider.profile_picture_url),
       companyName: trainingProvider.company_name || 'Training Provider',
       companyShortname: trainingProvider.company_shortname || 'TP',

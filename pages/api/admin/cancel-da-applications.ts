@@ -1,11 +1,12 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { searchEnrolment, cancelEnrolment } from '../../../lib/ssg/services/enrolment-service';
+import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdentifiers';
 
 /**
  * Build the search enrolment payload for a single DA application record.
  */
-function buildEnrolmentPayload(record: Record<string, any>): Record<string, any> {
+function buildEnrolmentPayload(record: Record<string, any>, tpUen: string, tpCode: string): Record<string, any> {
     const runId = String(record.course_run_id || '');
     const code = String(record.course_reference_number || '');
     const traineeId = String(record.trainee_id || '');
@@ -42,8 +43,8 @@ function buildEnrolmentPayload(record: Record<string, any>): Record<string, any>
                 },
                 trainee: traineeJSON,
                 trainingPartner: {
-                    uen: '201200696W',
-                    code: '201200696W-01'
+                    uen: tpUen,
+                    code: tpCode
                 }
             },
             parameters: {
@@ -98,7 +99,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }
 
         // 2. Search then cancel each enrolment via SSG directly (sequential per record)
-        const records = applicationRows.map(row => buildEnrolmentPayload(row));
+        const tp = await getTrainingPartnerIdentifiers();
+        const records = applicationRows.map(row => buildEnrolmentPayload(row, tp.uen, tp.code));
         console.log(`📤 Processing ${records.length} record(s) — search then cancel via SSG...`);
 
         const succeeded: { application_id: string; enrolment_ref: string; enrolment_status: string }[] = [];

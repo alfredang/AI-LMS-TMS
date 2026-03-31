@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { createSSGEnrolmentAPI } from '../../../lib/ssg/api/enrolment-api';
 import { getSSGCredentialsService } from '../../../lib/ssg/services/credentials-service';
+import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdentifiers';
 
 /**
  * Fetch Upcoming Class Enrolments
@@ -113,8 +114,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   const ssgBaseUrl  = process.env.SSG_API_URL || 'https://api.ssg-wsg.sg';
-  const tpUen       = process.env.TRAINING_PARTNER_UEN  || '201200696W';
-  const tpCode      = process.env.TRAINING_PARTNER_CODE || '201200696W-01';
+  const tp          = await getTrainingPartnerIdentifiers();
+  const tpUen       = tp.uen;
+  const tpCode      = tp.code;
   const enrolmentAPI = createSSGEnrolmentAPI(ssgBaseUrl, credentials);
 
   for (const cr of courseRuns) {

@@ -3,6 +3,7 @@ import pool from '../../../lib/db';
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import { inferIdType } from '../../../lib/utils/id-type';
+import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdentifiers';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -48,7 +49,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     } = enrolment;
 
     const traineeEmail = rawEmail?.toLowerCase().trim();
-    const trainingPartnerCode = rawTrainingPartnerCode || '201200696W-01';
+    const tp = await getTrainingPartnerIdentifiers();
+    const trainingPartnerCode = rawTrainingPartnerCode || tp.code;
 
     // Map sponsorship type to valid DB enum values ('Individual' | 'Employer')
     const mapSponsorship = (type: string | undefined): 'Individual' | 'Employer' => {
@@ -223,9 +225,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           },
           referenceNumber: enrolmentId || '',
           trainingPartner: {
-            uen: '201200696W',
+            uen: tp.uen,
             code: trainingPartnerCode,
-            name: 'TERTIARY INFOTECH ACADEMY PTE. LTD.',
+            name: tp.name,
           },
         }),
       ]

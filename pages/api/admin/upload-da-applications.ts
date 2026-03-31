@@ -2,6 +2,7 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { searchEnrolment } from '../../../lib/ssg/services/enrolment-service';
 import { inferIdType } from '../../../lib/utils/id-type';
+import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdentifiers';
 
 // Increase body size limit to 50MB (default is 1MB, which causes HTTP 413 for large Excel uploads)
 export const config = {
@@ -138,7 +139,7 @@ function transformRow(excelRow: Record<string, any>): Record<string, any> {
 /**
  * Build the SSG search enrolment payload for a single record.
  */
-function buildEnrolmentPayload(record: Record<string, any>): Record<string, any> {
+function buildEnrolmentPayload(record: Record<string, any>, tpUen: string, tpCode: string): Record<string, any> {
     const runId = String(record.course_run_id || '');
     const code = String(record.course_reference_number || '');
     const traineeId = String(record.trainee_id || '');
@@ -173,8 +174,8 @@ function buildEnrolmentPayload(record: Record<string, any>): Record<string, any>
                 },
                 trainee: traineeJSON,
                 trainingPartner: {
-                    uen: '201200696W',
-                    code: '201200696W-01'
+                    uen: tpUen,
+                    code: tpCode
                 }
             },
             parameters: {
@@ -190,7 +191,7 @@ function buildEnrolmentPayload(record: Record<string, any>): Record<string, any>
  * Search SSG enrolment status for each record and update the database.
  * Calls SSG POST /tpg/enrolments/search directly (one call per record).
  */
-async function callSearchEnrolmentSSGBatch(records: Record<string, any>[]): Promise<{ success: boolean; count: number; results: any[]; error?: string }> {
+async function callSearchEnrolmentSSGBatch(records: Record<string, any>[], tpUen: string, tpCode: string): Promise<{ success: boolean; count: number; results: any[]; error?: string }> {
     if (records.length === 0) {
         return { success: true, count: 0, results: [] };
     }
@@ -198,7 +199,7 @@ async function callSearchEnrolmentSSGBatch(records: Record<string, any>[]): Prom
     const processedResults: any[] = [];
 
     for (const record of records) {
-        const built = buildEnrolmentPayload(record);
+        const built = buildEnrolmentPayload(record, tpUen, tpCode);
         const applicationId = built.application_id;
 
         if (!applicationId) {
@@ -259,6 +260,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }
 
         console.log(`📊 Processing ${data.length} DA application records...`);
+
+        const tp = await getTrainingPartnerIdentifiers();
 
         // Get existing application IDs, their statuses, and enrolment status to check for duplicates
         const existingResult = await pool.query(
@@ -465,7 +468,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         let webhookResult: { success: boolean; count: number; results: any[]; error?: string } = { success: true, count: 0, results: [] };
 
         if (webhookQueue.length > 0) {
-            webhookResult = await callSearchEnrolmentSSGBatch(webhookQueue);
+            webhookResult = await callSearchEnrolmentSSGBatch(webhookQueue, tp.uen, tp.code);
         }
 
         return res.status(200).json({
