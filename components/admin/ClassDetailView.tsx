@@ -41,10 +41,12 @@ const getStatusColor = (status: string) => {
 interface OperationalSummary {
   trainer: string;
   startDate: string;
+  endDate: string;
   mode: string;
   overallAssessment: string;
   tgsRef: string;
   courseRunId: string;
+  courseRunUuid: string;
   overallGrantStatus: string;
   overallClaimStatus: string;
 }
@@ -74,7 +76,7 @@ interface ClassDetailViewProps {
 }
 
 const ClassDetailView: React.FC<ClassDetailViewProps> = ({ courseRunId }) => {
-  const { setAdminPage } = useLms();
+  const { setAdminPage, setEditingCourseRun } = useLms();
   const [classDetail, setClassDetail] = useState<ClassDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -271,9 +273,29 @@ const ClassDetailView: React.FC<ClassDetailViewProps> = ({ courseRunId }) => {
       <Button variant="ghost" onClick={() => setAdminPage(AdminPage.Dashboard)} className="mb-4">
         &larr; Back to List
       </Button>
-      
-      <h2 className="text-3xl font-bold mb-2">Class Details</h2>
-      <p className="text-xl text-primary font-semibold mb-6">{classDetail.courseTitle}</p>
+
+      <div className="flex items-start justify-between mb-6">
+        <div>
+          <h2 className="text-3xl font-bold mb-2">Class Details</h2>
+          <p className="text-xl text-primary font-semibold">{classDetail.courseTitle}</p>
+        </div>
+        <Button
+          variant="primary"
+          onClick={() => {
+            setEditingCourseRun({
+              id: classDetail.operationalSummary.courseRunUuid,
+              courseRunId: classDetail.operationalSummary.courseRunId,
+              courseCode: classDetail.operationalSummary.tgsRef,
+              startDate: classDetail.operationalSummary.startDate,
+              endDate: classDetail.operationalSummary.endDate,
+            });
+            setAdminPage(AdminPage.EditClass);
+          }}
+        >
+          <Icon name={IconName.Edit} className="w-4 h-4 mr-2" />
+          Edit Course Run
+        </Button>
+      </div>
 
       {/* Operational Summary Card (matching reference layout) */}
       <Card className="p-6 mb-8">

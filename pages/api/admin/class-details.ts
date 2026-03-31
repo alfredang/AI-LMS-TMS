@@ -9,10 +9,12 @@ interface ClassDetailsResponse {
     operationalSummary: {
       trainer: string;
       startDate: string;
+      endDate: string;
       mode: string;
       overallAssessment: string;
       tgsRef: string;
       courseRunId: string;
+      courseRunUuid: string;
       overallGrantStatus: string;
       overallClaimStatus: string;
     };
@@ -66,6 +68,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse<ClassDetailsRes
           c.title AS course_title,
           cr.assigned_trainer_name AS trainer,
           cr.start_date AS start_date,
+          cr.end_date AS end_date,
           cr.mode_of_learning AS mode,
           c.course_code AS tgs_ref,
           cr.course_run_id AS course_run_id,
@@ -216,10 +219,12 @@ async function handler(req: NextApiRequest, res: NextApiResponse<ClassDetailsRes
         operationalSummary: {
           trainer: trainerDisplay,
           startDate: basicData.start_date,
+          endDate: basicData.end_date,
           mode: basicData.mode,
           overallAssessment,
           tgsRef: basicData.tgs_ref,
           courseRunId: basicData.course_run_id,
+          courseRunUuid: basicData.course_run_uuid,
           overallGrantStatus,
           overallClaimStatus
         },

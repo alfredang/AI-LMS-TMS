@@ -221,6 +221,7 @@ export const ClassManagerView: React.FC<ClassManagerViewProps> = ({ courseToEdit
     const [ssgApiResponse, setSsgApiResponse] = useState<any>(null);
     const [ssgApiLoading, setSsgApiLoading] = useState(false);
     const [showSsgResponse, setShowSsgResponse] = useState(false);
+    const [ssgDataPopulated, setSsgDataPopulated] = useState(false);
 
     // ViewCourseSessions state management
     const [includeExpiredSessions, setIncludeExpiredSessions] = useState(false);
@@ -788,16 +789,16 @@ export const ClassManagerView: React.FC<ClassManagerViewProps> = ({ courseToEdit
         }
 
         // Validate that SSG data is available for populating course run details
-        if (!ssgApiResponse?.data?.data?.course?.run) {
+        if (!ssgApiResponse?.data?.course?.run) {
             showErrorPopup('Course run data is required. Please fetch SSG data first before adding sessions.');
             return;
         }
 
-        const runData = ssgApiResponse.data.data.course.run;
+        const runData = ssgApiResponse.data.course.run;
 
         // Generate schedule info from course dates
-        const courseStartDateForSchedule = runData.courseStartDate ? convertSsgDateToHtml(runData.courseStartDate) : (editFormData.courseStartDate || '');
-        const courseEndDateForSchedule = runData.courseEndDate ? convertSsgDateToHtml(runData.courseEndDate) : (editFormData.courseEndDate || '');
+        const courseStartDateForSchedule = (runData.courseStartDate ?? runData.courseDates?.start) ? convertSsgDateToHtml(runData.courseStartDate ?? runData.courseDates?.start) : (editFormData.courseStartDate || '');
+        const courseEndDateForSchedule = (runData.courseEndDate ?? runData.courseDates?.end) ? convertSsgDateToHtml(runData.courseEndDate ?? runData.courseDates?.end) : (editFormData.courseEndDate || '');
         const scheduleInfo = generateScheduleInfo(courseStartDateForSchedule, courseEndDateForSchedule);
 
         // Build the request body that will be sent to API (flat structure with all required run data)
@@ -806,10 +807,10 @@ export const ClassManagerView: React.FC<ClassManagerViewProps> = ({ courseToEdit
             courseReferenceNumber: courseReferenceNumber,
 
             // Course run dates (required for proper SSG API payload) - convert YYYYMMDD to YYYY-MM-DD format
-            openingRegistrationDate: runData.registrationOpeningDate ? convertSsgDateToHtml(runData.registrationOpeningDate) : (editFormData.openingRegistrationDate || ''),
-            closingRegistrationDate: runData.registrationClosingDate ? convertSsgDateToHtml(runData.registrationClosingDate) : (editFormData.closingRegistrationDate || ''),
-            courseStartDate: runData.courseStartDate ? convertSsgDateToHtml(runData.courseStartDate) : (editFormData.courseStartDate || ''),
-            courseEndDate: runData.courseEndDate ? convertSsgDateToHtml(runData.courseEndDate) : (editFormData.courseEndDate || ''),
+            openingRegistrationDate: (runData.registrationOpeningDate ?? runData.registrationDates?.opening) ? convertSsgDateToHtml(runData.registrationOpeningDate ?? runData.registrationDates?.opening) : (editFormData.openingRegistrationDate || ''),
+            closingRegistrationDate: (runData.registrationClosingDate ?? runData.registrationDates?.closing) ? convertSsgDateToHtml(runData.registrationClosingDate ?? runData.registrationDates?.closing) : (editFormData.closingRegistrationDate || ''),
+            courseStartDate: (runData.courseStartDate ?? runData.courseDates?.start) ? convertSsgDateToHtml(runData.courseStartDate ?? runData.courseDates?.start) : (editFormData.courseStartDate || ''),
+            courseEndDate: (runData.courseEndDate ?? runData.courseDates?.end) ? convertSsgDateToHtml(runData.courseEndDate ?? runData.courseDates?.end) : (editFormData.courseEndDate || ''),
 
             // Schedule info (required by backend)
             scheduleInfoTypeCode: "01",
@@ -864,12 +865,12 @@ export const ClassManagerView: React.FC<ClassManagerViewProps> = ({ courseToEdit
                 run: {
                     action: "update", // Action under "run" is "update" 
                     registrationDates: {
-                        opening: runData.registrationOpeningDate || convertHtmlDateToSsg(editFormData.openingRegistrationDate || ''),
-                        closing: runData.registrationClosingDate || convertHtmlDateToSsg(editFormData.closingRegistrationDate || '')
+                        opening: runData.registrationOpeningDate ?? runData.registrationDates?.opening ?? convertHtmlDateToSsg(editFormData.openingRegistrationDate || ''),
+                        closing: runData.registrationClosingDate ?? runData.registrationDates?.closing ?? convertHtmlDateToSsg(editFormData.closingRegistrationDate || '')
                     },
                     courseDates: {
-                        start: runData.courseStartDate || convertHtmlDateToSsg(editFormData.courseStartDate || ''),
-                        end: runData.courseEndDate || convertHtmlDateToSsg(editFormData.courseEndDate || '')
+                        start: runData.courseStartDate ?? runData.courseDates?.start ?? convertHtmlDateToSsg(editFormData.courseStartDate || ''),
+                        end: runData.courseEndDate ?? runData.courseDates?.end ?? convertHtmlDateToSsg(editFormData.courseEndDate || '')
                     },
                     scheduleInfoType: {
                         code: "01",
@@ -978,7 +979,7 @@ export const ClassManagerView: React.FC<ClassManagerViewProps> = ({ courseToEdit
             return;
         }
 
-        if (!ssgApiResponse?.data?.data?.course?.run) {
+        if (!ssgApiResponse?.data?.course?.run) {
             showErrorPopup('Course run data is required. Please fetch SSG data first.');
             return;
         }
@@ -991,11 +992,11 @@ export const ClassManagerView: React.FC<ClassManagerViewProps> = ({ courseToEdit
         }
 
         // Get SSG run data (same as add sessions)
-        const runData = ssgApiResponse.data.data.course.run;
+        const runData = ssgApiResponse.data.course.run;
 
         // Generate schedule info from course dates
-        const courseStartDateForSchedule = runData.courseStartDate ? convertSsgDateToHtml(runData.courseStartDate) : (editFormData.courseStartDate || '');
-        const courseEndDateForSchedule = runData.courseEndDate ? convertSsgDateToHtml(runData.courseEndDate) : (editFormData.courseEndDate || '');
+        const courseStartDateForSchedule = (runData.courseStartDate ?? runData.courseDates?.start) ? convertSsgDateToHtml(runData.courseStartDate ?? runData.courseDates?.start) : (editFormData.courseStartDate || '');
+        const courseEndDateForSchedule = (runData.courseEndDate ?? runData.courseDates?.end) ? convertSsgDateToHtml(runData.courseEndDate ?? runData.courseDates?.end) : (editFormData.courseEndDate || '');
         const scheduleInfo = generateScheduleInfo(courseStartDateForSchedule, courseEndDateForSchedule);
 
         // Build the request body that will be sent to API (SAME structure as add sessions)
@@ -1004,10 +1005,10 @@ export const ClassManagerView: React.FC<ClassManagerViewProps> = ({ courseToEdit
             courseReferenceNumber: courseReferenceNumber,
 
             // Course run dates (required for proper SSG API payload) - convert YYYYMMDD to YYYY-MM-DD format
-            openingRegistrationDate: runData.registrationOpeningDate ? convertSsgDateToHtml(runData.registrationOpeningDate) : (editFormData.openingRegistrationDate || ''),
-            closingRegistrationDate: runData.registrationClosingDate ? convertSsgDateToHtml(runData.registrationClosingDate) : (editFormData.closingRegistrationDate || ''),
-            courseStartDate: runData.courseStartDate ? convertSsgDateToHtml(runData.courseStartDate) : (editFormData.courseStartDate || ''),
-            courseEndDate: runData.courseEndDate ? convertSsgDateToHtml(runData.courseEndDate) : (editFormData.courseEndDate || ''),
+            openingRegistrationDate: (runData.registrationOpeningDate ?? runData.registrationDates?.opening) ? convertSsgDateToHtml(runData.registrationOpeningDate ?? runData.registrationDates?.opening) : (editFormData.openingRegistrationDate || ''),
+            closingRegistrationDate: (runData.registrationClosingDate ?? runData.registrationDates?.closing) ? convertSsgDateToHtml(runData.registrationClosingDate ?? runData.registrationDates?.closing) : (editFormData.closingRegistrationDate || ''),
+            courseStartDate: (runData.courseStartDate ?? runData.courseDates?.start) ? convertSsgDateToHtml(runData.courseStartDate ?? runData.courseDates?.start) : (editFormData.courseStartDate || ''),
+            courseEndDate: (runData.courseEndDate ?? runData.courseDates?.end) ? convertSsgDateToHtml(runData.courseEndDate ?? runData.courseDates?.end) : (editFormData.courseEndDate || ''),
 
             // Schedule info (required by backend)
             scheduleInfoTypeCode: "01",
@@ -1135,7 +1136,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=delete-sessions
             return;
         }
 
-        if (!ssgApiResponse?.data?.data?.course?.run) {
+        if (!ssgApiResponse?.data?.course?.run) {
             showErrorPopup('Course run data is required. Please fetch SSG data first.');
             return;
         }
@@ -1148,11 +1149,11 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=delete-sessions
         }
 
         // Get SSG run data (same as add sessions)
-        const runData = ssgApiResponse.data.data.course.run;
+        const runData = ssgApiResponse.data.course.run;
 
         // Generate schedule info from course dates
-        const courseStartDateForSchedule = runData.courseStartDate ? convertSsgDateToHtml(runData.courseStartDate) : (editFormData.courseStartDate || '');
-        const courseEndDateForSchedule = runData.courseEndDate ? convertSsgDateToHtml(runData.courseEndDate) : (editFormData.courseEndDate || '');
+        const courseStartDateForSchedule = (runData.courseStartDate ?? runData.courseDates?.start) ? convertSsgDateToHtml(runData.courseStartDate ?? runData.courseDates?.start) : (editFormData.courseStartDate || '');
+        const courseEndDateForSchedule = (runData.courseEndDate ?? runData.courseDates?.end) ? convertSsgDateToHtml(runData.courseEndDate ?? runData.courseDates?.end) : (editFormData.courseEndDate || '');
         const scheduleInfo = generateScheduleInfo(courseStartDateForSchedule, courseEndDateForSchedule);
 
         // Build the request body that will be sent to API (flat structure matching add/delete sessions)
@@ -1161,10 +1162,10 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=delete-sessions
             courseReferenceNumber: courseReferenceNumber,
 
             // Course run dates (required for proper SSG API payload) - convert YYYYMMDD to YYYY-MM-DD format
-            openingRegistrationDate: runData.registrationOpeningDate ? convertSsgDateToHtml(runData.registrationOpeningDate) : (editFormData.openingRegistrationDate || ''),
-            closingRegistrationDate: runData.registrationClosingDate ? convertSsgDateToHtml(runData.registrationClosingDate) : (editFormData.closingRegistrationDate || ''),
-            courseStartDate: runData.courseStartDate ? convertSsgDateToHtml(runData.courseStartDate) : (editFormData.courseStartDate || ''),
-            courseEndDate: runData.courseEndDate ? convertSsgDateToHtml(runData.courseEndDate) : (editFormData.courseEndDate || ''),
+            openingRegistrationDate: (runData.registrationOpeningDate ?? runData.registrationDates?.opening) ? convertSsgDateToHtml(runData.registrationOpeningDate ?? runData.registrationDates?.opening) : (editFormData.openingRegistrationDate || ''),
+            closingRegistrationDate: (runData.registrationClosingDate ?? runData.registrationDates?.closing) ? convertSsgDateToHtml(runData.registrationClosingDate ?? runData.registrationDates?.closing) : (editFormData.closingRegistrationDate || ''),
+            courseStartDate: (runData.courseStartDate ?? runData.courseDates?.start) ? convertSsgDateToHtml(runData.courseStartDate ?? runData.courseDates?.start) : (editFormData.courseStartDate || ''),
+            courseEndDate: (runData.courseEndDate ?? runData.courseDates?.end) ? convertSsgDateToHtml(runData.courseEndDate ?? runData.courseDates?.end) : (editFormData.courseEndDate || ''),
 
             // Schedule info (required by backend)
             scheduleInfoTypeCode: "01",
@@ -1220,12 +1221,12 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=delete-sessions
                 run: {
                     action: "update", // Action under "run" is "update" 
                     registrationDates: {
-                        opening: runData.registrationOpeningDate || convertHtmlDateToSsg(editFormData.openingRegistrationDate || ''),
-                        closing: runData.registrationClosingDate || convertHtmlDateToSsg(editFormData.closingRegistrationDate || '')
+                        opening: runData.registrationOpeningDate ?? runData.registrationDates?.opening ?? convertHtmlDateToSsg(editFormData.openingRegistrationDate || ''),
+                        closing: runData.registrationClosingDate ?? runData.registrationDates?.closing ?? convertHtmlDateToSsg(editFormData.closingRegistrationDate || '')
                     },
                     courseDates: {
-                        start: runData.courseStartDate || convertHtmlDateToSsg(editFormData.courseStartDate || ''),
-                        end: runData.courseEndDate || convertHtmlDateToSsg(editFormData.courseEndDate || '')
+                        start: runData.courseStartDate ?? runData.courseDates?.start ?? convertHtmlDateToSsg(editFormData.courseStartDate || ''),
+                        end: runData.courseEndDate ?? runData.courseDates?.end ?? convertHtmlDateToSsg(editFormData.courseEndDate || '')
                     },
                     scheduleInfoType: {
                         code: "01",
@@ -1386,37 +1387,27 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=update-sessions
 
     // Function to populate form data from SSG API response
     const populateFormFromSsgData = (ssgResponse: any) => {
-        console.log('=== SSG API Response Analysis ===');
-        console.log('Full SSG Response:', JSON.stringify(ssgResponse, null, 2));
-
         if (!ssgResponse) {
-            console.log('❌ No SSG response provided');
+            console.warn('populateFormFromSsgData: No SSG response provided');
             return;
         }
 
-        console.log('SSG Response keys:', Object.keys(ssgResponse));
-        console.log('SSG Response data:', ssgResponse.data);
-
-        if (!ssgResponse?.data?.data?.course?.run) {
-            console.log('❌ No course run data found in response');
-            console.log('Available path:', ssgResponse?.data?.data?.course);
+        if (!ssgResponse?.data?.course?.run) {
+            console.warn('populateFormFromSsgData: No course run data in response');
             return;
         }
 
-        // Get the run data from the actual response structure
-        const run = ssgResponse.data.data.course.run;
-        console.log('Course run data:', JSON.stringify(run, null, 2));
-        console.log('Run keys:', Object.keys(run));
+        const run = ssgResponse.data.course.run;
 
         // Update form data with the actual SSG response structure
         const updatedFormData = {
-            // Registration dates - using actual field names from response
-            openingRegistrationDate: run.registrationOpeningDate ? convertSsgDateToHtml(run.registrationOpeningDate) : undefined,
-            closingRegistrationDate: run.registrationClosingDate ? convertSsgDateToHtml(run.registrationClosingDate) : undefined,
+            // Registration dates - flat format ?? nested format fallback
+            openingRegistrationDate: (run.registrationOpeningDate ?? run.registrationDates?.opening) ? convertSsgDateToHtml(run.registrationOpeningDate ?? run.registrationDates?.opening) : undefined,
+            closingRegistrationDate: (run.registrationClosingDate ?? run.registrationDates?.closing) ? convertSsgDateToHtml(run.registrationClosingDate ?? run.registrationDates?.closing) : undefined,
 
-            // Course dates - using actual field names from response  
-            courseStartDate: run.courseStartDate ? convertSsgDateToHtml(run.courseStartDate) : undefined,
-            courseEndDate: run.courseEndDate ? convertSsgDateToHtml(run.courseEndDate) : undefined,
+            // Course dates - flat format ?? nested format fallback
+            courseStartDate: (run.courseStartDate ?? run.courseDates?.start) ? convertSsgDateToHtml(run.courseStartDate ?? run.courseDates?.start) : undefined,
+            courseEndDate: (run.courseEndDate ?? run.courseDates?.end) ? convertSsgDateToHtml(run.courseEndDate ?? run.courseDates?.end) : undefined,
 
             // Course vacancy
             courseVacancy: run.courseVacancy ? {
@@ -1436,90 +1427,42 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=update-sessions
                 (run.venue.wheelChairAccess ? OptionalSelector.YES : OptionalSelector.NO) :
                 undefined,
 
-            // Course admin email - use current user's email instead of SSG data
-            courseAdminEmail: currentUserEmail
+            // Course admin email - use SSG value, fall back to current user
+            courseAdminEmail: run.courseAdminEmail || currentUserEmail
         };
-
-        console.log('Updated form data:', updatedFormData);
 
         setEditFormData(prev => {
             const newFormData = { ...prev };
 
-            // Manually assign each field to avoid TypeScript indexing issues
-            if (updatedFormData.openingRegistrationDate !== undefined) {
-                newFormData.openingRegistrationDate = updatedFormData.openingRegistrationDate;
-                console.log('✅ Set opening registration date:', updatedFormData.openingRegistrationDate);
-            }
-            if (updatedFormData.closingRegistrationDate !== undefined) {
-                newFormData.closingRegistrationDate = updatedFormData.closingRegistrationDate;
-                console.log('✅ Set closing registration date:', updatedFormData.closingRegistrationDate);
-            }
-            if (updatedFormData.courseStartDate !== undefined) {
-                newFormData.courseStartDate = updatedFormData.courseStartDate;
-                console.log('✅ Set course start date:', updatedFormData.courseStartDate);
-            }
-            if (updatedFormData.courseEndDate !== undefined) {
-                newFormData.courseEndDate = updatedFormData.courseEndDate;
-                console.log('✅ Set course end date:', updatedFormData.courseEndDate);
-            }
-            if (updatedFormData.courseVacancy !== undefined) {
-                newFormData.courseVacancy = updatedFormData.courseVacancy;
-                console.log('✅ Set course vacancy:', updatedFormData.courseVacancy);
-            }
-            if (updatedFormData.block !== undefined) {
-                newFormData.block = updatedFormData.block;
-                console.log('✅ Set block:', updatedFormData.block);
-            }
-            if (updatedFormData.street !== undefined) {
-                newFormData.street = updatedFormData.street;
-                console.log('✅ Set street:', updatedFormData.street);
-            }
-            if (updatedFormData.building !== undefined) {
-                newFormData.building = updatedFormData.building;
-                console.log('✅ Set building:', updatedFormData.building);
-            }
-            if (updatedFormData.floor !== undefined) {
-                newFormData.floor = updatedFormData.floor;
-                console.log('✅ Set floor:', updatedFormData.floor);
-            }
-            if (updatedFormData.unit !== undefined) {
-                newFormData.unit = updatedFormData.unit;
-                console.log('✅ Set unit:', updatedFormData.unit);
-            }
-            if (updatedFormData.postalCode !== undefined) {
-                newFormData.postalCode = updatedFormData.postalCode;
-                console.log('✅ Set postal code:', updatedFormData.postalCode);
-            }
-            if (updatedFormData.room !== undefined) {
-                newFormData.room = updatedFormData.room;
-                console.log('✅ Set room:', updatedFormData.room);
-            }
-            if (updatedFormData.wheelChairAccess !== undefined) {
-                newFormData.wheelChairAccess = updatedFormData.wheelChairAccess;
-                console.log('✅ Set wheelchair access:', updatedFormData.wheelChairAccess);
-            }
-            if (updatedFormData.courseAdminEmail !== undefined) {
-                newFormData.courseAdminEmail = updatedFormData.courseAdminEmail;
-                console.log('✅ Set course admin email (using current user email):', updatedFormData.courseAdminEmail);
-            }
+            if (updatedFormData.openingRegistrationDate !== undefined) newFormData.openingRegistrationDate = updatedFormData.openingRegistrationDate;
+            if (updatedFormData.closingRegistrationDate !== undefined) newFormData.closingRegistrationDate = updatedFormData.closingRegistrationDate;
+            if (updatedFormData.courseStartDate !== undefined) newFormData.courseStartDate = updatedFormData.courseStartDate;
+            if (updatedFormData.courseEndDate !== undefined) newFormData.courseEndDate = updatedFormData.courseEndDate;
+            if (updatedFormData.courseVacancy !== undefined) newFormData.courseVacancy = updatedFormData.courseVacancy;
+            if (updatedFormData.block !== undefined) newFormData.block = updatedFormData.block;
+            if (updatedFormData.street !== undefined) newFormData.street = updatedFormData.street;
+            if (updatedFormData.building !== undefined) newFormData.building = updatedFormData.building;
+            if (updatedFormData.floor !== undefined) newFormData.floor = updatedFormData.floor;
+            if (updatedFormData.unit !== undefined) newFormData.unit = updatedFormData.unit;
+            if (updatedFormData.postalCode !== undefined) newFormData.postalCode = updatedFormData.postalCode;
+            if (updatedFormData.room !== undefined) newFormData.room = updatedFormData.room;
+            if (updatedFormData.wheelChairAccess !== undefined) newFormData.wheelChairAccess = updatedFormData.wheelChairAccess;
+            if (updatedFormData.courseAdminEmail !== undefined) newFormData.courseAdminEmail = updatedFormData.courseAdminEmail;
 
-            console.log('Final form data to set:', newFormData);
             return newFormData;
         });
 
         // Update the individual date states as well
-        if (run.courseStartDate) {
-            const startDateHtml = convertSsgDateToHtml(run.courseStartDate);
-            console.log('Setting start date:', startDateHtml);
-            setStartDate(startDateHtml);
+        const startDateRaw = run.courseStartDate ?? run.courseDates?.start;
+        if (startDateRaw) {
+            setStartDate(convertSsgDateToHtml(startDateRaw));
         }
-        if (run.courseEndDate) {
-            const endDateHtml = convertSsgDateToHtml(run.courseEndDate);
-            console.log('Setting end date:', endDateHtml);
-            setEndDate(endDateHtml);
+        const endDateRaw = run.courseEndDate ?? run.courseDates?.end;
+        if (endDateRaw) {
+            setEndDate(convertSsgDateToHtml(endDateRaw));
         }
 
-        console.log('✅ Form population completed successfully!');
+        setSsgDataPopulated(true);
     };
 
     // Function to handle course run update
@@ -1538,7 +1481,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=update-sessions
                 courseReferenceNumber: courseReferenceNumber, // Move to root level
                 course: {
                     trainingProvider: {
-                        uen: ssgApiResponse?.data?.data?.course?.run?.organizationKey
+                        uen: ssgApiResponse?.data?.course?.run?.organizationKey
                     },
                     run: {
                         action: "update",
@@ -1576,8 +1519,8 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=update-sessions
                         }
                         // TODO: Re-implement linkCourseRunTrainer in a better way in the future
                         // Include linkCourseRunTrainer if it exists in the SSG response
-                        // ...(ssgApiResponse?.data?.data?.course?.run?.linkCourseRunTrainer && {
-                        //     linkCourseRunTrainer: ssgApiResponse.data.data.course.run.linkCourseRunTrainer
+                        // ...(ssgApiResponse?.data?.course?.run?.linkCourseRunTrainer && {
+                        //     linkCourseRunTrainer: ssgApiResponse.data.course.run.linkCourseRunTrainer
                         // })
                     }
                 }
@@ -1618,154 +1561,48 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=update-sessions
 
     // Function to handle course run update specifically
     const handleUpdateCourseRunOnly = async () => {
-        if (!courseRunId.trim() || !courseReferenceNumber.trim()) {
-            showErrorPopup('Course Run ID and Course Reference Number are required for updating');
+        if (!courseRunId.trim()) {
+            showErrorPopup('Course Run ID is required for updating');
             return;
         }
 
-        // Generate schedule info from course dates
-        const scheduleInfo = generateScheduleInfo(editFormData.courseStartDate || '', editFormData.courseEndDate || '');
-
         setLoading(true);
         try {
-            // Create the request body matching the EditRunInfo interface structure
             const requestBody = {
-                // Required field
-                courseReferenceNumber: courseReferenceNumber,
-
-                // Optional fields - dates
-                openingRegistrationDate: editFormData.openingRegistrationDate || undefined,
-                closingRegistrationDate: editFormData.closingRegistrationDate || undefined,
+                courseRunId,
                 courseStartDate: editFormData.courseStartDate || undefined,
                 courseEndDate: editFormData.courseEndDate || undefined,
-
-                // Schedule information
-                scheduleInfoTypeCode: "01",
-                scheduleInfoTypeDescription: "Description",
-                scheduleInfo: scheduleInfo,
-
-                // Venue information (all fields)
+                openingRegistrationDate: editFormData.openingRegistrationDate || undefined,
+                closingRegistrationDate: editFormData.closingRegistrationDate || undefined,
                 block: editFormData.block || undefined,
                 street: editFormData.street || undefined,
+                building: editFormData.building || undefined,
                 floor: editFormData.floor || undefined,
                 unit: editFormData.unit || undefined,
-                building: editFormData.building || undefined,
                 postalCode: editFormData.postalCode || undefined,
                 room: editFormData.room || undefined,
-                wheelChairAccess: editFormData.wheelChairAccess || undefined,
-
-                // Course admin email - use current user's email
-                courseAdminEmail: currentUserEmail,
-
-                // Course vacancy
-                courseVacancy: editFormData.courseVacancy || undefined,
-
-                // File information (required by API)
-                fileName: "",
-                fileContent: ""
-
-                // TODO: Re-implement linkCourseRunTrainer in a better way in the future
-                // Include trainer information if it exists in the SSG response (flat structure for backend)
-                // Only include if we have complete trainer data with required fields
-                // ...(ssgApiResponse?.data?.data?.course?.run?.linkCourseRunTrainer && 
-                //     ssgApiResponse.data.data.course.run.linkCourseRunTrainer.length > 0 &&
-                //     ssgApiResponse.data.data.course.run.linkCourseRunTrainer[0]?.trainer?.idNumber && {
-                //     linkCourseRunTrainer: ssgApiResponse.data.data.course.run.linkCourseRunTrainer.map((trainerLink: any) => ({
-                //         trainer: {
-                //             photo: {
-                //                 name: trainerLink.trainer?.photo?.name || "",
-                //                 content: trainerLink.trainer?.photo?.content || ""
-                //             },
-                //             trainerType: {
-                //                 code: trainerLink.trainer?.trainerType?.code || "1",
-                //                 description: trainerLink.trainer?.trainerType?.description || "Existing"
-                //             },
-                //             idNumber: trainerLink.trainer?.idNumber || "",
-                //             ...(trainerLink.trainer?.name && { name: trainerLink.trainer.name }),
-                //             ...(trainerLink.trainer?.email && { email: trainerLink.trainer.email })
-                //         }
-                //     }))
-                // })
+                wheelChairAccess: editFormData.wheelChairAccess === OptionalSelector.YES,
+                courseVacancyCode: editFormData.courseVacancy?.code || undefined,
+                courseVacancyDescription: editFormData.courseVacancy?.description || undefined,
+                courseAdminEmail: editFormData.courseAdminEmail || currentUserEmail,
             };
 
-            console.log('=== API REQUEST DEBUG ===');
-            console.log('Course Run ID:', courseRunId);
-            console.log('Course Reference Number:', courseReferenceNumber);
-            console.log('Edit Form Data:', editFormData);
-            console.log('SSG API Response:', ssgApiResponse);
-            console.log('Trainer Data from SSG:', ssgApiResponse?.data?.data?.course?.run?.linkCourseRunTrainer);
-            console.log('Complete Request Body:', JSON.stringify(requestBody, null, 2));
-            console.log('Venue Data:', {
-                block: requestBody.block,
-                street: requestBody.street,
-                floor: requestBody.floor,
-                unit: requestBody.unit,
-                building: requestBody.building,
-                postalCode: requestBody.postalCode,
-                room: requestBody.room,
-                wheelChairAccess: requestBody.wheelChairAccess
-            });
-
-            // Show confirmation popup with request body for review
-            const confirmMessage = `Are you sure you want to update this course run?
-
-📋 **Request Body to be sent to API:**
-\`\`\`json
-${JSON.stringify(requestBody, null, 2)}
-\`\`\`
-
-🔍 **API Endpoint:**
-POST /api/ssg/courses/courseRuns/${courseRunId}?action=edit
-
-ℹ️ Please review the request body above before proceeding.`;
-
-            const confirmed = await showConfirmPopup(
-                confirmMessage,
-                () => { }, // Will be handled by the promise resolution
-                'Update Course Run',
-                'Update',
-                'Cancel'
-            );
-
-            if (!confirmed) {
-                setLoading(false);
-                return;
-            }
-
-            const response = await fetch(`/api/ssg/courses/courseRuns/${courseRunId}?includeExpiredCourses=false&action=edit`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
+            const response = await fetch(getApiUrl('/api/admin/update-course-run-local'), {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(requestBody)
             });
 
-            console.log('=== API RESPONSE DEBUG ===');
-            console.log('Response Status:', response.status);
-            console.log('Response OK:', response.ok);
-
             if (!response.ok) {
                 const errorData = await response.json();
-                console.error('HTTP error:', response.status, errorData);
-                console.log('Error Response Body:', JSON.stringify(errorData, null, 2));
-                throw new Error(`HTTP error! status: ${response.status}, details: ${JSON.stringify(errorData)}`);
+                throw new Error(errorData.error || `HTTP error: ${response.status}`);
             }
 
-            const data = await response.json();
-            console.log('Success Response:', JSON.stringify(data, null, 2));
-
-            if (response.status === 200) {
-                showSuccessPopup('Course run updated successfully!');
-                fetchCourseRunData(courseRunId);
-            } else {
-                showInfoPopup('Update completed with status: ' + response.status);
-            }
+            showSuccessPopup('Course run saved locally.');
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'An error occurred during update';
-            console.error('=== UPDATE ERROR ===');
-            console.error('Error Details:', error);
-            console.error('Error Message:', errorMessage);
-            showErrorPopup('Failed to update course run: ' + errorMessage);
+            console.error('Local update error:', error);
+            showErrorPopup('Failed to save course run: ' + errorMessage);
         } finally {
             setLoading(false);
         }
@@ -1915,7 +1752,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=edit
             return;
         }
 
-        if (!ssgApiResponse?.data?.data?.course?.run) {
+        if (!ssgApiResponse?.data?.course?.run) {
             showErrorPopup('Course run data is required. Please fetch SSG data first before assigning trainer.');
             return;
         }
@@ -1930,11 +1767,11 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=edit
         }
 
         // Get SSG run data for populating course run details
-        const runData = ssgApiResponse.data.data.course.run;
+        const runData = ssgApiResponse.data.course.run;
 
         // Generate schedule info from course dates
-        const courseStartDateForSchedule = runData.courseStartDate ? convertSsgDateToHtml(runData.courseStartDate) : (editFormData.courseStartDate || '');
-        const courseEndDateForSchedule = runData.courseEndDate ? convertSsgDateToHtml(runData.courseEndDate) : (editFormData.courseEndDate || '');
+        const courseStartDateForSchedule = (runData.courseStartDate ?? runData.courseDates?.start) ? convertSsgDateToHtml(runData.courseStartDate ?? runData.courseDates?.start) : (editFormData.courseStartDate || '');
+        const courseEndDateForSchedule = (runData.courseEndDate ?? runData.courseDates?.end) ? convertSsgDateToHtml(runData.courseEndDate ?? runData.courseDates?.end) : (editFormData.courseEndDate || '');
         const scheduleInfo = generateScheduleInfo(courseStartDateForSchedule, courseEndDateForSchedule);
 
         // Build the request body with the exact structure required by the API
@@ -1947,12 +1784,12 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=edit
                 run: {
                     action: "update",
                     registrationDates: {
-                        opening: runData.registrationOpeningDate || convertHtmlDateToSsg(editFormData.openingRegistrationDate || ''),
-                        closing: runData.registrationClosingDate || convertHtmlDateToSsg(editFormData.closingRegistrationDate || '')
+                        opening: runData.registrationOpeningDate ?? runData.registrationDates?.opening ?? convertHtmlDateToSsg(editFormData.openingRegistrationDate || ''),
+                        closing: runData.registrationClosingDate ?? runData.registrationDates?.closing ?? convertHtmlDateToSsg(editFormData.closingRegistrationDate || '')
                     },
                     courseDates: {
-                        start: runData.courseStartDate || convertHtmlDateToSsg(editFormData.courseStartDate || ''),
-                        end: runData.courseEndDate || convertHtmlDateToSsg(editFormData.courseEndDate || '')
+                        start: runData.courseStartDate ?? runData.courseDates?.start ?? convertHtmlDateToSsg(editFormData.courseStartDate || ''),
+                        end: runData.courseEndDate ?? runData.courseDates?.end ?? convertHtmlDateToSsg(editFormData.courseEndDate || '')
                     },
                     scheduleInfoType: {
                         code: "01",
@@ -2061,7 +1898,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                 console.log('✅ Updated course run data received:', updatedData);
 
                                 // Extract trainer name and email from the response
-                                const trainers = updatedData?.data?.data?.course?.run?.linkCourseRunTrainer;
+                                const trainers = updatedData?.data?.course?.run?.linkCourseRunTrainer;
                                 if (trainers && trainers.length > 0) {
                                     const trainerName = trainers[0].trainer?.name;
                                     const trainerEmail = trainers[0].trainer?.email;
@@ -2229,10 +2066,18 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                 {/* Course Run Tab */}
                 {(!isEditMode || activeTab === 'courseRun') && (
                     <>
-                        {isEditMode && ssgApiResponse && !ssgApiLoading && (
+                        {isEditMode && ssgDataPopulated && !ssgApiLoading && (
                             <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-md p-3 mb-4">
                                 <p className="text-sm text-green-800 dark:text-green-300">
                                     <strong>✓ Form populated with SSG data</strong> - The form fields below have been automatically filled with data from the SSG API. You can modify any field as needed before updating.
+                                </p>
+                            </div>
+                        )}
+
+                        {isEditMode && ssgApiResponse && !ssgApiLoading && !ssgDataPopulated && (
+                            <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-md p-3 mb-4">
+                                <p className="text-sm text-yellow-800 dark:text-yellow-300">
+                                    <strong>⚠ SSG data retrieved but form not populated</strong> - The SSG API returned data, but the form fields could not be filled. The response may have an unexpected structure.
                                 </p>
                             </div>
                         )}
@@ -2478,11 +2323,6 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                         className={`${inputClasses} ${ssgApiResponse?.data ? 'bg-gray-100' : ''}`}
                                         placeholder="Enter course admin email"
                                     />
-                                    {ssgApiResponse?.data && (
-                                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                            This field is populated from SSG data and cannot be edited
-                                        </p>
-                                    )}
                                 </div>
 
                                 <div className="flex justify-end mt-6">
@@ -2494,9 +2334,9 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                         {loading ? (
                                             <div className="flex items-center">
                                                 <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                                                Updating Course Run...
+                                                Saving...
                                             </div>
-                                        ) : 'Update Course Run'}
+                                        ) : 'Save to Local Database'}
                                     </Button>
                                 </div>
                             </FormSection>
@@ -3099,13 +2939,13 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                             )}
 
                             {/* Display Assigned Trainer Information */}
-                            {ssgApiResponse?.data?.data?.course?.run ? (
+                            {ssgApiResponse?.data?.course?.run ? (
                                 <div>
                                     <h4 className="text-lg font-medium text-gray-900 dark:text-white mb-4">Currently Assigned Trainer</h4>
-                                    {ssgApiResponse.data.data.course.run.linkCourseRunTrainer &&
-                                        ssgApiResponse.data.data.course.run.linkCourseRunTrainer.length > 0 ? (
+                                    {ssgApiResponse.data.course.run.linkCourseRunTrainer &&
+                                        ssgApiResponse.data.course.run.linkCourseRunTrainer.length > 0 ? (
                                         <div className="space-y-4">
-                                            {ssgApiResponse.data.data.course.run.linkCourseRunTrainer.map((trainerLink: any, index: number) => {
+                                            {ssgApiResponse.data.course.run.linkCourseRunTrainer.map((trainerLink: any, index: number) => {
                                                 const trainer = trainerLink.trainer;
                                                 return (
                                                     <Card key={index} className="p-4 bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-700">
