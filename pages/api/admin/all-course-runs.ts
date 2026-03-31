@@ -25,7 +25,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const { search, upcoming } = req.query;
+    const { search, upcoming, ongoing, status } = req.query;
 
     // Ensure the junction table exists before querying it
     await ensureJunctionTable();
@@ -63,8 +63,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const conditions: string[] = [];
     const params: any[] = [];
 
-    if (upcoming === 'true') {
+    if (status === 'upcoming') {
+      conditions.push(`cr.start_date > CURRENT_DATE`);
+    } else if (status === 'ongoing') {
+      conditions.push(`cr.start_date <= CURRENT_DATE AND (cr.end_date IS NULL OR cr.end_date >= CURRENT_DATE)`);
+    } else if (status === 'completed') {
+      conditions.push(`cr.end_date < CURRENT_DATE`);
+    } else if (upcoming === 'true') {
       conditions.push(`cr.start_date >= CURRENT_DATE`);
+    } else if (ongoing === 'true') {
+      conditions.push(`(cr.end_date IS NULL OR cr.end_date >= CURRENT_DATE)`);
     }
 
     if (search && search !== '') {
@@ -76,7 +84,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       query += ` WHERE ` + conditions.join(' AND ');
     }
 
-    query += ` ORDER BY cr.start_date ASC LIMIT 200`;
+    // Ongoing/completed: latest first. Upcoming: soonest first.
+    const sortOrder = (status === 'ongoing' || status === 'completed') ? 'DESC' : 'ASC';
+    query += ` ORDER BY cr.start_date ${sortOrder} LIMIT 200`;
 
     const result = await pool.query(query, params);
 
