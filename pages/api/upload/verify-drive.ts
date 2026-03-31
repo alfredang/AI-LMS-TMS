@@ -64,10 +64,10 @@ async function findSubfolder(drive: drive_v3.Drive, parentFolderId: string, fold
     return null;
 }
 
-async function findSessionFolderByPrefix(
+async function findSessionFolderByStartDate(
     drive: drive_v3.Drive,
     parentFolderId: string,
-    prefix: string
+    startDatePrefix: string
 ): Promise<string | null> {
     const response = await drive.files.list({
         q: `'${parentFolderId}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
@@ -77,18 +77,17 @@ async function findSessionFolderByPrefix(
 
     const files = response.data.files;
     if (files && files.length > 0) {
-        const matched = files.find(f => f.name?.startsWith(prefix));
+        const matched = files.find(f => f.name?.startsWith(startDatePrefix));
         if (matched) return matched.id!;
     }
     return null;
 }
 
-function buildSessionFolderPrefix(startDate: Date, endDate: Date): string {
+function buildStartDatePrefix(startDate: Date): string {
     const yyyy = startDate.getFullYear();
     const mm = String(startDate.getMonth() + 1).padStart(2, '0');
     const startDD = String(startDate.getDate()).padStart(2, '0');
-    const endDD = String(endDate.getDate()).padStart(2, '0');
-    return `${yyyy}_${mm}_${startDD}/${endDD}_`;
+    return `${yyyy}_${mm}_${startDD}`;
 }
 
 async function getCourseRunDetails(courseRunId: string) {
@@ -146,7 +145,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
         const effectiveCourseCode = courseCode || runDetails.course_code;
         const effectiveCourseName = courseName || runDetails.course_title;
-        const sessionFolderPrefix = buildSessionFolderPrefix(new Date(runDetails.start_date), new Date(runDetails.end_date));
+        const startDatePrefix = buildStartDatePrefix(new Date(runDetails.start_date));
 
         // 2. Find Course Folder
         let courseFolderId = null;
@@ -178,7 +177,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         if (!assessmentRecordsId) return res.status(200).json({ success: true, exists: false, count: 0, reason: 'Assessment Records folder not found' });
 
         // 4. Find Session Subfolder
-        const sessionFolderId = await findSessionFolderByPrefix(drive, assessmentRecordsId, sessionFolderPrefix);
+        const sessionFolderId = await findSessionFolderByStartDate(drive, assessmentRecordsId, startDatePrefix);
         if (!sessionFolderId) return res.status(200).json({ success: true, exists: false, count: 0, reason: 'Session folder not found' });
 
         // 5. Find Learner Subfolder
