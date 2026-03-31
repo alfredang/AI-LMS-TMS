@@ -1,6 +1,6 @@
 const { Pool } = require('pg');
 require('dotenv').config({ path: '.env.local' });
-const pool = new Pool({ connectionString: process.env.DATABASE_URL || 'postgres://postgres:112233@localhost:5432/ailmstms' });
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
 async function run() {
   const isValidDate = (d) => typeof d === 'string' && /^\d{2}[\/\-]\d{2}[\/\-]\d{4}$/.test(d);
