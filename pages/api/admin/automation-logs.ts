@@ -39,6 +39,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       )
     `);
     await pool.query(`ALTER TABLE auto_create_learner_log ADD COLUMN IF NOT EXISTS course_code TEXT`);
+    await pool.query(`ALTER TABLE auto_create_learner_log ADD COLUMN IF NOT EXISTS start_date DATE`);
+    await pool.query(`ALTER TABLE auto_create_learner_log ADD COLUMN IF NOT EXISTS end_date DATE`);
 
     const params: any[] = [limit, offset];
     let where = '';
@@ -49,6 +51,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const result = await pool.query(
       `SELECT id, run_id, created_at, course_run_id, course_title, course_code,
+              start_date, end_date,
               status, total_enrolled, created_count, existing_count,
               error_count, details, error_message
        FROM auto_create_learner_log

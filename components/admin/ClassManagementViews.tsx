@@ -4632,6 +4632,8 @@ interface AutomationLogRow {
     course_run_id: string;
     course_title: string;
     course_code: string | null;
+    start_date: string | null;
+    end_date: string | null;
     status: 'success' | 'partial' | 'error' | 'pending';
     total_enrolled: number;
     created_count: number;
@@ -4816,6 +4818,8 @@ export const AutomationLogsView: React.FC = () => {
                                                 <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Course Title</th>
                                                 <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Course Code</th>
                                                 <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">SSG Run ID</th>
+                                                <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Start Date</th>
+                                                <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">End Date</th>
                                                 <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 text-center">Status</th>
                                                 <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 text-center">Enrolled</th>
                                                 <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 text-center">Created</th>
@@ -4843,6 +4847,12 @@ export const AutomationLogsView: React.FC = () => {
                                                                 <span className="text-red-500 ml-1.5 text-xs" title={log.error_message}>⚠ {log.error_message.slice(0, 40)}{log.error_message.length > 40 ? '…' : ''}</span>
                                                             )}
                                                         </td>
+                                                        <td className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                                                            {log.start_date ? new Date(log.start_date).toLocaleDateString('en-SG', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
+                                                        </td>
+                                                        <td className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                                                            {log.end_date ? new Date(log.end_date).toLocaleDateString('en-SG', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
+                                                        </td>
                                                         <td className="px-4 py-3 text-center">{statusBadge(log.status)}</td>
                                                         <td className="px-4 py-3 text-center font-semibold text-gray-700 dark:text-gray-300">{log.total_enrolled}</td>
                                                         <td className="px-4 py-3 text-center">
@@ -4858,7 +4868,7 @@ export const AutomationLogsView: React.FC = () => {
                                                     {/* Learner rows — always shown when there are details */}
                                                     {log.details && log.details.length > 0 && (
                                                         <tr key={`${log.id}-detail`}>
-                                                            <td colSpan={8} className="px-5 pb-4 pt-1 bg-gray-50/80 dark:bg-gray-900/40">
+                                                            <td colSpan={10} className="px-5 pb-4 pt-1 bg-gray-50/80 dark:bg-gray-900/40">
                                                                 <div className="rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
                                                                     <table className="w-full text-xs">
                                                                         <thead className="bg-gray-100 dark:bg-gray-800">
@@ -4971,28 +4981,24 @@ export const AssignTrainerLogsView: React.FC = () => {
 
     const displayLogs = logs;
 
-    // Group logs by calendar date (SG time), then by hour within each date
+    // Flatten to one batch per date+hour (SG time), e.g. "31 Mar 2026 · 07:00"
     const batches = useMemo(() => {
-        const dateMap = new Map<string, Map<string, AssignTrainerLogRow[]>>();
+        const map = new Map<string, AssignTrainerLogRow[]>();
         for (const log of displayLogs) {
             const dt = new Date(log.created_at);
-            const dateKey = dt.toLocaleDateString('en-SG', {
+            const dateLabel = dt.toLocaleDateString('en-SG', {
                 timeZone: 'Asia/Singapore',
                 day: '2-digit', month: 'short', year: 'numeric',
             });
-            // Round down to the hour in SG time, e.g. "07:00"
-            const hourKey = dt.toLocaleTimeString('en-SG', {
+            const hourLabel = dt.toLocaleTimeString('en-SG', {
                 timeZone: 'Asia/Singapore',
                 hour: '2-digit', minute: '2-digit', hour12: false,
             }).slice(0, 2) + ':00';
-            if (!dateMap.has(dateKey)) dateMap.set(dateKey, new Map());
-            const hourMap = dateMap.get(dateKey)!;
-            if (!hourMap.has(hourKey)) hourMap.set(hourKey, []);
-            hourMap.get(hourKey)!.push(log);
+            const key = `${dateLabel} · ${hourLabel}`;
+            if (!map.has(key)) map.set(key, []);
+            map.get(key)!.push(log);
         }
-        return Array.from(dateMap.entries()).map(
-            ([dk, hm]) => [dk, Array.from(hm.entries())] as [string, [string, AssignTrainerLogRow[]][]]
-        );
+        return Array.from(map.entries()); // [ ["31 Mar 2026 · 07:00", rows[]], ... ]
     }, [displayLogs]);
 
     // Expand the most recent batch by default
@@ -5002,10 +5008,10 @@ export const AssignTrainerLogsView: React.FC = () => {
         }
     }, [batches.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    const toggleDate = (dateKey: string) => {
+    const toggleDate = (key: string) => {
         setExpandedDates(prev => {
             const next = new Set(prev);
-            next.has(dateKey) ? next.delete(dateKey) : next.add(dateKey);
+            next.has(key) ? next.delete(key) : next.add(key);
             return next;
         });
     };
@@ -5040,7 +5046,7 @@ export const AssignTrainerLogsView: React.FC = () => {
             </div>
 
             <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-                Records every trainer assignment made via the external API (Kael). Grouped by date.
+                Records every trainer assignment made via the external API (Kael). Each card is one automation batch (grouped by date &amp; hour).
             </p>
 
             {loading ? (
@@ -5048,22 +5054,21 @@ export const AssignTrainerLogsView: React.FC = () => {
             ) : batches.length === 0 ? (
                 <Card className="p-8 text-center text-gray-500 dark:text-gray-400">No assign trainer logs yet.</Card>
             ) : (
-                <div className="space-y-4">
-                    {batches.map(([dateKey, hourGroups]) => {
-                        const allRows = hourGroups.flatMap(([, r]) => r);
-                        const isOpen = expandedDates.has(dateKey);
-                        const successCount = allRows.filter(r => r.status === 'success').length;
-                        const errorCount   = allRows.filter(r => r.status === 'error').length;
+                <div className="space-y-3">
+                    {batches.map(([batchKey, rows]) => {
+                        const isOpen = expandedDates.has(batchKey);
+                        const successCount = rows.filter(r => r.status === 'success').length;
+                        const errorCount   = rows.filter(r => r.status === 'error').length;
                         return (
-                            <Card key={dateKey} className="overflow-hidden">
-                                {/* Date header */}
+                            <Card key={batchKey} className="overflow-hidden">
+                                {/* Batch header */}
                                 <button
-                                    onClick={() => toggleDate(dateKey)}
+                                    onClick={() => toggleDate(batchKey)}
                                     className="w-full flex items-center justify-between px-5 py-4 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors text-left"
                                 >
                                     <div className="flex items-center gap-4 flex-wrap">
-                                        <span className="font-semibold text-gray-900 dark:text-white">{dateKey}</span>
-                                        <span className="text-sm text-gray-500 dark:text-gray-400">{allRows.length} assignment{allRows.length !== 1 ? 's' : ''}</span>
+                                        <span className="font-semibold text-gray-900 dark:text-white font-mono">{batchKey}</span>
+                                        <span className="text-sm text-gray-500 dark:text-gray-400">{rows.length} assignment{rows.length !== 1 ? 's' : ''}</span>
                                         {successCount > 0 && (
                                             <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
                                                 {successCount} success
@@ -5078,86 +5083,68 @@ export const AssignTrainerLogsView: React.FC = () => {
                                     <svg className={`w-5 h-5 text-gray-400 transition-transform flex-shrink-0 ${isOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
                                 </button>
 
-                                {/* Hour sub-groups */}
+                                {/* Rows table */}
                                 {isOpen && (
-                                    <div className="border-t border-gray-100 dark:border-gray-700">
-                                        {hourGroups.map(([hourKey, rows]) => {
-                                            const hSuccess = rows.filter(r => r.status === 'success').length;
-                                            const hError   = rows.filter(r => r.status === 'error').length;
-                                            return (
-                                                <div key={hourKey} className="border-b border-gray-100 dark:border-gray-700 last:border-b-0">
-                                                    {/* Hour sub-header */}
-                                                    <div className="flex items-center gap-3 px-5 py-2.5 bg-gray-50/70 dark:bg-gray-800/50">
-                                                        <span className="text-xs font-semibold text-gray-600 dark:text-gray-300 font-mono">{hourKey} batch</span>
-                                                        <span className="text-xs text-gray-400">{rows.length} assignment{rows.length !== 1 ? 's' : ''}</span>
-                                                        {hSuccess > 0 && <span className="text-xs px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">{hSuccess} success</span>}
-                                                        {hError > 0 && <span className="text-xs px-1.5 py-0.5 rounded bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300">{hError} error{hError !== 1 ? 's' : ''}</span>}
-                                                    </div>
-                                                    {/* Rows table */}
-                                                    <div className="overflow-x-auto">
-                                                        <table className="w-full text-sm">
-                                                            <thead className="bg-gray-50 dark:bg-gray-800 text-left">
-                                                                <tr>
-                                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Time</th>
-                                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Course Title</th>
-                                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Course Code</th>
-                                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Course Run ID</th>
-                                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Start Date</th>
-                                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">End Date</th>
-                                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">RA Code</th>
-                                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Trainer</th>
-                                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 text-center">Action</th>
-                                                                </tr>
-                                                            </thead>
-                                                            <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-                                                                {rows.map(log => (
-                                                                    <tr key={log.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
-                                                                        <td className="px-4 py-3 whitespace-nowrap text-gray-500 dark:text-gray-400 text-xs">
-                                                                            {new Date(log.created_at).toLocaleTimeString('en-SG', {
-                                                                                timeZone: 'Asia/Singapore',
-                                                                                hour: '2-digit', minute: '2-digit', hour12: false,
-                                                                            })}
-                                                                        </td>
-                                                                        <td className="px-4 py-3 max-w-[260px]">
-                                                                            <div className="font-medium text-gray-900 dark:text-gray-100 whitespace-normal break-words">{log.course_title || '—'}</div>
-                                                                        </td>
-                                                                        <td className="px-4 py-3 whitespace-nowrap">
-                                                                            {log.course_code
-                                                                                ? <span className="text-xs text-indigo-600 dark:text-indigo-400 font-mono bg-indigo-50 dark:bg-indigo-900/30 px-1.5 py-0.5 rounded">{log.course_code}</span>
-                                                                                : <span className="text-gray-400">—</span>}
-                                                                        </td>
-                                                                        <td className="px-4 py-3 whitespace-nowrap">
-                                                                            <span className="text-xs text-gray-500 dark:text-gray-400 font-mono bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded">
-                                                                                {log.course_run_id || '—'}
-                                                                            </span>
-                                                                        </td>
-                                                                        <td className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
-                                                                            {log.start_date || '—'}
-                                                                        </td>
-                                                                        <td className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
-                                                                            {log.end_date || '—'}
-                                                                        </td>
-                                                                        <td className="px-4 py-3 text-xs font-mono text-gray-500 dark:text-gray-400 whitespace-nowrap">
-                                                                            {log.ra_code || '—'}
-                                                                        </td>
-                                                                        <td className="px-4 py-3">
-                                                                            <div className="font-medium text-gray-800 dark:text-gray-200">{log.trainer_name || '—'}</div>
-                                                                            <div className="text-xs text-gray-400 font-mono">{log.trainer_email || ''}</div>
-                                                                            {log.error_message && (
-                                                                                <div className="text-xs text-red-500 mt-0.5">{log.error_message}</div>
-                                                                            )}
-                                                                        </td>
-                                                                        <td className="px-4 py-3 text-center">
-                                                                            {actionBadge(log.status === 'error' ? 'error' : log.action)}
-                                                                        </td>
-                                                                    </tr>
-                                                                ))}
-                                                            </tbody>
-                                                        </table>
-                                                    </div>
-                                                </div>
-                                            );
-                                        })}
+                                    <div className="border-t border-gray-100 dark:border-gray-700 overflow-x-auto">
+                                        <table className="w-full text-sm">
+                                            <thead className="bg-gray-50 dark:bg-gray-800 text-left">
+                                                <tr>
+                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Time</th>
+                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Course Title</th>
+                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Course Code</th>
+                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Course Run ID</th>
+                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Start Date</th>
+                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">End Date</th>
+                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">RA Code</th>
+                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Trainer</th>
+                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 text-center">Action</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                                                {rows.map(log => (
+                                                    <tr key={log.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                                                        <td className="px-4 py-3 whitespace-nowrap text-gray-500 dark:text-gray-400 text-xs">
+                                                            {new Date(log.created_at).toLocaleTimeString('en-SG', {
+                                                                timeZone: 'Asia/Singapore',
+                                                                hour: '2-digit', minute: '2-digit', hour12: false,
+                                                            })}
+                                                        </td>
+                                                        <td className="px-4 py-3 max-w-[260px]">
+                                                            <div className="font-medium text-gray-900 dark:text-gray-100 whitespace-normal break-words">{log.course_title || '—'}</div>
+                                                        </td>
+                                                        <td className="px-4 py-3 whitespace-nowrap">
+                                                            {log.course_code
+                                                                ? <span className="text-xs text-indigo-600 dark:text-indigo-400 font-mono bg-indigo-50 dark:bg-indigo-900/30 px-1.5 py-0.5 rounded">{log.course_code}</span>
+                                                                : <span className="text-gray-400">—</span>}
+                                                        </td>
+                                                        <td className="px-4 py-3 whitespace-nowrap">
+                                                            <span className="text-xs text-gray-500 dark:text-gray-400 font-mono bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded">
+                                                                {log.course_run_id || '—'}
+                                                            </span>
+                                                        </td>
+                                                        <td className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                                                            {log.start_date || '—'}
+                                                        </td>
+                                                        <td className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                                                            {log.end_date || '—'}
+                                                        </td>
+                                                        <td className="px-4 py-3 text-xs font-mono text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                                                            {log.ra_code || '—'}
+                                                        </td>
+                                                        <td className="px-4 py-3">
+                                                            <div className="font-medium text-gray-800 dark:text-gray-200">{log.trainer_name || '—'}</div>
+                                                            <div className="text-xs text-gray-400 font-mono">{log.trainer_email || ''}</div>
+                                                            {log.error_message && (
+                                                                <div className="text-xs text-red-500 mt-0.5">{log.error_message}</div>
+                                                            )}
+                                                        </td>
+                                                        <td className="px-4 py-3 text-center">
+                                                            {actionBadge(log.status === 'error' ? 'error' : log.action)}
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
                                     </div>
                                 )}
                             </Card>
