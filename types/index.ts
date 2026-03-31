@@ -237,6 +237,8 @@ export interface TrainingProviderProfile {
   companyLogoUrl: string;
   companyName: string;
   companyShortname?: string;
+  companyWebsite?: string;
+  companyEmail?: string;
 }
 
 export interface CurrentUserProfile {

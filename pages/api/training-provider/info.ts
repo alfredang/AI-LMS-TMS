@@ -34,6 +34,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         SELECT
           tp.id,
           tp.uen,
+          tp.company_website,
+          tp.company_email,
           tp.company_logo_url AS profile_picture_url,
           tp.company_name,
           tp.company_shortname,
@@ -116,6 +118,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
         const responseData = {
           uen: trainingProvider.uen || '',
+          companyWebsite: trainingProvider.company_website || '',
+          companyEmail: trainingProvider.company_email || '',
           companyLogoUrl: getAbsoluteImageUrl(trainingProvider.profile_picture_url),
           companyName: trainingProvider.company_name || 'Training Provider',
           companyShortname: trainingProvider.company_shortname || 'TP',
@@ -154,6 +158,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         SELECT
           au.id AS user_id,
           tp.uen,
+          tp.company_website,
+          tp.company_email,
           tp.company_logo_url AS profile_picture_url,
           tp.company_name,
           tp.company_shortname,
@@ -189,6 +195,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // Use default training provider info
       const responseData = {
         uen: '',
+        companyWebsite: '',
+        companyEmail: '',
         companyLogoUrl: trainingProviderUser.rows.length > 0 && trainingProviderUser.rows[0].profile_picture_url
           ? getAbsoluteImageUrl(trainingProviderUser.rows[0].profile_picture_url)
           : '/images/default-company-logo.png',
@@ -225,6 +233,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const responseData = {
       uen: trainingProvider.uen || '',
+      companyWebsite: trainingProvider.company_website || '',
+      companyEmail: trainingProvider.company_email || '',
       companyLogoUrl: getAbsoluteImageUrl(trainingProvider.profile_picture_url),
       companyName: trainingProvider.company_name || 'Training Provider',
       companyShortname: trainingProvider.company_shortname || 'TP',

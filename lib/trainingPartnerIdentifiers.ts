@@ -6,6 +6,8 @@ export interface TrainingPartnerIdentifiers {
   name: string;
   companyShortname: string;
   defaultPassword: string;
+  companyWebsite: string;
+  companyEmail: string;
 }
 
 let cached: TrainingPartnerIdentifiers | null = null;
@@ -20,7 +22,7 @@ export async function getTrainingPartnerIdentifiers(): Promise<TrainingPartnerId
 
   try {
     const result = await pool.query(
-      `SELECT uen, company_name, company_shortname, default_password FROM training_provider WHERE uen IS NOT NULL LIMIT 1`
+      `SELECT uen, company_name, company_shortname, default_password, company_website, company_email FROM training_provider WHERE uen IS NOT NULL LIMIT 1`
     );
 
     if (result.rows.length > 0) {
@@ -32,6 +34,8 @@ export async function getTrainingPartnerIdentifiers(): Promise<TrainingPartnerId
         name: row.company_name || process.env.TRAINING_PROVIDER_NAME || '',
         companyShortname: row.company_shortname || row.company_name || process.env.TRAINING_PROVIDER_NAME || '',
         defaultPassword: row.default_password || process.env.DEFAULT_PASSWORD || 'changeme',
+        companyWebsite: row.company_website || '',
+        companyEmail: row.company_email || '',
       };
       return cached;
     }
@@ -47,6 +51,8 @@ export async function getTrainingPartnerIdentifiers(): Promise<TrainingPartnerId
     name: process.env.TRAINING_PROVIDER_NAME || '',
     companyShortname: process.env.TRAINING_PROVIDER_NAME || '',
     defaultPassword: process.env.DEFAULT_PASSWORD || 'changeme',
+    companyWebsite: '',
+    companyEmail: '',
   };
   return cached;
 }

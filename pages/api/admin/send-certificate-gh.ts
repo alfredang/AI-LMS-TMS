@@ -125,10 +125,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         <br/>
         <p>Best regards,</p>
         <p><strong>${tp.name || 'Training Provider'}</strong></p>
-        <p style="font-size: 12px; color: #666;">
-          <a href="https://www.tertiarycourses.com.gh">www.tertiarycourses.com.gh</a> |
-          <a href="https://www.tertiaryinfotech.com">www.tertiaryinfotech.com</a>
-        </p>
+        ${tp.companyWebsite ? `<p style="font-size: 12px; color: #666;"><a href="${tp.companyWebsite}">${tp.companyWebsite.replace(/^https?:\/\//, '')}</a></p>` : ''}
       </div>
     `;
 
