@@ -82,7 +82,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const tp = tpResult.rows[0];
     const { email_user, company_email, contact_person_name, google_client_id, google_client_secret, google_refresh_token } = tp;
-    const replyToEmail = tp.support_email || company_email || email_user;
+
+    // Safely fetch support_email (column may not exist yet)
+    let supportEmail = '';
+    try {
+      const seResult = await pool.query('SELECT support_email FROM training_provider LIMIT 1');
+      if (seResult.rows.length > 0 && seResult.rows[0].support_email) supportEmail = seResult.rows[0].support_email;
+    } catch (e) { /* column doesn't exist yet */ }
+    const replyToEmail = supportEmail || company_email || email_user;
     const senderName = contact_person_name || '';
 
     if (!email_user || !google_client_id || !google_client_secret || !google_refresh_token) {
