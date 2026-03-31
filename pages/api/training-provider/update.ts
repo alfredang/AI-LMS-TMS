@@ -586,7 +586,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         profileData.colorScheme || '#3B82F6',
         trainingProviderId,
         filePaths.companyLogoUrl || null,
-        profileData.contactPerson?.email || profileData.companyEmail || '',
+        profileData.companyEmail || '',
         profileData.companyTel || '',
         profileData.companyWebsite || ''
       ];
@@ -676,6 +676,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // Magento
       await autoCreateAndUpdate([
         { name: 'magento_backend_url', value: profileData.integrations?.magentoBackendUrl || null },
+      ]);
+      // Support email (separate from company_email)
+      await autoCreateAndUpdate([
+        { name: 'support_email', value: profileData.contactPerson?.email || null },
       ]);
 
       // Handle API keys - delete existing and insert new ones (with selected model)

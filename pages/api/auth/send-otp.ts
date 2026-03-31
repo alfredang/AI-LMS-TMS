@@ -76,7 +76,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse<SendOtpResponse
 
     const tp = tpResult.rows[0];
     const { email_user, company_email, google_client_id, google_client_secret, google_refresh_token, company_name } = tp;
-    const replyToEmail = company_email || email_user;
+    const replyToEmail = tp.support_email || company_email || email_user;
 
     if (!email_user || !google_client_id || !google_client_secret || !google_refresh_token) {
       console.error('❌ Gmail OAuth not configured in Company Settings');

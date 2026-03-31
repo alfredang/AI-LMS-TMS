@@ -266,6 +266,7 @@ async function getTrainingProviderProfile(userId: string) {
         tp.uen,
         tp.company_address,
         tp.company_email,
+        tp.support_email,
         tp.company_tel,
         tp.company_website,
         tp.contact_person_name,
@@ -333,6 +334,7 @@ async function getTrainingProviderProfile(userId: string) {
           tp.uen,
           tp.company_address,
           tp.company_email,
+        tp.support_email,
           tp.company_tel,
           tp.company_website,
           tp.contact_person_name,
@@ -398,6 +400,7 @@ async function getTrainingProviderProfile(userId: string) {
           tp.uen,
           tp.company_address,
           tp.company_email,
+        tp.support_email,
           tp.company_tel,
           tp.company_website,
           tp.contact_person_name,
@@ -532,7 +535,7 @@ async function getTrainingProviderProfile(userId: string) {
     companyLogoUrl: profileData.company_logo || profileData.profile_image,
     contactPerson: {
       name: profileData.contact_person_name || '',
-      email: profileData.company_email || '',
+      email: profileData.support_email || profileData.company_email || '',
       tel: profileData.telephone || ''
     },
     apiKeys: apiKeys,

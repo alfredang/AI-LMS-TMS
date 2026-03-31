@@ -32,7 +32,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const tp = result.rows[0];
     const { email_user, company_email, google_client_id, google_client_secret, google_refresh_token, company_name } = tp;
-    const replyToEmail = company_email || email_user;
+    const replyToEmail = tp.support_email || company_email || email_user;
     const senderName = tp.contact_person_name || '';
 
     // Get contact person email from app_user table (linked via training_provider_member or provider_admin_user)
