@@ -22,11 +22,11 @@ const DocumentsView: React.FC = () => {
             </div>
             <h4 className="text-lg font-semibold mb-2">Certificate Template</h4>
             <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
-              Standard certificate template.
+              Standard certificate template for n8n Automation.
             </p>
             <div className="mt-auto pt-4 border-t border-gray-100 dark:border-gray-800 space-y-3">
               <a 
-                href="/certificate_template/Certificate Template.pdf"
+                href="/certificate_template/Certificate Template (n8n Automation).pdf"
                 download
                 target="_blank"
                 rel="noreferrer"
@@ -36,7 +36,7 @@ const DocumentsView: React.FC = () => {
                 Download Template
               </a>
               <a 
-                href="/certificate_template/Certificate Template Blank.pdf"
+                href="/certificate_template/Certificate Template (n8n Automation) Blank.pdf"
                 download
                 target="_blank"
                 rel="noreferrer"

@@ -17,7 +17,7 @@ import { createSSGEnrolmentAPI } from '../../../lib/ssg/api/enrolment-api';
  *
  * What POST does:
  *   1. Finds enrollments where enrolment_id IS NOT NULL but raw_data IS NULL
- *   2. For each, fetches enrolment details using the native SSG API (4s between calls)
+ *   2. For each, calls the n8n View Enrolment webhook (4s between calls)
  *   3. On success (status 200), updates the enrollment row with the fetched data
  *   4. On 403/error, marks as skipped and continues
  *   5. Returns a full summary of results

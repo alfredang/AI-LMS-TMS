@@ -48,11 +48,11 @@ const friendlyErrorMessages: Record<string, string> = {
     'Service Unavailable': 'The service is temporarily unavailable. Please try again later.',
 };
 
-// Extract a human-readable error message from any SSG API error shape
+// Extract a human-readable error message from any n8n/SSG error shape
 const extractErrorMessage = (err: any): string => {
     if (!err) return 'Something went wrong. Please try again later.';
 
-    // Try to parse nested JSON from API AxiosError message (format: "STATUS - \"{ JSON }\"")
+    // Try to parse nested JSON from n8n AxiosError message (format: "STATUS - \"{ JSON }\"")
     const msg = err.message || '';
     const jsonMatch = msg.match(/^\d+\s*-\s*"([\s\S]*)"$/);
     if (jsonMatch) {

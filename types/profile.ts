@@ -258,7 +258,8 @@ export interface TrainingProviderProfile extends BaseProfile {
     tertiaryFmsUrl?: string;
     tertiaryMmsUrl?: string;
     tertiaryTpmsUrl?: string;
-
+    n8nHost1Url?: string;
+    n8nHost2Url?: string;
     magentoBackendUrl?: string;
   };
   adminSettings: {

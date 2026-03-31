@@ -2,12 +2,12 @@
 
 ## Overview
 
-The bulk enrolment system allows administrators to upload an Excel file with multiple enrolment records, which are then processed sequentially and stored in the database.
+The bulk enrolment system allows administrators to upload an Excel file with multiple enrolment records, which are then processed through an n8n webhook and stored in the database.
 
 ## Architecture
 
 ```
-Excel Upload → Frontend (React) → Next.js API → SSG API → PostgreSQL
+Excel Upload → Frontend (React) → n8n Webhook → SSG API → Database API → PostgreSQL
 ```
 
 ## Features Implemented
@@ -77,13 +77,63 @@ Excel Upload → Frontend (React) → Next.js API → SSG API → PostgreSQL
 }
 ```
 
-## Backend Processing Flow
+## n8n Webhook Integration
 
-The backend endpoint `/api/enrolments/bulk-create` receives the processed Excel records and performs the following for each record:
+### Current Workflow
 
-1. **Submit to SSG API (external)**
-2. **Call database inserts**
-3. **Return aggregated results** to frontend
+The n8n webhook (`https://n8n.srv1231536.hstgr.cloud/webhook/f19790ae-0ba2-4edf-9c3e-87d1dec1d458`) should be updated to:
+
+1. **Receive Excel data** from frontend
+2. **For each enrolment record:**
+   - Submit to SSG API (external)
+   - Call `/api/enrolments/bulk-create` (our database API)
+3. **Return results** to frontend
+
+### Recommended n8n Workflow Nodes
+
+```
+1. Webhook Trigger
+   ↓
+2. Loop Over Items (for each enrolment)
+   ↓
+3. SSG API Request (HTTP Request)
+   ↓
+4. Database API Request (HTTP Request to /api/enrolments/bulk-create)
+   ↓
+5. Aggregate Results
+   ↓
+6. Return Response
+```
+
+### Example n8n HTTP Request Node Configuration
+
+**Node: Call Database API**
+- Method: POST
+- URL: `${process.env.APP_BASE_URL}/api/enrolments/bulk-create`
+- Headers:
+  ```json
+  {
+    "Content-Type": "application/json"
+  }
+  ```
+- Body (JSON):
+  ```json
+  {
+    "enrolment": {
+      "traineeEmail": "{{ $json.traineeEmail }}",
+      "traineeName": "{{ $json.traineeName }}",
+      "traineeNric": "{{ $json.traineeNric }}",
+      "courseCode": "{{ $json.courseCode }}",
+      "courseTitle": "{{ $json.courseTitle }}",
+      "courseRunId": "{{ $json.courseRunId }}",
+      "courseReferenceNumber": "{{ $json.courseReferenceNumber }}",
+      "sponsorshipType": "{{ $json.sponsorshipType }}",
+      "enrolmentDate": "{{ $json.enrolmentDate }}",
+      "enrolmentStatus": "{{ $json.enrolmentStatus }}",
+      "enrolmentId": "{{ $json.enrolmentId }}"
+    }
+  }
+  ```
 
 ## Database Schema
 
