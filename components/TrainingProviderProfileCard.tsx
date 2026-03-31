@@ -828,7 +828,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
 
                 <div className="border-t my-6"></div>
                 <button type="button" onClick={() => setIsContactOpen(prev => !prev)} className="w-full flex items-center justify-between group">
-                    <h2 className="text-xl font-bold">Sender Email Setting</h2>
+                    <h2 className="text-xl font-bold">Company Support Details</h2>
                     <Icon name={IconName.ChevronDown} className={`w-5 h-5 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 transition-transform duration-200 flex-shrink-0 ml-4 ${isContactOpen ? 'rotate-180' : ''}`} />
                 </button>
                 {isContactOpen && (isEditing ? (
