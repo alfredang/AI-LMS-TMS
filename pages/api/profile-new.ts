@@ -526,7 +526,7 @@ async function getTrainingProviderProfile(userId: string) {
     companyLogoUrl: profileData.company_logo || profileData.profile_image,
     contactPerson: {
       name: profileData.contact_person_name || '',
-      email: profileData.email || '',
+      email: profileData.company_email || '',
       tel: profileData.telephone || ''
     },
     apiKeys: apiKeys,

@@ -484,14 +484,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const userUpdateResult = await pool.query(`
         UPDATE app_user
         SET full_name = COALESCE($1, full_name),
-            email = COALESCE($2, email),
-            password = COALESCE($3, password),
+            password = COALESCE($2, password),
             updated_at = NOW()
-        WHERE id = $4
+        WHERE id = $3
         RETURNING *
       `, [
         profileData.name || profileData.companyName,
-        profileData.contactPerson?.email || profileData.email,
         profileData.password,
         userId
       ]);
@@ -588,7 +586,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         profileData.colorScheme || '#3B82F6',
         trainingProviderId,
         filePaths.companyLogoUrl || null,
-        profileData.companyEmail || '',
+        profileData.contactPerson?.email || profileData.companyEmail || '',
         profileData.companyTel || '',
         profileData.companyWebsite || ''
       ];
