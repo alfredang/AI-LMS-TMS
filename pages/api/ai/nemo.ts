@@ -1,6 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import OpenAI from 'openai';
 import pool from '../../../lib/db';
+import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdentifiers';
 
 async function getMiniMaxKey(): Promise<{ apiKey: string; model: string }> {
     // First try from training_provider_api table
@@ -32,7 +33,8 @@ async function getMiniMaxKey(): Promise<{ apiKey: string; model: string }> {
     throw new Error('No MiniMax API key configured. Add one in Company Settings or set MINIMAX_API_KEY env var.');
 }
 
-const NEMO_SYSTEM_PROMPT = `You are Nemo, an AI operations assistant for Tertiary Infotech Academy's LMS/TMS platform.
+function getNemoSystemPrompt(companyName: string) {
+  return `You are Nemo, an AI operations assistant for ${companyName}'s LMS/TMS platform.
 You help admins and training providers manage courses, trainers, learners, enrollments, and class operations.
 
 You have access to the following tools to perform operations on the platform. Use them when the user asks you to take action.
@@ -46,6 +48,7 @@ When a user asks you to perform a destructive action (delete, remove, cancel), a
 Be concise, professional, and proactive in suggesting next steps.
 If you don't know something, say so honestly.
 Format your responses clearly — use bullet points for lists, bold for emphasis.`;
+}
 
 // Tool definitions for Nemo (OpenAI function calling format)
 const NEMO_TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
@@ -338,11 +341,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }
 
         const { apiKey, model } = await getMiniMaxKey();
+        const tp = await getTrainingPartnerIdentifiers();
         const client = new OpenAI({ apiKey, baseURL: 'https://api.minimax.io/v1' });
 
         // Convert messages to OpenAI format
         const openaiMessages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
-            { role: 'system', content: systemPrompt || NEMO_SYSTEM_PROMPT },
+            { role: 'system', content: systemPrompt || getNemoSystemPrompt(tp.companyShortname || tp.name || 'Training Provider') },
             ...messages.map((m: any) => ({
                 role: (m.role === 'model' ? 'assistant' : m.role) as 'user' | 'assistant',
                 content: m.content || m.text,

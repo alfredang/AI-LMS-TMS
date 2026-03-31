@@ -3,6 +3,7 @@ import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Icon, IconName } from '../ui/Icon';
 import { getApiUrl } from '@/lib/urlHelpers';
+import { useLms } from '@contexts/LmsContext';
 
 const DEFAULT_SUBJECT = '{COMPANY_SHORT_NAME} LMS - Verification Code';
 
@@ -20,6 +21,7 @@ Warm regards
 {COMPANY_SHORT_NAME}`;
 
 const OtpEmailTemplateView: React.FC = () => {
+  const { trainingProviderProfile } = useLms();
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
   const [originalSubject, setOriginalSubject] = useState('');
@@ -103,15 +105,17 @@ const OtpEmailTemplateView: React.FC = () => {
   ];
 
   // Preview: replace variables with sample values
+  const companyShortName = trainingProviderProfile?.companyShortname || 'Training Provider';
+
   const previewSubject = subject
-    .replace(/\{COMPANY_SHORT_NAME\}/g, 'Tertiary Infotech Academy')
+    .replace(/\{COMPANY_SHORT_NAME\}/g, companyShortName)
     .replace(/\{OTP\}/g, '123456')
     .replace(/\{SITE_URL\}/g, 'https://ai-lms-tms.tertiaryinfo.tech/')
     .replace(/\{EXPIRY_MINUTES\}/g, '30')
     .replace(/\{USER_EMAIL\}/g, 'user@example.com');
 
   const previewBody = body
-    .replace(/\{COMPANY_SHORT_NAME\}/g, 'Tertiary Infotech Academy')
+    .replace(/\{COMPANY_SHORT_NAME\}/g, companyShortName)
     .replace(/\{OTP\}/g, '123456')
     .replace(/\{SITE_URL\}/g, 'https://ai-lms-tms.tertiaryinfo.tech/')
     .replace(/\{EXPIRY_MINUTES\}/g, '30')

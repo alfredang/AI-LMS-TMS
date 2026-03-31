@@ -5,7 +5,8 @@ import { Icon, IconName } from './ui/Icon';
 import { ChatMessage } from '@app-types';
 import { getApiUrl } from '@/lib/urlHelpers';
 
-const NEMO_SYSTEM_PROMPT = `You are Nemo, an AI operations assistant for Tertiary Infotech Academy's LMS/TMS platform.
+function getNemoSystemPrompt(companyName: string) {
+  return `You are Nemo, an AI operations assistant for ${companyName}'s LMS/TMS platform.
 You help admins and training providers manage courses, trainers, learners, enrollments, and class operations.
 
 Key capabilities:
@@ -19,9 +20,11 @@ Key capabilities:
 When a user asks you to perform an action (assign trainer, enroll learner, etc.), explain what you'll do and confirm before executing.
 Be concise, professional, and proactive in suggesting next steps.
 If you don't know something, say so honestly.`;
+}
 
 const AiChatbot: React.FC = () => {
-    const { isChatOpen, toggleChat, resetInAppChat } = useLms();
+    const { isChatOpen, toggleChat, resetInAppChat, trainingProviderProfile } = useLms();
+    const NEMO_SYSTEM_PROMPT = getNemoSystemPrompt(trainingProviderProfile?.companyShortname || trainingProviderProfile?.companyName || 'Training Provider');
     const [messages, setMessages] = useState<ChatMessage[]>([
         { id: 'initial', role: 'model', text: 'Hello! I\'m Nemo, your AI operations assistant. I can help you manage courses, trainers, learners, and more. What would you like to do?' }
     ]);

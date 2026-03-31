@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { google } from 'googleapis';
 import pool from '@lib/db';
+import { getTrainingPartnerIdentifiers } from '@lib/trainingPartnerIdentifiers';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -8,6 +9,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   const { studentName, studentEmail, courseName, courseDates, userId, ccEmails } = req.body;
+  const tp = await getTrainingPartnerIdentifiers();
 
   // Parse CC list from request
   const ccList: string[] = typeof ccEmails === 'string' && ccEmails.trim()
@@ -117,7 +119,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         <p>Please find your Certificate of Achievement attached to this email.</p>
         <br/>
         <p>Best regards,</p>
-        <p><strong>Tertiary Infotech Pte Ltd</strong></p>
+        <p><strong>${tp.name || 'Training Provider'}</strong></p>
         <p style="font-size: 12px; color: #666;">
           <a href="https://www.tertiarycourses.com.sg">www.tertiarycourses.com.sg</a> |
           <a href="https://www.tertiaryinfotech.com">www.tertiaryinfotech.com</a>

@@ -2,6 +2,7 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import { cors } from '../../../lib/cors';
 import bcrypt from 'bcryptjs';
 import pool from '../../../lib/db';
+import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdentifiers';
 
 
 interface LoginRequest {
@@ -42,6 +43,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse<LoginResponse>)
   }
 
   const { email, password, otp, loginType }: LoginRequest = req.body;
+  const tp = await getTrainingPartnerIdentifiers();
 
   if (!email || !loginType) {
     return res.status(400).json({
@@ -109,7 +111,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse<LoginResponse>)
         console.log(`❌ Account disabled for user: ${email}`);
         return res.status(403).json({
           success: false,
-          error: 'Your account has been disabled. Please contact your training provider at enquiry@tertiaryinfotech.com to request reactivation.'
+          error: `Your account has been disabled. Please contact ${tp.name || 'your training provider'} to request reactivation.`
         });
       }
 
@@ -245,7 +247,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse<LoginResponse>)
         console.log(`❌ Account disabled for user: ${email}`);
         return res.status(403).json({
           success: false,
-          error: 'Your account has been disabled. Please contact your training provider at enquiry@tertiaryinfotech.com to request reactivation.'
+          error: `Your account has been disabled. Please contact ${tp.name || 'your training provider'} to request reactivation.`
         });
       }
     }

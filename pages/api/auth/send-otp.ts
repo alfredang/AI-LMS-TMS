@@ -93,7 +93,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse<SendOtpResponse
 
     const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
 
-    const companyShortName = tp.company_shortname || company_name || 'Tertiary Infotech Academy';
+    const companyShortName = tp.company_shortname || company_name || 'Training Provider';
     const siteUrl = 'https://ai-lms-tms.tertiaryinfo.tech/';
 
     // Helper to replace template variables

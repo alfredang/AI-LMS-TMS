@@ -21,7 +21,8 @@ interface HealthStatus {
 }
 
 const Home: NextPage = () => {
-  const { role, isAuthenticated, isLoading, currentUser } = useLms();
+  const { role, isAuthenticated, isLoading, currentUser, trainingProviderProfile } = useLms();
+  const appTitle = trainingProviderProfile?.companyShortname || 'LMS TMS';
   const [healthStatus, setHealthStatus] = useState<HealthStatus | null>(null)
   const [healthLoading, setHealthLoading] = useState(true)
 
@@ -55,7 +56,7 @@ const Home: NextPage = () => {
     return (
       <>
         <Head>
-          <title>Tertiary Infotech Academy LMS TMS - Login</title>
+          <title>{appTitle} LMS TMS - Login</title>
           <meta name="description" content="Login to your learning management system" />
           <link rel="icon" href="/favicon.ico" />
         </Head>
@@ -74,7 +75,7 @@ const Home: NextPage = () => {
     return (
       <>
         <Head>
-          <title>Tertiary Infotech Academy LMS TMS</title>
+          <title>{appTitle} LMS TMS</title>
           <meta name="description" content="Your personal learning dashboard" />
           <link rel="icon" href="/favicon.ico" />
         </Head>
@@ -87,7 +88,7 @@ const Home: NextPage = () => {
     return (
       <>
         <Head>
-          <title>Tertiary Infotech Academy LMS TMS - Trainer Dashboard</title>
+          <title>{appTitle} LMS TMS - Trainer Dashboard</title>
           <meta name="description" content="Trainer management dashboard" />
           <link rel="icon" href="/favicon.ico" />
         </Head>
@@ -100,7 +101,7 @@ const Home: NextPage = () => {
     return (
       <>
         <Head>
-          <title>Tertiary Infotech Academy LMS TMS - Developer Dashboard</title>
+          <title>{appTitle} LMS TMS - Developer Dashboard</title>
           <meta name="description" content="Developer dashboard and profile" />
           <link rel="icon" href="/favicon.ico" />
         </Head>
@@ -113,7 +114,7 @@ const Home: NextPage = () => {
     return (
       <>
         <Head>
-          <title>Tertiary Infotech Academy LMS TMS - Admin Dashboard</title>
+          <title>{appTitle} LMS TMS - Admin Dashboard</title>
           <meta name="description" content="Admin management dashboard" />
           <link rel="icon" href="/favicon.ico" />
         </Head>
@@ -126,7 +127,7 @@ const Home: NextPage = () => {
     return (
       <>
         <Head>
-          <title>Tertiary Infotech Academy LMS TMS - Finance Dashboard</title>
+          <title>{appTitle} LMS TMS - Finance Dashboard</title>
           <meta name="description" content="Finance management dashboard" />
           <link rel="icon" href="/favicon.ico" />
         </Head>
@@ -139,7 +140,7 @@ const Home: NextPage = () => {
     return (
       <>
         <Head>
-          <title>Tertiary Infotech Academy LMS TMS - Training Provider Dashboard</title>
+          <title>{appTitle} LMS TMS - Training Provider Dashboard</title>
           <meta name="description" content="Training provider management dashboard" />
           <link rel="icon" href="/favicon.ico" />
         </Head>
@@ -152,7 +153,7 @@ const Home: NextPage = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       <Head>
-        <title>Tertiary Infotech Academy LMS TMS - Dashboard</title>
+        <title>{appTitle} LMS TMS - Dashboard</title>
         <meta name="description" content="Learning Management System Dashboard" />
         <link rel="icon" href="/favicon.ico" />
       </Head>

@@ -660,6 +660,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
               <button onClick={() => setShowAcceptableUsePolicy(true)} className="hover:underline cursor-pointer">Acceptable Use Policy</button>
               <button onClick={() => { setShowFeedback(true); setFeedbackStatus(null); setFeedbackForm({ name: '', email: '', tel: '', message: '' }); }} className="hover:underline cursor-pointer">Feedback</button>
             </div>
+            {/* TODO: Replace hardcoded URL with a website field from training provider profile when available */}
             <p className="mt-3">
               Browse our WSQ courses at{' '}
               <a href="https://www.tertiarycourses.com.sg/" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">

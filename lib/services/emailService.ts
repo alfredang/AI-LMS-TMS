@@ -1,4 +1,5 @@
 import nodemailer from 'nodemailer';
+import { getTrainingPartnerIdentifiers } from '../trainingPartnerIdentifiers';
 
 // Email configuration - using environment variables
 // For production, configure these in .env:
@@ -92,28 +93,31 @@ class EmailService {
   }
 
   async sendOtpEmail(email: string, otp: string, expiryMinutes: number = 10): Promise<{ success: boolean; error?: string; messageId?: string }> {
-    const subject = 'Tertiary Infotech LMS - Verification Code';
+    const tp = await getTrainingPartnerIdentifiers();
+    const companyName = tp.companyShortname || tp.name || 'Training Provider';
+
+    const subject = `${companyName} LMS - Verification Code`;
     const text = `Hi,
 
-Your OTP is ${otp}. 
+Your OTP is ${otp}.
 
-Please use this to login to your account on the Tertiary Infotech Academy AI LMS TMS https://ai-lms-tms.tertiaryinfo.tech/ within ${expiryMinutes} minutes. 
+Please use this to login to your account on the ${companyName} AI LMS TMS https://ai-lms-tms.tertiaryinfo.tech/ within ${expiryMinutes} minutes.
 
 If your OTP does not work, please request for a new OTP on the login page.
 
-If you did not make this request, you may ignore this email. Do not share this OTP with anyone. This is strictly confidential and to be used by you only. 
+If you did not make this request, you may ignore this email. Do not share this OTP with anyone. This is strictly confidential and to be used by you only.
 
 Warm regards
-Tertiary Infotech Academy`;
+${companyName}`;
 
     const html = `
       <div style="font-family: Arial, sans-serif; font-size: 14px; color: #333; line-height: 1.6;">
         <p>Hi,</p>
         <p>Your OTP is <strong>${otp}</strong>.</p>
-        <p>Please use this to login to your account on the Tertiary Infotech Academy AI LMS TMS <a href="https://ai-lms-tms.tertiaryinfo.tech/">https://ai-lms-tms.tertiaryinfo.tech/</a> within ${expiryMinutes} minutes.</p>
+        <p>Please use this to login to your account on the ${companyName} AI LMS TMS <a href="https://ai-lms-tms.tertiaryinfo.tech/">https://ai-lms-tms.tertiaryinfo.tech/</a> within ${expiryMinutes} minutes.</p>
         <p>If your OTP does not work, please request for a new OTP on the login page.</p>
         <p>If you did not make this request, you may ignore this email. Do not share this OTP with anyone. This is strictly confidential and to be used by you only.</p>
-        <p>Warm regards<br>Tertiary Infotech Academy</p>
+        <p>Warm regards<br>${companyName}</p>
       </div>
     `;
 
