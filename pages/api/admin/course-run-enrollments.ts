@@ -15,9 +15,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     const result = await pool.query(
-      `SELECT au.id AS user_id, au.full_name, au.email
+      `SELECT au.id AS user_id, au.full_name, au.email, lp.nric
        FROM enrollment e
        JOIN app_user au ON au.id = e.user_id
+       LEFT JOIN learner_profile lp ON lp.user_id = au.id
        WHERE e.course_run_id = $1
        ORDER BY au.full_name ASC`,
       [courseRunId]

@@ -193,6 +193,12 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
   const [enrolmentError, setEnrolmentError]            = useState<string | null>(null);
   const [showEnrolNric, setShowEnrolNric]              = useState(false);
   const [showEnrolContact, setShowEnrolContact]        = useState(false);
+
+  // Local admin manual assignments
+  const [localAssignments, setLocalAssignments]        = useState<any[]>([]);
+  const [isLoadingLocalAssignments, setIsLoadingLocalAssignments] = useState(false);
+  const [showAssignedNric, setShowAssignedNric]        = useState(false);
+
   const [learnerAccountMap, setLearnerAccountMap]      = useState<Record<string, 'exists' | 'missing' | 'creating' | 'done' | 'error'>>({});
   const [attendanceSummary, setAttendanceSummary]      = useState<{ totalSessions: number; byNric: Record<string, number> } | null>(null);
   const [loadingAttendanceSummary, setLoadingAttendanceSummary] = useState(false);
@@ -260,6 +266,7 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
     setAttendanceCourseRun(null);
     setEnrolmentRecords([]);
     setEnrolmentError(null);
+    setLocalAssignments([]);
     setAttendanceSuccess(null);
     setAttendanceError(null);
     setDigitalAttendanceId('');
@@ -291,6 +298,7 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
       if (course.courseRunId) {
         fetchManualSessions(course.courseRunId);
         fetchAttendanceSummary(course.courseRunId);
+        fetchLocalAssignments(course.courseRunId);
       }
     } catch (err) {
       setSearchError(err instanceof Error ? err.message : 'Lookup failed');
@@ -772,6 +780,21 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
     }
   };
 
+  const fetchLocalAssignments = async (courseRunId: string) => {
+    setIsLoadingLocalAssignments(true);
+    setLocalAssignments([]);
+    try {
+      const res = await fetch(`/api/admin/course-run-enrollments?courseRunId=${encodeURIComponent(courseRunId)}`);
+      const json = await res.json();
+      if (json.success) {
+        setLocalAssignments(json.data);
+      }
+    } catch { /* silent */ }
+    finally {
+      setIsLoadingLocalAssignments(false);
+    }
+  };
+
   const checkLearnerAccounts = async (records: any[], courseOverride?: typeof selectedCourse) => {
     const emails: string[] = records
       .filter((item: any) => {
@@ -958,6 +981,7 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
       setAttendanceCourseRun(null);
       setEnrolmentRecords([]);
       setEnrolmentError(null);
+      setLocalAssignments([]);
       setAttendanceSuccess(null);
       setAttendanceError(null);
       setDigitalIdError(null);
@@ -983,10 +1007,49 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
       if (course.courseRunId) {
         fetchManualSessions(course.courseRunId);
         fetchAttendanceSummary(course.courseRunId);
+        fetchLocalAssignments(course.courseRunId);
       }
       setPendingAttendanceCourseRunId(null);
     }
   }, [pendingAttendanceCourseRunId, courses, coursesLoading]);
+
+  const assignedLearners = React.useMemo(() => {
+    const list: Array<{ nric: string, fullName: string, email: string, source: string }> = [];
+    const seen = new Set<string>();
+
+    // 1. Add SSG Confirmed
+    for (const item of enrolmentRecords) {
+      const enrol = item?.enrolment ?? item;
+      const status = (enrol?.status || enrol?.enrolmentStatus || '').toLowerCase();
+      if (status !== 'confirmed') continue;
+
+      const trainee = enrol?.trainee ?? {};
+      const nric = (trainee?.id || trainee?.nric || enrol?.nric || '').trim();
+      const fullName = (trainee?.fullName || trainee?.name || '').trim();
+      const email = (trainee?.email?.full || trainee?.email || '').trim();
+
+      const key = (nric || email).toLowerCase();
+      if (key && !seen.has(key)) {
+        seen.add(key);
+        list.push({ nric, fullName, email, source: 'SSG (Confirmed)' });
+      }
+    }
+
+    // 2. Add Local Admin Assignments
+    for (const loc of localAssignments) {
+      const nric = (loc.nric || '').trim();
+      const fullName = (loc.full_name || '').trim();
+      const email = (loc.email || '').trim();
+
+      const key = (nric || email).toLowerCase();
+      if (key && !seen.has(key)) {
+        seen.add(key);
+        list.push({ nric, fullName, email, source: 'Admin Assignment' });
+      }
+    }
+
+    return list.sort((a, b) => a.fullName.localeCompare(b.fullName));
+  }, [enrolmentRecords, localAssignments]);
 
   return (
     <div className="space-y-5">
@@ -1080,6 +1143,7 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
                       setAttendanceCourseRun(null);
                       setEnrolmentRecords([]);
                       setEnrolmentError(null);
+                      setLocalAssignments([]);
                       setAttendanceSuccess(null);
                       setAttendanceError(null);
                       setDigitalIdError(null);
@@ -1102,7 +1166,10 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
                         handleFetchSessions(course.courseRunCode, course.courseCode, course);
                         fetchEnrolments(course.courseRunCode, course);
                       }
-                      if (val) fetchManualSessions(val);
+                      if (val) {
+                        fetchManualSessions(val);
+                        fetchLocalAssignments(val);
+                      }
                     }}
                     className="input-themed w-full border rounded px-3 py-2 text-sm pr-8 appearance-none focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
                     disabled={isFetchingSessions}
@@ -1417,6 +1484,77 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
               <tr>
                 <td colSpan={7} className="px-3 py-10 text-center text-sm text-muted italic">
                   Select a class and session to load attendance.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {/* ── Assigned Learners ── */}
+      <div className="bg-surface rounded-lg border border-default shadow-sm mb-5">
+        <SectionHeader
+          title="Assigned Learners"
+          count={assignedLearners.length > 0 ? assignedLearners.length : undefined}
+          loading={isLoadingEnrolments || isLoadingLocalAssignments}
+          info="Every learner currently granted access to the courseware materials. Consolidates both SSG Confirmed enrolments and Local Administrative Assignments."
+          right={
+            selectedCourse?.courseRunId ? (
+              <button
+                onClick={() => {
+                  fetchLocalAssignments(selectedCourse.courseRunId!);
+                  if (selectedCourse?.courseRunCode) fetchEnrolments(selectedCourse.courseRunCode!, selectedCourse);
+                }}
+                disabled={isLoadingEnrolments || isLoadingLocalAssignments}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-surface-elevated border border-default text-on-surface-secondary rounded text-xs font-medium hover:bg-surface-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <RefreshIcon className="w-3.5 h-3.5" />
+                Refresh List
+              </button>
+            ) : undefined
+          }
+        />
+        <table className="w-full text-left border-collapse">
+          <thead>
+            <tr className="border-b border-default bg-surface/50">
+              <th className="px-3 py-2 text-xs font-semibold text-on-surface border-r border-default whitespace-nowrap w-12 text-center">No.</th>
+              <th className="px-3 py-2 text-xs font-semibold text-on-surface border-r border-default w-[30%]">Name</th>
+              <th className="px-3 py-2 text-xs font-semibold text-on-surface border-r border-default w-[20%]">NRIC</th>
+              <th className="px-3 py-2 text-xs font-semibold text-on-surface border-r border-default w-[25%]">Email</th>
+              <th className="px-3 py-2 text-xs font-semibold text-on-surface border-r border-default w-[25%]">Source</th>
+            </tr>
+          </thead>
+          <tbody className="text-sm divide-y divide-default">
+            {assignedLearners.length > 0 ? (
+              assignedLearners.map((learner, idx) => (
+                <tr key={`${learner.nric}-${learner.email}-${idx}`} className="hover:bg-surface-hover/30 transition-colors">
+                  <td className="px-3 py-2 border-r border-default text-center text-muted">{idx + 1}</td>
+                  <td className="px-3 py-2 border-r border-default font-medium text-on-surface">{learner.fullName || '-'}</td>
+                  <td className="px-3 py-2 border-r border-default text-muted">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-mono text-xs">{showAssignedNric ? learner.nric : (learner.nric ? '●●●●●' + learner.nric.slice(-4) : '-')}</span>
+                      {learner.nric && (
+                        <button
+                          onClick={() => setShowAssignedNric(!showAssignedNric)}
+                          className="text-[10px] text-primary hover:underline focus:outline-none"
+                        >
+                          {showAssignedNric ? 'Hide' : 'Show'}
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-3 py-2 border-r border-default text-muted truncate max-w-[200px]" title={learner.email || ''}>{learner.email || '-'}</td>
+                  <td className="px-3 py-2 border-r border-default text-muted">
+                    <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium ${learner.source.includes('SSG') ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-blue-500/10 text-blue-600 dark:text-blue-400'}`}>
+                      {learner.source}
+                    </span>
+                  </td>
+                </tr>
+              ))
+            ) : (
+              <tr>
+                <td colSpan={5} className="px-3 py-10 text-center text-sm text-muted italic">
+                  No assigned learners found.
                 </td>
               </tr>
             )}

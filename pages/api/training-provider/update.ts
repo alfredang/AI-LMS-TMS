@@ -664,11 +664,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         { name: 'tertiary_mms_url', value: profileData.integrations?.tertiaryMmsUrl || null },
         { name: 'tertiary_tpms_url', value: profileData.integrations?.tertiaryTpmsUrl || null },
       ]);
-      // n8n
-      await autoCreateAndUpdate([
-        { name: 'n8n_host1_url', value: profileData.integrations?.n8nHost1Url || null },
-        { name: 'n8n_host2_url', value: profileData.integrations?.n8nHost2Url || null },
-      ]);
+
       // Magento
       await autoCreateAndUpdate([
         { name: 'magento_backend_url', value: profileData.integrations?.magentoBackendUrl || null },
