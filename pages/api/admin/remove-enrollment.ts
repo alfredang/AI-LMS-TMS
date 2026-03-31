@@ -2,7 +2,7 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 
 // POST { email, courseRunId }
-// Removes a learner from a course run if their enrolment is cancelled.
+// Removes a learner from a course run.
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ success: false, message: 'Method not allowed' });
@@ -25,7 +25,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     );
 
     if (userResult.rows.length === 0) {
-      // No account found — nothing to remove
       await client.query('COMMIT');
       return res.status(200).json({ success: true, message: 'No account found, nothing to remove.' });
     }

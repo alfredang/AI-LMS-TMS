@@ -6,19 +6,34 @@ import { createSSGCourseAPI } from '../../../lib/ssg/api/course-api';
 /**
  * External API — Sync Course Run Dates
  *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * SCHEDULE: Run daily at 1:00 AM SGT
+ * ─────────────────────────────────────────────────────────────────────────────
+ *
+ * PURPOSE:
+ *   Keeps course run start and end dates in the local database in sync with
+ *   SSG. Runs in the early morning so any date changes made in SSG the
+ *   previous day are reflected before the work day begins.
+ *
  * POST /api/external/sync-course-run-dates
  *
  * Headers:
  *   x-api-key: <EXTERNAL_API_KEY_FOR_CLAWDBOT>
  *
- * Flow:
- *   1. Validate API key
- *   2. Find all course runs where start_date = today
- *   3. For each, fetch the course run from SSG by course_run_id
- *   4. Compare SSG start/end dates with DB dates
- *   5. If different, update the DB and log the change
- *   6. If same, log as no_change
- *   7. Write all results to course_run_date_sync_log
+ * Body: (empty — no body required)
+ *
+ * What it does:
+ *   1. Validates the API key
+ *   2. Finds all course runs where start_date = TODAY in the local database
+ *   3. For each course run, fetches the latest course run data from SSG
+ *   4. Compares SSG start/end dates against the local database dates
+ *      - If dates differ → updates the local database and logs as "updated"
+ *      - If dates are the same → logs as "no_change"
+ *   5. Writes all results to course_run_date_sync_log (viewable in Admin panel)
+ *
+ * Notes:
+ *   - A 2-second delay is applied between each course run to avoid SSG API rate limits
+ *   - Results can be viewed in the Admin panel under "Course Run Date Sync"
  */
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));

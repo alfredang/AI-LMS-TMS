@@ -7,18 +7,35 @@ import { createSSGEnrolmentAPI } from '../../../lib/ssg/api/enrolment-api';
 /**
  * External API — Auto Create Learners
  *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * SCHEDULE: Run daily at 6:00 PM SGT
+ * ─────────────────────────────────────────────────────────────────────────────
+ *
+ * PURPOSE:
+ *   Automatically creates learner accounts and enrolment records for all
+ *   classes starting TOMORROW. This ensures learners have their login
+ *   credentials ready before the class begins.
+ *
  * POST /api/external/auto-create-learners
  *
  * Headers:
  *   x-api-key: <EXTERNAL_API_KEY_FOR_CLAWDBOT>
  *
- * Flow:
- *   1. Validate API key
- *   2. Find all course runs where start_date = today
- *   3. Fetch SSG enrollments via n8n webhook for each run
- *   4. Create learner accounts (skip if already exists)
- *   5. Upsert enrollment records
- *   6. Log results to auto_create_learner_log
+ * Body: (empty — no body required)
+ *
+ * What it does:
+ *   1. Validates the API key
+ *   2. Finds all course runs where start_date = TOMORROW (current date + 1)
+ *   3. For each course run, fetches the enrolled learners from SSG
+ *   4. For each learner:
+ *      - If enrolment is Cancelled → removes learner from the course run
+ *      - If account does not exist → creates a new learner account with default password
+ *      - If account already exists → skips account creation, upserts enrolment only
+ *   5. Logs all results to auto_create_learner_log (viewable in Admin > Automation Logging)
+ *
+ * Notes:
+ *   - A 5-second delay is applied between each course run to avoid SSG API rate limits
+ *   - Results can be viewed in the Admin panel under "Automation Logging"
  */
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -53,6 +70,8 @@ async function ensureAutomationTable() {
     )
   `);
   await pool.query(`ALTER TABLE auto_create_learner_log ADD COLUMN IF NOT EXISTS course_code TEXT`);
+  await pool.query(`ALTER TABLE auto_create_learner_log ADD COLUMN IF NOT EXISTS start_date DATE`);
+  await pool.query(`ALTER TABLE auto_create_learner_log ADD COLUMN IF NOT EXISTS end_date DATE`);
 }
 
 // ── Fetch enrollments directly from SSG ──────────────────────────────────────
@@ -248,11 +267,14 @@ export async function runAutomation() {
     course_title: string;
     course_code: string;
     course_run_id: string;
+    start_date: string;
+    end_date: string;
   }>(
-    `SELECT cr.id AS db_id, cr.course_id, c.title AS course_title, c.course_code, cr.course_run_id
+    `SELECT cr.id AS db_id, cr.course_id, c.title AS course_title, c.course_code, cr.course_run_id,
+            cr.start_date, cr.end_date
      FROM course_run cr
      JOIN course c ON c.id = cr.course_id
-     WHERE DATE(cr.start_date) = CURRENT_DATE
+     WHERE DATE(cr.start_date) = CURRENT_DATE + INTERVAL '1 day'
      ORDER BY cr.start_date ASC`,
   );
 
@@ -267,6 +289,8 @@ export async function runAutomation() {
       courseRunId: run.course_run_id,
       courseTitle: run.course_title,
       courseCode: run.course_code,
+      startDate: run.start_date ?? null,
+      endDate: run.end_date ?? null,
       status: 'pending',
       totalEnrolled: 0,
       createdCount: 0,
@@ -309,16 +333,22 @@ export async function runAutomation() {
 
         if (enrolmentStatus === 'Cancelled') {
           try {
-            await pool.query(
-              `UPDATE enrollment
-               SET enrolment_status = 'Cancelled',
-                   raw_data         = $1,
-                   updated_at       = NOW()
-               WHERE enrolment_id = $2
-                  OR (email = $3 AND course_run_id = $4)`,
-              [JSON.stringify(enrolment), enrolmentRef, email, run.db_id],
-            );
-            console.log(`🚫 Cancelled enrolment for ${email} (${enrolmentRef}) in run ${run.course_run_id}`);
+            // Remove learner from the course run
+            if (accountExists) {
+              const userId = accountCheck.rows[0].id;
+              await pool.query(
+                `DELETE FROM enrollment WHERE user_id = $1 AND course_run_id = $2`,
+                [userId, run.db_id],
+              );
+              // Signal learner's UI to refresh
+              await pool.query(
+                `UPDATE app_user SET courses_updated_at = NOW() WHERE id = $1`,
+                [userId],
+              );
+              console.log(`🚫 Removed cancelled enrolment for ${email} (${enrolmentRef}) from run ${run.course_run_id}`);
+            } else {
+              console.log(`🚫 Cancelled enrolment for ${email} (${enrolmentRef}) — no account found, nothing to remove`);
+            }
             logEntry.details.push({ enrolmentRef, email, name, status: 'cancelled', accountExists });
           } catch (err) {
             logEntry.errorCount++;
@@ -351,9 +381,10 @@ export async function runAutomation() {
 
     await pool.query(
       `INSERT INTO auto_create_learner_log
-         (run_id, course_run_id, course_title, course_code, status, total_enrolled, created_count, existing_count, error_count, details, error_message)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
-      [runId, logEntry.courseRunId, logEntry.courseTitle, logEntry.courseCode, logEntry.status,
+         (run_id, course_run_id, course_title, course_code, start_date, end_date, status, total_enrolled, created_count, existing_count, error_count, details, error_message)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+      [runId, logEntry.courseRunId, logEntry.courseTitle, logEntry.courseCode,
+        logEntry.startDate, logEntry.endDate, logEntry.status,
         logEntry.totalEnrolled, logEntry.createdCount, logEntry.existingCount,
         logEntry.errorCount, JSON.stringify(logEntry.details), logEntry.errorMessage],
     );
