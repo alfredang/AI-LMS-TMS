@@ -272,7 +272,7 @@ const AssessmentsSection: React.FC<{
         submitted_at: string;
     }
     const [linkSubmissions, setLinkSubmissions] = useState<LinkSubmission[]>([]);
-    const [selectedLinkFiles, setSelectedLinkFiles] = useState<Record<string, File | null>>({});
+    const [selectedLinkFiles, setSelectedLinkFiles] = useState<Record<string, File[]>>({});
     const [isLinkUploading, setIsLinkUploading] = useState<Record<string, boolean>>({});
     const [linkUploadProgress, setLinkUploadProgress] = useState<Record<string, number>>({});
     const [isLinkResubmitting, setIsLinkResubmitting] = useState<Record<string, boolean>>({});
@@ -311,14 +311,14 @@ const AssessmentsSection: React.FC<{
         if (event.target.files && event.target.files.length > 0) {
             setSelectedLinkFiles(prev => ({
                 ...prev,
-                [assessmentType]: event.target.files![0]
+                [assessmentType]: Array.from(event.target.files!)
             }));
         }
     };
 
     const handleLinkSubmit = async (assessmentType: string) => {
-        const file = selectedLinkFiles[assessmentType];
-        if (!file) {
+        const files = selectedLinkFiles[assessmentType];
+        if (!files || files.length === 0) {
             alert('Please select a file to submit.');
             return;
         }
@@ -333,74 +333,71 @@ const AssessmentsSection: React.FC<{
             const tgsRefMatch = courseName.match(/(TGS-\d+)/) || courseCode.match(/(TGS-\d+)/);
             const tgsRef = tgsRefMatch ? tgsRefMatch[1] : courseCode;
 
-            const formData = new FormData();
-            formData.append('file', file);
+            const newSubmissions: LinkSubmission[] = [];
 
-            // Adding query parameters for the backend to build the folder structure
-            let fetchUrl = `/api/upload/google-drive?studentName=${encodeURIComponent(studentName)}`;
-            if (tgsRef) fetchUrl += `&courseCode=${encodeURIComponent(tgsRef)}`;
-            if (courseName) fetchUrl += `&courseName=${encodeURIComponent(courseName)}`;
-            if (courseRunId) fetchUrl += `&courseRunId=${encodeURIComponent(courseRunId)}`;
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                const progress = Math.round(10 + ((i / files.length) * 80));
+                setLinkUploadProgress(prev => ({ ...prev, [assessmentType]: progress }));
 
-            setLinkUploadProgress(prev => ({ ...prev, [assessmentType]: 40 }));
+                const formData = new FormData();
+                formData.append('file', file);
 
-            const uploadResponse = await fetch(fetchUrl, {
-                method: 'POST',
-                body: formData,
-            });
+                let fetchUrl = `/api/upload/google-drive?studentName=${encodeURIComponent(studentName)}`;
+                if (tgsRef) fetchUrl += `&courseCode=${encodeURIComponent(tgsRef)}`;
+                if (courseName) fetchUrl += `&courseName=${encodeURIComponent(courseName)}`;
+                if (courseRunId) fetchUrl += `&courseRunId=${encodeURIComponent(courseRunId)}`;
 
-            setLinkUploadProgress(prev => ({ ...prev, [assessmentType]: 80 }));
+                const uploadResponse = await fetch(fetchUrl, {
+                    method: 'POST',
+                    body: formData,
+                });
 
-            const uploadData = await uploadResponse.json();
+                const uploadData = await uploadResponse.json();
 
-            if (!uploadResponse.ok || !uploadData.success) {
-                throw new Error(uploadData.error || 'Failed to upload file to Google Drive.');
-            }
+                if (!uploadResponse.ok || !uploadData.success) {
+                    throw new Error(uploadData.error || `Failed to upload file "${file.name}" to Google Drive.`);
+                }
 
-            // Record the submission in the database
-            const submitResponse = await fetch('/api/assessments/submit-link', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    userId: currentUser?.id,
-                    courseRunId,
-                    assessmentType,
-                    fileName: file.name,
-                    fileUrl: uploadData.data.fileUrl
-                }),
-            });
+                const submitResponse = await fetch('/api/assessments/submit-link', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        userId: currentUser?.id,
+                        courseRunId,
+                        assessmentType,
+                        fileName: file.name,
+                        fileUrl: uploadData.data.fileUrl
+                    }),
+                });
 
-            const submitResult = await submitResponse.json();
+                const submitResult = await submitResponse.json();
 
-            if (!submitResponse.ok || !submitResult.success) {
-                throw new Error(submitResult.error || 'Failed to record submission.');
+                if (!submitResponse.ok || !submitResult.success) {
+                    throw new Error(submitResult.error || `Failed to record submission for "${file.name}".`);
+                }
+
+                newSubmissions.push({
+                    id: submitResult.id || `temp-${Date.now()}-${i}`,
+                    user_id: currentUser?.id || '',
+                    course_run_id: courseRunId || '',
+                    assessment_type: assessmentType,
+                    file_name: file.name,
+                    file_url: uploadData.data.fileUrl,
+                    submitted_at: new Date().toISOString()
+                });
             }
 
             setLinkUploadProgress(prev => ({ ...prev, [assessmentType]: 100 }));
+            console.log(`✅ ${newSubmissions.length} file(s) uploaded and recorded`);
 
-            console.log('✅ Link assessment successfully uploaded and recorded');
-
-            // Update local state with the new submission
-            const newSubmission: LinkSubmission = {
-                id: submitResult.id || `temp-${Date.now()}`,
-                user_id: currentUser?.id || '',
-                course_run_id: courseRunId || '',
-                assessment_type: assessmentType,
-                file_name: file.name,
-                file_url: uploadData.data.fileUrl,
-                submitted_at: new Date().toISOString()
-            };
-
-            setLinkSubmissions(prev => [...prev, newSubmission]);
-
-            // Auto-verify the uploaded file using the string identifier ('written' or 'practical')
+            setLinkSubmissions(prev => [...prev, ...newSubmissions]);
             handleVerifyDrive(assessmentType);
 
             // Reset UI state
-            setSelectedLinkFiles(prev => ({ ...prev, [assessmentType]: null }));
+            setSelectedLinkFiles(prev => ({ ...prev, [assessmentType]: [] }));
             setIsLinkResubmitting(prev => ({ ...prev, [assessmentType]: false }));
 
-            // Reset the file input visually
             const fileInput = document.getElementById(`link-file-upload-${assessmentType}`) as HTMLInputElement;
             if (fileInput) fileInput.value = '';
 
@@ -410,6 +407,28 @@ const AssessmentsSection: React.FC<{
         } finally {
             setIsLinkUploading(prev => ({ ...prev, [assessmentType]: false }));
             setLinkUploadProgress(prev => ({ ...prev, [assessmentType]: 0 }));
+        }
+    };
+
+    const handleDeleteSubmission = async (submissionId: string) => {
+        if (!confirm('Are you sure you want to delete this uploaded file?')) return;
+
+        try {
+            const response = await fetch('/api/assessments/submit-link', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ submissionId }),
+            });
+
+            const result = await response.json();
+            if (!response.ok || !result.success) {
+                throw new Error(result.error || 'Failed to delete submission.');
+            }
+
+            setLinkSubmissions(prev => prev.filter(s => s.id !== submissionId));
+        } catch (error: any) {
+            alert(`Delete failed: ${error.message || 'Please try again.'}`);
+            console.error('Delete submission error:', error);
         }
     };
 
@@ -897,9 +916,14 @@ const AssessmentsSection: React.FC<{
                                                     <p className="font-medium text-green-800 dark:text-green-300 truncate">{sub.file_name}</p>
                                                     <p className="text-xs text-green-600 dark:text-green-400">{new Date(sub.submitted_at).toLocaleString()}</p>
                                                 </div>
-                                                <a href={sub.file_url} target="_blank" rel="noopener noreferrer" className="ml-2 text-blue-600 hover:text-blue-800 dark:text-blue-400 text-sm font-medium flex-shrink-0">
-                                                    View
-                                                </a>
+                                                <div className="flex items-center gap-2 flex-shrink-0 ml-2">
+                                                    <a href={sub.file_url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 dark:text-blue-400 text-sm font-medium">
+                                                        View
+                                                    </a>
+                                                    <button onClick={() => handleDeleteSubmission(sub.id)} className="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 text-sm font-medium">
+                                                        Delete
+                                                    </button>
+                                                </div>
                                             </div>
                                         ))}
                                     </div>
@@ -924,10 +948,10 @@ const AssessmentsSection: React.FC<{
                                             dark:hover:file:bg-blue-900/40"
                                         multiple
                                     />
-                                    {selectedLinkFiles['written'] && !isLinkUploading['written'] && (
+                                    {selectedLinkFiles['written']?.length > 0 && !isLinkUploading['written'] && (
                                         <div className="mt-3">
                                             <Button onClick={() => handleLinkSubmit('written')} className="w-full">
-                                                Upload File
+                                                Upload {selectedLinkFiles['written'].length > 1 ? `${selectedLinkFiles['written'].length} Files` : 'File'}
                                             </Button>
                                         </div>
                                     )}
@@ -1004,9 +1028,14 @@ const AssessmentsSection: React.FC<{
                                                     <p className="font-medium text-green-800 dark:text-green-300 truncate">{sub.file_name}</p>
                                                     <p className="text-xs text-green-600 dark:text-green-400">{new Date(sub.submitted_at).toLocaleString()}</p>
                                                 </div>
-                                                <a href={sub.file_url} target="_blank" rel="noopener noreferrer" className="ml-2 text-blue-600 hover:text-blue-800 dark:text-blue-400 text-sm font-medium flex-shrink-0">
-                                                    View
-                                                </a>
+                                                <div className="flex items-center gap-2 flex-shrink-0 ml-2">
+                                                    <a href={sub.file_url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 dark:text-blue-400 text-sm font-medium">
+                                                        View
+                                                    </a>
+                                                    <button onClick={() => handleDeleteSubmission(sub.id)} className="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 text-sm font-medium">
+                                                        Delete
+                                                    </button>
+                                                </div>
                                             </div>
                                         ))}
                                     </div>
@@ -1031,10 +1060,10 @@ const AssessmentsSection: React.FC<{
                                             dark:hover:file:bg-blue-900/40"
                                         multiple
                                     />
-                                    {selectedLinkFiles['practical'] && !isLinkUploading['practical'] && (
+                                    {selectedLinkFiles['practical']?.length > 0 && !isLinkUploading['practical'] && (
                                         <div className="mt-3">
                                             <Button onClick={() => handleLinkSubmit('practical')} className="w-full">
-                                                Upload File
+                                                Upload {selectedLinkFiles['practical'].length > 1 ? `${selectedLinkFiles['practical'].length} Files` : 'File'}
                                             </Button>
                                         </div>
                                     )}
@@ -1118,9 +1147,14 @@ const AssessmentsSection: React.FC<{
                                                         <p className="font-medium text-green-800 dark:text-green-300 truncate">{sub.file_name}</p>
                                                         <p className="text-xs text-green-600 dark:text-green-400">{new Date(sub.submitted_at).toLocaleString()}</p>
                                                     </div>
-                                                    <a href={sub.file_url} target="_blank" rel="noopener noreferrer" className="ml-2 text-blue-600 hover:text-blue-800 dark:text-blue-400 text-sm font-medium flex-shrink-0">
-                                                        View
-                                                    </a>
+                                                    <div className="flex items-center gap-2 flex-shrink-0 ml-2">
+                                                        <a href={sub.file_url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 dark:text-blue-400 text-sm font-medium">
+                                                            View
+                                                        </a>
+                                                        <button onClick={() => handleDeleteSubmission(sub.id)} className="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 text-sm font-medium">
+                                                            Delete
+                                                        </button>
+                                                    </div>
                                                 </div>
                                             ))}
                                         </div>
@@ -1141,11 +1175,12 @@ const AssessmentsSection: React.FC<{
                                                 hover:file:bg-blue-100
                                                 dark:file:bg-blue-900/20 dark:file:text-blue-300
                                                 dark:hover:file:bg-blue-900/40"
+                                            multiple
                                         />
-                                        {selectedLinkFiles[methodKey] && !isLinkUploading[methodKey] && (
+                                        {selectedLinkFiles[methodKey]?.length > 0 && !isLinkUploading[methodKey] && (
                                             <div className="mt-3">
                                                 <Button onClick={() => handleLinkSubmit(methodKey as any)} className="w-full">
-                                                    Upload File
+                                                    Upload {selectedLinkFiles[methodKey].length > 1 ? `${selectedLinkFiles[methodKey].length} Files` : 'File'}
                                                 </Button>
                                             </div>
                                         )}

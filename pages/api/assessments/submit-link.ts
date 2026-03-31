@@ -59,10 +59,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
   }
 
-  if (!['written', 'practical'].includes(assessmentType)) {
+  const validTypes = ['written', 'practical', 'writtenAssessment', 'practicalExam', 'caseStudy', 'rolePlay', 'oralQuestioning', 'project', 'assignment'];
+  if (!validTypes.includes(assessmentType)) {
     return res.status(400).json({
       success: false,
-      error: 'Invalid assessmentType. Must be "written" or "practical".'
+      error: `Invalid assessmentType. Must be one of: ${validTypes.join(', ')}`
     });
   }
 
