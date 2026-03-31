@@ -32,7 +32,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   let replyToEmail = '';
   try {
     let result = await pool.query(
-      `SELECT tp.email_user, tp.google_client_id, tp.google_client_secret, tp.google_refresh_token, tp.google_slides_template_id, tp.contact_person_name, tp.company_email, tp.support_email
+      `SELECT tp.email_user, tp.google_client_id, tp.google_client_secret, tp.google_refresh_token, tp.google_slides_template_id, tp.contact_person_name, tp.company_email
        FROM training_provider tp
        INNER JOIN training_provider_member tpm ON tpm.provider_id = tp.id
        WHERE tpm.user_id = $1`,
@@ -55,7 +55,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     slidesTemplateId = tp.google_slides_template_id;
     senderName = tp.contact_person_name || '';
     senderEmail = tp.company_email || emailUser;
-    replyToEmail = tp.support_email || senderEmail;
+    // Safely fetch support_email (column may not exist yet)
+    try {
+      const seResult = await pool.query('SELECT support_email FROM training_provider WHERE id = (SELECT provider_id FROM training_provider_member WHERE user_id = $1 LIMIT 1)', [userId]);
+      if (seResult.rows.length > 0 && seResult.rows[0].support_email) replyToEmail = seResult.rows[0].support_email;
+    } catch (e) { /* column doesn't exist yet */ }
+    if (!replyToEmail) replyToEmail = senderEmail;
 
     if (!emailUser || !clientId || !clientSecret || !refreshToken || !slidesTemplateId) {
       return res.status(400).json({ error: 'Google Integration settings are incomplete. Please configure Email User, Client ID, Client Secret, Refresh Token, and Slides Template ID in Company Settings.' });

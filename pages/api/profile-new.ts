@@ -266,7 +266,6 @@ async function getTrainingProviderProfile(userId: string) {
         tp.uen,
         tp.company_address,
         tp.company_email,
-        tp.support_email,
         tp.company_tel,
         tp.company_website,
         tp.contact_person_name,
@@ -334,7 +333,6 @@ async function getTrainingProviderProfile(userId: string) {
           tp.uen,
           tp.company_address,
           tp.company_email,
-        tp.support_email,
           tp.company_tel,
           tp.company_website,
           tp.contact_person_name,
@@ -400,7 +398,6 @@ async function getTrainingProviderProfile(userId: string) {
           tp.uen,
           tp.company_address,
           tp.company_email,
-        tp.support_email,
           tp.company_tel,
           tp.company_website,
           tp.contact_person_name,
@@ -485,6 +482,13 @@ async function getTrainingProviderProfile(userId: string) {
     }
   });
 
+  // Safely fetch support_email (column may not exist yet)
+  let supportEmail = '';
+  try {
+    const r = await pool.query(`SELECT support_email FROM training_provider WHERE id = $1`, [profileData.provider_id]);
+    if (r.rows.length > 0 && r.rows[0].support_email) supportEmail = r.rows[0].support_email;
+  } catch (e) { /* column doesn't exist yet */ }
+
   // Safely fetch extra integration columns (each group independent so missing columns don't wipe others)
   let refLinks: any = {};
   // Reference links
@@ -535,7 +539,7 @@ async function getTrainingProviderProfile(userId: string) {
     companyLogoUrl: profileData.company_logo || profileData.profile_image,
     contactPerson: {
       name: profileData.contact_person_name || '',
-      email: profileData.support_email || profileData.company_email || '',
+      email: supportEmail || profileData.company_email || '',
       tel: profileData.telephone || ''
     },
     apiKeys: apiKeys,
