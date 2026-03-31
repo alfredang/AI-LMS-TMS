@@ -1514,52 +1514,54 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
             ) : undefined
           }
         />
-        <table className="w-full text-left border-collapse">
-          <thead>
-            <tr className="border-b border-default bg-surface/50">
-              <th className="px-3 py-2 text-xs font-semibold text-on-surface border-r border-default whitespace-nowrap w-12 text-center">No.</th>
-              <th className="px-3 py-2 text-xs font-semibold text-on-surface border-r border-default w-[30%]">Name</th>
-              <th className="px-3 py-2 text-xs font-semibold text-on-surface border-r border-default w-[20%]">NRIC</th>
-              <th className="px-3 py-2 text-xs font-semibold text-on-surface border-r border-default w-[25%]">Email</th>
-              <th className="px-3 py-2 text-xs font-semibold text-on-surface border-r border-default w-[25%]">Source</th>
-            </tr>
-          </thead>
-          <tbody className="text-sm divide-y divide-default">
-            {assignedLearners.length > 0 ? (
-              assignedLearners.map((learner, idx) => (
-                <tr key={`${learner.nric}-${learner.email}-${idx}`} className="hover:bg-surface-hover/30 transition-colors">
-                  <td className="px-3 py-2 border-r border-default text-center text-muted">{idx + 1}</td>
-                  <td className="px-3 py-2 border-r border-default font-medium text-on-surface">{learner.fullName || '-'}</td>
-                  <td className="px-3 py-2 border-r border-default text-muted">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="font-mono text-xs">{showAssignedNric ? learner.nric : (learner.nric ? '●●●●●' + learner.nric.slice(-4) : '-')}</span>
-                      {learner.nric && (
-                        <button
-                          onClick={() => setShowAssignedNric(!showAssignedNric)}
-                          className="text-[10px] text-primary hover:underline focus:outline-none"
-                        >
-                          {showAssignedNric ? 'Hide' : 'Show'}
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-3 py-2 border-r border-default text-muted truncate max-w-[200px]" title={learner.email || ''}>{learner.email || '-'}</td>
-                  <td className="px-3 py-2 border-r border-default text-muted">
-                    <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium ${learner.source.includes('SSG') ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-blue-500/10 text-blue-600 dark:text-blue-400'}`}>
-                      {learner.source}
-                    </span>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-surface-elevated border-b border-default">
+              <tr>
+                <th className="px-3 py-3 text-center font-semibold text-on-surface-secondary w-10 whitespace-nowrap">No.</th>
+                <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Name</th>
+                <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">NRIC</th>
+                <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Email</th>
+                <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Source</th>
+              </tr>
+            </thead>
+            <tbody>
+              {assignedLearners.length > 0 ? (
+                assignedLearners.map((learner, idx) => (
+                  <tr key={`${learner.nric}-${learner.email}-${idx}`} className="border-b border-default hover:bg-surface-elevated transition-colors">
+                    <td className="px-3 py-3 text-center text-on-surface-secondary">{idx + 1}</td>
+                    <td className="px-3 py-3 text-on-surface">{learner.fullName || '-'}</td>
+                    <td className="px-3 py-3 text-on-surface-secondary">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-sm">{showAssignedNric ? learner.nric : (learner.nric ? learner.nric.length >= 5 ? `${learner.nric[0]}XXXX${learner.nric.slice(-4)}` : learner.nric : '-')}</span>
+                        {learner.nric && (
+                          <button
+                            onClick={() => setShowAssignedNric(!showAssignedNric)}
+                            className="text-xs font-normal text-primary hover:underline focus:outline-none"
+                          >
+                            {showAssignedNric ? 'Hide' : 'Show'}
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-3 py-3 text-on-surface-secondary truncate max-w-[200px]" title={learner.email || ''}>{learner.email || '-'}</td>
+                    <td className="px-3 py-3 text-on-surface-secondary">
+                      <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium ${learner.source.includes('SSG') ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-blue-500/10 text-blue-600 dark:text-blue-400'}`}>
+                        {learner.source}
+                      </span>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={5} className="px-3 py-10 text-center text-sm text-muted italic">
+                    No assigned learners found.
                   </td>
                 </tr>
-              ))
-            ) : (
-              <tr>
-                <td colSpan={5} className="px-3 py-10 text-center text-sm text-muted italic">
-                  No assigned learners found.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {/* ── Class Enrolments ── */}
