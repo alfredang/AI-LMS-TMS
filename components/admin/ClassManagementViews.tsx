@@ -4018,10 +4018,15 @@ export const AssignStudentView: React.FC = () => {
     // Track local enrollment count changes
     const [localEnrollmentDeltas, setLocalEnrollmentDeltas] = useState<Record<string, number>>({});
 
-    const fetchCourseRuns = async (q: string) => {
+    const [classFilter, setClassFilter] = useState<'upcoming' | 'ongoing' | 'completed'>('upcoming');
+    const [currentPage, setCurrentPage] = useState(1);
+    const PAGE_SIZE = 10;
+
+    const fetchCourseRuns = async (q: string, filter: 'upcoming' | 'ongoing' | 'completed' = 'upcoming') => {
         setLoadingRuns(true);
+        setCurrentPage(1);
         try {
-            const queryParams = new URLSearchParams({ upcoming: 'true' });
+            const queryParams = new URLSearchParams({ status: filter });
             if (q) queryParams.set('search', q);
             const res = await fetch(`/api/admin/all-course-runs?${queryParams.toString()}`);
             const json = await res.json();
@@ -4063,13 +4068,13 @@ export const AssignStudentView: React.FC = () => {
     };
 
     useEffect(() => {
-        fetchCourseRuns('');
+        fetchCourseRuns('', 'upcoming');
         fetchLearners();
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
     const handleSearch = (e: React.FormEvent) => {
         e.preventDefault();
-        fetchCourseRuns(search);
+        fetchCourseRuns(search, classFilter);
     };
 
     const handleAssign = async (run: any) => {
@@ -4170,6 +4175,10 @@ export const AssignStudentView: React.FC = () => {
     const totalTrainees = courseRuns.reduce((sum, run) => sum + getEnrollmentCount(run), 0);
     const classesWithNoTrainee = courseRuns.filter(run => getEnrollmentCount(run) === 0).length;
 
+    // Pagination — applied for all tabs
+    const paginatedRuns = courseRuns.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+    const totalPages = Math.ceil(courseRuns.length / PAGE_SIZE);
+
     const inputClasses = 'w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white';
 
     return (
@@ -4204,13 +4213,37 @@ export const AssignStudentView: React.FC = () => {
                 </div>
             )}
 
-            {/* Search */}
+            {/* Filter + Search */}
             <Card className="p-4 mb-4 dark:bg-gray-800 dark:border-gray-700">
+                {/* Class status toggle */}
+                <div className="flex gap-1 mb-3 p-1 bg-gray-100 dark:bg-gray-700 rounded-lg w-fit">
+                    {(['upcoming', 'ongoing', 'completed'] as const).map(f => (
+                        <button
+                            key={f}
+                            type="button"
+                            onClick={() => {
+                                setClassFilter(f);
+                                setSelectedRunId(null);
+                                fetchCourseRuns(search, f);
+                            }}
+                            className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors capitalize ${
+                                classFilter === f
+                                    ? 'bg-white dark:bg-gray-900 text-blue-600 dark:text-blue-400 shadow-sm'
+                                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                            }`}
+                        >
+                            {f}
+                        </button>
+                    ))}
+                </div>
                 <form onSubmit={handleSearch} className="flex gap-2">
                     <input
                         type="text"
                         value={search}
-                        onChange={e => setSearch(e.target.value)}
+                        onChange={e => {
+                            setSearch(e.target.value);
+                            if (e.target.value === '') fetchCourseRuns('', classFilter);
+                        }}
                         placeholder="Search by course title, code or run ID..."
                         className={`${inputClasses} flex-1`}
                     />
@@ -4225,10 +4258,10 @@ export const AssignStudentView: React.FC = () => {
                 {loadingRuns ? (
                     <div className="p-8 text-center">
                         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
-                        <p className="text-gray-500 dark:text-gray-400 text-lg">Loading upcoming classes...</p>
+                        <p className="text-gray-500 dark:text-gray-400 text-lg">Loading {classFilter} classes...</p>
                     </div>
                 ) : courseRuns.length === 0 ? (
-                    <div className="p-8 text-center text-sm text-gray-500 dark:text-gray-400">No upcoming classes found.</div>
+                    <div className="p-8 text-center text-sm text-gray-500 dark:text-gray-400">No {classFilter} classes found.</div>
                 ) : (
                     <div className="overflow-x-auto">
                         <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
@@ -4243,7 +4276,7 @@ export const AssignStudentView: React.FC = () => {
                                 </tr>
                             </thead>
                             <tbody className="bg-white divide-y divide-gray-200 dark:bg-gray-800 dark:divide-gray-700">
-                                {courseRuns.map(run => {
+                                {paginatedRuns.map(run => {
                                     const isExpanded = selectedRunId === run.id;
                                     const enrollCount = getEnrollmentCount(run);
 
@@ -4419,6 +4452,39 @@ export const AssignStudentView: React.FC = () => {
                                 })}
                             </tbody>
                         </table>
+                    </div>
+                )}
+                {/* Pagination */}
+                {totalPages > 1 && (
+                    <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 dark:border-gray-700">
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                            Showing {(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, courseRuns.length)} of {courseRuns.length} classes
+                        </p>
+                        <div className="flex items-center gap-1">
+                            <button
+                                onClick={() => { setCurrentPage(p => Math.max(1, p - 1)); setSelectedRunId(null); }}
+                                disabled={currentPage === 1}
+                                className="px-2.5 py-1.5 text-xs border border-gray-300 dark:border-gray-600 rounded text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                            >
+                                ‹ Prev
+                            </button>
+                            {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
+                                <button
+                                    key={p}
+                                    onClick={() => { setCurrentPage(p); setSelectedRunId(null); }}
+                                    className={`px-2.5 py-1.5 text-xs border rounded transition-colors ${p === currentPage ? 'bg-blue-600 text-white border-blue-600' : 'border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
+                                >
+                                    {p}
+                                </button>
+                            ))}
+                            <button
+                                onClick={() => { setCurrentPage(p => Math.min(totalPages, p + 1)); setSelectedRunId(null); }}
+                                disabled={currentPage === totalPages}
+                                className="px-2.5 py-1.5 text-xs border border-gray-300 dark:border-gray-600 rounded text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                            >
+                                Next ›
+                            </button>
+                        </div>
                     </div>
                 )}
             </Card>

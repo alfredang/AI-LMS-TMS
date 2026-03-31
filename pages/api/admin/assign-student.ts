@@ -141,6 +141,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       [resolvedUserId, courseId, courseRunUuid, userEmail || null, userNric || null]
     );
 
+    // Add learner to all existing sessions for manual attendance tracking
+    // Use NRIC if available, otherwise _uid_<userId> as identifier (matches handleAddManualLearner pattern)
+    const identifier = userNric || `_uid_${resolvedUserId}`;
+    const sessionsResult = await client.query(
+      `SELECT id FROM course_session WHERE course_run_id = $1`,
+      [courseRunUuid]
+    );
+    for (const session of sessionsResult.rows) {
+      await client.query(
+        `INSERT INTO course_attendance (session_id, nric, user_id, is_present, reason_of_absence, updated_at)
+         VALUES ($1, $2, $3, false, null, NOW())
+         ON CONFLICT (session_id, nric) DO NOTHING`,
+        [session.id, identifier, resolvedUserId]
+      );
+    }
+
     await client.query('COMMIT');
     res.status(200).json({ success: true, message: 'Student enrolled successfully' });
   } catch (error) {
