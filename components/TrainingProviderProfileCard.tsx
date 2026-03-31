@@ -828,18 +828,18 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
 
                 <div className="border-t my-6"></div>
                 <button type="button" onClick={() => setIsContactOpen(prev => !prev)} className="w-full flex items-center justify-between group">
-                    <h2 className="text-xl font-bold">Contact Person</h2>
+                    <h2 className="text-xl font-bold">Sender Email Setting</h2>
                     <Icon name={IconName.ChevronDown} className={`w-5 h-5 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 transition-transform duration-200 flex-shrink-0 ml-4 ${isContactOpen ? 'rotate-180' : ''}`} />
                 </button>
                 {isContactOpen && (isEditing ? (
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-4">
                         <div>
-                            <label className="block text-sm font-medium text-on-surface-secondary mb-1">Name</label>
-                            <input type="text" name="name" value={formData.contactPerson.name} onChange={handleContactChange} placeholder="Name" className={inputClasses} />
+                            <label className="block text-sm font-medium text-on-surface-secondary mb-1">Sender Name</label>
+                            <input type="text" name="name" value={formData.contactPerson.name} onChange={handleContactChange} placeholder="Sender Name" className={inputClasses} />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-on-surface-secondary mb-1">Email</label>
-                            <input type="email" name="email" value={formData.contactPerson.email} onChange={handleContactChange} placeholder="Email" className={inputClasses} />
+                            <label className="block text-sm font-medium text-on-surface-secondary mb-1">Sender Email</label>
+                            <input type="email" name="email" value={formData.contactPerson.email} onChange={handleContactChange} placeholder="Sender Email" className={inputClasses} />
                         </div>
                         <div>
                             <label className="block text-sm font-medium text-on-surface-secondary mb-1">Telephone</label>
@@ -848,8 +848,8 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mt-4">
-                        <ProfileBioItem label="Name" value={formData.contactPerson.name} />
-                        <ProfileBioItem label="Email" value={formData.contactPerson.email} />
+                        <ProfileBioItem label="Sender Name" value={formData.contactPerson.name} />
+                        <ProfileBioItem label="Sender Email" value={formData.contactPerson.email} />
                         <ProfileBioItem label="Telephone" value={formData.contactPerson.tel} />
                     </div>
                 ))}
