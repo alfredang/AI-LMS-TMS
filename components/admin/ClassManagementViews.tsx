@@ -3296,6 +3296,10 @@ export const AssignTrainerView: React.FC = () => {
     const [filterTrainerName, setFilterTrainerName] = useState('');
     const [filterCourse, setFilterCourse] = useState('');
 
+    const [classFilter, setClassFilter] = useState<'upcoming' | 'ongoing' | 'completed'>('upcoming');
+    const [currentPage, setCurrentPage] = useState(1);
+    const PAGE_SIZE = 10;
+
     // Track live assignments without refetching the whole table
     const [localAssignments, setLocalAssignments] = useState<Record<string, { name: string; email: string }>>({});
 
@@ -3303,10 +3307,11 @@ export const AssignTrainerView: React.FC = () => {
     const [expandedRunTrainers, setExpandedRunTrainers] = useState<any[]>([]);
     const [loadingExpandedTrainers, setLoadingExpandedTrainers] = useState(false);
 
-    const fetchCourseRuns = async (q: string) => {
+    const fetchCourseRuns = async (q: string, filter: 'upcoming' | 'ongoing' | 'completed' = classFilter) => {
         setLoadingRuns(true);
+        setCurrentPage(1);
         try {
-            const queryParams = new URLSearchParams({ upcoming: 'true' });
+            const queryParams = new URLSearchParams({ status: filter });
             if (q) queryParams.set('search', q);
             const res = await fetch(`/api/admin/all-course-runs?${queryParams.toString()}`);
             const json = await res.json();
@@ -3367,7 +3372,7 @@ export const AssignTrainerView: React.FC = () => {
 
     const handleSearch = (e: React.FormEvent) => {
         e.preventDefault();
-        fetchCourseRuns(search);
+        fetchCourseRuns(search, classFilter);
     };
 
     const handleRemoveSpecificTrainer = async (runId: string, junctionId: string, trainerName: string) => {
@@ -3509,13 +3514,16 @@ export const AssignTrainerView: React.FC = () => {
         return true;
     });
 
+    const totalPages = Math.ceil(filteredRuns.length / PAGE_SIZE);
+    const paginatedRuns = filteredRuns.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
     // KPI stats
-    const totalUpcoming = courseRuns.length;
+    const totalClasses = courseRuns.length;
     const trainersAssigned = courseRuns.filter(run => {
         const local = localAssignments[run.id];
         return (local?.name ?? run.assignedTrainerName);
     }).length;
-    const missingTrainers = totalUpcoming - trainersAssigned;
+    const missingTrainers = totalClasses - trainersAssigned;
 
     const inputClasses = 'w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white';
 
@@ -3531,8 +3539,8 @@ export const AssignTrainerView: React.FC = () => {
             {/* KPI Stats */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
                 <Card className="p-6 text-center">
-                    <p className="text-4xl font-bold text-blue-600">{totalUpcoming}</p>
-                    <p className="text-gray-600 dark:text-gray-300 mt-1">Upcoming Classes</p>
+                    <p className="text-4xl font-bold text-blue-600">{totalClasses}</p>
+                    <p className="text-gray-600 dark:text-gray-300 mt-1 capitalize">{classFilter} Classes</p>
                 </Card>
                 <Card className="p-6 text-center">
                     <p className="text-4xl font-bold text-green-600">{trainersAssigned}</p>
@@ -3553,11 +3561,34 @@ export const AssignTrainerView: React.FC = () => {
 
             {/* Search & Filters */}
             <Card className="p-4 mb-4 dark:bg-gray-800 dark:border-gray-700">
+                {/* Filter tabs */}
+                <div className="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-1 mb-4">
+                    {(['upcoming', 'ongoing', 'completed'] as const).map(f => (
+                        <button
+                            key={f}
+                            onClick={() => {
+                                setClassFilter(f);
+                                setSelectedRunId(null);
+                                fetchCourseRuns(search, f);
+                            }}
+                            className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors capitalize ${
+                                classFilter === f
+                                    ? 'bg-white dark:bg-gray-900 text-blue-600 shadow-sm'
+                                    : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+                            }`}
+                        >
+                            {f}
+                        </button>
+                    ))}
+                </div>
                 <form onSubmit={handleSearch} className="flex gap-2 mb-4">
                     <input
                         type="text"
                         value={search}
-                        onChange={e => setSearch(e.target.value)}
+                        onChange={e => {
+                            setSearch(e.target.value);
+                            if (e.target.value === '') fetchCourseRuns('', classFilter);
+                        }}
                         placeholder="Search by course title, code or run ID..."
                         className={`${inputClasses} flex-1`}
                     />
@@ -3608,7 +3639,7 @@ export const AssignTrainerView: React.FC = () => {
                         </select>
                     </div>
                     <span className="text-xs text-gray-500 dark:text-gray-400">
-                        Showing {filteredRuns.length} of {courseRuns.length} upcoming classes
+                        Showing {filteredRuns.length} of {courseRuns.length} <span className="capitalize">{classFilter}</span> classes
                     </span>
                 </div>
             </Card>
@@ -3618,11 +3649,11 @@ export const AssignTrainerView: React.FC = () => {
                 {loadingRuns ? (
                     <div className="p-8 text-center">
                         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
-                        <p className="text-gray-500 dark:text-gray-400 text-lg">Loading upcoming classes...</p>
+                        <p className="text-gray-500 dark:text-gray-400 text-lg capitalize">Loading {classFilter} classes...</p>
                     </div>
                 ) : filteredRuns.length === 0 ? (
                     <div className="p-8 text-center text-sm text-gray-500 dark:text-gray-400">
-                        {courseRuns.length === 0 ? 'No upcoming classes found.' : 'No classes match the current filters.'}
+                        {courseRuns.length === 0 ? `No ${classFilter} classes found.` : 'No classes match the current filters.'}
                     </div>
                 ) : (
                     <div className="overflow-x-auto">
@@ -3638,7 +3669,7 @@ export const AssignTrainerView: React.FC = () => {
                                 </tr>
                             </thead>
                             <tbody className="bg-white divide-y divide-gray-200 dark:bg-gray-800 dark:divide-gray-700">
-                                {filteredRuns.map(run => {
+                                {paginatedRuns.map(run => {
                                     const local = localAssignments[run.id];
                                     const currentName = local?.name ?? run.assignedTrainerName;
                                     const currentEmail = local?.email ?? run.assignedTrainerEmail;
@@ -3824,6 +3855,43 @@ export const AssignTrainerView: React.FC = () => {
                                 })}
                             </tbody>
                         </table>
+                    </div>
+                )}
+                {/* Pagination */}
+                {totalPages > 1 && (
+                    <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 dark:border-gray-700">
+                        <span className="text-sm text-gray-500 dark:text-gray-400">
+                            Page {currentPage} of {totalPages} ({filteredRuns.length} classes)
+                        </span>
+                        <div className="flex items-center gap-1">
+                            <button
+                                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                                disabled={currentPage === 1}
+                                className="px-3 py-1.5 text-sm rounded-md border border-gray-300 dark:border-gray-600 disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:cursor-not-allowed"
+                            >
+                                Prev
+                            </button>
+                            {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
+                                <button
+                                    key={p}
+                                    onClick={() => setCurrentPage(p)}
+                                    className={`px-3 py-1.5 text-sm rounded-md border ${
+                                        p === currentPage
+                                            ? 'bg-blue-600 text-white border-blue-600'
+                                            : 'border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
+                                    }`}
+                                >
+                                    {p}
+                                </button>
+                            ))}
+                            <button
+                                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                                disabled={currentPage === totalPages}
+                                className="px-3 py-1.5 text-sm rounded-md border border-gray-300 dark:border-gray-600 disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:cursor-not-allowed"
+                            >
+                                Next
+                            </button>
+                        </div>
                     </div>
                 )}
             </Card>
@@ -4903,18 +4971,28 @@ export const AssignTrainerLogsView: React.FC = () => {
 
     const displayLogs = logs;
 
-    // Group logs by calendar date (SG time)
+    // Group logs by calendar date (SG time), then by hour within each date
     const batches = useMemo(() => {
-        const map = new Map<string, AssignTrainerLogRow[]>();
+        const dateMap = new Map<string, Map<string, AssignTrainerLogRow[]>>();
         for (const log of displayLogs) {
-            const dateKey = new Date(log.created_at).toLocaleDateString('en-SG', {
+            const dt = new Date(log.created_at);
+            const dateKey = dt.toLocaleDateString('en-SG', {
                 timeZone: 'Asia/Singapore',
                 day: '2-digit', month: 'short', year: 'numeric',
             });
-            if (!map.has(dateKey)) map.set(dateKey, []);
-            map.get(dateKey)!.push(log);
+            // Round down to the hour in SG time, e.g. "07:00"
+            const hourKey = dt.toLocaleTimeString('en-SG', {
+                timeZone: 'Asia/Singapore',
+                hour: '2-digit', minute: '2-digit', hour12: false,
+            }).slice(0, 2) + ':00';
+            if (!dateMap.has(dateKey)) dateMap.set(dateKey, new Map());
+            const hourMap = dateMap.get(dateKey)!;
+            if (!hourMap.has(hourKey)) hourMap.set(hourKey, []);
+            hourMap.get(hourKey)!.push(log);
         }
-        return Array.from(map.entries()); // [ [dateLabel, rows[]], ... ]
+        return Array.from(dateMap.entries()).map(
+            ([dk, hm]) => [dk, Array.from(hm.entries())] as [string, [string, AssignTrainerLogRow[]][]]
+        );
     }, [displayLogs]);
 
     // Expand the most recent batch by default
@@ -4971,20 +5049,21 @@ export const AssignTrainerLogsView: React.FC = () => {
                 <Card className="p-8 text-center text-gray-500 dark:text-gray-400">No assign trainer logs yet.</Card>
             ) : (
                 <div className="space-y-4">
-                    {batches.map(([dateKey, rows]) => {
+                    {batches.map(([dateKey, hourGroups]) => {
+                        const allRows = hourGroups.flatMap(([, r]) => r);
                         const isOpen = expandedDates.has(dateKey);
-                        const successCount = rows.filter(r => r.status === 'success').length;
-                        const errorCount   = rows.filter(r => r.status === 'error').length;
+                        const successCount = allRows.filter(r => r.status === 'success').length;
+                        const errorCount   = allRows.filter(r => r.status === 'error').length;
                         return (
                             <Card key={dateKey} className="overflow-hidden">
-                                {/* Batch header */}
+                                {/* Date header */}
                                 <button
                                     onClick={() => toggleDate(dateKey)}
                                     className="w-full flex items-center justify-between px-5 py-4 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors text-left"
                                 >
                                     <div className="flex items-center gap-4 flex-wrap">
                                         <span className="font-semibold text-gray-900 dark:text-white">{dateKey}</span>
-                                        <span className="text-sm text-gray-500 dark:text-gray-400">{rows.length} assignment{rows.length !== 1 ? 's' : ''}</span>
+                                        <span className="text-sm text-gray-500 dark:text-gray-400">{allRows.length} assignment{allRows.length !== 1 ? 's' : ''}</span>
                                         {successCount > 0 && (
                                             <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
                                                 {successCount} success
@@ -4999,68 +5078,86 @@ export const AssignTrainerLogsView: React.FC = () => {
                                     <svg className={`w-5 h-5 text-gray-400 transition-transform flex-shrink-0 ${isOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
                                 </button>
 
-                                {/* Rows table */}
+                                {/* Hour sub-groups */}
                                 {isOpen && (
-                                    <div className="border-t border-gray-100 dark:border-gray-700 overflow-x-auto">
-                                        <table className="w-full text-sm">
-                                            <thead className="bg-gray-50 dark:bg-gray-800 text-left">
-                                                <tr>
-                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Time</th>
-                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Course Title</th>
-                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Course Code</th>
-                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Course Run ID</th>
-                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Start Date</th>
-                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">End Date</th>
-                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">RA Code</th>
-                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Trainer</th>
-                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 text-center">Action</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-                                                {rows.map(log => (
-                                                    <tr key={log.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
-                                                        <td className="px-4 py-3 whitespace-nowrap text-gray-500 dark:text-gray-400 text-xs">
-                                                            {new Date(log.created_at).toLocaleTimeString('en-SG', {
-                                                                timeZone: 'Asia/Singapore',
-                                                                hour: '2-digit', minute: '2-digit', hour12: false,
-                                                            })}
-                                                        </td>
-                                                        <td className="px-4 py-3 max-w-[260px]">
-                                                            <div className="font-medium text-gray-900 dark:text-gray-100 whitespace-normal break-words">{log.course_title || '—'}</div>
-                                                        </td>
-                                                        <td className="px-4 py-3 whitespace-nowrap">
-                                                            {log.course_code
-                                                                ? <span className="text-xs text-indigo-600 dark:text-indigo-400 font-mono bg-indigo-50 dark:bg-indigo-900/30 px-1.5 py-0.5 rounded">{log.course_code}</span>
-                                                                : <span className="text-gray-400">—</span>}
-                                                        </td>
-                                                        <td className="px-4 py-3 whitespace-nowrap">
-                                                            <span className="text-xs text-gray-500 dark:text-gray-400 font-mono bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded">
-                                                                {log.course_run_id || '—'}
-                                                            </span>
-                                                        </td>
-                                                        <td className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
-                                                            {log.start_date || '—'}
-                                                        </td>
-                                                        <td className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
-                                                            {log.end_date || '—'}
-                                                        </td>
-                                                        <td className="px-4 py-3 text-xs font-mono text-gray-500 dark:text-gray-400 whitespace-nowrap">
-                                                            {log.ra_code || '—'}
-                                                        </td>
-                                                        <td className="px-4 py-3">
-                                                            <div className="font-medium text-gray-800 dark:text-gray-200">{log.trainer_name || '—'}</div>
-                                                            <div className="text-xs text-gray-400 font-mono">{log.trainer_email || ''}</div>
-                                                            {log.error_message && (
-                                                                <div className="text-xs text-red-500 mt-0.5">{log.error_message}</div>
-                                                            )}
-                                                        </td>
-                                                        <td className="px-4 py-3 text-center">
-                                                            {actionBadge(log.status === 'error' ? 'error' : log.action)}
-                                                        </td>
-                                                    </tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
+                                    <div className="border-t border-gray-100 dark:border-gray-700">
+                                        {hourGroups.map(([hourKey, rows]) => {
+                                            const hSuccess = rows.filter(r => r.status === 'success').length;
+                                            const hError   = rows.filter(r => r.status === 'error').length;
+                                            return (
+                                                <div key={hourKey} className="border-b border-gray-100 dark:border-gray-700 last:border-b-0">
+                                                    {/* Hour sub-header */}
+                                                    <div className="flex items-center gap-3 px-5 py-2.5 bg-gray-50/70 dark:bg-gray-800/50">
+                                                        <span className="text-xs font-semibold text-gray-600 dark:text-gray-300 font-mono">{hourKey} batch</span>
+                                                        <span className="text-xs text-gray-400">{rows.length} assignment{rows.length !== 1 ? 's' : ''}</span>
+                                                        {hSuccess > 0 && <span className="text-xs px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">{hSuccess} success</span>}
+                                                        {hError > 0 && <span className="text-xs px-1.5 py-0.5 rounded bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300">{hError} error{hError !== 1 ? 's' : ''}</span>}
+                                                    </div>
+                                                    {/* Rows table */}
+                                                    <div className="overflow-x-auto">
+                                                        <table className="w-full text-sm">
+                                                            <thead className="bg-gray-50 dark:bg-gray-800 text-left">
+                                                                <tr>
+                                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Time</th>
+                                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Course Title</th>
+                                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Course Code</th>
+                                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Course Run ID</th>
+                                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Start Date</th>
+                                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">End Date</th>
+                                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">RA Code</th>
+                                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Trainer</th>
+                                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 text-center">Action</th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                                                                {rows.map(log => (
+                                                                    <tr key={log.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                                                                        <td className="px-4 py-3 whitespace-nowrap text-gray-500 dark:text-gray-400 text-xs">
+                                                                            {new Date(log.created_at).toLocaleTimeString('en-SG', {
+                                                                                timeZone: 'Asia/Singapore',
+                                                                                hour: '2-digit', minute: '2-digit', hour12: false,
+                                                                            })}
+                                                                        </td>
+                                                                        <td className="px-4 py-3 max-w-[260px]">
+                                                                            <div className="font-medium text-gray-900 dark:text-gray-100 whitespace-normal break-words">{log.course_title || '—'}</div>
+                                                                        </td>
+                                                                        <td className="px-4 py-3 whitespace-nowrap">
+                                                                            {log.course_code
+                                                                                ? <span className="text-xs text-indigo-600 dark:text-indigo-400 font-mono bg-indigo-50 dark:bg-indigo-900/30 px-1.5 py-0.5 rounded">{log.course_code}</span>
+                                                                                : <span className="text-gray-400">—</span>}
+                                                                        </td>
+                                                                        <td className="px-4 py-3 whitespace-nowrap">
+                                                                            <span className="text-xs text-gray-500 dark:text-gray-400 font-mono bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded">
+                                                                                {log.course_run_id || '—'}
+                                                                            </span>
+                                                                        </td>
+                                                                        <td className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                                                                            {log.start_date || '—'}
+                                                                        </td>
+                                                                        <td className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                                                                            {log.end_date || '—'}
+                                                                        </td>
+                                                                        <td className="px-4 py-3 text-xs font-mono text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                                                                            {log.ra_code || '—'}
+                                                                        </td>
+                                                                        <td className="px-4 py-3">
+                                                                            <div className="font-medium text-gray-800 dark:text-gray-200">{log.trainer_name || '—'}</div>
+                                                                            <div className="text-xs text-gray-400 font-mono">{log.trainer_email || ''}</div>
+                                                                            {log.error_message && (
+                                                                                <div className="text-xs text-red-500 mt-0.5">{log.error_message}</div>
+                                                                            )}
+                                                                        </td>
+                                                                        <td className="px-4 py-3 text-center">
+                                                                            {actionBadge(log.status === 'error' ? 'error' : log.action)}
+                                                                        </td>
+                                                                    </tr>
+                                                                ))}
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
                                     </div>
                                 )}
                             </Card>
