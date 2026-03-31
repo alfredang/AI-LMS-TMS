@@ -77,38 +77,61 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
 
-    // Build the email
-    const subject = `Feedback from ${name} - ${company_name || 'LMS/TMS'}`;
-    const htmlBody = `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+    // Fetch feedback email template from DB (or use defaults)
+    let dbSubject = '';
+    let dbBody = '';
+    let dbCc = '';
+    try {
+      const tplResult = await pool.query('SELECT feedback_email_subject, feedback_email_body, feedback_email_cc FROM training_provider LIMIT 1');
+      if (tplResult.rows.length > 0) {
+        dbSubject = tplResult.rows[0].feedback_email_subject || '';
+        dbBody = tplResult.rows[0].feedback_email_body || '';
+        dbCc = tplResult.rows[0].feedback_email_cc || '';
+      }
+    } catch (e) { /* columns don't exist yet */ }
+
+    const replaceVars = (text: string) => text
+      .replace(/\{SENDER_NAME\}/g, name)
+      .replace(/\{SENDER_EMAIL\}/g, email)
+      .replace(/\{SENDER_TEL\}/g, tel || 'Not provided')
+      .replace(/\{MESSAGE\}/g, message)
+      .replace(/\{COMPANY_NAME\}/g, company_name || 'LMS/TMS');
+
+    const defaultSubject = 'Feedback from {SENDER_NAME} - {COMPANY_NAME}';
+    const subject = replaceVars(dbSubject || defaultSubject);
+
+    const defaultBody = `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <h2 style="color: #1e40af; border-bottom: 2px solid #3b82f6; padding-bottom: 10px;">New Feedback Received</h2>
         <table style="width: 100%; border-collapse: collapse; margin-top: 15px;">
           <tr>
             <td style="padding: 8px 12px; font-weight: bold; color: #374151; width: 120px; vertical-align: top;">Name:</td>
-            <td style="padding: 8px 12px; color: #1f2937;">${name}</td>
+            <td style="padding: 8px 12px; color: #1f2937;">{SENDER_NAME}</td>
           </tr>
           <tr style="background-color: #f9fafb;">
             <td style="padding: 8px 12px; font-weight: bold; color: #374151; vertical-align: top;">Email:</td>
-            <td style="padding: 8px 12px; color: #1f2937;"><a href="mailto:${email}">${email}</a></td>
+            <td style="padding: 8px 12px; color: #1f2937;"><a href="mailto:{SENDER_EMAIL}">{SENDER_EMAIL}</a></td>
           </tr>
           <tr>
             <td style="padding: 8px 12px; font-weight: bold; color: #374151; vertical-align: top;">Tel:</td>
-            <td style="padding: 8px 12px; color: #1f2937;">${tel || 'Not provided'}</td>
+            <td style="padding: 8px 12px; color: #1f2937;">{SENDER_TEL}</td>
           </tr>
           <tr style="background-color: #f9fafb;">
             <td style="padding: 8px 12px; font-weight: bold; color: #374151; vertical-align: top;">Message:</td>
-            <td style="padding: 8px 12px; color: #1f2937; white-space: pre-wrap;">${message}</td>
+            <td style="padding: 8px 12px; color: #1f2937; white-space: pre-wrap;">{MESSAGE}</td>
           </tr>
         </table>
         <p style="margin-top: 20px; font-size: 12px; color: #9ca3af;">
-          This feedback was submitted via the ${company_name || 'LMS/TMS'} login page.
+          This feedback was submitted via the {COMPANY_NAME} login page.
         </p>
-      </div>
-    `;
+      </div>`;
+    const htmlBody = replaceVars(dbBody || defaultBody);
+
+    const ccList = dbCc ? dbCc.split(',').map((e: string) => e.trim()).filter(Boolean) : [];
 
     const rawEmail = [
       `From: ${email_user}`,
       `To: ${recipientEmail}`,
+      ...(ccList.length > 0 ? [`Cc: ${ccList.join(', ')}`] : []),
       `Reply-To: ${email}`,
       `Subject: ${subject}`,
       'MIME-Version: 1.0',

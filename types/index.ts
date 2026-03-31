@@ -15,6 +15,9 @@ export enum View {
   PrivacyPolicy = 'privacyPolicy',
   AcceptableUsePolicy = 'acceptableUsePolicy',
   OtpEmailTemplate = 'otpEmailTemplate',
+  CertificateEmailTemplate = 'certificateEmailTemplate',
+  FeedbackEmailTemplate = 'feedbackEmailTemplate',
+  PasswordResetEmailTemplate = 'passwordResetEmailTemplate',
   FinanceManagement = 'financeManagement'
 }
 

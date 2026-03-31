@@ -281,6 +281,7 @@ const UserManagementView: React.FC = () => {
         setEditRoles([...user.roles]);
         setEditAccountStatus(user.account_status);
         setEditFullName(user.full_name || '');
+        setResetPasswordMessage(null);
     };
 
     // Toggle a role in the edit list
@@ -357,6 +358,35 @@ const UserManagementView: React.FC = () => {
             alert(`Failed to delete user: ${err instanceof Error ? err.message : 'Unknown error'}`);
         } finally {
             setIsHardDeletingUser(false);
+        }
+    };
+
+    // Handle Reset Password (admin resets user to default password)
+    const [isResettingPassword, setIsResettingPassword] = useState(false);
+    const [resetPasswordMessage, setResetPasswordMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+    const handleResetPassword = async (userId: string) => {
+        if (!confirm('Are you sure you want to reset this user\'s password to the default password? They will be required to change it on next login.')) return;
+
+        setIsResettingPassword(true);
+        setResetPasswordMessage(null);
+        try {
+            const response = await fetch('/api/auth/admin-reset-password', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId }),
+            });
+            const result = await response.json();
+            if (result.success) {
+                setResetPasswordMessage({ type: 'success', text: result.message });
+            } else {
+                setResetPasswordMessage({ type: 'error', text: result.error || 'Failed to reset password' });
+            }
+        } catch (err) {
+            setResetPasswordMessage({ type: 'error', text: 'Failed to reset password. Please try again.' });
+        } finally {
+            setIsResettingPassword(false);
+            setTimeout(() => setResetPasswordMessage(null), 5000);
         }
     };
 
@@ -982,6 +1012,36 @@ const UserManagementView: React.FC = () => {
                             {editRoles.length === 0 && (
                                 <p className="text-red-500 text-xs mt-2">At least one role must be selected.</p>
                             )}
+
+                            {/* Reset Password */}
+                            <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
+                                <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Password</p>
+                                {resetPasswordMessage && (
+                                    <div className={`mb-3 p-3 rounded-lg text-sm ${resetPasswordMessage.type === 'success' ? 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-400 border border-green-200 dark:border-green-800' : 'bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-400 border border-red-200 dark:border-red-800'}`}>
+                                        {resetPasswordMessage.text}
+                                    </div>
+                                )}
+                                <button
+                                    onClick={() => handleResetPassword(editingUser.id)}
+                                    disabled={isResettingPassword}
+                                    className="w-full flex items-center justify-center gap-2 p-3 rounded-lg border border-orange-300 dark:border-orange-700 text-orange-700 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-900/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    {isResettingPassword ? (
+                                        <>
+                                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-orange-600"></div>
+                                            Resetting...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Icon name={IconName.Shield} className="w-4 h-4" />
+                                            Reset to Default Password
+                                        </>
+                                    )}
+                                </button>
+                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1.5">
+                                    Resets password to the default and forces a change on next login.
+                                </p>
+                            </div>
 
                             {/* Account Status Toggle */}
                             <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">

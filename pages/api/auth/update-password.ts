@@ -57,7 +57,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const saltRounds = 10;
         const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
 
-        // Update both password columns for compatibility
+        // Update both password columns for compatibility and clear must_change_password flag
         const updateQuery = `
             UPDATE app_user
             SET password = $1, password_hash = $2, updated_at = CURRENT_TIMESTAMP
@@ -65,6 +65,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         `;
 
         await pool.query(updateQuery, [newPassword, hashedPassword, userId]);
+
+        // Clear the must_change_password flag if it exists
+        try {
+            await pool.query('UPDATE app_user SET must_change_password = FALSE WHERE id = $1', [userId]);
+        } catch (e) {
+            // Column may not exist yet, that's fine
+        }
 
         console.log(`✅ Password updated successfully for user: ${user.email}`);
 

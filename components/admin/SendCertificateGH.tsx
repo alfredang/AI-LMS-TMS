@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLms } from '@contexts/LmsContext';
+import { getApiUrl } from '@/lib/urlHelpers';
 
 interface FormData {
   studentName: string;
@@ -9,24 +10,33 @@ interface FormData {
   ccEmails: string;
 }
 
-const DEFAULT_CC = 'iris@tertiaryinfotech.com, angch@tertiaryinfotech.com, siraj@tertiarycourses.com.gh';
 const STORAGE_KEY = 'send-cert-gh-form';
 
 export const SendCertificateGHView: React.FC = () => {
   const { currentUser } = useLms();
-  const [form, setForm] = useState<FormData>({ studentName: '', studentEmail: '', courseName: '', courseDates: '', ccEmails: DEFAULT_CC });
+  const [form, setForm] = useState<FormData>({ studentName: '', studentEmail: '', courseName: '', courseDates: '', ccEmails: '' });
   const [sending, setSending] = useState(false);
   const [result, setResult] = useState<{ success: boolean; message: string } | null>(null);
 
-  // Restore course fields from localStorage on mount
+  // Fetch default CC from certificate email template and restore course fields
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        setForm(prev => ({ ...prev, courseName: parsed.courseName || '', courseDates: parsed.courseDates || '' }));
-      }
-    } catch {}
+    const init = async () => {
+      try {
+        const res = await fetch(getApiUrl('/api/training-provider/certificate-email-template'));
+        const data = await res.json();
+        if (data.success && data.data?.certificateEmailCc) {
+          setForm(prev => ({ ...prev, ccEmails: prev.ccEmails || data.data.certificateEmailCc }));
+        }
+      } catch {}
+      try {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          setForm(prev => ({ ...prev, courseName: parsed.courseName || '', courseDates: parsed.courseDates || '' }));
+        }
+      } catch {}
+    };
+    init();
   }, []);
 
   const handleChange = (field: keyof FormData, value: string) => {

@@ -39,7 +39,7 @@ interface LoginScreenProps {
 const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
   const { login, courses, trainingProviderProfile } = useLms();
 
-  const [step, setStep] = useState<'email' | 'otp' | 'password' | 'roleSelect' | 'changePassword'>('email');
+  const [step, setStep] = useState<'email' | 'otp' | 'password' | 'roleSelect' | 'changePassword' | 'forgotPassword'>('email');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState(''); // Pre-fill for testing
   const [otp, setOtp] = useState('');
@@ -60,6 +60,8 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
   const [feedbackForm, setFeedbackForm] = useState({ name: '', email: '', tel: '', message: '' });
   const [feedbackStatus, setFeedbackStatus] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [isSendingFeedback, setIsSendingFeedback] = useState(false);
+  const [forgotPasswordEmail, setForgotPasswordEmail] = useState('');
+  const [forgotPasswordSent, setForgotPasswordSent] = useState(false);
 
   // Multi-role state
   const [pendingUser, setPendingUser] = useState<User | null>(null);
@@ -341,6 +343,34 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
     setSuccessMessage(null);
   };
 
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!forgotPasswordEmail.includes('@')) {
+      setError('Please enter a valid email address.');
+      return;
+    }
+    setIsLoading(true);
+    setError(null);
+    try {
+      const response = await fetch('/api/auth/forgot-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: forgotPasswordEmail }),
+      });
+      const result = await response.json();
+      if (result.success) {
+        setForgotPasswordSent(true);
+      } else {
+        setError(result.error || 'Failed to process request. Please try again.');
+      }
+    } catch (err) {
+      console.error('Forgot password error:', err);
+      setError('An unexpected error occurred. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
 
 
 
@@ -486,17 +516,31 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
         </Button>
       </div>
 
-      {securitySettings.enableOtpLogin && (
-        <div className="text-center mt-4">
-          <button
-            type="button"
-            onClick={handleSwitchToOtp}
-            className="text-sm text-blue-600 hover:text-blue-800 underline dark:text-blue-400 dark:hover:text-blue-300"
-          >
-            Login with OTP instead
-          </button>
-        </div>
-      )}
+      <div className="text-center mt-4 space-y-2">
+        <button
+          type="button"
+          onClick={() => {
+            setStep('forgotPassword');
+            setForgotPasswordEmail(email);
+            setForgotPasswordSent(false);
+            setError(null);
+          }}
+          className="text-sm text-gray-500 hover:text-gray-700 underline dark:text-gray-400 dark:hover:text-gray-300"
+        >
+          Forgot Password?
+        </button>
+        {securitySettings.enableOtpLogin && (
+          <div>
+            <button
+              type="button"
+              onClick={handleSwitchToOtp}
+              className="text-sm text-blue-600 hover:text-blue-800 underline dark:text-blue-400 dark:hover:text-blue-300"
+            >
+              Login with OTP instead
+            </button>
+          </div>
+        )}
+      </div>
 
     </form>
   );
@@ -611,8 +655,82 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
     </form>
   );
 
+  const renderForgotPasswordStep = () => (
+    <div className="space-y-6">
+      {forgotPasswordSent ? (
+        <div className="text-center space-y-4">
+          <div className="w-16 h-16 mx-auto bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center">
+            <svg className="w-8 h-8 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+            </svg>
+          </div>
+          <h3 className="text-lg font-bold text-gray-900 dark:text-white">Check Your Email</h3>
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            If an account exists for <span className="font-semibold text-gray-900 dark:text-white">{forgotPasswordEmail}</span>, a temporary password has been sent. Please check your inbox (and spam folder).
+          </p>
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            Use the temporary password to log in. You will be prompted to set a new password.
+          </p>
+          <Button
+            onClick={() => {
+              setStep('password');
+              setEmail(forgotPasswordEmail);
+              setPassword('');
+              setError(null);
+            }}
+            className="w-full !py-3"
+            size="lg"
+          >
+            Back to Login
+          </Button>
+        </div>
+      ) : (
+        <form onSubmit={handleForgotPassword} className="space-y-6">
+          <div className="text-center mb-2">
+            <h3 className="text-lg font-bold text-gray-900 dark:text-white">Forgot Password</h3>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+              Enter your email address and we&apos;ll send you a temporary password.
+            </p>
+          </div>
+          <div>
+            <label htmlFor="forgot-email" className="block text-sm font-medium text-gray-700 mb-1 dark:text-gray-300">Email</label>
+            <input
+              id="forgot-email"
+              name="email"
+              type="email"
+              autoComplete="email"
+              required
+              value={forgotPasswordEmail}
+              onChange={(e) => setForgotPasswordEmail(e.target.value.toLowerCase())}
+              className={inputClasses}
+              placeholder="your@email.com"
+            />
+          </div>
+          {error && <p className="text-red-500 text-sm text-center">{error}</p>}
+          <Button type="submit" className="w-full !py-3" size="lg" disabled={isLoading}>
+            {isLoading ? 'Sending...' : 'Send Temporary Password'}
+          </Button>
+          <div className="text-center">
+            <button
+              type="button"
+              onClick={() => {
+                setStep('password');
+                setError(null);
+              }}
+              className="text-sm text-gray-500 hover:text-gray-700 underline dark:text-gray-400 dark:hover:text-gray-300"
+            >
+              Back to Login
+            </button>
+          </div>
+        </form>
+      )}
+    </div>
+  );
+
   const renderCurrentStep = () => {
-    if (step === 'changePassword') {
+    if (step === 'forgotPassword') {
+      return renderForgotPasswordStep();
+    } else if (step === 'changePassword') {
       return renderChangePasswordStep();
     } else if (step === 'roleSelect') {
       return renderRoleSelectStep();

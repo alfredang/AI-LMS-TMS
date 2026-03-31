@@ -63,7 +63,7 @@ const salutationOptions = [
 ];
 
 export const CreateNewClassView: React.FC = () => {
-    const { setAdminPage } = useLms();
+    const { setAdminPage, trainingProviderProfile } = useLms();
 
     // Course Run Form State
     const [courseReferenceNumber, setCourseReferenceNumber] = useState('');
@@ -105,7 +105,7 @@ export const CreateNewClassView: React.FC = () => {
 
     // Course Admin Details
     const [modeOfTraining, setModeOfTraining] = useState('1');
-    const [courseAdminEmail, setCourseAdminEmail] = useState('enquiry@tertiaryinfotech.com');
+    const [courseAdminEmail, setCourseAdminEmail] = useState(trainingProviderProfile?.companyEmail || '');
 
     // Course Vacancy
     const [courseVacancy, setCourseVacancy] = useState('A');

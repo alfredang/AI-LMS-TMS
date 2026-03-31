@@ -288,24 +288,40 @@ async function handler(req: NextApiRequest, res: NextApiResponse<LoginResponse>)
 
     console.log(`✅ User roles determined: ${userRoles.join(', ')}, primary: ${primaryRole}`);
 
-    // Check if forced first-time password change is enabled and user still has default password
+    // Check if forced password change is needed:
+    // 1. Per-user flag (admin reset or forgot password)
+    // 2. Global setting (force first password change when using default password)
     let forcePasswordChange = false;
     if (loginType === 'password') {
+      // Check per-user must_change_password flag first
       try {
-        const tpSettingsQuery = `SELECT force_first_password_change, default_password FROM training_provider LIMIT 1`;
-        const tpSettings = await pool.query(tpSettingsQuery);
-        if (tpSettings.rows.length > 0 && tpSettings.rows[0].force_first_password_change) {
-          const defaultPwd = tpSettings.rows[0].default_password;
-          if (defaultPwd) {
-            const isDefaultPassword = await bcrypt.compare(defaultPwd, user.password);
-            if (isDefaultPassword) {
-              forcePasswordChange = true;
-              console.log(`🔐 User ${email} still has default password, forcing change`);
-            }
-          }
+        const flagResult = await pool.query('SELECT must_change_password FROM app_user WHERE id = $1', [user.id]);
+        if (flagResult.rows.length > 0 && flagResult.rows[0].must_change_password) {
+          forcePasswordChange = true;
+          console.log(`🔐 User ${email} has must_change_password flag set`);
         }
       } catch (e) {
         // Column may not exist yet, skip
+      }
+
+      // Also check global force_first_password_change setting
+      if (!forcePasswordChange) {
+        try {
+          const tpSettingsQuery = `SELECT force_first_password_change, default_password FROM training_provider LIMIT 1`;
+          const tpSettings = await pool.query(tpSettingsQuery);
+          if (tpSettings.rows.length > 0 && tpSettings.rows[0].force_first_password_change) {
+            const defaultPwd = tpSettings.rows[0].default_password;
+            if (defaultPwd) {
+              const isDefaultPassword = await bcrypt.compare(defaultPwd, user.password);
+              if (isDefaultPassword) {
+                forcePasswordChange = true;
+                console.log(`🔐 User ${email} still has default password, forcing change`);
+              }
+            }
+          }
+        } catch (e) {
+          // Column may not exist yet, skip
+        }
       }
     }
 

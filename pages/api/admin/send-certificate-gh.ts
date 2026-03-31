@@ -3,12 +3,6 @@ import { google } from 'googleapis';
 import pool from '@lib/db';
 import { getTrainingPartnerIdentifiers } from '@lib/trainingPartnerIdentifiers';
 
-const DEFAULT_CC = [
-  'iris@tertiaryinfotech.com',
-  'angch@tertiaryinfotech.com',
-  'siraj@tertiarycourses.com.gh',
-];
-
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -17,10 +11,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const { studentName, studentEmail, courseName, courseDates, userId, ccEmails } = req.body;
   const tp = await getTrainingPartnerIdentifiers();
 
-  // Parse CC list: use provided value or fall back to defaults
+  // Parse CC list from request
   const ccList: string[] = typeof ccEmails === 'string' && ccEmails.trim()
     ? ccEmails.split(',').map((e: string) => e.trim()).filter(Boolean)
-    : DEFAULT_CC;
+    : [];
 
   if (!studentName || !studentEmail || !courseName || !courseDates || !userId) {
     return res.status(400).json({ error: 'All fields are required' });
@@ -115,17 +109,45 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const fileName = `${sanitizedName}-Certificate-of-Achievement.pdf`;
 
     const boundary = '----CertBoundary' + Date.now();
-    const subject = 'Certificate of Achievement: Congratulations!';
+
+    // Fetch certificate email template from DB (or use defaults)
+    let dbSubject = '';
+    let dbBody = '';
+    try {
+      const tplResult = await pool.query('SELECT certificate_email_subject, certificate_email_body FROM training_provider LIMIT 1');
+      if (tplResult.rows.length > 0) {
+        dbSubject = tplResult.rows[0].certificate_email_subject || '';
+        dbBody = tplResult.rows[0].certificate_email_body || '';
+      }
+    } catch (e) { /* columns don't exist yet */ }
+
+    const subject = (dbSubject || 'Certificate of Achievement: Congratulations!')
+      .replace(/\{STUDENT_NAME\}/g, studentName)
+      .replace(/\{COURSE_NAME\}/g, courseName)
+      .replace(/\{COMPANY_NAME\}/g, tp.name || 'Training Provider')
+      .replace(/\{COMPANY_SHORT_NAME\}/g, tp.companyShortname || tp.name || 'Training Provider')
+      .replace(/\{COMPANY_WEBSITE\}/g, tp.companyWebsite || '');
+
+    const defaultBody = `Dear {STUDENT_NAME},
+
+Congratulations on successfully completing {COURSE_NAME}!
+
+Please find your Certificate of Achievement attached to this email.
+
+Best regards,
+{COMPANY_NAME}
+{COMPANY_WEBSITE}`;
+
+    const bodyText = (dbBody || defaultBody)
+      .replace(/\{STUDENT_NAME\}/g, studentName)
+      .replace(/\{COURSE_NAME\}/g, courseName)
+      .replace(/\{COMPANY_NAME\}/g, tp.name || 'Training Provider')
+      .replace(/\{COMPANY_SHORT_NAME\}/g, tp.companyShortname || tp.name || 'Training Provider')
+      .replace(/\{COMPANY_WEBSITE\}/g, tp.companyWebsite || '');
 
     const htmlBody = `
       <div style="font-family: Arial, sans-serif; color: #333;">
-        <p>Dear ${studentName},</p>
-        <p>Congratulations on successfully completing <strong>${courseName}</strong>!</p>
-        <p>Please find your Certificate of Achievement attached to this email.</p>
-        <br/>
-        <p>Best regards,</p>
-        <p><strong>${tp.name || 'Training Provider'}</strong></p>
-        ${tp.companyWebsite ? `<p style="font-size: 12px; color: #666;"><a href="${tp.companyWebsite}">${tp.companyWebsite.replace(/^https?:\/\//, '')}</a></p>` : ''}
+        ${bodyText.split('\n').map(line => line.trim() ? `<p>${line}</p>` : '<br/>').join('\n        ')}
       </div>
     `;
 

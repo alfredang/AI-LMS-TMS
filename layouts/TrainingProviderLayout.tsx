@@ -17,6 +17,9 @@ import DocumentsView from '../components/training-provider/DocumentsView';
 import PrivacyPolicyView from '../components/training-provider/PrivacyPolicyView';
 import AcceptableUsePolicyView from '../components/training-provider/AcceptableUsePolicyView';
 import OtpEmailTemplateView from '../components/training-provider/OtpEmailTemplateView';
+import CertificateEmailTemplateView from '../components/training-provider/CertificateEmailTemplateView';
+import FeedbackEmailTemplateView from '../components/training-provider/FeedbackEmailTemplateView';
+import PasswordResetEmailTemplateView from '../components/training-provider/PasswordResetEmailTemplateView';
 import FinanceManagementView from '../components/training-provider/FinanceManagementView';
 import TrainingProviderSidebar from '../components/training-provider/TrainingProviderSidebar';
 import { Card } from '../components/ui/Card';
@@ -63,6 +66,12 @@ const TrainingProviderLayout: React.FC = () => {
         return <AcceptableUsePolicyView />;
       case View.OtpEmailTemplate:
         return <OtpEmailTemplateView />;
+      case View.CertificateEmailTemplate:
+        return <CertificateEmailTemplateView />;
+      case View.FeedbackEmailTemplate:
+        return <FeedbackEmailTemplateView />;
+      case View.PasswordResetEmailTemplate:
+        return <PasswordResetEmailTemplateView />;
       case View.FinanceManagement:
         return <FinanceManagementView />;
       default:
@@ -85,6 +94,9 @@ const TrainingProviderLayout: React.FC = () => {
       case View.PrivacyPolicy: return 'Privacy Policy';
       case View.AcceptableUsePolicy: return 'Acceptable Use Policy';
       case View.OtpEmailTemplate: return 'OTP Email Template';
+      case View.CertificateEmailTemplate: return 'Certificate Email Template';
+      case View.FeedbackEmailTemplate: return 'Feedback Email Template';
+      case View.PasswordResetEmailTemplate: return 'Password Reset Email Template';
       case View.FinanceManagement: return 'Finance Management';
       default: return 'Dashboard';
     }
