@@ -511,6 +511,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             company_shortname = $2,
             uen = $3,
             company_address = $4,
+            company_email = $38,
+            company_tel = $39,
+            company_website = $40,
             contact_person_name = $5,
             contact_tel = $6,
             invoice_template_url = COALESCE($7, invoice_template_url),
@@ -584,7 +587,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         profileData.fundingSettings?.isGstRegistered || false,
         profileData.colorScheme || '#3B82F6',
         trainingProviderId,
-        filePaths.companyLogoUrl || null
+        filePaths.companyLogoUrl || null,
+        profileData.companyEmail || '',
+        profileData.companyTel || '',
+        profileData.companyWebsite || ''
       ];
 
       console.log('🔍 File upload parameters being sent to database:', {

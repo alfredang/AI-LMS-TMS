@@ -799,6 +799,18 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                             <label className="block text-sm font-medium text-on-surface-secondary mb-1">Company Address</label>
                             <input type="text" name="companyAddress" value={formData.companyAddress} onChange={handleInputChange} placeholder="Company Address" className={inputClasses} />
                         </div>
+                        <div>
+                            <label className="block text-sm font-medium text-on-surface-secondary mb-1">Company Email</label>
+                            <input type="email" name="companyEmail" value={formData.companyEmail} onChange={handleInputChange} placeholder="e.g. enquiry@company.com" className={inputClasses} />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-on-surface-secondary mb-1">Company Tel</label>
+                            <input type="tel" name="companyTel" value={formData.companyTel} onChange={handleInputChange} placeholder="e.g. +65 6123 4567" className={inputClasses} />
+                        </div>
+                        <div className="sm:col-span-2">
+                            <label className="block text-sm font-medium text-on-surface-secondary mb-1">Company Website</label>
+                            <input type="url" name="companyWebsite" value={formData.companyWebsite} onChange={handleInputChange} placeholder="e.g. https://www.company.com" className={inputClasses} />
+                        </div>
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -808,6 +820,9 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                         <div className="sm:col-span-2 lg:col-span-3">
                             <ProfileBioItem label="Company Address" value={formData.companyAddress} />
                         </div>
+                        <ProfileBioItem label="Company Email" value={formData.companyEmail} />
+                        <ProfileBioItem label="Company Tel" value={formData.companyTel} />
+                        <ProfileBioItem label="Company Website" value={formData.companyWebsite} />
                     </div>
                 ))}
 
