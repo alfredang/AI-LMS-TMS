@@ -145,145 +145,6 @@ const ToggleSwitch: React.FC<{
     );
 };
 
-// Login Details Card Component
-const LoginDetailsCard: React.FC<{
-    loginId: string;
-    password?: string;
-    userId?: string;
-    onPasswordUpdate?: (newPassword: string) => void;
-}> = ({ loginId, password, userId, onPasswordUpdate }) => {
-    const [isPasswordVisible, setIsPasswordVisible] = useState(false);
-    const [isResetting, setIsResetting] = useState(false);
-    const [newPassword, setNewPassword] = useState('');
-    const [isUpdating, setIsUpdating] = useState(false);
-    const displayPassword = password || "No password available";
-
-    const handleResetPassword = async () => {
-        if (!newPassword.trim()) {
-            alert('Please enter a new password');
-            return;
-        }
-
-        if (newPassword.length < 6) {
-            alert('Password must be at least 6 characters long');
-            return;
-        }
-
-        try {
-            setIsUpdating(true);
-
-            if (!userId) {
-                throw new Error('No user ID found');
-            }
-
-            // Use the new bcrypt-enabled password update API
-            const response = await fetch(getApiUrl('/api/auth/update-password'), {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    userId: userId,
-                    newPassword: newPassword
-                })
-            });
-
-            if (!response.ok) {
-                throw new Error(`Password update failed: ${response.status}`);
-            }
-
-            const result = await response.json();
-            if (!result.success) {
-                throw new Error(result.message || 'Password update failed');
-            }
-
-            console.log('✅ Training Provider password updated successfully with bcrypt hashing');
-            alert('Password reset successfully!');
-            setIsResetting(false);
-            setNewPassword('');
-
-            // Call the callback to update the parent component
-            if (onPasswordUpdate) {
-                onPasswordUpdate(newPassword);
-            }
-
-        } catch (error) {
-            console.error('❌ Failed to reset training provider password:', error);
-            alert(`Failed to reset password: ${error instanceof Error ? error.message : 'Please try again.'}`);
-        } finally {
-            setIsUpdating(false);
-        }
-    };
-
-    return (
-        <div>
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4 flex-grow">
-                    <div>
-                        <p className="text-sm text-subtle">User ID</p>
-                        <p className="font-semibold text-on-surface">{loginId}</p>
-                    </div>
-                    <div>
-                        <p className="text-sm text-subtle">Password</p>
-                        <div className="flex items-end gap-2">
-                            <div className="flex items-center gap-2 flex-grow">
-                                {isResetting ? (
-                                    <input
-                                        type={isPasswordVisible ? "text" : "password"}
-                                        value={newPassword}
-                                        onChange={(e) => setNewPassword(e.target.value)}
-                                        className={`${inputClasses} tracking-wider`}
-                                        placeholder="Enter new password"
-                                    />
-                                ) : (
-                                    <p className="font-semibold text-on-surface tracking-wider">
-                                        {isPasswordVisible ? displayPassword : "••••••••••••••••"}
-                                    </p>
-                                )}
-                                <button
-                                    type="button"
-                                    onClick={() => setIsPasswordVisible(!isPasswordVisible)}
-                                    className="text-subtle hover:text-primary p-1 rounded-full"
-                                >
-                                    <Icon
-                                        name={isPasswordVisible ? IconName.EyeOff : IconName.Eye}
-                                        className="w-5 h-5"
-                                    />
-                                </button>
-                            </div>
-                            {isResetting ? (
-                                <div className="flex items-end gap-2 flex-shrink-0">
-                                    <Button
-                                        variant="ghost"
-                                        onClick={() => {
-                                            setIsResetting(false);
-                                            setNewPassword("");
-                                        }}
-                                        disabled={isUpdating}
-                                    >
-                                        Cancel
-                                    </Button>
-                                    <Button onClick={handleResetPassword} disabled={isUpdating}>
-                                        {isUpdating ? <Spinner size="sm" /> : 'Save'}
-                                    </Button>
-                                </div>
-                            ) : (
-                                <Button
-                                    variant="ghost"
-                                    className="border border-primary text-primary hover:bg-primary hover:text-white flex-shrink-0"
-                                    onClick={() => setIsResetting(true)}
-                                >
-                                    Reset Password
-                                </Button>
-                            )}
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    );
-};
-
 interface TrainingProviderProfileCardProps {
     profile: TrainingProviderProfile;
     onUpdate: (userId: string, updatedData: Partial<TrainingProviderProfile>) => Promise<void>;
@@ -335,7 +196,6 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
     const [isGamificationOpen, setIsGamificationOpen] = useState(false);
     const [isFundingOpen, setIsFundingOpen] = useState(false);
     const [isAppearanceOpen, setIsAppearanceOpen] = useState(false);
-    const [isLoginDetailsOpen, setIsLoginDetailsOpen] = useState(false);
     const [isEncryptionKeyVisible, setIsEncryptionKeyVisible] = useState(false);
     const [themeMode, setThemeMode] = useState<ThemeMode>(() => getCurrentTheme());
 
@@ -853,22 +713,6 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                         <ProfileBioItem label="Support Telephone" value={formData.contactPerson.tel} />
                     </div>
                 ))}
-
-                <div className="border-t my-6"></div>
-                <button type="button" onClick={() => setIsLoginDetailsOpen(prev => !prev)} className="w-full flex items-center justify-between group">
-                    <h2 className="text-xl font-bold">Login Details</h2>
-                    <Icon name={IconName.ChevronDown} className={`w-5 h-5 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 transition-transform duration-200 flex-shrink-0 ml-4 ${isLoginDetailsOpen ? 'rotate-180' : ''}`} />
-                </button>
-                {isLoginDetailsOpen && <div className="mt-4">
-                    <LoginDetailsCard
-                        loginId={formData.loginId}
-                        password={formData.password}
-                        userId={profile.id}
-                        onPasswordUpdate={(newPassword) => {
-                            setFormData(prev => ({ ...prev, password: newPassword }));
-                        }}
-                    />
-                </div>}
 
                 <div className="border-t my-6"></div>
                 <button type="button" onClick={() => setIsFundingOpen(prev => !prev)} className="w-full flex items-center justify-between group">
