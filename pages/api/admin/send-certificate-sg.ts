@@ -55,6 +55,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     slidesTemplateId = tp.google_slides_template_id;
     senderName = tp.contact_person_name || '';
     senderEmail = tp.company_email || emailUser;
+    const replyToEmail = senderEmail;
 
     if (!emailUser || !clientId || !clientSecret || !refreshToken || !slidesTemplateId) {
       return res.status(400).json({ error: 'Google Integration settings are incomplete. Please configure Email User, Client ID, Client Secret, Refresh Token, and Slides Template ID in Company Settings.' });
@@ -157,8 +158,8 @@ Best regards,
     `;
 
     const rawEmail = [
-      `From: ${senderName ? `${senderName} <${senderEmail}>` : senderEmail}`,
-      `Reply-To: ${senderEmail}`,
+      `From: ${senderName ? `${senderName} <${emailUser}>` : emailUser}`,
+      `Reply-To: ${replyToEmail}`,
       `To: ${studentEmail}`,
       ...(ccList.length > 0 ? [`Cc: ${ccList.join(', ')}`] : []),
       `Subject: ${subject}`,

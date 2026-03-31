@@ -82,7 +82,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const tp = tpResult.rows[0];
     const { email_user, company_email, contact_person_name, google_client_id, google_client_secret, google_refresh_token } = tp;
-    const senderEmail = company_email || email_user;
+    const replyToEmail = company_email || email_user;
     const senderName = contact_person_name || '';
 
     if (!email_user || !google_client_id || !google_client_secret || !google_refresh_token) {
@@ -132,8 +132,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const htmlBody = replaceVars(dbBody || defaultBody);
 
     const rawEmail = [
-      `From: ${senderName ? `${senderName} <${senderEmail}>` : senderEmail}`,
-      `Reply-To: ${senderEmail}`,
+      `From: ${senderName ? `${senderName} <${email_user}>` : email_user}`,
+      `Reply-To: ${replyToEmail}`,
       `To: ${user.email}`,
       `Subject: ${subject}`,
       'MIME-Version: 1.0',
