@@ -82,8 +82,9 @@ async function fetchEnrollments(courseRunId: string): Promise<any[]> {
   if (!credentials) throw new Error('SSG credentials not found');
 
   const ssgBaseUrl = process.env.SSG_API_URL || 'https://api.ssg-wsg.sg';
-  const tpUen  = process.env.TRAINING_PARTNER_UEN  || credentials.uen;
-  const tpCode = process.env.TRAINING_PARTNER_CODE || `${tpUen}-01`;
+  const tp = await getTrainingPartnerIdentifiers();
+  const tpUen  = tp.uen || credentials.uen;
+  const tpCode = tp.code;
 
   const api = createSSGEnrolmentAPI(ssgBaseUrl, credentials);
   const result = await api.searchEnrolment({

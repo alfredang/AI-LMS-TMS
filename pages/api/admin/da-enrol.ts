@@ -84,7 +84,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     const ssgBaseUrl = process.env.SSG_API_URL || 'https://api.ssg-wsg.sg';
-    const encKey = Buffer.from(process.env.ENCRYPTION_KEY || credentials.encryptionKey, 'base64');
+    const encKey = Buffer.from(credentials.encryptionKey, 'base64');
     const iv = Buffer.from('SSGAPIInitVector', 'utf8');
     const tp = await getTrainingPartnerIdentifiers();
     const uen = credentials.uen || tp.uen;
