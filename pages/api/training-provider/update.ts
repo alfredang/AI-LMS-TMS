@@ -118,8 +118,9 @@ const saveUploadedFile = async (file: File, userId: string, fieldName: string): 
   // Get just the base name without extension  
   const baseName = path.basename(cleanFilename, fileExtension);
 
-  // Create clean filename with timestamp
-  const fileName = `${timestamp}_${baseName}${fileExtension}`;
+  // Create clean filename — no timestamp for SSG cert/key files (cleaner DB paths)
+  const skipTimestamp = folderName === 'self_signing_cert' || folderName === 'private_key';
+  const fileName = skipTimestamp ? `${baseName}${fileExtension}` : `${timestamp}_${baseName}${fileExtension}`;
   const filePath = path.join(uploadDir, fileName);
 
   console.log('📄 Filename generation details:', {
