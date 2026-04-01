@@ -146,6 +146,7 @@ export interface Course {
   isLeaderboardEnabled?: boolean;
   courseLink?: string;
   assessmentRecordLink?: string;
+  assessmentSummaryRecordUrl?: string;
   topics: Topic[];
   assessments?: Assessment[];
   learners?: any[];
@@ -171,6 +172,7 @@ export interface CourseDetail {
   assessmentPlanUrl?: string;
   courseLink?: string;
   assessmentRecordLink?: string;
+  assessmentSummaryRecordUrl?: string;
   writtenAssessmentLink?: string;
   practicalPerformanceAssessmentLink?: string;
   writtenAssessmentPublished?: boolean;
