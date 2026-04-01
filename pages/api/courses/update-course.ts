@@ -51,6 +51,7 @@ interface CourseData {
   slidesUrl?: string;
   courseLink?: string;
   assessmentRecordLink?: string;
+  assessmentSummaryRecordUrl?: string;
   fundingValidity?: string;
   writtenAssessmentLink?: string;
   practicalPerformanceAssessmentLink?: string;
@@ -485,9 +486,10 @@ export default async function handler(
           practical_performance_assessment_link = COALESCE($21, practical_performance_assessment_link),
           courseware_link = COALESCE($22, courseware_link),
           assessment_record_link = COALESCE($23, assessment_record_link),
-          funding_validity = $24,
+          assessment_summary_record_url = COALESCE($24, assessment_summary_record_url),
+          funding_validity = $25,
           updated_at = now()
-        WHERE id = $25
+        WHERE id = $26
         RETURNING id
       `;
 
@@ -515,6 +517,7 @@ export default async function handler(
         fileUrls.practicalPerformanceAssessmentLink || courseData.practicalPerformanceAssessmentLink || null,
         courseData.courseLink || null,
         courseData.assessmentRecordLink || null,
+        courseData.assessmentSummaryRecordUrl || null,
         courseData.fundingValidity || null,
         courseId
       ]);

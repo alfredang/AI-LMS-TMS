@@ -104,28 +104,28 @@ const LoginDetailsCard: React.FC<{
                         <div className="flex items-end gap-2">
                             <div className="flex items-center gap-2 flex-grow">
                                 {isResetting ? (
-                                    <input
-                                        type={isPasswordVisible ? "text" : "password"}
-                                        value={newPassword}
-                                        onChange={(e) => setNewPassword(e.target.value)}
-                                        className={`${inputClasses} tracking-wider`}
-                                        placeholder="Enter new password"
-                                    />
+                                    <>
+                                        <input
+                                            type={isPasswordVisible ? "text" : "password"}
+                                            value={newPassword}
+                                            onChange={(e) => setNewPassword(e.target.value)}
+                                            className={`${inputClasses} tracking-wider`}
+                                            placeholder="Enter new password"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => setIsPasswordVisible(!isPasswordVisible)}
+                                            className="text-subtle hover:text-primary p-1 rounded-full"
+                                        >
+                                            <Icon
+                                                name={isPasswordVisible ? IconName.EyeOff : IconName.Eye}
+                                                className="w-5 h-5"
+                                            />
+                                        </button>
+                                    </>
                                 ) : (
-                                    <p className="font-semibold text-on-surface tracking-wider">
-                                        {isPasswordVisible ? password : "••••••••••••••••"}
-                                    </p>
+                                    <p className="font-semibold text-on-surface tracking-wider">••••••••••••••••</p>
                                 )}
-                                <button
-                                    type="button"
-                                    onClick={() => setIsPasswordVisible(!isPasswordVisible)}
-                                    className="text-subtle hover:text-primary p-1 rounded-full"
-                                >
-                                    <Icon
-                                        name={isPasswordVisible ? IconName.EyeOff : IconName.Eye}
-                                        className="w-5 h-5"
-                                    />
-                                </button>
                             </div>
                             {isResetting ? (
                                 <div className="flex items-end gap-2 flex-shrink-0">

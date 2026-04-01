@@ -852,28 +852,28 @@ const LoginDetailsCard: React.FC<{ loginId: string; password: string; userId?: s
                         <div className="flex items-center gap-2">
                             <div className="flex items-center gap-2 flex-grow">
                                 {isResetting ? (
-                                    <input
-                                        type={isPasswordVisible ? "text" : "password"}
-                                        value={newPassword}
-                                        onChange={(e) => setNewPassword(e.target.value)}
-                                        className={`${inputClasses} tracking-wider`}
-                                        placeholder="Enter new password"
-                                    />
+                                    <>
+                                        <input
+                                            type={isPasswordVisible ? "text" : "password"}
+                                            value={newPassword}
+                                            onChange={(e) => setNewPassword(e.target.value)}
+                                            className={`${inputClasses} tracking-wider`}
+                                            placeholder="Enter new password"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => setIsPasswordVisible(!isPasswordVisible)}
+                                            className="text-subtle hover:text-primary p-1 rounded-full"
+                                        >
+                                            <Icon
+                                                name={isPasswordVisible ? IconName.EyeOff : IconName.Eye}
+                                                className="w-5 h-5"
+                                            />
+                                        </button>
+                                    </>
                                 ) : (
-                                    <p className="font-semibold text-on-surface tracking-wider">
-                                        {isPasswordVisible ? password : "••••••••••••••••"}
-                                    </p>
+                                    <p className="font-semibold text-on-surface tracking-wider">••••••••••••••••</p>
                                 )}
-                                <button
-                                    type="button"
-                                    onClick={() => setIsPasswordVisible(!isPasswordVisible)}
-                                    className="text-subtle hover:text-primary p-1 rounded-full"
-                                >
-                                    <Icon
-                                        name={isPasswordVisible ? IconName.EyeOff : IconName.Eye}
-                                        className="w-5 h-5"
-                                    />
-                                </button>
                             </div>
                         </div>
                     </div>
@@ -2155,17 +2155,7 @@ const LearnerProfileView: React.FC = () => {
                         </div>
                         <div>
                             <p className="text-sm text-subtle">Password</p>
-                            <div className="flex items-center gap-2">
-                                <p className="font-semibold text-on-surface font-mono tracking-wider">
-                                    {isPasswordVisible ? 'Str0ngP@ssw0rd!23' : '••••••••••••••••'}
-                                </p>
-                                <button
-                                    onClick={() => setIsPasswordVisible(!isPasswordVisible)}
-                                    className="text-subtle hover:text-primary p-1 rounded-full"
-                                >
-                                    <Icon name={isPasswordVisible ? IconName.EyeOff : IconName.Eye} className="w-5 h-5" />
-                                </button>
-                            </div>
+                            <p className="font-semibold text-on-surface tracking-wider">••••••••••••••••</p>
                         </div>
                     </div>
                     <Button variant="ghost" className="border border-gray-300 mt-4 sm:mt-0 flex-shrink-0">

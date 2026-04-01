@@ -1303,6 +1303,17 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                     placeholder="https://..."
                                 />
                             </div>
+                            <div>
+                                <label htmlFor="assessmentSummaryRecordUrl" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Assessment Summary Record URL</label>
+                                <input
+                                    type="url"
+                                    id="assessmentSummaryRecordUrl"
+                                    value={course.assessmentSummaryRecordUrl || ''}
+                                    onChange={(e) => setCourse(prev => ({ ...prev, assessmentSummaryRecordUrl: e.target.value }))}
+                                    className={inputClasses}
+                                    placeholder="https://docs.google.com/..."
+                                />
+                            </div>
                         </div>
                     </Card>
 
