@@ -15,6 +15,8 @@ const nextConfig = {
     unoptimized: process.env.NODE_ENV !== 'production',
   },
 
+  serverExternalPackages: ['node-cron'],
+
   // TypeScript & ESLint
   typescript: {
     ignoreBuildErrors: false,
