@@ -5831,3 +5831,248 @@ export const CourseRunDateSyncLogsView: React.FC = () => {
         </div>
     );
 };
+
+// ─── Trainer Folder Logging ───────────────────────────────────────────────────
+
+interface TrainerFolderLogRow {
+    id: number;
+    run_id: string;
+    created_at: string;
+    course_run_id: string;
+    course_title: string;
+    course_code: string | null;
+    start_date: string | null;
+    end_date: string | null;
+    trainer_name: string | null;
+    trainer_source: string | null;
+    folder_name: string | null;
+    status: 'created' | 'existing' | 'error' | 'pending';
+    error_message: string | null;
+}
+
+export const TrainerFolderLogsView: React.FC = () => {
+    const { setAdminPage } = useLms();
+    const [logs, setLogs] = useState<TrainerFolderLogRow[]>([]);
+    const [loading, setLoading] = useState(false);
+    const [running, setRunning] = useState(false);
+    const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+    const [expandedDates, setExpandedDates] = useState<Set<string>>(new Set());
+
+    const fetchLogs = async () => {
+        setLoading(true);
+        try {
+            const res = await fetch('/api/admin/trainer-folder-logs?limit=500');
+            const json = await res.json();
+            if (json.success) setLogs(json.data);
+        } catch {
+            /* silent */
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => { fetchLogs(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+    const handleRunNow = async () => {
+        setRunning(true);
+        setMessage(null);
+        try {
+            // Re-trigger the background function locally without scheduler API key requirement
+            const res = await fetch('/api/scheduler/execute', { 
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    authKey: process.env.NEXT_PUBLIC_SCHEDULER_SECRET || 'local-dev-fallback', // fallback for dev
+                    taskId: 'auto_create_trainer_folders'
+                })
+            });
+            const text = await res.text();
+            if (res.ok) {
+                setMessage({ type: 'success', text: 'Trainer folder automation run requested successfully.' });
+                setTimeout(fetchLogs, 3000); // Give it a bit of time to start logging
+            } else {
+                setMessage({ type: 'error', text: 'Run failed: ' + text });
+            }
+        } catch (err) {
+            setMessage({ type: 'error', text: err instanceof Error ? err.message : 'Request failed' });
+        } finally {
+            setRunning(false);
+        }
+    };
+
+    // Group by run_id
+    const batches = useMemo(() => {
+        const map = new Map<string, TrainerFolderLogRow[]>();
+        for (const log of logs) {
+            if (!map.has(log.run_id)) map.set(log.run_id, []);
+            map.get(log.run_id)!.push(log);
+        }
+        return Array.from(map.entries());
+    }, [logs]);
+
+    useEffect(() => {
+        if (batches.length > 0) {
+            setExpandedDates(new Set([batches[0][0]]));
+        }
+    }, [batches.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    const toggleDate = (key: string) => {
+        setExpandedDates(prev => {
+            const next = new Set(prev);
+            next.has(key) ? next.delete(key) : next.add(key);
+            return next;
+        });
+    };
+
+    const actionBadge = (action: string | null) => {
+        const map: Record<string, string> = {
+            created: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
+            existing: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
+            pending: 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400',
+            error:   'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
+        };
+        const key = action ?? 'pending';
+        return (
+            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${map[key] ?? map.pending}`}>
+                {key}
+            </span>
+        );
+    };
+
+    return (
+        <div>
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+                <h2 className="text-3xl font-bold">Auto Create Trainer Folders Log</h2>
+                <div className="flex items-center gap-2">
+                    <Button variant="ghost" onClick={fetchLogs} disabled={loading}>
+                        {loading ? 'Refreshing…' : 'Refresh'}
+                    </Button>
+                    <Button
+                        onClick={handleRunNow}
+                        disabled={running}
+                        className="bg-indigo-600 hover:bg-indigo-700 text-white disabled:opacity-50"
+                    >
+                        {running ? 'Running…' : 'Run Now'}
+                    </Button>
+                    <Button variant="ghost" onClick={() => setAdminPage(AdminPage.Dashboard)}>
+                        Back
+                    </Button>
+                </div>
+            </div>
+
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                Records daily automation runs for creating trainer folders in Google Drive for today&apos;s classes.
+            </p>
+
+            {message && (
+                <div className={`mb-4 px-4 py-3 rounded-lg text-sm font-medium ${
+                    message.type === 'success'
+                        ? 'bg-green-50 text-green-800 border border-green-200 dark:bg-green-900/20 dark:text-green-300 dark:border-green-800'
+                        : 'bg-red-50 text-red-800 border border-red-200 dark:bg-red-900/20 dark:text-red-300 dark:border-red-800'
+                }`}>
+                    {message.text}
+                </div>
+            )}
+
+            {loading ? (
+                <div className="text-center py-12 text-gray-400">Loading logs…</div>
+            ) : batches.length === 0 ? (
+                <Card className="p-8 text-center text-gray-500 dark:text-gray-400">No trainer folder logs yet.</Card>
+            ) : (
+                <div className="space-y-3">
+                    {batches.map(([batchKey, rows]) => {
+                        const isOpen = expandedDates.has(batchKey);
+                        const sortedRows = [...rows].sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+                        const runTime = new Date(sortedRows[0]?.created_at).toLocaleString('en-SG', {
+                            timeZone: 'Asia/Singapore',
+                            day: '2-digit', month: 'short', year: 'numeric',
+                            hour: '2-digit', minute: '2-digit', hour12: false,
+                        });
+                        const createdCount = rows.filter(r => r.status === 'created').length;
+                        const existingCount = rows.filter(r => r.status === 'existing').length;
+                        const errorCount   = rows.filter(r => r.status === 'error').length;
+                        return (
+                            <Card key={batchKey} className="overflow-hidden">
+                                {/* Batch header */}
+                                <button
+                                    onClick={() => toggleDate(batchKey)}
+                                    className="w-full flex items-center justify-between px-5 py-4 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors text-left"
+                                >
+                                    <div className="flex items-center gap-4 flex-wrap">
+                                        <span className="font-semibold text-gray-900 dark:text-white font-mono">{runTime}</span>
+                                        <span className="text-sm text-gray-500 dark:text-gray-400">{rows.length} course{rows.length !== 1 ? 's' : ''} checked</span>
+                                        {createdCount > 0 && (
+                                            <span className="inline-flex items-center gap-1 font-semibold text-emerald-600 dark:text-emerald-400 text-xs">
+                                                ✓ {createdCount} created
+                                            </span>
+                                        )}
+                                        {existingCount > 0 && (
+                                            <span className="inline-flex items-center gap-1 font-semibold text-blue-600 dark:text-blue-400 text-xs">
+                                                ↩ {existingCount} existing
+                                            </span>
+                                        )}
+                                        {errorCount > 0 && (
+                                            <span className="inline-flex items-center gap-1 font-semibold text-red-600 dark:text-red-400 text-xs">
+                                                ✕ {errorCount} errors
+                                            </span>
+                                        )}
+                                    </div>
+                                    <svg className={`w-5 h-5 text-gray-400 transition-transform flex-shrink-0 ${isOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                                </button>
+
+                                {/* Rows table */}
+                                {isOpen && (
+                                    <div className="border-t border-gray-100 dark:border-gray-700 overflow-x-auto">
+                                        <table className="w-full text-sm">
+                                            <thead className="bg-gray-50 dark:bg-gray-800 text-left">
+                                                <tr>
+                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Course / Code</th>
+                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Run ID</th>
+                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Trainer</th>
+                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Folder Path</th>
+                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 text-center">Status</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                                                {sortedRows.map((log, idx) => (
+                                                    <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                                                        <td className="px-4 py-3">
+                                                            <div className="font-medium text-gray-900 dark:text-gray-100 whitespace-normal break-words max-w-[260px]">{log.course_title || '—'}</div>
+                                                            <div className="mt-1">
+                                                                {log.course_code
+                                                                    ? <span className="text-[10px] text-indigo-600 dark:text-indigo-400 font-mono bg-indigo-50 dark:bg-indigo-900/30 px-1.5 py-0.5 rounded">{log.course_code}</span>
+                                                                    : <span className="text-gray-400">—</span>}
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-4 py-3 whitespace-nowrap">
+                                                            <span className="text-xs text-gray-500 dark:text-gray-400 font-mono bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded">
+                                                                {log.course_run_id || '—'}
+                                                            </span>
+                                                        </td>
+                                                        <td className="px-4 py-3 text-xs text-gray-700 dark:text-gray-300">
+                                                            {log.trainer_name || '—'}
+                                                            {log.trainer_source && <div className="text-[10px] text-gray-400 mt-0.5 truncate max-w-[150px]">{log.trainer_source}</div>}
+                                                        </td>
+                                                        <td className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400">
+                                                           {log.folder_name || '—'}
+                                                        </td>
+                                                        <td className="px-4 py-3 text-center flex flex-col items-center">
+                                                            {actionBadge(log.status)}
+                                                            {log.error_message && (
+                                                                <div className="text-[10px] text-red-500 mt-1 max-w-[200px] whitespace-normal text-left" title={log.error_message}>{log.error_message}</div>
+                                                            )}
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )}
+                            </Card>
+                        );
+                    })}
+                </div>
+            )}
+        </div>
+    );
+};

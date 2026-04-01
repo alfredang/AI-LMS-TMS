@@ -66,6 +66,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate }) => {
         referenceLinks: false,
         n8nLinks: false,
         usefulLinks: false,
+        scheduler: false,
     });
 
     const toggleSection = (key: string) => {
@@ -232,9 +233,14 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate }) => {
                 })}
             </NavSection>
 
+            <NavSection title="Scheduler" isOpen={openSections.scheduler} onToggle={() => toggleSection('scheduler')}>
+                <NavItem page={AdminPage.Scheduler} label="Task Scheduler" isSubItem />
+            </NavSection>
+
             <NavSection title="Logging" isOpen={openSections.logging} onToggle={() => toggleSection('logging')}>
                 <NavItem page={AdminPage.AutomationLogs} label="Auto Create Learner Log" isSubItem />
                 <NavItem page={AdminPage.AssignTrainerLogs} label="Assign Trainer Log" isSubItem />
+                <NavItem page={AdminPage.TrainerFolderLogs} label="Auto Create Trainer Folders Log" isSubItem />
                 <NavItem page={AdminPage.CourseRunDateSyncLogs} label="Course Run Date Sync Log" isSubItem />
             </NavSection>
 

@@ -22,7 +22,7 @@ import OngoingClasses from '../components/admin/OngoingClasses';
 import CompletedClasses from '../components/admin/CompletedClasses';
 import ClassDetailView from '../components/admin/ClassDetailView';
 import { UpcomingClassesTable } from '../components/UpcomingClassesTable';
-import { ClassManagerView, AssignTrainerView, AssignStudentView, AddCourseView, AddCourseRunView, AutomationLogsView, AssignTrainerLogsView, BackfillEnrollmentsView, FetchUpcomingEnrolmentsView, CourseRunDateSyncLogsView } from '../components/admin/ClassManagementViews';
+import { ClassManagerView, AssignTrainerView, AssignStudentView, AddCourseView, AddCourseRunView, AutomationLogsView, AssignTrainerLogsView, TrainerFolderLogsView, BackfillEnrollmentsView, FetchUpcomingEnrolmentsView, CourseRunDateSyncLogsView } from '../components/admin/ClassManagementViews';
 import { CreateCertificateView, DeleteCertificateView } from '../components/admin/CertificateManagement';
 import { SendCertificateSGView } from '../components/admin/SendCertificateSG';
 import { SendCertificateGHView } from '../components/admin/SendCertificateGH';
@@ -55,6 +55,7 @@ import { UploadDirectApplicationView, ViewDirectApplicationView, UpdateDirectApp
 import { BulkUploadEnrolmentView } from '../components/admin/BulkEnrolmentViews';
 import TrainerAttendanceDashboard from '../components/trainer/TrainerAttendanceDashboard';
 import AdminCalendarView from '../components/admin/AdminCalendarView';
+import SchedulerView from '../components/admin/SchedulerView';
 
 // Management Dashboard Component
 interface ManagementDashboardProps {
@@ -141,6 +142,7 @@ const PAGE_LABELS: Partial<Record<AdminPage, string>> = {
   [AdminPage.SearchPastLearners]: 'Search Past Learners',
   [AdminPage.AutomationLogs]: 'Automation Logging',
   [AdminPage.AssignTrainerLogs]: 'Assign Trainer Log',
+  [AdminPage.TrainerFolderLogs]: 'Auto Create Trainer Folders Log',
   [AdminPage.CourseRunDateSyncLogs]: 'Course Run Date Sync Log',
   [AdminPage.BackfillEnrollments]: 'Backfill Enrollments',
   [AdminPage.FetchUpcomingEnrolments]: 'Fetch Upcoming Classes Enrolment',
@@ -149,6 +151,7 @@ const PAGE_LABELS: Partial<Record<AdminPage, string>> = {
   [AdminPage.SendCertificateSG]: 'Send Certificate (SG)',
   [AdminPage.SendCertificateGH]: 'Send Certificate (GH)',
   [AdminPage.Calendar]: 'Calendar',
+  [AdminPage.Scheduler]: 'Task Scheduler',
 };
 
 const AdminLayout: React.FC = () => {
@@ -279,6 +282,8 @@ const AdminLayout: React.FC = () => {
         return <AutomationLogsView />;
       case AdminPage.AssignTrainerLogs:
         return <AssignTrainerLogsView />;
+      case AdminPage.TrainerFolderLogs:
+        return <TrainerFolderLogsView />;
       case AdminPage.CourseRunDateSyncLogs:
         return <CourseRunDateSyncLogsView />;
       case AdminPage.BackfillEnrollments:
@@ -295,6 +300,8 @@ const AdminLayout: React.FC = () => {
         return <SendCertificateGHView />;
       case AdminPage.Calendar:
         return <AdminCalendarView />;
+      case AdminPage.Scheduler:
+        return <SchedulerView />;
       default:
         return <AdminDashboard />;
     }

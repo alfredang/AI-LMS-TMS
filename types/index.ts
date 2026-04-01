@@ -76,6 +76,7 @@ export enum AdminPage {
   CheckAttendance = 'checkAttendance',
   AutomationLogs = 'automationLogs',
   AssignTrainerLogs = 'assignTrainerLogs',
+  TrainerFolderLogs = 'trainerFolderLogs',
   CourseRunDateSyncLogs = 'courseRunDateSyncLogs',
   BackfillEnrollments = 'backfillEnrollments',
   FetchUpcomingEnrolments = 'fetchUpcomingEnrolments',
@@ -83,7 +84,8 @@ export enum AdminPage {
   DeleteCertificate = 'deleteCertificate',
   SendCertificateSG = 'sendCertificateSG',
   SendCertificateGH = 'sendCertificateGH',
-  Calendar = 'calendar'
+  Calendar = 'calendar',
+  Scheduler = 'scheduler',
 }
 
 export enum TrainerPage {
