@@ -67,7 +67,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     // Create API client
-    const apiClient = createSSGCourseAPI(process.env.SSG_API_BASE_URL!, credentials);
+    const apiClient = createSSGCourseAPI(credentials.ssgApiBaseUrl, credentials);
 
     if (action === 'edit') {
       // Edit course run

@@ -14,6 +14,7 @@ export interface SSGCredentials {
   privateKeyPath: string;
   certificateContent?: string;
   privateKeyContent?: string;
+  ssgApiBaseUrl: string;
 }
 
 export class SSGCredentialsService {
@@ -36,12 +37,13 @@ export class SSGCredentialsService {
   async getSSGCredentials(trainingProviderId?: number): Promise<SSGCredentials | null> {
     try {
       let query = `
-        SELECT 
+        SELECT
           uen,
           ssg_encryption_key,
           ssg_self_sign_cert_file,
-          ssg_private_key_file
-        FROM 
+          ssg_private_key_file,
+          ssg_api_base_url
+        FROM
           training_provider
       `;
       
@@ -86,7 +88,8 @@ export class SSGCredentialsService {
         uen: row.uen || process.env.TRAINING_PARTNER_UEN,
         encryptionKey: row.ssg_encryption_key || process.env.SSG_ENCRYPTION_KEY || process.env.ENCRYPTION_KEY || process.env.CERT_1_ENCRYPTION_KEY || '',
         certificatePath: convertToAbsolutePath(row.ssg_self_sign_cert_file),
-        privateKeyPath: convertToAbsolutePath(row.ssg_private_key_file)
+        privateKeyPath: convertToAbsolutePath(row.ssg_private_key_file),
+        ssgApiBaseUrl: row.ssg_api_base_url || process.env.SSG_API_BASE_URL || process.env.SSG_API_URL || 'https://api.ssg-wsg.sg'
       };
 
       // Normalize PEM from env var — handles base64-encoded PEM, literal \n, Windows \r\n
