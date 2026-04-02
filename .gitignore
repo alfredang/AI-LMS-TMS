@@ -115,6 +115,11 @@ public/uploads/slides/*
 public/uploads/guides/*
 public/uploads/training_provider/private_key/*
 public/uploads/training_provider/self_signing_cert/*
+# Claims import uploads (and any other runtime uploads)
+public/uploads/claims/*
+public/uploads/**/*.pdf
+public/uploads/**/*.xlsx
+public/uploads/**/*.xls
 # server/public/uploads/
 # client/public/uploads/
 
