@@ -54,10 +54,11 @@ const USEFUL_LINKS = [
 ];
 
 const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate }) => {
-    const { adminPage, setAdminPage, setEditingCourseRun, trainingProviderProfile } = useLms();
+    const { adminPage, setAdminPage, setEditingCourseRun, setEditingCourse, setSelectedCourse, setCourseEditMode, trainingProviderProfile } = useLms();
 
     const [openSections, setOpenSections] = useState<Record<string, boolean>>({
         calendar: false,
+        courseManagement: false,
         classManagement: false,
         directApplication: false,
         tpgManagement: false,
@@ -78,6 +79,11 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate }) => {
             href="#"
             onClick={(e) => {
                 e.preventDefault();
+                // Clear course detail/editor state so admin navigation always responds.
+                setSelectedCourse(null);
+                setEditingCourse(null);
+                setCourseEditMode(null);
+
                 // Clear editingCourseRun when navigating to Create New Class
                 if (page === AdminPage.CreateNewClass) {
                     setEditingCourseRun(null);
@@ -105,9 +111,13 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate }) => {
                 <NavItem page={AdminPage.Calendar} label="View Calendar" isSubItem />
             </NavSection>
 
-            <NavSection title="Class Management" isOpen={openSections.classManagement} onToggle={() => toggleSection('classManagement')}>
+            <NavSection title="Course Management" isOpen={openSections.courseManagement} onToggle={() => toggleSection('courseManagement')}>
                 <NavItem page={AdminPage.ViewCourses} label="View Courses" isSubItem />
                 <NavItem page={AdminPage.ViewTrainers} label="View Trainers" isSubItem />
+                <NavItem page={AdminPage.FundingValidity} label="Funding Validity" isSubItem />
+            </NavSection>
+
+            <NavSection title="Class Management" isOpen={openSections.classManagement} onToggle={() => toggleSection('classManagement')}>
                 <NavItem page={AdminPage.ViewLearners} label="View Learners" isSubItem />
                 <NavItem page={AdminPage.UpcomingClasses} label="Upcoming Classes" isSubItem />
                 <NavItem page={AdminPage.OngoingClasses} label="Ongoing Classes" isSubItem />

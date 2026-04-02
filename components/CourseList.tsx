@@ -431,7 +431,7 @@ const ManagementCourseList: React.FC = () => {
                 <thead className="bg-surface-elevated">
                     <tr>
                         <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-on-surface-secondary uppercase tracking-wider">Course</th>
-                        <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-on-surface-secondary uppercase tracking-wider">Details</th>
+                        <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-on-surface-secondary uppercase tracking-wider">Types</th>
                         <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-on-surface-secondary uppercase tracking-wider">Duration</th>
                         {(role === UserRole.Admin || role === UserRole.TrainingProvider) && (
                             <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-on-surface-secondary uppercase tracking-wider">Validity</th>

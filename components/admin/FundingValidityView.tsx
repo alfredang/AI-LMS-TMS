@@ -1,0 +1,214 @@
+import React, { useMemo, useState } from 'react';
+import { useDeveloperCourses } from '@hooks/useDeveloperCourses';
+import { Card } from '../ui/Card';
+import { apiClient } from '@lib/services/apiClient';
+
+const FOUR_MONTHS_AHEAD = (date: Date) => {
+  const next = new Date(date);
+  next.setMonth(next.getMonth() + 4);
+  return next;
+};
+
+const startOfDay = (date: Date) => {
+  const next = new Date(date);
+  next.setHours(0, 0, 0, 0);
+  return next;
+};
+
+const parseValidityDate = (value?: string | null) => {
+  if (!value) return null;
+  if (/^\d{4}-\d{2}-\d{2}/.test(value)) {
+    const parsed = new Date(`${value.slice(0, 10)}T00:00:00`);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
+  parsed.setHours(0, 0, 0, 0);
+  return parsed;
+};
+
+const formatValidityDate = (value?: string | null) => {
+  const date = parseValidityDate(value);
+  return date ? date.toLocaleDateString('en-GB') : 'N/A';
+};
+
+const isRenewed = (value?: string | null) => !!value && value.trim().length > 0;
+
+const displayCourseType = (value?: string | null) => {
+  if (value === 'Non-WSQ') return 'CASL';
+  return value || 'CASL';
+};
+
+const FundingValidityView: React.FC = () => {
+  const { courses, loading, error } = useDeveloperCourses();
+  const [renewingIds, setRenewingIds] = useState<Record<string, boolean>>({});
+  const [renewStateOverrides, setRenewStateOverrides] = useState<Record<string, boolean>>({});
+
+  const today = startOfDay(new Date());
+  const fourMonthsAhead = startOfDay(FOUR_MONTHS_AHEAD(today));
+
+  const wsqCourses = useMemo(() => {
+    return [...(courses || [])]
+      .filter(course => course.courseType === 'WSQ')
+      .sort((a, b) => {
+        const left = parseValidityDate(a.fundingValidity);
+        const right = parseValidityDate(b.fundingValidity);
+        if (!left && !right) return a.title.localeCompare(b.title);
+        if (!left) return 1;
+        if (!right) return -1;
+        return left.getTime() - right.getTime();
+      });
+  }, [courses]);
+
+  const expiringSoonIds = useMemo(() => {
+    return new Set(
+      wsqCourses
+        .filter(course => {
+          const validityDate = parseValidityDate(course.fundingValidity);
+          return validityDate && validityDate >= today && validityDate <= fourMonthsAhead;
+        })
+        .map(course => course.id)
+    );
+  }, [fourMonthsAhead, today, wsqCourses]);
+
+  const totalToRenew = wsqCourses.filter(course => {
+    const checked = renewStateOverrides[course.id] ?? isRenewed(course.renewedStatus);
+    return expiringSoonIds.has(course.id) && !checked;
+  }).length;
+
+  const handleRenewToggle = async (courseId: string, checked: boolean) => {
+    setRenewStateOverrides(prev => ({ ...prev, [courseId]: checked }));
+    setRenewingIds(prev => ({ ...prev, [courseId]: true }));
+
+    try {
+      await apiClient.put('/api/admin/course-renewal-status', {
+        courseId,
+        renew: checked,
+      });
+    } catch (err) {
+      console.error('❌ Failed to update renewal status:', err);
+      setRenewStateOverrides(prev => {
+        const next = { ...prev };
+        delete next[courseId];
+        return next;
+      });
+      window.alert('Failed to update renewal status. Please try again.');
+    } finally {
+      setRenewingIds(prev => ({ ...prev, [courseId]: false }));
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-64">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+          <p className="mt-2 text-on-surface-secondary">Loading funding validity...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="text-center py-8">
+        <p className="text-red-600 mb-4">Error loading WSQ courses: {error}</p>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <h3 className="text-3xl font-bold dark:text-white mb-6">Funding Validity</h3>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <Card className="p-6 text-center">
+          <p className="text-4xl font-bold text-blue-600">{wsqCourses.length}</p>
+          <p className="text-gray-600 dark:text-gray-300 mt-1">WSQ Courses</p>
+        </Card>
+        <Card className="p-6 text-center">
+          <p className="text-4xl font-bold text-amber-500">{expiringSoonIds.size}</p>
+          <p className="text-gray-600 dark:text-gray-300 mt-1">Expired in 4 Months</p>
+        </Card>
+        <Card className="p-6 text-center">
+          <p className="text-4xl font-bold text-purple-600">{totalToRenew}</p>
+          <p className="text-gray-600 dark:text-gray-300 mt-1">To Renew (Expired in 4 Months)</p>
+        </Card>
+      </div>
+
+      <Card className="dark:bg-gray-800 dark:border-gray-700">
+        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between gap-4">
+          <div>
+            <h4 className="text-lg font-semibold text-gray-900 dark:text-white">WSQ Course Validity List</h4>
+            <p className="text-sm text-gray-600 dark:text-gray-400">Sorted from earliest validity date to latest. Courses expiring within 4 months are highlighted.</p>
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 dark:bg-gray-900/40">
+              <tr className="text-left text-gray-600 dark:text-gray-300">
+                <th className="px-6 py-3 font-semibold">Course Title</th>
+                <th className="px-6 py-3 font-semibold">Course Ref Code</th>
+                <th className="px-6 py-3 font-semibold">Course Type</th>
+                <th className="px-6 py-3 font-semibold">Validity</th>
+                <th className="px-6 py-3 font-semibold text-center">Renew</th>
+              </tr>
+            </thead>
+            <tbody>
+              {wsqCourses.map(course => {
+                const validityDate = parseValidityDate(course.fundingValidity);
+                const expiringSoon = !!validityDate && validityDate >= today && validityDate <= fourMonthsAhead;
+                const expired = !!validityDate && validityDate < today;
+                const checked = renewStateOverrides[course.id] ?? isRenewed(course.renewedStatus);
+
+                return (
+                  <tr
+                    key={course.id}
+                    className={`border-t border-gray-200 dark:border-gray-700 ${
+                      expired
+                        ? 'bg-red-50/70 dark:bg-red-900/10'
+                        : expiringSoon
+                          ? 'bg-amber-50/80 dark:bg-amber-900/10'
+                          : ''
+                    }`}
+                  >
+                    <td className="px-6 py-4 font-medium text-gray-900 dark:text-white">{course.title}</td>
+                    <td className="px-6 py-4 text-gray-700 dark:text-gray-300">{course.courseCode || '—'}</td>
+                    <td className="px-6 py-4 text-gray-700 dark:text-gray-300">{displayCourseType(course.courseType)}</td>
+                    <td className="px-6 py-4 text-gray-700 dark:text-gray-300">
+                      <div className="flex items-center gap-3">
+                        <span>{formatValidityDate(course.fundingValidity)}</span>
+                        {expired && <span className="text-xs font-semibold uppercase text-red-600 dark:text-red-400">Expired</span>}
+                        {!expired && expiringSoon && <span className="text-xs font-semibold uppercase text-amber-600 dark:text-amber-400">Expiring Soon</span>}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 text-center">
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        disabled={!!renewingIds[course.id]}
+                        onChange={(e) => handleRenewToggle(course.id, e.target.checked)}
+                        className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 disabled:opacity-50"
+                        aria-label={`Mark ${course.title} for renewal`}
+                      />
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        {wsqCourses.length === 0 && (
+          <div className="px-6 py-10 text-center text-gray-500 dark:text-gray-400">
+            No WSQ courses found.
+          </div>
+        )}
+      </Card>
+    </div>
+  );
+};
+
+export default FundingValidityView;

@@ -37,6 +37,7 @@ export enum AdminPage {
   ClassDetail = 'classDetail',
   ClassManagement = 'classManagement',
   TpgManagement = 'tpgManagement',
+  FundingValidity = 'fundingValidity',
   ViewCourses = 'viewCourses',
   ViewTrainers = 'viewTrainers',
   ViewLearners = 'viewLearners',
@@ -151,6 +152,7 @@ export interface Course {
   courseFee?: number;
   taxPercent?: number;
   fundingValidity?: string;
+  renewedStatus?: string;
   isLeaderboardEnabled?: boolean;
   courseLink?: string;
   assessmentRecordLink?: string;

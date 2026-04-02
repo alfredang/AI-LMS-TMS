@@ -21,6 +21,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           c.assessment_hours,
           c.mode_of_learning,
           c.funding_validity,
+          c.renewed_status,
           c.num_of_trainers,
           c.trainers_list
       FROM course c
@@ -43,6 +44,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       imageUrl: row.course_image || null,
       modeOfLearning: row.mode_of_learning ? [row.mode_of_learning] : ['Hybrid'],
       fundingValidity: row.funding_validity || null,
+      renewedStatus: row.renewed_status || null,
       numOfTrainers: row.num_of_trainers || 0,
       trainersList: row.trainers_list || null,
       courseRunId: null,

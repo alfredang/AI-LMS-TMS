@@ -17,6 +17,7 @@ import { Icon } from '../components/ui/Icon';
 import { Card } from '../components/ui/Card';
 import AdminSidebar from '../components/admin/AdminSidebar';
 import ViewTrainers from '../components/admin/ViewTrainers';
+import FundingValidityView from '../components/admin/FundingValidityView';
 import ViewLearners from '../components/admin/ViewLearners';
 import OngoingClasses from '../components/admin/OngoingClasses';
 import CompletedClasses from '../components/admin/CompletedClasses';
@@ -71,6 +72,7 @@ const ManagementDashboard: React.FC<ManagementDashboardProps> = ({ type }) => {
   const classManagementLinks: NavBoxProps[] = [
     { title: "View Courses", description: "Browse and manage all course templates.", icon: IconName.BookOpen, onClick: () => setAdminPage(AdminPage.ViewCourses) },
     { title: "View Trainers", description: "View details and assignments for all trainers.", icon: IconName.User, onClick: () => setAdminPage(AdminPage.ViewTrainers) },
+    { title: "Funding Validity", description: "Track WSQ course validity dates and renewal planning.", icon: IconName.Calendar, onClick: () => setAdminPage(AdminPage.FundingValidity) },
     { title: "View Learners", description: "View learner profiles, status, and contact details.", icon: IconName.MyAccount, onClick: () => setAdminPage(AdminPage.ViewLearners) },
     { title: "Upcoming Classes", description: "See all scheduled upcoming classes.", icon: IconName.Calendar, onClick: () => setAdminPage(AdminPage.UpcomingClasses) },
     { title: "Ongoing Classes", description: "Monitor classes that are currently in session.", icon: IconName.Clock, onClick: () => setAdminPage(AdminPage.OngoingClasses) },
@@ -117,6 +119,7 @@ const PAGE_LABELS: Partial<Record<AdminPage, string>> = {
   [AdminPage.TpgManagement]: 'TPG Management',
   [AdminPage.ViewCourses]: 'View Courses',
   [AdminPage.ViewTrainers]: 'View Trainers',
+  [AdminPage.FundingValidity]: 'Funding Validity',
   [AdminPage.ViewLearners]: 'View Learners',
   [AdminPage.UpcomingClasses]: 'Upcoming Classes',
   [AdminPage.OngoingClasses]: 'Ongoing Classes',
@@ -204,6 +207,8 @@ const AdminLayout: React.FC = () => {
         return <CourseList />;
       case AdminPage.ViewTrainers:
         return <ViewTrainers />;
+      case AdminPage.FundingValidity:
+        return <FundingValidityView />;
       case AdminPage.ViewLearners:
         return <ViewLearners />;
       case AdminPage.UpcomingClasses:

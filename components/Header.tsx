@@ -148,7 +148,7 @@ const Header: React.FC = () => {
     };
   }, [isProfileOpen, isRoleSwitcherOpen]);
 
-  const classManagementPages = [AdminPage.ViewCourses, AdminPage.ViewTrainers, AdminPage.UpcomingClasses, AdminPage.OngoingClasses, AdminPage.CompletedClasses, AdminPage.CreateNewClass, AdminPage.EditClass, AdminPage.EnrollLearners, AdminPage.AssignTrainer];
+  const classManagementPages = [AdminPage.ViewCourses, AdminPage.ViewTrainers, AdminPage.FundingValidity, AdminPage.UpcomingClasses, AdminPage.OngoingClasses, AdminPage.CompletedClasses, AdminPage.CreateNewClass, AdminPage.EditClass, AdminPage.EnrollLearners, AdminPage.AssignTrainer];
   const tpgManagementPages = [AdminPage.ApplyNewGrant, AdminPage.ViewGrantStatus, AdminPage.SubmitAssessment, AdminPage.UpdateAssessment, AdminPage.ApplyNewClaim, AdminPage.UploadCourseRuns, AdminPage.UploadEnrolments];
 
   const isAdminPageActive = (item: any) => {
