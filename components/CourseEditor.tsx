@@ -626,6 +626,7 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                 assessmentPlanUrl: course.assessmentPlanUrl || undefined,
                 slidesUrl: course.slidesUrl || undefined,
                 courseLink: course.courseLink || undefined,
+                brochureLink: course.brochureLink || undefined,
                 fundingValidity: course.fundingValidity || undefined,
                 assessmentRecordLink: course.assessmentRecordLink || undefined,
                 assessmentSummaryRecordUrl: course.assessmentSummaryRecordUrl || '',
@@ -1376,6 +1377,17 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                     onChange={(e) => setCourse(prev => ({ ...prev, courseLink: e.target.value }))}
                                     className={inputClasses}
                                     placeholder="https://..."
+                                />
+                            </div>
+                            <div>
+                                <label htmlFor="brochureLink" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Brochure Link</label>
+                                <input
+                                    type="url"
+                                    id="brochureLink"
+                                    value={course.brochureLink || ''}
+                                    onChange={(e) => setCourse(prev => ({ ...prev, brochureLink: e.target.value }))}
+                                    className={inputClasses}
+                                    placeholder="https://drive.google.com/..."
                                 />
                             </div>
                             <div>

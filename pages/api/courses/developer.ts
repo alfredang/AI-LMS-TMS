@@ -29,6 +29,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           c.is_utap_eligible,
           c.funding_validity,
           c.renewed_status,
+          c.brochure_link,
           c.num_of_trainers,
           c.trainers_list
       FROM course c
@@ -59,6 +60,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       isUtapEligible: !!row.is_utap_eligible,
       fundingValidity: row.funding_validity || null,
       renewedStatus: row.renewed_status || null,
+      brochureLink: row.brochure_link || null,
       numOfTrainers: row.num_of_trainers || 0,
       trainersList: row.trainers_list || null,
       courseRunId: null,

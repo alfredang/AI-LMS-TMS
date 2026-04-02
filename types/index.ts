@@ -161,6 +161,7 @@ export interface Course {
   renewedStatus?: string;
   isLeaderboardEnabled?: boolean;
   courseLink?: string;
+  brochureLink?: string;
   assessmentRecordLink?: string;
   assessmentSummaryRecordUrl?: string;
   topics: Topic[];
@@ -187,6 +188,7 @@ export interface CourseDetail {
   trainerSlidesUrl?: string;
   assessmentPlanUrl?: string;
   courseLink?: string;
+  brochureLink?: string;
   assessmentRecordLink?: string;
   assessmentSummaryRecordUrl?: string;
   writtenAssessmentLink?: string;
