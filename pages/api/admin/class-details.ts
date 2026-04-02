@@ -54,9 +54,9 @@ async function handler(req: NextApiRequest, res: NextApiResponse<ClassDetailsRes
     const { courseRunId } = req.query;
 
     if (!courseRunId || typeof courseRunId !== 'string') {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'Course run ID is required' 
+      return res.status(400).json({
+        success: false,
+        error: 'Course run ID is required'
       });
     }
 
@@ -230,10 +230,10 @@ async function handler(req: NextApiRequest, res: NextApiResponse<ClassDetailsRes
         },
         trainers: trainersRows.length > 0
           ? trainersRows.map(t => ({
-              trainerId: t.trainer_id,
-              trainerName: t.trainer_name,
-              trainerEmail: t.trainer_email,
-            }))
+            trainerId: t.trainer_id,
+            trainerName: t.trainer_name,
+            trainerEmail: t.trainer_email,
+          }))
           : basicData.trainer
             ? [{ trainerId: null, trainerName: basicData.trainer, trainerEmail: null }]
             : [],

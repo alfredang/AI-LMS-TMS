@@ -7,32 +7,17 @@
  */
 
 import { google, drive_v3 } from 'googleapis';
+import { getGoogleDriveClient } from '../google-auth/googleAuth';
+import pool from '../db';
 
 // ── OAuth2 Drive Client ──────────────────────────────────────────────────────
 
 /**
  * Authenticate using OAuth2.
- * Files will be uploaded directly as the `agenticai.tertiaryrobotics@gmail.com` user,
- * utilizing the account's 15GB free storage quota.
+ * Fetches credentials from the database (Company Settings) which is the source of truth.
  */
-export function getDriveClient(): drive_v3.Drive {
-    const clientId = process.env.GOOGLE_OAUTH_CLIENT_ID;
-    const clientSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET;
-    const refreshToken = process.env.GOOGLE_OAUTH_REFRESH_TOKEN;
-
-    if (!clientId || !clientSecret || !refreshToken) {
-        throw new Error('Missing Google OAuth credentials. Ensure GOOGLE_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET, and GOOGLE_OAUTH_REFRESH_TOKEN are set.');
-    }
-
-    const oauth2Client = new google.auth.OAuth2(
-        clientId,
-        clientSecret,
-        'http://localhost:9876'
-    );
-
-    oauth2Client.setCredentials({ refresh_token: refreshToken });
-
-    return google.drive({ version: 'v3', auth: oauth2Client });
+export async function getDriveClient(): Promise<drive_v3.Drive> {
+    return getGoogleDriveClient(pool);
 }
 
 // ── Subfolder Helpers ────────────────────────────────────────────────────────

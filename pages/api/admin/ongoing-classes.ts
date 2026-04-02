@@ -271,8 +271,8 @@ export default async function handler(
     res.status(200).json(response);
   } catch (error) {
     console.error('❌ Error fetching ongoing classes:', error);
-    res.status(500).json({ 
-      success: false, 
+    res.status(500).json({
+      success: false,
       message: 'Failed to fetch ongoing classes',
       error: error instanceof Error ? error.message : 'Unknown error'
     });

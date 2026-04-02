@@ -186,7 +186,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         const originalName = uploadedFile.originalFilename || 'untitled';
         const mimeType = uploadedFile.mimetype || 'application/octet-stream';
 
-        const drive = getDriveClient();
+        const drive = await getDriveClient();
 
         // Look up course run details from the database for folder matching
         let sessionFolderName: string | null = null;

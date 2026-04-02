@@ -60,10 +60,10 @@ async function seedDefaults() {
     }> = [
         {
             id: 'auto_create_trainer_folders',
-            name: 'Auto Create Trainer Folders',
-            description: 'Creates trainer assessment folders in Google Drive for all course runs starting today. Trainer names are sourced from local DB (course_run_trainer / assigned_trainer_name / trainer_profile).',
+            name: 'Auto Create Assessment Records',
+            description: 'Creates assessment folders in Google Drive for all course runs starting today. Trainer names are sourced from local DB (course_run_trainer / assigned_trainer_name / trainer_profile).',
             cron_expression: '0 14 * * *', // 2:00 PM daily
-            api_endpoint: '/api/external/auto-create-trainer-folders',
+            api_endpoint: '/api/external/auto-create-assessment-records',
         },
         {
             id: 'auto_create_learners',
@@ -79,13 +79,28 @@ async function seedDefaults() {
             cron_expression: '0 1 * * *', // 1:00 AM daily
             api_endpoint: '/api/external/sync-course-run-dates',
         },
+        {
+            id: 'auto_create_certificates',
+            name: 'Auto-Create Certificates',
+            description: 'Automatically generates certificates at 6:30 PM for learners in courses ending today based on final session attendance.',
+            cron_expression: '30 18 * * *',
+            api_endpoint: '/api/external/auto-create-certificates',
+        },
     ];
+
+    const ids = defaults.map(t => t.id);
+    await pool.query(
+        `DELETE FROM scheduler_config WHERE id NOT IN (${ids.map((_, i) => `$${i + 1}`).join(', ')})`,
+        ids
+    );
 
     for (const task of defaults) {
         await pool.query(
             `INSERT INTO scheduler_config (id, name, description, cron_expression, api_endpoint)
              VALUES ($1, $2, $3, $4, $5)
-             ON CONFLICT (id) DO NOTHING`,
+             ON CONFLICT (id) DO UPDATE SET 
+                name = EXCLUDED.name,
+                description = EXCLUDED.description`,
             [task.id, task.name, task.description, task.cron_expression, task.api_endpoint]
         );
     }
@@ -106,11 +121,15 @@ function getDirectHandler(taskId: string): TaskHandler | undefined {
     // Lazy-register handlers on first call
     if (directHandlers.size === 0) {
         directHandlers.set('auto_create_trainer_folders', async () => {
-            const { runAutomation } = await import('../../pages/api/external/auto-create-trainer-folders');
+            const { runAutomation } = await import('../../pages/api/external/auto-create-assessment-records');
             return runAutomation();
         });
         directHandlers.set('auto_create_learners', async () => {
             const { runAutomation } = await import('../../pages/api/external/auto-create-learners');
+            return runAutomation();
+        });
+        directHandlers.set('auto_create_certificates', async () => {
+            const { runAutomation } = await import('../../pages/api/external/auto-create-certificates');
             return runAutomation();
         });
     }

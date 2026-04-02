@@ -22,7 +22,7 @@ import OngoingClasses from '../components/admin/OngoingClasses';
 import CompletedClasses from '../components/admin/CompletedClasses';
 import ClassDetailView from '../components/admin/ClassDetailView';
 import { UpcomingClassesTable } from '../components/UpcomingClassesTable';
-import { ClassManagerView, AssignTrainerView, AssignStudentView, AddCourseView, AddCourseRunView, AutomationLogsView, AssignTrainerLogsView, TrainerFolderLogsView, BackfillEnrollmentsView, FetchUpcomingEnrolmentsView, CourseRunDateSyncLogsView } from '../components/admin/ClassManagementViews';
+import { ClassManagerView, AssignTrainerView, AssignStudentView, AddCourseView, AddCourseRunView, AutomationLogsView, AssignTrainerLogsView, TrainerFolderLogsView, AutoCreateCertificatesLogView, BackfillEnrollmentsView, FetchUpcomingEnrolmentsView, CourseRunDateSyncLogsView } from '../components/admin/ClassManagementViews';
 import { CreateCertificateView, DeleteCertificateView } from '../components/admin/CertificateManagement';
 import { SendCertificateSGView } from '../components/admin/SendCertificateSG';
 import { SendCertificateGHView } from '../components/admin/SendCertificateGH';
@@ -144,7 +144,7 @@ const PAGE_LABELS: Partial<Record<AdminPage, string>> = {
   [AdminPage.SearchPastLearners]: 'Search Past Learners',
   [AdminPage.AutomationLogs]: 'Automation Logging',
   [AdminPage.AssignTrainerLogs]: 'Assign Trainer Log',
-  [AdminPage.TrainerFolderLogs]: 'Auto Create Trainer Folders Log',
+  [AdminPage.TrainerFolderLogs]: 'Auto Create Assessment Records Log',
   [AdminPage.CourseRunDateSyncLogs]: 'Course Run Date Sync Log',
   [AdminPage.BackfillEnrollments]: 'Backfill Enrollments',
   [AdminPage.FetchUpcomingEnrolments]: 'Fetch Upcoming Classes Enrolment',
@@ -288,6 +288,8 @@ const AdminLayout: React.FC = () => {
         return <AssignTrainerLogsView />;
       case AdminPage.TrainerFolderLogs:
         return <TrainerFolderLogsView />;
+      case AdminPage.AutoCreateCertificatesLog:
+        return <AutoCreateCertificatesLogView />;
       case AdminPage.CourseRunDateSyncLogs:
         return <CourseRunDateSyncLogsView />;
       case AdminPage.BackfillEnrollments:

@@ -11,20 +11,20 @@ import {
 } from '../../../lib/google-drive/drive-helpers';
 
 /**
- * External API — Auto Create Trainer Folders
+ * External API — Auto Create Assessment Records
  *
  * ─────────────────────────────────────────────────────────────────────────────
  * SCHEDULE: Run daily at 2:00 PM SGT
  * ─────────────────────────────────────────────────────────────────────────────
  *
  * PURPOSE:
- *   Automatically creates trainer assessment folders in Google Drive for all
+ *   Automatically creates assessment folders in Google Drive for all
  *   course runs starting TODAY. The trainer name is sourced from the local
  *   database — specifically the course_run_trainer junction table (same data
  *   shown under E-Attendance → Course Session Attendance), with fallback to
  *   assigned_trainer_name and trainer_profile.common_name.
  *
- * POST /api/external/auto-create-trainer-folders
+ * POST /api/external/auto-create-assessment-records
  *
  * Headers:
  *   x-api-key: <EXTERNAL_API_KEY_FOR_CLAWDBOT>
@@ -124,14 +124,14 @@ export async function runAutomation() {
     );
 
     const runs = runsResult.rows;
-    console.log(`📋 auto-create-trainer-folders: ${runs.length} course run(s) starting today`);
+    console.log(`📋 auto-create-assessment-records: ${runs.length} course run(s) starting today`);
 
     if (runs.length === 0) {
         return { runId, startedAt, processed: 0, created: 0, existing: 0, errors: 0, results: [] };
     }
 
     // Google Drive
-    const drive = getDriveClient();
+    const drive = await getDriveClient();
     const rootFolderId = process.env.GOOGLE_DRIVE_FOLDER_ID;
     if (!rootFolderId) throw new Error('GOOGLE_DRIVE_FOLDER_ID is not configured');
 
@@ -250,7 +250,7 @@ export async function runAutomation() {
         results.push(logEntry);
     }
 
-    console.log(`\n✅ auto-create-trainer-folders done. runId=${runId}, processed=${runs.length}, created=${created}, existing=${existing}, errors=${errors}`);
+    console.log(`\n✅ auto-create-assessment-records done. runId=${runId}, processed=${runs.length}, created=${created}, existing=${existing}, errors=${errors}`);
     return { runId, startedAt, processed: runs.length, created, existing, errors, results };
 }
 
@@ -277,7 +277,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const result = await runAutomation();
         return res.status(200).json({ success: true, ...result });
     } catch (err) {
-        console.error('❌ auto-create-trainer-folders error:', err);
+        console.error('❌ auto-create-assessment-records error:', err);
         return res.status(500).json({
             success: false,
             error: err instanceof Error ? err.message : 'Internal server error',

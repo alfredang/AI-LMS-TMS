@@ -5832,7 +5832,7 @@ export const CourseRunDateSyncLogsView: React.FC = () => {
     );
 };
 
-// ─── Trainer Folder Logging ───────────────────────────────────────────────────
+// ─── Assessment Records Logging ───────────────────────────────────────────────────
 
 interface TrainerFolderLogRow {
     id: number;
@@ -5942,7 +5942,7 @@ export const TrainerFolderLogsView: React.FC = () => {
     return (
         <div>
             <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
-                <h2 className="text-3xl font-bold">Auto Create Trainer Folders Log</h2>
+                <h2 className="text-3xl font-bold">Auto Create Assessment Records Log</h2>
                 <div className="flex items-center gap-2">
                     <Button variant="ghost" onClick={fetchLogs} disabled={loading}>
                         {loading ? 'Refreshing…' : 'Refresh'}
@@ -6075,4 +6075,130 @@ export const TrainerFolderLogsView: React.FC = () => {
             )}
         </div>
     );
+};
+export const AutoCreateCertificatesLogView: React.FC = () => {
+  const [logs, setLogs] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchLogs = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/admin/auto-create-certificates-log');
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      if (!data.success) throw new Error(data.message || 'Error fetching logs');
+      setLogs(data.logs || []);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchLogs();
+  }, []);
+
+  return (
+    <div className="space-y-6 max-w-7xl mx-auto pb-12">
+      <div className="flex justify-between items-center pb-5 border-b border-default">
+        <div>
+          <h2 className="text-2xl font-semibold text-on-surface">Auto-Create Certificates Logs</h2>
+          <p className="text-sm text-on-surface-secondary mt-1">Logs for the daily 6:30 PM background generation of certificates.</p>
+        </div>
+        <button
+          onClick={fetchLogs}
+          disabled={loading}
+          className="flex items-center gap-2 px-4 py-2 bg-surface-elevated text-on-surface-secondary border border-default rounded-md hover:bg-surface-hover text-sm"
+        >
+          <svg className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+          Refresh
+        </button>
+      </div>
+
+      {error ? (
+        <div className="p-4 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 rounded-md">
+          {error}
+        </div>
+      ) : (
+        <div className="bg-surface rounded-lg border border-default shadow-sm overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm text-left">
+              <thead className="bg-surface-elevated border-b border-default text-on-surface-secondary font-semibold">
+                <tr>
+                  <th className="px-5 py-3">Timestamp</th>
+                  <th className="px-5 py-3">Batch/Run ID</th>
+                  <th className="px-5 py-3">Course Code/Title</th>
+                  <th className="px-5 py-3">Learner Name</th>
+                  <th className="px-5 py-3">Status</th>
+                  <th className="px-5 py-3 max-w-sm text-right">Details</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-default">
+                {logs.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="px-5 py-12 text-center text-muted">
+                      No matching logs found.
+                    </td>
+                  </tr>
+                ) : (
+                  logs.map((log: any) => (
+                    <tr key={log.id} className="hover:bg-surface-hover transition-colors">
+                      <td className="px-5 py-4 whitespace-nowrap text-on-surface font-mono text-xs">
+                        {new Date(log.created_at).toLocaleString('en-SG')}
+                      </td>
+                      <td className="px-5 py-4 whitespace-nowrap text-on-surface-secondary font-mono text-xs" title={log.run_id}>
+                        {log.run_id ? log.run_id.substring(0, 8) + '...' : '—'}
+                      </td>
+                      <td className="px-5 py-4">
+                        <div className="font-medium text-on-surface">{log.course_code || '—'}</div>
+                        <div className="text-xs text-on-surface-secondary truncate max-w-[200px]" title={log.course_title}>
+                          {log.course_title || '—'}
+                        </div>
+                      </td>
+                      <td className="px-5 py-4 whitespace-nowrap">
+                        <div className="font-medium text-on-surface">{log.learner_name || '—'}</div>
+                        {log.nric && <div className="text-xs text-on-surface-secondary">{log.nric}</div>}
+                      </td>
+                      <td className="px-5 py-4 whitespace-nowrap">
+                        {log.status === 'error' ? (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700 dark:bg-red-500/10 dark:text-red-400 border border-red-200 dark:border-red-500/20">
+                            Error
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700 dark:bg-green-500/10 dark:text-green-400 border border-green-200 dark:border-green-500/20">
+                            Success
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-5 py-4 text-right max-w-sm">
+                        {log.status === 'error' ? (
+                          <div className="text-xs text-red-600 dark:text-red-400 break-words" title={log.error_message}>
+                            {log.error_message || 'Unknown error'}
+                          </div>
+                        ) : log.certificate_url ? (
+                          <a href={log.certificate_url} target="_blank" rel="noreferrer" className="text-primary hover:underline font-mono text-xs inline-flex items-center gap-1">
+                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                            </svg>
+                            View Cert
+                          </a>
+                        ) : (
+                          <span className="text-xs text-muted">No URL</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 };
