@@ -227,6 +227,13 @@ export default async function handler(
     let statsQuery = `
       SELECT
         COUNT(DISTINCT cr.id) AS total_classes,
+        COUNT(DISTINCT cr.id) FILTER (
+          WHERE COALESCE(
+            NULLIF(BTRIM(cr.assigned_trainer_name), ''),
+            NULLIF(BTRIM(cr.assigned_trainer_email), ''),
+            NULLIF(BTRIM(au.full_name), '')
+          ) IS NOT NULL
+        ) AS total_assigned_classes,
         COALESCE(SUM(ec.cnt), 0) AS total_trainees,
         COUNT(DISTINCT COALESCE(cr.assigned_trainer_name, au.full_name)) FILTER (WHERE COALESCE(cr.assigned_trainer_name, au.full_name) IS NOT NULL) AS total_trainers
       FROM course_run cr
@@ -276,6 +283,7 @@ export default async function handler(
         totalPages: Math.ceil(totalCount / limitNum),
         stats: {
           totalClasses: parseInt(stats.total_classes) || 0,
+          totalAssignedTrainers: parseInt(stats.total_assigned_classes) || 0,
           totalTrainees: parseInt(stats.total_trainees) || 0,
           totalTrainers: parseInt(stats.total_trainers) || 0,
         }

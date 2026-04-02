@@ -93,7 +93,7 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
     const [loading, setLoading] = useState(true);
     const [totalCount, setTotalCount] = useState(0);
     const [totalPages, setTotalPages] = useState(0);
-    const [stats, setStats] = useState<{ totalClasses: number; totalTrainees: number; totalTrainers: number }>({ totalClasses: 0, totalTrainees: 0, totalTrainers: 0 });
+    const [stats, setStats] = useState<{ totalClasses: number; totalAssignedTrainers: number }>({ totalClasses: 0, totalAssignedTrainers: 0 });
 
     // Import Run modal states
     const [showImportModal, setShowImportModal] = useState(false);
@@ -102,6 +102,7 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
     const [importResult, setImportResult] = useState<{ success: boolean; message: string; detail?: string } | null>(null);
 
     const ITEMS_PER_PAGE = 20;
+    const totalUnassignedTrainers = Math.max(stats.totalClasses - stats.totalAssignedTrainers, 0);
 
     // Fetch trainers from API
     const fetchTrainers = async () => {
@@ -155,7 +156,12 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                 setUpcomingClasses(result.data.classes);
                 setTotalCount(result.data.totalCount);
                 setTotalPages(result.data.totalPages);
-                if (result.data.stats) setStats(result.data.stats);
+                if (result.data.stats) {
+                    setStats({
+                        totalClasses: result.data.stats.totalClasses ?? 0,
+                        totalAssignedTrainers: result.data.stats.totalAssignedTrainers ?? result.data.stats.totalTrainers ?? 0,
+                    });
+                }
             } else {
                 console.error('❌ Error fetching upcoming classes:', result.message);
             }
@@ -302,12 +308,12 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                         <p className="text-gray-600 dark:text-gray-300 mt-1">Upcoming Classes</p>
                     </Card>
                     <Card className="p-6 text-center">
-                        <p className="text-4xl font-bold text-green-600">{stats.totalTrainees}</p>
-                        <p className="text-gray-600 dark:text-gray-300 mt-1">Trainees</p>
+                        <p className="text-4xl font-bold text-green-600">{stats.totalAssignedTrainers}</p>
+                        <p className="text-gray-600 dark:text-gray-300 mt-1">Assigned Trainers</p>
                     </Card>
                     <Card className="p-6 text-center">
-                        <p className="text-4xl font-bold text-purple-600">{stats.totalTrainers}</p>
-                        <p className="text-gray-600 dark:text-gray-300 mt-1">Trainers</p>
+                        <p className="text-4xl font-bold text-purple-600">{totalUnassignedTrainers}</p>
+                        <p className="text-gray-600 dark:text-gray-300 mt-1">Unassigned Trainers</p>
                     </Card>
                 </div>
             )}
