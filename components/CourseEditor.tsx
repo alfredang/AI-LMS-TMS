@@ -389,6 +389,23 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
         console.log('📝 CourseEditor: Mode:', courseEditMode, '| isNewCourse:', isNewCourse, '| Course ID:', course.id, '| hasRealId:', hasRealId);
     }, [courseEditMode, isNewCourse, course.id, hasRealId]);
 
+    useEffect(() => {
+        if (!editingCourse) return;
+        setCourse(prev => {
+            if (
+                prev.skillsfutureLink === editingCourse.skillsfutureLink &&
+                prev.brochureLink === editingCourse.brochureLink
+            ) {
+                return prev;
+            }
+            return {
+                ...prev,
+                skillsfutureLink: editingCourse.skillsfutureLink,
+                brochureLink: editingCourse.brochureLink,
+            };
+        });
+    }, [editingCourse]);
+
     // Clean up invalid blob URLs from database when editing existing courses
     useEffect(() => {
         if (!isNewCourse && course.imageUrl && course.imageUrl.startsWith('blob:')) {
@@ -671,6 +688,7 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                 slidesUrl: course.slidesUrl || undefined,
                 courseLink: course.courseLink || undefined,
                 brochureLink: course.brochureLink || undefined,
+                skillsfutureLink: course.skillsfutureLink || undefined,
                 fundingValidity: course.fundingValidity || undefined,
                 assessmentRecordLink: course.assessmentRecordLink || undefined,
                 assessmentSummaryRecordUrl: course.assessmentSummaryRecordUrl || '',
@@ -1098,14 +1116,14 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
     return (
         <div>
             {/* Header */}
-            <div className="sticky top-14 sm:top-16 z-20 bg-background pt-4 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-6 pb-4 border-b border-gray-200 dark:border-gray-700">
-                <div>
-                    <h2 className="text-2xl font-bold dark:text-white">{isNewCourse ? 'Create Course' : isReadOnly ? 'Course Info' : 'Edit Course'}</h2>
+            <div className={`z-20 bg-background flex flex-col gap-3 pb-2 border-b border-gray-200 dark:border-gray-700 ${isReadOnly ? 'mb-2' : 'pt-0 mb-4'}`}>
+                <div className={!isNewCourse ? 'space-y-0' : undefined}>
+                    <h2 className={`font-bold dark:text-white ${!isNewCourse ? 'text-[1.625rem] leading-tight' : 'text-2xl'}`}>{isNewCourse ? 'Create Course' : course.title}</h2>
                     {!isNewCourse && course.courseCode && (
-                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">{course.courseCode}</p>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-0">{course.courseCode}</p>
                     )}
                 </div>
-                <div className="flex items-center gap-2 self-end sm:self-auto">
+                <div className="flex flex-wrap sm:flex-nowrap items-center justify-end gap-2">
                     <Button variant="ghost" onClick={() => {
                         setEditingCourse(null);
                         setCourseEditMode(null);
@@ -1203,19 +1221,9 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                 <LinkField label="Trainer Slides URL" value={course.trainerSlidesUrl} />
                                 <LinkField label="Courseware Link" value={course.courseLink} />
                                 <LinkField label="Brochure Link" value={course.brochureLink} />
+                                <LinkField label="SkillsFuture Link" value={course.skillsfutureLink} />
                                 <LinkField label="Assessment Record Link" value={course.assessmentRecordLink} />
                                 <LinkField label="Assessment Summary Record URL" value={course.assessmentSummaryRecordUrl} />
-                            </div>
-                        </Card>
-
-                        <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
-                            <h3 className="text-xl font-bold mb-4">Assessment Links</h3>
-                            <div className="space-y-4">
-                                <LinkField label="Written Assessment Link" value={course.writtenAssessmentLink} />
-                                <LinkField label="Practical Performance Assessment Link" value={course.practicalPerformanceAssessmentLink} />
-                                {course.assessmentMethods && Object.entries(course.assessmentMethods).map(([key, method]) => (
-                                    method?.enabled ? <LinkField key={key} label={ASSESSMENT_METHOD_LABELS[key as AssessmentMethodKey]} value={method.link} /> : null
-                                ))}
                             </div>
                         </Card>
 
@@ -1251,6 +1259,20 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                 )) : (
                                     <div className="text-gray-500 dark:text-gray-400">No lessons available.</div>
                                 )}
+                            </div>
+                        </Card>
+
+                        <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
+                            <h3 className="text-xl font-bold mb-4">Assessment Links</h3>
+                            <div className="space-y-4">
+                                <LinkField label="Written Exam" value={course.writtenAssessmentLink} />
+                                <LinkField label="Practical Exam" value={course.practicalPerformanceAssessmentLink} />
+                                {course.assessmentMethods && Object.entries(course.assessmentMethods).map(([key, method]) => {
+                                    if (!method?.enabled) return null;
+                                    if (key === 'writtenAssessment' && course.writtenAssessmentLink) return null;
+                                    if (key === 'practicalExam' && course.practicalPerformanceAssessmentLink) return null;
+                                    return <LinkField key={key} label={ASSESSMENT_METHOD_LABELS[key as AssessmentMethodKey]} value={method.link} />;
+                                })}
                             </div>
                         </Card>
                     </div>
@@ -1566,6 +1588,17 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                     onChange={(e) => setCourse(prev => ({ ...prev, brochureLink: e.target.value }))}
                                     className={inputClasses}
                                     placeholder="https://drive.google.com/..."
+                                />
+                            </div>
+                            <div>
+                                <label htmlFor="skillsfutureLink" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">SkillsFuture Link</label>
+                                <input
+                                    type="url"
+                                    id="skillsfutureLink"
+                                    value={course.skillsfutureLink || ''}
+                                    onChange={(e) => setCourse(prev => ({ ...prev, skillsfutureLink: e.target.value }))}
+                                    className={inputClasses}
+                                    placeholder="https://www.myskillsfuture.gov.sg/..."
                                 />
                             </div>
                             <div>

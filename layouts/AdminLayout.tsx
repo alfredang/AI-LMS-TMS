@@ -394,7 +394,7 @@ const AdminLayout: React.FC = () => {
 
         {/* Main Content Area */}
         <main className="flex-1 min-w-0 overflow-x-hidden">
-          <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className={`container mx-auto px-4 sm:px-6 lg:px-8 ${editingCourse ? 'pt-3 pb-8' : 'py-8'}`}>
             {renderContent()}
           </div>
         </main>

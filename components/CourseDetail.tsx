@@ -263,6 +263,12 @@ const AssessmentsSection: React.FC<{
         return true;
     }) || [];
 
+    const hasLegacyAssessmentLink = (methodKey: string) => {
+        if (methodKey === 'writtenAssessment') return !!course.writtenAssessmentLink;
+        if (methodKey === 'practicalExam') return !!course.practicalPerformanceAssessmentLink;
+        return false;
+    };
+
     // State for link-based assessment submissions (Written/Practical)
     interface LinkSubmission {
         id: string;
@@ -1092,6 +1098,7 @@ const AssessmentsSection: React.FC<{
             })
             .map(([methodKey, config]) => {
                 if (!config.enabled || !config.link) return null;
+                if (hasLegacyAssessmentLink(methodKey)) return null;
                 const label = ASSESSMENT_METHOD_LABELS[methodKey as AssessmentMethodKey] || methodKey;
                 const isPublished = methodPublishState[methodKey] === true;
                 const isPrivileged = userRole === UserRole.Trainer || userRole === UserRole.Admin || userRole === UserRole.Developer || userRole === UserRole.TrainingProvider;
