@@ -25,7 +25,7 @@
     "lucide-react": "^0.545.0",
     "multer": "^2.0.2",
     "next": "^16.1.6",
-    "nodemailer": "^7.0.12",
+    "nodemailer": "^8.0.4",
     "openai": "^6.17.0",
     "pdf-lib": "^1.17.1",
     "pdf2json": "^4.0.2",
