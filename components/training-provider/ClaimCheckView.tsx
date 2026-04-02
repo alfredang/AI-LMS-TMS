@@ -3,6 +3,8 @@ import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Icon, IconName } from '../ui/Icon';
 
+const RESULTS_PER_PAGE = 20;
+
 type ClaimRowDb = {
   id: string;
   claim_id: string | null;
@@ -69,6 +71,7 @@ const ClaimCheckView: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [resultsPage, setResultsPage] = useState(1);
 
   const [file, setFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -92,6 +95,7 @@ const ClaimCheckView: React.FC = () => {
     setError(null);
     setSuccess(null);
     setUploadResponse(null);
+    setResultsPage(1);
   };
 
   const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
@@ -126,6 +130,7 @@ const ClaimCheckView: React.FC = () => {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Upload failed');
       setUploadResponse(json as UploadResponse);
+      setResultsPage(1);
       setSuccess('Upload processed successfully.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Upload failed');
@@ -256,9 +261,19 @@ const ClaimCheckView: React.FC = () => {
               </div>
             </div>
 
-            <div className="overflow-x-auto rounded-xl border border-default bg-surface">
-              <table className="min-w-full text-sm">
-                <thead className="bg-surface-elevated text-on-surface-secondary">
+            {(() => {
+              const total = uploadResponse.results.length;
+              const totalPages = Math.max(1, Math.ceil(total / RESULTS_PER_PAGE));
+              const currentPage = Math.min(resultsPage, totalPages);
+              const startIdx = (currentPage - 1) * RESULTS_PER_PAGE;
+              const endIdx = Math.min(startIdx + RESULTS_PER_PAGE, total);
+              const pageRows = uploadResponse.results.slice(startIdx, endIdx);
+
+              return (
+                <>
+                  <div className="overflow-x-auto rounded-xl border border-default bg-surface">
+                    <table className="min-w-full text-sm">
+                      <thead className="bg-surface-elevated text-on-surface-secondary">
                   <tr>
                     <th className="text-left px-3 py-2 font-semibold">Claim ID</th>
                     <th className="text-left px-3 py-2 font-semibold">Result</th>
@@ -273,7 +288,7 @@ const ClaimCheckView: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {uploadResponse.results.map((r, idx) => {
+                  {pageRows.map((r, idx) => {
                     const data = r.result === 'failed' ? null : r.data;
                     const badge =
                       r.result === 'inserted'
@@ -283,7 +298,7 @@ const ClaimCheckView: React.FC = () => {
                           : 'bg-red-500/15 text-red-700 dark:text-red-200';
 
                     return (
-                      <tr key={`${r.claim_id ?? 'failed'}-${idx}`} className="border-t border-default">
+                      <tr key={`${r.claim_id ?? 'failed'}-${startIdx + idx}`} className="border-t border-default">
                         <td className="px-3 py-2 font-mono text-xs text-on-surface-secondary">
                           {r.claim_id ?? '-'}
                         </td>
@@ -304,8 +319,41 @@ const ClaimCheckView: React.FC = () => {
                     );
                   })}
                 </tbody>
-              </table>
-            </div>
+                    </table>
+                  </div>
+
+                  <div className="flex items-center justify-between text-sm text-on-surface-secondary">
+                    <div>
+                      Showing <span className="font-semibold text-on-surface">{total === 0 ? 0 : startIdx + 1}</span> to{' '}
+                      <span className="font-semibold text-on-surface">{endIdx}</span> of{' '}
+                      <span className="font-semibold text-on-surface">{total}</span> results
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setResultsPage((p) => Math.max(1, p - 1))}
+                        disabled={currentPage <= 1}
+                        className="px-3 py-1.5 rounded-md border border-default bg-surface hover:bg-surface-hover disabled:opacity-50"
+                      >
+                        Previous
+                      </button>
+                      <span>
+                        Page <span className="font-semibold text-on-surface">{currentPage}</span> of{' '}
+                        <span className="font-semibold text-on-surface">{totalPages}</span>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setResultsPage((p) => Math.min(totalPages, p + 1))}
+                        disabled={currentPage >= totalPages}
+                        className="px-3 py-1.5 rounded-md border border-default bg-surface hover:bg-surface-hover disabled:opacity-50"
+                      >
+                        Next
+                      </button>
+                    </div>
+                  </div>
+                </>
+              );
+            })()}
           </div>
         )}
       </Card>
