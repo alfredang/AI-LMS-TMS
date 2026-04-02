@@ -26,9 +26,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const { userId, profileData } = req.body;
+    const { userId, profileData, role } = req.body;
+    const profileTable = role === 'Finance' ? 'finance_profile' : 'admin_profile';
 
-    console.log('🔄 Admin Profile Update API called with:', { userId, profileData });
+    console.log('🔄 Profile Update API called with:', { userId, profileData, role, profileTable });
 
     if (!userId || typeof userId !== 'string') {
       return res.status(400).json(
@@ -110,20 +111,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         console.log('✅ app_user table updated successfully');
       }
 
-      // Update admin_profile table if there are fields to update
+      // Update profile table if there are fields to update
       if (profileData.tel !== undefined) {
-        const adminProfileQuery = `
-          INSERT INTO admin_profile (user_id, tel)
+        const profileQuery = `
+          INSERT INTO ${profileTable} (user_id, tel)
           VALUES ($1, $2)
           ON CONFLICT (user_id) DO UPDATE
           SET tel = EXCLUDED.tel
         `;
 
-        console.log('🔄 Executing admin_profile upsert:', adminProfileQuery);
+        console.log(`🔄 Executing ${profileTable} upsert:`, profileQuery);
         console.log('📝 Values:', [userId, profileData.tel]);
 
-        await client.query(adminProfileQuery, [userId, profileData.tel]);
-        console.log('✅ admin_profile table upserted successfully');
+        await client.query(profileQuery, [userId, profileData.tel]);
+        console.log(`✅ ${profileTable} table upserted successfully`);
       }
 
       // Commit the transaction
@@ -131,20 +132,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       // Fetch the updated profile data
       const result = await client.query(`
-        SELECT 
+        SELECT
             au.id AS user_id,
             au.full_name,
             au.email,
             au.profile_picture_url,
-            ap.tel AS telephone
+            p.tel AS telephone
         FROM app_user au
-        LEFT JOIN admin_profile ap 
-            ON ap.user_id = au.id
+        LEFT JOIN ${profileTable} p
+            ON p.user_id = au.id
         WHERE au.id = $1
       `, [userId]);
 
       if (result.rows.length === 0) {
-        throw new Error('Admin profile not found after update');
+        throw new Error('Profile not found after update');
       }
 
       const updatedProfile = result.rows[0];

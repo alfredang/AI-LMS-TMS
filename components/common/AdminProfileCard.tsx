@@ -144,7 +144,7 @@ const LoginDetailsCard: React.FC<{
 };
 
 export const AdminProfileCard: React.FC<{ profile: AdminProfile }> = ({ profile }) => {
-    const { updateCurrentUserProfile } = useLms();
+    const { updateCurrentUserProfile, role } = useLms();
     const [isEditing, setIsEditing] = useState(false);
     const [formData, setFormData] = useState(profile);
     const [isGeneratingAvatar, setIsGeneratingAvatar] = useState(false);
@@ -364,7 +364,8 @@ export const AdminProfileCard: React.FC<{ profile: AdminProfile }> = ({ profile 
                 },
                 body: JSON.stringify({
                     userId: profile.id,
-                    profileData: changedFields
+                    profileData: changedFields,
+                    role: role || 'Admin'
                 })
             });
 
@@ -378,10 +379,10 @@ export const AdminProfileCard: React.FC<{ profile: AdminProfile }> = ({ profile 
                 throw new Error(updateResult.error || 'Failed to update admin profile');
             }
 
-            console.log('✅ Admin profile updated successfully:', updateResult.data);
+            console.log('✅ Profile updated successfully:', updateResult.data);
 
             setIsEditing(false);
-            alert('Admin profile saved successfully!');
+            alert('Profile saved successfully!');
 
             // Update the original profile state with the changes
             Object.assign(profile, changedFields);
@@ -420,8 +421,8 @@ export const AdminProfileCard: React.FC<{ profile: AdminProfile }> = ({ profile 
             setProfilePicturePreview(null);
 
         } catch (error) {
-            console.error('❌ Failed to save admin profile:', error);
-            alert(`Failed to save admin profile: ${error instanceof Error ? error.message : 'Please try again.'}`);
+            console.error('❌ Failed to save profile:', error);
+            alert(`Failed to save profile: ${error instanceof Error ? error.message : 'Please try again.'}`);
         }
     };
 
@@ -461,7 +462,7 @@ export const AdminProfileCard: React.FC<{ profile: AdminProfile }> = ({ profile 
                     </div>
                     <div className="text-center sm:text-left flex-grow">
                         <h1 className="text-2xl font-bold text-on-surface">{isEditing ? 'Editing Profile' : formData.name}</h1>
-                        <p className="text-gray-600 dark:text-gray-400">Admin Profile</p>
+                        <p className="text-gray-600 dark:text-gray-400">{role ? `${role.charAt(0).toUpperCase() + role.slice(1)} Profile` : 'Admin Profile'}</p>
                     </div>
                     {isEditing ? (
                         <div className="flex items-center gap-2">

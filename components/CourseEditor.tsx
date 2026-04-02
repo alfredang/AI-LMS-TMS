@@ -557,6 +557,7 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                 courseLink: course.courseLink || undefined,
                 fundingValidity: course.fundingValidity || undefined,
                 assessmentRecordLink: course.assessmentRecordLink || undefined,
+                assessmentSummaryRecordUrl: course.assessmentSummaryRecordUrl || '',
                 writtenAssessmentLink: writtenAssessmentInputType === 'link' ? (course.writtenAssessmentLink || undefined) : undefined,
                 practicalPerformanceAssessmentLink: practicalPerformanceInputType === 'link' ? (course.practicalPerformanceAssessmentLink || undefined) : undefined,
                 assessmentMethods: course.assessmentMethods || undefined,

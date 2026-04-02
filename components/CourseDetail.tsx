@@ -9,6 +9,7 @@ import GradingView from './GradingView';
 import { extractFilenameFromPath } from '@utils/fileUtils';
 import { courseService } from '@lib/services/courseService';
 import { getApiUrl, getDownloadUrl } from '@/lib/urlHelpers';
+import { AssessmentSummarySection } from './trainer/AssessmentSummarySection';
 
 // --- Types (assuming these exist in your project) ---
 interface Topic {
@@ -79,6 +80,7 @@ interface Course {
     assessmentMethods?: Record<string, { enabled: boolean; link: string }>;
     publishedAssessmentMethods?: Record<string, boolean>;
     fundingValidity?: string;
+    assessmentSummaryRecordUrl?: string;
 }
 
 // --- Utility Functions ---
@@ -1353,6 +1355,197 @@ const AdditionalDocumentsSection: React.FC<{ userRole: UserRole, courseRunId: st
     );
 };
 
+// --- Course Sessions Section Component (Admin / Developer only) ---
+const DAY_SESSION_COUNT = 11;
+const EVENING_SESSION_COUNT = 3;
+const MODE_OPTIONS = [
+    { value: '1', label: '1 - Classroom Facilitated Training' },
+    { value: '2', label: '2 - Asynchronous E-learning' },
+    { value: '4', label: '4 - On the Job Training' },
+    { value: '8', label: '8 - Assessment' },
+    { value: '9', label: '9 - Synchronous E-learning' },
+    { value: '10', label: '10 - Work-based/Workplace Learning' },
+];
+
+const CourseSessionsSection: React.FC<{ courseCode: string }> = ({ courseCode }) => {
+    const [timing, setTiming] = React.useState<Record<string, string> | null>(null);
+    const [draft, setDraft] = React.useState<Record<string, string>>({});
+    const [loading, setLoading] = React.useState(false);
+    const [editing, setEditing] = React.useState(false);
+    const [saving, setSaving] = React.useState(false);
+    const [error, setError] = React.useState<string | null>(null);
+    const [saveSuccess, setSaveSuccess] = React.useState(false);
+
+    React.useEffect(() => {
+        if (!courseCode) return;
+        setLoading(true);
+        setError(null);
+        fetch(`/api/admin/course-session-timing?courseCode=${encodeURIComponent(courseCode)}`)
+            .then(res => res.json())
+            .then(json => { setTiming(json?.data ?? null); })
+            .catch(() => setError('Failed to load session timing'))
+            .finally(() => setLoading(false));
+    }, [courseCode]);
+
+    const startEdit = () => {
+        setDraft(timing ? { ...timing } : {});
+        setEditing(true);
+        setSaveSuccess(false);
+    };
+
+    const cancelEdit = () => { setEditing(false); setDraft({}); };
+
+    const setField = (key: string, value: string) => {
+        setDraft(prev => ({ ...prev, [key]: value }));
+    };
+
+    const handleSave = async () => {
+        setSaving(true);
+        setError(null);
+        try {
+            const res = await fetch('/api/admin/course-session-timing', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ courseCode, ...draft }),
+            });
+            const json = await res.json();
+            if (!res.ok || !json.success) throw new Error(json.error || `HTTP ${res.status}`);
+            setTiming(json.data ?? draft);
+            setEditing(false);
+            setDraft({});
+            setSaveSuccess(true);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Save failed');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const buildRows = (t: Record<string, string>) => {
+        const rows: { key: string; label: string; startKey: string; endKey: string; modeKey: string }[] = [];
+        for (let i = 1; i <= DAY_SESSION_COUNT; i++) {
+            rows.push({
+                key: `day-${i}`, label: `Session ${i}`,
+                startKey: `session_${i}_start_time`,
+                endKey: `session_${i}_end_time`,
+                modeKey: `session_${i}_mode_of_training`,
+            });
+        }
+        for (let i = 1; i <= EVENING_SESSION_COUNT; i++) {
+            rows.push({
+                key: `eve-${i}`, label: `Session ${i} Evening`,
+                startKey: `session_${i}_evening_start_time`,
+                endKey: `session_${i}_evening_end_time`,
+                modeKey: `session_${i}_evening_mode_of_training`,
+            });
+        }
+        return rows;
+    };
+
+    const inputCls = 'w-full px-2 py-1 text-sm rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500 font-mono';
+
+    const source = editing ? draft : (timing ?? {});
+    const rows = buildRows(source);
+    const hasAnyData = rows.some(r => source[r.startKey] || source[r.endKey] || source[r.modeKey]);
+
+    return (
+        <ContentSection title="Course Sessions">
+            {loading && (
+                <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500" />
+                    Loading session timing…
+                </div>
+            )}
+            {error && <p className="text-sm text-red-500 dark:text-red-400">{error}</p>}
+            {saveSuccess && !editing && (
+                <p className="text-sm text-green-600 dark:text-green-400 mb-2">Saved successfully.</p>
+            )}
+            {!loading && !timing && !editing && (
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">No session timing configured for this course.</p>
+            )}
+
+            {!loading && (
+                <>
+                    {(hasAnyData || editing) && (
+                        <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700 mb-4">
+                            <table className="w-full text-sm border-collapse">
+                                <thead className="bg-gray-50 dark:bg-gray-800">
+                                    <tr>
+                                        {['Session', 'Start Time', 'End Time', 'Mode of Training'].map(h => (
+                                            <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider border-b border-gray-200 dark:border-gray-700">
+                                                {h}
+                                            </th>
+                                        ))}
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-100 dark:divide-gray-700 bg-white dark:bg-gray-900">
+                                    {rows.map(row => (
+                                        <tr key={row.key} className="hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                                            <td className="px-4 py-2 text-gray-700 dark:text-gray-300 font-medium whitespace-nowrap">{row.label}</td>
+                                            {editing ? (
+                                                <>
+                                                    <td className="px-4 py-1.5">
+                                                        <input type="time" value={draft[row.startKey] ?? ''} onChange={e => setField(row.startKey, e.target.value)} className={inputCls} />
+                                                    </td>
+                                                    <td className="px-4 py-1.5">
+                                                        <input type="time" value={draft[row.endKey] ?? ''} onChange={e => setField(row.endKey, e.target.value)} className={inputCls} />
+                                                    </td>
+                                                    <td className="px-4 py-1.5">
+                                                        {(() => {
+                                                            const stored = draft[row.modeKey] ?? '';
+                                                            const knownValues = MODE_OPTIONS.map(o => o.value);
+                                                            return (
+                                                                <select value={stored} onChange={e => setField(row.modeKey, e.target.value)} className={inputCls}>
+                                                                    <option value="">— Select —</option>
+                                                                    {stored && !knownValues.includes(stored) && (
+                                                                        <option value={stored}>{stored}</option>
+                                                                    )}
+                                                                    {MODE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                                                                </select>
+                                                            );
+                                                        })()}
+                                                    </td>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <td className="px-4 py-2 text-gray-900 dark:text-white font-mono">{source[row.startKey] || '—'}</td>
+                                                    <td className="px-4 py-2 text-gray-900 dark:text-white font-mono">{source[row.endKey] || '—'}</td>
+                                                    <td className="px-4 py-2 text-gray-700 dark:text-gray-300">
+                                                        {source[row.modeKey]
+                                                            ? (MODE_OPTIONS.find(o => o.value === String(source[row.modeKey]).trim())?.label ?? source[row.modeKey])
+                                                            : '—'}
+                                                    </td>
+                                                </>
+                                            )}
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+
+                    <div className="flex gap-2">
+                        {editing ? (
+                            <>
+                                <button onClick={handleSave} disabled={saving} className="px-4 py-2 text-sm font-medium rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 transition-colors">
+                                    {saving ? 'Saving…' : 'Save'}
+                                </button>
+                                <button onClick={cancelEdit} disabled={saving} className="px-4 py-2 text-sm font-medium rounded-md border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                                    Cancel
+                                </button>
+                            </>
+                        ) : (
+                            <button onClick={startEdit} className="px-4 py-2 text-sm font-medium rounded-md border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                                {timing ? 'Edit' : 'Add Session Timing'}
+                            </button>
+                        )}
+                    </div>
+                </>
+            )}
+        </ContentSection>
+    );
+};
+
 // --- Certificate Section Component ---
 const CertificateSection: React.FC<{ userRole: UserRole }> = ({ userRole }) => {
     const { certificate, selectedCourse } = useLms();
@@ -1435,7 +1628,6 @@ const CertificateSection: React.FC<{ userRole: UserRole }> = ({ userRole }) => {
         </ContentSection>
     );
 };
-
 
 //---- Course Info Panel ---
 const CourseInfoPanel: React.FC<{ course: Course; userRole: UserRole }> = ({ course, userRole }) => {
@@ -1527,6 +1719,7 @@ const CourseSidebar: React.FC<CourseSidebarProps> = ({ userRole, onSetGradingVie
         else if (label === 'Assessment' || label === 'Assessments') targetId = 'assessments';
         else if (label === 'Certificate') targetId = 'certificate';
         else if (label === 'Additional Documents') targetId = 'additional-documents';
+        else if (label === 'Assessment Summary Record') targetId = toId(label);
         else if (label === 'Grading') targetId = 'assessment-grading';
 
             const element = document.getElementById(targetId);
@@ -1555,6 +1748,7 @@ const CourseSidebar: React.FC<CourseSidebarProps> = ({ userRole, onSetGradingVie
         { type: 'link', label: "E-Attendance", icon: IconName.ClipboardCheck },
         { type: 'link', label: "Courseware Link", icon: IconName.Link },
         { type: 'link', label: "Assessment Grading", icon: IconName.Edit },
+        { type: 'link', label: "Assessment Summary Record", icon: IconName.ClipboardCheck },
         { type: 'link', label: "Lesson Plan", icon: IconName.BookOpen },
         { type: 'link', label: "Learner Guide", icon: IconName.FileText },
         { type: 'link', label: "Facilitator Guide", icon: IconName.FileText },
@@ -1568,6 +1762,13 @@ const CourseSidebar: React.FC<CourseSidebarProps> = ({ userRole, onSetGradingVie
         { type: 'link', label: "Grading", icon: IconName.Edit },
         { type: 'link', label: "Additional Documents", icon: IconName.FileText },
     ];
+
+    if (userRole === UserRole.Developer || userRole === UserRole.Admin) {
+        trainerNavItems = [
+            ...trainerNavItems,
+            { type: 'link', label: "Course Sessions", icon: IconName.ClipboardCheck },
+        ];
+    }
 
     if (userRole === UserRole.Developer || userRole === UserRole.TrainingProvider || userRole === UserRole.Admin) {
         trainerNavItems = trainerNavItems.filter(item =>
@@ -1958,6 +2159,7 @@ export const CourseDetail: React.FC = () => {
         assessmentPlanUrl: effectiveDetail?.assessmentPlanUrl,
         courseLink: effectiveDetail?.courseLink,
         assessmentRecordLink: effectiveDetail?.assessmentRecordLink,
+        assessmentSummaryRecordUrl: effectiveDetail?.assessmentSummaryRecordUrl,
         writtenAssessmentLink: effectiveDetail?.writtenAssessmentLink,
         practicalPerformanceAssessmentLink: effectiveDetail?.practicalPerformanceAssessmentLink,
         fundingValidity: (effectiveDetail as any)?.fundingValidity || selectedCourse.fundingValidity || undefined,
@@ -2697,9 +2899,31 @@ export const CourseDetail: React.FC = () => {
                                 </div>
                             )}
 
+                            {/* Assessment Summary Record */}
+                            {(userRole === UserRole.Trainer || userRole === UserRole.Developer || userRole === UserRole.Admin || userRole === UserRole.TrainingProvider) && (
+                                <div id={toId("Assessment Summary Record")}>
+                                    <AssessmentSummarySection 
+                                        course={convertedCourse} 
+                                        userRole={userRole} 
+                                        courseRunUuid={effectiveDetail?.courseRunUuid || selectedCourse?.courseRunId || ''} 
+                                    />
+                                </div>
+                            )}
+
+                            {/* Course Sessions — Admin and Developer only */}
+                            {(userRole === UserRole.Admin || userRole === UserRole.Developer) && (() => {
+                                const courseCode = effectiveDetail?.tgsRef || selectedCourse?.courseCode || convertedCourse.courseCode || '';
+                                if (!courseCode) return null;
+                                return (
+                                    <div id={toId("Course Sessions")}>
+                                        <CourseSessionsSection courseCode={courseCode} />
+                                    </div>
+                                );
+                            })()}
+
                             {/* Additional Documents */}
                             <div id={toId("Additional Documents")}>
-                                <AdditionalDocumentsSection 
+                                <AdditionalDocumentsSection
                                     userRole={userRole} 
                                     courseRunId={convertedCourse.courseRunId || selectedCourse?.courseRunId || ''} 
                                     currentUser={currentUser}
@@ -2707,7 +2931,7 @@ export const CourseDetail: React.FC = () => {
                             </div>
 
                             {/* Certificate */}
-                            <div id="certificate">
+                            <div id={toId("Certificate")}>
                                 <CertificateSection userRole={userRole} />
                             </div>
 

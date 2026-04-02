@@ -3,6 +3,7 @@ import pool from '../../../lib/db';
 import bcrypt from 'bcryptjs';
 import { google, drive_v3 } from 'googleapis';
 import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdentifiers';
+import { getDriveClient } from '../../../lib/google-drive/drive-helpers';
 
 // Helper function for database queries
 const query = (text: string, params?: any[]) => pool.query(text, params);
@@ -521,14 +522,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                     }
 
                     if (folderId) {
-                        const clientId = process.env.GOOGLE_OAUTH_CLIENT_ID;
-                        const clientSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET;
-                        const refreshToken = process.env.GOOGLE_OAUTH_REFRESH_TOKEN;
-
-                        if (clientId && clientSecret && refreshToken) {
-                            const oauth2Client = new google.auth.OAuth2(clientId, clientSecret, 'http://localhost:9876');
-                            oauth2Client.setCredentials({ refresh_token: refreshToken });
-                            const drive: drive_v3.Drive = google.drive({ version: 'v3', auth: oauth2Client });
+                        try {
+                            const drive = await getDriveClient();
 
                             try {
                                 await drive.permissions.create({
@@ -544,6 +539,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                                     console.warn(`⚠️ Could not share courseware folder with ${trainerEmail}: ${shareErr.message}`);
                                 }
                             }
+                        } catch (authErr: any) {
+                            console.warn(`⚠️ Google Auth failed for auto-sharing: ${authErr.message}`);
                         }
                     }
                 }

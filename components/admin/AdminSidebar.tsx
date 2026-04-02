@@ -66,6 +66,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate }) => {
         referenceLinks: false,
         n8nLinks: false,
         usefulLinks: false,
+        scheduler: false,
     });
 
     const toggleSection = (key: string) => {
@@ -127,8 +128,11 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate }) => {
                 <NavItem page={AdminPage.CreateNewClass} label="Create New Class" isSubItem />
                 <NavItem page={AdminPage.SearchCourseRuns} label="Search Course Runs" isSubItem />
                 <NavItem page={AdminPage.ViewCourseRun} label="View Course Run" isSubItem />
+                <NavItem page={AdminPage.EditCourseRun} label="Edit Course Run" isSubItem />
                 <NavItem page={AdminPage.UploadCourseRuns} label="Upload Course Runs" isSubItem />
                 <NavItem page={AdminPage.DeleteCourseRun} label="Delete Course Run" isSubItem />
+                <NavItem page={AdminPage.AddSessions} label="Add Sessions" isSubItem />
+                <NavItem page={AdminPage.CourseSessionTiming} label="Course Session Timing" isSubItem />
                 <NavItem page={AdminPage.CourseSessions} label="Course Sessions" isSubItem />
                 <NavItem page={AdminPage.CourseSessionAttendance} label="Course Session Attendance" isSubItem />
                 <NavItem page={AdminPage.CheckAttendance} label="Check Attendance" isSubItem />
@@ -232,9 +236,15 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate }) => {
                 })}
             </NavSection>
 
+            <NavSection title="Scheduler" isOpen={openSections.scheduler} onToggle={() => toggleSection('scheduler')}>
+                <NavItem page={AdminPage.Scheduler} label="Task Scheduler" isSubItem />
+            </NavSection>
+
             <NavSection title="Logging" isOpen={openSections.logging} onToggle={() => toggleSection('logging')}>
                 <NavItem page={AdminPage.AutomationLogs} label="Auto Create Learner Log" isSubItem />
                 <NavItem page={AdminPage.AssignTrainerLogs} label="Assign Trainer Log" isSubItem />
+                <NavItem page={AdminPage.TrainerFolderLogs} label="Auto Create Assessment Records Log" isSubItem />
+                <NavItem page={AdminPage.AutoCreateCertificatesLog} label="Auto Create Certificates Log" isSubItem />
                 <NavItem page={AdminPage.CourseRunDateSyncLogs} label="Course Run Date Sync Log" isSubItem />
             </NavSection>
 

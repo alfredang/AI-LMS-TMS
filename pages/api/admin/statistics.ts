@@ -64,7 +64,7 @@ export default async function handler(
     `;
 
     const result = await pool.query(statisticsQuery);
-    
+
     if (result.rows.length === 0) {
       return res.status(404).json({ message: 'No statistics found' });
     }
@@ -85,7 +85,7 @@ export default async function handler(
 
   } catch (error) {
     console.error('Error fetching admin statistics:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
       message: 'Internal server error',
       error: error instanceof Error ? error.message : 'Unknown error'

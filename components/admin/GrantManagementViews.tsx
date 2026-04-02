@@ -4,6 +4,7 @@ import { Button } from '../ui/Button';
 import { Icon, IconName } from '../ui/Icon';
 import { getApiUrl } from '@/lib/urlHelpers';
 import { useLms } from '@contexts/LmsContext';
+import { AdminPage } from '@app-types';
 
 // Helper functions for consistent styling
 const getStatusColor = (status: string) => {
@@ -3524,6 +3525,7 @@ export const SearchCourseRunsView: React.FC = () => {
 };
 
 export const ViewCourseRunView: React.FC = () => {
+    const { setAdminPage, setSelectedCourseRunId } = useLms();
     const [courseRunId, setCourseRunId] = useState<string>('');
     const [isSearching, setIsSearching] = useState(false);
     const [webhookResponse, setWebhookResponse] = useState<any>(null);
@@ -3922,7 +3924,7 @@ export const ViewCourseRunView: React.FC = () => {
                                     </pre>
                                 </details>
 
-                                <div className="mt-6 flex justify-end">
+                                <div className="mt-6 flex justify-end gap-3">
                                     <Button
                                         variant="outline"
                                         onClick={() => {
@@ -3932,6 +3934,15 @@ export const ViewCourseRunView: React.FC = () => {
                                         }}
                                     >
                                         Clear Results
+                                    </Button>
+                                    <Button
+                                        onClick={() => {
+                                            setSelectedCourseRunId(courseRunId.trim());
+                                            setAdminPage(AdminPage.EditCourseRun);
+                                        }}
+                                    >
+                                        <Icon name={IconName.Edit} className="w-4 h-4 mr-2" />
+                                        Edit Course Run
                                     </Button>
                                 </div>
                             </>

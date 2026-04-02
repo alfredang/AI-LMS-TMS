@@ -22,7 +22,7 @@ import OngoingClasses from '../components/admin/OngoingClasses';
 import CompletedClasses from '../components/admin/CompletedClasses';
 import ClassDetailView from '../components/admin/ClassDetailView';
 import { UpcomingClassesTable } from '../components/UpcomingClassesTable';
-import { ClassManagerView, AssignTrainerView, AssignStudentView, AddCourseView, AddCourseRunView, AutomationLogsView, AssignTrainerLogsView, BackfillEnrollmentsView, FetchUpcomingEnrolmentsView, CourseRunDateSyncLogsView } from '../components/admin/ClassManagementViews';
+import { ClassManagerView, AssignTrainerView, AssignStudentView, AddCourseView, AddCourseRunView, AutomationLogsView, AssignTrainerLogsView, TrainerFolderLogsView, AutoCreateCertificatesLogView, BackfillEnrollmentsView, FetchUpcomingEnrolmentsView, CourseRunDateSyncLogsView } from '../components/admin/ClassManagementViews';
 import { CreateCertificateView, DeleteCertificateView } from '../components/admin/CertificateManagement';
 import { SendCertificateSGView } from '../components/admin/SendCertificateSG';
 import { SendCertificateGHView } from '../components/admin/SendCertificateGH';
@@ -50,11 +50,15 @@ import {
   CourseSessionAttendanceView,
   CourseSessionsView
 } from '../components/admin/GrantManagementViews';
+import EditCourseRunView from '../components/admin/EditCourseRunView';
 import { CourseRunView } from '../components/admin/CourseRunView';
 import { UploadDirectApplicationView, ViewDirectApplicationView, UpdateDirectApplicationView } from '../components/admin/DirectApplicationViews';
 import { BulkUploadEnrolmentView } from '../components/admin/BulkEnrolmentViews';
 import TrainerAttendanceDashboard from '../components/trainer/TrainerAttendanceDashboard';
 import AdminCalendarView from '../components/admin/AdminCalendarView';
+import SchedulerView from '../components/admin/SchedulerView';
+import AddSessionsView from '../components/admin/AddSessionsView';
+import CourseSessionTimingView from '../components/admin/CourseSessionTimingView';
 
 // Management Dashboard Component
 interface ManagementDashboardProps {
@@ -132,6 +136,7 @@ const PAGE_LABELS: Partial<Record<AdminPage, string>> = {
   [AdminPage.SearchCourseRuns]: 'Search Course Runs',
   [AdminPage.SearchAssessments]: 'Search Assessments',
   [AdminPage.CourseRun]: 'Course Run',
+  [AdminPage.EditCourseRun]: 'Edit Course Run',
   [AdminPage.CancelEnrolment]: 'Cancel Enrolment',
   [AdminPage.UpdateEnrolment]: 'Update Enrolment',
   [AdminPage.DeleteCourseRun]: 'Delete Course Run',
@@ -141,6 +146,7 @@ const PAGE_LABELS: Partial<Record<AdminPage, string>> = {
   [AdminPage.SearchPastLearners]: 'Search Past Learners',
   [AdminPage.AutomationLogs]: 'Automation Logging',
   [AdminPage.AssignTrainerLogs]: 'Assign Trainer Log',
+  [AdminPage.TrainerFolderLogs]: 'Auto Create Assessment Records Log',
   [AdminPage.CourseRunDateSyncLogs]: 'Course Run Date Sync Log',
   [AdminPage.BackfillEnrollments]: 'Backfill Enrollments',
   [AdminPage.FetchUpcomingEnrolments]: 'Fetch Upcoming Classes Enrolment',
@@ -149,6 +155,9 @@ const PAGE_LABELS: Partial<Record<AdminPage, string>> = {
   [AdminPage.SendCertificateSG]: 'Send Certificate (SG)',
   [AdminPage.SendCertificateGH]: 'Send Certificate (GH)',
   [AdminPage.Calendar]: 'Calendar',
+  [AdminPage.Scheduler]: 'Task Scheduler',
+  [AdminPage.AddSessions]: 'Add Sessions',
+  [AdminPage.CourseSessionTiming]: 'Course Session Timing',
 };
 
 const AdminLayout: React.FC = () => {
@@ -245,6 +254,8 @@ const AdminLayout: React.FC = () => {
         return <SearchCourseRunsView />;
       case AdminPage.ViewCourseRun:
         return <ViewCourseRunView />;
+      case AdminPage.EditCourseRun:
+        return <EditCourseRunView />;
       case AdminPage.SearchAssessments:
         return <SearchAssessmentsView />;
       case AdminPage.ViewAssessment:
@@ -259,6 +270,10 @@ const AdminLayout: React.FC = () => {
         return <CourseSessionAttendanceView />;
       case AdminPage.CourseSessions:
         return <CourseSessionsView />;
+      case AdminPage.AddSessions:
+        return <AddSessionsView />;
+      case AdminPage.CourseSessionTiming:
+        return <CourseSessionTimingView />;
       case AdminPage.ClassDetail:
         return <ClassDetailView courseRunId={selectedCourseRunId || undefined} />;
       case AdminPage.CourseRun:
@@ -279,6 +294,10 @@ const AdminLayout: React.FC = () => {
         return <AutomationLogsView />;
       case AdminPage.AssignTrainerLogs:
         return <AssignTrainerLogsView />;
+      case AdminPage.TrainerFolderLogs:
+        return <TrainerFolderLogsView />;
+      case AdminPage.AutoCreateCertificatesLog:
+        return <AutoCreateCertificatesLogView />;
       case AdminPage.CourseRunDateSyncLogs:
         return <CourseRunDateSyncLogsView />;
       case AdminPage.BackfillEnrollments:
@@ -295,6 +314,8 @@ const AdminLayout: React.FC = () => {
         return <SendCertificateGHView />;
       case AdminPage.Calendar:
         return <AdminCalendarView />;
+      case AdminPage.Scheduler:
+        return <SchedulerView />;
       default:
         return <AdminDashboard />;
     }

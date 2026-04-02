@@ -8,10 +8,14 @@ import {
   SearchGrantView,
   ViewGrantStatusView,
 } from '../components/admin/GrantManagementViews';
+import { ProfilePage } from '../components/ProfilePage';
+import { useLms } from '@contexts/LmsContext';
+import { View } from '@app-types/index';
 
 type FinancePage = 'dashboard' | 'searchGrant' | 'viewGrant' | 'courseRuns';
 
 const FinanceLayout: React.FC = () => {
+  const { currentView } = useLms();
   const [page, setPage] = useState<FinancePage>('dashboard');
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isDesktopSidebarCollapsed, setIsDesktopSidebarCollapsed] = useState(false);
@@ -141,6 +145,21 @@ const FinanceLayout: React.FC = () => {
       </div>
     </div>
   );
+
+  // Profile view — full width, no sidebar
+  if (currentView === View.Profile) {
+    return (
+      <div className="min-h-screen flex flex-col bg-background font-sans text-on-surface">
+        <Header />
+        <main className="flex-1">
+          <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <ProfilePage />
+          </div>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex flex-col bg-background font-sans text-on-surface">

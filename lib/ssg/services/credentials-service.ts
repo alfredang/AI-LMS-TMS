@@ -14,6 +14,7 @@ export interface SSGCredentials {
   privateKeyPath: string;
   certificateContent?: string;
   privateKeyContent?: string;
+  ssgApiBaseUrl: string;
 }
 
 export class SSGCredentialsService {
@@ -36,12 +37,13 @@ export class SSGCredentialsService {
   async getSSGCredentials(trainingProviderId?: number): Promise<SSGCredentials | null> {
     try {
       let query = `
-        SELECT 
+        SELECT
           uen,
           ssg_encryption_key,
           ssg_self_sign_cert_file,
-          ssg_private_key_file
-        FROM 
+          ssg_private_key_file,
+          ssg_api_base_url
+        FROM
           training_provider
       `;
       
@@ -83,10 +85,11 @@ export class SSGCredentialsService {
       };
       
       const credentials: SSGCredentials = {
-        uen: process.env.TRAINING_PARTNER_UEN || row.uen,
-        encryptionKey: process.env.SSG_ENCRYPTION_KEY || process.env.ENCRYPTION_KEY || process.env.CERT_1_ENCRYPTION_KEY || row.ssg_encryption_key || '',
+        uen: row.uen || process.env.TRAINING_PARTNER_UEN,
+        encryptionKey: row.ssg_encryption_key || process.env.SSG_ENCRYPTION_KEY || process.env.ENCRYPTION_KEY || process.env.CERT_1_ENCRYPTION_KEY || '',
         certificatePath: convertToAbsolutePath(row.ssg_self_sign_cert_file),
-        privateKeyPath: convertToAbsolutePath(row.ssg_private_key_file)
+        privateKeyPath: convertToAbsolutePath(row.ssg_private_key_file),
+        ssgApiBaseUrl: row.ssg_api_base_url || process.env.SSG_API_BASE_URL || process.env.SSG_API_URL || 'https://api.ssg-wsg.sg'
       };
 
       // Normalize PEM from env var — handles base64-encoded PEM, literal \n, Windows \r\n
@@ -106,36 +109,57 @@ export class SSGCredentialsService {
           .replace(/\r/g, '\n');   // stray CR → LF
       };
 
-      // Read certificate and private key — env vars take priority over file paths
+      // Read certificate and private key — DB file paths first, env vars as fallback
       const certEnv = process.env.CERT_VALUE || process.env.CERT_1_CERT;
       const keyEnv  = process.env.PRIVATE_KEY_VALUE || process.env.CERT_1_KEY;
 
-      if (certEnv) {
-        credentials.certificateContent = resolvePem(certEnv);
-      } else {
-        try {
-          if (credentials.certificatePath && credentials.certificatePath.trim() !== '' && fs.existsSync(credentials.certificatePath)) {
-            credentials.certificateContent = fs.readFileSync(credentials.certificatePath, 'utf8');
-          } else {
-            console.warn(`❌ Certificate not found — set CERT_VALUE or fix path: ${credentials.certificatePath}`);
-          }
-        } catch (fileError) {
-          console.error('Error reading certificate file:', fileError);
+      // Certificate: DB file path first
+      try {
+        if (credentials.certificatePath && credentials.certificatePath.trim() !== '' && fs.existsSync(credentials.certificatePath)) {
+          credentials.certificateContent = fs.readFileSync(credentials.certificatePath, 'utf8');
+          console.log(`[creds] Certificate loaded from DB file path: ${credentials.certificatePath}`);
+        } else if (certEnv) {
+          credentials.certificateContent = resolvePem(certEnv);
+          console.log('[creds] Certificate loaded from env var');
+        } else {
+          console.warn(`[creds] ❌ Certificate not found — no DB file path and no env var`);
+        }
+      } catch (fileError) {
+        if (certEnv) {
+          credentials.certificateContent = resolvePem(certEnv);
+          console.log('[creds] Certificate loaded from env var (file read failed)');
+        } else {
+          console.error('[creds] Error reading certificate file:', fileError);
         }
       }
 
-      if (keyEnv) {
-        credentials.privateKeyContent = resolvePem(keyEnv);
-      } else {
-        try {
-          if (credentials.privateKeyPath && credentials.privateKeyPath.trim() !== '' && fs.existsSync(credentials.privateKeyPath)) {
-            credentials.privateKeyContent = fs.readFileSync(credentials.privateKeyPath, 'utf8');
-          } else {
-            console.warn(`❌ Private key not found — set PRIVATE_KEY_VALUE or fix path: ${credentials.privateKeyPath}`);
-          }
-        } catch (fileError) {
-          console.error('Error reading private key file:', fileError);
+      // Private key: DB file path first
+      try {
+        if (credentials.privateKeyPath && credentials.privateKeyPath.trim() !== '' && fs.existsSync(credentials.privateKeyPath)) {
+          credentials.privateKeyContent = fs.readFileSync(credentials.privateKeyPath, 'utf8');
+          console.log(`[creds] Private key loaded from DB file path: ${credentials.privateKeyPath}`);
+        } else if (keyEnv) {
+          credentials.privateKeyContent = resolvePem(keyEnv);
+          console.log('[creds] Private key loaded from env var');
+        } else {
+          console.warn(`[creds] ❌ Private key not found — no DB file path and no env var`);
         }
+      } catch (fileError) {
+        if (keyEnv) {
+          credentials.privateKeyContent = resolvePem(keyEnv);
+          console.log('[creds] Private key loaded from env var (file read failed)');
+        } else {
+          console.error('[creds] Error reading private key file:', fileError);
+        }
+      }
+
+      // Log encryption key source
+      if (row.ssg_encryption_key) {
+        console.log('[creds] Encryption key loaded from DB');
+      } else if (process.env.SSG_ENCRYPTION_KEY || process.env.ENCRYPTION_KEY || process.env.CERT_1_ENCRYPTION_KEY) {
+        console.log('[creds] Encryption key loaded from env var');
+      } else {
+        console.warn('[creds] ❌ No encryption key found');
       }
 
       return credentials;

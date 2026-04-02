@@ -82,8 +82,9 @@ async function fetchEnrollments(courseRunId: string): Promise<any[]> {
   if (!credentials) throw new Error('SSG credentials not found');
 
   const ssgBaseUrl = process.env.SSG_API_URL || 'https://api.ssg-wsg.sg';
-  const tpUen  = process.env.TRAINING_PARTNER_UEN  || credentials.uen;
-  const tpCode = process.env.TRAINING_PARTNER_CODE || `${tpUen}-01`;
+  const tp = await getTrainingPartnerIdentifiers();
+  const tpUen  = tp.uen || credentials.uen;
+  const tpCode = tp.code;
 
   const api = createSSGEnrolmentAPI(ssgBaseUrl, credentials);
   const result = await api.searchEnrolment({
@@ -106,6 +107,20 @@ async function fetchEnrollments(courseRunId: string): Promise<any[]> {
   return [];
 }
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+/**
+ * Map any SSG sponsorship code to the DB enum values ('Employer' | 'Individual').
+ * SSG can return 'EMPLOYER', 'Employer', 'INDIVIDUAL', 'Individual', etc.
+ */
+function normalizeSponsorship(raw: string | null): 'Employer' | 'Individual' | null {
+  if (!raw) return null;
+  const upper = raw.toUpperCase();
+  if (upper.includes('EMPLOYER')) return 'Employer';
+  if (upper.includes('INDIVIDUAL')) return 'Individual';
+  return null; // unrecognised value — use NULL to avoid enum cast error
+}
+
 // ── Upsert learner account + enrollment ──────────────────────────────────────
 
 async function upsertLearner(
@@ -124,10 +139,11 @@ async function upsertLearner(
   const courseRef: string | null = enrolment?.course?.referenceNumber ?? enrolment?.courseReferenceNumber ?? null;
   const tpCode: string | null = enrolment?.trainingPartner?.code ?? enrolment?.trainingPartnerCode ?? null;
   const rawSponsorship = enrolment?.trainee?.sponsorshipType;
-  const sponsorship: string | null = (typeof rawSponsorship === 'string' ? rawSponsorship : rawSponsorship?.code)
+  const rawSponsorshipCode: string | null = (typeof rawSponsorship === 'string' ? rawSponsorship : rawSponsorship?.code)
     ?? enrolment?.sponsorshipType?.code
     ?? enrolment?.traineeSponsorshipType
     ?? null;
+  const sponsorship = normalizeSponsorship(rawSponsorshipCode);
 
   try {
     await client.query('BEGIN');

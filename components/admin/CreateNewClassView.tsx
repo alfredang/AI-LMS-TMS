@@ -22,15 +22,12 @@ export enum OptionalSelector {
 }
 
 const modeOfTrainingOptions = [
-    { value: '1', label: '1 - Classroom' },
-    { value: '2', label: '2 - Asynchronous eLearning' },
-    { value: '3', label: '3 - In-house' },
-    { value: '4', label: '4 - On-the-Job' },
-    { value: '5', label: '5 - Blended Learning' },
-    { value: '6', label: '6 - Synchronous eLearning' },
-    { value: '7', label: '7 - Practical / Traineeship' },
+    { value: '1', label: '1 - Classroom Facilitated Training' },
+    { value: '2', label: '2 - Asynchronous E-learning' },
+    { value: '4', label: '4 - On the Job Training' },
     { value: '8', label: '8 - Assessment' },
-    { value: '9', label: '9 - Virtual Classroom' }
+    { value: '9', label: '9 - Synchronous E-learning' },
+    { value: '10', label: '10 - Work-based/Workplace Learning' },
 ];
 
 const vacancyOptions = [
