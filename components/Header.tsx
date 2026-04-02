@@ -76,10 +76,11 @@ const RoleSwitcher: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 };
 
 const ProfileDropdown: React.FC<{ onClose: () => void }> = ({ onClose }) => {
-  const { logout, handleNavigation } = useLms();
+  const { logout, handleNavigation, role } = useLms();
 
   const menuItems = [
     { label: 'My Profile', icon: IconName.MyAccount, view: View.Profile },
+    ...(role === UserRole.Learner ? [{ label: 'Billing History', icon: IconName.DollarSign, view: View.BillingHistory }] : []),
     { label: 'Help and Support', icon: IconName.Help, view: View.HelpAndSupport },
   ];
 

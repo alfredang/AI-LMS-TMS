@@ -10,6 +10,7 @@ import CalendarView from '../components/CalendarView';
 import { ProfilePage } from '@components/ProfilePage';
 import { CourseDetail } from '../components/CourseDetail';
 import HelpAndSupportView from '../components/HelpAndSupportView';
+import BillingHistoryView from '../components/BillingHistoryView';
 
 const LearnerLayout: React.FC = () => {
   const { currentView, selectedCourse } = useLms();
@@ -32,6 +33,10 @@ const LearnerLayout: React.FC = () => {
     
     if (currentView === View.HelpAndSupport) {
       return <HelpAndSupportView />;
+    }
+
+    if (currentView === View.BillingHistory) {
+      return <BillingHistoryView />;
     }
     
     // Only reach this switch if no course is selected
