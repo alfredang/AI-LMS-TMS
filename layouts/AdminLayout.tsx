@@ -83,14 +83,14 @@ const ManagementDashboard: React.FC<ManagementDashboardProps> = ({ type }) => {
   ];
 
   const tpgManagementLinks: NavBoxProps[] = [
-    { title: "Check Attendance", description: "View and manage e-attendance for all course runs.", icon: IconName.ClipboardCheck, onClick: () => setAdminPage(AdminPage.CheckAttendance) },
-    { title: "Apply New Grant", description: "Submit new grant applications to SSG for learners.", icon: IconName.Send, onClick: () => setAdminPage(AdminPage.ApplyNewGrant) },
-    { title: "Search Grant", description: "Search for grant details using Reference ID.", icon: IconName.Search, onClick: () => setAdminPage(AdminPage.SearchGrant) },
-    { title: "View Grant Status", description: "Check the status of submitted grant applications.", icon: IconName.Eye, onClick: () => setAdminPage(AdminPage.ViewGrantStatus) },
-    { title: "Submit Assessment", description: "Submit learner assessment results to TPG.", icon: IconName.Upload, onClick: () => setAdminPage(AdminPage.SubmitAssessment) },
-    { title: "Apply New Claim", description: "Submit new claims to SSG for learners.", icon: IconName.DollarSign, onClick: () => setAdminPage(AdminPage.ApplyNewClaim) },
-    { title: "Upload Course Runs", description: "Bulk upload new course runs via Excel to SSG.", icon: IconName.FileText, onClick: () => setAdminPage(AdminPage.UploadCourseRuns) },
-    { title: "Upload Enrolments", description: "Bulk upload learner enrolments via Excel to SSG.", icon: IconName.FileText, onClick: () => setAdminPage(AdminPage.UploadEnrolments) },
+    { title: "Direct Application", description: "Upload and review direct applications before enrolment processing.", icon: IconName.FileText, onClick: () => setAdminPage(AdminPage.TpgDirectApplication) },
+    { title: "Course Run", description: "Create, search, view, edit, and upload course runs for SSG workflows.", icon: IconName.Calendar, onClick: () => setAdminPage(AdminPage.TpgCourseRun) },
+    { title: "Course Session", description: "Manage session setup, timings, and attendance records for each course run.", icon: IconName.Clock, onClick: () => setAdminPage(AdminPage.TpgCourseSession) },
+    { title: "Enrollment", description: "Upload, search, view, and update learner enrolments for course runs.", icon: IconName.MyAccount, onClick: () => setAdminPage(AdminPage.TpgEnrollment) },
+    { title: "Grant", description: "Apply, search, and monitor grant submissions and statuses.", icon: IconName.Send, onClick: () => setAdminPage(AdminPage.TpgGrant) },
+    { title: "Attendance", description: "Check and manage attendance submissions for all course runs.", icon: IconName.ClipboardCheck, onClick: () => setAdminPage(AdminPage.TpgAttendance) },
+    { title: "Assessment", description: "Submit and review learner assessment records and outcomes.", icon: IconName.Upload, onClick: () => setAdminPage(AdminPage.TpgAssessment) },
+    { title: "Claims", description: "Submit and manage claims after training and assessment completion.", icon: IconName.DollarSign, onClick: () => setAdminPage(AdminPage.TpgClaims) },
   ];
 
   const isClass = type === 'class';
@@ -109,6 +109,22 @@ const ManagementDashboard: React.FC<ManagementDashboardProps> = ({ type }) => {
   );
 };
 
+interface AdminSubDashboardProps {
+  title: string;
+  links: NavBoxProps[];
+}
+
+const AdminSubDashboard: React.FC<AdminSubDashboardProps> = ({ title, links }) => (
+  <div>
+    <h2 className="text-3xl font-bold mb-6 dark:text-white">{title}</h2>
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      {links.map((link, index) => (
+        <NavBox key={index} {...link} />
+      ))}
+    </div>
+  </div>
+);
+
 // Convert camelCase enum value → "Title Case" readable label
 const formatAdminPageTitle = (page: string): string =>
   page.replace(/([A-Z])/g, ' $1').replace(/^(.)/, c => c.toUpperCase());
@@ -117,6 +133,14 @@ const PAGE_LABELS: Partial<Record<AdminPage, string>> = {
   [AdminPage.Dashboard]: 'Admin Dashboard',
   [AdminPage.ClassManagement]: 'Class Management',
   [AdminPage.TpgManagement]: 'TPG Management',
+  [AdminPage.TpgDirectApplication]: 'Direct Application',
+  [AdminPage.TpgCourseRun]: 'Course Run',
+  [AdminPage.TpgCourseSession]: 'Course Session',
+  [AdminPage.TpgEnrollment]: 'Enrollment',
+  [AdminPage.TpgGrant]: 'Grant',
+  [AdminPage.TpgAttendance]: 'Attendance',
+  [AdminPage.TpgAssessment]: 'Assessment',
+  [AdminPage.TpgClaims]: 'Claims',
   [AdminPage.ViewCourses]: 'View Courses',
   [AdminPage.ViewTrainers]: 'View Trainers',
   [AdminPage.FundingValidity]: 'Funding Validity',
@@ -164,9 +188,55 @@ const PAGE_LABELS: Partial<Record<AdminPage, string>> = {
 };
 
 const AdminLayout: React.FC = () => {
-  const { currentView, adminPage, selectedCourse, editingCourse, courseEditMode, selectedCourseRunId, editingCourseRun } = useLms();
+  const { currentView, adminPage, selectedCourse, editingCourse, courseEditMode, selectedCourseRunId, editingCourseRun, setAdminPage } = useLms();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isDesktopSidebarOpen, setIsDesktopSidebarOpen] = useState(true);
+
+  const tpgSubDashboards: Partial<Record<AdminPage, NavBoxProps[]>> = {
+    [AdminPage.TpgDirectApplication]: [
+      { title: "Upload Direct Application", description: "Import direct application records into the system.", icon: IconName.Upload, onClick: () => setAdminPage(AdminPage.UploadDirectApplication) },
+      { title: "View Direct Application", description: "Review and manage uploaded direct application records.", icon: IconName.Eye, onClick: () => setAdminPage(AdminPage.ViewDirectApplication) },
+    ],
+    [AdminPage.TpgCourseRun]: [
+      { title: "Create New Class", description: "Create a new course run for TPG workflows.", icon: IconName.Add, onClick: () => setAdminPage(AdminPage.CreateNewClass) },
+      { title: "Search Course Runs", description: "Search existing course runs by code, title, or schedule.", icon: IconName.Search, onClick: () => setAdminPage(AdminPage.SearchCourseRuns) },
+      { title: "View Course Run", description: "Open the course run detail view.", icon: IconName.Eye, onClick: () => setAdminPage(AdminPage.ViewCourseRun) },
+      { title: "Edit Course Run", description: "Update course run details and trainer assignments.", icon: IconName.Create, onClick: () => setAdminPage(AdminPage.EditCourseRun) },
+      { title: "Upload Course Runs", description: "Bulk upload course runs to SSG using Excel.", icon: IconName.FileText, onClick: () => setAdminPage(AdminPage.UploadCourseRuns) },
+      { title: "Delete Course Run", description: "Remove an uploaded course run record.", icon: IconName.Delete, onClick: () => setAdminPage(AdminPage.DeleteCourseRun) },
+    ],
+    [AdminPage.TpgCourseSession]: [
+      { title: "Add Sessions", description: "Create the session schedule for a course run.", icon: IconName.Add, onClick: () => setAdminPage(AdminPage.AddSessions) },
+      { title: "Course Session Timing", description: "Adjust timing and sequence for course sessions.", icon: IconName.Clock, onClick: () => setAdminPage(AdminPage.CourseSessionTiming) },
+      { title: "Course Sessions", description: "Review the full session list for each course run.", icon: IconName.Calendar, onClick: () => setAdminPage(AdminPage.CourseSessions) },
+      { title: "Course Session Attendance", description: "Check session-level attendance details.", icon: IconName.ClipboardCheck, onClick: () => setAdminPage(AdminPage.CourseSessionAttendance) },
+    ],
+    [AdminPage.TpgEnrollment]: [
+      { title: "Enroll Learners", description: "Assign learners to a course run.", icon: IconName.MyAccount, onClick: () => setAdminPage(AdminPage.EnrollLearners) },
+      { title: "Upload Enrolments", description: "Bulk upload enrolments using Excel.", icon: IconName.FileText, onClick: () => setAdminPage(AdminPage.UploadEnrolments) },
+      { title: "Search Enrolment", description: "Search enrolment records by learner or class.", icon: IconName.Search, onClick: () => setAdminPage(AdminPage.SearchEnrolment) },
+      { title: "View Enrolment", description: "Open the detailed enrolment record.", icon: IconName.Eye, onClick: () => setAdminPage(AdminPage.ViewEnrolment) },
+      { title: "Update Enrolment", description: "Edit learner enrolment details.", icon: IconName.Create, onClick: () => setAdminPage(AdminPage.UpdateEnrolment) },
+      { title: "Cancel Enrolment", description: "Cancel an enrolment that should not proceed.", icon: IconName.Delete, onClick: () => setAdminPage(AdminPage.CancelEnrolment) },
+      { title: "Update Enrolment Fees", description: "Adjust the fee details for a learner enrolment.", icon: IconName.DollarSign, onClick: () => setAdminPage(AdminPage.UpdateEnrolmentFees) },
+    ],
+    [AdminPage.TpgGrant]: [
+      { title: "Search Grant", description: "Search submitted grants by reference ID.", icon: IconName.Search, onClick: () => setAdminPage(AdminPage.SearchGrant) },
+      { title: "View Grant Status", description: "Review grant submission statuses.", icon: IconName.Eye, onClick: () => setAdminPage(AdminPage.ViewGrantStatus) },
+    ],
+    [AdminPage.TpgAttendance]: [
+      { title: "Check Attendance", description: "View and manage e-attendance for course runs.", icon: IconName.ClipboardCheck, onClick: () => setAdminPage(AdminPage.CheckAttendance) },
+    ],
+    [AdminPage.TpgAssessment]: [
+      { title: "Submit Assessment", description: "Submit learner assessment results to TPG.", icon: IconName.Upload, onClick: () => setAdminPage(AdminPage.SubmitAssessment) },
+      { title: "Update Assessment", description: "Update previously submitted assessment results.", icon: IconName.Create, onClick: () => setAdminPage(AdminPage.UpdateAssessment) },
+      { title: "Search Assessments", description: "Search assessment records and submission history.", icon: IconName.Search, onClick: () => setAdminPage(AdminPage.SearchAssessments) },
+      { title: "View Assessment", description: "Open a submitted assessment record.", icon: IconName.Eye, onClick: () => setAdminPage(AdminPage.ViewAssessment) },
+    ],
+    [AdminPage.TpgClaims]: [
+      { title: "Apply New Claim", description: "Submit a new claim after training and assessment completion.", icon: IconName.DollarSign, onClick: () => setAdminPage(AdminPage.ApplyNewClaim) },
+    ],
+  };
 
   // Handle full-width views (Profile and Help & Support only)
   if (currentView === View.Profile || currentView === View.HelpAndSupport) {
@@ -203,6 +273,15 @@ const AdminLayout: React.FC = () => {
         return <ManagementDashboard type="class" />;
       case AdminPage.TpgManagement:
         return <ManagementDashboard type="tpg" />;
+      case AdminPage.TpgDirectApplication:
+      case AdminPage.TpgCourseRun:
+      case AdminPage.TpgCourseSession:
+      case AdminPage.TpgEnrollment:
+      case AdminPage.TpgGrant:
+      case AdminPage.TpgAttendance:
+      case AdminPage.TpgAssessment:
+      case AdminPage.TpgClaims:
+        return <AdminSubDashboard title={PAGE_LABELS[adminPage] || formatAdminPageTitle(adminPage)} links={tpgSubDashboards[adminPage] || []} />;
       case AdminPage.ViewCourses:
         return <CourseList />;
       case AdminPage.ViewTrainers:

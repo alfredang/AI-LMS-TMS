@@ -149,7 +149,43 @@ const Header: React.FC = () => {
   }, [isProfileOpen, isRoleSwitcherOpen]);
 
   const classManagementPages = [AdminPage.ViewCourses, AdminPage.ViewTrainers, AdminPage.FundingValidity, AdminPage.UpcomingClasses, AdminPage.OngoingClasses, AdminPage.CompletedClasses, AdminPage.CreateNewClass, AdminPage.EditClass, AdminPage.EnrollLearners, AdminPage.AssignTrainer];
-  const tpgManagementPages = [AdminPage.ApplyNewGrant, AdminPage.ViewGrantStatus, AdminPage.SubmitAssessment, AdminPage.UpdateAssessment, AdminPage.ApplyNewClaim, AdminPage.UploadCourseRuns, AdminPage.UploadEnrolments];
+  const tpgManagementPages = [
+    AdminPage.TpgDirectApplication,
+    AdminPage.TpgCourseRun,
+    AdminPage.TpgCourseSession,
+    AdminPage.TpgEnrollment,
+    AdminPage.TpgGrant,
+    AdminPage.TpgAttendance,
+    AdminPage.TpgAssessment,
+    AdminPage.TpgClaims,
+    AdminPage.UploadDirectApplication,
+    AdminPage.ViewDirectApplication,
+    AdminPage.UpdateDirectApplication,
+    AdminPage.SearchCourseRuns,
+    AdminPage.ViewCourseRun,
+    AdminPage.EditCourseRun,
+    AdminPage.UploadCourseRuns,
+    AdminPage.DeleteCourseRun,
+    AdminPage.AddSessions,
+    AdminPage.CourseSessionTiming,
+    AdminPage.CourseSessions,
+    AdminPage.CourseSessionAttendance,
+    AdminPage.UploadEnrolments,
+    AdminPage.SearchEnrolment,
+    AdminPage.ViewEnrolment,
+    AdminPage.UpdateEnrolment,
+    AdminPage.CancelEnrolment,
+    AdminPage.UpdateEnrolmentFees,
+    AdminPage.ApplyNewGrant,
+    AdminPage.SearchGrant,
+    AdminPage.ViewGrantStatus,
+    AdminPage.CheckAttendance,
+    AdminPage.SubmitAssessment,
+    AdminPage.UpdateAssessment,
+    AdminPage.SearchAssessments,
+    AdminPage.ViewAssessment,
+    AdminPage.ApplyNewClaim,
+  ];
 
   const isAdminPageActive = (item: any) => {
     if (currentView !== View.Admin || !('page' in item)) return false;
