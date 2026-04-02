@@ -43,18 +43,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
         let inCertificatesFolder = false;
         
-        // Ensure the file is inside a folder literally named "Certificates"
+        // Ensure the file is inside a course folder which is inside "Certificates"
         if (file.data.parents && file.data.parents.length > 0) {
             try {
-                const parent = await drive.files.get({
+                // Get the immediate parent (Course Folder)
+                const courseFolder = await drive.files.get({
                     fileId: file.data.parents[0],
-                    fields: 'id, name, trashed'
+                    fields: 'id, name, trashed, parents'
                 });
-                if (parent.data.name === 'Certificates' && !parent.data.trashed) {
-                    inCertificatesFolder = true;
+                
+                // Now check the parent of the course folder (should be "Certificates")
+                if (courseFolder.data.parents && courseFolder.data.parents.length > 0) {
+                    const certificatesFolder = await drive.files.get({
+                        fileId: courseFolder.data.parents[0],
+                        fields: 'id, name, trashed'
+                    });
+                    
+                    if (certificatesFolder.data.name === 'Certificates' && !certificatesFolder.data.trashed) {
+                        inCertificatesFolder = true;
+                    }
                 }
             } catch (parentErr) {
-                console.error(`Could not verify parent folder for cert ${fileId}:`, parentErr);
+                console.error(`Could not verify parent hierarchy for cert ${fileId}:`, parentErr);
             }
         }
 

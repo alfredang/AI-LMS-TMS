@@ -2707,7 +2707,7 @@ export const CourseDetail: React.FC = () => {
                             </div>
 
                             {/* Certificate */}
-                            <div id="certificate">
+                            <div id={toId("Certificate")}>
                                 <CertificateSection userRole={userRole} />
                             </div>
 

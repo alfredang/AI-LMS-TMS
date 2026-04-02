@@ -139,7 +139,7 @@ export async function generateAndUploadCertificate(enrolmentId: string, pool: Po
         const rootFolderId = extractFolderId(certificateFolderUrl);
         const fileName = `Certificate_${learnerName.replace(/\s+/g, '_')}_${data.course_name.replace(/\s+/g, '_')}.pdf`;
 
-        // 5a. Locate 'Certificates' subfolder inside the root
+        // 5a. Locate or create 'Certificates' subfolder inside the root
         let certificatesFolderId = await findSubfolder(drive, rootFolderId, 'Certificates');
         if (!certificatesFolderId) {
             const createCertRes = await drive.files.create({
@@ -149,8 +149,8 @@ export async function generateAndUploadCertificate(enrolmentId: string, pool: Po
             certificatesFolderId = createCertRes.data.id!;
         }
 
-        // 5b. Locate course folder inside 'Certificates'
-        let courseFolderId = null;
+        // 5b. Locate or create course folder inside 'Certificates'
+        // Format: "COURSE_CODE COURSE_NAME"
         let tgsRef = data.course_code;
         if (!tgsRef) {
             const tgsMatch = data.course_name.match(/(TGS-\d+)/);
@@ -161,19 +161,7 @@ export async function generateAndUploadCertificate(enrolmentId: string, pool: Po
             ? `${tgsRef} ${data.course_name}`.trim()
             : (`${data.course_code || ''} ${data.course_name}`).trim() || 'Unknown Course';
 
-        if (tgsRef) {
-            const safeTgsRef = tgsRef.replace(/'/g, "\\'");
-            const tgsResponse = await drive.files.list({
-                q: `'${certificatesFolderId}' in parents and name contains '${safeTgsRef}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
-                fields: 'files(id, name)',
-                spaces: 'drive',
-            });
-            if (tgsResponse.data.files && tgsResponse.data.files.length > 0) {
-                courseFolderId = tgsResponse.data.files[0].id!;
-            }
-        } else {
-            courseFolderId = await findSubfolder(drive, certificatesFolderId, expectedCourseFolderName);
-        }
+        let courseFolderId = await findSubfolder(drive, certificatesFolderId, expectedCourseFolderName);
 
         if (!courseFolderId) {
             const createRes = await drive.files.create({
