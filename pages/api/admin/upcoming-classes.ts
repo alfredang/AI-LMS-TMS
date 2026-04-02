@@ -290,8 +290,4 @@ export default async function handler(
       error: error instanceof Error ? error.message : 'Unknown error'
     });
   }
-} message: 'Internal server error',
-  error: error instanceof Error ? error.message : 'Unknown error'
-    });
-  }
 }
