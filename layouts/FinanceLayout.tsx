@@ -3,6 +3,7 @@ import Header from '../components/Header';
 import Footer from '../components/Footer';
 import { Icon, IconName } from '../components/ui/Icon';
 import FinanceManagementView from '../components/training-provider/FinanceManagementView';
+import AllCourseRunsView from '../components/training-provider/AllCourseRunsView';
 import {
   SearchGrantView,
   ViewGrantStatusView,
@@ -11,7 +12,7 @@ import { ProfilePage } from '../components/ProfilePage';
 import { useLms } from '@contexts/LmsContext';
 import { View } from '@app-types/index';
 
-type FinancePage = 'dashboard' | 'searchGrant' | 'viewGrant';
+type FinancePage = 'dashboard' | 'searchGrant' | 'viewGrant' | 'courseRuns';
 
 const FinanceLayout: React.FC = () => {
   const { currentView } = useLms();
@@ -19,6 +20,7 @@ const FinanceLayout: React.FC = () => {
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isDesktopSidebarCollapsed, setIsDesktopSidebarCollapsed] = useState(false);
   const [grantOpen, setGrantOpen] = useState(false);
+  const [courseRunsOpen, setCourseRunsOpen] = useState(false);
 
   const handleToggleSidebar = () => {
     if (typeof window !== 'undefined' && window.innerWidth >= 768) {
@@ -39,6 +41,8 @@ const FinanceLayout: React.FC = () => {
         return <SearchGrantView />;
       case 'viewGrant':
         return <ViewGrantStatusView />;
+      case 'courseRuns':
+        return <AllCourseRunsView />;
       default:
         return <FinanceManagementView />;
     }
@@ -48,6 +52,7 @@ const FinanceLayout: React.FC = () => {
     switch (page) {
       case 'searchGrant': return 'Search Grant';
       case 'viewGrant': return 'View Grant';
+      case 'courseRuns': return 'All Course Runs';
       default: return 'Finance Management';
     }
   };
@@ -104,6 +109,35 @@ const FinanceLayout: React.FC = () => {
               >
                 <Icon name={IconName.Eye} className={`w-[18px] h-[18px] flex-shrink-0 transition-colors ${page === 'viewGrant' ? 'text-primary' : 'text-gray-400 dark:text-gray-500'}`} />
                 <span className="truncate">View Grant</span>
+              </a>
+            </div>
+          )}
+        </div>
+
+        {/* All Course Runs — collapsible */}
+        <div className="pt-3">
+          <button
+            onClick={() => setCourseRunsOpen(prev => !prev)}
+            className="flex items-center justify-between w-full px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-muted select-none"
+          >
+            <span>All Course Runs</span>
+            <Icon
+              name={IconName.ChevronDown}
+              className={`w-4 h-4 transition-transform duration-200 ${courseRunsOpen ? 'rotate-0' : '-rotate-90'}`}
+            />
+          </button>
+
+          {courseRunsOpen && (
+            <div className="space-y-0.5">
+              <a
+                href="#"
+                onClick={(e) => { e.preventDefault(); navigateTo('courseRuns'); }}
+                className={`group flex items-center gap-3 w-full rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-150 ${
+                  page === 'courseRuns' ? activeClass : inactiveClass
+                }`}
+              >
+                <Icon name={IconName.BookOpen} className={`w-[18px] h-[18px] flex-shrink-0 transition-colors ${page === 'courseRuns' ? 'text-primary' : 'text-gray-400 dark:text-gray-500'}`} />
+                <span className="truncate">View All</span>
               </a>
             </div>
           )}
