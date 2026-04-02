@@ -216,14 +216,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       });
     }
 
-    // Get base URL from environment
-    const baseUrl = process.env.SSG_API_BASE_URL;
-    if (!baseUrl) {
-      return res.status(500).json({ 
-        error: 'SSG API base URL not configured',
-        message: 'Please add SSG_API_BASE_URL to your environment variables'
-      });
-    }
+    // Get base URL from credentials (DB-first)
+    const baseUrl = credentials.ssgApiBaseUrl;
 
     // Create SSG API client
     const ssgAPI = createSSGCourseAPI(baseUrl, credentials);

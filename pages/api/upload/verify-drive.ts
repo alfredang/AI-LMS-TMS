@@ -2,6 +2,7 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import { google, drive_v3 } from 'googleapis';
 import pool from '../../../lib/db';
 import { cors } from '../../../lib/cors';
+import { getDriveClient } from '../../../lib/google-drive/drive-helpers';
 
 export const config = {
     api: {
@@ -9,28 +10,6 @@ export const config = {
     },
 };
 
-const CLIENT_ID = process.env.GOOGLE_OAUTH_CLIENT_ID;
-const CLIENT_SECRET = process.env.GOOGLE_OAUTH_CLIENT_SECRET;
-const REFRESH_TOKEN = process.env.GOOGLE_OAUTH_REFRESH_TOKEN;
-const REDIRECT_URI = 'http://localhost:9876';
-
-function getDriveClient(): drive_v3.Drive {
-    if (!CLIENT_ID || !CLIENT_SECRET || !REFRESH_TOKEN) {
-        throw new Error('Missing Google OAuth credentials in .env.local');
-    }
-
-    const oauth2Client = new google.auth.OAuth2(
-        CLIENT_ID,
-        CLIENT_SECRET,
-        REDIRECT_URI
-    );
-
-    oauth2Client.setCredentials({
-        refresh_token: REFRESH_TOKEN
-    });
-
-    return google.drive({ version: 'v3', auth: oauth2Client });
-}
 
 async function findSubfolder(drive: drive_v3.Drive, parentFolderId: string, folderName: string): Promise<string | null> {
     const safeName = folderName.replace(/'/g, "\\'");
@@ -148,7 +127,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     try {
-        const drive = getDriveClient();
+        const drive = await getDriveClient();
 
         // 1. Get Course Run Details
         const runDetails = await getCourseRunDetails(courseRunId);

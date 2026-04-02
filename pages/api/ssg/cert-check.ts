@@ -23,7 +23,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const creds = await getSSGCredentialsService().getSSGCredentials();
     if (creds) {
       result.active = {
-        source: process.env.CERT_VALUE || process.env.CERT_1_CERT ? 'env var' : 'file path',
+        source: (creds.certificatePath && fs.existsSync(creds.certificatePath)) ? 'file path' : 'env var',
         uen: creds.uen,
         encryptionKeyLength: creds.encryptionKey?.length ?? 0,
         certLoaded: !!creds.certificateContent,

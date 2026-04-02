@@ -46,15 +46,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 `UPDATE enrollment SET assessment_status = $1, updated_at = NOW() WHERE id = $2`,
                 [newStatus, enrolmentId]
             );
-            
-            // Automatically generate the certificate in the background for competent learners
-            try {
-                await generateAndUploadCertificate(enrolmentId, pool);
-            } catch (certError) {
-                console.error(`Failed to automatically generate certificate for enrolment ${enrolmentId}:`, certError);
-                // We purposefully don't fail the request if just the certificate fails,
-                // so the grading still saves successfully.
-            }
         }
 
         return res.status(200).json({ message: 'Competency updated successfully', status: newStatus });

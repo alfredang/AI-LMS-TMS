@@ -1,22 +1,8 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { Pool } from 'pg';
-import { google, drive_v3 } from 'googleapis';
+import { getDriveClient } from '../../../lib/google-drive/drive-helpers';
+import pool from '../../../lib/db';
 
-const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-});
 
-function getDriveClient(): drive_v3.Drive | null {
-    const clientId = process.env.GOOGLE_OAUTH_CLIENT_ID;
-    const clientSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET;
-    const refreshToken = process.env.GOOGLE_OAUTH_REFRESH_TOKEN;
-
-    if (!clientId || !clientSecret || !refreshToken) return null;
-
-    const oauth2Client = new google.auth.OAuth2(clientId, clientSecret, 'http://localhost:9876');
-    oauth2Client.setCredentials({ refresh_token: refreshToken });
-    return google.drive({ version: 'v3', auth: oauth2Client });
-}
 
 function extractFileId(url: string): string | null {
     // Handles: https://drive.google.com/file/d/{id}/view and webViewLink formats
@@ -53,7 +39,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             const enrollments = result.rows;
 
             // Real-time Google Drive verification for enrollments with certificate URLs
-            const drive = getDriveClient();
+            const drive = await getDriveClient();
             if (drive) {
                 for (const enrollment of enrollments) {
                     if (enrollment.certificate) {

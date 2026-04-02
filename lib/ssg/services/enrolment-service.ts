@@ -37,7 +37,7 @@ async function getSSGContext() {
   if (!credentials) throw new Error('SSG credentials not found');
 
   const ssgBaseUrl = process.env.SSG_API_URL || 'https://api.ssg-wsg.sg';
-  const encKey = Buffer.from(process.env.ENCRYPTION_KEY || credentials.encryptionKey, 'base64');
+  const encKey = Buffer.from(credentials.encryptionKey, 'base64');
   const iv = Buffer.from('SSGAPIInitVector', 'utf8');
 
   const httpClient = new HttpClient(ssgBaseUrl, {

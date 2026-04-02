@@ -1,6 +1,7 @@
 import { Pool } from 'pg';
 import { Readable } from 'stream';
-import { google, drive_v3 } from 'googleapis';
+import { google, drive_v3, slides_v1 } from 'googleapis';
+import { getGoogleDriveClient, getGoogleSlidesClient, getGoogleCredentials } from '../google-auth/googleAuth';
 
 // --- Helper to extract folder ID from Google Drive URL or raw ID ---
 function extractFolderId(input: string): string {
@@ -14,13 +15,6 @@ function extractFolderId(input: string): string {
     return input.trim();
 }
 
-// --- Google Drive Helpers ---
-function createDriveClient(clientId: string, clientSecret: string, refreshToken: string): drive_v3.Drive {
-    const oauth2Client = new google.auth.OAuth2(clientId, clientSecret, 'https://developers.google.com/oauthplayground');
-    oauth2Client.setCredentials({ refresh_token: refreshToken });
-    return google.drive({ version: 'v3', auth: oauth2Client });
-}
-
 async function findSubfolder(drive: drive_v3.Drive, parentFolderId: string, folderName: string): Promise<string | null> {
     const safeName = folderName.replace(/'/g, "\\'");
     const response = await drive.files.list({
@@ -32,26 +26,6 @@ async function findSubfolder(drive: drive_v3.Drive, parentFolderId: string, fold
     return (files && files.length > 0) ? files[0].id! : null;
 }
 
-// --- Fetch training provider settings from DB ---
-async function getTrainingProviderSettings(pool: Pool, _enrolmentId: string) {
-    // The course table does not have a training_provider_id FK,
-    // so we fetch the single training provider directly.
-    const result = await pool.query(`
-        SELECT
-            google_client_id,
-            google_client_secret,
-            google_refresh_token,
-            google_slides_template_id,
-            certificate_folder_url,
-            certificate_template_url
-        FROM training_provider
-        LIMIT 1
-    `);
-    if (result.rows.length === 0) {
-        throw new Error('No training provider found');
-    }
-    return result.rows[0];
-}
 
 /**
  * Generates a PDF certificate for an Enrollment and securely uploads it to Google Drive.
@@ -60,7 +34,7 @@ async function getTrainingProviderSettings(pool: Pool, _enrolmentId: string) {
  * @param pool Database connection pool
  * @returns The webViewLink (URL) of the uploaded PDF
  */
-export async function generateAndUploadCertificate(enrolmentId: string, pool: Pool): Promise<string> {
+export async function generateAndUploadCertificate(enrolmentId: string, pool: Pool, overrideLearnerName?: string): Promise<string> {
     // 1. Fetch the enrollment details
     const enrollQuery = `
         SELECT
@@ -84,23 +58,26 @@ export async function generateAndUploadCertificate(enrolmentId: string, pool: Po
     }
 
     const data = enrollRes.rows[0];
+    const learnerName = overrideLearnerName || data.full_name;
 
-    if (data.assessment_status !== 'Competent' && data.assessment_status !== 'Passed') {
-        throw new Error(`Student status is ${data.assessment_status}. Cannot generate certificate.`);
-    }
+    // 2. Get training provider settings from DB and initialize Google clients
+    const drive = await getGoogleDriveClient(pool);
+    const slides = await getGoogleSlidesClient(pool);
+    
+    // Fetch individual settings for folder/template URLs
+    const settingsRes = await pool.query(`
+        SELECT 
+            google_slides_template_id,
+            certificate_folder_url,
+            certificate_template_url
+        FROM training_provider
+        LIMIT 1
+    `);
+    const tpSettings = settingsRes.rows[0];
 
-    // 2. Get training provider settings from DB
-    const tpSettings = await getTrainingProviderSettings(pool, enrolmentId);
-
-    const clientId = tpSettings.google_client_id;
-    const clientSecret = tpSettings.google_client_secret;
-    const refreshToken = tpSettings.google_refresh_token;
     const slidesTemplateId = tpSettings.google_slides_template_id || tpSettings.certificate_template_url;
     const certificateFolderUrl = tpSettings.certificate_folder_url;
 
-    if (!clientId || !clientSecret || !refreshToken) {
-        throw new Error('Google OAuth credentials are not configured in Company Settings. Please set Google Client ID, Client Secret, and Refresh Token under Google Integration.');
-    }
     if (!slidesTemplateId) {
         throw new Error('Certificate Template ID is not configured in Company Settings. Please set it under Document Templates.');
     }
@@ -124,10 +101,6 @@ export async function generateAndUploadCertificate(enrolmentId: string, pool: Po
     }
 
     // 4. Generate PDF from Google Slides template
-    const drive = createDriveClient(clientId, clientSecret, refreshToken);
-    const oauth2Client = new google.auth.OAuth2(clientId, clientSecret, 'https://developers.google.com/oauthplayground');
-    oauth2Client.setCredentials({ refresh_token: refreshToken });
-    const slides = google.slides({ version: 'v1', auth: oauth2Client });
 
     let tempFileId: string | null = null;
 
@@ -144,7 +117,7 @@ export async function generateAndUploadCertificate(enrolmentId: string, pool: Po
             presentationId: tempFileId,
             requestBody: {
                 requests: [
-                    { replaceAllText: { containsText: { text: '[Student Name]', matchCase: true }, replaceText: data.full_name } },
+                    { replaceAllText: { containsText: { text: '[Student Name]', matchCase: true }, replaceText: learnerName } },
                     { replaceAllText: { containsText: { text: '[Course Name]', matchCase: true }, replaceText: data.course_name } },
                     { replaceAllText: { containsText: { text: '[Course Dates]', matchCase: true }, replaceText: dateString } },
                 ],
@@ -164,10 +137,20 @@ export async function generateAndUploadCertificate(enrolmentId: string, pool: Po
 
         // 5. Upload PDF to Google Drive certificate folder
         const rootFolderId = extractFolderId(certificateFolderUrl);
-        const fileName = `Certificate_${data.full_name.replace(/\s+/g, '_')}_${data.course_name.replace(/\s+/g, '_')}.pdf`;
+        const fileName = `Certificate_${learnerName.replace(/\s+/g, '_')}_${data.course_name.replace(/\s+/g, '_')}.pdf`;
 
-        // 5a. Locate course folder
-        let courseFolderId = null;
+        // 5a. Locate or create 'Certificates' subfolder inside the root
+        let certificatesFolderId = await findSubfolder(drive, rootFolderId, 'Certificates');
+        if (!certificatesFolderId) {
+            const createCertRes = await drive.files.create({
+                requestBody: { name: 'Certificates', mimeType: 'application/vnd.google-apps.folder', parents: [rootFolderId] },
+                fields: 'id',
+            });
+            certificatesFolderId = createCertRes.data.id!;
+        }
+
+        // 5b. Locate or create course folder inside 'Certificates'
+        // Format: "COURSE_CODE COURSE_NAME"
         let tgsRef = data.course_code;
         if (!tgsRef) {
             const tgsMatch = data.course_name.match(/(TGS-\d+)/);
@@ -178,42 +161,20 @@ export async function generateAndUploadCertificate(enrolmentId: string, pool: Po
             ? `${tgsRef} ${data.course_name}`.trim()
             : (`${data.course_code || ''} ${data.course_name}`).trim() || 'Unknown Course';
 
-        if (tgsRef) {
-            const safeTgsRef = tgsRef.replace(/'/g, "\\'");
-            const tgsResponse = await drive.files.list({
-                q: `'${rootFolderId}' in parents and name contains '${safeTgsRef}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
-                fields: 'files(id, name)',
-                spaces: 'drive',
-            });
-            if (tgsResponse.data.files && tgsResponse.data.files.length > 0) {
-                courseFolderId = tgsResponse.data.files[0].id!;
-            }
-        } else {
-            courseFolderId = await findSubfolder(drive, rootFolderId, expectedCourseFolderName);
-        }
+        let courseFolderId = await findSubfolder(drive, certificatesFolderId, expectedCourseFolderName);
 
         if (!courseFolderId) {
             const createRes = await drive.files.create({
-                requestBody: { name: expectedCourseFolderName, mimeType: 'application/vnd.google-apps.folder', parents: [rootFolderId] },
+                requestBody: { name: expectedCourseFolderName, mimeType: 'application/vnd.google-apps.folder', parents: [certificatesFolderId] },
                 fields: 'id',
             });
             courseFolderId = createRes.data.id!;
         }
 
-        // 5b. Locate 'Certificates' subfolder
-        let certificatesFolderId = await findSubfolder(drive, courseFolderId, 'Certificates');
-        if (!certificatesFolderId) {
-            const createCertRes = await drive.files.create({
-                requestBody: { name: 'Certificates', mimeType: 'application/vnd.google-apps.folder', parents: [courseFolderId] },
-                fields: 'id',
-            });
-            certificatesFolderId = createCertRes.data.id!;
-        }
-
         // 5c. Upload & overwrite existing PDF
         const safeFileName = fileName.replace(/'/g, "\\'");
         const existingFileRes = await drive.files.list({
-            q: `'${certificatesFolderId}' in parents and name = '${safeFileName}' and trashed = false`,
+            q: `'${courseFolderId}' in parents and name = '${safeFileName}' and trashed = false`,
             fields: 'files(id)',
             spaces: 'drive',
         });
@@ -228,7 +189,7 @@ export async function generateAndUploadCertificate(enrolmentId: string, pool: Po
             fileUrl = `https://drive.google.com/file/d/${existingFileId}/view`;
         } else {
             const driveResponse = await drive.files.create({
-                requestBody: { name: fileName, parents: [certificatesFolderId] },
+                requestBody: { name: fileName, parents: [courseFolderId] },
                 media: { mimeType: 'application/pdf', body: Readable.from(pdfBuffer) },
                 fields: 'id, webViewLink',
             });
@@ -244,12 +205,35 @@ export async function generateAndUploadCertificate(enrolmentId: string, pool: Po
         await pool.query(`UPDATE enrollment SET certificate = $1 WHERE id = $2`, [fileUrl, enrolmentId]);
 
         return fileUrl;
-    } catch (err) {
+    } catch (err: any) {
+        // Handle specific Google OAuth errors with helpful guidance
+        const msg = err.message || '';
+        const isUnauthorized = err.code === 401 || err.status === 401 || msg.includes('unauthorized_client');
+        const isInsufficientScopes = err.code === 403 || err.status === 403 || msg.includes('insufficient authentication scopes');
+
+        if (isUnauthorized) {
+            throw new Error(
+                'Google OAuth Error: unauthorized_client (401). ' +
+                'This usually means the Client ID or Client Secret in Company Settings does not match the ones used to generate the Refresh Token. ' +
+                'Please ensure your Client ID and Client Secret in Settings match your Google Cloud Console (and .env.local) exactly.'
+            );
+        }
+
+        if (isInsufficientScopes) {
+            throw new Error(
+                'Google OAuth Error: Request had insufficient authentication scopes (403). ' +
+                'Please re-authorize your account in Company Settings > Integrations > Google and ensure you have included ' + 
+                'BOTH "https://www.googleapis.com/auth/drive" and "https://www.googleapis.com/auth/presentations" scopes.'
+            );
+        }
+
         // Clean up temp file if it exists
         if (tempFileId) {
             try {
                 await drive.files.delete({ fileId: tempFileId });
-            } catch {}
+            } catch (cleanupErr) {
+                console.warn('Failed to clean up temporary Google Slide copy:', cleanupErr);
+            }
         }
         throw err;
     }
@@ -268,15 +252,8 @@ export async function deleteCertificate(certificateUrl: string, pool: Pool) {
     const match = certificateUrl.match(/\/file\/d\/([^/]+)/) || certificateUrl.match(/[?&]id=([^&]+)/);
     const fileId = match ? match[1] : certificateUrl.trim();
 
-    if (!fileId) return;
-
     try {
-        const tpSettings = await getTrainingProviderSettings(pool, '');
-        const drive = createDriveClient(
-            tpSettings.google_client_id,
-            tpSettings.google_client_secret,
-            tpSettings.google_refresh_token
-        );
+        const drive = await getGoogleDriveClient(pool);
         
         await drive.files.delete({ fileId });
         console.log(`Deleted certificate ${fileId} from Google Drive.`);

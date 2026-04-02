@@ -1,5 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { getSSGCredentialsService } from '../../../lib/ssg/services/credentials-service';
+import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdentifiers';
 import { HttpClient, HTTPRequestBuilder, HttpMethod } from '../../../lib/ssg/utils/http-utils';
 import { syncEnrolmentToDB } from '../../../lib/ssg/utils/sync-enrolment-to-db';
 import pool from '../../../lib/db';
@@ -26,8 +27,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     const ssgBaseUrl = process.env.SSG_API_URL || 'https://api.ssg-wsg.sg';
-    const tpUen  = process.env.TRAINING_PARTNER_UEN  || credentials.uen;
-    const tpCode = process.env.TRAINING_PARTNER_CODE || '';
+    const tp = await getTrainingPartnerIdentifiers();
+    const tpUen  = tp.uen || credentials.uen;
+    const tpCode = tp.code;
 
     // Encrypt the payload
     const payload = {
@@ -40,7 +42,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     console.log('📤 Search payload:', JSON.stringify(payload, null, 2));
 
-    const encKey = Buffer.from(process.env.ENCRYPTION_KEY || credentials.encryptionKey, 'base64');
+    const encKey = Buffer.from(credentials.encryptionKey, 'base64');
     const iv = Buffer.from('SSGAPIInitVector', 'utf8');
     const cipher = crypto.createCipheriv('aes-256-cbc', encKey, iv);
     let encryptedPayload = cipher.update(JSON.stringify(payload), 'utf8', 'base64');

@@ -23,10 +23,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const baseUrl = process.env.SSG_API_BASE_URL;
-    if (!baseUrl) {
-      return res.status(500).json({ error: 'SSG_API_BASE_URL not configured' });
-    }
+    // Base URL loaded from credentials (DB-first) in step below
 
     const { courseReferenceNumber, runId, includeExpired, month, year } = req.query;
 
@@ -56,7 +53,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     // Create SSG API client
-    const ssgAPI = createSSGCourseAPI(baseUrl, credentials);
+    const ssgAPI = createSSGCourseAPI(credentials.ssgApiBaseUrl, credentials);
 
     const includeExpiredOption = getOptionalSelector(includeExpired);
     

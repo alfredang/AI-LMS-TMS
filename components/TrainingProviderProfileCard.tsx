@@ -197,6 +197,8 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
     const [isFundingOpen, setIsFundingOpen] = useState(false);
     const [isAppearanceOpen, setIsAppearanceOpen] = useState(false);
     const [isEncryptionKeyVisible, setIsEncryptionKeyVisible] = useState(false);
+    const [isVisibleGoogleSecret, setIsVisibleGoogleSecret] = useState(false);
+    const [isVisibleGoogleRefreshToken, setIsVisibleGoogleRefreshToken] = useState(false);
     const [themeMode, setThemeMode] = useState<ThemeMode>(() => getCurrentTheme());
 
     // Get the updateTrainingProviderProfile function from the LMS context
@@ -866,35 +868,66 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                 <h4 className="text-sm font-bold text-on-surface mb-3">Email Configuration (Google OAuth2)</h4>
                                 <div className="space-y-3">
                                     {[
-                                        { key: 'emailUser', label: 'Email User', placeholder: 'e.g. sales@yourcompany.com' },
-                                        { key: 'googleClientId', label: 'Google Client ID', placeholder: 'From Google Cloud Console' },
-                                        { key: 'googleClientSecret', label: 'Google Client Secret', placeholder: 'From Google Cloud Console' },
-                                        { key: 'googleRefreshToken', label: 'Google Refresh Token', placeholder: 'OAuth2 refresh token' },
-                                    ].map(({ key, label, placeholder }) => (
+                                        { key: 'emailUser', label: 'Email User', placeholder: 'e.g. sales@yourcompany.com', isSecret: false },
+                                        { key: 'googleClientId', label: 'Google Client ID', placeholder: 'From Google Cloud Console', isSecret: false },
+                                        { key: 'googleClientSecret', label: 'Google Client Secret', placeholder: 'From Google Cloud Console', isSecret: true, visible: isVisibleGoogleSecret, setVisible: setIsVisibleGoogleSecret },
+                                        { key: 'googleRefreshToken', label: 'Google Refresh Token', placeholder: 'OAuth2 refresh token', isSecret: true, visible: isVisibleGoogleRefreshToken, setVisible: setIsVisibleGoogleRefreshToken, helpText: 'REQUIRED SCOPES: https://www.googleapis.com/auth/drive AND https://www.googleapis.com/auth/presentations (separated by space)' },
+                                    ].map(({ key, label, placeholder, helpText, isSecret, visible, setVisible }) => (
                                         <div key={key}>
                                             <label className="block text-sm font-medium text-on-surface-secondary mb-1">{label}</label>
                                             {isEditing ? (
-                                                <input
-                                                    type={key === 'googleClientSecret' || key === 'googleRefreshToken' ? 'password' : 'text'}
-                                                    value={(formData.integrations as any)[key] || ''}
-                                                    onChange={(e) =>
-                                                        setFormData((prev) => ({
-                                                            ...prev,
-                                                            integrations: {
-                                                                ...prev.integrations,
-                                                                [key]: e.target.value,
-                                                            },
-                                                        }))
-                                                    }
-                                                    className={inputClasses}
-                                                    placeholder={placeholder}
-                                                />
+                                                <>
+                                                    <div className="relative">
+                                                        <input
+                                                            type={isSecret ? (visible ? 'text' : 'password') : 'text'}
+                                                            value={(formData.integrations as any)[key] || ''}
+                                                            onChange={(e) =>
+                                                                setFormData((prev) => ({
+                                                                    ...prev,
+                                                                    integrations: {
+                                                                        ...prev.integrations,
+                                                                        [key]: e.target.value,
+                                                                    },
+                                                                }))
+                                                            }
+                                                            className={`${inputClasses} ${isSecret ? 'pr-10' : ''}`}
+                                                            placeholder={placeholder}
+                                                        />
+                                                        {isSecret && setVisible && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setVisible(!visible)}
+                                                                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-subtle hover:text-primary p-1"
+                                                            >
+                                                                <Icon
+                                                                    name={visible ? IconName.EyeOff : IconName.Eye}
+                                                                    className="w-4 h-4"
+                                                                />
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                    {helpText && <p className="text-[10px] text-primary mt-1 font-semibold">{helpText}</p>}
+                                                </>
                                             ) : (
-                                                <p className="text-sm text-on-surface truncate">
-                                                    {key === 'googleClientSecret' || key === 'googleRefreshToken'
-                                                        ? ((formData.integrations as any)[key] ? '••••••••' : 'Not Set')
-                                                        : ((formData.integrations as any)[key] || 'Not Set')}
-                                                </p>
+                                                <div className="flex items-center gap-2 group">
+                                                    <p className="text-sm text-on-surface truncate flex-grow">
+                                                        {isSecret
+                                                            ? ((formData.integrations as any)[key] ? (visible ? (formData.integrations as any)[key] : '••••••••') : 'Not Set')
+                                                            : ((formData.integrations as any)[key] || 'Not Set')}
+                                                    </p>
+                                                    {isSecret && setVisible && (formData.integrations as any)[key] && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setVisible(!visible)}
+                                                            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                        >
+                                                            <Icon
+                                                                name={visible ? IconName.EyeOff : IconName.Eye}
+                                                                className="w-4 h-4"
+                                                            />
+                                                        </button>
+                                                    )}
+                                                </div>
                                             )}
                                         </div>
                                     ))}

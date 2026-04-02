@@ -113,10 +113,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(500).json({ success: false, error: 'SSG credentials not found in database' });
   }
 
-  const ssgBaseUrl  = process.env.SSG_API_URL || 'https://api.ssg-wsg.sg';
-  const tp          = await getTrainingPartnerIdentifiers();
-  const tpUen       = tp.uen;
-  const tpCode      = tp.code;
+  const ssgBaseUrl = process.env.SSG_API_URL || 'https://api.ssg-wsg.sg';
+  const tp = await getTrainingPartnerIdentifiers();
+  const tpUen = tp.uen;
+  const tpCode = tp.code;
   const enrolmentAPI = createSSGEnrolmentAPI(ssgBaseUrl, credentials);
 
   for (const cr of courseRuns) {
@@ -156,7 +156,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (enrolments.length > 0) {
         const runInfo = enrolments[0]?.enrolment?.course?.run ?? {};
         ssgStartDate = parseDate(runInfo.startDate);
-        ssgEndDate   = parseDate(runInfo.endDate);
+        ssgEndDate = parseDate(runInfo.endDate);
       }
     } catch (err) {
       results.push({ ssgRunId, courseTitle: cr.course_title, enrollmentsInserted: 0, enrollmentsSkipped: 0, dateFixed: false, error: err instanceof Error ? err.message : 'Network error' });
@@ -172,14 +172,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       for (const record of enrolments) {
         const enrolment = record?.enrolment ?? {};
-        const trainee   = enrolment?.trainee ?? {};
-        const email     = trainee?.email?.full ?? trainee?.emailAddress ?? null;
-        const fullName  = trainee?.fullName ?? null;
-        const nric      = trainee?.id ?? null;
+        const trainee = enrolment?.trainee ?? {};
+        const email = trainee?.email?.full ?? trainee?.emailAddress ?? null;
+        const fullName = trainee?.fullName ?? null;
+        const nric = trainee?.id ?? null;
         const enrolmentId = enrolment?.referenceNumber ?? null;
         const enrolStatus = enrolment?.status ?? null;
-        const contactNum  = trainee?.contactNumber ?? {};
-        const tel         = [contactNum.countryCode, contactNum.phoneNumber].filter(Boolean).join('') || '';
+        const contactNum = trainee?.contactNumber ?? {};
+        const tel = [contactNum.countryCode, contactNum.phoneNumber].filter(Boolean).join('') || '';
 
         if (!email) { skipped++; continue; }
 
@@ -204,9 +204,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }
 
         // Upsert enrollment
-        const enrolDate  = parseDate(trainee?.enrolmentDate);
+        const enrolDate = parseDate(trainee?.enrolmentDate);
         const sponsorship = mapSponsorship(trainee?.sponsorshipType);
-        const payStatus  = mapPaymentStatus(trainee?.fees?.collectionStatus);
+        const payStatus = mapPaymentStatus(trainee?.fees?.collectionStatus);
 
         const upsertRes = await client.query(
           `INSERT INTO enrollment
@@ -240,19 +240,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       if (ssgStartDate || ssgEndDate) {
         const dbStart = cr.start_date ? new Date(cr.start_date).toISOString().slice(0, 10) : null;
-        const dbEnd   = cr.end_date   ? new Date(cr.end_date).toISOString().slice(0, 10)   : null;
+        const dbEnd = cr.end_date ? new Date(cr.end_date).toISOString().slice(0, 10) : null;
 
         const startMismatch = ssgStartDate && dbStart && ssgStartDate !== dbStart;
-        const endMismatch   = ssgEndDate   && dbEnd   && ssgEndDate   !== dbEnd;
-        const startMissing  = ssgStartDate && !dbStart;
-        const endMissing    = ssgEndDate   && !dbEnd;
+        const endMismatch = ssgEndDate && dbEnd && ssgEndDate !== dbEnd;
+        const startMissing = ssgStartDate && !dbStart;
+        const endMissing = ssgEndDate && !dbEnd;
 
         if (startMismatch || endMismatch || startMissing || endMissing) {
           const parts: string[] = [];
           if (startMismatch) parts.push(`Start: DB ${dbStart} → SSG ${ssgStartDate}`);
-          if (endMismatch)   parts.push(`End: DB ${dbEnd} → SSG ${ssgEndDate}`);
-          if (startMissing)  parts.push(`Start missing in DB, SSG has ${ssgStartDate}`);
-          if (endMissing)    parts.push(`End missing in DB, SSG has ${ssgEndDate}`);
+          if (endMismatch) parts.push(`End: DB ${dbEnd} → SSG ${ssgEndDate}`);
+          if (startMissing) parts.push(`Start missing in DB, SSG has ${ssgStartDate}`);
+          if (endMissing) parts.push(`End missing in DB, SSG has ${ssgEndDate}`);
           dateMismatch = parts.join(' | ');
 
           await client.query(
@@ -283,8 +283,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   const totalInserted = results.reduce((s, r) => s + r.enrollmentsInserted, 0);
-  const totalFixed    = results.filter(r => r.dateFixed).length;
-  const totalErrors   = results.filter(r => r.error).length;
+  const totalFixed = results.filter(r => r.dateFixed).length;
+  const totalErrors = results.filter(r => r.error).length;
 
   return res.status(200).json({
     success: true,

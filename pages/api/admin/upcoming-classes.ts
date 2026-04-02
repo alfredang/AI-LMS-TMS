@@ -35,7 +35,7 @@ export default async function handler(
   }
 
   try {
-    const { 
+    const {
       search,
       courseTitle,
       courseCode,
@@ -284,7 +284,7 @@ export default async function handler(
 
   } catch (error) {
     console.error('Error fetching upcoming classes:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
       message: 'Internal server error',
       error: error instanceof Error ? error.message : 'Unknown error'

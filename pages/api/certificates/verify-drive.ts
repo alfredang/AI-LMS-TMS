@@ -1,6 +1,8 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { google, drive_v3 } from 'googleapis';
 
+import { getDriveClient } from '../../../lib/google-drive/drive-helpers';
+
 /**
  * Verify whether a certificate file exists in Google Drive by its URL.
  * Extracts the file ID from a Drive URL and checks if the file is accessible.
@@ -8,19 +10,6 @@ import { google, drive_v3 } from 'googleapis';
  * GET /api/certificates/verify-drive?url=https://drive.google.com/file/d/FILE_ID/view
  */
 
-function getDriveClient(): drive_v3.Drive {
-    const clientId = process.env.GOOGLE_OAUTH_CLIENT_ID;
-    const clientSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET;
-    const refreshToken = process.env.GOOGLE_OAUTH_REFRESH_TOKEN;
-
-    if (!clientId || !clientSecret || !refreshToken) {
-        throw new Error('Missing Google OAuth credentials.');
-    }
-
-    const oauth2Client = new google.auth.OAuth2(clientId, clientSecret, 'http://localhost:9876');
-    oauth2Client.setCredentials({ refresh_token: refreshToken });
-    return google.drive({ version: 'v3', auth: oauth2Client });
-}
 
 function extractFileId(url: string): string | null {
     // Match patterns like:
@@ -46,7 +35,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     try {
-        const drive = getDriveClient();
+        const drive = await getDriveClient();
         const file = await drive.files.get({
             fileId,
             fields: 'id, name, trashed, parents',
@@ -54,18 +43,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
         let inCertificatesFolder = false;
         
-        // Ensure the file is inside a folder literally named "Certificates"
+        // Ensure the file is inside a course folder which is inside "Certificates"
         if (file.data.parents && file.data.parents.length > 0) {
             try {
-                const parent = await drive.files.get({
+                // Get the immediate parent (Course Folder)
+                const courseFolder = await drive.files.get({
                     fileId: file.data.parents[0],
-                    fields: 'id, name, trashed'
+                    fields: 'id, name, trashed, parents'
                 });
-                if (parent.data.name === 'Certificates' && !parent.data.trashed) {
-                    inCertificatesFolder = true;
+                
+                // Now check the parent of the course folder (should be "Certificates")
+                if (courseFolder.data.parents && courseFolder.data.parents.length > 0) {
+                    const certificatesFolder = await drive.files.get({
+                        fileId: courseFolder.data.parents[0],
+                        fields: 'id, name, trashed'
+                    });
+                    
+                    if (certificatesFolder.data.name === 'Certificates' && !certificatesFolder.data.trashed) {
+                        inCertificatesFolder = true;
+                    }
                 }
             } catch (parentErr) {
-                console.error(`Could not verify parent folder for cert ${fileId}:`, parentErr);
+                console.error(`Could not verify parent hierarchy for cert ${fileId}:`, parentErr);
             }
         }
 

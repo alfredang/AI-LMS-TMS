@@ -18,7 +18,9 @@ export enum View {
   CertificateEmailTemplate = 'certificateEmailTemplate',
   FeedbackEmailTemplate = 'feedbackEmailTemplate',
   PasswordResetEmailTemplate = 'passwordResetEmailTemplate',
-  FinanceManagement = 'financeManagement'
+  FinanceManagement = 'financeManagement',
+  BillingHistory = 'billingHistory',
+  CertificateHistory = 'certificateHistory'
 }
 
 export enum UserRole {
@@ -63,6 +65,7 @@ export enum AdminPage {
   UploadEnrolments = 'uploadEnrolments',
   SearchCourseRuns = 'searchCourseRuns',
   ViewCourseRun = 'viewCourseRun',
+  EditCourseRun = 'editCourseRun',
   SearchAssessments = 'searchAssessments',
   ViewAssessment = 'viewAssessment',
   CancelEnrolment = 'cancelEnrolment',
@@ -71,11 +74,15 @@ export enum AdminPage {
   UpdateEnrolmentFees = 'updateEnrolmentFees',
   CourseSessionAttendance = 'courseSessionAttendance',
   CourseSessions = 'courseSessions',
+  AddSessions = 'addSessions',
+  CourseSessionTiming = 'courseSessionTiming',
   AssignStudent = 'assignStudent',
   SearchPastLearners = 'searchPastLearners',
   CheckAttendance = 'checkAttendance',
   AutomationLogs = 'automationLogs',
   AssignTrainerLogs = 'assignTrainerLogs',
+  TrainerFolderLogs = 'trainerFolderLogs',
+  AutoCreateCertificatesLog = 'autoCreateCertificatesLog',
   CourseRunDateSyncLogs = 'courseRunDateSyncLogs',
   BackfillEnrollments = 'backfillEnrollments',
   FetchUpcomingEnrolments = 'fetchUpcomingEnrolments',
@@ -83,7 +90,8 @@ export enum AdminPage {
   DeleteCertificate = 'deleteCertificate',
   SendCertificateSG = 'sendCertificateSG',
   SendCertificateGH = 'sendCertificateGH',
-  Calendar = 'calendar'
+  Calendar = 'calendar',
+  Scheduler = 'scheduler',
 }
 
 export enum TrainerPage {

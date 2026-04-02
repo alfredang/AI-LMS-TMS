@@ -75,6 +75,7 @@ export default async function handler(
         e.enrolment_status,
         e.nric,
         e.email,
+        e.certificate,
         cr.start_date,
         cr.end_date,
         cr.class_status
@@ -120,6 +121,7 @@ export default async function handler(
       enrolmentStatus: row.enrolment_status || null,
       nric: row.nric || null,
       email: row.email || null,
+      certificate: (row as any).certificate || null,
       enrollmentStatus: 'enrolled' // Hardcoded as all these are enrolled courses
     }));
 

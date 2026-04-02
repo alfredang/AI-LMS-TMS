@@ -126,7 +126,7 @@ export class SSGEnrolmentAPI {
       const rawBody = typeof httpResponse.data === 'string' ? httpResponse.data : JSON.stringify(httpResponse.data);
       console.log('🔍 rawBody type:', typeof httpResponse.data, '| preview:', rawBody.slice(0, 120));
 
-      const encKey = Buffer.from(process.env.ENCRYPTION_KEY || this.credentials.encryptionKey, 'base64');
+      const encKey = Buffer.from(this.credentials.encryptionKey, 'base64');
       const iv = Buffer.from('SSGAPIInitVector', 'utf8');
       const crypto = require('crypto');
       const decipher = crypto.createDecipheriv('aes-256-cbc', encKey, iv);

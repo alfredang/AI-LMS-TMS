@@ -16,15 +16,10 @@ import {
 import { createSSGCourseAPI } from '../../../lib/ssg/api/course-api';
 import { getSSGCredentialsService } from '../../../lib/ssg/services/credentials-service';
 
-// Environment variables validation
-const validateEnvironment = () => {
-  const baseUrl = process.env.SSG_API_BASE_URL;
-  
-  if (!baseUrl) {
-    throw new Error(`Missing required environment variable: SSG_API_BASE_URL. Please add it to your .env.local file. Example: SSG_API_BASE_URL=https://api.ssg-wsg.sg`);
-  }
-  
-  return { baseUrl };
+// Get base URL from credentials (DB-first, env fallback)
+const getBaseUrl = async () => {
+  const credentials = await getSSGCredentialsService().getSSGCredentials();
+  return credentials?.ssgApiBaseUrl || 'https://api.ssg-wsg.sg';
 };
 
 // Helper function to get optional selector from query
@@ -37,7 +32,7 @@ const getOptionalSelector = (value: string | string[] | undefined): OptionalSele
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
-    const { baseUrl } = validateEnvironment();
+    const baseUrl = await getBaseUrl();
 
     // Get training provider ID from request (optional, defaults to first available)
     const trainingProviderId = req.query.trainingProviderId as string;
