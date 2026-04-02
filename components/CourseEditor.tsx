@@ -32,6 +32,14 @@ const formatCurrencyDisplay = (value: unknown) => {
     }).format(numeric);
 };
 
+interface TrainerOption {
+    user_id: string;
+    trainer_name: string;
+    email: string;
+    status: string | null;
+    account_status: string | null;
+}
+
 const formatDisplayValue = (value: unknown) => {
     if (value === null || value === undefined || value === '') return '—';
     return String(value);
@@ -318,6 +326,8 @@ const CourseEditor: React.FC = () => {
     });
     const [isSaving, setIsSaving] = useState(false);
     const [isGeneratingImage, setIsGeneratingImage] = useState(false);
+    const [availableTrainers, setAvailableTrainers] = useState<TrainerOption[]>([]);
+    const [trainerSearch, setTrainerSearch] = useState('');
 
     // State to track preview URL for cleanup
     const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
@@ -390,11 +400,38 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
     }, [courseEditMode, isNewCourse, course.id, hasRealId]);
 
     useEffect(() => {
+        if (role !== UserRole.Admin) return;
+        let cancelled = false;
+        const loadTrainers = async () => {
+            try {
+                const response = await fetch('/api/admin/trainers-detail');
+                const result = await response.json();
+                if (!response.ok || !result.success) return;
+                const activeTrainers = (result.data?.trainers || []).filter((trainer: TrainerOption) => {
+                    const trainerStatus = String(trainer.status || '').toLowerCase();
+                    const accountStatus = String(trainer.account_status || '').toLowerCase();
+                    return trainerStatus === 'active' && accountStatus === 'active';
+                });
+                if (!cancelled) {
+                    setAvailableTrainers(activeTrainers);
+                }
+            } catch (error) {
+                console.error('❌ Failed to load available trainers:', error);
+            }
+        };
+        loadTrainers();
+        return () => {
+            cancelled = true;
+        };
+    }, [role]);
+
+    useEffect(() => {
         if (!editingCourse) return;
         setCourse(prev => {
             if (
                 prev.skillsfutureLink === editingCourse.skillsfutureLink &&
-                prev.brochureLink === editingCourse.brochureLink
+                prev.brochureLink === editingCourse.brochureLink &&
+                JSON.stringify(prev.approvedTrainers || []) === JSON.stringify(editingCourse.approvedTrainers || [])
             ) {
                 return prev;
             }
@@ -402,9 +439,40 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                 ...prev,
                 skillsfutureLink: editingCourse.skillsfutureLink,
                 brochureLink: editingCourse.brochureLink,
+                approvedTrainers: editingCourse.approvedTrainers || [],
+                numOfTrainers: editingCourse.numOfTrainers || 0,
+                trainersList: editingCourse.trainersList || '',
             };
         });
     }, [editingCourse]);
+
+    const selectedApprovedTrainers = course.approvedTrainers || [];
+    const availableTrainerChoices = availableTrainers.filter(trainer => {
+        const matchesSearch = !trainerSearch || trainer.trainer_name.toLowerCase().includes(trainerSearch.toLowerCase()) || trainer.email.toLowerCase().includes(trainerSearch.toLowerCase());
+        return matchesSearch && !selectedApprovedTrainers.includes(trainer.trainer_name);
+    });
+
+    const addApprovedTrainer = (trainerName: string) => {
+        if (!trainerName || selectedApprovedTrainers.includes(trainerName)) return;
+        const updated = [...selectedApprovedTrainers, trainerName];
+        setCourse(prev => ({
+            ...prev,
+            approvedTrainers: updated,
+            numOfTrainers: updated.length,
+            trainersList: updated.join(', ')
+        }));
+        setTrainerSearch('');
+    };
+
+    const removeApprovedTrainer = (trainerName: string) => {
+        const updated = selectedApprovedTrainers.filter(name => name !== trainerName);
+        setCourse(prev => ({
+            ...prev,
+            approvedTrainers: updated,
+            numOfTrainers: updated.length,
+            trainersList: updated.join(', ')
+        }));
+    };
 
     // Clean up invalid blob URLs from database when editing existing courses
     useEffect(() => {
@@ -692,6 +760,8 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                 fundingValidity: course.fundingValidity || undefined,
                 assessmentRecordLink: course.assessmentRecordLink || undefined,
                 assessmentSummaryRecordUrl: course.assessmentSummaryRecordUrl || '',
+                numOfTrainers: selectedApprovedTrainers.length,
+                trainersList: selectedApprovedTrainers.join(', '),
                 writtenAssessmentLink: writtenAssessmentInputType === 'link' ? (course.writtenAssessmentLink || undefined) : undefined,
                 practicalPerformanceAssessmentLink: practicalPerformanceInputType === 'link' ? (course.practicalPerformanceAssessmentLink || undefined) : undefined,
                 assessmentMethods: course.assessmentMethods || undefined,
@@ -1182,12 +1252,24 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                 <ReadonlyValueField label="Total Duration" value={`${Number(course.trainingHours || 0) + Number(course.assessmentHours || 0)} hours`} />
                                 <ReadonlyValueField label="Mode of Learning" value={course.modeOfLearning?.join(', ')} />
                                 <ReadonlyValueField label="Course Type" value={course.courseType} />
+                                <ReadonlyValueField
+                                    label="Approved Trainers"
+                                    value={
+                                        selectedApprovedTrainers.length > 0 ? (
+                                            <div className="space-y-1">
+                                                {selectedApprovedTrainers.map((trainerName) => (
+                                                    <div key={trainerName}>{trainerName}</div>
+                                                ))}
+                                            </div>
+                                        ) : '—'
+                                    }
+                                />
                             </div>
                         </Card>
 
                         {role === UserRole.Admin && (
-                            <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
-                                <h3 className="text-xl font-bold mb-4 dark:text-white">Pricing & Funding</h3>
+                    <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
+                        <h3 className="text-xl font-bold mb-4 dark:text-white">Pricing & Funding</h3>
                                 <div className="space-y-4">
                                     <ReadonlyValueField label="Schedule ID" value={course.scheduleId} />
                                     <ReadonlyValueField label="Course Fee ($)" value={formatCurrencyDisplay(baseCourseFee)} />
@@ -1197,10 +1279,11 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                     <ReadonlyValueField label="After Normal Funding ($)" value={formatCurrencyDisplay(computedAfterNormalFunding)} />
                                     <ReadonlyValueField label="After MCES Funding ($)" value={formatCurrencyDisplay(computedAfterMcesFunding)} />
                                     <ReadonlyValueField label="UTAP Eligible" value={course.isUtapEligible ? 'Yes' : 'No'} />
-                                </div>
-                            </Card>
-                        )}
-                    </div>
+                            </div>
+                        </Card>
+                    )}
+
+                </div>
 
                     <div className="md:col-span-1 xl:col-span-2 space-y-6">
                         <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
@@ -1494,10 +1577,12 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
 
                 {/* Right Column: Content Sections */}
                 <div className="md:col-span-1 xl:col-span-2 space-y-6">
-                    <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
-                        <h3 className="text-xl font-bold mb-3">Learning Outcomes</h3>
-                        <textarea id="learningOutcomes" name="learningOutcomes" value={course.learningOutcomes} onChange={handleCourseChange} className={`${inputClasses} h-32`} placeholder="Describe the key learning outcomes..." />
-                    </Card>
+                    {role !== UserRole.Admin && (
+                        <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
+                            <h3 className="text-xl font-bold mb-3">Learning Outcomes</h3>
+                            <textarea id="learningOutcomes" name="learningOutcomes" value={course.learningOutcomes} onChange={handleCourseChange} className={`${inputClasses} h-32`} placeholder="Describe the key learning outcomes..." />
+                        </Card>
+                    )}
                     <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
                         <h3 className="text-xl font-bold mb-4">Courseware</h3>
                         <div className="space-y-4">
@@ -1669,46 +1754,104 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                     </Card>
                     )}
 
-                    <div className="space-y-4">
-                        <h3 className="text-xl font-bold px-1">Lesson</h3>
-                        {course.topics.map(topic => (
-                            <div
-                                key={topic.id}
-                                onDragOver={(e) => handleTopicDragOver(e, topic.id)}
-                                onDragLeave={handleTopicDragLeave}
-                                onDrop={(e) => handleTopicDrop(e, topic.id)}
-                                className={`transition-opacity ${draggedTopicId === topic.id ? 'opacity-30' : ''}`}
-                            >
-                                <div className={`h-2 transition-all duration-200 ${dropTargetTopicId === topic.id ? 'border-t-4 border-primary' : 'border-t-0'}`}></div>
-                                <EditableTopicAccordion
-                                    topic={topic}
-                                    onUpdateTitle={updateTopicTitle}
-                                    onDelete={deleteTopic}
-                                    onAddSubtopic={addSubtopic}
-                                    onUpdateSubtopic={updateSubtopic}
-                                    onDeleteSubtopic={deleteSubtopic}
-                                    onSelfDragStart={(e) => handleTopicDragStart(e, topic.id)}
-                                    onSelfDragEnd={handleTopicDragEnd}
-                                    draggedSubtopic={draggedSubtopic}
-                                    dropTargetSubtopic={dropTargetSubtopic}
-                                    onSubtopicDragStart={handleSubtopicDragStart}
-                                    onSubtopicDrop={handleSubtopicDrop}
-                                    onSubtopicDragOver={handleSubtopicDragOver}
-                                    onSubtopicDragLeave={handleSubtopicDragLeave}
-                                    onSubtopicDragEnd={handleSubtopicDragEnd}
-                                    resourceLinks={resourceLinks.filter(rl => topic.subtopics.some(st => st.id === rl.topicId))}
-                                    onAddResourceLink={addResourceLink}
-                                    onUpdateResourceLink={updateResourceLink}
-                                    onDeleteResourceLink={deleteResourceLink}
-                                    onReorderResourceLink={reorderResourceLink}
-                                    onMoveResourceLink={moveResourceLink}
-                                />
+                    {role === UserRole.Admin ? (
+                        <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
+                            <h3 className="text-xl font-bold mb-4 dark:text-white">Assigned Trainers</h3>
+                            <div className="space-y-4">
+                                <div>
+                                    <label htmlFor="trainerSearch" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Add Trainer</label>
+                                    <input
+                                        id="trainerSearch"
+                                        type="text"
+                                        value={trainerSearch}
+                                        onChange={(e) => setTrainerSearch(e.target.value)}
+                                        className={inputClasses}
+                                        placeholder="Search active trainer by name or email"
+                                    />
+                                </div>
+                                {availableTrainerChoices.length > 0 && (
+                                    <div className="max-h-56 overflow-y-auto rounded-md border border-gray-300 dark:border-gray-600">
+                                        {availableTrainerChoices.slice(0, 12).map((trainer) => (
+                                            <button
+                                                key={trainer.user_id}
+                                                type="button"
+                                                onClick={() => addApprovedTrainer(trainer.trainer_name)}
+                                                className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
+                                            >
+                                                <span className="dark:text-white">{trainer.trainer_name}</span>
+                                                <span className="text-gray-500 dark:text-gray-400">{trainer.email}</span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                                <div className="space-y-2">
+                                    <div className="text-sm text-gray-500 dark:text-gray-400">
+                                        {selectedApprovedTrainers.length} assigned trainer{selectedApprovedTrainers.length === 1 ? '' : 's'}
+                                    </div>
+                                    {selectedApprovedTrainers.length > 0 ? (
+                                        <div className="flex flex-wrap gap-2">
+                                            {selectedApprovedTrainers.map((trainerName) => (
+                                                <span key={trainerName} className="inline-flex items-center gap-2 rounded-full bg-blue-100 px-3 py-1 text-sm text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
+                                                    {trainerName}
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => removeApprovedTrainer(trainerName)}
+                                                        className="font-bold leading-none"
+                                                        aria-label={`Remove ${trainerName}`}
+                                                    >
+                                                        ×
+                                                    </button>
+                                                </span>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <div className="text-sm text-gray-500 dark:text-gray-400">No assigned trainers selected.</div>
+                                    )}
+                                </div>
                             </div>
-                        ))}
-                        <Button variant="ghost" onClick={addTopic} className="w-full !py-3 !text-lg !font-semibold border-2 border-dashed !border-gray-300 dark:!border-gray-600 hover:!border-primary !text-subtle hover:!text-primary">
-                            + Add Learning Unit
-                        </Button>
-                    </div>
+                        </Card>
+                    ) : (
+                        <div className="space-y-4">
+                            <h3 className="text-xl font-bold px-1">Lesson</h3>
+                            {course.topics.map(topic => (
+                                <div
+                                    key={topic.id}
+                                    onDragOver={(e) => handleTopicDragOver(e, topic.id)}
+                                    onDragLeave={handleTopicDragLeave}
+                                    onDrop={(e) => handleTopicDrop(e, topic.id)}
+                                    className={`transition-opacity ${draggedTopicId === topic.id ? 'opacity-30' : ''}`}
+                                >
+                                    <div className={`h-2 transition-all duration-200 ${dropTargetTopicId === topic.id ? 'border-t-4 border-primary' : 'border-t-0'}`}></div>
+                                    <EditableTopicAccordion
+                                        topic={topic}
+                                        onUpdateTitle={updateTopicTitle}
+                                        onDelete={deleteTopic}
+                                        onAddSubtopic={addSubtopic}
+                                        onUpdateSubtopic={updateSubtopic}
+                                        onDeleteSubtopic={deleteSubtopic}
+                                        onSelfDragStart={(e) => handleTopicDragStart(e, topic.id)}
+                                        onSelfDragEnd={handleTopicDragEnd}
+                                        draggedSubtopic={draggedSubtopic}
+                                        dropTargetSubtopic={dropTargetSubtopic}
+                                        onSubtopicDragStart={handleSubtopicDragStart}
+                                        onSubtopicDrop={handleSubtopicDrop}
+                                        onSubtopicDragOver={handleSubtopicDragOver}
+                                        onSubtopicDragLeave={handleSubtopicDragLeave}
+                                        onSubtopicDragEnd={handleSubtopicDragEnd}
+                                        resourceLinks={resourceLinks.filter(rl => topic.subtopics.some(st => st.id === rl.topicId))}
+                                        onAddResourceLink={addResourceLink}
+                                        onUpdateResourceLink={updateResourceLink}
+                                        onDeleteResourceLink={deleteResourceLink}
+                                        onReorderResourceLink={reorderResourceLink}
+                                        onMoveResourceLink={moveResourceLink}
+                                    />
+                                </div>
+                            ))}
+                            <Button variant="ghost" onClick={addTopic} className="w-full !py-3 !text-lg !font-semibold border-2 border-dashed !border-gray-300 dark:!border-gray-600 hover:!border-primary !text-subtle hover:!text-primary">
+                                + Add Learning Unit
+                            </Button>
+                        </div>
+                    )}
 
                     {(role === UserRole.Admin) && (
                         <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">

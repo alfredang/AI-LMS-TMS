@@ -172,11 +172,13 @@ const AiChatbot: React.FC = () => {
             {!isChatOpen && (
                 <Button
                     onClick={toggleChat}
-                    className="rounded-full !p-4 shadow-lg w-16 h-16 flex items-center justify-center transform hover:scale-110 transition-transform duration-200"
+                    className="rounded-full !p-0 shadow-lg w-12 h-12 flex items-center justify-center transform hover:scale-110 transition-transform duration-200 overflow-hidden"
                     aria-label="Open Nemo AI Agent"
                     title="Nemo - AI Agent"
                 >
-                    <Icon name={IconName.Chat} className="w-8 h-8" />
+                    <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-white font-bold text-base leading-none">
+                        N
+                    </div>
                 </Button>
             )}
         </div>

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
+import AiChatbot from '../components/AiChatbot';
 import { Icon, IconName } from '../components/ui/Icon';
 import FinanceManagementView from '../components/training-provider/FinanceManagementView';
 import AllCourseRunsView from '../components/finance/AllCourseRunsView';
@@ -159,6 +160,7 @@ const FinanceLayout: React.FC = () => {
           </div>
         </main>
         <Footer />
+        <AiChatbot />
       </div>
     );
   }
@@ -213,6 +215,7 @@ const FinanceLayout: React.FC = () => {
       </div>
 
       <Footer />
+      <AiChatbot />
     </div>
   );
 };

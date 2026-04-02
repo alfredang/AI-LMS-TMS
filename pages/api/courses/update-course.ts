@@ -62,6 +62,8 @@ interface CourseData {
   assessmentRecordLink?: string;
   assessmentSummaryRecordUrl?: string;
   fundingValidity?: string;
+  numOfTrainers?: number;
+  trainersList?: string;
   writtenAssessmentLink?: string;
   practicalPerformanceAssessmentLink?: string;
   assessmentMethods?: Record<string, { enabled: boolean; link: string }>;
@@ -506,8 +508,10 @@ export default async function handler(
           assessment_record_link = COALESCE($32, assessment_record_link),
           assessment_summary_record_url = $33,
           funding_validity = $34,
+          num_of_trainers = $35,
+          trainers_list = $36,
           updated_at = now()
-        WHERE id = $35
+        WHERE id = $37
         RETURNING id
       `;
 
@@ -546,6 +550,8 @@ export default async function handler(
         courseData.assessmentRecordLink || null,
         courseData.assessmentSummaryRecordUrl || null,
         courseData.fundingValidity || null,
+        courseData.numOfTrainers ?? 0,
+        courseData.trainersList || null,
         courseId
       ]);
 

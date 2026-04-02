@@ -95,6 +95,8 @@ export default async function handler(
         c.is_gamified          AS is_leaderboard_enabled,
         c.image_url,
         c.funding_validity,
+        c.num_of_trainers,
+        c.trainers_list,
         c.resource_links
       FROM course c
       WHERE c.id = $1
@@ -220,6 +222,11 @@ export default async function handler(
       isLeaderboardEnabled: courseData.is_leaderboard_enabled,
       imageUrl: courseData.image_url,
       fundingValidity: courseData.funding_validity || null,
+      numOfTrainers: courseData.num_of_trainers ?? 0,
+      trainersList: courseData.trainers_list || '',
+      approvedTrainers: courseData.trainers_list
+        ? String(courseData.trainers_list).split(',').map((name: string) => name.trim()).filter(Boolean)
+        : [],
       assessmentMethods: assessmentMethodsData ? (typeof assessmentMethodsData === 'string' ? JSON.parse(assessmentMethodsData) : assessmentMethodsData) : null,
       resourceLinks: courseData.resource_links ? (typeof courseData.resource_links === 'string' ? JSON.parse(courseData.resource_links) : courseData.resource_links) : [],
       // Convert learning units to topics format expected by the editor

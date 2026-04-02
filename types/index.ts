@@ -170,6 +170,7 @@ export interface Course {
   learners?: any[];
   numOfTrainers?: number;
   trainersList?: string;
+  approvedTrainers?: string[];
 }
 
 export interface CourseDetail {
