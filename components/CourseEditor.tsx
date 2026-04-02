@@ -38,11 +38,12 @@ const EditableTopicAccordion: React.FC<{
     onUpdateResourceLink: (id: string, field: 'title' | 'url', value: string) => void;
     onDeleteResourceLink: (id: string) => void;
     onReorderResourceLink: (draggedId: string, targetId: string, parentId: string) => void;
+    onMoveResourceLink: (draggedId: string, targetParentId: string) => void;
 }> = ({
     topic, onUpdateTitle, onDelete, onAddSubtopic, onUpdateSubtopic, onDeleteSubtopic,
     draggedSubtopic, dropTargetSubtopic, onSubtopicDragStart, onSubtopicDrop, onSubtopicDragOver, onSubtopicDragLeave, onSubtopicDragEnd,
     onSelfDragStart, onSelfDragEnd,
-    resourceLinks, onAddResourceLink, onUpdateResourceLink, onDeleteResourceLink, onReorderResourceLink
+    resourceLinks, onAddResourceLink, onUpdateResourceLink, onDeleteResourceLink, onReorderResourceLink, onMoveResourceLink
 }) => {
         const [isSubtopicsOpen, setSubtopicsOpen] = useState(true);
 
@@ -84,9 +85,28 @@ const EditableTopicAccordion: React.FC<{
                                 return (
                                 <li key={subtopic.id}>
                                     <div
-                                        onDragOver={(e) => onSubtopicDragOver(e, topic.id, subtopic.id)}
+                                        onDragOver={(e) => {
+                                            const draggedResourceLinkId = e.dataTransfer.getData('resourceLinkId');
+                                            if (draggedResourceLinkId) {
+                                                e.preventDefault();
+                                                e.stopPropagation();
+                                                e.currentTarget.classList.add('ring-1', 'ring-blue-400');
+                                                return;
+                                            }
+                                            onSubtopicDragOver(e, topic.id, subtopic.id);
+                                        }}
                                         onDragLeave={onSubtopicDragLeave}
-                                        onDrop={(e) => onSubtopicDrop(e, topic.id, subtopic.id)}
+                                        onDrop={(e) => {
+                                            const draggedResourceLinkId = e.dataTransfer.getData('resourceLinkId');
+                                            if (draggedResourceLinkId) {
+                                                e.preventDefault();
+                                                e.stopPropagation();
+                                                e.currentTarget.classList.remove('ring-1', 'ring-blue-400');
+                                                onMoveResourceLink(draggedResourceLinkId, subtopic.id);
+                                                return;
+                                            }
+                                            onSubtopicDrop(e, topic.id, subtopic.id);
+                                        }}
                                         className={`relative flex items-center justify-between p-1 rounded-md group transition-all duration-200 ${draggedSubtopic?.subtopicId === subtopic.id ? 'opacity-30' : 'hover:bg-gray-100/70 dark:hover:bg-gray-700/70'
                                             } ${dropTargetSubtopic?.subtopicId === subtopic.id ? 'pt-2 border-t-2 border-blue-500' : 'border-t-2 border-transparent'
                                             }`}
@@ -112,7 +132,28 @@ const EditableTopicAccordion: React.FC<{
                                         </button>
                                     </div>
                                     {/* Resource links + buttons for this topic */}
-                                    <div className="ml-10 mt-1 space-y-1">
+                                    <div
+                                        className="ml-10 mt-1 space-y-1 rounded-md transition-colors"
+                                        onDragOver={(e) => {
+                                            const draggedId = e.dataTransfer.getData('resourceLinkId');
+                                            if (!draggedId) return;
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            e.currentTarget.classList.add('ring-1', 'ring-blue-400', 'bg-blue-50/40', 'dark:bg-blue-900/10');
+                                        }}
+                                        onDragLeave={(e) => {
+                                            e.stopPropagation();
+                                            e.currentTarget.classList.remove('ring-1', 'ring-blue-400', 'bg-blue-50/40', 'dark:bg-blue-900/10');
+                                        }}
+                                        onDrop={(e) => {
+                                            const draggedId = e.dataTransfer.getData('resourceLinkId');
+                                            if (!draggedId) return;
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            e.currentTarget.classList.remove('ring-1', 'ring-blue-400', 'bg-blue-50/40', 'dark:bg-blue-900/10');
+                                            onMoveResourceLink(draggedId, subtopic.id);
+                                        }}
+                                    >
                                         {subtopicLinks.map((rl, rlIndex) => (
                                             <div
                                                 key={rl.id}
@@ -367,6 +408,7 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
     };
     const handleSubtopicDragLeave = (e: React.DragEvent) => {
         e.stopPropagation();
+        e.currentTarget.classList.remove('ring-1', 'ring-blue-400');
         setDropTargetSubtopic(null);
     };
     const handleSubtopicDrop = (e: React.DragEvent, dropTargetTopicId: string, dropTargetSubtopicId: string) => {
@@ -822,6 +864,20 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
 
     const deleteResourceLink = (id: string) => {
         setResourceLinks(prev => prev.filter(rl => rl.id !== id));
+    };
+
+    const moveResourceLink = (draggedId: string, targetParentId: string) => {
+        setResourceLinks(prev => {
+            const draggedIndex = prev.findIndex(rl => rl.id === draggedId);
+            if (draggedIndex === -1) return prev;
+
+            const draggedLink = prev[draggedIndex];
+            if (draggedLink.topicId === targetParentId) return prev;
+
+            const nextLinks = [...prev];
+            nextLinks[draggedIndex] = { ...draggedLink, topicId: targetParentId };
+            return nextLinks;
+        });
     };
 
     const reorderResourceLink = (draggedId: string, targetId: string, parentId: string) => {
@@ -1393,6 +1449,7 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                     onUpdateResourceLink={updateResourceLink}
                                     onDeleteResourceLink={deleteResourceLink}
                                     onReorderResourceLink={reorderResourceLink}
+                                    onMoveResourceLink={moveResourceLink}
                                 />
                             </div>
                         ))}
