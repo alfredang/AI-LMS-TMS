@@ -41,8 +41,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     if (role === 'learner') {
       profileData = await getLearnerProfile(userId);
-    } else if (role === 'admin' || role === 'finance') {
+    } else if (role === 'admin') {
       profileData = await getAdminProfile(userId);
+    } else if (role === 'finance') {
+      profileData = await getFinanceProfile(userId);
     } else if (role === 'trainer') {
       profileData = await getTrainerProfile(userId);
     } else if (role === 'training_provider') {
@@ -171,6 +173,44 @@ async function getAdminProfile(userId: string) {
 
   const profile = result.rows[0];
   console.log('✅ Admin profile found:', profile.full_name, '(admin_profile may be NULL for multi-role users)');
+
+  return {
+    id: profile.user_id,
+    name: profile.full_name,
+    email: profile.email,
+    tel: profile.telephone || '',
+    loginId: profile.email,
+    profilePictureUrl: profile.profile_picture_url || `https://i.pravatar.cc/150?img=2`,
+    password: profile.password,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  };
+}
+
+async function getFinanceProfile(userId: string) {
+  console.log('💰 Fetching finance profile for userId:', userId);
+
+  const result = await pool.query(`
+    SELECT
+        au.id AS user_id,
+        au.full_name,
+        au.email,
+        au.password,
+        au.profile_picture_url,
+        fp.tel AS telephone
+    FROM app_user au
+    LEFT JOIN finance_profile fp
+        ON fp.user_id = au.id
+    WHERE au.id = $1
+  `, [userId]);
+
+  if (result.rows.length === 0) {
+    console.log('❌ No user found with ID:', userId);
+    return null;
+  }
+
+  const profile = result.rows[0];
+  console.log('✅ Finance profile found:', profile.full_name);
 
   return {
     id: profile.user_id,
