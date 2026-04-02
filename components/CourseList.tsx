@@ -286,28 +286,35 @@ const ManagementCourseList: React.FC = () => {
     };
 
 
-    // Handle edit course
-    const handleEditCourse = async (course: any) => {
+    const loadCourseInfo = async (course: any, mode: 'view' | 'edit') => {
         if (!course?.id) return;
 
         try {
-            console.log('🔄 Loading complete course data for editing...');
+            console.log(`🔄 Loading complete course data for ${mode}...`);
             const response = await fetch(`/api/courses/edit-data?courseId=${course.id}`);
             const result = await response.json();
 
             if (result.success && result.data) {
-                console.log('✅ Complete course data loaded for editing:', result.data);
+                console.log(`✅ Complete course data loaded for ${mode}:`, result.data);
                 setEditingCourse(result.data);
-                setCourseEditMode('edit');
-                console.log('✏️ CourseList: Set course edit mode to EDIT for course:', course.id);
+                setCourseEditMode(mode);
+                console.log(`✏️ CourseList: Set course edit mode to ${mode.toUpperCase()} for course:`, course.id);
             } else {
-                console.error('❌ Failed to load course edit data:', result.message);
-                alert('Failed to load course data for editing. Please try again.');
+                console.error('❌ Failed to load course info:', result.message);
+                alert('Failed to load course information. Please try again.');
             }
         } catch (error) {
-            console.error('❌ Error loading course edit data:', error);
-            alert('Failed to load course data for editing. Please try again.');
+            console.error('❌ Error loading course info:', error);
+            alert('Failed to load course information. Please try again.');
         }
+    };
+
+    const handleCourseInfo = async (course: any) => {
+        await loadCourseInfo(course, 'view');
+    };
+
+    const handleEditCourse = async (course: any) => {
+        await loadCourseInfo(course, 'edit');
     };
 
     const inputClasses = "block w-full px-3 py-2 text-on-surface bg-surface border border-default rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent";
@@ -476,9 +483,9 @@ const ManagementCourseList: React.FC = () => {
                                     View Course
                                 </Button>
                                 {(role === UserRole.Developer || role === UserRole.Admin) && (
-                                    <button onClick={() => handleEditCourse(course)} className="flex items-center text-subtle font-semibold hover:text-primary transition-colors">
+                                    <button onClick={() => handleCourseInfo(course)} className="flex items-center text-subtle font-semibold hover:text-primary transition-colors">
                                         <Icon name={IconName.Edit} className="w-4 h-4 mr-1" />
-                                        <span>Edit</span>
+                                        <span>Course Info</span>
                                     </button>
                                 )}
                             </div>
@@ -649,9 +656,9 @@ const ManagementCourseList: React.FC = () => {
                                             View Course
                                         </Button>
                                         {(role === UserRole.Developer || role === UserRole.Admin) && (
-                                            <Button size="sm" variant="ghost" onClick={() => handleEditCourse(course)}>
+                                            <Button size="sm" variant="ghost" onClick={() => handleCourseInfo(course)}>
                                                 <Icon name={IconName.Edit} className="w-4 h-4 mr-1" />
-                                                Edit
+                                                Course Info
                                             </Button>
                                         )}
                                     </div>

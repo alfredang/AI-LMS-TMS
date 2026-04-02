@@ -344,7 +344,7 @@ const AdminLayout: React.FC = () => {
         </button>
         <h2 className="text-lg font-bold truncate">
           {editingCourse
-            ? (courseEditMode === 'create' ? 'Create Course' : 'Edit Course')
+            ? (courseEditMode === 'create' ? 'Create Course' : courseEditMode === 'view' ? 'Course Info' : 'Edit Course')
             : (selectedCourse && adminPage === AdminPage.ViewCourses
                 ? 'Course Detail'
                 : (PAGE_LABELS[adminPage] ?? formatAdminPageTitle(adminPage)))}

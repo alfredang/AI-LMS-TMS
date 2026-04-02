@@ -239,8 +239,8 @@ interface LmsContextType {
   setSelectedCourse: (course: Course | null) => void;
   editingCourse: Course | null;
   setEditingCourse: (course: Course | null) => void;
-  courseEditMode: 'create' | 'edit' | null;
-  setCourseEditMode: (mode: 'create' | 'edit' | null) => void;
+  courseEditMode: 'create' | 'edit' | 'view' | null;
+  setCourseEditMode: (mode: 'create' | 'edit' | 'view' | null) => void;
   editingCourseRun: any | null;
   setEditingCourseRun: (courseRun: any | null) => void;
   courseListPage: number;
@@ -305,7 +305,7 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
   const [editingCourse, setEditingCourse] = useState<Course | null>(null);
-  const [courseEditMode, setCourseEditMode] = useState<'create' | 'edit' | null>(null);
+  const [courseEditMode, setCourseEditMode] = useState<'create' | 'edit' | 'view' | null>(null);
   const [editingCourseRun, setEditingCourseRun] = useState<any | null>(null);
   const [courseListPage, setCourseListPage] = useState(1);
   const [courseDetail, setCourseDetail] = useState<CourseDetail | null>(null);

@@ -22,6 +22,49 @@ const parseNumericInput = (value: unknown) => {
 const roundCurrency = (value: number) => Math.round(value * 100) / 100;
 
 const formatCurrencyInput = (value: number) => roundCurrency(value).toFixed(2);
+const formatCurrencyDisplay = (value: unknown) => {
+    const numeric = parseNumericInput(value);
+    return new Intl.NumberFormat('en-SG', {
+        style: 'currency',
+        currency: 'SGD',
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+    }).format(numeric);
+};
+
+const formatDisplayValue = (value: unknown) => {
+    if (value === null || value === undefined || value === '') return '—';
+    return String(value);
+};
+
+const LinkField: React.FC<{ label: string; value?: string | null }> = ({ label, value }) => (
+    <div>
+        <div className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">{label}</div>
+        {value ? (
+            <a
+                href={value}
+                target="_blank"
+                rel="noreferrer"
+                className="block w-full px-3 py-2 text-blue-600 bg-white border border-gray-300 rounded-md shadow-sm hover:underline dark:bg-gray-700 dark:text-blue-300 dark:border-gray-600 break-all"
+            >
+                {value}
+            </a>
+        ) : (
+            <div className="block w-full px-3 py-2 text-gray-500 bg-white border border-gray-300 rounded-md shadow-sm dark:bg-gray-700 dark:text-gray-400 dark:border-gray-600">
+                —
+            </div>
+        )}
+    </div>
+);
+
+const ReadonlyValueField: React.FC<{ label: string; value?: React.ReactNode }> = ({ label, value }) => (
+    <div>
+        <div className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">{label}</div>
+        <div className="block w-full px-3 py-2 text-gray-900 bg-white border border-gray-300 rounded-md shadow-sm dark:bg-gray-700 dark:text-white dark:border-gray-600 break-words">
+            {value || '—'}
+        </div>
+    </div>
+);
 
 
 // Sub-component for an editable Learning Unit (Topic)
@@ -333,6 +376,7 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
     const companyMcesFundingRate = trainingProviderProfile?.fundingSettings?.enhancedFunding ?? 20;
     const companyGstRate = trainingProviderProfile?.fundingSettings?.gstRate ?? 9;
     const isCompanyGstRegistered = trainingProviderProfile?.fundingSettings?.isGstRegistered ?? true;
+    const isReadOnly = courseEditMode === 'view';
 
     const baseCourseFee = parseNumericInput(course.courseFee);
     const computedGstAmount = isCompanyGstRegistered ? roundCurrency(baseCourseFee * (companyGstRate / 100)) : 0;
@@ -1056,7 +1100,7 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
             {/* Header */}
             <div className="sticky top-14 sm:top-16 z-20 bg-background pt-4 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-6 pb-4 border-b border-gray-200 dark:border-gray-700">
                 <div>
-                    <h2 className="text-2xl font-bold dark:text-white">{isNewCourse ? 'Create Course' : 'Edit Course'}</h2>
+                    <h2 className="text-2xl font-bold dark:text-white">{isNewCourse ? 'Create Course' : isReadOnly ? 'Course Info' : 'Edit Course'}</h2>
                     {!isNewCourse && course.courseCode && (
                         <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">{course.courseCode}</p>
                     )}
@@ -1066,18 +1110,152 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                         setEditingCourse(null);
                         setCourseEditMode(null);
                     }}>Cancel</Button>
-                    {!isNewCourse && (
+                    {!isReadOnly && !isNewCourse && (
+                        <Button variant="outline" onClick={() => setCourseEditMode('view')}>
+                            Exit Edit
+                        </Button>
+                    )}
+                    {isReadOnly && (
+                        <Button variant="primary" onClick={() => setCourseEditMode('edit')}>
+                            Edit
+                        </Button>
+                    )}
+                    {!isReadOnly && !isNewCourse && (
                         <Button variant="outline" onClick={() => handleSaveCourse(true)} disabled={isSaving}>
                             {isSaving ? <Spinner size="sm" /> : 'Save & Continue Editing'}
                         </Button>
                     )}
-                    <Button variant="primary" onClick={() => handleSaveCourse(false)} disabled={isSaving}>
-                        {isSaving ? <Spinner size="sm" /> : (isNewCourse ? 'Create Course' : 'Save Changes')}
-                    </Button>
+                    {!isReadOnly && (
+                        <Button variant="primary" onClick={() => handleSaveCourse(false)} disabled={isSaving}>
+                            {isSaving ? <Spinner size="sm" /> : (isNewCourse ? 'Create Course' : 'Save Changes')}
+                        </Button>
+                    )}
                 </div>
             </div>
 
-            {/* Main two-column layout */}
+            {isReadOnly ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 items-start">
+                    <div className="md:col-span-1 xl:col-span-1 space-y-6 xl:sticky xl:top-6">
+                        <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
+                            <h3 className="text-xl font-bold mb-4 dark:text-white">Course Details</h3>
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Course Image</label>
+                                    <div className="relative aspect-video bg-gray-100 dark:bg-gray-700 rounded-xl overflow-hidden border border-gray-200 dark:border-gray-600 mb-3 shadow-sm">
+                                        <img
+                                            src={getCourseImageUrl(course.imageUrl, course.id)}
+                                            alt={course.title}
+                                            className="w-full h-full object-cover"
+                                            onError={(e) => {
+                                                const target = e.target as HTMLImageElement;
+                                                target.src = `https://picsum.photos/seed/${course.id || 'default'}/400/200`;
+                                            }}
+                                        />
+                                    </div>
+                                    <LinkField label="Image URL Link" value={course.imageUrl} />
+                                </div>
+                                <ReadonlyValueField label="Course Title" value={course.title} />
+                                <ReadonlyValueField label="Course Code" value={course.courseCode} />
+                                <ReadonlyValueField label="TSC Title" value={course.tscTitle} />
+                                <ReadonlyValueField label="TSC Code" value={course.tscCode} />
+                                <ReadonlyValueField label="Funding Validity" value={course.fundingValidity} />
+                                <ReadonlyValueField label="Training Hours" value={formatDisplayValue(course.trainingHours)} />
+                                <ReadonlyValueField label="Assessment Hours" value={formatDisplayValue(course.assessmentHours)} />
+                                <ReadonlyValueField label="Total Duration" value={`${Number(course.trainingHours || 0) + Number(course.assessmentHours || 0)} hours`} />
+                                <ReadonlyValueField label="Mode of Learning" value={course.modeOfLearning?.join(', ')} />
+                                <ReadonlyValueField label="Course Type" value={course.courseType} />
+                            </div>
+                        </Card>
+
+                        {role === UserRole.Admin && (
+                            <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
+                                <h3 className="text-xl font-bold mb-4 dark:text-white">Pricing & Funding</h3>
+                                <div className="space-y-4">
+                                    <ReadonlyValueField label="Schedule ID" value={course.scheduleId} />
+                                    <ReadonlyValueField label="Course Fee ($)" value={formatCurrencyDisplay(baseCourseFee)} />
+                                    <ReadonlyValueField label="Tax / GST Rate (%)" value={`${companyGstRate}%`} />
+                                    <ReadonlyValueField label="GST ($)" value={formatCurrencyDisplay(computedGstAmount)} />
+                                    <ReadonlyValueField label="Course Fee Incl. GST ($)" value={formatCurrencyDisplay(computedCourseFeeIncludeGst)} />
+                                    <ReadonlyValueField label="After Normal Funding ($)" value={formatCurrencyDisplay(computedAfterNormalFunding)} />
+                                    <ReadonlyValueField label="After MCES Funding ($)" value={formatCurrencyDisplay(computedAfterMcesFunding)} />
+                                    <ReadonlyValueField label="UTAP Eligible" value={course.isUtapEligible ? 'Yes' : 'No'} />
+                                </div>
+                            </Card>
+                        )}
+                    </div>
+
+                    <div className="md:col-span-1 xl:col-span-2 space-y-6">
+                        <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
+                            <h3 className="text-xl font-bold mb-3">Learning Outcomes</h3>
+                            <div className="whitespace-pre-wrap rounded-md border border-gray-300 bg-white px-3 py-2 text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white">
+                                {course.learningOutcomes || '—'}
+                            </div>
+                        </Card>
+
+                        <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
+                            <h3 className="text-xl font-bold mb-4">Courseware</h3>
+                            <div className="space-y-4">
+                                <LinkField label="Lesson Plan URL" value={course.lessonPlanUrl} />
+                                <LinkField label="Learner Guide URL" value={course.learnerGuideUrl} />
+                                <LinkField label="Facilitator Guide URL" value={course.facilitatorGuideUrl} />
+                                <LinkField label="Assessment Plan URL" value={course.assessmentPlanUrl} />
+                                <LinkField label="Learner Slides URL" value={course.slidesUrl} />
+                                <LinkField label="Trainer Slides URL" value={course.trainerSlidesUrl} />
+                                <LinkField label="Courseware Link" value={course.courseLink} />
+                                <LinkField label="Brochure Link" value={course.brochureLink} />
+                                <LinkField label="Assessment Record Link" value={course.assessmentRecordLink} />
+                                <LinkField label="Assessment Summary Record URL" value={course.assessmentSummaryRecordUrl} />
+                            </div>
+                        </Card>
+
+                        <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
+                            <h3 className="text-xl font-bold mb-4">Assessment Links</h3>
+                            <div className="space-y-4">
+                                <LinkField label="Written Assessment Link" value={course.writtenAssessmentLink} />
+                                <LinkField label="Practical Performance Assessment Link" value={course.practicalPerformanceAssessmentLink} />
+                                {course.assessmentMethods && Object.entries(course.assessmentMethods).map(([key, method]) => (
+                                    method?.enabled ? <LinkField key={key} label={ASSESSMENT_METHOD_LABELS[key as AssessmentMethodKey]} value={method.link} /> : null
+                                ))}
+                            </div>
+                        </Card>
+
+                        <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
+                            <h3 className="text-xl font-bold mb-4">Lesson</h3>
+                            <div className="space-y-4">
+                                {course.topics?.length ? course.topics.map((topic, index) => (
+                                    <div key={topic.id} className="rounded-lg border border-gray-200 p-4 dark:border-gray-700">
+                                        <h4 className="text-lg font-semibold dark:text-white">{index + 1}. {topic.title}</h4>
+                                        {topic.subtopics?.length > 0 && (
+                                            <ul className="mt-3 space-y-2 text-sm text-gray-700 dark:text-gray-300">
+                                                {topic.subtopics.map((subtopic, subIndex) => (
+                                                    <li key={subtopic.id}>{index + 1}.{subIndex + 1} {subtopic.title}</li>
+                                                ))}
+                                            </ul>
+                                        )}
+                                        {resourceLinks.filter(link => link.topicId === topic.id).length > 0 && (
+                                            <div className="mt-4 space-y-2">
+                                                {resourceLinks.filter(link => link.topicId === topic.id).map(link => (
+                                                    <a
+                                                        key={link.id}
+                                                        href={link.url}
+                                                        target="_blank"
+                                                        rel="noreferrer"
+                                                        className="block rounded-md border border-gray-200 px-3 py-2 text-sm text-blue-600 hover:underline dark:border-gray-700 dark:text-blue-300"
+                                                    >
+                                                        {link.title || link.url}
+                                                    </a>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                )) : (
+                                    <div className="text-gray-500 dark:text-gray-400">No lessons available.</div>
+                                )}
+                            </div>
+                        </Card>
+                    </div>
+                </div>
+            ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 items-start">
                 {/* Left Column: Course Details */}
                 <div className="md:col-span-1 xl:col-span-1 space-y-6 xl:sticky xl:top-6">
@@ -1582,6 +1760,7 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                     </Card>
                 </div>
             </div>
+            )}
         </div>
     );
 };
