@@ -57,6 +57,8 @@ import { BulkUploadEnrolmentView } from '../components/admin/BulkEnrolmentViews'
 import TrainerAttendanceDashboard from '../components/trainer/TrainerAttendanceDashboard';
 import AdminCalendarView from '../components/admin/AdminCalendarView';
 import SchedulerView from '../components/admin/SchedulerView';
+import AddSessionsView from '../components/admin/AddSessionsView';
+import CourseSessionTimingView from '../components/admin/CourseSessionTimingView';
 
 // Management Dashboard Component
 interface ManagementDashboardProps {
@@ -154,6 +156,8 @@ const PAGE_LABELS: Partial<Record<AdminPage, string>> = {
   [AdminPage.SendCertificateGH]: 'Send Certificate (GH)',
   [AdminPage.Calendar]: 'Calendar',
   [AdminPage.Scheduler]: 'Task Scheduler',
+  [AdminPage.AddSessions]: 'Add Sessions',
+  [AdminPage.CourseSessionTiming]: 'Course Session Timing',
 };
 
 const AdminLayout: React.FC = () => {
@@ -266,6 +270,10 @@ const AdminLayout: React.FC = () => {
         return <CourseSessionAttendanceView />;
       case AdminPage.CourseSessions:
         return <CourseSessionsView />;
+      case AdminPage.AddSessions:
+        return <AddSessionsView />;
+      case AdminPage.CourseSessionTiming:
+        return <CourseSessionTimingView />;
       case AdminPage.ClassDetail:
         return <ClassDetailView courseRunId={selectedCourseRunId || undefined} />;
       case AdminPage.CourseRun:

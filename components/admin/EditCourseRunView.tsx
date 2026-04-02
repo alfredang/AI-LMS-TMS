@@ -12,15 +12,12 @@ enum OptionalSelector {
 }
 
 const modeOfTrainingOptions = [
-    { value: '1', label: '1 - Classroom' },
-    { value: '2', label: '2 - Asynchronous eLearning' },
-    { value: '3', label: '3 - In-house' },
-    { value: '4', label: '4 - On-the-Job' },
-    { value: '5', label: '5 - Blended Learning' },
-    { value: '6', label: '6 - Synchronous eLearning' },
-    { value: '7', label: '7 - Practical / Traineeship' },
+    { value: '1', label: '1 - Classroom Facilitated Training' },
+    { value: '2', label: '2 - Asynchronous E-learning' },
+    { value: '4', label: '4 - On the Job Training' },
     { value: '8', label: '8 - Assessment' },
-    { value: '9', label: '9 - Virtual Classroom' },
+    { value: '9', label: '9 - Synchronous E-learning' },
+    { value: '10', label: '10 - Work-based/Workplace Learning' },
 ];
 
 const vacancyOptions = [
@@ -67,7 +64,6 @@ export const EditCourseRunView: React.FC = () => {
     const [courseTitle, setCourseTitle] = useState('');
 
     // ── Editable form fields ─────────────────────────────────────────────────
-    const [sequenceNumber, setSequenceNumber] = useState(0);
     const [openingRegistrationDate, setOpeningRegistrationDate] = useState('');
     const [closingRegistrationDate, setClosingRegistrationDate] = useState('');
     const [courseStartDate, setCourseStartDate] = useState('');
@@ -85,11 +81,6 @@ export const EditCourseRunView: React.FC = () => {
     const [modeOfTraining, setModeOfTraining] = useState('1');
     const [courseAdminEmail, setCourseAdminEmail] = useState('');
     const [courseVacancy, setCourseVacancy] = useState('A');
-
-    // ── Sessions (optional) ──────────────────────────────────────────────────
-    const [showSessions, setShowSessions] = useState(false);
-    const [sessionCount, setSessionCount] = useState(0);
-    const [sessions, setSessions] = useState<any[]>([]);
 
     // ── Trainer (optional) ───────────────────────────────────────────────────
     const [showTrainer, setShowTrainer] = useState(false);
@@ -141,7 +132,6 @@ export const EditCourseRunView: React.FC = () => {
             setCourseTitle(courseData.title ?? '');
 
             // Populate form fields
-            setSequenceNumber(run.sequenceNumber ?? 0);
             setCourseStartDate(toDateInput(run.courseStartDate ?? run.courseDates?.start));
             setCourseEndDate(toDateInput(run.courseEndDate ?? run.courseDates?.end));
             setOpeningRegistrationDate(toDateInput(run.registrationOpeningDate ?? run.registrationDates?.opening));
@@ -169,45 +159,6 @@ export const EditCourseRunView: React.FC = () => {
         }
     };
 
-    // ── Session helpers ──────────────────────────────────────────────────────
-    const updateSessionCount = (count: number) => {
-        const newSessions = [...sessions];
-        if (count > sessions.length) {
-            for (let i = sessions.length; i < count; i++) {
-                newSessions.push({
-                    id: i, modeOfTraining: '1',
-                    startDate: '', endDate: '', startTime: '09:15', endTime: '13:15',
-                    useDefaultVenue: true, block: '', street: '', building: '',
-                    wheelchairAccess: OptionalSelector.YES, floor: '', unit: '', postalCode: '', room: '',
-                });
-            }
-        } else {
-            newSessions.splice(count);
-        }
-        setSessions(newSessions);
-        setSessionCount(count);
-    };
-
-    const updateSessionField = (idx: number, field: string, value: any) => {
-        const updated = [...sessions];
-        updated[idx] = { ...updated[idx], [field]: value };
-        if (field === 'modeOfTraining') {
-            if (value === '2' || value === '4') {
-                updated[idx].startTime = '00:00';
-                updated[idx].endTime = '23:59';
-            } else {
-                updated[idx].endDate = updated[idx].startDate;
-                updated[idx].startTime = '09:15';
-                updated[idx].endTime = '13:15';
-            }
-        }
-        if (field === 'startDate') {
-            const mode = updated[idx].modeOfTraining;
-            if (mode !== '2' && mode !== '4') updated[idx].endDate = value;
-        }
-        setSessions(updated);
-    };
-
     const updateTrainerField = (idx: number, field: string, value: any) => {
         const updated = [...trainers];
         updated[idx] = { ...updated[idx], [field]: value };
@@ -231,7 +182,6 @@ export const EditCourseRunView: React.FC = () => {
         if (!courseAdminEmail.trim()) missing.push('Course Admin Email');
         if (!courseVacancy) missing.push('Course Vacancy');
 
-        if (showSessions && sessions.length === 0) missing.push('At least one Session');
         if (showTrainer && !trainers[0]?.trainerIdNumber?.trim()) missing.push('Trainer ID Number');
 
         if (missing.length > 0) {
@@ -258,7 +208,6 @@ export const EditCourseRunView: React.FC = () => {
 
             const body: any = {
                 courseReferenceNumber,
-                sequenceNumber,
                 openingRegistrationDate,
                 closingRegistrationDate,
                 courseStartDate,
@@ -283,26 +232,6 @@ export const EditCourseRunView: React.FC = () => {
                 fileName: '',
                 fileContent: '',
             };
-
-            if (showSessions && sessions.length > 0) {
-                body.sessions = sessions.map(s => ({
-                    startDate: s.startDate.replace(/-/g, ''),
-                    endDate: s.endDate.replace(/-/g, ''),
-                    startTime: s.startTime + ':00',
-                    endTime: s.endTime + ':00',
-                    modeOfTraining: s.modeOfTraining,
-                    venue: {
-                        floor: s.useDefaultVenue ? floor : s.floor,
-                        unit: s.useDefaultVenue ? unit : s.unit,
-                        postalCode: s.useDefaultVenue ? postalCode : s.postalCode,
-                        room: s.useDefaultVenue ? room : s.room,
-                        wheelChairAccess: true,
-                        ...(block && { block }),
-                        ...(street && { street }),
-                        ...(building && { building }),
-                    },
-                }));
-            }
 
             if (showTrainer && trainers[0]?.trainerIdNumber?.trim()) {
                 body.linkCourseRunTrainer = [{
@@ -450,15 +379,6 @@ export const EditCourseRunView: React.FC = () => {
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Course Title</label>
                                 <input type="text" value={courseTitle} readOnly className={readonlyClasses} />
                             </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Sequence Number</label>
-                                <input
-                                    type="number" min="0"
-                                    value={sequenceNumber}
-                                    onChange={e => setSequenceNumber(parseInt(e.target.value) || 0)}
-                                    className={inputClasses}
-                                />
-                            </div>
                         </div>
                     </FormSection>
 
@@ -552,77 +472,6 @@ export const EditCourseRunView: React.FC = () => {
                             </div>
                         </div>
                     </FormSection>
-
-                    {/* Optional: Sessions */}
-                    <Card className="p-6">
-                        <div className="flex items-center justify-between mb-4">
-                            <h3 className="text-xl font-bold dark:text-white">Sessions (Optional)</h3>
-                            <label className="flex items-center gap-2 cursor-pointer">
-                                <input
-                                    type="checkbox"
-                                    checked={showSessions}
-                                    onChange={e => { setShowSessions(e.target.checked); if (!e.target.checked) { setSessions([]); setSessionCount(0); } }}
-                                    className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                                />
-                                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Update Sessions</span>
-                            </label>
-                        </div>
-                        {showSessions && (
-                            <div className="space-y-4">
-                                <div className="flex items-center gap-3">
-                                    <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Session Count:</label>
-                                    <div className="flex items-center gap-2">
-                                        <button onClick={() => updateSessionCount(Math.max(0, sessionCount - 1))} className="w-8 h-8 flex items-center justify-center bg-gray-200 dark:bg-gray-700 rounded-full text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600">-</button>
-                                        <span className="w-8 text-center font-medium dark:text-white">{sessionCount}</span>
-                                        <button onClick={() => updateSessionCount(sessionCount + 1)} className="w-8 h-8 flex items-center justify-center bg-gray-200 dark:bg-gray-700 rounded-full text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600">+</button>
-                                    </div>
-                                </div>
-                                {sessions.map((session, idx) => (
-                                    <Card key={idx} className="p-4 border dark:border-gray-700">
-                                        <h4 className="font-semibold mb-3 dark:text-white">Session {idx + 1}</h4>
-                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                                            <div>
-                                                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Mode of Training</label>
-                                                <select value={session.modeOfTraining} onChange={e => updateSessionField(idx, 'modeOfTraining', e.target.value)} className={inputClasses}>
-                                                    {modeOfTrainingOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                                                </select>
-                                            </div>
-                                            <div>
-                                                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Start Date</label>
-                                                <input type="date" value={session.startDate} onChange={e => updateSessionField(idx, 'startDate', e.target.value)} className={inputClasses} />
-                                            </div>
-                                            <div>
-                                                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">End Date</label>
-                                                <input type="date" value={session.endDate} onChange={e => updateSessionField(idx, 'endDate', e.target.value)} className={inputClasses} />
-                                            </div>
-                                            <div>
-                                                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Start Time</label>
-                                                <input type="time" value={session.startTime} onChange={e => updateSessionField(idx, 'startTime', e.target.value)} className={inputClasses} />
-                                            </div>
-                                            <div>
-                                                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">End Time</label>
-                                                <input type="time" value={session.endTime} onChange={e => updateSessionField(idx, 'endTime', e.target.value)} className={inputClasses} />
-                                            </div>
-                                            <div className="flex items-center gap-2 pt-5">
-                                                <input type="checkbox" id={`default-venue-${idx}`} checked={session.useDefaultVenue} onChange={e => updateSessionField(idx, 'useDefaultVenue', e.target.checked)} className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
-                                                <label htmlFor={`default-venue-${idx}`} className="text-sm text-gray-700 dark:text-gray-300">Use primary venue</label>
-                                            </div>
-                                        </div>
-                                        {!session.useDefaultVenue && (
-                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3">
-                                                {(['floor', 'unit', 'postalCode', 'room'] as const).map(f => (
-                                                    <div key={f}>
-                                                        <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1 capitalize">{f}</label>
-                                                        <input type="text" value={session[f]} onChange={e => updateSessionField(idx, f, e.target.value)} className={inputClasses} />
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        )}
-                                    </Card>
-                                ))}
-                            </div>
-                        )}
-                    </Card>
 
                     {/* Optional: Trainer */}
                     <Card className="p-6">
