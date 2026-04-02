@@ -3,6 +3,7 @@ import Header from '../components/Header';
 import Footer from '../components/Footer';
 import { Icon, IconName } from '../components/ui/Icon';
 import FinanceManagementView from '../components/training-provider/FinanceManagementView';
+import AllCourseRunsView from '../components/finance/AllCourseRunsView';
 import {
   SearchGrantView,
   ViewGrantStatusView,
@@ -14,8 +15,7 @@ import { ProfilePage } from '../components/ProfilePage';
 import { useLms } from '@contexts/LmsContext';
 import { View } from '@app-types/index';
 
-
-type FinancePage = 'dashboard' | 'searchGrant' | 'viewGrant' | 'claimCheck';
+type FinancePage = 'dashboard' | 'allCourseRuns' | 'searchGrant' | 'viewGrant' | 'claimCheck';
 
 const FinanceLayout: React.FC = () => {
   const { currentView } = useLms();
@@ -39,6 +39,8 @@ const FinanceLayout: React.FC = () => {
 
   const renderContent = () => {
     switch (page) {
+      case 'allCourseRuns':
+        return <AllCourseRunsView />;
       case 'searchGrant':
         return <SearchGrantView />;
       case 'viewGrant':
@@ -52,6 +54,7 @@ const FinanceLayout: React.FC = () => {
 
   const getPageTitle = () => {
     switch (page) {
+      case 'allCourseRuns': return 'All Course Runs';
       case 'searchGrant': return 'Search Grant';
       case 'viewGrant': return 'View Grant';
       case 'claimCheck': return 'Check / Add Claim';
@@ -75,6 +78,18 @@ const FinanceLayout: React.FC = () => {
         >
           <Icon name={IconName.DollarSign} className={`w-[18px] h-[18px] flex-shrink-0 transition-colors ${page === 'dashboard' ? 'text-primary' : 'text-gray-400 dark:text-gray-500'}`} />
           <span className="truncate">Finance Management</span>
+        </a>
+
+        {/* All Course Runs */}
+        <a
+          href="#"
+          onClick={(e) => { e.preventDefault(); navigateTo('allCourseRuns'); }}
+          className={`group flex items-center gap-3 w-full rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-150 ${
+            page === 'allCourseRuns' ? activeClass : inactiveClass
+          }`}
+        >
+          <Icon name={IconName.FileText} className={`w-[18px] h-[18px] flex-shrink-0 transition-colors ${page === 'allCourseRuns' ? 'text-primary' : 'text-gray-400 dark:text-gray-500'}`} />
+          <span className="truncate">All Course Runs</span>
         </a>
 
         {/* Grant Management — collapsible */}
