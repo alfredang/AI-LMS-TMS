@@ -19,7 +19,8 @@ export enum View {
   FeedbackEmailTemplate = 'feedbackEmailTemplate',
   PasswordResetEmailTemplate = 'passwordResetEmailTemplate',
   FinanceManagement = 'financeManagement',
-  BillingHistory = 'billingHistory'
+  BillingHistory = 'billingHistory',
+  CertificateHistory = 'certificateHistory'
 }
 
 export enum UserRole {

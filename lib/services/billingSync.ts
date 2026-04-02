@@ -255,21 +255,34 @@ export async function syncLearnerFromSSG(userId: string): Promise<void> {
       return;
     }
 
-    const rawRecords = enrolmentResponse?.data ?? [];
-    if (rawRecords.length === 0) {
+    const rawWrapped = enrolmentResponse?.data ?? [];
+    if (rawWrapped.length === 0) {
       console.log('[billingSync] SSG returned 0 enrolment records');
       return;
     }
 
+    // Unwrap { enrolment: { ... } } wrapper if present
+    const rawRecords = rawWrapped.map(r => (r.enrolment ?? r) as Record<string, unknown>);
+
     // Filter to our training partner only
     const records = rawRecords.filter(r => {
-      const recordTp = (r.trainingPartner ?? r) as Record<string, unknown>;
+      const recordTp = (r.trainingPartner ?? {}) as Record<string, unknown>;
       return (recordTp.code as string) === ourCode;
     });
 
     console.log(`[billingSync] ${records.length} enrolments from our TP (${rawRecords.length} total from SSG)`);
 
-    // 4. Upsert ssg_enrolments + enrich enrollment
+    // 4. Find which SSG enrolments exist in local DB
+    const ssgRefs = records.map(r => r.referenceNumber as string).filter(Boolean);
+    const localResult = ssgRefs.length > 0
+      ? await pool.query(
+          `SELECT enrolment_id FROM enrollment WHERE enrolment_id = ANY($1)`,
+          [ssgRefs]
+        )
+      : { rows: [] };
+    const localEnrolmentIds = new Set(localResult.rows.map((r: { enrolment_id: string }) => r.enrolment_id));
+
+    // 4b. Upsert ssg_enrolments + enrich only local enrollments
     const enrolmentRefs: string[] = [];
 
     for (const record of records) {
@@ -277,18 +290,23 @@ export async function syncLearnerFromSSG(userId: string): Promise<void> {
       if (!ref) continue;
 
       try {
+        // Always upsert to ssg_enrolments (staging table)
         await upsertSsgEnrolment(record);
-        await enrichLocalEnrollment(ref, record);
-        enrolmentRefs.push(ref);
+
+        // Only enrich + fetch grants for enrolments that exist locally
+        if (localEnrolmentIds.has(ref)) {
+          await enrichLocalEnrollment(ref, record);
+          enrolmentRefs.push(ref);
+        }
       } catch (err) {
         console.warn(`[billingSync] Failed to upsert enrolment ${ref}:`, (err as Error).message);
       }
     }
 
-    console.log(`[billingSync] Upserted ${enrolmentRefs.length} enrolments, fetching grants...`);
+    console.log(`[billingSync] ${records.length} from SSG, ${enrolmentRefs.length} matched local DB, fetching grants for all ${ssgRefs.length}...`);
 
-    // 5. Fetch grants for each enrolment (in parallel)
-    const grantPromises = enrolmentRefs.map(async (ref) => {
+    // 5. Fetch grants for ALL SSG enrolments (not just local matches) and upsert to ssg_grants
+    const grantPromises = ssgRefs.map(async (ref) => {
       try {
         const grantPayload = {
           grants: {

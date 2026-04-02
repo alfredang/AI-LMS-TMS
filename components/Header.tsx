@@ -81,7 +81,10 @@ const ProfileDropdown: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const profileLabel = role === UserRole.TrainingProvider ? 'Company Setting' : 'My Profile';
   const menuItems = [
     { label: profileLabel, icon: IconName.MyAccount, view: View.Profile },
-    ...(role === UserRole.Learner ? [{ label: 'Billing History', icon: IconName.DollarSign, view: View.BillingHistory }] : []),
+    ...(role === UserRole.Learner ? [
+      { label: 'Billing History', icon: IconName.DollarSign, view: View.BillingHistory },
+      { label: 'Certificate History', icon: IconName.Award, view: View.CertificateHistory },
+    ] : []),
     { label: 'Help and Support', icon: IconName.Help, view: View.HelpAndSupport },
   ];
 
@@ -158,7 +161,6 @@ const Header: React.FC = () => {
 
   const navConfig = {
     [UserRole.Learner]: [
-      { view: View.Courses, label: 'My Courses', icon: IconName.Courses },
       { view: View.Courses, label: 'Certificate Delivery', icon: IconName.Award, href: 'https://goo.gl/R2eumq' },
       { view: View.Courses, label: 'TRAQOM Survey', icon: IconName.ClipboardCheck, href: 'https://ssgtraqom.qualtrics.com/jfe/form/SV_3K9i7rTJ9OLsauW?Q_CHL=qr' },
     ],

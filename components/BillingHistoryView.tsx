@@ -179,7 +179,6 @@ const BillingHistoryView: React.FC = () => {
                     <th className="text-right py-3 px-4 font-semibold text-subtle">Nett Payable</th>
                     <th className="text-center py-3 px-4 font-semibold text-subtle">Payment</th>
                     <th className="text-center py-3 px-4 font-semibold text-subtle">Status</th>
-                    <th className="text-center py-3 px-4 font-semibold text-subtle">Invoice</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -233,21 +232,6 @@ const BillingHistoryView: React.FC = () => {
                           }`}>
                             {record.enrolment_status || 'Unknown'}
                           </span>
-                        </td>
-                        <td className="py-3 px-4 text-center">
-                          {record.pro_forma_url ? (
-                            <a
-                              href={record.pro_forma_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center space-x-1 px-3 py-1.5 rounded-md text-xs font-semibold bg-primary text-white hover:bg-primary-hover transition-colors"
-                            >
-                              <Icon name={IconName.Download} className="w-3.5 h-3.5" />
-                              <span>Download</span>
-                            </a>
-                          ) : (
-                            <span className="text-xs text-subtle">-</span>
-                          )}
                         </td>
                       </tr>
                     );

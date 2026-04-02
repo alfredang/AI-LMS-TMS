@@ -155,11 +155,11 @@ export async function syncEnrolmentToDB(
   if (courseRunRow.rows.length === 0) {
     const newId = crypto.randomUUID();
     const ins = await client.query(
-      `INSERT INTO course_run (id, course_id, course_run_id, class_status, created_at, updated_at)
-       VALUES ($1, $2, $3, 'Confirmed', NOW(), NOW())
+      `INSERT INTO course_run (id, course_id, course_run_id, class_status, start_date, end_date, created_at, updated_at)
+       VALUES ($1, $2, $3, 'Confirmed', $4::date, $5::date, NOW(), NOW())
        ON CONFLICT (course_id, course_run_id) DO NOTHING
        RETURNING id`,
-      [newId, courseId, courseRunId]
+      [newId, courseId, courseRunId, run.startDate || null, run.endDate || null]
     );
     if (ins.rows.length > 0) {
       courseRunUuid = ins.rows[0].id;
@@ -172,6 +172,16 @@ export async function syncEnrolmentToDB(
     }
   } else {
     courseRunUuid = courseRunRow.rows[0].id;
+    // Backfill dates if missing
+    if (run.startDate || run.endDate) {
+      await client.query(
+        `UPDATE course_run SET
+           start_date = COALESCE(start_date, $2::date),
+           end_date = COALESCE(end_date, $3::date)
+         WHERE id = $1 AND (start_date IS NULL OR end_date IS NULL)`,
+        [courseRunUuid, run.startDate || null, run.endDate || null]
+      );
+    }
   }
 
   if (!courseRunUuid!) return 'skipped';
