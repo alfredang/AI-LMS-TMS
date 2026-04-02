@@ -63,6 +63,7 @@ export enum AdminPage {
   UploadEnrolments = 'uploadEnrolments',
   SearchCourseRuns = 'searchCourseRuns',
   ViewCourseRun = 'viewCourseRun',
+  EditCourseRun = 'editCourseRun',
   SearchAssessments = 'searchAssessments',
   ViewAssessment = 'viewAssessment',
   CancelEnrolment = 'cancelEnrolment',

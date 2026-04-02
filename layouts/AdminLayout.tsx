@@ -50,6 +50,7 @@ import {
   CourseSessionAttendanceView,
   CourseSessionsView
 } from '../components/admin/GrantManagementViews';
+import EditCourseRunView from '../components/admin/EditCourseRunView';
 import { CourseRunView } from '../components/admin/CourseRunView';
 import { UploadDirectApplicationView, ViewDirectApplicationView, UpdateDirectApplicationView } from '../components/admin/DirectApplicationViews';
 import { BulkUploadEnrolmentView } from '../components/admin/BulkEnrolmentViews';
@@ -133,6 +134,7 @@ const PAGE_LABELS: Partial<Record<AdminPage, string>> = {
   [AdminPage.SearchCourseRuns]: 'Search Course Runs',
   [AdminPage.SearchAssessments]: 'Search Assessments',
   [AdminPage.CourseRun]: 'Course Run',
+  [AdminPage.EditCourseRun]: 'Edit Course Run',
   [AdminPage.CancelEnrolment]: 'Cancel Enrolment',
   [AdminPage.UpdateEnrolment]: 'Update Enrolment',
   [AdminPage.DeleteCourseRun]: 'Delete Course Run',
@@ -248,6 +250,8 @@ const AdminLayout: React.FC = () => {
         return <SearchCourseRunsView />;
       case AdminPage.ViewCourseRun:
         return <ViewCourseRunView />;
+      case AdminPage.EditCourseRun:
+        return <EditCourseRunView />;
       case AdminPage.SearchAssessments:
         return <SearchAssessmentsView />;
       case AdminPage.ViewAssessment:

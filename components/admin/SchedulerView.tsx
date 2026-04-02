@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
+import { useLms } from '@contexts/LmsContext';
+import { AdminPage } from '@app-types';
 
 interface SchedulerTask {
     id: string;
@@ -88,9 +90,18 @@ const StatusBadge: React.FC<{ status: string | null }> = ({ status }) => {
     );
 };
 
+// ── Task ID → Log Page mapping ────────────────────────────────────────────────
+
+const TASK_LOG_PAGE: Record<string, AdminPage> = {
+    auto_create_learners:       AdminPage.AutomationLogs,
+    auto_create_trainer_folders: AdminPage.TrainerFolderLogs,
+    sync_course_run_dates:      AdminPage.CourseRunDateSyncLogs,
+};
+
 // ── Main Component ────────────────────────────────────────────────────────────
 
 export const SchedulerView: React.FC = () => {
+    const { setAdminPage } = useLms();
     const [tasks, setTasks] = useState<SchedulerTask[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -201,6 +212,12 @@ export const SchedulerView: React.FC = () => {
             });
             const data = await res.json();
             if (data.success) {
+                // Navigate to the log page if one exists for this task
+                const logPage = TASK_LOG_PAGE[task.id];
+                if (logPage) {
+                    setAdminPage(logPage);
+                    return;
+                }
                 setActionMessage({
                     type: 'success',
                     text: `"${task.name}" executed successfully`,
@@ -396,8 +413,18 @@ export const SchedulerView: React.FC = () => {
                                     </div>
                                 </div>
 
-                                {/* Run Now Button */}
-                                <div className="mt-4 pt-3 border-t border-gray-100 dark:border-gray-700 flex justify-end">
+                                {/* Run Now Button + View Logs link */}
+                                <div className="mt-4 pt-3 border-t border-gray-100 dark:border-gray-700 flex items-center justify-between">
+                                    {TASK_LOG_PAGE[task.id] ? (
+                                        <button
+                                            onClick={() => setAdminPage(TASK_LOG_PAGE[task.id])}
+                                            className="text-xs text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 underline"
+                                        >
+                                            View Logs
+                                        </button>
+                                    ) : (
+                                        <span />
+                                    )}
                                     <Button
                                         onClick={() => runNow(task)}
                                         disabled={runningTaskId === task.id}

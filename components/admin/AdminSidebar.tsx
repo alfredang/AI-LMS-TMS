@@ -128,6 +128,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate }) => {
                 <NavItem page={AdminPage.CreateNewClass} label="Create New Class" isSubItem />
                 <NavItem page={AdminPage.SearchCourseRuns} label="Search Course Runs" isSubItem />
                 <NavItem page={AdminPage.ViewCourseRun} label="View Course Run" isSubItem />
+                <NavItem page={AdminPage.EditCourseRun} label="Edit Course Run" isSubItem />
                 <NavItem page={AdminPage.UploadCourseRuns} label="Upload Course Runs" isSubItem />
                 <NavItem page={AdminPage.DeleteCourseRun} label="Delete Course Run" isSubItem />
                 <NavItem page={AdminPage.CourseSessions} label="Course Sessions" isSubItem />
