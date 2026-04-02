@@ -151,6 +151,12 @@ export interface Course {
   assessmentMethods?: AssessmentMethods;
   courseFee?: number;
   taxPercent?: number;
+  scheduleId?: string;
+  courseFeesExcludeGst?: string | number;
+  courseFeesIncludeGst?: string | number;
+  afterNormalFunding?: string | number;
+  afterMcesFunding?: string | number;
+  isUtapEligible?: boolean;
   fundingValidity?: string;
   renewedStatus?: string;
   isLeaderboardEnabled?: boolean;

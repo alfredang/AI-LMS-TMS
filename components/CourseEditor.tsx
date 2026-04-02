@@ -12,6 +12,17 @@ import { getApiUrl } from '@/lib/urlHelpers';
 const inputGhostClasses = (isTitle: boolean) =>
     `flex-grow border border-transparent hover:border-gray-300 dark:hover:border-gray-600 focus:border-gray-300 dark:focus:border-gray-600 rounded-md px-2 py-1 bg-transparent hover:bg-gray-50 dark:hover:bg-gray-800 focus:bg-gray-50 dark:focus:bg-gray-800 focus:outline-none w-full transition-colors dark:text-white ${isTitle ? 'font-bold text-xl' : 'text-base'}`;
 
+const parseNumericInput = (value: unknown) => {
+    if (value === null || value === undefined || value === '') return 0;
+    if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+    const parsed = Number(String(value).replace(/,/g, '').trim());
+    return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const roundCurrency = (value: number) => Math.round(value * 100) / 100;
+
+const formatCurrencyInput = (value: number) => roundCurrency(value).toFixed(2);
+
 
 // Sub-component for an editable Learning Unit (Topic)
 const EditableTopicAccordion: React.FC<{
@@ -238,7 +249,7 @@ const EditableTopicAccordion: React.FC<{
 
 
 const CourseEditor: React.FC = () => {
-    const { editingCourse, setEditingCourse, role, courseEditMode, setCourseEditMode } = useLms();
+    const { editingCourse, setEditingCourse, role, courseEditMode, setCourseEditMode, trainingProviderProfile } = useLms();
 
     if (!editingCourse) {
         return <div className="flex items-center justify-center h-full"><Spinner text="Loading course editor..." /></div>;
@@ -317,6 +328,17 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
 
     const isPracticalPerformanceUrl = !course.practicalPerformanceAssessmentLink || course.practicalPerformanceAssessmentLink.startsWith('http://') || course.practicalPerformanceAssessmentLink.startsWith('https://');
     const [practicalPerformanceInputType, setPracticalPerformanceInputType] = useState<'link' | 'upload'>(isPracticalPerformanceUrl ? 'link' : 'upload');
+
+    const companyNormalFundingRate = trainingProviderProfile?.fundingSettings?.normalFunding ?? 50;
+    const companyMcesFundingRate = trainingProviderProfile?.fundingSettings?.enhancedFunding ?? 20;
+    const companyGstRate = trainingProviderProfile?.fundingSettings?.gstRate ?? 9;
+    const isCompanyGstRegistered = trainingProviderProfile?.fundingSettings?.isGstRegistered ?? true;
+
+    const baseCourseFee = parseNumericInput(course.courseFee);
+    const computedGstAmount = isCompanyGstRegistered ? roundCurrency(baseCourseFee * (companyGstRate / 100)) : 0;
+    const computedCourseFeeIncludeGst = roundCurrency(baseCourseFee + computedGstAmount);
+    const computedAfterNormalFunding = roundCurrency((baseCourseFee * ((100 - companyNormalFundingRate) / 100)) + computedGstAmount);
+    const computedAfterMcesFunding = roundCurrency((baseCourseFee * ((100 - companyNormalFundingRate - companyMcesFundingRate) / 100)) + computedGstAmount);
 
     // Debug logging for mode
     useEffect(() => {
@@ -587,8 +609,15 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                 courseType: course.courseType,
                 learningOutcomes: course.learningOutcomes,
                 isGamified: course.isLeaderboardEnabled || false, // Use isLeaderboardEnabled as gamification
-                courseFee: course.courseFee,
-                taxPercent: (course.taxPercent || 0) / 100, // Divide by 100 to convert percentage to decimal
+                courseFee: baseCourseFee,
+                taxPercent: companyGstRate / 100,
+                scheduleId: course.scheduleId,
+                courseFeesExcludeGst: baseCourseFee,
+                courseFeesIncludeGst: computedCourseFeeIncludeGst,
+                afterNormalFunding: computedAfterNormalFunding,
+                afterMcesFunding: computedAfterMcesFunding,
+                isUtapEligible: course.isUtapEligible || false,
+                renewedStatus: course.renewedStatus,
                 // Include trainer slides URL if it's a link (not upload)
                 trainerSlidesUrl: course.trainerSlidesUrl,
                 lessonPlanUrl: course.lessonPlanUrl || undefined,
@@ -1461,30 +1490,61 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                     {(role === UserRole.Admin) && (
                         <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
                             <h3 className="text-xl font-bold mb-4 dark:text-white">Pricing & Funding</h3>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                                 <div>
-                                    <label htmlFor="courseFee" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Course Fee ($)</label>
-                                    <input type="number" id="courseFee" name="courseFee" value={course.courseFee} onChange={handleCourseChange} className={inputClasses} placeholder="e.g. 500" />
+                                    <label htmlFor="scheduleId" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Schedule ID</label>
+                                    <input type="text" id="scheduleId" name="scheduleId" value={course.scheduleId || ''} onChange={handleCourseChange} className={inputClasses} placeholder="e.g. SCH-001" />
                                 </div>
                                 <div>
-                                    <label htmlFor="taxPercent" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Tax / GST (%)</label>
+                                    <label htmlFor="courseFee" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Course Fee ($)</label>
+                                    <input type="number" inputMode="decimal" id="courseFee" name="courseFee" value={course.courseFee ?? ''} onChange={handleCourseChange} className={inputClasses} placeholder="e.g. 500" />
+                                </div>
+                                <div>
+                                    <label htmlFor="taxPercent" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Tax / GST Rate (%)</label>
                                     <input
-                                        type="number"
+                                        type="text"
                                         id="taxPercent"
                                         name="taxPercent"
-                                        value={course.taxPercent}
-                                        onChange={handleCourseChange}
+                                        value={companyGstRate}
+                                        readOnly
                                         className={inputClasses}
                                         placeholder="e.g. 9"
-                                        min="0"
-                                        step="1"
-                                        onKeyPress={(e) => {
-                                            // Only allow digits
-                                            if (!/[0-9]/.test(e.key) && e.key !== 'Backspace' && e.key !== 'Delete' && e.key !== 'Tab' && e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') {
-                                                e.preventDefault();
-                                            }
-                                        }}
                                     />
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">From Company Setting</p>
+                                </div>
+                                <div>
+                                    <label htmlFor="gstAmount" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">GST ($)</label>
+                                    <input type="text" id="gstAmount" value={formatCurrencyInput(computedGstAmount)} readOnly className={inputClasses} />
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Computed as Course Fee × {companyGstRate}%</p>
+                                </div>
+                                <div>
+                                    <label htmlFor="courseFeesIncludeGst" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Course Fee Incl. GST ($)</label>
+                                    <input type="text" id="courseFeesIncludeGst" value={formatCurrencyInput(computedCourseFeeIncludeGst)} readOnly className={inputClasses} />
+                                </div>
+                                <div>
+                                    <label htmlFor="afterNormalFunding" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">After Normal Funding ($)</label>
+                                    <input type="text" id="afterNormalFunding" value={formatCurrencyInput(computedAfterNormalFunding)} readOnly className={inputClasses} />
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Using Company Setting rate of {companyNormalFundingRate}%</p>
+                                </div>
+                                <div>
+                                    <label htmlFor="afterMcesFunding" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">After MCES Funding ($)</label>
+                                    <input type="text" id="afterMcesFunding" value={formatCurrencyInput(computedAfterMcesFunding)} readOnly className={inputClasses} />
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Using Company Setting rate of {companyMcesFundingRate}%</p>
+                                </div>
+                                <div className="sm:col-span-2 lg:col-span-3">
+                                    <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600">
+                                        <div>
+                                            <p className="font-semibold text-sm text-gray-900 dark:text-white">UTAP Eligible</p>
+                                            <p className="text-xs text-subtle">Mark whether this course is eligible for UTAP funding.</p>
+                                        </div>
+                                        <input
+                                            type="checkbox"
+                                            id="isUtapEligible"
+                                            checked={!!course.isUtapEligible}
+                                            onChange={(e) => setCourse(prev => ({ ...prev, isUtapEligible: e.target.checked }))}
+                                            className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                        />
+                                    </div>
                                 </div>
                             </div>
                         </Card>

@@ -43,6 +43,13 @@ interface CourseData {
   isGamified: boolean;
   courseFee?: number;
   taxPercent?: number;
+  scheduleId?: string;
+  courseFeesExcludeGst?: string | number;
+  courseFeesIncludeGst?: string | number;
+  afterNormalFunding?: string | number;
+  afterMcesFunding?: string | number;
+  isUtapEligible?: boolean;
+  renewedStatus?: string;
   trainerSlidesUrl?: string; // For Google Slides links
   lessonPlanUrl?: string;
   learnerGuideUrl?: string;
@@ -482,14 +489,21 @@ export default async function handler(
           is_gamified = $17,
           course_fee = $18,
           tax_percent = $19,
-          written_assessment_link = COALESCE($20, written_assessment_link),
-          practical_performance_assessment_link = COALESCE($21, practical_performance_assessment_link),
-          courseware_link = COALESCE($22, courseware_link),
-          assessment_record_link = COALESCE($23, assessment_record_link),
-          assessment_summary_record_url = $24,
-          funding_validity = $25,
+          schedule_id = $20,
+          course_fees_exclude_gst = $21,
+          course_fees_include_gst = $22,
+          after_normal_funding = $23,
+          after_mces_funding = $24,
+          is_utap_eligible = $25,
+          renewed_status = $26,
+          written_assessment_link = COALESCE($27, written_assessment_link),
+          practical_performance_assessment_link = COALESCE($28, practical_performance_assessment_link),
+          courseware_link = COALESCE($29, courseware_link),
+          assessment_record_link = COALESCE($30, assessment_record_link),
+          assessment_summary_record_url = $31,
+          funding_validity = $32,
           updated_at = now()
-        WHERE id = $26
+        WHERE id = $33
         RETURNING id
       `;
 
@@ -513,6 +527,13 @@ export default async function handler(
         courseData.isGamified,
         courseData.courseFee || null,
         courseData.taxPercent || null,
+        courseData.scheduleId || null,
+        courseData.courseFeesExcludeGst || null,
+        courseData.courseFeesIncludeGst || null,
+        courseData.afterNormalFunding || null,
+        courseData.afterMcesFunding || null,
+        !!courseData.isUtapEligible,
+        courseData.renewedStatus || null,
         fileUrls.writtenAssessmentLink || courseData.writtenAssessmentLink || null,
         fileUrls.practicalPerformanceAssessmentLink || courseData.practicalPerformanceAssessmentLink || null,
         courseData.courseLink || null,

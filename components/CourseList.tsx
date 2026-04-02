@@ -36,8 +36,51 @@ const DetailRow: React.FC<{ label: string; value: React.ReactNode }> = ({ label,
     </div>
 );
 
+const HeaderCell: React.FC<{ shortLabel: string; fullLabel?: string }> = ({ shortLabel, fullLabel }) => (
+    <span className="inline-block whitespace-nowrap" title={fullLabel || shortLabel}>
+        {shortLabel}
+    </span>
+);
+
+const formatMoney = (value?: string | number | null) => {
+    if (value === null || value === undefined || value === '') return '—';
+    const numeric = typeof value === 'number' ? value : Number(String(value).replace(/,/g, ''));
+    if (Number.isNaN(numeric)) return String(value);
+    return new Intl.NumberFormat('en-SG', {
+        style: 'currency',
+        currency: 'SGD',
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+    }).format(numeric);
+};
+
+const formatPercent = (value?: string | number | null) => {
+    if (value === null || value === undefined || value === '') return '—';
+    const numeric = typeof value === 'number' ? value : Number(String(value).replace(/%/g, '').trim());
+    if (Number.isNaN(numeric)) return String(value);
+    return `${numeric}%`;
+};
+
+const parseMoney = (value?: string | number | null) => {
+    if (value === null || value === undefined || value === '') return null;
+    const numeric = typeof value === 'number' ? value : Number(String(value).replace(/,/g, ''));
+    return Number.isNaN(numeric) ? null : numeric;
+};
+
+const computeGstAmount = (
+    courseFee?: string | number | null,
+    gstRate?: number | null,
+    isGstRegistered?: boolean
+) => {
+    if (!isGstRegistered) return 0;
+    const fee = parseMoney(courseFee);
+    const rate = typeof gstRate === 'number' ? gstRate : null;
+    if (fee === null || rate === null) return null;
+    return (fee * rate) / 100;
+};
+
 const ManagementCourseList: React.FC = () => {
-    const { role, currentUser, setSelectedCourse: setContextSelectedCourse, setEditingCourse, setCourseEditMode, loadCourseData, setAdminPage, courseListPage, setCourseListPage } = useLms();
+    const { role, currentUser, trainingProviderProfile, setSelectedCourse: setContextSelectedCourse, setEditingCourse, setCourseEditMode, loadCourseData, setAdminPage, courseListPage, setCourseListPage } = useLms();
 
     // Hooks for different user roles
     const { courses: learnerCourses, loading: learnerLoading, error: learnerError } = useCourses(
@@ -97,6 +140,8 @@ const ManagementCourseList: React.FC = () => {
 
     // Determine which courses to use based on role
     let relevantCourses, currentLoading, currentError;
+    const companyGstRate = trainingProviderProfile?.fundingSettings?.gstRate ?? 9;
+    const isCompanyGstRegistered = trainingProviderProfile?.fundingSettings?.isGstRegistered ?? true;
 
     switch (role) {
         case UserRole.Trainer:
@@ -393,6 +438,25 @@ const ManagementCourseList: React.FC = () => {
                                         </span>
                                     </div>
                                 } />
+                                {(role === UserRole.Admin || role === UserRole.TrainingProvider) && (
+                                    <>
+                                        <DetailRow label="Schedule ID" value={course.scheduleId || '—'} />
+                                        <DetailRow label="Course Fee" value={formatMoney(course.courseFeesExcludeGst)} />
+                                        <DetailRow label="GST" value={formatMoney(computeGstAmount(course.courseFeesExcludeGst, companyGstRate, isCompanyGstRegistered))} />
+                                        <DetailRow label="Course Fee (incl. GST)" value={formatMoney(course.courseFeesIncludeGst)} />
+                                        <DetailRow label="After Normal Funding" value={formatMoney(course.afterNormalFunding)} />
+                                        <DetailRow label="After MCES Funding" value={formatMoney(course.afterMcesFunding)} />
+                                        <DetailRow label="UTAP" value={
+                                            <input
+                                                type="checkbox"
+                                                checked={!!course.isUtapEligible}
+                                                readOnly
+                                                disabled
+                                                className="h-4 w-4 rounded border-gray-300 text-blue-600 disabled:opacity-100 disabled:cursor-default"
+                                            />
+                                        } />
+                                    </>
+                                )}
                                 {course.startDate && role !== UserRole.Developer && (
                                     <DetailRow label="Start Date" value={
                                         new Date(course.startDate).toLocaleDateString('en-SG', {
@@ -430,22 +494,43 @@ const ManagementCourseList: React.FC = () => {
             <table className="min-w-full divide-y divide-default">
                 <thead className="bg-surface-elevated">
                     <tr>
-                        <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-on-surface-secondary uppercase tracking-wider">Course</th>
-                        <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-on-surface-secondary uppercase tracking-wider">Types</th>
-                        <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-on-surface-secondary uppercase tracking-wider">Duration</th>
+                        <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-on-surface-secondary uppercase tracking-wider"><HeaderCell shortLabel="Course" /></th>
+                        <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-on-surface-secondary uppercase tracking-wider"><HeaderCell shortLabel="Types" /></th>
+                        <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-on-surface-secondary uppercase tracking-wider"><HeaderCell shortLabel="Duration" /></th>
                         {(role === UserRole.Admin || role === UserRole.TrainingProvider) && (
-                            <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-on-surface-secondary uppercase tracking-wider">Validity</th>
+                            <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-on-surface-secondary uppercase tracking-wider"><HeaderCell shortLabel="Schedule ID" /></th>
                         )}
                         {(role === UserRole.Admin || role === UserRole.TrainingProvider) && (
-                            <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-on-surface-secondary uppercase tracking-wider">Trainers</th>
+                            <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-on-surface-secondary uppercase tracking-wider"><HeaderCell shortLabel="Course Fee" /></th>
+                        )}
+                        {(role === UserRole.Admin || role === UserRole.TrainingProvider) && (
+                            <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-on-surface-secondary uppercase tracking-wider"><HeaderCell shortLabel="GST" /></th>
+                        )}
+                        {(role === UserRole.Admin || role === UserRole.TrainingProvider) && (
+                            <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-on-surface-secondary uppercase tracking-wider"><HeaderCell shortLabel="Fee incl. GST" fullLabel="Course Fee (Include GST)" /></th>
+                        )}
+                        {(role === UserRole.Admin || role === UserRole.TrainingProvider) && (
+                            <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-on-surface-secondary uppercase tracking-wider"><HeaderCell shortLabel="Normal Funding" fullLabel="After Normal Funding" /></th>
+                        )}
+                        {(role === UserRole.Admin || role === UserRole.TrainingProvider) && (
+                            <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-on-surface-secondary uppercase tracking-wider"><HeaderCell shortLabel="MCES Funding" fullLabel="After MCES Funding" /></th>
+                        )}
+                        {(role === UserRole.Admin || role === UserRole.TrainingProvider) && (
+                            <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-on-surface-secondary uppercase tracking-wider"><HeaderCell shortLabel="UTAP" /></th>
+                        )}
+                        {(role === UserRole.Admin || role === UserRole.TrainingProvider) && (
+                            <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-on-surface-secondary uppercase tracking-wider"><HeaderCell shortLabel="Validity" /></th>
+                        )}
+                        {(role === UserRole.Admin || role === UserRole.TrainingProvider) && (
+                            <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-on-surface-secondary uppercase tracking-wider"><HeaderCell shortLabel="Trainers" /></th>
                         )}
                         {role === UserRole.Trainer && (
-                            <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-on-surface-secondary uppercase tracking-wider">Course Run ID</th>
+                            <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-on-surface-secondary uppercase tracking-wider"><HeaderCell shortLabel="Course Run ID" /></th>
                         )}
                         {(role !== UserRole.Developer && role !== UserRole.Admin && role !== UserRole.TrainingProvider) && (
-                            <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-on-surface-secondary uppercase tracking-wider">Start Date</th>
+                            <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-on-surface-secondary uppercase tracking-wider"><HeaderCell shortLabel="Start Date" /></th>
                         )}
-                        <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-on-surface-secondary uppercase tracking-wider">Actions</th>
+                        <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-on-surface-secondary uppercase tracking-wider"><HeaderCell shortLabel="Actions" /></th>
                     </tr>
                 </thead>
                 <tbody className="bg-surface divide-y divide-default">
@@ -480,6 +565,48 @@ const ManagementCourseList: React.FC = () => {
                                     <div>{totalHours} Hours</div>
                                     <div className="text-xs">({course.trainingHours}T + {course.assessmentHours}A)</div>
                                 </td>
+                                {(role === UserRole.Admin || role === UserRole.TrainingProvider) && (
+                                    <td className="px-4 py-4 whitespace-nowrap text-sm text-on-surface-secondary">
+                                        {course.scheduleId || '—'}
+                                    </td>
+                                )}
+                                {(role === UserRole.Admin || role === UserRole.TrainingProvider) && (
+                                    <td className="px-4 py-4 whitespace-nowrap text-sm text-on-surface-secondary">
+                                        {formatMoney(course.courseFeesExcludeGst)}
+                                    </td>
+                                )}
+                                {(role === UserRole.Admin || role === UserRole.TrainingProvider) && (
+                                    <td className="px-4 py-4 whitespace-nowrap text-sm text-on-surface-secondary">
+                                        {formatMoney(computeGstAmount(course.courseFeesExcludeGst, companyGstRate, isCompanyGstRegistered))}
+                                    </td>
+                                )}
+                                {(role === UserRole.Admin || role === UserRole.TrainingProvider) && (
+                                    <td className="px-4 py-4 whitespace-nowrap text-sm text-on-surface-secondary">
+                                        {formatMoney(course.courseFeesIncludeGst)}
+                                    </td>
+                                )}
+                                {(role === UserRole.Admin || role === UserRole.TrainingProvider) && (
+                                    <td className="px-4 py-4 whitespace-nowrap text-sm text-on-surface-secondary">
+                                        {formatMoney(course.afterNormalFunding)}
+                                    </td>
+                                )}
+                                {(role === UserRole.Admin || role === UserRole.TrainingProvider) && (
+                                    <td className="px-4 py-4 whitespace-nowrap text-sm text-on-surface-secondary">
+                                        {formatMoney(course.afterMcesFunding)}
+                                    </td>
+                                )}
+                                {(role === UserRole.Admin || role === UserRole.TrainingProvider) && (
+                                    <td className="px-4 py-4 whitespace-nowrap text-sm text-on-surface-secondary">
+                                        <input
+                                            type="checkbox"
+                                            checked={!!course.isUtapEligible}
+                                            readOnly
+                                            disabled
+                                            className="h-4 w-4 rounded border-gray-300 text-blue-600 disabled:opacity-100 disabled:cursor-default"
+                                            aria-label={`${course.title} UTAP eligible`}
+                                        />
+                                    </td>
+                                )}
                                 {(role === UserRole.Admin || role === UserRole.TrainingProvider) && (
                                     <td className="px-4 py-4 whitespace-nowrap text-sm text-on-surface-secondary">
                                         {course.fundingValidity || '—'}
