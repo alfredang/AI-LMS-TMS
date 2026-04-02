@@ -7,8 +7,9 @@ import {
   SearchGrantView,
   ViewGrantStatusView,
 } from '../components/admin/GrantManagementViews';
+import ClaimCheckView from '../components/training-provider/ClaimCheckView';
 
-type FinancePage = 'dashboard' | 'searchGrant' | 'viewGrant';
+type FinancePage = 'dashboard' | 'searchGrant' | 'viewGrant' | 'claimCheck';
 
 const FinanceLayout: React.FC = () => {
   const [page, setPage] = useState<FinancePage>('dashboard');
@@ -35,6 +36,8 @@ const FinanceLayout: React.FC = () => {
         return <SearchGrantView />;
       case 'viewGrant':
         return <ViewGrantStatusView />;
+      case 'claimCheck':
+        return <ClaimCheckView />;
       default:
         return <FinanceManagementView />;
     }
@@ -44,6 +47,7 @@ const FinanceLayout: React.FC = () => {
     switch (page) {
       case 'searchGrant': return 'Search Grant';
       case 'viewGrant': return 'View Grant';
+      case 'claimCheck': return 'Check / Add Claim';
       default: return 'Finance Management';
     }
   };
@@ -103,6 +107,20 @@ const FinanceLayout: React.FC = () => {
               </a>
             </div>
           )}
+        </div>
+
+        {/* Claim Management */}
+        <div className="pt-3">
+          <a
+            href="#"
+            onClick={(e) => { e.preventDefault(); navigateTo('claimCheck'); }}
+            className={`group flex items-center gap-3 w-full rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-150 ${
+              page === 'claimCheck' ? activeClass : inactiveClass
+            }`}
+          >
+            <Icon name={IconName.ClipboardCheck} className={`w-[18px] h-[18px] flex-shrink-0 transition-colors ${page === 'claimCheck' ? 'text-primary' : 'text-gray-400 dark:text-gray-500'}`} />
+            <span className="truncate">Check / Add Claim</span>
+          </a>
         </div>
       </div>
     </div>
