@@ -41,7 +41,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     if (role === 'learner') {
       profileData = await getLearnerProfile(userId);
-    } else if (role === 'admin') {
+    } else if (role === 'admin' || role === 'finance') {
       profileData = await getAdminProfile(userId);
     } else if (role === 'trainer') {
       profileData = await getTrainerProfile(userId);
