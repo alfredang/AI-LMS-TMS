@@ -250,17 +250,28 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate }) => {
             </NavSection>
 
             <NavSection title="Useful Links" isOpen={openSections.usefulLinks} onToggle={() => toggleSection('usefulLinks')}>
-                <a
-                    href="https://alfredang.github.io/ssgwsqprocess/index.html"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center rounded-md px-3 py-2 text-sm font-medium transition-colors pl-8 text-gray-700 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-slate-700 dark:hover:text-white"
-                >
-                    SSG Process Steps
-                    <svg className="w-3 h-3 ml-1.5 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                    </svg>
-                </a>
+                {[
+                    { label: 'SSG Process Steps', href: 'https://alfredang.github.io/ssgwsqprocess/index.html' },
+                    { label: 'TPGateway', href: 'https://www.tpgateway.gov.sg/' },
+                    { label: 'MySkillsFuture Portal', href: 'https://www.myskillsfuture.gov.sg/content/portal/en/index.html' },
+                    { label: 'SkillsFuture for Business', href: 'https://skillsfuture.gobusiness.gov.sg/' },
+                    { label: 'Skills Framework', href: 'https://www.tpgateway.gov.sg/plan-courses/skills-framework' },
+                    { label: 'SSG Circular', href: 'https://www.tpgateway.gov.sg/resources/announcements-and-circulars' },
+                    { label: 'Corppass', href: 'https://www.corppass.gov.sg/portal' },
+                ].map(({ label, href }) => (
+                    <a
+                        key={label}
+                        href={href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center rounded-md px-3 py-2 text-sm font-medium transition-colors pl-8 text-gray-700 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-slate-700 dark:hover:text-white"
+                    >
+                        {label}
+                        <svg className="w-3 h-3 ml-1.5 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                        </svg>
+                    </a>
+                ))}
                 {USEFUL_LINKS.map(({ key, label }) => {
                     const url = (trainingProviderProfile?.integrations as any)?.[key];
                     if (!url) return null;
