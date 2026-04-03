@@ -1,5 +1,4 @@
 import pool from './db';
-import { executeTool } from './nemo-tools';
 
 const OPENCLAW_URL = process.env.OPENCLAW_GATEWAY_URL;
 const OPENCLAW_GATEWAY_TOKEN = process.env.OPENCLAW_GATEWAY_TOKEN;
@@ -60,27 +59,16 @@ async function getCompanyOpenClawConfig(userId?: string): Promise<{ mode: string
 }
 
 export interface ChatMessage {
-  role: 'system' | 'user' | 'assistant' | 'tool';
-  content: string | null;
-  tool_calls?: ToolCall[];
-  tool_call_id?: string;
+  role: 'system' | 'user' | 'assistant';
+  content: string;
 }
-
-interface ToolCall {
-  id: string;
-  type: 'function';
-  function: { name: string; arguments: string };
-}
-
-const MAX_TOOL_ROUNDS = 5;
 
 export async function sendToOpenClaw(opts: {
   messages: ChatMessage[];
-  tools?: any[];
   timeoutMs?: number;
   userId?: string;
 }): Promise<string> {
-  const { messages, tools, timeoutMs = 120000, userId } = opts;
+  const { messages, timeoutMs = 120000, userId } = opts;
   const token = (await getCompanyOpenClawGatewayToken(userId)) || OPENCLAW_GATEWAY_TOKEN;
   const config = await getCompanyOpenClawConfig(userId);
   const baseUrl = (config.mode === 'local' ? config.localGatewayUrl : config.gatewayUrl) || OPENCLAW_URL;
@@ -94,96 +82,49 @@ export async function sendToOpenClaw(opts: {
   }
 
   const url = `${baseUrl.replace(/\/$/, '')}/v1/chat/completions`;
-  const conversationMessages = [...messages];
 
-  for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
-    const requestBody: any = {
-      model: 'openclaw',
-      messages: conversationMessages,
-    };
+  console.log(`[Nemo] Sending ${messages.length} messages to OpenClaw`);
+  const startTime = Date.now();
 
-    // Only include tools on the first round (initial request)
-    if (round === 0 && tools && tools.length > 0) {
-      requestBody.tools = tools;
-    }
-
-    console.log(`[Nemo] Round ${round + 1}: sending ${conversationMessages.length} messages${requestBody.tools ? ` with ${requestBody.tools.length} tools` : ''}`);
-    const startTime = Date.now();
-
-    let data: any;
-    try {
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-          'x-openclaw-model': 'minimax/MiniMax-M2.7',
-        },
-        body: JSON.stringify(requestBody),
-        signal: controller.signal,
-      });
-
-      console.log(`[Nemo] Round ${round + 1}: response ${response.status} in ${Date.now() - startTime}ms`);
-
-      if (!response.ok) {
-        const body = await response.text().catch(() => '');
-        throw new Error(`OpenClaw returned ${response.status}: ${body}`);
-      }
-
-      data = await response.json();
-    } catch (error: any) {
-      if (error.name === 'AbortError') {
-        throw new Error('Timed out waiting for OpenClaw response');
-      }
-      throw error;
-    } finally {
-      clearTimeout(timeout);
-    }
-
-    const choice = data?.choices?.[0];
-    if (!choice) throw new Error('OpenClaw returned empty response');
-
-    const message = choice.message;
-
-    // If no tool calls, return the final text response
-    if (!message.tool_calls || message.tool_calls.length === 0) {
-      console.log(`[Nemo] Final response in round ${round + 1}, total ${Date.now() - startTime}ms`);
-      return (message.content || '').trim();
-    }
-
-    console.log(`[Nemo] Round ${round + 1}: ${message.tool_calls.length} tool calls: ${message.tool_calls.map((tc: ToolCall) => tc.function.name).join(', ')}`);
-
-    // Add assistant message with tool calls to conversation
-    conversationMessages.push({
-      role: 'assistant',
-      content: message.content || null,
-      tool_calls: message.tool_calls,
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+        'x-openclaw-model': 'minimax/MiniMax-M2.7',
+      },
+      body: JSON.stringify({
+        model: 'openclaw',
+        messages,
+      }),
+      signal: controller.signal,
     });
 
-    // Execute each tool call and add results
-    for (const toolCall of message.tool_calls) {
-      let args: Record<string, any> = {};
-      try {
-        args = JSON.parse(toolCall.function.arguments || '{}');
-      } catch {
-        args = {};
-      }
+    console.log(`[Nemo] OpenClaw responded ${response.status} in ${Date.now() - startTime}ms`);
 
-      console.log(`[Nemo] Executing tool: ${toolCall.function.name}(${JSON.stringify(args)})`);
-      const toolStart = Date.now();
-      const result = await executeTool(toolCall.function.name, args);
-      console.log(`[Nemo] Tool ${toolCall.function.name} completed in ${Date.now() - toolStart}ms, result length: ${result.length}`);
-
-      conversationMessages.push({
-        role: 'tool',
-        content: result,
-        tool_call_id: toolCall.id,
-      });
+    if (!response.ok) {
+      const body = await response.text().catch(() => '');
+      throw new Error(`OpenClaw returned ${response.status}: ${body}`);
     }
-  }
 
-  throw new Error('Max tool calling rounds exceeded');
+    const data = await response.json();
+    const content = data?.choices?.[0]?.message?.content;
+
+    if (!content) {
+      throw new Error('OpenClaw returned empty response');
+    }
+
+    return content.trim();
+  } catch (error: any) {
+    if (error.name === 'AbortError') {
+      throw new Error('Timed out waiting for OpenClaw response');
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
 }
