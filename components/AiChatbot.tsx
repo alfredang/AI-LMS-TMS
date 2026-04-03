@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import ReactMarkdown from 'react-markdown';
 import { useLms } from '@contexts/LmsContext';
 import { Button } from './ui/Button';
 import { Icon, IconName } from './ui/Icon';
@@ -148,7 +149,17 @@ const AiChatbot: React.FC = () => {
                                     <div className="w-6 h-6 rounded-full bg-primary flex items-center justify-center text-white font-bold text-[10px] mr-2 mt-1 flex-shrink-0">N</div>
                                 )}
                                 <div className={`max-w-[80%] px-4 py-2 rounded-2xl ${msg.role === 'user' ? 'bg-primary text-white dark:bg-blue-600' : 'bg-gray-100 !text-black dark:bg-gray-200 dark:!text-black'}`}>
-                                    <p className="whitespace-pre-wrap text-sm">{msg.text || <span className="inline-block w-2 h-4 bg-gray-400 animate-pulse rounded-full"></span>}</p>
+                                    {msg.text ? (
+                                        msg.role === 'user' ? (
+                                            <p className="whitespace-pre-wrap text-sm">{msg.text}</p>
+                                        ) : (
+                                            <div className="text-sm prose prose-sm max-w-none prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5 prose-headings:my-1.5 prose-headings:text-black prose-strong:text-black prose-a:text-blue-600 prose-table:text-xs prose-th:px-2 prose-th:py-1 prose-td:px-2 prose-td:py-1 prose-table:border prose-th:border prose-td:border prose-th:bg-gray-200">
+                                                <ReactMarkdown>{msg.text}</ReactMarkdown>
+                                            </div>
+                                        )
+                                    ) : (
+                                        <span className="inline-block w-2 h-4 bg-gray-400 animate-pulse rounded-full"></span>
+                                    )}
                                 </div>
                             </div>
                         ))}

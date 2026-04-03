@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { sendToOpenClaw } from '../../../lib/openclaw-client';
+import { sendToOpenClaw, sendToMiniMaxDirect } from '../../../lib/openclaw-client';
 import type { ChatMessage } from '../../../lib/openclaw-client';
 import { executeTool } from '../../../lib/nemo-tools';
 
@@ -105,11 +105,6 @@ function detectTools(message: string): ToolMatch[] {
     matches.push({ tool: 'get_dashboard_summary', args: {} });
   }
 
-  // Always include dashboard summary as fallback context so Nemo has data to work with
-  if (matches.length === 0) {
-    matches.push({ tool: 'get_dashboard_summary', args: {} });
-  }
-
   return matches;
 }
 
@@ -204,9 +199,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Detect and execute relevant tools based on keywords
     const toolMatches = detectTools(userQuery);
-    let toolContext = '';
+
+    let text: string;
 
     if (toolMatches.length > 0) {
+      // Data query — run DB tools, then send results to OpenClaw for formatting
       console.log(`[Nemo] Detected ${toolMatches.length} tools: ${toolMatches.map(m => m.tool).join(', ')}`);
       const startTime = Date.now();
 
@@ -222,20 +219,32 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       );
 
       console.log(`[Nemo] All tools completed in ${Date.now() - startTime}ms`);
-      toolContext = `\n\n--- Database Results (live data from LMS/TMS) ---\n${results.join('\n\n')}\n--- End Results ---`;
+      const toolContext = `\n\n--- Database Results (live data from LMS/TMS) ---\n${results.join('\n\n')}\n--- End Results ---\n\nUse bullet points instead of markdown tables for readability.`;
+
+      const openAiMessages: ChatMessage[] = [
+        { role: 'system', content: buildSystemPrompt(currentUser, systemPrompt) + toolContext },
+        ...normalizedMessages,
+      ];
+
+      text = await sendToOpenClaw({
+        messages: openAiMessages,
+        timeoutMs: 120000,
+        userId: currentUser.id,
+      });
+    } else {
+      // Simple Q&A — skip OpenClaw agent, call MiniMax directly (~3-5s vs ~15s)
+      console.log('[Nemo] No tools matched, using MiniMax direct');
+      const openAiMessages: ChatMessage[] = [
+        { role: 'system', content: buildSystemPrompt(currentUser, systemPrompt) },
+        ...normalizedMessages,
+      ];
+
+      text = await sendToMiniMaxDirect({
+        messages: openAiMessages,
+        timeoutMs: 60000,
+        userId: currentUser.id,
+      });
     }
-
-    // Build messages for OpenClaw
-    const openAiMessages: ChatMessage[] = [
-      { role: 'system', content: buildSystemPrompt(currentUser, systemPrompt) + toolContext },
-      ...normalizedMessages,
-    ];
-
-    const text = await sendToOpenClaw({
-      messages: openAiMessages,
-      timeoutMs: 120000,
-      userId: currentUser.id,
-    });
 
     return res.status(200).json({ text });
   } catch (error: any) {
