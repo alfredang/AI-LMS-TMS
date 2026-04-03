@@ -115,6 +115,7 @@ export enum TrainerPage {
   EdTools = 'edTools',
   StatTools = 'statTools',
   DoeTools = 'doeTools',
+  SpcTools = 'spcTools',
   AssessmentGuide = 'assessmentGuide',
 }
 

@@ -56,6 +56,18 @@ const DOE_TOOL_ITEMS: { label: string; icon: IconName; href: string }[] = [
   { label: 'Response Surface',      icon: IconName.Analytics, href: 'https://alfredang.github.io/novadoe/#response-surface' },
 ];
 
+const SPC_TOOL_ITEMS: { label: string; icon: IconName; href: string }[] = [
+  { label: 'c Chart',              icon: IconName.Analytics, href: 'https://alfredang.github.io/novaspc/#c-chart' },
+  { label: 'u Chart',              icon: IconName.Analytics, href: 'https://alfredang.github.io/novaspc/#u-chart' },
+  { label: 'np Chart',             icon: IconName.Analytics, href: 'https://alfredang.github.io/novaspc/#np-chart' },
+  { label: 'p Chart',              icon: IconName.Analytics, href: 'https://alfredang.github.io/novaspc/#p-chart' },
+  { label: 'X-mR Chart',           icon: IconName.Analytics, href: 'https://alfredang.github.io/novaspc/#x-mr-chart' },
+  { label: 'X\u0304-R Chart',      icon: IconName.Analytics, href: 'https://alfredang.github.io/novaspc/#xbar-r-chart' },
+  { label: 'X\u0304-s Chart',      icon: IconName.Analytics, href: 'https://alfredang.github.io/novaspc/#xbar-s-chart' },
+  { label: 'Distribution',         icon: IconName.Analytics, href: 'https://alfredang.github.io/novaspc/#distribution' },
+  { label: 'Process Capability',   icon: IconName.Analytics, href: 'https://alfredang.github.io/novaspc/#process-capability' },
+];
+
 const GENAI_TOOL_ITEMS: { label: string; icon: IconName }[] = [
   { label: 'Create Quiz',            icon: IconName.FileText },
   { label: 'Create Interactive Poll', icon: IconName.ClipboardCheck },
@@ -74,6 +86,7 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate }) => {
   const [edToolsOpen, setEdToolsOpen] = useState(true);
   const [statToolsOpen, setStatToolsOpen] = useState(trainerPage === TrainerPage.StatTools);
   const [doeToolsOpen, setDoeToolsOpen] = useState(trainerPage === TrainerPage.DoeTools);
+  const [spcToolsOpen, setSpcToolsOpen] = useState(trainerPage === TrainerPage.SpcTools);
   const [genAiOpen, setGenAiOpen] = useState(trainerPage === TrainerPage.GenAIAuthoring);
 
   const navigateTo = (page: TrainerPage) => {
@@ -245,6 +258,51 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate }) => {
           {doeToolsOpen && (
             <div className="ml-5 pl-3 border-l border-gray-200 dark:border-gray-700 space-y-0.5">
               {DOE_TOOL_ITEMS.map(({ label, icon, href }) => (
+                <a
+                  key={label}
+                  href={href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={`group flex items-center gap-2.5 w-full rounded-lg px-2.5 py-2 text-[13px] font-medium transition-all duration-150 ${subItemClass}`}
+                >
+                  <Icon name={icon} className="w-4 h-4 flex-shrink-0 text-gray-400 dark:text-gray-500 group-hover:text-gray-900 dark:group-hover:text-white transition-colors" />
+                  <span className="truncate">{label}</span>
+                  <Icon name={IconName.ExternalLink} className="w-3 h-3 ml-auto text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                </a>
+              ))}
+            </div>
+          )}
+
+          {/* SPC Tools — expandable */}
+          <button
+            onClick={() => {
+              setSpcToolsOpen(prev => !prev);
+              navigateTo(TrainerPage.SpcTools);
+            }}
+            className={`group flex items-center gap-3 w-full rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-150 ${
+              trainerPage === TrainerPage.SpcTools
+                ? 'bg-primary/10 text-primary'
+                : inactiveClass
+            }`}
+          >
+            <Icon
+              name={IconName.Analytics}
+              className={`w-[18px] h-[18px] flex-shrink-0 transition-colors ${
+                trainerPage === TrainerPage.SpcTools ? 'text-primary' : inactiveIconClass
+              }`}
+            />
+            <span className="truncate">SPC Tools</span>
+            <Icon
+              name={IconName.ChevronDown}
+              className={`w-4 h-4 ml-auto flex-shrink-0 transition-transform duration-200 ${
+                spcToolsOpen ? 'rotate-0' : '-rotate-90'
+              } ${trainerPage === TrainerPage.SpcTools ? 'text-primary' : 'text-gray-400 dark:text-gray-500'}`}
+            />
+          </button>
+
+          {spcToolsOpen && (
+            <div className="ml-5 pl-3 border-l border-gray-200 dark:border-gray-700 space-y-0.5">
+              {SPC_TOOL_ITEMS.map(({ label, icon, href }) => (
                 <a
                   key={label}
                   href={href}
