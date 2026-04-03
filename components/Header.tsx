@@ -204,7 +204,6 @@ const Header: React.FC = () => {
       { view: View.Dashboard, label: 'My Classes', icon: IconName.BookOpen, trainerPage: TrainerPage.MyClasses },
       { view: View.Dashboard, label: 'E-Attendance', icon: IconName.ClipboardCheck, trainerPage: TrainerPage.EAttendance },
       { view: View.Dashboard, label: 'Ed Tools', icon: IconName.BookOpen, trainerPage: TrainerPage.EdTools },
-      { view: View.Dashboard, label: 'Statistical Tools', icon: IconName.Analytics, trainerPage: TrainerPage.StatTools },
       { view: View.Dashboard, label: 'GenAI Tools', icon: IconName.Create, trainerPage: TrainerPage.GenAIAuthoring },
     ],
     [UserRole.Developer]: [
