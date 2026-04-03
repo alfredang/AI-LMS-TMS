@@ -101,11 +101,15 @@ const EditableTopicAccordion: React.FC<{
     onDeleteResourceLink: (id: string) => void;
     onReorderResourceLink: (draggedId: string, targetId: string, parentId: string) => void;
     onMoveResourceLink: (draggedId: string, targetParentId: string) => void;
+    draggedResourceLinkId: string | null;
+    onResourceLinkDragStart: (id: string) => void;
+    onResourceLinkDragEnd: () => void;
 }> = ({
     topic, onUpdateTitle, onDelete, onAddSubtopic, onUpdateSubtopic, onDeleteSubtopic,
     draggedSubtopic, dropTargetSubtopic, onSubtopicDragStart, onSubtopicDrop, onSubtopicDragOver, onSubtopicDragLeave, onSubtopicDragEnd,
     onSelfDragStart, onSelfDragEnd,
-    resourceLinks, onAddResourceLink, onUpdateResourceLink, onDeleteResourceLink, onReorderResourceLink, onMoveResourceLink
+    resourceLinks, onAddResourceLink, onUpdateResourceLink, onDeleteResourceLink, onReorderResourceLink, onMoveResourceLink,
+    draggedResourceLinkId, onResourceLinkDragStart, onResourceLinkDragEnd
 }) => {
         const [isSubtopicsOpen, setSubtopicsOpen] = useState(true);
 
@@ -148,7 +152,6 @@ const EditableTopicAccordion: React.FC<{
                                 <li key={subtopic.id}>
                                     <div
                                         onDragOver={(e) => {
-                                            const draggedResourceLinkId = e.dataTransfer.getData('resourceLinkId');
                                             if (draggedResourceLinkId) {
                                                 e.preventDefault();
                                                 e.stopPropagation();
@@ -159,7 +162,6 @@ const EditableTopicAccordion: React.FC<{
                                         }}
                                         onDragLeave={onSubtopicDragLeave}
                                         onDrop={(e) => {
-                                            const draggedResourceLinkId = e.dataTransfer.getData('resourceLinkId');
                                             if (draggedResourceLinkId) {
                                                 e.preventDefault();
                                                 e.stopPropagation();
@@ -197,8 +199,7 @@ const EditableTopicAccordion: React.FC<{
                                     <div
                                         className="ml-10 mt-1 space-y-1 rounded-md transition-colors"
                                         onDragOver={(e) => {
-                                            const draggedId = e.dataTransfer.getData('resourceLinkId');
-                                            if (!draggedId) return;
+                                            if (!draggedResourceLinkId) return;
                                             e.preventDefault();
                                             e.stopPropagation();
                                             e.currentTarget.classList.add('ring-1', 'ring-blue-400', 'bg-blue-50/40', 'dark:bg-blue-900/10');
@@ -208,27 +209,26 @@ const EditableTopicAccordion: React.FC<{
                                             e.currentTarget.classList.remove('ring-1', 'ring-blue-400', 'bg-blue-50/40', 'dark:bg-blue-900/10');
                                         }}
                                         onDrop={(e) => {
-                                            const draggedId = e.dataTransfer.getData('resourceLinkId');
-                                            if (!draggedId) return;
+                                            if (!draggedResourceLinkId) return;
                                             e.preventDefault();
                                             e.stopPropagation();
                                             e.currentTarget.classList.remove('ring-1', 'ring-blue-400', 'bg-blue-50/40', 'dark:bg-blue-900/10');
-                                            onMoveResourceLink(draggedId, subtopic.id);
+                                            onMoveResourceLink(draggedResourceLinkId, subtopic.id);
                                         }}
                                     >
                                         {subtopicLinks.map((rl, rlIndex) => (
                                             <div
                                                 key={rl.id}
                                                 draggable
-                                                onDragStart={(e) => { e.dataTransfer.setData('resourceLinkId', rl.id); e.dataTransfer.setData('parentId', subtopic.id); e.dataTransfer.effectAllowed = 'move'; }}
+                                                onDragStart={(e) => { e.dataTransfer.setData('resourceLinkId', rl.id); e.dataTransfer.setData('parentId', subtopic.id); e.dataTransfer.effectAllowed = 'move'; onResourceLinkDragStart(rl.id); }}
+                                                onDragEnd={() => onResourceLinkDragEnd()}
                                                 onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add('border-t-2', 'border-blue-400'); }}
                                                 onDragLeave={(e) => { e.currentTarget.classList.remove('border-t-2', 'border-blue-400'); }}
                                                 onDrop={(e) => {
                                                     e.preventDefault();
                                                     e.currentTarget.classList.remove('border-t-2', 'border-blue-400');
-                                                    const draggedId = e.dataTransfer.getData('resourceLinkId');
-                                                    if (draggedId && draggedId !== rl.id) {
-                                                        onReorderResourceLink(draggedId, rl.id, subtopic.id);
+                                                    if (draggedResourceLinkId && draggedResourceLinkId !== rl.id) {
+                                                        onReorderResourceLink(draggedResourceLinkId, rl.id, subtopic.id);
                                                     }
                                                 }}
                                                 className={`flex items-center gap-1.5 p-1.5 rounded cursor-grab group/rl ${
@@ -370,6 +370,9 @@ const CourseEditor: React.FC = () => {
     // Drag and Drop state for Subtopics
     const [draggedSubtopic, setDraggedSubtopic] = useState<{ topicId: string; subtopicId: string } | null>(null);
     const [dropTargetSubtopic, setDropTargetSubtopic] = useState<{ topicId: string; subtopicId: string } | null>(null);
+
+    // Drag and Drop state for Resource Links (needed because dataTransfer.getData() returns '' during dragover)
+    const [draggedResourceLinkId, setDraggedResourceLinkId] = useState<string | null>(null);
 
     // Use courseEditMode to determine if this is a new course, with fallback to ID check
     // If course has a real database ID (not starting with 'course_'), it's definitely existing
@@ -1844,6 +1847,9 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                         onDeleteResourceLink={deleteResourceLink}
                                         onReorderResourceLink={reorderResourceLink}
                                         onMoveResourceLink={moveResourceLink}
+                                        draggedResourceLinkId={draggedResourceLinkId}
+                                        onResourceLinkDragStart={(id: string) => setDraggedResourceLinkId(id)}
+                                        onResourceLinkDragEnd={() => setDraggedResourceLinkId(null)}
                                     />
                                 </div>
                             ))}
