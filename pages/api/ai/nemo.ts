@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { sendToOpenClaw } from '../../../lib/openclaw-client';
 import type { ChatMessage } from '../../../lib/openclaw-client';
+import { NEMO_TOOLS } from '../../../lib/nemo-tools';
 
 type ChatRole = 'user' | 'assistant';
 
@@ -110,6 +111,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const text = await sendToOpenClaw({
       messages: openAiMessages,
+      tools: NEMO_TOOLS,
       timeoutMs: 120000,
       userId: currentUser.id,
     });
