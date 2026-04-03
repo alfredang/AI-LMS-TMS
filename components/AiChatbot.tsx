@@ -23,7 +23,7 @@ If you don't know something, say so honestly.`;
 }
 
 const AiChatbot: React.FC = () => {
-    const { isChatOpen, toggleChat, resetInAppChat, trainingProviderProfile } = useLms();
+    const { isChatOpen, toggleChat, resetInAppChat, trainingProviderProfile, currentUser, role } = useLms();
     const NEMO_SYSTEM_PROMPT = getNemoSystemPrompt(trainingProviderProfile?.companyShortname || trainingProviderProfile?.companyName || 'Training Provider');
     const [messages, setMessages] = useState<ChatMessage[]>([
         { id: 'initial', role: 'model', text: 'Hello! I\'m Nemo, your AI operations assistant. I can help you manage courses, trainers, learners, and more. What would you like to do?' }
@@ -75,6 +75,12 @@ const AiChatbot: React.FC = () => {
                 body: JSON.stringify({
                     messages: conversationMessages,
                     systemPrompt: NEMO_SYSTEM_PROMPT,
+                    currentUser: currentUser ? {
+                        id: currentUser.id,
+                        email: currentUser.email,
+                        role,
+                        name: currentUser.fullName,
+                    } : null,
                 }),
             });
 
@@ -108,7 +114,7 @@ const AiChatbot: React.FC = () => {
             setMessages(prev =>
                 prev.map(msg =>
                     msg.id === modelMessageId
-                        ? { ...msg, text: 'Sorry, I encountered an error. Please check that an AI provider is configured in Company Settings.' }
+                        ? { ...msg, text: 'Sorry, I encountered an error. Please check that the OpenClaw gateway is configured and reachable.' }
                         : msg
                 )
             );

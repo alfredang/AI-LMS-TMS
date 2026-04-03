@@ -264,6 +264,12 @@ export interface TrainingProviderProfile extends BaseProfile {
     n8nHost1Url?: string;
     n8nHost2Url?: string;
     magentoBackendUrl?: string;
+    openClawMode?: 'live' | 'local';
+    openClawGatewayUrl?: string;
+    openClawLocalGatewayUrl?: string;
+    openClawHooksPath?: string;
+    openClawAgentId?: string;
+    openClawCallbackUrl?: string;
   };
   adminSettings: {
     autoSendProFormaInvoice: boolean;

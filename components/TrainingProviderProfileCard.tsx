@@ -74,6 +74,16 @@ const API_KEY_CONFIGS: Record<string, { label: string; models: { value: string; 
             { value: 'google/gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
         ]
     },
+    'OPENCLAW_HOOKS_TOKEN': {
+        label: 'OpenClaw Hooks Token',
+        defaultModel: '',
+        models: []
+    },
+    'OPENCLAW_GATEWAY_TOKEN': {
+        label: 'OpenClaw Gateway Token',
+        defaultModel: '',
+        models: []
+    },
 };
 
 // Fixed API Key names - these are the only allowed API key names
@@ -964,6 +974,74 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
 
                     {/* ===== n8n Subsection ===== */}
                     <div className="p-4 bg-surface-elevated rounded-lg border border-default">
+                        <h3 className="text-lg font-bold text-on-surface mb-4">OpenClaw / Orion</h3>
+                        <div className="space-y-3">
+                            <div>
+                                <label className="block text-sm font-medium text-on-surface-secondary mb-1">Mode</label>
+                                {isEditing ? (
+                                    <select
+                                        value={formData.integrations.openClawMode || 'live'}
+                                        onChange={(e) =>
+                                            setFormData((prev) => ({
+                                                ...prev,
+                                                integrations: {
+                                                    ...prev.integrations,
+                                                    openClawMode: e.target.value as 'live' | 'local',
+                                                },
+                                            }))
+                                        }
+                                        className={inputClasses}
+                                    >
+                                        <option value="live">Remote Live Mode</option>
+                                        <option value="local">Local Test Mode</option>
+                                    </select>
+                                ) : (
+                                    <p className="text-sm text-on-surface">
+                                        {formData.integrations.openClawMode === 'local' ? 'Local Test Mode' : 'Remote Live Mode'}
+                                    </p>
+                                )}
+                            </div>
+                            {[
+                                { key: 'openClawGatewayUrl' as const, label: 'Live Gateway URL', placeholder: 'e.g. http://10.0.0.1:18789' },
+                                { key: 'openClawLocalGatewayUrl' as const, label: 'Local Testing URL', placeholder: 'e.g. http://76.13.180.29:18789' },
+                                { key: 'openClawHooksPath' as const, label: 'Hooks Path', placeholder: 'e.g. /hooks' },
+                                { key: 'openClawAgentId' as const, label: 'Agent ID', placeholder: 'e.g. main' },
+                                { key: 'openClawCallbackUrl' as const, label: 'Callback URL', placeholder: 'e.g. https://your-app.example.com/api/openclaw/callback' },
+                            ].map(({ key, label, placeholder }) => (
+                                <div key={key}>
+                                    <label className="block text-sm font-medium text-on-surface-secondary mb-1">{label}</label>
+                                    {isEditing ? (
+                                        <input
+                                            type="text"
+                                            value={(formData.integrations as any)[key] || ''}
+                                            onChange={(e) =>
+                                                setFormData((prev) => ({
+                                                    ...prev,
+                                                    integrations: {
+                                                        ...prev.integrations,
+                                                        [key]: e.target.value,
+                                                    },
+                                                }))
+                                            }
+                                            className={inputClasses}
+                                            placeholder={placeholder}
+                                        />
+                                    ) : (
+                                        <p className="text-sm text-on-surface truncate">
+                                            {(formData.integrations as any)[key] ? (
+                                                <a href={(formData.integrations as any)[key]} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">
+                                                    {(formData.integrations as any)[key]}
+                                                </a>
+                                            ) : 'Not Set'}
+                                        </p>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* ===== n8n Subsection ===== */}
+                    <div className="p-4 bg-surface-elevated rounded-lg border border-default">
                         <h3 className="text-lg font-bold text-on-surface mb-4">n8n</h3>
                         <div className="space-y-3">
                             {[
@@ -1506,6 +1584,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
 
                         const isVisible = visibleApiKeys[keyName];
                         const config = API_KEY_CONFIGS[keyName];
+                        const supportsModels = (config?.models?.length || 0) > 0;
 
                         return (
                             <div
@@ -1529,7 +1608,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                 <div className="flex flex-col sm:flex-row gap-3">
                                     {/* API Key Input */}
                                     <div className="flex-1">
-                                        <label className="block text-xs text-subtle mb-1">API Key</label>
+                                        <label className="block text-xs text-subtle mb-1">{keyName === 'OPENCLAW_HOOKS_TOKEN' ? 'Hooks Token' : 'API Key'}</label>
                                         {isEditing ? (
                                             <div className="relative">
                                                 <input
@@ -1585,42 +1664,44 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                     </div>
 
                                     {/* Model Dropdown */}
-                                    <div className="sm:w-48 flex-shrink-0">
-                                        <label className="block text-xs text-subtle mb-1">Model</label>
-                                        {isEditing ? (
-                                            <select
-                                                value={selectedModel}
-                                                onChange={(e) => {
-                                                    setFormData(prev => ({
-                                                        ...prev,
-                                                        apiKeyModels: {
-                                                            ...(prev.apiKeyModels || {}),
-                                                            [keyName]: e.target.value
-                                                        }
-                                                    }));
-                                                }}
-                                                className="w-full px-3 py-2 text-on-surface bg-surface border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-                                                disabled={!keyValue}
-                                            >
-                                                <option value="">None</option>
-                                                {config?.models.map((model) => (
-                                                    <option key={model.value} value={model.value}>
-                                                        {model.label}
-                                                    </option>
-                                                ))}
-                                            </select>
-                                        ) : (
-                                            <div className="px-3 py-2 bg-surface border border-gray-300 dark:border-gray-600 rounded-md">
-                                                <span className="text-on-surface text-sm">
-                                                    {keyValue ? (
-                                                        selectedModel === '' ? 'None' : (config?.models.find(m => m.value === selectedModel)?.label || selectedModel)
-                                                    ) : (
-                                                        <span className="text-gray-500 italic">-</span>
-                                                    )}
-                                                </span>
-                                            </div>
-                                        )}
-                                    </div>
+                                    {supportsModels && (
+                                        <div className="sm:w-48 flex-shrink-0">
+                                            <label className="block text-xs text-subtle mb-1">Model</label>
+                                            {isEditing ? (
+                                                <select
+                                                    value={selectedModel}
+                                                    onChange={(e) => {
+                                                        setFormData(prev => ({
+                                                            ...prev,
+                                                            apiKeyModels: {
+                                                                ...(prev.apiKeyModels || {}),
+                                                                [keyName]: e.target.value
+                                                            }
+                                                        }));
+                                                    }}
+                                                    className="w-full px-3 py-2 text-on-surface bg-surface border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                                                    disabled={!keyValue}
+                                                >
+                                                    <option value="">None</option>
+                                                    {config?.models.map((model) => (
+                                                        <option key={model.value} value={model.value}>
+                                                            {model.label}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                            ) : (
+                                                <div className="px-3 py-2 bg-surface border border-gray-300 dark:border-gray-600 rounded-md">
+                                                    <span className="text-on-surface text-sm">
+                                                        {keyValue ? (
+                                                            selectedModel === '' ? 'None' : (config?.models.find(m => m.value === selectedModel)?.label || selectedModel)
+                                                        ) : (
+                                                            <span className="text-gray-500 italic">-</span>
+                                                        )}
+                                                    </span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         );
@@ -1644,7 +1725,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                 >
                                     <option value="">— Select default provider —</option>
                                     {FIXED_API_KEY_NAMES
-                                        .filter(k => (formData.apiKeys || {})[k])
+                                        .filter(k => (formData.apiKeys || {})[k] && (API_KEY_CONFIGS[k]?.models?.length || 0) > 0)
                                         .map(k => {
                                             const modelLabel = API_KEY_CONFIGS[k]?.models.find(m => m.value === formData.apiKeyModels?.[k])?.label;
                                             return (
@@ -1678,7 +1759,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                 >
                                     <option value="">— None —</option>
                                     {FIXED_API_KEY_NAMES
-                                        .filter(k => (formData.apiKeys || {})[k] && k !== formData.defaultAiProvider)
+                                        .filter(k => (formData.apiKeys || {})[k] && k !== formData.defaultAiProvider && (API_KEY_CONFIGS[k]?.models?.length || 0) > 0)
                                         .map(k => {
                                             const modelLabel = API_KEY_CONFIGS[k]?.models.find(m => m.value === formData.apiKeyModels?.[k])?.label;
                                             return (

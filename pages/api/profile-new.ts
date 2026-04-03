@@ -546,6 +546,14 @@ async function getTrainingProviderProfile(userId: string) {
     const r = await pool.query(`SELECT magento_backend_url FROM training_provider WHERE id = $1`, [profileData.provider_id]);
     if (r.rows.length > 0) refLinks = { ...refLinks, ...r.rows[0] };
   } catch (e) { /* columns don't exist */ }
+  // OpenClaw / Orion
+  try {
+    const r = await pool.query(
+      `SELECT openclaw_mode, openclaw_gateway_url, openclaw_local_gateway_url, openclaw_hooks_path, openclaw_agent_id, openclaw_callback_url FROM training_provider WHERE id = $1`,
+      [profileData.provider_id]
+    );
+    if (r.rows.length > 0) refLinks = { ...refLinks, ...r.rows[0] };
+  } catch (e) { /* columns don't exist */ }
 
   // Parse color scheme - now returning as string instead of object
   let colorScheme;
@@ -610,6 +618,12 @@ async function getTrainingProviderProfile(userId: string) {
       n8nHost1Url: refLinks.n8n_host1_url || '',
       n8nHost2Url: refLinks.n8n_host2_url || '',
       magentoBackendUrl: refLinks.magento_backend_url || '',
+      openClawMode: refLinks.openclaw_mode || 'live',
+      openClawGatewayUrl: refLinks.openclaw_gateway_url || '',
+      openClawLocalGatewayUrl: refLinks.openclaw_local_gateway_url || '',
+      openClawHooksPath: refLinks.openclaw_hooks_path || '',
+      openClawAgentId: refLinks.openclaw_agent_id || '',
+      openClawCallbackUrl: refLinks.openclaw_callback_url || '',
     },
     adminSettings: {
       autoSendProFormaInvoice: profileData.auto_send_proforma_invoice || false,

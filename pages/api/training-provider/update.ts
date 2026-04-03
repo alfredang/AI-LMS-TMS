@@ -678,6 +678,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       await autoCreateAndUpdate([
         { name: 'magento_backend_url', value: profileData.integrations?.magentoBackendUrl || null },
       ]);
+      // OpenClaw / Orion
+      await autoCreateAndUpdate([
+        { name: 'openclaw_mode', value: profileData.integrations?.openClawMode || 'live' },
+        { name: 'openclaw_gateway_url', value: profileData.integrations?.openClawGatewayUrl || null },
+        { name: 'openclaw_local_gateway_url', value: profileData.integrations?.openClawLocalGatewayUrl || null },
+        { name: 'openclaw_hooks_path', value: profileData.integrations?.openClawHooksPath || null },
+        { name: 'openclaw_agent_id', value: profileData.integrations?.openClawAgentId || null },
+        { name: 'openclaw_callback_url', value: profileData.integrations?.openClawCallbackUrl || null },
+      ]);
       // Support email (separate from company_email)
       await autoCreateAndUpdate([
         { name: 'support_email', value: profileData.contactPerson?.email || null },
