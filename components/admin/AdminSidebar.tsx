@@ -32,6 +32,25 @@ const NavSection: React.FC<NavSectionProps> = ({ title, children, isOpen, onTogg
     </div>
 );
 
+const SubSection: React.FC<{ title: string; isOpen: boolean; onToggle: () => void; children: React.ReactNode }> = ({ title, isOpen, onToggle, children }) => (
+    <div>
+        <button
+            type="button"
+            onClick={onToggle}
+            className="w-full flex items-center justify-between pl-8 pr-3 py-1.5 group cursor-pointer hover:bg-gray-100 dark:hover:bg-slate-700 rounded-md"
+        >
+            <span className="text-xs font-semibold uppercase text-gray-400 dark:text-gray-500 tracking-wider">{title}</span>
+            <svg
+                className={`w-3 h-3 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
+                fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+            >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+            </svg>
+        </button>
+        {isOpen && <div className="space-y-1">{children}</div>}
+    </div>
+);
+
 interface AdminSidebarProps {
     onNavigate?: () => void;
 }
@@ -62,6 +81,12 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate }) => {
         classManagement: false,
         directApplication: false,
         tpgManagement: false,
+        tpgCourseRun: false,
+        tpgSession: false,
+        tpgAttendance: false,
+        tpgEnrolment: false,
+        tpgAssessment: false,
+        tpgGrant: false,
         logging: false,
         certificate: false,
         referenceLinks: false,
@@ -132,47 +157,47 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate }) => {
             </NavSection>
 
             <NavSection title="TPG Management" isOpen={openSections.tpgManagement} onToggle={() => toggleSection('tpgManagement')}>
-                {/* Course Run */}
-                <p className="pl-8 pt-2 pb-1 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">Course Run</p>
-                <NavItem page={AdminPage.CreateNewClass} label="Create New Class" isSubItem />
-                <NavItem page={AdminPage.SearchCourseRuns} label="Search Course Runs" isSubItem />
-                <NavItem page={AdminPage.ViewCourseRun} label="View Course Run" isSubItem />
-                <NavItem page={AdminPage.EditCourseRun} label="Edit Course Run" isSubItem />
-                <NavItem page={AdminPage.UploadCourseRuns} label="Upload Course Runs" isSubItem />
-                <NavItem page={AdminPage.DeleteCourseRun} label="Delete Course Run" isSubItem />
-                <NavItem page={AdminPage.AddSessions} label="Add Sessions" isSubItem />
-                <NavItem page={AdminPage.CourseSessionTiming} label="Course Session Timing" isSubItem />
-                <NavItem page={AdminPage.CourseSessions} label="Course Sessions" isSubItem />
-                <NavItem page={AdminPage.CourseSessionAttendance} label="Course Session Attendance" isSubItem />
-                <NavItem page={AdminPage.CheckAttendance} label="Check Attendance" isSubItem />
+                <SubSection title="Course Run" isOpen={openSections.tpgCourseRun} onToggle={() => toggleSection('tpgCourseRun')}>
+                    <NavItem page={AdminPage.CreateNewClass} label="Create New Class" isSubItem />
+                    <NavItem page={AdminPage.SearchCourseRuns} label="Search Course Runs" isSubItem />
+                    <NavItem page={AdminPage.ViewCourseRun} label="View Course Run" isSubItem />
+                    <NavItem page={AdminPage.EditCourseRun} label="Edit Course Run" isSubItem />
+                    <NavItem page={AdminPage.UploadCourseRuns} label="Upload Course Runs" isSubItem />
+                    <NavItem page={AdminPage.DeleteCourseRun} label="Delete Course Run" isSubItem />
+                </SubSection>
 
-                <div className="mx-3 my-2 border-t border-gray-200 dark:border-gray-700" />
+                <SubSection title="Session" isOpen={openSections.tpgSession} onToggle={() => toggleSection('tpgSession')}>
+                    <NavItem page={AdminPage.AddSessions} label="Add Sessions" isSubItem />
+                    <NavItem page={AdminPage.CourseSessionTiming} label="Session Timing" isSubItem />
+                    <NavItem page={AdminPage.CourseSessions} label="Course Sessions" isSubItem />
+                </SubSection>
 
-                {/* Enrolment */}
-                <p className="pl-8 pt-1 pb-1 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">Enrolment</p>
-                <NavItem page={AdminPage.EnrollLearners} label="Enroll Learners" isSubItem />
-                <NavItem page={AdminPage.UploadEnrolments} label="Upload Enrolments" isSubItem />
-                <NavItem page={AdminPage.SearchEnrolment} label="Search Enrolment" isSubItem />
-                <NavItem page={AdminPage.ViewEnrolment} label="View Enrolment" isSubItem />
-                <NavItem page={AdminPage.UpdateEnrolment} label="Update Enrolment" isSubItem />
-                <NavItem page={AdminPage.CancelEnrolment} label="Cancel Enrolment" isSubItem />
-                <NavItem page={AdminPage.UpdateEnrolmentFees} label="Update Enrolment Fees" isSubItem />
+                <SubSection title="Attendance" isOpen={openSections.tpgAttendance} onToggle={() => toggleSection('tpgAttendance')}>
+                    <NavItem page={AdminPage.CourseSessionAttendance} label="Session Attendance" isSubItem />
+                    <NavItem page={AdminPage.CheckAttendance} label="Check Attendance" isSubItem />
+                </SubSection>
 
-                <div className="mx-3 my-2 border-t border-gray-200 dark:border-gray-700" />
+                <SubSection title="Enrolment" isOpen={openSections.tpgEnrolment} onToggle={() => toggleSection('tpgEnrolment')}>
+                    <NavItem page={AdminPage.EnrollLearners} label="Enroll Learners" isSubItem />
+                    <NavItem page={AdminPage.UploadEnrolments} label="Upload Enrolments" isSubItem />
+                    <NavItem page={AdminPage.SearchEnrolment} label="Search Enrolment" isSubItem />
+                    <NavItem page={AdminPage.ViewEnrolment} label="View Enrolment" isSubItem />
+                    <NavItem page={AdminPage.UpdateEnrolment} label="Update Enrolment" isSubItem />
+                    <NavItem page={AdminPage.CancelEnrolment} label="Cancel Enrolment" isSubItem />
+                    <NavItem page={AdminPage.UpdateEnrolmentFees} label="Update Enrolment Fees" isSubItem />
+                </SubSection>
 
-                {/* Assessment */}
-                <p className="pl-8 pt-1 pb-1 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">Assessment</p>
-                <NavItem page={AdminPage.SubmitAssessment} label="Submit Assessment" isSubItem />
-                <NavItem page={AdminPage.UpdateAssessment} label="Update Assessment" isSubItem />
-                <NavItem page={AdminPage.SearchAssessments} label="Search Assessments" isSubItem />
-                <NavItem page={AdminPage.ViewAssessment} label="View Assessment" isSubItem />
+                <SubSection title="Assessment" isOpen={openSections.tpgAssessment} onToggle={() => toggleSection('tpgAssessment')}>
+                    <NavItem page={AdminPage.SubmitAssessment} label="Submit Assessment" isSubItem />
+                    <NavItem page={AdminPage.UpdateAssessment} label="Update Assessment" isSubItem />
+                    <NavItem page={AdminPage.SearchAssessments} label="Search Assessments" isSubItem />
+                    <NavItem page={AdminPage.ViewAssessment} label="View Assessment" isSubItem />
+                </SubSection>
 
-                <div className="mx-3 my-2 border-t border-gray-200 dark:border-gray-700" />
-
-                {/* Grant */}
-                <p className="pl-8 pt-1 pb-1 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">Grant</p>
-                <NavItem page={AdminPage.SearchGrant} label="Search Grant" isSubItem />
-                <NavItem page={AdminPage.ViewGrantStatus} label="View Grant Status" isSubItem />
+                <SubSection title="Grant" isOpen={openSections.tpgGrant} onToggle={() => toggleSection('tpgGrant')}>
+                    <NavItem page={AdminPage.SearchGrant} label="Search Grant" isSubItem />
+                    <NavItem page={AdminPage.ViewGrantStatus} label="View Grant Status" isSubItem />
+                </SubSection>
             </NavSection>
 
             <NavSection title="Certificate" isOpen={openSections.certificate} onToggle={() => toggleSection('certificate')}>
