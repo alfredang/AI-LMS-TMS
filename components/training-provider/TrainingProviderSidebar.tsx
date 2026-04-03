@@ -12,6 +12,7 @@ const TrainingProviderSidebar: React.FC<TrainingProviderSidebarProps> = ({ onNav
 
     const templateViews = [View.OtpEmailTemplate, View.CertificateEmailTemplate, View.FeedbackEmailTemplate, View.PasswordResetEmailTemplate, View.PrivacyPolicy, View.AcceptableUsePolicy];
     const [templatesOpen, setTemplatesOpen] = useState(templateViews.includes(currentView));
+    const [usefulLinksOpen, setUsefulLinksOpen] = useState(false);
 
     const navItems = [
         { view: View.Dashboard, label: 'Dashboard', icon: IconName.Dashboard },
@@ -98,6 +99,37 @@ const TrainingProviderSidebar: React.FC<TrainingProviderSidebarProps> = ({ onNav
                                 <span>{item.label}</span>
                             </a>
                         ))}
+                    </div>
+                )}
+            </div>
+
+            {/* Useful Links - Collapsible */}
+            <div>
+                <button
+                    onClick={() => setUsefulLinksOpen(!usefulLinksOpen)}
+                    className="flex items-center justify-between w-full rounded-md px-3 py-2.5 text-sm font-medium transition-colors text-gray-700 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-slate-700 dark:hover:text-white"
+                >
+                    <div className="flex items-center gap-3">
+                        <Icon name={IconName.ExternalLink} className="w-5 h-5" />
+                        <span>Useful Links</span>
+                    </div>
+                    <Icon
+                        name={IconName.ChevronDown}
+                        className={`w-4 h-4 transition-transform ${usefulLinksOpen ? 'rotate-180' : ''}`}
+                    />
+                </button>
+                {usefulLinksOpen && (
+                    <div className="ml-4 mt-1 space-y-1">
+                        <a
+                            href="https://developer.ssg-wsg.gov.sg/webapp/home"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors text-gray-700 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-slate-700 dark:hover:text-white"
+                        >
+                            <Icon name={IconName.Link} className="w-4 h-4" />
+                            <span>SSG API</span>
+                            <Icon name={IconName.ExternalLink} className="w-3 h-3 ml-auto opacity-50" />
+                        </a>
                     </div>
                 )}
             </div>
