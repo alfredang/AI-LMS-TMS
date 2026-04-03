@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { buildOpenClawSessionKey, sendToOpenClaw } from '../../../lib/openclaw-client';
+import { sendToOpenClaw } from '../../../lib/openclaw-client';
+import type { ChatMessage } from '../../../lib/openclaw-client';
 
 type ChatRole = 'user' | 'assistant';
 
@@ -40,31 +41,27 @@ function getRolePermissions(role: string): string {
   }
 }
 
-function buildContextPrefix(user: ChatUserContext): string {
+function buildSystemPrompt(user: ChatUserContext, customSystemPrompt?: string): string {
+  const normalizedRole = normalizeRole(user.role);
   const lines = [
-    `[LMS Chat] User: ${user.name || user.email || user.id}`,
-    `User ID: ${user.id}`,
+    'You are Nemo, the AI operations assistant for the Tertiary Infotech LMS/TMS platform.',
+    `User: ${user.name || user.email || user.id} (ID: ${user.id})`,
   ];
 
-  if (user.email) {
-    lines.push(`Email: ${user.email}`);
-  }
-
-  if (user.role) {
-    lines.push(`Role: ${user.role}`);
-  }
-
-  if (user.employeeId) {
-    lines.push(`Employee ID: ${user.employeeId}`);
-  }
+  if (user.email) lines.push(`Email: ${user.email}`);
+  if (user.role) lines.push(`Role: ${user.role}`);
+  if (user.employeeId) lines.push(`Employee ID: ${user.employeeId}`);
 
   lines.push(
     '',
-    'This message is from the Tertiary Infotech LMS/TMS platform chatbot.',
-    'The user is authenticated within the LMS client and their current role is supplied by the platform.',
+    getRolePermissions(normalizedRole),
+    '',
     'Help them with LMS, TMS, admin, finance, training, and operational queries using your available tools.',
-    ''
   );
+
+  if (customSystemPrompt?.trim()) {
+    lines.push('', customSystemPrompt.trim());
+  }
 
   return lines.join('\n');
 }
@@ -100,35 +97,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     const normalizedMessages = coerceMessages(messages).slice(-10);
-    const lastUserMessage = [...normalizedMessages].reverse().find(message => message.role === 'user');
 
-    if (!lastUserMessage) {
-      return res.status(400).json({ error: 'No user message found' });
+    if (normalizedMessages.length === 0) {
+      return res.status(400).json({ error: 'No valid messages found' });
     }
 
-    const historyText = normalizedMessages
-      .map(message => `${message.role === 'user' ? 'User' : 'Orion'}: ${message.content}`)
-      .join('\n');
-
-    const normalizedRole = normalizeRole(currentUser.role);
-    const fullMessage = [
-      buildContextPrefix(currentUser),
-      getRolePermissions(normalizedRole),
-      '',
-      systemPrompt?.trim() || '',
-      '--- Conversation History ---',
-      historyText,
-      '--- End History ---',
-      '',
-      "Respond to the user's latest message above.",
-    ]
-      .filter(Boolean)
-      .join('\n');
+    // Build OpenAI-format messages: system prompt + conversation history
+    const openAiMessages: ChatMessage[] = [
+      { role: 'system', content: buildSystemPrompt(currentUser, systemPrompt) },
+      ...normalizedMessages,
+    ];
 
     const text = await sendToOpenClaw({
-      message: fullMessage,
-      sessionKey: buildOpenClawSessionKey(currentUser.id),
-      name: 'LMS',
+      messages: openAiMessages,
       timeoutMs: 120000,
       userId: currentUser.id,
     });
