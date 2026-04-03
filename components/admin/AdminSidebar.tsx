@@ -254,7 +254,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate }) => {
                     { label: 'SSG Process Steps', href: 'https://alfredang.github.io/ssgwsqprocess/index.html' },
                     { label: 'TPGateway', href: 'https://www.tpgateway.gov.sg/' },
                     { label: 'MySkillsFuture Portal', href: 'https://www.myskillsfuture.gov.sg/content/portal/en/index.html' },
-                    { label: 'SkillsFuture for Business', href: 'https://skillsfuture.gobusiness.gov.sg/' },
+                    { label: 'SF for Business', href: 'https://skillsfuture.gobusiness.gov.sg/' },
                     { label: 'Skills Framework', href: 'https://www.tpgateway.gov.sg/plan-courses/skills-framework' },
                     { label: 'SSG Circular', href: 'https://www.tpgateway.gov.sg/resources/announcements-and-circulars' },
                     { label: 'Corppass', href: 'https://www.corppass.gov.sg/portal' },
