@@ -158,7 +158,12 @@ const AiChatbot: React.FC = () => {
                                             </div>
                                         )
                                     ) : (
-                                        <span className="inline-block w-2 h-4 bg-gray-400 animate-pulse rounded-full"></span>
+                                        <div className="flex items-center gap-1.5 py-1">
+                                            <span className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
+                                            <span className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
+                                            <span className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
+                                            <span className="text-xs text-gray-500 ml-1.5">Nemo is thinking...</span>
+                                        </div>
                                     )}
                                 </div>
                             </div>
