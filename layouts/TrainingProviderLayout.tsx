@@ -22,6 +22,7 @@ import FeedbackEmailTemplateView from '../components/training-provider/FeedbackE
 import PasswordResetEmailTemplateView from '../components/training-provider/PasswordResetEmailTemplateView';
 import FinanceManagementView from '../components/training-provider/FinanceManagementView';
 import TrainingProviderSidebar from '../components/training-provider/TrainingProviderSidebar';
+import SchedulerView from '../components/admin/SchedulerView';
 import { Card } from '../components/ui/Card';
 
 const TrainingProviderLayout: React.FC = () => {
@@ -74,6 +75,8 @@ const TrainingProviderLayout: React.FC = () => {
         return <PasswordResetEmailTemplateView />;
       case View.FinanceManagement:
         return <FinanceManagementView />;
+      case View.Scheduler:
+        return <SchedulerView />;
       default:
         return <TrainingProviderDashboard />;
     }
@@ -98,6 +101,7 @@ const TrainingProviderLayout: React.FC = () => {
       case View.FeedbackEmailTemplate: return 'Feedback Email Template';
       case View.PasswordResetEmailTemplate: return 'Password Reset Email Template';
       case View.FinanceManagement: return 'Finance Management';
+      case View.Scheduler: return 'Task Scheduler';
       default: return 'Dashboard';
     }
   };

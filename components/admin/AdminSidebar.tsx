@@ -67,7 +67,6 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate }) => {
         referenceLinks: false,
         n8nLinks: false,
         usefulLinks: false,
-        scheduler: false,
     });
 
     const toggleSection = (key: string) => {
@@ -244,10 +243,6 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate }) => {
                         </a>
                     );
                 })}
-            </NavSection>
-
-            <NavSection title="Scheduler" isOpen={openSections.scheduler} onToggle={() => toggleSection('scheduler')}>
-                <NavItem page={AdminPage.Scheduler} label="Task Scheduler" isSubItem />
             </NavSection>
 
             <NavSection title="Logging" isOpen={openSections.logging} onToggle={() => toggleSection('logging')}>

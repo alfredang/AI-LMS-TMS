@@ -11,6 +11,7 @@ export enum View {
   UserManagement = 'userManagement',
   ApiEndpoints = 'apiEndpoints',
   AdminManagement = 'adminManagement',
+  Scheduler = 'scheduler',
   Documents = 'documents',
   PrivacyPolicy = 'privacyPolicy',
   AcceptableUsePolicy = 'acceptableUsePolicy',
