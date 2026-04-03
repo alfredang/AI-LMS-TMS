@@ -33,7 +33,12 @@ const ED_TOOL_ITEMS: { label: string; icon: IconName; href: string }[] = [
   { label: 'Fishbone Diagram', icon: IconName.Link,  href: 'https://alfredang.github.io/fishbone/' },
   { label: 'Pareto Chart',    icon: IconName.Link,   href: 'https://alfredang.github.io/paretochart/' },
   { label: 'System Thinking', icon: IconName.Link,   href: 'https://alfredang.github.io/systemloop/' },
-  { label: 'Google Meet',    icon: IconName.Video,    href: 'https://meet.google.com/landing' },
+];
+
+const VIRTUAL_TOOL_ITEMS: { label: string; icon: IconName; href: string }[] = [
+  { label: 'Google Meet',      icon: IconName.Video, href: 'https://meet.google.com/landing' },
+  { label: 'Microsoft Teams',  icon: IconName.Video, href: 'https://www.microsoft.com/en-sg/microsoft-teams/log-in' },
+  { label: 'Zoom',             icon: IconName.Video, href: 'https://www.zoom.com/' },
 ];
 
 const DATA_ANALYTICS_ITEMS: { label: string; icon: IconName; href: string }[] = [
@@ -98,6 +103,7 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate }) => {
   const [doeToolsOpen, setDoeToolsOpen] = useState(trainerPage === TrainerPage.DoeTools);
   const [spcToolsOpen, setSpcToolsOpen] = useState(trainerPage === TrainerPage.SpcTools);
   const [genAiOpen, setGenAiOpen] = useState(trainerPage === TrainerPage.GenAIAuthoring);
+  const [virtualToolsOpen, setVirtualToolsOpen] = useState(trainerPage === TrainerPage.VirtualTools);
 
   const navigateTo = (page: TrainerPage) => {
     setSelectedCourse(null);
@@ -456,6 +462,51 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate }) => {
                 >
                   <Icon name={icon} className="w-4 h-4 flex-shrink-0 text-gray-400 dark:text-gray-500 group-hover:text-gray-900 dark:group-hover:text-white transition-colors" />
                   <span className="truncate">{label}</span>
+                </a>
+              ))}
+            </div>
+          )}
+
+          {/* Virtual Tools — expandable */}
+          <button
+            onClick={() => {
+              setVirtualToolsOpen(prev => !prev);
+              navigateTo(TrainerPage.VirtualTools);
+            }}
+            className={`group flex items-center gap-3 w-full rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-150 ${
+              trainerPage === TrainerPage.VirtualTools
+                ? 'bg-primary/10 text-primary'
+                : inactiveClass
+            }`}
+          >
+            <Icon
+              name={IconName.Video}
+              className={`w-[18px] h-[18px] flex-shrink-0 transition-colors ${
+                trainerPage === TrainerPage.VirtualTools ? 'text-primary' : inactiveIconClass
+              }`}
+            />
+            <span className="truncate">Virtual Tools</span>
+            <Icon
+              name={IconName.ChevronDown}
+              className={`w-4 h-4 ml-auto flex-shrink-0 transition-transform duration-200 ${
+                virtualToolsOpen ? 'rotate-0' : '-rotate-90'
+              } ${trainerPage === TrainerPage.VirtualTools ? 'text-primary' : 'text-gray-400 dark:text-gray-500'}`}
+            />
+          </button>
+
+          {virtualToolsOpen && (
+            <div className="ml-5 pl-3 border-l border-gray-200 dark:border-gray-700 space-y-0.5">
+              {VIRTUAL_TOOL_ITEMS.map(({ label, icon, href }) => (
+                <a
+                  key={label}
+                  href={href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={`group flex items-center gap-2.5 w-full rounded-lg px-2.5 py-2 text-[13px] font-medium transition-all duration-150 ${subItemClass}`}
+                >
+                  <Icon name={icon} className="w-4 h-4 flex-shrink-0 text-gray-400 dark:text-gray-500 group-hover:text-gray-900 dark:group-hover:text-white transition-colors" />
+                  <span className="truncate">{label}</span>
+                  <Icon name={IconName.ExternalLink} className="w-3 h-3 ml-auto text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
                 </a>
               ))}
             </div>

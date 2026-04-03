@@ -99,12 +99,6 @@ const ED_TOOLS = [
     icon: IconName.Link,
     href: 'https://alfredang.github.io/systemloop/',
   },
-  {
-    title: 'Google Meet',
-    description: 'Start or join a video meeting with learners',
-    icon: IconName.Video,
-    href: 'https://meet.google.com/landing',
-  },
 ];
 
 const EdToolsPage: React.FC = () => {
