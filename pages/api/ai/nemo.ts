@@ -105,8 +105,8 @@ function detectTools(message: string): ToolMatch[] {
     matches.push({ tool: 'get_dashboard_summary', args: {} });
   }
 
-  // If nothing matched but it seems like a data query, get dashboard summary as context
-  if (matches.length === 0 && /\b(how many|count|total|what|which|check|show me|tell me)\b/.test(msg)) {
+  // Always include dashboard summary as fallback context so Nemo has data to work with
+  if (matches.length === 0) {
     matches.push({ tool: 'get_dashboard_summary', args: {} });
   }
 

@@ -10,5 +10,10 @@ export async function register() {
     if (process.env.NEXT_RUNTIME === 'nodejs') {
         const { initScheduler } = await import('./lib/scheduler/scheduler');
         await initScheduler();
+
+        // Warm up OpenClaw session to avoid ~15s cold start on first user message
+        const { sendToOpenClaw } = await import('./lib/openclaw-client');
+        sendToOpenClaw({ messages: [{ role: 'user', content: 'ping' }], userId: 'warmup', timeoutMs: 30000 }).catch(() => {});
+        console.log('[Nemo] Warm-up ping sent to OpenClaw');
     }
 }
