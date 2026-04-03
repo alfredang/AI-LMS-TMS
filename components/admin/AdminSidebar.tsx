@@ -172,11 +172,6 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate }) => {
                     <NavItem page={AdminPage.CourseSessions} label="Course Sessions" isSubItem />
                 </SubSection>
 
-                <SubSection title="Attendance" isOpen={openSections.tpgAttendance} onToggle={() => toggleSection('tpgAttendance')}>
-                    <NavItem page={AdminPage.CourseSessionAttendance} label="Session Attendance" isSubItem />
-                    <NavItem page={AdminPage.CheckAttendance} label="Check Attendance" isSubItem />
-                </SubSection>
-
                 <SubSection title="Enrolment" isOpen={openSections.tpgEnrolment} onToggle={() => toggleSection('tpgEnrolment')}>
                     <NavItem page={AdminPage.EnrollLearners} label="Enroll Learners" isSubItem />
                     <NavItem page={AdminPage.UploadEnrolments} label="Upload Enrolments" isSubItem />
@@ -185,6 +180,11 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate }) => {
                     <NavItem page={AdminPage.UpdateEnrolment} label="Update Enrolment" isSubItem />
                     <NavItem page={AdminPage.CancelEnrolment} label="Cancel Enrolment" isSubItem />
                     <NavItem page={AdminPage.UpdateEnrolmentFees} label="Update Enrolment Fees" isSubItem />
+                </SubSection>
+
+                <SubSection title="Attendance" isOpen={openSections.tpgAttendance} onToggle={() => toggleSection('tpgAttendance')}>
+                    <NavItem page={AdminPage.CourseSessionAttendance} label="Session Attendance" isSubItem />
+                    <NavItem page={AdminPage.CheckAttendance} label="Check Attendance" isSubItem />
                 </SubSection>
 
                 <SubSection title="Assessment" isOpen={openSections.tpgAssessment} onToggle={() => toggleSection('tpgAssessment')}>
