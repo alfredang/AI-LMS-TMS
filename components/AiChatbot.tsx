@@ -192,16 +192,16 @@ const AiChatbot: React.FC = () => {
 
             {/* Floating Action Button */}
             {!isChatOpen && (
-                <Button
+                <button
                     onClick={toggleChat}
-                    className="rounded-full !p-0 shadow-lg w-12 h-12 flex items-center justify-center transform hover:scale-110 transition-transform duration-200 overflow-hidden"
+                    className="w-14 h-14 rounded-full bg-primary shadow-lg flex items-center justify-center transform hover:scale-110 transition-transform duration-200"
                     aria-label="Open Nemo AI Agent"
                     title="Nemo - AI Agent"
                 >
-                    <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-white font-bold text-base leading-none">
+                    <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center text-white font-bold text-lg leading-none">
                         N
                     </div>
-                </Button>
+                </button>
             )}
         </div>
     );
