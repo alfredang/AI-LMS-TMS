@@ -120,6 +120,7 @@ export async function sendToOpenClaw(opts: {
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
+          'x-openclaw-model': 'minimax/MiniMax-M2.7',
         },
         body: JSON.stringify(requestBody),
         signal: controller.signal,
