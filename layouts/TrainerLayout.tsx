@@ -18,6 +18,7 @@ import PastAttendance from '../components/trainer/PastAttendance';
 import PastAssessment from '../components/trainer/PastAssessment';
 import EdToolsPage from '../components/trainer/EdToolsPage';
 import DataAnalyticsToolsPage from '../components/trainer/DataAnalyticsToolsPage';
+import FinanceToolsPage from '../components/trainer/FinanceToolsPage';
 import StatToolsPage from '../components/trainer/StatToolsPage';
 import DoeToolsPage from '../components/trainer/DoeToolsPage';
 import SpcToolsPage from '../components/trainer/SpcToolsPage';
@@ -33,6 +34,7 @@ const PAGE_LABELS: Record<TrainerPage, string> = {
   [TrainerPage.GenAIAuthoring]: 'GenAI Tools',
   [TrainerPage.EdTools]: 'Ed Tools',
   [TrainerPage.DataAnalyticsTools]: 'Data Analytics Tools',
+  [TrainerPage.FinanceTools]: 'Finance Tools',
   [TrainerPage.StatTools]: 'Statistical Tools',
   [TrainerPage.DoeTools]: 'DOE Tools',
   [TrainerPage.SpcTools]: 'SPC Tools',
@@ -68,6 +70,8 @@ const TrainerLayout: React.FC = () => {
         return <EdToolsPage />;
       case TrainerPage.DataAnalyticsTools:
         return <DataAnalyticsToolsPage />;
+      case TrainerPage.FinanceTools:
+        return <FinanceToolsPage />;
       case TrainerPage.StatTools:
         return <StatToolsPage />;
       case TrainerPage.DoeTools:
