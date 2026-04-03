@@ -219,7 +219,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    // Use /tmp for Vercel serverless environment (only writable directory)
+    // Use /tmp as writable directory
     const tempDir = '/tmp';
 
     // Parse the multipart form data with improved formidable configuration

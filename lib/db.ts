@@ -15,7 +15,7 @@ const pool = new Pool({
     ? { rejectUnauthorized: false }
     : false,
 
-  // Connection pool settings optimized for serverless (Vercel)
+  // Connection pool settings optimized for serverless
   // Keep these low for serverless environments
   max: 5, // Reduced for serverless - each function instance has its own pool
   idleTimeoutMillis: 10000, // Close idle clients after 10 seconds
