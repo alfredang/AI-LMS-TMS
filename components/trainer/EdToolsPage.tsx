@@ -99,6 +99,12 @@ const ED_TOOLS = [
     icon: IconName.Link,
     href: 'https://alfredang.github.io/systemloop/',
   },
+  {
+    title: 'Mock Data Generator',
+    description: 'Generate realistic mock data for testing and demonstrations',
+    icon: IconName.FileText,
+    href: 'https://alfredang.github.io/mockdatagen/',
+  },
 ];
 
 const EdToolsPage: React.FC = () => {

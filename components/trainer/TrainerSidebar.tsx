@@ -33,6 +33,7 @@ const ED_TOOL_ITEMS: { label: string; icon: IconName; href: string }[] = [
   { label: 'Fishbone Diagram', icon: IconName.Link,  href: 'https://alfredang.github.io/fishbone/' },
   { label: 'Pareto Chart',    icon: IconName.Link,   href: 'https://alfredang.github.io/paretochart/' },
   { label: 'System Thinking', icon: IconName.Link,   href: 'https://alfredang.github.io/systemloop/' },
+  { label: 'Mock Data Generator', icon: IconName.FileText, href: 'https://alfredang.github.io/mockdatagen/' },
 ];
 
 const VIRTUAL_TOOL_ITEMS: { label: string; icon: IconName; href: string }[] = [
