@@ -100,6 +100,19 @@ export async function sendToOpenClaw(opts: {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
+    const requestBody: any = {
+      model: 'openclaw',
+      messages: conversationMessages,
+    };
+
+    // Only include tools on the first round (initial request)
+    if (round === 0 && tools && tools.length > 0) {
+      requestBody.tools = tools;
+    }
+
+    console.log(`[Nemo] Round ${round + 1}: sending ${conversationMessages.length} messages${requestBody.tools ? ` with ${requestBody.tools.length} tools` : ''}`);
+    const startTime = Date.now();
+
     let data: any;
     try {
       const response = await fetch(url, {
@@ -108,13 +121,11 @@ export async function sendToOpenClaw(opts: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
         },
-        body: JSON.stringify({
-          model: 'openclaw',
-          messages: conversationMessages,
-          ...(tools && tools.length > 0 ? { tools } : {}),
-        }),
+        body: JSON.stringify(requestBody),
         signal: controller.signal,
       });
+
+      console.log(`[Nemo] Round ${round + 1}: response ${response.status} in ${Date.now() - startTime}ms`);
 
       if (!response.ok) {
         const body = await response.text().catch(() => '');
@@ -138,8 +149,11 @@ export async function sendToOpenClaw(opts: {
 
     // If no tool calls, return the final text response
     if (!message.tool_calls || message.tool_calls.length === 0) {
+      console.log(`[Nemo] Final response in round ${round + 1}, total ${Date.now() - startTime}ms`);
       return (message.content || '').trim();
     }
+
+    console.log(`[Nemo] Round ${round + 1}: ${message.tool_calls.length} tool calls: ${message.tool_calls.map((tc: ToolCall) => tc.function.name).join(', ')}`);
 
     // Add assistant message with tool calls to conversation
     conversationMessages.push({
@@ -157,7 +171,10 @@ export async function sendToOpenClaw(opts: {
         args = {};
       }
 
+      console.log(`[Nemo] Executing tool: ${toolCall.function.name}(${JSON.stringify(args)})`);
+      const toolStart = Date.now();
       const result = await executeTool(toolCall.function.name, args);
+      console.log(`[Nemo] Tool ${toolCall.function.name} completed in ${Date.now() - toolStart}ms, result length: ${result.length}`);
 
       conversationMessages.push({
         role: 'tool',
