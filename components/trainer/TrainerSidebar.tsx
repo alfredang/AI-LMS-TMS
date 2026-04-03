@@ -45,6 +45,17 @@ const STAT_TOOL_ITEMS: { label: string; icon: IconName; href: string }[] = [
   { label: 'ANOVA',        icon: IconName.Analytics, href: 'https://alfredang.github.io/novastats/#/anova' },
 ];
 
+const DOE_TOOL_ITEMS: { label: string; icon: IconName; href: string }[] = [
+  { label: 'Full Factorial',        icon: IconName.Analytics, href: 'https://alfredang.github.io/novadoe/#full-factorial' },
+  { label: 'Fractional Factorial',  icon: IconName.Analytics, href: 'https://alfredang.github.io/novadoe/#fractional-factorial' },
+  { label: 'Taguchi',               icon: IconName.Analytics, href: 'https://alfredang.github.io/novadoe/#taguchi' },
+  { label: 'Central Composite',     icon: IconName.Analytics, href: 'https://alfredang.github.io/novadoe/#central-composite' },
+  { label: 'Box-Behnken',           icon: IconName.Analytics, href: 'https://alfredang.github.io/novadoe/#box-behnken' },
+  { label: 'Plackett-Burman',       icon: IconName.Analytics, href: 'https://alfredang.github.io/novadoe/#plackett-burman' },
+  { label: 'Latin Square',          icon: IconName.Analytics, href: 'https://alfredang.github.io/novadoe/#latin-square' },
+  { label: 'Response Surface',      icon: IconName.Analytics, href: 'https://alfredang.github.io/novadoe/#response-surface' },
+];
+
 const GENAI_TOOL_ITEMS: { label: string; icon: IconName }[] = [
   { label: 'Create Quiz',            icon: IconName.FileText },
   { label: 'Create Interactive Poll', icon: IconName.ClipboardCheck },
@@ -62,6 +73,7 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate }) => {
   const { trainerPage, setTrainerPage, setCurrentView, setSelectedCourse } = useLms();
   const [edToolsOpen, setEdToolsOpen] = useState(true);
   const [statToolsOpen, setStatToolsOpen] = useState(trainerPage === TrainerPage.StatTools);
+  const [doeToolsOpen, setDoeToolsOpen] = useState(trainerPage === TrainerPage.DoeTools);
   const [genAiOpen, setGenAiOpen] = useState(trainerPage === TrainerPage.GenAIAuthoring);
 
   const navigateTo = (page: TrainerPage) => {
@@ -188,6 +200,51 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate }) => {
           {statToolsOpen && (
             <div className="ml-5 pl-3 border-l border-gray-200 dark:border-gray-700 space-y-0.5">
               {STAT_TOOL_ITEMS.map(({ label, icon, href }) => (
+                <a
+                  key={label}
+                  href={href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={`group flex items-center gap-2.5 w-full rounded-lg px-2.5 py-2 text-[13px] font-medium transition-all duration-150 ${subItemClass}`}
+                >
+                  <Icon name={icon} className="w-4 h-4 flex-shrink-0 text-gray-400 dark:text-gray-500 group-hover:text-gray-900 dark:group-hover:text-white transition-colors" />
+                  <span className="truncate">{label}</span>
+                  <Icon name={IconName.ExternalLink} className="w-3 h-3 ml-auto text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                </a>
+              ))}
+            </div>
+          )}
+
+          {/* DOE Tools — expandable */}
+          <button
+            onClick={() => {
+              setDoeToolsOpen(prev => !prev);
+              navigateTo(TrainerPage.DoeTools);
+            }}
+            className={`group flex items-center gap-3 w-full rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-150 ${
+              trainerPage === TrainerPage.DoeTools
+                ? 'bg-primary/10 text-primary'
+                : inactiveClass
+            }`}
+          >
+            <Icon
+              name={IconName.Analytics}
+              className={`w-[18px] h-[18px] flex-shrink-0 transition-colors ${
+                trainerPage === TrainerPage.DoeTools ? 'text-primary' : inactiveIconClass
+              }`}
+            />
+            <span className="truncate">DOE Tools</span>
+            <Icon
+              name={IconName.ChevronDown}
+              className={`w-4 h-4 ml-auto flex-shrink-0 transition-transform duration-200 ${
+                doeToolsOpen ? 'rotate-0' : '-rotate-90'
+              } ${trainerPage === TrainerPage.DoeTools ? 'text-primary' : 'text-gray-400 dark:text-gray-500'}`}
+            />
+          </button>
+
+          {doeToolsOpen && (
+            <div className="ml-5 pl-3 border-l border-gray-200 dark:border-gray-700 space-y-0.5">
+              {DOE_TOOL_ITEMS.map(({ label, icon, href }) => (
                 <a
                   key={label}
                   href={href}
