@@ -163,6 +163,31 @@ function coerceMessages(messages: IncomingMessage[]): Array<{ role: ChatRole; co
     .filter(message => message.content.length > 0);
 }
 
+function formatRawResults(results: string[]): string {
+  const lines = ['Here\'s what I found from the database:\n'];
+  for (const result of results) {
+    try {
+      const colonIdx = result.indexOf(':\n');
+      if (colonIdx === -1) { lines.push(result); continue; }
+      const toolName = result.substring(0, colonIdx);
+      const json = JSON.parse(result.substring(colonIdx + 2));
+      lines.push(`**${toolName}**`);
+      if (json.count !== undefined) lines.push(`- Total results: ${json.count}`);
+      const dataKey = Object.keys(json).find(k => Array.isArray(json[k]));
+      if (dataKey) {
+        for (const item of json[dataKey].slice(0, 10)) {
+          const label = item.course_title || item.title || item.name || item.trainee_name || item.claim_id || item.grant_id || item.label || JSON.stringify(item).substring(0, 80);
+          const status = item.class_status || item.status || item.enrolment_status || item.claim_status || '';
+          lines.push(`- ${label}${status ? ` (${status})` : ''}`);
+        }
+      }
+    } catch {
+      lines.push(result);
+    }
+  }
+  return lines.join('\n');
+}
+
 // ---------------------------------------------------------------------------
 // Handler
 // ---------------------------------------------------------------------------
@@ -226,11 +251,27 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         ...normalizedMessages,
       ];
 
-      text = await sendToOpenClaw({
-        messages: openAiMessages,
-        timeoutMs: 120000,
-        userId: currentUser.id,
-      });
+      // Try OpenClaw first, then MiniMax direct, then return raw data as fallback
+      try {
+        text = await sendToOpenClaw({
+          messages: openAiMessages,
+          timeoutMs: 60000,
+          userId: currentUser.id,
+        });
+      } catch (openClawError: any) {
+        console.error('[Nemo] OpenClaw failed, trying MiniMax direct:', openClawError.message);
+        try {
+          text = await sendToMiniMaxDirect({
+            messages: openAiMessages,
+            timeoutMs: 30000,
+            userId: currentUser.id,
+          });
+        } catch {
+          // Last resort: return raw DB results so user still gets data
+          console.error('[Nemo] All LLM calls failed, returning raw data');
+          text = formatRawResults(results);
+        }
+      }
     } else {
       // Simple Q&A — skip OpenClaw agent, call MiniMax directly (~3-5s vs ~15s)
       console.log('[Nemo] No tools matched, using MiniMax direct');
@@ -239,11 +280,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         ...normalizedMessages,
       ];
 
-      text = await sendToMiniMaxDirect({
-        messages: openAiMessages,
-        timeoutMs: 60000,
-        userId: currentUser.id,
-      });
+      try {
+        text = await sendToMiniMaxDirect({
+          messages: openAiMessages,
+          timeoutMs: 30000,
+          userId: currentUser.id,
+        });
+      } catch {
+        text = "I'm having trouble connecting to the AI service right now. Please try again in a moment.";
+      }
     }
 
     return res.status(200).json({ text });
