@@ -22,6 +22,7 @@ import FinanceToolsPage from '../components/trainer/FinanceToolsPage';
 import StatToolsPage from '../components/trainer/StatToolsPage';
 import DoeToolsPage from '../components/trainer/DoeToolsPage';
 import SpcToolsPage from '../components/trainer/SpcToolsPage';
+import SustainabilityToolsPage from '../components/trainer/SustainabilityToolsPage';
 import VirtualToolsPage from '../components/trainer/VirtualToolsPage';
 import AssessmentGuidePage from '../components/trainer/AssessmentGuidePage';
 
@@ -39,6 +40,7 @@ const PAGE_LABELS: Record<TrainerPage, string> = {
   [TrainerPage.StatTools]: 'Statistical Tools',
   [TrainerPage.DoeTools]: 'DOE Tools',
   [TrainerPage.SpcTools]: 'SPC Tools',
+  [TrainerPage.SustainabilityTools]: 'Sustainability Tools',
   [TrainerPage.VirtualTools]: 'Virtual Tools',
   [TrainerPage.AssessmentGuide]: 'Assessment Guide',
 };
@@ -80,6 +82,8 @@ const TrainerLayout: React.FC = () => {
         return <DoeToolsPage />;
       case TrainerPage.SpcTools:
         return <SpcToolsPage />;
+      case TrainerPage.SustainabilityTools:
+        return <SustainabilityToolsPage />;
       case TrainerPage.VirtualTools:
         return <VirtualToolsPage />;
       case TrainerPage.AssessmentGuide:
