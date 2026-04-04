@@ -86,7 +86,7 @@ const SPC_TOOL_ITEMS: { label: string; icon: IconName; href: string }[] = [
 ];
 
 const SUSTAINABILITY_TOOL_ITEMS: { label: string; icon: IconName; href: string }[] = [
-  { label: 'Carbon Calculator', icon: IconName.Analytics, href: 'https://alfredang.github.io/sgcarboncalculator/' },
+  { label: 'Carbon Footprint Calculator', icon: IconName.Analytics, href: 'https://alfredang.github.io/sgcarboncalculator/' },
 ];
 
 const GENAI_TOOL_ITEMS: { label: string; icon: IconName }[] = [

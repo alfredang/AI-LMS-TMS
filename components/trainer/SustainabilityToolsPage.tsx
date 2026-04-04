@@ -4,7 +4,7 @@ import { Icon, IconName } from '../ui/Icon';
 
 const SUSTAINABILITY_TOOLS = [
   {
-    title: 'Carbon Calculator',
+    title: 'Carbon Footprint Calculator',
     description: 'Calculate and track carbon emissions for sustainability reporting',
     icon: IconName.Analytics,
     href: 'https://alfredang.github.io/sgcarboncalculator/',
