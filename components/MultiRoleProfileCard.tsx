@@ -9,6 +9,7 @@ import { Button } from './ui/Button';
 import { Icon, IconName } from './ui/Icon';
 import Spinner from './ui/Spinner';
 import { useLms } from '@contexts/LmsContext';
+import { UserRole } from '@app-types/index';
 import { ensureAbsoluteImageUrl } from '@utils/imageUtils';
 import { getApiUrl, getUploadUrl, getDeleteFileUrl, stripBaseUrl } from '@/lib/urlHelpers';
 import { ThemeMode, getCurrentTheme, applyTheme } from '@utils/colorUtils';
@@ -130,24 +131,65 @@ const WorkExperienceSection: React.FC<{
     );
 };
 
+// Skills Tags Input Component
+const MAX_SKILL_TAGS = 20;
+const SkillTagsInput: React.FC<{
+    tags: string[]; isEditing: boolean; onUpdate: (tags: string[]) => void;
+}> = ({ tags, isEditing, onUpdate }) => {
+    const [inputValue, setInputValue] = React.useState('');
+
+    const addTag = () => {
+        const tag = inputValue.trim().toLowerCase();
+        if (!tag || tags.length >= MAX_SKILL_TAGS || tags.includes(tag)) { setInputValue(''); return; }
+        onUpdate([...tags, tag]);
+        setInputValue('');
+    };
+
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addTag(); }
+        if (e.key === 'Backspace' && !inputValue && tags.length > 0) { onUpdate(tags.slice(0, -1)); }
+    };
+
+    if (!isEditing) {
+        return tags.length > 0 ? (
+            <div className="flex flex-wrap gap-2">
+                {tags.map((tag, i) => (
+                    <span key={i} className="px-3 py-1 text-sm rounded-full bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400">{tag}</span>
+                ))}
+            </div>
+        ) : <p className="text-subtle text-sm">No skills added.</p>;
+    }
+
+    return (
+        <div>
+            <div className="flex flex-wrap gap-2 p-3 min-h-[44px] border border-gray-300 rounded-md bg-white dark:bg-gray-700 dark:border-gray-600">
+                {tags.map((tag, i) => (
+                    <span key={i} className="inline-flex items-center gap-1 px-3 py-1 text-sm rounded-full bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400">
+                        {tag}
+                        <button type="button" onClick={() => onUpdate(tags.filter((_, idx) => idx !== i))}
+                            className="ml-0.5 hover:text-red-600 dark:hover:text-red-400 font-bold text-base leading-none">&times;</button>
+                    </span>
+                ))}
+                {tags.length < MAX_SKILL_TAGS && (
+                    <input
+                        type="text" value={inputValue}
+                        onChange={e => setInputValue(e.target.value)}
+                        onKeyDown={handleKeyDown} onBlur={addTag}
+                        placeholder={tags.length === 0 ? 'Type a skill and press Enter' : 'Add more...'}
+                        className="flex-1 min-w-[120px] outline-none bg-transparent text-sm dark:text-white dark:placeholder-gray-400"
+                    />
+                )}
+            </div>
+            <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">{tags.length}/{MAX_SKILL_TAGS} tags. Press Enter or comma to add.</p>
+        </div>
+    );
+};
+
 // Document Section
 const DocumentSection: React.FC<{
     title: string; cvUrl?: string; cvOriginalFilename?: string; cvFolderUrl?: string; certifications: any[];
-    isEditing: boolean; onUpdateCv: (file: File) => void; onAddCertification: (name: string, file: File) => void;
-    onRemoveCertification: (id: string) => void; uploadId: string; onUpdateCvFolderUrl?: (url: string) => void;
-}> = ({ title, cvUrl, cvOriginalFilename, cvFolderUrl, certifications, isEditing, onUpdateCv, onAddCertification, onRemoveCertification, uploadId, onUpdateCvFolderUrl }) => {
-    const [newCertName, setNewCertName] = useState('');
-    const [selectedCertFile, setSelectedCertFile] = useState<File | null>(null);
-    const certUploadId = `cert-upload-${uploadId}`;
-
-    const handleAddCert = () => {
-        if (selectedCertFile && newCertName) {
-            onAddCertification(newCertName, selectedCertFile);
-            setNewCertName(''); setSelectedCertFile(null);
-            const el = document.getElementById(certUploadId) as HTMLInputElement;
-            if (el) el.value = '';
-        } else { alert("Please provide both a name and select a file."); }
-    };
+    isEditing: boolean; onUpdateCvFolderUrl?: (url: string) => void;
+}> = ({ title, cvUrl, cvOriginalFilename, cvFolderUrl, certifications, isEditing, onUpdateCvFolderUrl }) => {
 
     if (isEditing) {
         return (
@@ -167,31 +209,6 @@ const DocumentSection: React.FC<{
                         )}
                     </div>
                     <p className="text-xs text-gray-500 mt-1 dark:text-gray-400">Upload your CV and certifications to this Google Drive folder.</p>
-                </div>
-                <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Certifications</label>
-                    <div className="space-y-2">
-                        {certifications?.map(cert => (
-                            <div key={cert.id || cert.name} className="flex items-center gap-2 p-2 bg-gray-50 rounded-md border dark:bg-gray-700 dark:border-gray-600">
-                                <Icon name={IconName.FilePdf} className="w-5 h-5 text-gray-500" />
-                                <span className="text-sm text-gray-600 flex-1">{cert.name}</span>
-                                <button onClick={() => cert.id && onRemoveCertification(cert.id)} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-100 rounded-full">
-                                    <Icon name={IconName.Delete} className="w-4 h-4" />
-                                </button>
-                            </div>
-                        ))}
-                        <div className="flex items-center gap-2 p-2 bg-gray-100 rounded-md border border-dashed dark:bg-gray-700/50 dark:border-gray-600">
-                            <input type="text" placeholder="New Certification Name" value={newCertName} onChange={e => setNewCertName(e.target.value)} className={`${inputClasses} !py-1.5 !text-sm flex-1`} />
-                            <div className="flex flex-col gap-1">
-                                <Button variant="ghost" size="sm" onClick={() => document.getElementById(certUploadId)?.click()}>
-                                    <Icon name={IconName.Upload} className="w-4 h-4 mr-1" /> Select File
-                                </Button>
-                                {selectedCertFile && <span className="text-xs text-gray-600 truncate max-w-32" title={selectedCertFile.name}>{selectedCertFile.name}</span>}
-                            </div>
-                            <Button variant="ghost" size="sm" onClick={handleAddCert} disabled={!newCertName || !selectedCertFile} className="bg-green-100 hover:bg-green-200 text-green-700 dark:bg-green-900/50 dark:text-green-300">Add</Button>
-                            <input type="file" id={certUploadId} className="hidden" onChange={(e) => e.target.files && setSelectedCertFile(e.target.files[0])} accept=".pdf,.jpg,.png,.doc,.docx" />
-                        </div>
-                    </div>
                 </div>
             </div>
         );
@@ -307,13 +324,13 @@ interface SharedData {
 }
 interface TrainerRoleData {
     trainerType: string; status: string; cvUrl: string; cvOriginalFilename: string; cvFolderUrl: string;
-    qualifications: string[]; education: string; areasOfExpertise: string[];
+    qualifications: string[]; education: string; areasOfExpertise: string[]; skillsTags: string[]; certificationTags: string[];
     commonName: string; country: string; cnPlusEmail: string;
     workExperience: WorkExperienceItem[]; certifications: Certification[];
 }
 interface DeveloperRoleData {
     developerType: string; cvUrl: string; cvOriginalFilename: string; cvFolderUrl: string;
-    qualifications: string[]; education: string; areasOfSpecialty: string[];
+    qualifications: string[]; education: string; areasOfSpecialty: string[]; skillsTags: string[]; certificationTags: string[];
     workExperience: WorkExperienceItem[]; certifications: Certification[];
 }
 interface MultiRoleProfileData {
@@ -325,7 +342,7 @@ interface MultiRoleProfileData {
 
 // ========== Main Component ==========
 export const MultiRoleProfileCard: React.FC = () => {
-    const { currentUser, updateCurrentUserProfile } = useLms();
+    const { currentUser, updateCurrentUserProfile, role } = useLms();
     const [data, setData] = useState<MultiRoleProfileData | null>(null);
     const [loading, setLoading] = useState(true);
     const [isEditing, setIsEditing] = useState(false);
@@ -546,6 +563,8 @@ export const MultiRoleProfileCard: React.FC = () => {
                 if (trainerForm.education !== data.trainer?.education) trainerUpdate.education = trainerForm.education;
                 if (JSON.stringify(trainerForm.qualifications) !== JSON.stringify(data.trainer?.qualifications)) trainerUpdate.qualifications = trainerForm.qualifications;
                 if (JSON.stringify(trainerForm.areasOfExpertise) !== JSON.stringify(data.trainer?.areasOfExpertise)) trainerUpdate.areasOfExpertise = trainerForm.areasOfExpertise;
+                if (JSON.stringify(trainerForm.skillsTags) !== JSON.stringify(data.trainer?.skillsTags)) trainerUpdate.skillsTags = trainerForm.skillsTags;
+                if (JSON.stringify(trainerForm.certificationTags) !== JSON.stringify(data.trainer?.certificationTags)) trainerUpdate.certificationTags = trainerForm.certificationTags;
                 if (JSON.stringify(trainerForm.workExperience) !== JSON.stringify(data.trainer?.workExperience)) trainerUpdate.workExperience = trainerForm.workExperience;
 
                 // app_user fields
@@ -605,6 +624,7 @@ export const MultiRoleProfileCard: React.FC = () => {
                 if (developerForm.education !== data.developer?.education) devUpdate.education = developerForm.education;
                 if (JSON.stringify(developerForm.qualifications) !== JSON.stringify(data.developer?.qualifications)) devUpdate.qualifications = developerForm.qualifications;
                 if (JSON.stringify(developerForm.areasOfSpecialty) !== JSON.stringify(data.developer?.areasOfSpecialty)) devUpdate.areasOfSpecialty = developerForm.areasOfSpecialty;
+                if (JSON.stringify(developerForm.skillsTags) !== JSON.stringify(data.developer?.skillsTags)) devUpdate.skillsTags = developerForm.skillsTags;
                 if (JSON.stringify(developerForm.workExperience) !== JSON.stringify(data.developer?.workExperience)) devUpdate.workExperience = developerForm.workExperience;
 
                 // app_user fields (only if trainer didn't already save them)
@@ -727,36 +747,10 @@ export const MultiRoleProfileCard: React.FC = () => {
                     </section>
                 </div>
 
-                {/* Appearance (view mode only) */}
-                {!isEditing && (
-                    <>
-                        <div className="border-t dark:border-gray-700 my-6"></div>
-                        <h2 className="text-xl font-bold mb-4 dark:text-white">Appearance</h2>
-                        <div className="flex justify-between items-center p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
-                            <div className="flex items-center gap-3">
-                                <div className={`p-2 rounded-lg ${themeMode === 'dark' ? 'bg-gray-600' : 'bg-blue-100'}`}>
-                                    {themeMode === 'dark' ? (
-                                        <svg className="w-5 h-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20"><path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z" /></svg>
-                                    ) : (
-                                        <svg className="w-5 h-5 text-yellow-500" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" clipRule="evenodd" /></svg>
-                                    )}
-                                </div>
-                                <div>
-                                    <p className="font-semibold text-gray-900 dark:text-gray-200">Theme Mode</p>
-                                    <p className="text-sm text-gray-600 dark:text-gray-400">{themeMode === 'dark' ? 'Dark theme active' : 'Light theme active'}</p>
-                                </div>
-                            </div>
-                            <button type="button" onClick={handleThemeToggle}
-                                className={`relative inline-flex h-7 w-14 items-center rounded-full transition-colors duration-300 ${themeMode === 'dark' ? 'bg-blue-600' : 'bg-gray-300'}`}>
-                                <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-md transition-transform duration-300 ${themeMode === 'dark' ? 'translate-x-8' : 'translate-x-1'}`} />
-                            </button>
-                        </div>
-                    </>
-                )}
             </Card>
 
             {/* ===== TRAINER SECTION ===== */}
-            {hasTrainer && trainerForm && (
+            {hasTrainer && trainerForm && role !== UserRole.Developer && (
                 <Card className="p-8 mt-8">
                     <div className="flex items-center gap-3 mb-6">
                         <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-blue-100 text-blue-800">Trainer</span>
@@ -764,68 +758,79 @@ export const MultiRoleProfileCard: React.FC = () => {
                     </div>
 
                     <div className="space-y-6">
-                        {/* Trainer Type */}
-                        <section>
-                            <h3 className="text-lg font-bold mb-3">Trainer Details</h3>
-                            {isEditing ? (
-                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                                    <div><label className="text-sm font-medium">Trainer Type</label>
-                                        <select name="trainerType" value={trainerForm.trainerType} onChange={(e) => setTrainerForm(prev => prev ? { ...prev, trainerType: e.target.value } : prev)} className={inputClasses}>
-                                            {Object.values(TrainerType).map(t => <option key={t} value={t}>{t}</option>)}
-                                        </select>
-                                    </div>
-                                </div>
-                            ) : (
-                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                                    <ProfileBioItem label="Trainer Type" value={trainerForm.trainerType || '—'} />
-                                </div>
-                            )}
-                        </section>
-
-                        {/* Trainer CV & Certs */}
-                        <section>
-                            <h3 className="text-lg font-bold mb-3">CV & Certifications</h3>
-                            <DocumentSection title="" cvUrl={trainerForm.cvUrl} cvOriginalFilename={trainerForm.cvOriginalFilename}
-                                cvFolderUrl={trainerForm.cvFolderUrl}
-                                certifications={trainerForm.certifications || []} isEditing={isEditing}
-                                onUpdateCv={handleTrainerCvUpdate} onAddCertification={handleTrainerAddCert}
-                                onRemoveCertification={handleTrainerRemoveCert} uploadId="trainer"
-                                onUpdateCvFolderUrl={(url) => setTrainerForm(prev => prev ? { ...prev, cvFolderUrl: url } : prev)} />
-                        </section>
-
-                        {/* Trainer Qualifications */}
-                        <section>
-                            <h3 className="text-lg font-bold mb-3">Qualifications</h3>
-                            <MultiSelectCheckboxes options={Object.values(TrainerQualification)} selected={trainerForm.qualifications || []}
-                                onChange={handleTrainerMultiSelect('qualifications')} isEditing={isEditing} color="secondary" />
-                        </section>
-
-                        {/* Trainer Education */}
-                        <section>
-                            <h3 className="text-lg font-bold mb-3">Highest Education</h3>
-                            <SingleSelectEducation options={Object.values(TrainerEducation)} selected={trainerForm.education || ''}
-                                onChange={(v) => setTrainerForm(prev => prev ? { ...prev, education: v } : prev)} isEditing={isEditing} />
-                        </section>
-
-                        {/* Trainer Areas of Expertise */}
+                        {/* Area of Expertise (spans 2 columns) */}
                         <section>
                             <h3 className="text-lg font-bold mb-3">Area of Expertise</h3>
                             <MultiSelectCheckboxes options={SKILLS_FUTURE_INDUSTRIES} selected={trainerForm.areasOfExpertise || []}
                                 onChange={handleTrainerMultiSelect('areasOfExpertise')} isEditing={isEditing} color="secondary" />
                         </section>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            {/* Left Column */}
+                            <div className="space-y-6">
+                                {/* Trainer Type */}
+                                <section>
+                                    <h3 className="text-lg font-bold mb-3">Trainer Details</h3>
+                                    {isEditing ? (
+                                        <div><label className="text-sm font-medium">Trainer Type</label>
+                                            <select name="trainerType" value={trainerForm.trainerType} onChange={(e) => setTrainerForm(prev => prev ? { ...prev, trainerType: e.target.value } : prev)} className={inputClasses}>
+                                                {Object.values(TrainerType).map(t => <option key={t} value={t}>{t}</option>)}
+                                            </select>
+                                        </div>
+                                    ) : (
+                                        <ProfileBioItem label="Trainer Type" value={trainerForm.trainerType || '—'} />
+                                    )}
+                                </section>
 
-                        {/* Trainer Work Experience */}
+                                {/* Trainer Qualifications */}
+                                <section>
+                                    <h3 className="text-lg font-bold mb-3">Qualifications</h3>
+                                    <MultiSelectCheckboxes options={Object.values(TrainerQualification)} selected={trainerForm.qualifications || []}
+                                        onChange={handleTrainerMultiSelect('qualifications')} isEditing={isEditing} color="secondary" />
+                                </section>
+                            </div>
+
+                            {/* Right Column */}
+                            <div className="space-y-6">
+                                {/* Trainer Education */}
+                                <section>
+                                    <h3 className="text-lg font-bold mb-3">Highest Education</h3>
+                                    <SingleSelectEducation options={Object.values(TrainerEducation)} selected={trainerForm.education || ''}
+                                        onChange={(v) => setTrainerForm(prev => prev ? { ...prev, education: v } : prev)} isEditing={isEditing} />
+                                </section>
+                            </div>
+                        </div>
+
+                        {/* Skill Tags (examples) */}
                         <section>
-                            <h3 className="text-lg font-bold mb-3">Work Experience</h3>
-                            <WorkExperienceSection experience={trainerForm.workExperience || []} isEditing={isEditing}
-                                onUpdate={(we) => setTrainerForm(prev => prev ? { ...prev, workExperience: we } : prev)} />
+                            <h3 className="text-lg font-bold mb-3">Skill Tags <span className="text-xs text-gray-400 ml-2">e.g. python, finance, excel, project management</span></h3>
+                            <SkillTagsInput tags={trainerForm.skillsTags || []} isEditing={isEditing}
+                                onUpdate={(tags) => setTrainerForm(prev => prev ? { ...prev, skillsTags: tags } : prev)} />
                         </section>
+
+                        {/* Certification Tags (examples) */}
+                        <section>
+                            <h3 className="text-lg font-bold mb-3">Certification Tags <span className="text-xs text-gray-400 ml-2">e.g. CKA, CKAD, PL-300, CISSP</span></h3>
+                            <SkillTagsInput tags={trainerForm.certificationTags || []} isEditing={isEditing}
+                                onUpdate={(tags) => setTrainerForm(prev => prev ? { ...prev, certificationTags: tags } : prev)} />
+                        </section>
+
+                        {/* CV & Certifications (full width) */}
+                        <section>
+                            <h3 className="text-lg font-bold mb-3">CV & Supporting Document Folder</h3>
+                            <p className="text-xs text-gray-400 mb-2">Please upload your CV, ACLP certification, and other supporting documents in the Google Drive folder.</p>
+                            <DocumentSection title="" cvUrl={trainerForm.cvUrl} cvOriginalFilename={trainerForm.cvOriginalFilename}
+                                cvFolderUrl={trainerForm.cvFolderUrl}
+                                certifications={trainerForm.certifications || []} isEditing={isEditing}
+                                onUpdateCvFolderUrl={(url) => setTrainerForm(prev => prev ? { ...prev, cvFolderUrl: url } : prev)} />
+                        </section>
+
+
                     </div>
                 </Card>
             )}
 
             {/* ===== DEVELOPER SECTION ===== */}
-            {hasDeveloper && developerForm && (
+            {hasDeveloper && developerForm && role !== UserRole.Trainer && (
                 <Card className="p-8 mt-8">
                     <div className="flex items-center gap-3 mb-6">
                         <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-green-100 text-green-800">Developer</span>
@@ -833,62 +838,66 @@ export const MultiRoleProfileCard: React.FC = () => {
                     </div>
 
                     <div className="space-y-6">
-                        {/* Developer Type */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            {/* Left Column */}
+                            <div className="space-y-6">
+                                {/* Developer Type */}
+                                <section>
+                                    <h3 className="text-lg font-bold mb-3">Developer Details</h3>
+                                    {isEditing ? (
+                                        <div><label className="text-sm font-medium">Developer Type</label>
+                                            <select name="developerType" value={developerForm.developerType} onChange={(e) => setDeveloperForm(prev => prev ? { ...prev, developerType: e.target.value } : prev)} className={inputClasses}>
+                                                {Object.values(DeveloperType).map(t => <option key={t} value={t}>{t}</option>)}
+                                            </select>
+                                        </div>
+                                    ) : (
+                                        <ProfileBioItem label="Developer Type" value={developerForm.developerType || '—'} />
+                                    )}
+                                </section>
+
+                                {/* Developer Qualifications */}
+                                <section>
+                                    <h3 className="text-lg font-bold mb-3">Qualifications</h3>
+                                    <MultiSelectCheckboxes options={Object.values(TrainerQualification)} selected={developerForm.qualifications || []}
+                                        onChange={handleDevMultiSelect('qualifications')} isEditing={isEditing} color="secondary" />
+                                </section>
+
+                                {/* Developer Education */}
+                                <section>
+                                    <h3 className="text-lg font-bold mb-3">Highest Education</h3>
+                                    <SingleSelectEducation options={Object.values(DeveloperEducation)} selected={developerForm.education || ''}
+                                        onChange={(v) => setDeveloperForm(prev => prev ? { ...prev, education: v } : prev)} isEditing={isEditing} />
+                                </section>
+                            </div>
+
+                            {/* Right Column */}
+                            <div className="space-y-6">
+                                {/* Developer Areas of Specialty */}
+                                <section>
+                                    <h3 className="text-lg font-bold mb-3">Area of Specialty</h3>
+                                    <MultiSelectCheckboxes options={SKILLS_FUTURE_INDUSTRIES} selected={developerForm.areasOfSpecialty || []}
+                                        onChange={handleDevMultiSelect('areasOfSpecialty')} isEditing={isEditing} color="secondary" />
+                                </section>
+                            </div>
+                        </div>
+
+                        {/* Full-width sections */}
                         <section>
-                            <h3 className="text-lg font-bold mb-3">Developer Details</h3>
-                            {isEditing ? (
-                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                                    <div><label className="text-sm font-medium">Developer Type</label>
-                                        <select name="developerType" value={developerForm.developerType} onChange={(e) => setDeveloperForm(prev => prev ? { ...prev, developerType: e.target.value } : prev)} className={inputClasses}>
-                                            {Object.values(DeveloperType).map(t => <option key={t} value={t}>{t}</option>)}
-                                        </select>
-                                    </div>
-                                </div>
-                            ) : (
-                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                                    <ProfileBioItem label="Developer Type" value={developerForm.developerType || '—'} />
-                                </div>
-                            )}
+                            <h3 className="text-lg font-bold mb-3">Skill Tags</h3>
+                            <SkillTagsInput tags={developerForm.skillsTags || []} isEditing={isEditing}
+                                onUpdate={(tags) => setDeveloperForm(prev => prev ? { ...prev, skillsTags: tags } : prev)} />
                         </section>
 
-                        {/* Developer CV & Certs */}
                         <section>
-                            <h3 className="text-lg font-bold mb-3">CV & Certifications</h3>
+                            <h3 className="text-lg font-bold mb-3">CV & Supporting Document Folder</h3>
+                            <p className="text-xs text-gray-400 mb-2">Please upload your CV, ACLP certification, and other supporting documents in the Google Drive folder.</p>
                             <DocumentSection title="" cvUrl={developerForm.cvUrl} cvOriginalFilename={developerForm.cvOriginalFilename}
                                 cvFolderUrl={developerForm.cvFolderUrl}
                                 certifications={developerForm.certifications || []} isEditing={isEditing}
-                                onUpdateCv={handleDevCvUpdate} onAddCertification={handleDevAddCert}
-                                onRemoveCertification={handleDevRemoveCert} uploadId="developer"
                                 onUpdateCvFolderUrl={(url) => setDeveloperForm(prev => prev ? { ...prev, cvFolderUrl: url } : prev)} />
                         </section>
 
-                        {/* Developer Qualifications */}
-                        <section>
-                            <h3 className="text-lg font-bold mb-3">Qualifications</h3>
-                            <MultiSelectCheckboxes options={Object.values(TrainerQualification)} selected={developerForm.qualifications || []}
-                                onChange={handleDevMultiSelect('qualifications')} isEditing={isEditing} color="secondary" />
-                        </section>
 
-                        {/* Developer Education */}
-                        <section>
-                            <h3 className="text-lg font-bold mb-3">Highest Education</h3>
-                            <SingleSelectEducation options={Object.values(DeveloperEducation)} selected={developerForm.education || ''}
-                                onChange={(v) => setDeveloperForm(prev => prev ? { ...prev, education: v } : prev)} isEditing={isEditing} />
-                        </section>
-
-                        {/* Developer Areas of Specialty */}
-                        <section>
-                            <h3 className="text-lg font-bold mb-3">Area of Specialty</h3>
-                            <MultiSelectCheckboxes options={SKILLS_FUTURE_INDUSTRIES} selected={developerForm.areasOfSpecialty || []}
-                                onChange={handleDevMultiSelect('areasOfSpecialty')} isEditing={isEditing} color="secondary" />
-                        </section>
-
-                        {/* Developer Work Experience */}
-                        <section>
-                            <h3 className="text-lg font-bold mb-3">Work Experience</h3>
-                            <WorkExperienceSection experience={developerForm.workExperience || []} isEditing={isEditing}
-                                onUpdate={(we) => setDeveloperForm(prev => prev ? { ...prev, workExperience: we } : prev)} />
-                        </section>
                     </div>
                 </Card>
             )}
@@ -896,6 +905,32 @@ export const MultiRoleProfileCard: React.FC = () => {
             {/* ===== LOGIN DETAILS ===== */}
             <LoginDetailsCard loginId={sharedForm.loginId || sharedForm.email} password={sharedForm.password || '••••••••'}
                 userId={currentUser?.id} onPasswordUpdate={handlePasswordUpdate} />
+
+            {/* ===== APPEARANCE ===== */}
+            {!isEditing && (
+                <Card className="p-8 mt-8">
+                    <h2 className="text-xl font-bold mb-4 dark:text-white">Appearance</h2>
+                    <div className="flex justify-between items-center p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
+                        <div className="flex items-center gap-3">
+                            <div className={`p-2 rounded-lg ${themeMode === 'dark' ? 'bg-gray-600' : 'bg-blue-100'}`}>
+                                {themeMode === 'dark' ? (
+                                    <svg className="w-5 h-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20"><path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z" /></svg>
+                                ) : (
+                                    <svg className="w-5 h-5 text-yellow-500" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" clipRule="evenodd" /></svg>
+                                )}
+                            </div>
+                            <div>
+                                <p className="font-semibold text-gray-900 dark:text-gray-200">Theme Mode</p>
+                                <p className="text-sm text-gray-600 dark:text-gray-400">{themeMode === 'dark' ? 'Dark theme active' : 'Light theme active'}</p>
+                            </div>
+                        </div>
+                        <button type="button" onClick={handleThemeToggle}
+                            className={`relative inline-flex h-7 w-14 items-center rounded-full transition-colors duration-300 ${themeMode === 'dark' ? 'bg-blue-600' : 'bg-gray-300'}`}>
+                            <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-md transition-transform duration-300 ${themeMode === 'dark' ? 'translate-x-8' : 'translate-x-1'}`} />
+                        </button>
+                    </div>
+                </Card>
+            )}
         </div>
     );
 };

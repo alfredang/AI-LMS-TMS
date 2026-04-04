@@ -158,6 +158,15 @@ export default async function handler(
           : JSON.stringify(profileData.areasOfExpertise));
       }
 
+      if (profileData.skillsTags !== undefined) {
+        updateFields.push(`skills_tags = $${paramIndex++}`);
+        updateValues.push(JSON.stringify(profileData.skillsTags));
+      }
+      if (profileData.certificationTags !== undefined) {
+        updateFields.push(`certification_tags = $${paramIndex++}`);
+        updateValues.push(JSON.stringify(profileData.certificationTags));
+      }
+
       if (profileData.qualifications) {
         updateFields.push(`qualifications = $${paramIndex++}`);
         updateValues.push(typeof profileData.qualifications === 'string'

@@ -5,6 +5,7 @@ import { Button } from '../ui/Button';
 import { Icon, IconName } from '../ui/Icon';
 import AddTrainerForm from './AddTrainerForm';
 import { BulkUploadTrainersView } from './BulkUploadTrainersView';
+import { SKILLS_FUTURE_INDUSTRIES } from '@app-types/profile';
 
 interface Trainer {
   trainer_name: string;
@@ -17,6 +18,7 @@ interface Trainer {
   account_status: string | null;
   linkedin_url: string | null;
   cv_folder_url: string | null;
+  areas_of_expertise: string[] | null;
   user_id: string;
 }
 
@@ -52,6 +54,7 @@ const ViewTrainers: React.FC = () => {
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [filterTrainerTypes, setFilterTrainerTypes] = useState<string[]>([]);
   const [filterTrainerStatuses, setFilterTrainerStatuses] = useState<string[]>([]);
+  const [filterAreasOfExpertise, setFilterAreasOfExpertise] = useState<string[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [showAddTrainerForm, setShowAddTrainerForm] = useState(false);
   const [showBulkUpload, setShowBulkUpload] = useState(false);
@@ -80,6 +83,7 @@ const ViewTrainers: React.FC = () => {
     setSearchQuery('');
     setFilterTrainerTypes([]);
     setFilterTrainerStatuses([]);
+    setFilterAreasOfExpertise([]);
     setCurrentPage(1);
   };
 
@@ -152,7 +156,13 @@ const ViewTrainers: React.FC = () => {
     const matchesTrainerStatus = filterTrainerStatuses.length === 0 ||
       filterTrainerStatuses.includes(trainer.status || '');
 
-    return matchesSearch && matchesTrainerType && matchesTrainerStatus;
+    const areas = Array.isArray(trainer.areas_of_expertise)
+      ? trainer.areas_of_expertise
+      : (typeof trainer.areas_of_expertise === 'string' ? JSON.parse(trainer.areas_of_expertise) : []);
+    const matchesAreasOfExpertise = filterAreasOfExpertise.length === 0 ||
+      (areas.length > 0 && areas.some((a: string) => filterAreasOfExpertise.includes(a)));
+
+    return matchesSearch && matchesTrainerType && matchesTrainerStatus && matchesAreasOfExpertise;
   });
 
   const totalPages = Math.ceil(filteredTrainers.length / itemsPerPage);
@@ -253,7 +263,7 @@ const ViewTrainers: React.FC = () => {
 
         {showAdvancedFilters && (
           <div className="mt-4 pt-4 border-t dark:border-gray-700 space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
               {/* Trainer Type checkboxes */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Trainer Type</label>
@@ -295,6 +305,24 @@ const ViewTrainers: React.FC = () => {
                   <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">Showing: {filterTrainerStatuses.join(', ')}</p>
                 )}
               </div>
+
+              {/* Area of Expertise dropdown */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Area of Expertise</label>
+                <select
+                  value={filterAreasOfExpertise[0] || ''}
+                  onChange={(e) => {
+                    setFilterAreasOfExpertise(e.target.value ? [e.target.value] : []);
+                    setCurrentPage(1);
+                  }}
+                  className={inputClasses}
+                >
+                  <option value="">None</option>
+                  {SKILLS_FUTURE_INDUSTRIES.map(area => (
+                    <option key={area} value={area}>{area}</option>
+                  ))}
+                </select>
+              </div>
             </div>
           </div>
         )}
@@ -310,6 +338,7 @@ const ViewTrainers: React.FC = () => {
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Trainer Name</th>
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Contact</th>
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Trainer Type</th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Area of Expertise</th>
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Trainer Status</th>
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Account Status</th>
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">LinkedIn Profile</th>
@@ -350,6 +379,25 @@ const ViewTrainers: React.FC = () => {
                       <div className="text-sm text-gray-500 dark:text-gray-400">{trainer.telephone || 'N/A'}</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{trainer.trainer_type || 'N/A'}</td>
+                    <td className="px-6 py-4">
+                      {(() => {
+                        const areas = Array.isArray(trainer.areas_of_expertise)
+                          ? trainer.areas_of_expertise
+                          : (typeof trainer.areas_of_expertise === 'string' ? JSON.parse(trainer.areas_of_expertise) : []);
+                        return areas.length > 0 ? (
+                          <div className="flex items-center gap-1 max-w-[200px]" title={areas.join(', ')}>
+                            <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400 truncate max-w-[150px]">
+                              {areas[0]}
+                            </span>
+                            {areas.length > 1 && (
+                              <span className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">+{areas.length - 1} more</span>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-sm text-gray-500 dark:text-gray-400">N/A</span>
+                        );
+                      })()}
+                    </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(trainer.status)}`}>
                         {trainer.status || 'N/A'}

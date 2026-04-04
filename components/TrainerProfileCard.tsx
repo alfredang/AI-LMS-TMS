@@ -419,29 +419,8 @@ const DocumentSection: React.FC<{
     cvFolderUrl?: string;
     certifications?: Certification[];
     isEditing: boolean;
-    onUpdateCv: (file: File) => void;
-    onAddCertification: (name: string, file: File) => void;
-    onRemoveCertification: (id: string) => void;
     onUpdateCvFolderUrl?: (url: string) => void;
-}> = ({ title, cvUrl, cvOriginalFilename, cvFolderUrl, certifications, isEditing, onUpdateCv, onAddCertification, onRemoveCertification, onUpdateCvFolderUrl }) => {
-
-    const [newCertName, setNewCertName] = useState('');
-    const [selectedCertFile, setSelectedCertFile] = useState<File | null>(null);
-
-    const handleFileSelect = (file: File) => {
-        setSelectedCertFile(file);
-    };
-
-    const handleAddCert = () => {
-        if (selectedCertFile && newCertName) {
-            onAddCertification(newCertName, selectedCertFile);
-            setNewCertName('');
-            setSelectedCertFile(null);
-            (document.getElementById('cert-upload') as HTMLInputElement).value = ''; // Reset file input
-        } else {
-            alert("Please provide both a name and select a file for the certification.");
-        }
-    };
+}> = ({ title, cvUrl, cvOriginalFilename, cvFolderUrl, certifications, isEditing, onUpdateCvFolderUrl }) => {
 
     if (isEditing) {
         return (
@@ -468,56 +447,6 @@ const DocumentSection: React.FC<{
                             )}
                         </div>
                         <p className="text-xs text-gray-500 mt-1 dark:text-gray-400">Upload your CV and certifications to this Google Drive folder.</p>
-                    </div>
-                    {/* Certifications List (Editable) */}
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Certifications</label>
-                        <div className="space-y-2">
-                            {certifications?.map(cert => (
-                                <div key={cert.id || cert.name} className="flex items-center gap-2 p-2 bg-gray-50 rounded-md border dark:bg-gray-700 dark:border-gray-600">
-                                    <Icon name={IconName.FilePdf} className="w-5 h-5 text-gray-500" />
-                                    <span className="text-sm text-gray-600 flex-1">{cert.name}</span>
-                                    <button onClick={() => cert.id && onRemoveCertification(cert.id)} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-100 rounded-full">
-                                        <Icon name={IconName.Delete} className="w-4 h-4" />
-                                    </button>
-                                </div>
-                            ))}
-                            <div className="flex items-center gap-2 p-2 bg-gray-100 rounded-md border border-dashed dark:bg-gray-700/50 dark:border-gray-600">
-                                <input
-                                    type="text"
-                                    placeholder="New Certification Name"
-                                    value={newCertName}
-                                    onChange={e => setNewCertName(e.target.value)}
-                                    className={`${inputClasses} !py-1.5 !text-sm flex-1`}
-                                />
-                                <div className="flex flex-col gap-1">
-                                    <Button variant="ghost" size="sm" onClick={() => document.getElementById('cert-upload')?.click()}>
-                                        <Icon name={IconName.Upload} className="w-4 h-4 mr-1" /> Select File
-                                    </Button>
-                                    {selectedCertFile && (
-                                        <span className="text-xs text-gray-600 truncate max-w-32" title={selectedCertFile.name}>
-                                            {selectedCertFile.name}
-                                        </span>
-                                    )}
-                                </div>
-                                <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={handleAddCert}
-                                    disabled={!newCertName || !selectedCertFile}
-                                    className="bg-green-100 hover:bg-green-200 text-green-700 dark:bg-green-900/50 dark:text-green-300"
-                                >
-                                    Add
-                                </Button>
-                                <input
-                                    type="file"
-                                    id="cert-upload"
-                                    className="hidden"
-                                    onChange={(e) => e.target.files && handleFileSelect(e.target.files[0])}
-                                    accept=".pdf,.jpg,.png,.doc,.docx"
-                                />
-                            </div>
-                        </div>
                     </div>
                 </div>
             </section>
@@ -1244,9 +1173,6 @@ export const TrainerProfileCard: React.FC<{
                         cvFolderUrl={(formData as any).cvFolderUrl}
                         certifications={formData.certifications}
                         isEditing={isEditing}
-                        onUpdateCv={handleCvUpdate}
-                        onAddCertification={handleAddCertification}
-                        onRemoveCertification={handleRemoveCertification}
                         onUpdateCvFolderUrl={(url) => setFormData(prev => ({ ...prev, cvFolderUrl: url } as any))}
                     />
 
@@ -1281,59 +1207,8 @@ export const TrainerProfileCard: React.FC<{
                             color="secondary"
                         />
                     </section>
-
-                    <section>
-                        <h2 className="text-xl font-bold mb-4">Work Experience</h2>
-                        <WorkExperienceSection
-                            experience={formData.workExperience || []}
-                            isEditing={isEditing}
-                            onUpdate={handleWorkExperienceUpdate}
-                        />
-                    </section>
                 </div>
 
-                {!isEditing && (
-                    <>
-                        <div className="border-t dark:border-gray-700 my-6"></div>
-                        <h2 className="text-xl font-bold mb-4 dark:text-white">Appearance</h2>
-
-                        {/* Theme Mode Toggle */}
-                        <div className="space-y-4">
-                            <div className="flex justify-between items-center p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
-                                <div className="flex items-center gap-3">
-                                    <div className={`p-2 rounded-lg ${themeMode === 'dark' ? 'bg-gray-600' : 'bg-blue-100'}`}>
-                                        {themeMode === 'dark' ? (
-                                            <svg className="w-5 h-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
-                                                <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z" />
-                                            </svg>
-                                        ) : (
-                                            <svg className="w-5 h-5 text-yellow-500" fill="currentColor" viewBox="0 0 20 20">
-                                                <path fillRule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" clipRule="evenodd" />
-                                            </svg>
-                                        )}
-                                    </div>
-                                    <div>
-                                        <p className="font-semibold text-gray-900 dark:text-gray-200">Theme Mode</p>
-                                        <p className="text-sm text-gray-600 dark:text-gray-400">
-                                            {themeMode === 'dark' ? 'Dark theme active' : 'Light theme active'}
-                                        </p>
-                                    </div>
-                                </div>
-                                <button
-                                    type="button"
-                                    onClick={handleThemeToggle}
-                                    className={`relative inline-flex h-7 w-14 items-center rounded-full transition-colors duration-300 ${themeMode === 'dark' ? 'bg-blue-600' : 'bg-gray-300'
-                                        }`}
-                                >
-                                    <span
-                                        className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-md transition-transform duration-300 ${themeMode === 'dark' ? 'translate-x-8' : 'translate-x-1'
-                                            }`}
-                                    />
-                                </button>
-                            </div>
-                        </div>
-                    </>
-                )}
             </Card>
             <LoginDetailsCard
                 loginId={formData.loginId || formData.email}
@@ -1341,6 +1216,43 @@ export const TrainerProfileCard: React.FC<{
                 userId={userId}
                 onPasswordUpdate={handlePasswordUpdate}
             />
+            {!isEditing && (
+                <Card className="p-8 mt-8">
+                    <h2 className="text-xl font-bold mb-4 dark:text-white">Appearance</h2>
+                    <div className="space-y-4">
+                        <div className="flex justify-between items-center p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
+                            <div className="flex items-center gap-3">
+                                <div className={`p-2 rounded-lg ${themeMode === 'dark' ? 'bg-gray-600' : 'bg-blue-100'}`}>
+                                    {themeMode === 'dark' ? (
+                                        <svg className="w-5 h-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
+                                            <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z" />
+                                        </svg>
+                                    ) : (
+                                        <svg className="w-5 h-5 text-yellow-500" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fillRule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" clipRule="evenodd" />
+                                        </svg>
+                                    )}
+                                </div>
+                                <div>
+                                    <p className="font-semibold text-gray-900 dark:text-gray-200">Theme Mode</p>
+                                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                                        {themeMode === 'dark' ? 'Dark theme active' : 'Light theme active'}
+                                    </p>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={handleThemeToggle}
+                                className={`relative inline-flex h-7 w-14 items-center rounded-full transition-colors duration-300 ${themeMode === 'dark' ? 'bg-blue-600' : 'bg-gray-300'}`}
+                            >
+                                <span
+                                    className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-md transition-transform duration-300 ${themeMode === 'dark' ? 'translate-x-8' : 'translate-x-1'}`}
+                                />
+                            </button>
+                        </div>
+                    </div>
+                </Card>
+            )}
         </>
     );
 };

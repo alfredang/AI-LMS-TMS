@@ -209,6 +209,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
         profileUpdateFields.push(`areas_of_specialty = $${profileParamIndex++}`);
         profileUpdateValues.push(JSON.stringify(profileData.areasOfSpecialty));
       }
+      if (profileData.skillsTags !== undefined) {
+        profileUpdateFields.push(`skills_tags = $${profileParamIndex++}`);
+        profileUpdateValues.push(JSON.stringify(profileData.skillsTags));
+      }
 
       if (profileUpdateFields.length > 0) {
         profileUpdateValues.push(userId);

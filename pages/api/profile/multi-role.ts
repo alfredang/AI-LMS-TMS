@@ -46,7 +46,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (isTrainer) {
       const tpResult = await pool.query(`
         SELECT tel, gender, trainer_type, status, linkedin_url, cv_url, cv_original_filename, cv_folder_url,
-               qualifications, education, areas_of_expertise, common_name, country,
+               qualifications, education, areas_of_expertise, skills_tags, certification_tags, common_name, country,
                cn_plus_email, nric, nationality, ethnicity, TO_CHAR(dob, 'YYYY-MM-DD') as dob
         FROM trainer_profile WHERE user_id = $1
       `, [userId]);
@@ -72,6 +72,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           qualifications: parseJsonb(tp.qualifications),
           education: tp.education || '',
           areasOfExpertise: parseJsonb(tp.areas_of_expertise),
+          skillsTags: parseJsonb(tp.skills_tags),
+          certificationTags: parseJsonb(tp.certification_tags),
           commonName: tp.common_name || '',
           country: tp.country || '',
           cnPlusEmail: tp.cn_plus_email || '',
@@ -110,7 +112,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (isDeveloper) {
       const dpResult = await pool.query(`
         SELECT tel, developer_type, gender, linkedin_url, cv_url, cv_original_filename, cv_folder_url,
-               qualifications, education, areas_of_specialty, nric, nationality, ethnicity,
+               qualifications, education, areas_of_specialty, skills_tags, nric, nationality, ethnicity,
                TO_CHAR(dob, 'YYYY-MM-DD') as dob, secondary_email
         FROM developer_profile WHERE user_id = $1
       `, [userId]);
@@ -135,6 +137,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           qualifications: parseJsonb(dp.qualifications),
           education: dp.education || '',
           areasOfSpecialty: parseJsonb(dp.areas_of_specialty),
+          skillsTags: parseJsonb(dp.skills_tags),
           nric: dp.nric || '',
           nationality: dp.nationality || '',
           ethnicity: dp.ethnicity || '',
@@ -198,6 +201,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         qualifications: trainerData.qualifications,
         education: trainerData.education,
         areasOfExpertise: trainerData.areasOfExpertise,
+        skillsTags: trainerData.skillsTags,
+        certificationTags: trainerData.certificationTags,
         commonName: trainerData.commonName,
         country: trainerData.country,
         cnPlusEmail: trainerData.cnPlusEmail,
