@@ -34,7 +34,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                     tp.status,
                     tp.linkedin_url,
                     tp.cv_folder_url,
-                    tp.areas_of_expertise
+                    tp.areas_of_expertise,
+                    tp.skills_tags,
+                    tp.certification_tags
                 FROM app_user au
                 INNER JOIN trainer_profile tp ON tp.user_id = au.id
                 ORDER BY au.full_name;

@@ -19,6 +19,8 @@ interface Trainer {
   linkedin_url: string | null;
   cv_folder_url: string | null;
   areas_of_expertise: string[] | null;
+  skills_tags?: string[] | null;
+  certification_tags?: string[] | null;
   user_id: string;
 }
 
@@ -149,7 +151,9 @@ const ViewTrainers: React.FC = () => {
       trainer.trainer_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       trainer.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (trainer.secondary_email && trainer.secondary_email.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      (trainer.telephone && trainer.telephone.toLowerCase().includes(searchQuery.toLowerCase()));
+      (trainer.telephone && trainer.telephone.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      (Array.isArray(trainer.skills_tags) && trainer.skills_tags.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()))) ||
+      (Array.isArray(trainer.certification_tags) && trainer.certification_tags.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase())));
 
     const matchesTrainerType = filterTrainerTypes.length === 0 || filterTrainerTypes.includes(trainer.trainer_type || '');
 
@@ -343,6 +347,8 @@ const ViewTrainers: React.FC = () => {
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Account Status</th>
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">LinkedIn Profile</th>
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">CV Folder</th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Skill Tags</th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Certification Tags</th>
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Action</th>
                 </tr>
               </thead>
@@ -436,6 +442,36 @@ const ViewTrainers: React.FC = () => {
                         </a>
                       ) : (
                         'N/A'
+                      )}
+                    </td>
+                    {/* Skill Tags */}
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {Array.isArray(trainer.skills_tags) && trainer.skills_tags.length > 0 ? (
+                        <div className="flex items-center gap-1 max-w-[200px]" title={trainer.skills_tags.join(', ')}>
+                          <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300 truncate max-w-[150px]">
+                            {trainer.skills_tags[0]}
+                          </span>
+                          {trainer.skills_tags.length > 1 && (
+                            <span className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">+{trainer.skills_tags.length - 1} more</span>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-sm text-gray-500 dark:text-gray-400">N/A</span>
+                      )}
+                    </td>
+                    {/* Certification Tags */}
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {Array.isArray(trainer.certification_tags) && trainer.certification_tags.length > 0 ? (
+                        <div className="flex items-center gap-1 max-w-[200px]" title={trainer.certification_tags.join(', ')}>
+                          <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300 truncate max-w-[150px]">
+                            {trainer.certification_tags[0]}
+                          </span>
+                          {trainer.certification_tags.length > 1 && (
+                            <span className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">+{trainer.certification_tags.length - 1} more</span>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-sm text-gray-500 dark:text-gray-400">N/A</span>
                       )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">

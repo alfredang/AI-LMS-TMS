@@ -758,12 +758,6 @@ export const MultiRoleProfileCard: React.FC = () => {
                     </div>
 
                     <div className="space-y-6">
-                        {/* Area of Expertise (spans 2 columns) */}
-                        <section>
-                            <h3 className="text-lg font-bold mb-3">Area of Expertise</h3>
-                            <MultiSelectCheckboxes options={SKILLS_FUTURE_INDUSTRIES} selected={trainerForm.areasOfExpertise || []}
-                                onChange={handleTrainerMultiSelect('areasOfExpertise')} isEditing={isEditing} color="secondary" />
-                        </section>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             {/* Left Column */}
                             <div className="space-y-6">
@@ -799,6 +793,12 @@ export const MultiRoleProfileCard: React.FC = () => {
                                 </section>
                             </div>
                         </div>
+                        {/* Area of Expertise (spans 2 columns) */}
+                        <section className="md:col-span-2">
+                            <h3 className="text-lg font-bold mb-3">Area of Expertise</h3>
+                            <MultiSelectCheckboxes options={SKILLS_FUTURE_INDUSTRIES} selected={trainerForm.areasOfExpertise || []}
+                                onChange={handleTrainerMultiSelect('areasOfExpertise')} isEditing={isEditing} color="secondary" />
+                        </section>
 
                         {/* Skill Tags (examples) */}
                         <section>
