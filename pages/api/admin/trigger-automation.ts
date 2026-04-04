@@ -8,6 +8,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     const result = await runAutomation();
+    if (result.skipped) {
+      return res.status(429).json({ success: false, message: 'Daily run limit reached (3 runs/day SGT). Try again tomorrow.' });
+    }
     return res.status(200).json({ success: true, ...result });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';

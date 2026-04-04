@@ -52,7 +52,6 @@ import {
   CourseSessionsView
 } from '../components/admin/GrantManagementViews';
 import EditCourseRunView from '../components/admin/EditCourseRunView';
-import { CourseRunView } from '../components/admin/CourseRunView';
 import { UploadDirectApplicationView, ViewDirectApplicationView, UpdateDirectApplicationView } from '../components/admin/DirectApplicationViews';
 import { BulkUploadEnrolmentView } from '../components/admin/BulkEnrolmentViews';
 import TrainerAttendanceDashboard from '../components/trainer/TrainerAttendanceDashboard';
@@ -162,7 +161,6 @@ const PAGE_LABELS: Partial<Record<AdminPage, string>> = {
   [AdminPage.SearchGrant]: 'Search Grant',
   [AdminPage.SearchCourseRuns]: 'Search Course Runs',
   [AdminPage.SearchAssessments]: 'Search Assessments',
-  [AdminPage.CourseRun]: 'Course Run',
   [AdminPage.EditCourseRun]: 'Edit Course Run',
   [AdminPage.CancelEnrolment]: 'Cancel Enrolment',
   [AdminPage.UpdateEnrolment]: 'Update Enrolment',
@@ -360,8 +358,6 @@ const AdminLayout: React.FC = () => {
         return <CourseSessionTimingView />;
       case AdminPage.ClassDetail:
         return <ClassDetailView courseRunId={selectedCourseRunId || undefined} />;
-      case AdminPage.CourseRun:
-        return <CourseRunView />;
       case AdminPage.UploadDirectApplication:
         return <UploadDirectApplicationView />;
       case AdminPage.ViewDirectApplication:

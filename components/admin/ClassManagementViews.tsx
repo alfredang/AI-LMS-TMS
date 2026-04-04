@@ -4751,7 +4751,7 @@ export const AutomationLogsView: React.FC = () => {
             </div>
 
             <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-                Daily automation (4 AM SGT): searches SSG enrollments for today&apos;s classes and auto-creates learner accounts.
+                Daily automation (6 PM SGT): searches SSG enrollments for classes starting tomorrow and auto-creates learner accounts.
                 Use <strong>Run Now</strong> to trigger manually.
             </p>
 
@@ -5701,7 +5701,7 @@ export const CourseRunDateSyncLogsView: React.FC = () => {
             </div>
 
             <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-                Daily sync log — compares SSG course run dates with the database for classes starting today. Grouped by date.
+                Daily automation (1 AM SGT): compares SSG course run start/end dates against the local database for classes starting today, and updates any mismatches automatically. Capped at 3 runs/day. Use <strong>Run Now</strong> to trigger manually.
             </p>
 
             {runResult && (

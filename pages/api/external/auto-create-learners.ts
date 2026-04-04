@@ -268,6 +268,17 @@ async function upsertLearner(
 export async function runAutomation() {
   await ensureAutomationTable();
 
+  // De-duplication guard: skip if already ran 3 or more times today (SGT)
+  const recent = await pool.query(
+    `SELECT COUNT(DISTINCT run_id) AS run_count
+     FROM auto_create_learner_log
+     WHERE (created_at AT TIME ZONE 'Asia/Singapore')::date = (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Singapore')::date`
+  );
+  if (Number(recent.rows[0]?.run_count) >= 3) {
+    console.log(`⏭️ auto-create-learners: skipping — already ran 3 times today (SGT)`);
+    return { runId: `skipped_${Date.now()}`, startedAt: new Date().toISOString(), processed: 0, results: [], skipped: true };
+  }
+
   const runId = `run_${Date.now()}`;
   const startedAt = new Date().toISOString();
 
@@ -284,7 +295,7 @@ export async function runAutomation() {
             cr.start_date, cr.end_date
      FROM course_run cr
      JOIN course c ON c.id = cr.course_id
-     WHERE DATE(cr.start_date) = CURRENT_DATE + INTERVAL '1 day'
+     WHERE DATE(cr.start_date) = (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Singapore')::date + INTERVAL '1 day'
      ORDER BY cr.start_date ASC`,
   );
 
@@ -431,6 +442,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     const result = await runAutomation();
+    if (result.skipped) {
+      return res.status(429).json({ success: false, error: 'Daily run limit reached (3 runs/day SGT). Try again tomorrow.' });
+    }
     return res.status(200).json({ success: true, ...result });
   } catch (err) {
     console.error('❌ auto-create-learners error:', err);
