@@ -32,7 +32,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                     tp.tel AS telephone,
                     tp.trainer_type,
                     tp.status,
-                    tp.linkedin_url
+                    tp.linkedin_url,
+                    tp.cv_folder_url
                 FROM app_user au
                 INNER JOIN trainer_profile tp ON tp.user_id = au.id
                 ORDER BY au.full_name;

@@ -76,6 +76,7 @@ export default async function handler(
         t.linkedin_url,
         t.cv_url,
         t.cv_original_filename,
+        t.cv_folder_url,
         t.qualifications,
         t.education,
         t.areas_of_expertise,
@@ -208,6 +209,7 @@ export default async function handler(
       linkedinUrl: row.linkedin_url || '',
       cvUrl: row.cv_url || '',
       cvOriginalFilename: row.cv_original_filename || '',
+      cvFolderUrl: row.cv_folder_url || '',
       // Use data from certification table
       certifications: certifications,
       qualifications: (() => {

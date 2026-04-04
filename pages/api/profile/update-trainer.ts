@@ -14,6 +14,7 @@ interface UpdateTrainerProfileRequest {
     linkedinUrl?: string;
     cvUrl?: string;
     cvOriginalFilename?: string;
+    cvFolderUrl?: string;
     profilePictureUrl?: string;
     areasOfExpertise?: string[];
     qualifications?: string[];
@@ -143,6 +144,11 @@ export default async function handler(
       if (profileData.cvOriginalFilename !== undefined) {
         updateFields.push(`cv_original_filename = $${paramIndex++}`);
         updateValues.push(profileData.cvOriginalFilename);
+      }
+
+      if (profileData.cvFolderUrl !== undefined) {
+        updateFields.push(`cv_folder_url = $${paramIndex++}`);
+        updateValues.push(profileData.cvFolderUrl);
       }
 
       if (profileData.areasOfExpertise) {

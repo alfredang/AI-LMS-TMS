@@ -16,6 +16,7 @@ interface Trainer {
   status: string | null;
   account_status: string | null;
   linkedin_url: string | null;
+  cv_folder_url: string | null;
   user_id: string;
 }
 
@@ -312,6 +313,7 @@ const ViewTrainers: React.FC = () => {
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Trainer Status</th>
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Account Status</th>
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">LinkedIn Profile</th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">CV Folder</th>
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Action</th>
                 </tr>
               </thead>
@@ -368,6 +370,21 @@ const ViewTrainers: React.FC = () => {
                         >
                           <Icon name={IconName.Linkedin} className="w-4 h-4" />
                           View
+                        </a>
+                      ) : (
+                        'N/A'
+                      )}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                      {trainer.cv_folder_url ? (
+                        <a
+                          href={trainer.cv_folder_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:text-blue-800 underline flex items-center gap-1.5"
+                        >
+                          <Icon name={IconName.Folder} className="w-4 h-4" />
+                          Open
                         </a>
                       ) : (
                         'N/A'

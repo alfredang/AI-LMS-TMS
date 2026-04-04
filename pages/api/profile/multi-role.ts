@@ -45,7 +45,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     if (isTrainer) {
       const tpResult = await pool.query(`
-        SELECT tel, gender, trainer_type, status, linkedin_url, cv_url, cv_original_filename,
+        SELECT tel, gender, trainer_type, status, linkedin_url, cv_url, cv_original_filename, cv_folder_url,
                qualifications, education, areas_of_expertise, common_name, country,
                cn_plus_email, nric, nationality, ethnicity, TO_CHAR(dob, 'YYYY-MM-DD') as dob
         FROM trainer_profile WHERE user_id = $1
@@ -68,6 +68,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           linkedinUrl: tp.linkedin_url || '',
           cvUrl: tp.cv_url || '',
           cvOriginalFilename: tp.cv_original_filename || '',
+          cvFolderUrl: tp.cv_folder_url || '',
           qualifications: parseJsonb(tp.qualifications),
           education: tp.education || '',
           areasOfExpertise: parseJsonb(tp.areas_of_expertise),
@@ -108,7 +109,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     if (isDeveloper) {
       const dpResult = await pool.query(`
-        SELECT tel, developer_type, gender, linkedin_url, cv_url, cv_original_filename,
+        SELECT tel, developer_type, gender, linkedin_url, cv_url, cv_original_filename, cv_folder_url,
                qualifications, education, areas_of_specialty, nric, nationality, ethnicity,
                TO_CHAR(dob, 'YYYY-MM-DD') as dob, secondary_email
         FROM developer_profile WHERE user_id = $1
@@ -130,6 +131,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           linkedinUrl: dp.linkedin_url || '',
           cvUrl: dp.cv_url || '',
           cvOriginalFilename: dp.cv_original_filename || '',
+          cvFolderUrl: dp.cv_folder_url || '',
           qualifications: parseJsonb(dp.qualifications),
           education: dp.education || '',
           areasOfSpecialty: parseJsonb(dp.areas_of_specialty),
@@ -192,6 +194,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         status: trainerData.status,
         cvUrl: trainerData.cvUrl,
         cvOriginalFilename: trainerData.cvOriginalFilename,
+        cvFolderUrl: trainerData.cvFolderUrl,
         qualifications: trainerData.qualifications,
         education: trainerData.education,
         areasOfExpertise: trainerData.areasOfExpertise,
@@ -208,6 +211,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         developerType: developerData.developerType,
         cvUrl: developerData.cvUrl,
         cvOriginalFilename: developerData.cvOriginalFilename,
+        cvFolderUrl: developerData.cvFolderUrl,
         qualifications: developerData.qualifications,
         education: developerData.education,
         areasOfSpecialty: developerData.areasOfSpecialty,

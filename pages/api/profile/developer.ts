@@ -70,6 +70,7 @@ export default async function handler(
         dp.linkedin_url AS linkedin_profile,
         dp.cv_url AS cv,
         dp.cv_original_filename AS cv_original_filename,
+        dp.cv_folder_url,
         dp.qualifications,
         dp.education,
         dp.areas_of_specialty,
@@ -215,6 +216,7 @@ export default async function handler(
       secondaryEmail: row.secondary_email || '',
       cvUrl: row.cv || '',
       cvOriginalFilename: row.cv_original_filename || '',
+      cvFolderUrl: row.cv_folder_url || '',
       // Use data from certification table
       certifications: certifications,
       qualifications: (() => {

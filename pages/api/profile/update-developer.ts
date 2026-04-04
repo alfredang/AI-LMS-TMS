@@ -26,6 +26,7 @@ interface UpdateDeveloperRequest {
     secondaryEmail?: string;
     cvUrl?: string;
     cvOriginalFilename?: string;
+    cvFolderUrl?: string;
     qualifications?: string[];
     education?: string; // Single education string using DeveloperEducation enum values
     areasOfSpecialty?: string[];
@@ -191,6 +192,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
       if (profileData.cvOriginalFilename !== undefined) {
         profileUpdateFields.push(`cv_original_filename = $${profileParamIndex++}`);
         profileUpdateValues.push(profileData.cvOriginalFilename);
+      }
+      if (profileData.cvFolderUrl !== undefined) {
+        profileUpdateFields.push(`cv_folder_url = $${profileParamIndex++}`);
+        profileUpdateValues.push(profileData.cvFolderUrl);
       }
       if (profileData.qualifications !== undefined) {
         profileUpdateFields.push(`qualifications = $${profileParamIndex++}`);

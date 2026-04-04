@@ -132,13 +132,12 @@ const WorkExperienceSection: React.FC<{
 
 // Document Section
 const DocumentSection: React.FC<{
-    title: string; cvUrl?: string; cvOriginalFilename?: string; certifications: any[];
+    title: string; cvUrl?: string; cvOriginalFilename?: string; cvFolderUrl?: string; certifications: any[];
     isEditing: boolean; onUpdateCv: (file: File) => void; onAddCertification: (name: string, file: File) => void;
-    onRemoveCertification: (id: string) => void; uploadId: string;
-}> = ({ title, cvUrl, cvOriginalFilename, certifications, isEditing, onUpdateCv, onAddCertification, onRemoveCertification, uploadId }) => {
+    onRemoveCertification: (id: string) => void; uploadId: string; onUpdateCvFolderUrl?: (url: string) => void;
+}> = ({ title, cvUrl, cvOriginalFilename, cvFolderUrl, certifications, isEditing, onUpdateCv, onAddCertification, onRemoveCertification, uploadId, onUpdateCvFolderUrl }) => {
     const [newCertName, setNewCertName] = useState('');
     const [selectedCertFile, setSelectedCertFile] = useState<File | null>(null);
-    const cvUploadId = `cv-upload-${uploadId}`;
     const certUploadId = `cert-upload-${uploadId}`;
 
     const handleAddCert = () => {
@@ -154,15 +153,20 @@ const DocumentSection: React.FC<{
         return (
             <div className="space-y-4">
                 <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-gray-300">Curriculum Vitae (CV)</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-gray-300">CV & Documents Folder</label>
                     <div className="flex items-center gap-2 p-2 bg-gray-50 rounded-md border dark:bg-gray-700 dark:border-gray-600">
-                        <Icon name={IconName.FilePdf} className="w-5 h-5 text-gray-500" />
-                        <span className="text-sm text-subtle flex-grow">{cvUrl ? <span className="font-medium text-gray-700 dark:text-gray-300">{cvOriginalFilename}</span> : 'No CV uploaded'}</span>
-                        <Button variant="ghost" size="sm" onClick={() => document.getElementById(cvUploadId)?.click()}>
-                            <Icon name={IconName.Upload} className="w-4 h-4 mr-1" /> {cvUrl ? 'Change' : 'Upload'}
-                        </Button>
-                        <input type="file" id={cvUploadId} className="hidden" onChange={(e) => e.target.files && onUpdateCv(e.target.files[0])} accept=".pdf,.doc,.docx" />
+                        <Icon name={IconName.Folder} className="w-5 h-5 text-blue-500" />
+                        <input type="url" placeholder="Paste Google Drive folder URL" value={cvFolderUrl || ''}
+                            onChange={(e) => onUpdateCvFolderUrl?.(e.target.value)}
+                            className={`${inputClasses} !py-1.5 !text-sm flex-1`} />
+                        {cvFolderUrl && (
+                            <a href={cvFolderUrl} target="_blank" rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold text-blue-600 bg-blue-50 rounded-md hover:bg-blue-100 transition-colors whitespace-nowrap">
+                                <Icon name={IconName.ExternalLink} className="w-3 h-3" /> Open
+                            </a>
+                        )}
                     </div>
+                    <p className="text-xs text-gray-500 mt-1 dark:text-gray-400">Upload your CV and certifications to this Google Drive folder.</p>
                 </div>
                 <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Certifications</label>
@@ -195,6 +199,21 @@ const DocumentSection: React.FC<{
 
     return (
         <div className="space-y-4">
+            {cvFolderUrl && (
+                <div className="flex items-center justify-between p-3 bg-gray-50 rounded-md border dark:bg-gray-700/50 dark:border-gray-600">
+                    <div className="flex items-center gap-3">
+                        <Icon name={IconName.Folder} className="w-6 h-6 text-blue-500 flex-shrink-0" />
+                        <div>
+                            <p className="text-sm font-medium text-gray-900 dark:text-gray-200">CV & Documents Folder</p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">Google Drive</p>
+                        </div>
+                    </div>
+                    <a href={cvFolderUrl} target="_blank" rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-blue-600 bg-blue-50 rounded-md hover:bg-blue-100 transition-colors">
+                        <Icon name={IconName.ExternalLink} className="w-3 h-3" /> Open Folder
+                    </a>
+                </div>
+            )}
             {cvUrl && (
                 <div className="flex items-center justify-between p-3 bg-gray-50 rounded-md border dark:bg-gray-700/50 dark:border-gray-600">
                     <div className="flex items-center gap-3"><Icon name={IconName.FilePdf} className="w-6 h-6 text-red-600 flex-shrink-0" /><p className="text-sm font-medium text-gray-900 dark:text-gray-200">Curriculum Vitae</p></div>
@@ -213,7 +232,7 @@ const DocumentSection: React.FC<{
                     </a>
                 </div>
             ))}
-            {!cvUrl && (!certifications || certifications.length === 0) && <p className="text-subtle text-sm">No documents uploaded.</p>}
+            {!cvFolderUrl && !cvUrl && (!certifications || certifications.length === 0) && <p className="text-subtle text-sm">No documents uploaded.</p>}
         </div>
     );
 };
@@ -287,13 +306,13 @@ interface SharedData {
     linkedinUrl: string; nric: string; nationality: string; ethnicity: string; dob: string;
 }
 interface TrainerRoleData {
-    trainerType: string; status: string; cvUrl: string; cvOriginalFilename: string;
+    trainerType: string; status: string; cvUrl: string; cvOriginalFilename: string; cvFolderUrl: string;
     qualifications: string[]; education: string; areasOfExpertise: string[];
     commonName: string; country: string; cnPlusEmail: string;
     workExperience: WorkExperienceItem[]; certifications: Certification[];
 }
 interface DeveloperRoleData {
-    developerType: string; cvUrl: string; cvOriginalFilename: string;
+    developerType: string; cvUrl: string; cvOriginalFilename: string; cvFolderUrl: string;
     qualifications: string[]; education: string; areasOfSpecialty: string[];
     workExperience: WorkExperienceItem[]; certifications: Certification[];
 }
@@ -523,6 +542,7 @@ export const MultiRoleProfileCard: React.FC = () => {
 
                 // Trainer-specific fields
                 if (trainerForm.trainerType !== data.trainer?.trainerType) trainerUpdate.trainerType = trainerForm.trainerType;
+                if (trainerForm.cvFolderUrl !== data.trainer?.cvFolderUrl) trainerUpdate.cvFolderUrl = trainerForm.cvFolderUrl;
                 if (trainerForm.education !== data.trainer?.education) trainerUpdate.education = trainerForm.education;
                 if (JSON.stringify(trainerForm.qualifications) !== JSON.stringify(data.trainer?.qualifications)) trainerUpdate.qualifications = trainerForm.qualifications;
                 if (JSON.stringify(trainerForm.areasOfExpertise) !== JSON.stringify(data.trainer?.areasOfExpertise)) trainerUpdate.areasOfExpertise = trainerForm.areasOfExpertise;
@@ -581,6 +601,7 @@ export const MultiRoleProfileCard: React.FC = () => {
 
                 // Developer-specific fields
                 if (developerForm.developerType !== data.developer?.developerType) devUpdate.developerType = developerForm.developerType;
+                if (developerForm.cvFolderUrl !== data.developer?.cvFolderUrl) devUpdate.cvFolderUrl = developerForm.cvFolderUrl;
                 if (developerForm.education !== data.developer?.education) devUpdate.education = developerForm.education;
                 if (JSON.stringify(developerForm.qualifications) !== JSON.stringify(data.developer?.qualifications)) devUpdate.qualifications = developerForm.qualifications;
                 if (JSON.stringify(developerForm.areasOfSpecialty) !== JSON.stringify(data.developer?.areasOfSpecialty)) devUpdate.areasOfSpecialty = developerForm.areasOfSpecialty;
@@ -765,9 +786,11 @@ export const MultiRoleProfileCard: React.FC = () => {
                         <section>
                             <h3 className="text-lg font-bold mb-3">CV & Certifications</h3>
                             <DocumentSection title="" cvUrl={trainerForm.cvUrl} cvOriginalFilename={trainerForm.cvOriginalFilename}
+                                cvFolderUrl={trainerForm.cvFolderUrl}
                                 certifications={trainerForm.certifications || []} isEditing={isEditing}
                                 onUpdateCv={handleTrainerCvUpdate} onAddCertification={handleTrainerAddCert}
-                                onRemoveCertification={handleTrainerRemoveCert} uploadId="trainer" />
+                                onRemoveCertification={handleTrainerRemoveCert} uploadId="trainer"
+                                onUpdateCvFolderUrl={(url) => setTrainerForm(prev => prev ? { ...prev, cvFolderUrl: url } : prev)} />
                         </section>
 
                         {/* Trainer Qualifications */}
@@ -832,9 +855,11 @@ export const MultiRoleProfileCard: React.FC = () => {
                         <section>
                             <h3 className="text-lg font-bold mb-3">CV & Certifications</h3>
                             <DocumentSection title="" cvUrl={developerForm.cvUrl} cvOriginalFilename={developerForm.cvOriginalFilename}
+                                cvFolderUrl={developerForm.cvFolderUrl}
                                 certifications={developerForm.certifications || []} isEditing={isEditing}
                                 onUpdateCv={handleDevCvUpdate} onAddCertification={handleDevAddCert}
-                                onRemoveCertification={handleDevRemoveCert} uploadId="developer" />
+                                onRemoveCertification={handleDevRemoveCert} uploadId="developer"
+                                onUpdateCvFolderUrl={(url) => setDeveloperForm(prev => prev ? { ...prev, cvFolderUrl: url } : prev)} />
                         </section>
 
                         {/* Developer Qualifications */}

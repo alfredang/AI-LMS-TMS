@@ -416,12 +416,14 @@ const DocumentSection: React.FC<{
     title: string;
     cvUrl?: string;
     cvOriginalFilename?: string;
+    cvFolderUrl?: string;
     certifications?: Certification[];
     isEditing: boolean;
     onUpdateCv: (file: File) => void;
     onAddCertification: (name: string, file: File) => void;
     onRemoveCertification: (id: string) => void;
-}> = ({ title, cvUrl, cvOriginalFilename, certifications, isEditing, onUpdateCv, onAddCertification, onRemoveCertification }) => {
+    onUpdateCvFolderUrl?: (url: string) => void;
+}> = ({ title, cvUrl, cvOriginalFilename, cvFolderUrl, certifications, isEditing, onUpdateCv, onAddCertification, onRemoveCertification, onUpdateCvFolderUrl }) => {
 
     const [newCertName, setNewCertName] = useState('');
     const [selectedCertFile, setSelectedCertFile] = useState<File | null>(null);
@@ -446,25 +448,26 @@ const DocumentSection: React.FC<{
             <section>
                 <h2 className="text-xl font-bold mb-4">{title}</h2>
                 <div className="space-y-4">
-                    {/* CV Upload */}
+                    {/* CV Folder URL */}
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-gray-300">Curriculum Vitae (CV)</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-gray-300">CV & Documents Folder</label>
                         <div className="flex items-center gap-2 p-2 bg-gray-50 rounded-md border dark:bg-gray-700 dark:border-gray-600">
-                            <Icon name={IconName.FilePdf} className="w-5 h-5 text-gray-500" />
-                            <span className="text-sm text-subtle flex-grow">
-                                {cvUrl ? (
-                                    <span className="font-medium text-gray-700 dark:text-gray-300">
-                                        {cvOriginalFilename}
-                                    </span>
-                                ) : (
-                                    'No CV uploaded'
-                                )}
-                            </span>
-                            <Button variant="ghost" size="sm" onClick={() => document.getElementById('cv-upload')?.click()}>
-                                <Icon name={IconName.Upload} className="w-4 h-4 mr-1" /> {cvUrl ? 'Change' : 'Upload'}
-                            </Button>
-                            <input type="file" id="cv-upload" className="hidden" onChange={(e) => e.target.files && onUpdateCv(e.target.files[0])} accept=".pdf,.doc,.docx" />
+                            <Icon name={IconName.Folder} className="w-5 h-5 text-blue-500" />
+                            <input
+                                type="url"
+                                placeholder="Paste Google Drive folder URL"
+                                value={cvFolderUrl || ''}
+                                onChange={(e) => onUpdateCvFolderUrl?.(e.target.value)}
+                                className={`${inputClasses} !py-1.5 !text-sm flex-1`}
+                            />
+                            {cvFolderUrl && (
+                                <a href={cvFolderUrl} target="_blank" rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold text-blue-600 bg-blue-50 rounded-md hover:bg-blue-100 transition-colors whitespace-nowrap">
+                                    <Icon name={IconName.ExternalLink} className="w-3 h-3" /> Open
+                                </a>
+                            )}
                         </div>
+                        <p className="text-xs text-gray-500 mt-1 dark:text-gray-400">Upload your CV and certifications to this Google Drive folder.</p>
                     </div>
                     {/* Certifications List (Editable) */}
                     <div>
@@ -525,6 +528,26 @@ const DocumentSection: React.FC<{
         <section>
             <h2 className="text-xl font-bold mb-4">{title}</h2>
             <div className="space-y-4">
+                {cvFolderUrl && (
+                    <div className="flex items-center justify-between p-3 bg-gray-50 rounded-md border dark:bg-gray-700/50 dark:border-gray-600">
+                        <div className="flex items-center gap-3">
+                            <Icon name={IconName.Folder} className="w-6 h-6 text-blue-500 flex-shrink-0" />
+                            <div>
+                                <p className="text-sm font-medium text-gray-900 dark:text-gray-200">CV & Documents Folder</p>
+                                <p className="text-xs text-gray-500 dark:text-gray-400">Google Drive</p>
+                            </div>
+                        </div>
+                        <a
+                            href={cvFolderUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-blue-600 bg-blue-50 rounded-md hover:bg-blue-100 transition-colors"
+                        >
+                            <Icon name={IconName.ExternalLink} className="w-3 h-3" />
+                            Open Folder
+                        </a>
+                    </div>
+                )}
                 {cvUrl && (
                     <div className="flex items-center justify-between p-3 bg-gray-50 rounded-md border dark:bg-gray-700/50 dark:border-gray-600">
                         <div className="flex items-center gap-3">
@@ -565,7 +588,7 @@ const DocumentSection: React.FC<{
                         ))}
                     </div>
                 )}
-                {!cvUrl && (!certifications || certifications.length === 0) && <p className="text-subtle text-sm">No documents uploaded.</p>}
+                {!cvFolderUrl && !cvUrl && (!certifications || certifications.length === 0) && <p className="text-subtle text-sm">No documents uploaded.</p>}
             </div>
         </section>
     );
@@ -1007,6 +1030,11 @@ export const TrainerProfileCard: React.FC<{
                 });
             }
 
+            // CV folder URL changes
+            if ((formData as any).cvFolderUrl !== (profile as any).cvFolderUrl) {
+                changedFields.cvFolderUrl = (formData as any).cvFolderUrl;
+            }
+
             // Profile picture changes
             if (currentUploadedPath) {
                 changedFields.profilePictureUrl = currentUploadedPath;
@@ -1213,11 +1241,13 @@ export const TrainerProfileCard: React.FC<{
                         title="CV & Certifications"
                         cvUrl={formData.cvUrl}
                         cvOriginalFilename={formData.cvOriginalFilename}
+                        cvFolderUrl={(formData as any).cvFolderUrl}
                         certifications={formData.certifications}
                         isEditing={isEditing}
                         onUpdateCv={handleCvUpdate}
                         onAddCertification={handleAddCertification}
                         onRemoveCertification={handleRemoveCertification}
+                        onUpdateCvFolderUrl={(url) => setFormData(prev => ({ ...prev, cvFolderUrl: url } as any))}
                     />
 
                     <section>
