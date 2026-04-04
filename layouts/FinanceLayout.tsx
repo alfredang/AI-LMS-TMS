@@ -93,6 +93,18 @@ const FinanceLayout: React.FC = () => {
           <span className="truncate">All Course Runs</span>
         </a>
 
+        {/* Quickbooks */}
+        <a
+          href="https://quickbooks.intuit.com/sg/"
+          target="_blank"
+          rel="noopener noreferrer"
+          className={`group flex items-center gap-3 w-full rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-150 ${inactiveClass}`}
+        >
+          <Icon name={IconName.DollarSign} className="w-[18px] h-[18px] flex-shrink-0 transition-colors text-gray-400 dark:text-gray-500" />
+          <span className="truncate">Quickbooks</span>
+          <Icon name={IconName.ExternalLink} className="w-3 h-3 ml-auto text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+        </a>
+
         {/* Grant Management — collapsible */}
         <div className="pt-3">
           <button

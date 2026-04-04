@@ -121,13 +121,23 @@ const TrainingProviderSidebar: React.FC<TrainingProviderSidebarProps> = ({ onNav
                 {usefulLinksOpen && (
                     <div className="ml-4 mt-1 space-y-1">
                         <a
+                            href="https://ssg-api-portal.vercel.app/"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors text-gray-700 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-slate-700 dark:hover:text-white"
+                        >
+                            <Icon name={IconName.Link} className="w-4 h-4" />
+                            <span>SSG API Portal</span>
+                            <Icon name={IconName.ExternalLink} className="w-3 h-3 ml-auto opacity-50" />
+                        </a>
+                        <a
                             href="https://developer.ssg-wsg.gov.sg/webapp/home"
                             target="_blank"
                             rel="noopener noreferrer"
                             className="flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors text-gray-700 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-slate-700 dark:hover:text-white"
                         >
                             <Icon name={IconName.Link} className="w-4 h-4" />
-                            <span>SSG API</span>
+                            <span>SSG Developer</span>
                             <Icon name={IconName.ExternalLink} className="w-3 h-3 ml-auto opacity-50" />
                         </a>
                     </div>

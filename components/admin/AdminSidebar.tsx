@@ -258,6 +258,8 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate }) => {
                     { label: 'Skills Framework', href: 'https://www.tpgateway.gov.sg/plan-courses/skills-framework' },
                     { label: 'SSG Circular', href: 'https://www.tpgateway.gov.sg/resources/announcements-and-circulars' },
                     { label: 'Corppass', href: 'https://www.corppass.gov.sg/portal' },
+                    { label: 'SSG API Portal', href: 'https://ssg-api-portal.vercel.app/' },
+                    { label: 'SSG Developer', href: 'https://developer.ssg-wsg.gov.sg/webapp/home' },
                 ].map(({ label, href }) => (
                     <a
                         key={label}
