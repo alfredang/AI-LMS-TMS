@@ -8,8 +8,12 @@
 export async function register() {
     // Only run on the server side, not during build
     if (process.env.NEXT_RUNTIME === 'nodejs') {
-        const { initScheduler } = await import('./lib/scheduler/scheduler');
-        await initScheduler();
+        if (process.env.NODE_ENV === 'production') {
+            const { initScheduler } = await import('./lib/scheduler/scheduler');
+            await initScheduler();
+        } else {
+            console.log('[Scheduler] Skipped — not running in production');
+        }
 
         // Warm up OpenClaw session to avoid ~15s cold start on first user message
         const { sendToOpenClaw } = await import('./lib/openclaw-client');

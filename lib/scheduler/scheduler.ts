@@ -132,6 +132,10 @@ function getDirectHandler(taskId: string): TaskHandler | undefined {
             const { runAutomation } = await import('../../pages/api/external/auto-create-certificates');
             return runAutomation();
         });
+        directHandlers.set('sync_course_run_dates', async () => {
+            const { runDateSync } = await import('../../pages/api/external/sync-course-run-dates');
+            return runDateSync();
+        });
     }
     return directHandlers.get(taskId);
 }
