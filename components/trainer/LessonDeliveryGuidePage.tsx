@@ -13,87 +13,66 @@ interface Step {
 const STEPS: Step[] = [
   {
     number: 1,
-    title: 'Trainer Publishes the Assessment',
-    description: 'The trainer creates and publishes the assessment for the course. The assessment becomes available for learners to access.',
+    title: 'E-Attendance in AM for Learners and Trainer',
+    description: 'Take electronic attendance in the morning for both learners and trainer to record participation.',
     actor: 'trainer',
-    icon: IconName.Upload,
+    icon: IconName.ClipboardCheck,
   },
   {
     number: 2,
-    title: 'Learner Downloads the Assessment',
-    description: 'The learner downloads the digital Word document from the assessment section in the LMS.',
-    actor: 'learner',
-    icon: IconName.Download,
+    title: 'Ice Breaker and Self Introduction',
+    description: 'Conduct an ice breaker activity and facilitate self introductions to build rapport among learners.',
+    actor: 'trainer',
+    icon: IconName.Users,
   },
   {
     number: 3,
-    title: 'Learner Completes the Assessment',
-    description: 'The learner works on the assessment by filling in their answers in the downloaded document.',
-    actor: 'learner',
-    icon: IconName.Edit,
+    title: 'Follow the Lesson Plan to Deliver the Lesson',
+    description: 'Follow the lesson plan to deliver the lesson. Always contextualize the delivery to learners profile.',
+    actor: 'trainer',
+    icon: IconName.BookOpen,
   },
   {
     number: 4,
-    title: 'Learner Submits the Assessment',
-    description: 'The learner uploads and submits the completed digital copy of the assessment answers back into the LMS.',
-    actor: 'learner',
-    icon: IconName.Send,
+    title: 'E-Attendance in PM for Learners and Trainer',
+    description: 'Take electronic attendance in the afternoon for both learners and trainer to record participation.',
+    actor: 'trainer',
+    icon: IconName.ClipboardCheck,
   },
   {
     number: 5,
-    title: 'Assessment Filed in Trainee Sub-Folder',
-    description: 'The submitted assessment answers are automatically placed in the respective trainee sub-folder on Google Drive for organised record keeping.',
-    actor: 'system',
+    title: 'Get Learners to Fill Up Cert Delivery Form',
+    description: 'Have learners complete the Certificate Delivery Form to ensure certificates are sent to the correct address.',
+    actor: 'learner',
     icon: IconName.FileText,
   },
   {
     number: 6,
-    title: 'Trainer Reviews the Assessment in Individual Trainee Sub-Folder',
-    description: 'The trainer checks the learner\'s assessment answers from the Assessment folder link on Google Drive.',
-    actor: 'trainer',
-    icon: IconName.Eye,
+    title: 'Get Learners to Fill Up TRAQOM Survey',
+    description: 'Have learners complete the TRAQOM survey to provide feedback on the training quality.',
+    actor: 'learner',
+    icon: IconName.Edit,
   },
   {
     number: 7,
-    title: 'Trainer Amends and Re-Uploads the Trainee Assessment to Individual Trainee Sub-Folder',
-    description: 'If necessary, the trainer amends the answers and re-uploads the corrected assessment to Google Drive.',
+    title: 'E-Attendance for Assessment',
+    description: 'Take electronic attendance for the assessment session.',
     actor: 'trainer',
-    icon: IconName.Upload,
+    icon: IconName.ClipboardCheck,
   },
   {
     number: 8,
-    title: 'Trainer Marks as Competent',
-    description: 'The trainer marks the learner as competent if they meet the assessment criteria.',
+    title: 'Start the Assessment',
+    description: 'Begin the assessment. Refer to the Assessment Guide for the detailed assessment workflow.',
     actor: 'trainer',
-    icon: IconName.CheckCircle,
+    icon: IconName.Award,
   },
   {
     number: 9,
-    title: 'Learner Signs Physical Copy of the Assessment Summary Record',
-    description: 'The learner signs the physical copy of the Assessment Summary Record.',
-    actor: 'learner',
-    icon: IconName.ClipboardCheck,
-  },
-  {
-    number: 10,
-    title: 'Trainer Signs Physical Copy of the Assessment Summary Record',
-    description: 'The trainer signs the physical copy of the Assessment Summary Record.',
-    actor: 'trainer',
-    icon: IconName.ClipboardCheck,
-  },
-  {
-    number: 11,
-    title: 'Trainer Passes Back Signed Assessment Summary Record to Staff',
-    description: 'The trainer passes the signed Assessment Summary Record back to the staff.',
-    actor: 'trainer',
-    icon: IconName.Send,
-  },
-  {
-    number: 12,
-    title: 'Certificate Auto-Generation',
-    description: 'Certificate of Achievement for learners will be auto generated after class once they completed at least 75% attendance.',
+    title: 'Class Ended',
+    description: 'The class has concluded. Ensure all administrative tasks are completed.',
     actor: 'system',
-    icon: IconName.Award,
+    icon: IconName.CheckCircle,
   },
 ];
 
@@ -129,16 +108,16 @@ const actorColors = {
 
 const actorLabels = { trainer: 'Trainer', learner: 'Learner', system: 'System' };
 
-const AssessmentGuidePage: React.FC = () => {
+const LessonDeliveryGuidePage: React.FC = () => {
   return (
     <div className="space-y-6">
       <div className="border-b border-gray-200 dark:border-gray-700 pb-5">
         <h3 className="text-2xl font-bold leading-6 text-gray-900 dark:text-white flex items-center gap-2">
           <Icon name={IconName.BookOpen} className="w-7 h-7" />
-          Assessment Guide
+          Lesson Delivery Guide
         </h3>
         <p className="mt-2 max-w-4xl text-sm text-gray-500 dark:text-gray-400">
-          Step-by-step visual guide on how assessments are conducted in the LMS.
+          Step-by-step visual guide on how lessons are delivered in the classroom.
         </p>
       </div>
 
@@ -202,4 +181,4 @@ const AssessmentGuidePage: React.FC = () => {
   );
 };
 
-export default AssessmentGuidePage;
+export default LessonDeliveryGuidePage;
