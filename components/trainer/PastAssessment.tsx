@@ -19,6 +19,7 @@ interface StudentRecord {
   user_id: string | null;
   student_name: string;
   email: string;
+  nric?: string;
   competent_status: string;
   source: 'manual' | 'ssg';
   is_competent: boolean;
@@ -160,8 +161,8 @@ const PastAssessment: React.FC = () => {
                   <thead>
                     <tr className="border-b border-default bg-gray-50 dark:bg-gray-800">
                       <th className="px-5 py-3 text-left font-medium text-gray-500 dark:text-gray-400">#</th>
-                      <th className="px-5 py-3 text-left font-medium text-gray-500 dark:text-gray-400">Student Name</th>
-                      <th className="px-5 py-3 text-left font-medium text-gray-500 dark:text-gray-400">Email</th>
+                      <th className="px-5 py-3 text-left font-medium text-gray-500 dark:text-gray-400">Learner Name</th>
+                      <th className="px-5 py-3 text-left font-medium text-gray-500 dark:text-gray-400">Learner NRIC</th>
                       <th className="px-5 py-3 text-left font-medium text-gray-500 dark:text-gray-400">Source</th>
                       <th className="px-5 py-3 text-left font-medium text-gray-500 dark:text-gray-400">Assessment Result</th>
                     </tr>
@@ -170,15 +171,8 @@ const PastAssessment: React.FC = () => {
                     {students.map((student, idx) => (
                       <tr key={student.enrolment_id || idx} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
                         <td className="px-5 py-3 text-gray-400 font-mono">{idx + 1}</td>
-                        <td className="px-5 py-3">
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold text-sm border border-blue-200 dark:border-blue-800 select-none flex-shrink-0">
-                              {student.student_name.charAt(0).toUpperCase()}
-                            </div>
-                            <span className="font-medium text-gray-900 dark:text-white">{student.student_name}</span>
-                          </div>
-                        </td>
-                        <td className="px-5 py-3 text-gray-500 dark:text-gray-400">{student.email || '—'}</td>
+                        <td className="px-5 py-3 font-medium text-gray-900 dark:text-white">{student.student_name}</td>
+                        <td className="px-5 py-3 text-gray-500 dark:text-gray-400 font-mono text-xs">{student.nric ? '****' + student.nric.slice(4) : '—'}</td>
                         <td className="px-5 py-3">
                           {student.source === 'ssg' ? (
                             <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400">
