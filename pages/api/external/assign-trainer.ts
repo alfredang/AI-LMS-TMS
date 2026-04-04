@@ -1,49 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 
-/**
- * External API — Assign Trainer to Course Run
- *
- * POST /api/external/assign-trainer
- *
- * Headers:
- *   x-api-key: <EXTERNAL_API_KEY_FOR_CLAWDBOT>
- *
- * Body (JSON):
- *   {
- *     "course_run_id":    "1303232",
- *     "primary_email":    "trainer@email.com",
- *     "secondary_email":  "",             // empty string if none
- *     "course_code":      "TGS-...",      // required
- *     "course_title":     "...",          // mode derivation
- *     "start_date":       "12 Mar 2026",  // required
- *     "end_date":         "12 Mar 2026",  // required
- *     "ra_code":          "RA741642"      // optional
- *   }
- *
- * Flow:
- *   1. Validate API key
- *   2. Use data provided in request body directly (n8n webhook disabled)
- *   3. Upsert course_run in DB (create if not exists, update if exists)
- *   4. Assign the trainer
- */
-
-// ── Rate limiter (commented out — webhook disabled) ───────────────────────────
-// let lastWebhookCallAt = 0;
-// const RATE_LIMIT_MS   = 3000;
-//
-// async function rateLimitedFetch(url: string, options: RequestInit): Promise<Response> {
-//   const now     = Date.now();
-//   const elapsed = now - lastWebhookCallAt;
-//   if (elapsed < RATE_LIMIT_MS) {
-//     await new Promise(r => setTimeout(r, RATE_LIMIT_MS - elapsed));
-//   }
-//   lastWebhookCallAt = Date.now();
-//   return fetch(url, options);
-// }
-
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
 // Convert various date formats → ISO string "YYYY-MM-DD"
 // Handles: SSG integer 20260307, already-ISO "2026-03-07", human "12 Mar 2026"
 function parseToISO(d: number | string | undefined): string | null {
@@ -62,14 +20,6 @@ function parseToISO(d: number | string | undefined): string | null {
   if (m) return `${m[3]}-${months[m[2]] ?? '01'}-${m[1].padStart(2, '0')}`;
   return null;
 }
-
-// ── extractRaCode (commented out — was used by n8n webhook response) ──────────
-// Extract RA code from qrCodeLink e.g. ".../take-attendance/RA741642" → "RA741642"
-// function extractRaCode(qrCodeLink: string | undefined): string | null {
-//   if (!qrCodeLink) return null;
-//   const parts = qrCodeLink.split('/');
-//   return parts[parts.length - 1] || null;
-// }
 
 async function ensureLogTable() {
   await pool.query(`

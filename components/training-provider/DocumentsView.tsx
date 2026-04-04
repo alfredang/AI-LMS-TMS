@@ -22,7 +22,7 @@ const DocumentsView: React.FC = () => {
             </div>
             <h4 className="text-lg font-semibold mb-2">Certificate Template</h4>
             <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
-              Standard certificate template for n8n Automation.
+              Standard certificate template for automated certificate generation.
             </p>
             <div className="mt-auto pt-4 border-t border-gray-100 dark:border-gray-800 space-y-3">
               <a 

@@ -184,7 +184,7 @@ const sections: EndpointSection[] = [
         method: 'POST',
         path: '/api/external/auto-create-learners',
         title: 'Auto-Create Learner Accounts',
-        description: 'Automatically creates learner accounts for course runs starting today. Fetches SSG enrollments via n8n webhook and upserts enrollment records.',
+        description: 'Automatically creates learner accounts for course runs starting tomorrow. Fetches SSG enrollments directly from the SSG API and upserts enrollment records.',
         headers: [
           { name: 'x-api-key', value: '<API_KEY>', description: 'API key for authentication' },
         ],
@@ -244,7 +244,7 @@ const sections: EndpointSection[] = [
         method: 'POST',
         path: '/api/external/backfill-enrollments',
         title: 'Backfill Enrollments (Execute)',
-        description: 'Fetches and updates enrollments with raw data from SSG via n8n webhook.',
+        description: 'Fetches and updates enrollments with raw data directly from the SSG API.',
         headers: [
           { name: 'x-api-key', value: '<API_KEY>', description: 'API key for authentication' },
         ],
