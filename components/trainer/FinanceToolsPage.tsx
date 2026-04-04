@@ -9,6 +9,12 @@ const FINANCE_TOOLS = [
     icon: IconName.Analytics,
     href: 'https://alfredang.github.io/novataxsg/',
   },
+  {
+    title: 'Financial Tools',
+    description: 'Access financial planning and analysis tools for budgeting, forecasting, and reporting',
+    icon: IconName.Analytics,
+    href: 'https://alfredang.github.io/novafinance/',
+  },
 ];
 
 const FinanceToolsPage: React.FC = () => {
