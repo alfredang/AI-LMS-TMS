@@ -100,38 +100,43 @@ export async function runAutomation(targetDate?: string) {
             };
 
             try {
-                // 2. Fetch the latest sequential session for this Course Run
-                // Column check: id, ssg_session_id, start_date
-                const sessionRes = await pool.query(`
-                    SELECT id, ssg_session_id, start_date, session_number
+                // 2. Count total sessions for this Course Run
+                const totalSessionsRes = await pool.query(`
+                    SELECT COUNT(*) as total
                     FROM course_session
                     WHERE course_run_id = $1
                       AND deleted = false
-                    ORDER BY start_date DESC, LENGTH(session_number) DESC, session_number DESC
-                    LIMIT 1
                 `, [run.db_uuid]);
 
-                if (sessionRes.rowCount === 0) {
+                const totalSessions = parseInt(totalSessionsRes.rows[0].total, 10);
+                if (totalSessions === 0) {
                     throw new Error('No sessions found for this course run in local DB.');
                 }
-                const lastSessionId = sessionRes.rows[0].id;
 
-                // 3. Fetch local attendance for this session joined with enrollment to check status
-                // Trainees status "confirmed" logic pull from enrollment table
+                // 3. Fetch attendance score per learner across ALL sessions
+                // Only include learners with confirmed enrollment and ≥60% attendance
                 const attendanceRes = await pool.query(`
-                    SELECT ca.nric, au.full_name as learner_name, e.id as enrolment_id
-                    FROM course_attendance ca
-                    JOIN app_user au ON ca.user_id = au.id
-                    JOIN enrollment e ON e.user_id = au.id AND e.course_run_id = $1
-                    WHERE ca.session_id = $2
-                      AND ca.is_present = true
+                    SELECT 
+                        e.id as enrolment_id,
+                        e.nric,
+                        COALESCE(au.full_name, e.nric, 'Unknown') as learner_name,
+                        COUNT(DISTINCT CASE WHEN ca.is_present = true THEN ca.session_id END) as attended_count
+                    FROM enrollment e
+                    LEFT JOIN app_user au ON e.user_id = au.id
+                    LEFT JOIN course_attendance ca ON ca.user_id = e.user_id AND ca.session_id IN (
+                        SELECT id FROM course_session WHERE course_run_id = $1 AND deleted = false
+                    )
+                    WHERE e.course_run_id = $1
                       AND LOWER(e.enrolment_status) = 'confirmed'
-                `, [run.db_uuid, lastSessionId]);
+                    GROUP BY e.id, e.nric, au.full_name
+                    HAVING COUNT(DISTINCT CASE WHEN ca.is_present = true THEN ca.session_id END)::float / $2::float * 100 >= 60
+                `, [run.db_uuid, totalSessions]);
 
-                const confirmedTrainees = attendanceRes.rows;
-                console.log(`[auto-create-certificates] ${run.course_run_id} (Session ${lastSessionId}): found ${confirmedTrainees.length} confirmed present trainees.`);
+                const eligibleTrainees = attendanceRes.rows;
+                console.log(`[auto-create-certificates] ${run.course_run_id}: ${totalSessions} sessions, ${eligibleTrainees.length} learners with ≥60% attendance.`);
 
-                for (const trainee of confirmedTrainees) {
+                for (const trainee of eligibleTrainees) {
+                    const attendancePercent = Math.round((parseInt(trainee.attended_count, 10) / totalSessions) * 100);
                     const traineeLogContext = {
                         ...logContext,
                         nric: trainee.nric,
@@ -140,7 +145,7 @@ export async function runAutomation(targetDate?: string) {
 
                     try {
                         // 4. Generate and Upload Certificate
-                        // Uses the name from app_user as per local attendance
+                        console.log(`[auto-create-certificates] Generating cert for ${trainee.learner_name} (${attendancePercent}% attendance)`);
                         const certificateUrl = await generateAndUploadCertificate(trainee.enrolment_id, pool, trainee.learner_name);
 
                         await logResult(runId, 'created', { ...traineeLogContext, certificateUrl });

@@ -1587,7 +1587,7 @@ const CertificateSection: React.FC<{ userRole: UserRole }> = ({ userRole }) => {
     const isCompetent = selectedCourse?.assessmentStatus === 'Competent' || selectedCourse?.assessmentStatus === 'Passed';
 
     return (
-        <ContentSection title="Certificate of Completion">
+        <ContentSection title="Certificate of Achievement">
             {isCompetent ? (
                 <>
                     {localCertUrl ? (
@@ -1626,9 +1626,9 @@ const CertificateSection: React.FC<{ userRole: UserRole }> = ({ userRole }) => {
             ) : (
                 <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-md border border-gray-200 dark:border-gray-600 text-center">
                     <Icon name={IconName.FileText} className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-                    <p className="text-gray-600 dark:text-gray-300 font-medium">Not Yet Competent</p>
+                    <p className="text-gray-600 dark:text-gray-300 font-medium">Minimum Attendance Not Fulfilled</p>
                     <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                        When you successfully complete all assessments to standard, your certificate will be available here.
+                        When you have fulfilled the minimum attendance requirement, your certificate will be available here.
                     </p>
                 </div>
             )}
