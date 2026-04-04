@@ -24,6 +24,7 @@ const FinanceLayout: React.FC = () => {
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isDesktopSidebarCollapsed, setIsDesktopSidebarCollapsed] = useState(false);
   const [grantOpen, setGrantOpen] = useState(false);
+  const [usefulLinksOpen, setUsefulLinksOpen] = useState(false);
 
   const handleToggleSidebar = () => {
     if (typeof window !== 'undefined' && window.innerWidth >= 768) {
@@ -156,6 +157,43 @@ const FinanceLayout: React.FC = () => {
             <Icon name={IconName.ClipboardCheck} className={`w-[18px] h-[18px] flex-shrink-0 transition-colors ${page === 'claimCheck' ? 'text-primary' : 'text-gray-400 dark:text-gray-500'}`} />
             <span className="truncate">Check / Add Claim</span>
           </a>
+        </div>
+
+        {/* Useful Links — collapsible */}
+        <div className="pt-3">
+          <button
+            onClick={() => setUsefulLinksOpen(prev => !prev)}
+            className={`group flex items-center gap-3 w-full rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-150 ${inactiveClass}`}
+          >
+            <Icon name={IconName.ExternalLink} className="w-[18px] h-[18px] flex-shrink-0 transition-colors text-gray-400 dark:text-gray-500" />
+            <span className="truncate">Useful Links</span>
+            <Icon
+              name={IconName.ChevronDown}
+              className={`w-4 h-4 ml-auto flex-shrink-0 transition-transform duration-200 ${usefulLinksOpen ? 'rotate-0' : '-rotate-90'} text-gray-400 dark:text-gray-500`}
+            />
+          </button>
+
+          {usefulLinksOpen && (
+            <div className="space-y-0.5 ml-4">
+              {[
+                { label: 'GeBiz', href: 'https://www.gebiz.gov.sg/' },
+                { label: 'Bizfile', href: 'https://www.bizfile.gov.sg/' },
+                { label: 'CPF', href: 'https://www.cpf.gov.sg/member' },
+              ].map(({ label, href }) => (
+                <a
+                  key={label}
+                  href={href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={`group flex items-center gap-3 w-full rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-150 ${inactiveClass}`}
+                >
+                  <Icon name={IconName.Link} className="w-4 h-4 flex-shrink-0 text-gray-400 dark:text-gray-500" />
+                  <span className="truncate">{label}</span>
+                  <Icon name={IconName.ExternalLink} className="w-3 h-3 ml-auto text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                </a>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>
