@@ -47,7 +47,7 @@ const DATA_ANALYTICS_ITEMS: { label: string; icon: IconName; href: string }[] = 
 ];
 
 const FINANCE_TOOL_ITEMS: { label: string; icon: IconName; href: string }[] = [
-  { label: 'Tax Calculator', icon: IconName.Analytics, href: 'https://alfredang.github.io/novafinance/index.html' },
+  { label: 'Tax Calculator', icon: IconName.Analytics, href: 'https://alfredang.github.io/novataxsg/' },
 ];
 
 const STAT_TOOL_ITEMS: { label: string; icon: IconName; href: string }[] = [

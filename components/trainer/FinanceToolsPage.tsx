@@ -7,7 +7,7 @@ const FINANCE_TOOLS = [
     title: 'Tax Calculator',
     description: 'Calculate income tax, deductions, and net pay across different tax brackets',
     icon: IconName.Analytics,
-    href: 'https://alfredang.github.io/novafinance/index.html',
+    href: 'https://alfredang.github.io/novataxsg/',
   },
 ];
 
