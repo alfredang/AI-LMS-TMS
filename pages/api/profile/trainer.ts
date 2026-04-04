@@ -22,6 +22,9 @@ interface TrainerProfileRow {
   cn_plus_email: string;
   nric: string;
   secondary_email: string;
+  nationality: string;
+  ethnicity: string;
+  dob: string;
 }
 
 export default async function handler(
@@ -80,7 +83,10 @@ export default async function handler(
         t.country,
         t.cn_plus_email,
         t.nric,
-        u.secondary_email
+        u.secondary_email,
+        t.nationality,
+        t.ethnicity,
+        to_char(t.dob, 'YYYY-MM-DD') AS dob
       FROM app_user u
       LEFT JOIN trainer_profile t
         ON t.user_id = u.id
@@ -225,6 +231,9 @@ export default async function handler(
       cnPlusEmail: row.cn_plus_email || '',
       nric: row.nric || '',
       secondaryEmail: row.secondary_email || '',
+      nationality: row.nationality || '',
+      ethnicity: row.ethnicity || '',
+      dob: row.dob || '',
       // Additional fields for security (not exposed to frontend)
       password: row.password,
       passwordHash: row.password_hash

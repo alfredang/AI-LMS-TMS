@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { TrainerProfile, WorkExperienceItem, Certification, TrainerType, Gender, SKILLS_FUTURE_INDUSTRIES, TrainerQualification, TrainerEducation } from '@app-types/profile';
+import { TrainerProfile, WorkExperienceItem, Certification, TrainerType, Gender, SKILLS_FUTURE_INDUSTRIES, TrainerQualification, TrainerEducation, Nationality, Ethnicity } from '@app-types/profile';
 import { Card } from './ui/Card';
 import { Button } from './ui/Button';
 import { Icon, IconName } from './ui/Icon';
@@ -8,6 +8,7 @@ import { useLms } from '@contexts/LmsContext';
 import { ensureAbsoluteImageUrl } from '@utils/imageUtils';
 import { getApiUrl, getUploadUrl, getDeleteFileUrl, stripBaseUrl } from '@/lib/urlHelpers';
 import { ThemeMode, getCurrentTheme, applyTheme } from '@utils/colorUtils';
+import { maskNric, formatDate, formatDateForInput } from '../utils';
 
 // Constants for styling consistency
 const inputClasses = "block w-full px-3 py-2 text-on-surface bg-surface border border-default rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent";
@@ -987,6 +988,10 @@ export const TrainerProfileCard: React.FC<{
             if (formData.gender !== profile.gender) changedFields.gender = formData.gender;
             if (formData.trainerType !== profile.trainerType) changedFields.trainerType = formData.trainerType;
             if (formData.linkedinUrl !== profile.linkedinUrl) changedFields.linkedinUrl = formData.linkedinUrl;
+            if ((formData as any).ethnicity !== (profile as any).ethnicity) changedFields.ethnicity = (formData as any).ethnicity;
+            if ((formData as any).nationality !== (profile as any).nationality) changedFields.nationality = (formData as any).nationality;
+            if (formData.nric !== profile.nric) changedFields.nric = formData.nric;
+            if ((formData as any).dob !== (profile as any).dob) changedFields.dob = (formData as any).dob;
             if (JSON.stringify(formData.areasOfExpertise) !== JSON.stringify(profile.areasOfExpertise)) changedFields.areasOfExpertise = formData.areasOfExpertise;
             if (JSON.stringify(formData.workExperience) !== JSON.stringify(profile.workExperience)) changedFields.workExperience = formData.workExperience;
             if (JSON.stringify(formData.qualifications) !== JSON.stringify(profile.qualifications)) changedFields.qualifications = formData.qualifications;
@@ -1169,7 +1174,11 @@ export const TrainerProfileCard: React.FC<{
                                 <div><label className="text-sm font-medium">Phone</label><input type="tel" name="tel" value={formData.tel || ''} onChange={handleChange} className={inputClasses} /></div>
                                 <div><label className="text-sm font-medium">Email</label><input type="email" name="email" value={formData.email} onChange={handleChange} className={inputClasses} /></div>
                                 <div><label className="text-sm font-medium">Secondary Email</label><input type="email" name="secondaryEmail" value={formData.secondaryEmail ?? ''} onChange={handleChange} className={inputClasses} /></div>
-                                <div><label className="text-sm font-medium">Gender</label><select name="gender" value={formData.gender} onChange={handleChange} className={inputClasses}>{Object.values(Gender).map(g => <option key={g} value={g}>{g}</option>)}</select></div>
+                                <div><label className="text-sm font-medium">Gender</label><select name="gender" value={formData.gender || ''} onChange={handleChange} className={inputClasses}><option value="">— Select —</option>{Object.values(Gender).map(g => <option key={g} value={g}>{g}</option>)}</select></div>
+                                <div><label className="text-sm font-medium">Race</label><select name="ethnicity" value={(formData as any).ethnicity || ''} onChange={handleChange} className={inputClasses}><option value="">— Select —</option>{Object.values(Ethnicity).map(e => <option key={e} value={e}>{e}</option>)}</select></div>
+                                <div><label className="text-sm font-medium">Nationality</label><select name="nationality" value={(formData as any).nationality || ''} onChange={handleChange} className={inputClasses}><option value="">— Select —</option>{Object.values(Nationality).map(n => <option key={n} value={n}>{n}</option>)}</select></div>
+                                <div><label className="text-sm font-medium">NRIC</label><input type="text" name="nric" value={formData.nric || ''} onChange={handleChange} className={inputClasses} /></div>
+                                <div><label className="text-sm font-medium">Date of Birth</label><input type="date" name="dob" value={formatDateForInput((formData as any).dob || '')} onChange={handleChange} className={inputClasses} /></div>
                                 <div><label className="text-sm font-medium">Trainer Type</label><select name="trainerType" value={formData.trainerType} onChange={handleChange} className={inputClasses}>{Object.values(TrainerType).map(t => <option key={t} value={t}>{t}</option>)}</select></div>
                                 <div><label className="text-sm font-medium">LinkedIn Profile</label><input type="url" name="linkedinUrl" value={formData.linkedinUrl || ''} onChange={handleChange} className={inputClasses} /></div>
                             </div>
@@ -1179,8 +1188,12 @@ export const TrainerProfileCard: React.FC<{
                                 <ProfileBioItem label="Phone" value={formData.tel} />
                                 <ProfileBioItem label="Email" value={formData.email} />
                                 <ProfileBioItem label="Secondary Email" value={formData.secondaryEmail || '—'} />
-                                <ProfileBioItem label="Gender" value={formData.gender} />
-                                <ProfileBioItem label="Trainer Type" value={formData.trainerType} />
+                                <ProfileBioItem label="Gender" value={formData.gender || '—'} />
+                                <ProfileBioItem label="Race" value={(formData as any).ethnicity || '—'} />
+                                <ProfileBioItem label="Nationality" value={(formData as any).nationality || '—'} />
+                                <ProfileBioItem label="NRIC" value={formData.nric ? maskNric(formData.nric) : '—'} />
+                                <ProfileBioItem label="Date of Birth" value={(formData as any).dob ? formatDate((formData as any).dob) : '—'} />
+                                <ProfileBioItem label="Trainer Type" value={formData.trainerType || '—'} />
                                 {formData.linkedinUrl && (
                                     <ProfileBioItem
                                         label="LinkedIn Profile"

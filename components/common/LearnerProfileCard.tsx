@@ -543,7 +543,7 @@ export const LearnerProfileCard: React.FC<{
                         <div><label className="text-sm font-medium dark:text-gray-200">Gender</label><select name="gender" value={formData.gender || ''} onChange={handleChange} className={inputClasses}><option value="">— Select —</option>{Object.values(Gender).map(g => <option key={g} value={g}>{g}</option>)}</select></div>
                         <div><label className="text-sm font-medium dark:text-gray-200">Company</label><input type="text" name="company" value={formData.company} onChange={handleChange} className={inputClasses} /></div>
                         <div><label className="text-sm font-medium dark:text-gray-200">Employment Status</label><select name="employmentStatus" value={formData.employmentStatus || ''} onChange={handleChange} className={inputClasses}><option value="">— Select —</option>{Object.values(EmploymentStatus).map(s => <option key={s} value={s}>{s}</option>)}</select></div>
-                        <div><label className="text-sm font-medium dark:text-gray-200">Nationality</label><select name="nationality" value={formData.nationality} onChange={handleChange} className={inputClasses}>{Object.values(Nationality).map(n => <option key={n} value={n}>{n}</option>)}</select></div>
+                        <div><label className="text-sm font-medium dark:text-gray-200">Nationality</label><select name="nationality" value={formData.nationality || ''} onChange={handleChange} className={inputClasses}><option value="">— Select —</option>{Object.values(Nationality).map(n => <option key={n} value={n}>{n}</option>)}</select></div>
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">

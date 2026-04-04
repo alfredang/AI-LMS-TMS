@@ -28,6 +28,9 @@ interface UpdateTrainerProfileRequest {
     cnPlusEmail?: string;
     nric?: string;
     secondaryEmail?: string;
+    nationality?: string;
+    ethnicity?: string;
+    dob?: string;
   };
 }
 
@@ -181,6 +184,21 @@ export default async function handler(
         updateValues.push(profileData.nric);
       }
 
+      if (profileData.nationality !== undefined) {
+        updateFields.push(`nationality = $${paramIndex++}`);
+        updateValues.push(profileData.nationality || null);
+      }
+
+      if (profileData.ethnicity !== undefined) {
+        updateFields.push(`ethnicity = $${paramIndex++}`);
+        updateValues.push(profileData.ethnicity || null);
+      }
+
+      if (profileData.dob !== undefined) {
+        updateFields.push(`dob = $${paramIndex++}`);
+        updateValues.push(profileData.dob || null);
+      }
+
       // Note: certifications are now handled in separate certification table
       // Remove the old certifications field update
 
@@ -305,7 +323,10 @@ export default async function handler(
           t.country,
           t.cn_plus_email,
           t.nric,
-          u.secondary_email
+          u.secondary_email,
+          t.nationality,
+          t.ethnicity,
+          to_char(t.dob, 'YYYY-MM-DD') as dob
         FROM app_user u
         LEFT JOIN trainer_profile t
           ON t.user_id = u.id
@@ -404,7 +425,10 @@ export default async function handler(
         country: row.country || '',
         cnPlusEmail: row.cn_plus_email || '',
         nric: row.nric || '',
-        secondaryEmail: row.secondary_email || ''
+        secondaryEmail: row.secondary_email || '',
+        nationality: row.nationality || '',
+        ethnicity: row.ethnicity || '',
+        dob: row.dob || '',
       };
 
       res.status(200).json({
