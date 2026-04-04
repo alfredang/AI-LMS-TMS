@@ -472,7 +472,8 @@ CREATE TYPE public.user_role AS ENUM (
     'Trainer',
     'Admin',
     'Developer',
-    'Training Provider'
+    'Training Provider',
+    'Finance'
 );
 
 
@@ -733,6 +734,8 @@ CREATE TABLE public.course (
     course_outline text,
     practical_performance_assessment_link text,
     written_assessment_link text,
+    assessment_methods jsonb,
+    assessment_summary_record_url text,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT course_assessment_hours_check CHECK ((assessment_hours >= (0)::numeric)),
@@ -765,6 +768,20 @@ CREATE TABLE public.course_run (
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     assigned_trainer_name text,
     assigned_trainer_email text,
+    published_assessment_methods jsonb DEFAULT '{}'::jsonb,
+    registration_opening_date date,
+    registration_closing_date date,
+    venue_block text,
+    venue_street text,
+    venue_building text,
+    venue_floor text,
+    venue_unit text,
+    venue_postal_code text,
+    venue_room text,
+    venue_wheelchair_access boolean,
+    course_vacancy_code text,
+    course_vacancy_description text,
+    course_admin_email text,
     CONSTRAINT course_run_dates CHECK ((end_date >= start_date))
 );
 
@@ -939,8 +956,20 @@ CREATE TABLE public.ssg_claims (
     payment_date timestamp with time zone,
     created_date timestamp with time zone DEFAULT now() NOT NULL,
     imported_at timestamp with time zone DEFAULT now() NOT NULL,
-    raw_data jsonb
+    raw_data jsonb,
+    course_name text,
+    course_start_date timestamp with time zone,
+    disbursement_date timestamp with time zone,
+    ready_for_payout_date timestamp with time zone,
+    payout_request_id bigint,
+    paynow_account character varying(100),
+    individual_nric character varying(50),
+    sctp_declaration character varying(50),
+    lapsed_date timestamp with time zone,
+    CONSTRAINT ssg_claims_claim_id_key UNIQUE (claim_id)
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS ssg_claims_claim_id_unique_idx ON public.ssg_claims (claim_id);
 
 
 -- Ownership managed by Supabase
@@ -1112,7 +1141,31 @@ CREATE TABLE public.training_provider (
     enhanced_fund_rate numeric,
     gst_rate numeric,
     gst_register boolean DEFAULT false NOT NULL,
-    selected_ai_model text
+    selected_ai_model text,
+    force_first_password_change boolean DEFAULT false NOT NULL,
+    default_password text,
+    google_calendar_url text,
+    ms_calendar_url text,
+    email_user text,
+    google_client_id text,
+    google_client_secret text,
+    google_refresh_token text,
+    google_slides_template_id text,
+    certificate_folder_url text,
+    master_list_url text,
+    tertiary_tms_url text,
+    tertiary_fms_url text,
+    tertiary_mms_url text,
+    tertiary_tpms_url text,
+    n8n_host1_url text,
+    n8n_host2_url text,
+    company_email text,
+    company_tel text,
+    company_website text,
+    privacy_policy text,
+    acceptable_use_policy text,
+    otp_email_subject text,
+    otp_email_body text
 );
 
 
