@@ -3,26 +3,6 @@ import pool from '../../../lib/db';
 import { getSSGCredentialsService } from '../../../lib/ssg/services/credentials-service';
 import { createSSGEnrolmentAPI } from '../../../lib/ssg/api/enrolment-api';
 
-/**
- * External API — Backfill Enrollment Raw Data
- *
- * GET  /api/external/backfill-enrollments          — preview: list enrollments missing raw_data (no webhook calls)
- * POST /api/external/backfill-enrollments          — run: fetch & update enrollments missing raw_data
- *
- * Headers:
- *   x-api-key: <EXTERNAL_API_KEY_FOR_CLAWDBOT>
- *
- * Query params (optional):
- *   limit  — max enrollments to process in one run (default 50, max 200)
- *
- * What POST does:
- *   1. Finds enrollments where enrolment_id IS NOT NULL but raw_data IS NULL
- *   2. For each, calls the n8n View Enrolment webhook (4s between calls)
- *   3. On success (status 200), updates the enrollment row with the fetched data
- *   4. On 403/error, marks as skipped and continues
- *   5. Returns a full summary of results
- */
-
 const RATE_LIMIT_MS = 4000; // 4 seconds between SSG API calls
 
 function sleep(ms: number) {

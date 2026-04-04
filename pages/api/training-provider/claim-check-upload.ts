@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import formidable, { File } from 'formidable';
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
 import { processClaimUpload } from '@lib/services/claimUploadService';
 
@@ -11,31 +12,20 @@ export const config = {
   },
 };
 
-function ensureUploadsDir(): string {
-  const base = path.join(process.cwd(), 'public', 'uploads', 'claims');
-  fs.mkdirSync(base, { recursive: true });
-  return base;
-}
-
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', ['POST']);
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  try {
-    const uploadDir = ensureUploadsDir();
+  let tempFilePath: string | null = null;
 
+  try {
     const form = formidable({
       multiples: false,
       maxFileSize: 20 * 1024 * 1024,
-      uploadDir,
+      uploadDir: os.tmpdir(),
       keepExtensions: true,
-      filename: (name, ext, part, form) => {
-        const ts = Date.now();
-        const safe = (part.originalFilename || 'claim').replace(/[^a-zA-Z0-9._-]/g, '_');
-        return `${ts}_${safe}`;
-      },
     });
 
     const { files } = await new Promise<{ fields: formidable.Fields; files: formidable.Files }>((resolve, reject) => {
@@ -50,6 +40,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (!first || !first.filepath) {
       return res.status(400).json({ error: 'No file uploaded' });
     }
+
+    tempFilePath = first.filepath;
 
     const originalFilename = first.originalFilename || path.basename(first.filepath);
     const lower = String(originalFilename).toLowerCase();
@@ -89,6 +81,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     return res.status(500).json({ error: 'Internal server error' });
+  } finally {
+    if (tempFilePath) {
+      fs.unlink(tempFilePath, () => {});
+    }
   }
 }
-
