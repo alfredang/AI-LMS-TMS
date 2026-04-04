@@ -10,10 +10,16 @@ const FINANCE_TOOLS = [
     href: 'https://alfredang.github.io/novataxsg/',
   },
   {
-    title: 'Financial Tools',
+    title: 'Financial Planning & Analysis',
     description: 'Access financial planning and analysis tools for budgeting, forecasting, and reporting',
     icon: IconName.Analytics,
     href: 'https://alfredang.github.io/novafinance/',
+  },
+  {
+    title: 'Financial Ratio Calculators',
+    description: 'Calculate and analyze key financial ratios for profitability, liquidity, and efficiency',
+    icon: IconName.Analytics,
+    href: 'https://alfredang.github.io/novafinancialratiocalculator/',
   },
 ];
 

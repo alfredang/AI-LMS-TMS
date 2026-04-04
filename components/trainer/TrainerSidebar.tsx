@@ -49,7 +49,8 @@ const DATA_ANALYTICS_ITEMS: { label: string; icon: IconName; href: string }[] = 
 
 const FINANCE_TOOL_ITEMS: { label: string; icon: IconName; href: string }[] = [
   { label: 'Tax Calculator', icon: IconName.Analytics, href: 'https://alfredang.github.io/novataxsg/' },
-  { label: 'Financial Tools', icon: IconName.Analytics, href: 'https://alfredang.github.io/novafinance/' },
+  { label: 'Financial Planning & Analysis', icon: IconName.Analytics, href: 'https://alfredang.github.io/novafinance/' },
+  { label: 'Financial Ratio Calculators', icon: IconName.Analytics, href: 'https://alfredang.github.io/novafinancialratiocalculator/' },
 ];
 
 const STAT_TOOL_ITEMS: { label: string; icon: IconName; href: string }[] = [
