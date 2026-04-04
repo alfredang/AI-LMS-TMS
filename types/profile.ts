@@ -206,6 +206,8 @@ export interface DeveloperProfile extends BaseProfile, ContactInfo, PersonalInfo
   certifications?: Certification[];
   qualifications?: string[]; // Array of qualification strings to match backend
   education?: string; // Single education string (highest education) using DeveloperEducation enum values
+  nric?: string;
+  secondaryEmail?: string;
 }
 
 export interface AdminProfile extends BaseProfile, ContactInfo {

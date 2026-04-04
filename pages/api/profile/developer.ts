@@ -6,6 +6,7 @@ interface DeveloperProfileRow {
   name: string;
   phone: string;
   email: string;
+  secondary_email: string;
   developer_type: string;
   gender: string;
   linkedin_profile: string;
@@ -16,6 +17,10 @@ interface DeveloperProfileRow {
   areas_of_specialty: any;
   password: string;
   password_hash: string;
+  nric: string;
+  nationality: string;
+  ethnicity: string;
+  dob: string;
 }
 
 export default async function handler(
@@ -59,6 +64,7 @@ export default async function handler(
         au.full_name AS name,
         dp.tel AS phone,
         au.email,
+        au.secondary_email,
         dp.developer_type,
         dp.gender,
         dp.linkedin_url AS linkedin_profile,
@@ -67,6 +73,10 @@ export default async function handler(
         dp.qualifications,
         dp.education,
         dp.areas_of_specialty,
+        dp.nric,
+        dp.nationality,
+        dp.ethnicity,
+        TO_CHAR(dp.dob, 'YYYY-MM-DD') AS dob,
         au.password,
         au.password_hash
       FROM app_user au
@@ -198,6 +208,11 @@ export default async function handler(
       gender: row.gender || '',
       developerType: row.developer_type || '',
       linkedinUrl: row.linkedin_profile || '',
+      nric: row.nric || '',
+      nationality: row.nationality || '',
+      ethnicity: row.ethnicity || '',
+      dob: row.dob || '',
+      secondaryEmail: row.secondary_email || '',
       cvUrl: row.cv || '',
       cvOriginalFilename: row.cv_original_filename || '',
       // Use data from certification table

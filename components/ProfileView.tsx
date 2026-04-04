@@ -8,12 +8,14 @@ import Spinner from './ui/Spinner';
 import { useLms } from '@contexts/LmsContext';
 import { TrainerProfileCard } from './TrainerProfileCard';
 import { TrainingProviderProfileCard } from './TrainingProviderProfileCard';
+import { MultiRoleProfileCard } from './MultiRoleProfileCard';
 import { useTrainerProfile } from '../hooks/useTrainerProfile';
 import { ensureAbsoluteImageUrl } from '@utils/imageUtils';
 import { generateAvatarImage } from '@lib/services/geminiService';
 import { SKILLS_FUTURE_INDUSTRIES } from '@app-types/profile';
 import { getApiUrl, getUploadUrl, getDeleteFileUrl, stripBaseUrl } from '@/lib/urlHelpers';
 import { ThemeMode, getCurrentTheme, applyTheme } from '@utils/colorUtils';
+import { maskNric, formatDate, formatDateForInput } from '../utils';
 
 
 // Constants
@@ -70,7 +72,13 @@ const useProfileData = () => {
 
 // Simple ProfileView component
 const ProfileView: React.FC = () => {
-    const { currentUser, role } = useLms();
+    const { currentUser, role, userRoles } = useLms();
+
+    // Handle multi-role: Trainer + Developer
+    const isMultiRole = userRoles.includes(UserRole.Trainer) && userRoles.includes(UserRole.Developer);
+    if (isMultiRole && (role === UserRole.Trainer || role === UserRole.Developer)) {
+        return <MultiRoleProfileCard />;
+    }
 
     // Handle trainer profile
     if (role === UserRole.Trainer) {
@@ -1054,15 +1062,12 @@ const DeveloperProfileCard: React.FC<{
             // Clear any previous uploaded path since we have a new file
             setUploadedProfilePicturePath(null);
 
-            // Create preview URL for immediate display
+            // Create preview URL for immediate display only - don't update formData
             const reader = new FileReader();
             reader.onloadend = () => {
                 const previewUrl = reader.result as string;
                 setProfilePicturePreviewUrl(previewUrl);
-                setFormData(prev => ({
-                    ...prev,
-                    profilePictureUrl: previewUrl
-                }));
+                // DON'T update formData.profilePictureUrl with the preview - only with actual uploaded path
             };
             reader.readAsDataURL(file);
         }
@@ -1073,30 +1078,23 @@ const DeveloperProfileCard: React.FC<{
         try {
             // Delete old profile picture if it exists and is a file
             const oldFileUrl = formData.profilePictureUrl;
-            if (oldFileUrl && (oldFileUrl.startsWith('/uploads/') || oldFileUrl.includes('uploads/'))) {
+            if (oldFileUrl && oldFileUrl.includes('uploads/')) {
                 try {
-                    // Extract just the path part if it's a full URL
-                    const filePath = oldFileUrl.startsWith('http')
-                        ? stripBaseUrl(oldFileUrl) || oldFileUrl
-                        : oldFileUrl;
+                    // Extract just the path part (remove base URL)
+                    const filePath = stripBaseUrl(oldFileUrl) || oldFileUrl;
                     await fetch(getDeleteFileUrl(filePath), {
                         method: 'DELETE'
                     });
-                    console.log('✅ Old profile picture deleted before generating new avatar');
+                    console.log('✅ Old profile picture deleted');
                 } catch (error) {
                     console.warn('⚠️ Failed to delete old profile picture:', error);
                 }
             }
 
-            // Generate new avatar using external service (stores as external URL, not file path)
+            // Use the same approach as trainer profile - simple and reliable
             await new Promise(resolve => setTimeout(resolve, 2000));
             const newAvatarUrl = `https://i.pravatar.cc/150?img=${Math.floor(Math.random() * 50)}`;
             setFormData(prev => ({ ...prev, profilePictureUrl: newAvatarUrl }));
-
-            // Clear any selected file since we're using AI generated image
-            setSelectedProfilePictureFile(null);
-            setProfilePicturePreviewUrl(null);
-
         } catch (error) {
             console.error('Avatar generation failed:', error);
             alert('An error occurred while generating the avatar.');
@@ -1278,12 +1276,16 @@ const DeveloperProfileCard: React.FC<{
             const changedFields: any = {};
             if (formData.name !== profile.name) changedFields.name = formData.name;
             if (formData.email !== profile.email) changedFields.email = formData.email;
+            if (formData.secondaryEmail !== profile.secondaryEmail) changedFields.secondaryEmail = formData.secondaryEmail;
             if (formData.tel !== profile.tel) changedFields.tel = formData.tel;
             if (formData.gender !== profile.gender) changedFields.gender = formData.gender;
             if (formData.developerType !== profile.developerType) changedFields.developerType = formData.developerType;
             if (formData.linkedinUrl !== profile.linkedinUrl) changedFields.linkedinUrl = formData.linkedinUrl;
+            if ((formData as any).ethnicity !== (profile as any).ethnicity) changedFields.ethnicity = (formData as any).ethnicity;
+            if ((formData as any).nationality !== (profile as any).nationality) changedFields.nationality = (formData as any).nationality;
+            if (formData.nric !== profile.nric) changedFields.nric = formData.nric;
+            if ((formData as any).dob !== (profile as any).dob) changedFields.dob = (formData as any).dob;
             if (formData.bio !== profile.bio) changedFields.bio = formData.bio;
-            if (formData.dob !== profile.dob) changedFields.dob = formData.dob;
             if (JSON.stringify(formData.areasOfSpecialty) !== JSON.stringify(profile.areasOfSpecialty)) changedFields.areasOfSpecialty = formData.areasOfSpecialty;
             if (JSON.stringify(formData.workExperience) !== JSON.stringify(profile.workExperience)) changedFields.workExperience = formData.workExperience;
             if (JSON.stringify(formData.qualifications) !== JSON.stringify(profile.qualifications)) changedFields.qualifications = formData.qualifications;
@@ -1401,59 +1403,37 @@ const DeveloperProfileCard: React.FC<{
                 <div className="flex flex-col sm:flex-row items-center gap-6">
                     <div className="flex-shrink-0 text-center">
                         <div className="relative group w-24 h-24">
-                            <img
-                                src={ensureAbsoluteImageUrl(formData.profilePictureUrl)}
-                                alt={formData.name}
-                                className="w-24 h-24 rounded-full object-cover ring-4 ring-green-500/20"
-                            />
+                            <img src={profilePicturePreviewUrl || ensureAbsoluteImageUrl(formData.profilePictureUrl) || 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMjAiIGN5PSIyMCIgcj0iMjAiIGZpbGw9IiM5Q0EzQUYiLz4KPGNpcmNsZSBjeD0iMjAiIGN5PSIxNSIgcj0iNiIgZmlsbD0id2hpdGUiLz4KPHBhdGggZD0iTTMwIDMzQzMwIDI3LjQ3NzIgMjUuNTIyOCAyMyAyMCAyM0MxNC40NzcyIDIzIDEwIDI3LjQ3NzIgMTAgMzNIMzBaIiBmaWxsPSJ3aGl0ZSIvPgo8L3N2Zz4K'} alt={formData.name} className="w-24 h-24 rounded-full object-cover ring-4 ring-green-500/20" onError={(e) => { e.currentTarget.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMjAiIGN5PSIyMCIgcj0iMjAiIGZpbGw9IiM5Q0EzQUYiLz4KPGNpcmNsZSBjeD0iMjAiIGN5PSIxNSIgcj0iNiIgZmlsbD0id2hpdGUiLz4KPHBhdGggZD0iTTMwIDMzQzMwIDI3LjQ3NzIgMjUuNTIyOCAyMyAyMCAyM0MxNC40NzcyIDIzIDEwIDI3LjQ3NzIgMTAgMzNIMzBaIiBmaWxsPSJ3aGl0ZSIvPgo8L3N2Zz4K'; }} />
                             {isGeneratingAvatar && (
-                                <div className="absolute inset-0 bg-black/70 flex items-center justify-center rounded-full">
-                                    <Spinner />
+                                <div className="absolute inset-0 bg-black bg-opacity-50 rounded-full flex items-center justify-center">
+                                    <Spinner size="sm" />
                                 </div>
                             )}
                             {isEditing && !isGeneratingAvatar && (
-                                <>
-                                    <input
-                                        type="file"
-                                        id="photo-upload-developer"
-                                        className="hidden"
-                                        accept="image/*"
-                                        onChange={handlePhotoChange}
-                                    />
-                                    <label
-                                        htmlFor="photo-upload-developer"
-                                        className="absolute inset-0 bg-black/50 flex items-center justify-center text-white rounded-full cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity"
-                                    >
-                                        <Icon name={IconName.Upload} className="w-8 h-8" />
+                                <div className="absolute inset-0 bg-black bg-opacity-50 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <label htmlFor="photo-upload-developer" className="cursor-pointer">
+                                        <Icon name={IconName.Upload} className="w-6 h-6 text-white" />
                                     </label>
-                                </>
+                                </div>
                             )}
                         </div>
                         {isEditing && (
-                            <Button
-                                variant="ghost"
-                                size="sm"
-                                className="mt-2"
-                                onClick={handleGenerateAvatar}
-                                disabled={isGeneratingAvatar}
-                            >
-                                {isGeneratingAvatar ? <Spinner size="sm" /> : 'Generate Avatar'}
-                            </Button>
+                            <div className="mt-2">
+                                <input type="file" id="photo-upload-developer" accept="image/*" onChange={handlePhotoChange} className="hidden" />
+                            </div>
                         )}
                     </div>
                     <div className="text-center sm:text-left flex-grow">
-                        <h1 className="text-2xl font-bold text-on-surface">{isEditing ? 'Editing Profile' : formData.name}</h1>
+                        <h1 className="text-2xl font-bold text-on-surface">{formData.name}</h1>
                         <p className="text-subtle">Developer Profile</p>
                     </div>
                     {isEditing ? (
                         <div className="flex items-center gap-2">
-                            <Button variant="ghost" onClick={handleCancel}>
-                                Cancel
-                            </Button>
-                            <Button onClick={handleSave}>Save Changes</Button>
+                            <Button variant="ghost" onClick={handleCancel}>Cancel</Button>
+                            <Button variant="primary" onClick={handleSave}>Save Changes</Button>
                         </div>
                     ) : (
-                        <Button onClick={() => setIsEditing(true)}>Edit Profile</Button>
+                        <Button variant="primary" onClick={() => setIsEditing(true)}>Edit Profile</Button>
                     )}
                 </div>
                 <div className="border-t my-6"></div>
@@ -1463,91 +1443,35 @@ const DeveloperProfileCard: React.FC<{
                         <h2 className="text-xl font-bold mb-4">Bio Data</h2>
                         {isEditing ? (
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
-                                <div>
-                                    <label className="text-sm font-medium">Name</label>
-                                    <input
-                                        type="text"
-                                        name="name"
-                                        value={formData.name}
-                                        onChange={handleChange}
-                                        className={inputClasses}
-                                    />
-                                </div>
-                                <div>
-                                    <label className="text-sm font-medium">Telephone</label>
-                                    <input
-                                        type="tel"
-                                        name="tel"
-                                        value={formData.tel}
-                                        onChange={handleChange}
-                                        className={inputClasses}
-                                    />
-                                </div>
-                                <div>
-                                    <label className="text-sm font-medium">Email</label>
-                                    <input
-                                        type="email"
-                                        name="email"
-                                        value={formData.email}
-                                        onChange={handleChange}
-                                        className={inputClasses}
-                                    />
-                                </div>
-                                <div>
-                                    <label className="text-sm font-medium">Developer Type</label>
-                                    <select
-                                        name="developerType"
-                                        value={formData.developerType}
-                                        onChange={handleChange}
-                                        className={inputClasses}
-                                    >
-                                        {Object.values(DeveloperType).map(t => (
-                                            <option key={t} value={t}>{t}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className="text-sm font-medium">Gender</label>
-                                    <select
-                                        name="gender"
-                                        value={formData.gender}
-                                        onChange={handleChange}
-                                        className={inputClasses}
-                                    >
-                                        {Object.values(Gender).map(g => (
-                                            <option key={g} value={g}>{g}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className="text-sm font-medium">LinkedIn Profile</label>
-                                    <input
-                                        type="url"
-                                        name="linkedinUrl"
-                                        value={formData.linkedinUrl || ''}
-                                        onChange={handleChange}
-                                        className={inputClasses}
-                                        placeholder="https://linkedin.com/in/..."
-                                    />
-                                </div>
+                                <div><label className="text-sm font-medium">Name</label><input type="text" name="name" value={formData.name} onChange={handleChange} className={inputClasses} /></div>
+                                <div><label className="text-sm font-medium">Phone</label><input type="tel" name="tel" value={formData.tel || ''} onChange={handleChange} className={inputClasses} /></div>
+                                <div><label className="text-sm font-medium">Email</label><input type="email" name="email" value={formData.email} onChange={handleChange} className={inputClasses} /></div>
+                                <div><label className="text-sm font-medium">Secondary Email</label><input type="email" name="secondaryEmail" value={formData.secondaryEmail ?? ''} onChange={handleChange} className={inputClasses} /></div>
+                                <div><label className="text-sm font-medium">Gender</label><select name="gender" value={formData.gender || ''} onChange={handleChange} className={inputClasses}><option value="">— Select —</option>{Object.values(Gender).map(g => <option key={g} value={g}>{g}</option>)}</select></div>
+                                <div><label className="text-sm font-medium">Race</label><select name="ethnicity" value={(formData as any).ethnicity || ''} onChange={handleChange} className={inputClasses}><option value="">— Select —</option>{Object.values(Ethnicity).map(e => <option key={e} value={e}>{e}</option>)}</select></div>
+                                <div><label className="text-sm font-medium">Nationality</label><select name="nationality" value={(formData as any).nationality || ''} onChange={handleChange} className={inputClasses}><option value="">— Select —</option>{Object.values(Nationality).map(n => <option key={n} value={n}>{n}</option>)}</select></div>
+                                <div><label className="text-sm font-medium">NRIC</label><input type="text" name="nric" value={formData.nric || ''} onChange={handleChange} className={inputClasses} /></div>
+                                <div><label className="text-sm font-medium">Date of Birth</label><input type="date" name="dob" value={formatDateForInput((formData as any).dob || '')} onChange={handleChange} className={inputClasses} /></div>
+                                <div><label className="text-sm font-medium">Developer Type</label><select name="developerType" value={formData.developerType} onChange={handleChange} className={inputClasses}>{Object.values(DeveloperType).map(t => <option key={t} value={t}>{t}</option>)}</select></div>
+                                <div><label className="text-sm font-medium">LinkedIn Profile</label><input type="url" name="linkedinUrl" value={formData.linkedinUrl || ''} onChange={handleChange} className={inputClasses} /></div>
                             </div>
                         ) : (
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
                                 <ProfileBioItem label="Name" value={formData.name} />
-                                <ProfileBioItem label="Telephone" value={formData.tel} />
+                                <ProfileBioItem label="Phone" value={formData.tel} />
                                 <ProfileBioItem label="Email" value={formData.email} />
-                                <ProfileBioItem label="Developer Type" value={formData.developerType} />
-                                <ProfileBioItem label="Gender" value={formData.gender} />
+                                <ProfileBioItem label="Secondary Email" value={formData.secondaryEmail || '—'} />
+                                <ProfileBioItem label="Gender" value={formData.gender || '—'} />
+                                <ProfileBioItem label="Race" value={(formData as any).ethnicity || '—'} />
+                                <ProfileBioItem label="Nationality" value={(formData as any).nationality || '—'} />
+                                <ProfileBioItem label="NRIC" value={formData.nric ? maskNric(formData.nric) : '—'} />
+                                <ProfileBioItem label="Date of Birth" value={(formData as any).dob ? formatDate((formData as any).dob) : '—'} />
+                                <ProfileBioItem label="Developer Type" value={formData.developerType || '—'} />
                                 {formData.linkedinUrl && (
                                     <ProfileBioItem
                                         label="LinkedIn Profile"
                                         value={
-                                            <a
-                                                href={formData.linkedinUrl.startsWith('http') ? formData.linkedinUrl : `https://${formData.linkedinUrl}`}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="text-primary hover:underline flex items-center gap-1.5"
-                                            >
+                                            <a href={formData.linkedinUrl.startsWith('http') ? formData.linkedinUrl : `https://${formData.linkedinUrl}`} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline flex items-center gap-1.5">
                                                 <Icon name={IconName.Linkedin} className="w-4 h-4" />
                                                 View Profile
                                             </a>

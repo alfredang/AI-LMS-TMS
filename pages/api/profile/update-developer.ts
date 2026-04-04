@@ -20,6 +20,10 @@ interface UpdateDeveloperRequest {
     linkedinUrl?: string;
     bio?: string;
     dob?: string;
+    nric?: string;
+    nationality?: string;
+    ethnicity?: string;
+    secondaryEmail?: string;
     cvUrl?: string;
     cvOriginalFilename?: string;
     qualifications?: string[];
@@ -62,7 +66,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
     console.log('📝 Developer Update API: Starting update for userId:', userId);
     console.log('📝 Developer Update API: Update data:', profileData);
 
-    // First, verify the user exists and is a developer
+    // First, verify the user exists and is a developer (user may have multiple roles)
     const roleCheckQuery = `
       SELECT u.full_name, ur.role 
       FROM app_user u 
@@ -79,12 +83,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
       });
     }
     
-    const user = roleCheckResult.rows[0];
-    if (user.role?.toLowerCase() !== 'developer') {
-      console.log('📝 Developer Update API: User exists but role is:', user.role);
+    const userRoles = roleCheckResult.rows.map(r => r.role?.toLowerCase());
+    const userName = roleCheckResult.rows[0].full_name;
+    if (!userRoles.includes('developer')) {
+      console.log('📝 Developer Update API: User exists but roles are:', userRoles);
       return res.status(403).json({
         success: false,
-        message: `User ${user.full_name} is not a developer (role: ${user.role})`
+        message: `User ${userName} is not a developer (roles: ${userRoles.join(', ')})`
       });
     }
 
@@ -116,6 +121,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
       if (profileData.email) {
         userUpdateFields.push(`email = $${userParamIndex++}`);
         userUpdateValues.push(profileData.email);
+      }
+      if (profileData.secondaryEmail !== undefined) {
+        userUpdateFields.push(`secondary_email = $${userParamIndex++}`);
+        userUpdateValues.push(profileData.secondaryEmail);
       }
       if (profileData.profilePictureUrl) {
         userUpdateFields.push(`profile_picture_url = $${userParamIndex++}`);
@@ -162,6 +171,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
       if (profileData.dob !== undefined) {
         profileUpdateFields.push(`dob = $${profileParamIndex++}`);
         profileUpdateValues.push(profileData.dob);
+      }
+      if (profileData.nric !== undefined) {
+        profileUpdateFields.push(`nric = $${profileParamIndex++}`);
+        profileUpdateValues.push(profileData.nric);
+      }
+      if (profileData.nationality !== undefined) {
+        profileUpdateFields.push(`nationality = $${profileParamIndex++}`);
+        profileUpdateValues.push(profileData.nationality);
+      }
+      if (profileData.ethnicity !== undefined) {
+        profileUpdateFields.push(`ethnicity = $${profileParamIndex++}`);
+        profileUpdateValues.push(profileData.ethnicity);
       }
       if (profileData.cvUrl !== undefined) {
         profileUpdateFields.push(`cv_url = $${profileParamIndex++}`);
@@ -307,6 +328,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
           au.full_name AS name,
           dp.tel AS phone,
           au.email,
+          au.secondary_email,
           dp.developer_type,
           dp.gender,
           dp.linkedin_url AS linkedin_profile,
@@ -315,6 +337,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
           dp.qualifications,
           dp.education,
           dp.areas_of_specialty,
+          dp.nric,
+          dp.nationality,
+          dp.ethnicity,
+          TO_CHAR(dp.dob, 'YYYY-MM-DD') AS dob,
           au.password,
           au.password_hash
         FROM developer_profile dp
@@ -366,6 +392,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
         gender: updatedRow.gender,
         developerType: updatedRow.developer_type,
         linkedinUrl: updatedRow.linkedin_profile,
+        nric: updatedRow.nric || '',
+        nationality: updatedRow.nationality || '',
+        ethnicity: updatedRow.ethnicity || '',
+        dob: updatedRow.dob || '',
+        secondaryEmail: updatedRow.secondary_email || '',
         cvUrl: updatedRow.cv,
         cvOriginalFilename: updatedRow.cv_original_filename,
         qualifications: (updatedRow.qualifications && typeof updatedRow.qualifications === 'string' && updatedRow.qualifications.trim()) ? JSON.parse(updatedRow.qualifications) : [],
