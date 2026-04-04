@@ -85,10 +85,19 @@ const AiChatbot: React.FC = () => {
                 }),
             });
 
-            const data = await response.json();
+            const rawBody = await response.text();
+            let data: any = null;
+
+            if (rawBody) {
+                try {
+                    data = JSON.parse(rawBody);
+                } catch {
+                    data = { error: rawBody };
+                }
+            }
 
             if (!response.ok) {
-                const errorMsg = data?.error || data?.details || `API error: ${response.status}`;
+                const errorMsg = data?.error || data?.details || rawBody || `API error: ${response.status}`;
                 console.error('Nemo API error:', errorMsg);
                 setMessages(prev =>
                     prev.map(msg =>
@@ -101,7 +110,7 @@ const AiChatbot: React.FC = () => {
                 return;
             }
 
-            const responseText = data.text || 'Sorry, I could not generate a response.';
+            const responseText = data?.text || rawBody || 'Sorry, I could not generate a response.';
 
             setMessages(prev =>
                 prev.map(msg =>
@@ -110,12 +119,12 @@ const AiChatbot: React.FC = () => {
                         : msg
                 )
             );
-        } catch (error) {
+        } catch (error: any) {
             console.error('Nemo AI error:', error);
             setMessages(prev =>
                 prev.map(msg =>
                     msg.id === modelMessageId
-                        ? { ...msg, text: 'Sorry, I encountered an error. Please check that the OpenClaw gateway is configured and reachable.' }
+                        ? { ...msg, text: `Sorry, I encountered an error: ${error?.message || 'Request failed'}` }
                         : msg
                 )
             );

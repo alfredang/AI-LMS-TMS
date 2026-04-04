@@ -95,7 +95,6 @@ export async function sendToOpenClaw(opts: {
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`,
-        'x-openclaw-model': 'minimax/MiniMax-M2.7',
       },
       body: JSON.stringify({
         model: 'openclaw',
@@ -138,55 +137,5 @@ export async function sendToMiniMaxDirect(opts: {
   timeoutMs?: number;
   userId?: string;
 }): Promise<string> {
-  const { messages, timeoutMs = 60000, userId } = opts;
-  const token = (await getCompanyOpenClawGatewayToken(userId)) || OPENCLAW_GATEWAY_TOKEN;
-  const config = await getCompanyOpenClawConfig(userId);
-  const baseUrl = (config.mode === 'local' ? config.localGatewayUrl : config.gatewayUrl) || OPENCLAW_URL;
-
-  if (!token || !baseUrl) {
-    // Fall back to full OpenClaw if config missing
-    return sendToOpenClaw(opts);
-  }
-
-  const url = `${baseUrl.replace(/\/$/, '')}/v1/chat/completions`;
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
-
-  console.log(`[Nemo] Direct MiniMax call with ${messages.length} messages`);
-  const startTime = Date.now();
-
-  try {
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-        'x-openclaw-model': 'minimax/MiniMax-M2.7',
-        'x-openclaw-bypass-agent': 'true',
-      },
-      body: JSON.stringify({
-        model: 'minimax/MiniMax-M2.7',
-        messages,
-      }),
-      signal: controller.signal,
-    });
-
-    console.log(`[Nemo] MiniMax direct responded ${response.status} in ${Date.now() - startTime}ms`);
-
-    if (!response.ok) {
-      // Fall back to full OpenClaw on error
-      console.log('[Nemo] MiniMax direct failed, falling back to OpenClaw');
-      return sendToOpenClaw(opts);
-    }
-
-    const data = await response.json();
-    const content = data?.choices?.[0]?.message?.content;
-    if (!content) return sendToOpenClaw(opts);
-
-    return content.trim();
-  } catch {
-    return sendToOpenClaw(opts);
-  } finally {
-    clearTimeout(timeout);
-  }
+  return sendToOpenClaw(opts);
 }

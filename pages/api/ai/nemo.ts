@@ -49,6 +49,14 @@ function detectTools(message: string): ToolMatch[] {
     matches.push({ tool: 'search_course_runs', args: { start_date_from: today } });
   }
 
+  // Day-of-week class queries, e.g. "how many classes on monday"
+  if (/\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/.test(msg) &&
+      /\b(class|course|run|session)\b/.test(msg) &&
+      !matches.some(m => m.tool === 'search_course_runs')) {
+    const today = new Date().toISOString().split('T')[0];
+    matches.push({ tool: 'search_course_runs', args: { start_date_from: today, limit: 50 } });
+  }
+
   // Search course runs by keyword
   if (/\b(find|search|look.?up|show|list|get)\b.*\b(class|course|run)\b/.test(msg) && !matches.some(m => m.tool === 'search_course_runs')) {
     // Extract potential search terms after the action word
@@ -251,7 +259,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         ...normalizedMessages,
       ];
 
-      // Try OpenClaw first, then MiniMax direct, then return raw data as fallback
+      // Use OpenClaw to format the tool results. If the LLM call fails,
+      // still return the raw data so the user gets a usable answer.
       try {
         text = await sendToOpenClaw({
           messages: openAiMessages,
@@ -259,35 +268,25 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           userId: currentUser.id,
         });
       } catch (openClawError: any) {
-        console.error('[Nemo] OpenClaw failed, trying MiniMax direct:', openClawError.message);
-        try {
-          text = await sendToMiniMaxDirect({
-            messages: openAiMessages,
-            timeoutMs: 30000,
-            userId: currentUser.id,
-          });
-        } catch {
-          // Last resort: return raw DB results so user still gets data
-          console.error('[Nemo] All LLM calls failed, returning raw data');
-          text = formatRawResults(results);
-        }
+        console.error('[Nemo] OpenClaw failed while formatting tool results:', openClawError.message);
+        text = formatRawResults(results);
       }
     } else {
-      // Simple Q&A — skip OpenClaw agent, call MiniMax directly (~3-5s vs ~15s)
-      console.log('[Nemo] No tools matched, using MiniMax direct');
+      // Simple Q&A still goes through the OpenClaw chat-completions endpoint.
+      console.log('[Nemo] No tools matched, using OpenClaw chat completions');
       const openAiMessages: ChatMessage[] = [
         { role: 'system', content: buildSystemPrompt(currentUser, systemPrompt) },
         ...normalizedMessages,
       ];
 
       try {
-        text = await sendToMiniMaxDirect({
+        text = await sendToOpenClaw({
           messages: openAiMessages,
-          timeoutMs: 30000,
+          timeoutMs: 60000,
           userId: currentUser.id,
         });
-      } catch {
-        text = "I'm having trouble connecting to the AI service right now. Please try again in a moment.";
+      } catch (error: any) {
+        throw new Error(error?.message || "I'm having trouble connecting to the AI service right now. Please try again in a moment.");
       }
     }
 
