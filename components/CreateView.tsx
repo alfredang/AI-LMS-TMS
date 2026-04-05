@@ -360,14 +360,42 @@ const CreateView: React.FC = () => {
         { title: 'Create Oral Questioning', description: 'Generate a set of questions for an oral examination or knowledge check.', buttonText: 'Create Questions', generatorFn: generateOralQuestioning },
     ];
 
-    const trainerTools: AiTool[] = [
-        { title: 'Create Quiz', description: 'Generate a multiple-choice quiz using AI for any existing course topic.', buttonText: 'Create Quiz', specialComponent: 'Quiz' },
-        { title: 'Create Interactive Poll', description: 'Generate a quick poll to gauge understanding or gather opinions.', buttonText: 'Create Poll', generatorFn: generateInteractivePollSurvey },
-        { title: 'Create Case Study', description: 'Generate a realistic case study to help learners apply their knowledge.', buttonText: 'Create Case Study', generatorFn: generateCaseStudy },
-        { title: 'Create Role Play', description: 'Design a role-playing scenario for interactive, skill-based learning.', buttonText: 'Create Scenario', generatorFn: generateRolePlayScenario },
-        { title: 'Create Practical Lab', description: 'Generate hands-on, step-by-step lab exercises for practical skill application.', buttonText: 'Create Lab', generatorFn: generatePracticalLab },
-        { title: 'Create Mind Maps', description: 'Generate a hierarchical mind map to visualize concepts and their relationships.', buttonText: 'Create Mind Map', generatorFn: generateMindMap },
+    const trainerGenAiCategories = [
+        { title: 'Text', description: 'AI chatbots and text generation tools for creating content, answering questions, and brainstorming ideas.', items: [
+            { label: 'ChatGPT', href: 'https://chatgpt.com/' },
+            { label: 'Gemini', href: 'https://gemini.google.com/app' },
+            { label: 'Claude', href: 'https://claude.ai/new' },
+            { label: 'Grok', href: 'https://grok.com/' },
+            { label: 'DeepSeek', href: 'https://chat.deepseek.com/' },
+            { label: 'Kimi', href: 'https://www.kimi.com/en' },
+            { label: 'Qwen', href: 'https://qwen.ai/home' },
+        ]},
+        { title: 'Image', description: 'AI-powered image generation and editing tools for creating visuals, illustrations, and designs.', items: [
+            { label: 'Firefly', href: 'https://firefly.adobe.com/' },
+            { label: 'Nano Banana', href: 'https://gemini.google.com/app' },
+            { label: 'Microsoft Designer', href: 'https://designer.microsoft.com/' },
+            { label: 'Leonardo', href: 'https://app.leonardo.ai/' },
+        ]},
+        { title: 'Video', description: 'AI video creation and editing tools for producing engaging video content.', items: [
+            { label: 'Kling', href: 'https://kling.ai/' },
+            { label: 'Invideo', href: 'https://invideo.io/' },
+            { label: 'Veed', href: 'https://www.veed.io/' },
+            { label: 'Descript', href: 'https://www.descript.com/' },
+        ]},
+        { title: 'Music', description: 'AI music generation tools for creating original audio and soundtracks.', items: [
+            { label: 'Suno', href: 'https://suno.com/' },
+        ]},
+        { title: 'Presentation', description: 'AI presentation and knowledge tools for creating slides, notes, and visual summaries.', items: [
+            { label: 'Gamma', href: 'https://gamma.app/' },
+            { label: 'NotebookLM', href: 'https://notebooklm.google/' },
+            { label: 'Napkin', href: 'https://www.napkin.ai/' },
+        ]},
+        { title: 'Design', description: 'AI-assisted design tools for creating user interfaces, prototypes, and layouts.', items: [
+            { label: 'Figma', href: 'https://www.figma.com/make/' },
+        ]},
     ];
+
+    const trainerTools: AiTool[] = [];
 
     const tools = role === UserRole.Trainer ? trainerTools : developerTools;
     const activeToolData = tools.find(t => t.title === activeTool);
@@ -389,6 +417,36 @@ const CreateView: React.FC = () => {
 
     const title = role === UserRole.Trainer ? "GenAI Tools" : "Developer GenAI Authoring";
     const gridCols = role === UserRole.Trainer ? 'lg:grid-cols-3' : 'lg:grid-cols-4';
+
+    if (role === UserRole.Trainer) {
+        return (
+            <div>
+                <h2 className="text-3xl font-bold mb-6 dark:text-white">{title}</h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {trainerGenAiCategories.map(cat => (
+                        <Card key={cat.title} className="p-6 flex flex-col dark:bg-gray-800 dark:border-gray-700">
+                            <h3 className="text-xl font-bold mb-2 dark:text-white">{cat.title}</h3>
+                            <p className="text-gray-600 dark:text-gray-300 text-sm mb-4">{cat.description}</p>
+                            <div className="flex flex-wrap gap-2 mt-auto">
+                                {cat.items.map(item => (
+                                    <a
+                                        key={item.label}
+                                        href={item.href}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+                                    >
+                                        {item.label}
+                                        <svg className="w-3 h-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+                                    </a>
+                                ))}
+                            </div>
+                        </Card>
+                    ))}
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div>

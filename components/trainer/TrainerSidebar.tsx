@@ -89,13 +89,58 @@ const SUSTAINABILITY_TOOL_ITEMS: { label: string; icon: IconName; href: string }
   { label: 'Carbon Footprint Calculator', icon: IconName.Analytics, href: 'https://alfredang.github.io/sgcarboncalculator/' },
 ];
 
-const GENAI_TOOL_ITEMS: { label: string; icon: IconName }[] = [
-  { label: 'Create Quiz',            icon: IconName.FileText },
-  { label: 'Create Interactive Poll', icon: IconName.ClipboardCheck },
-  { label: 'Create Case Study',      icon: IconName.FileText },
-  { label: 'Create Role Play',       icon: IconName.Award },
-  { label: 'Create Practical Lab',   icon: IconName.ClipboardCheck },
-  { label: 'Create Mind Maps',       icon: IconName.Create },
+
+const GENAI_LINK_GROUPS: { category: string; items: { label: string; icon: IconName; href: string }[] }[] = [
+  {
+    category: 'Text',
+    items: [
+      { label: 'ChatGPT',            icon: IconName.Chat,   href: 'https://chatgpt.com/' },
+      { label: 'Gemini',             icon: IconName.Chat,   href: 'https://gemini.google.com/app' },
+      { label: 'Claude',             icon: IconName.Chat,   href: 'https://claude.ai/new' },
+      { label: 'Grok',               icon: IconName.Chat,   href: 'https://grok.com/' },
+      { label: 'DeepSeek',           icon: IconName.Chat,   href: 'https://chat.deepseek.com/' },
+      { label: 'Kimi',               icon: IconName.Chat,   href: 'https://www.kimi.com/en' },
+      { label: 'Qwen',               icon: IconName.Chat,   href: 'https://qwen.ai/home' },
+    ],
+  },
+  {
+    category: 'Image',
+    items: [
+      { label: 'Firefly',            icon: IconName.Create, href: 'https://firefly.adobe.com/' },
+      { label: 'Nano Banana',        icon: IconName.Create, href: 'https://gemini.google.com/app' },
+      { label: 'Microsoft Designer', icon: IconName.Create, href: 'https://designer.microsoft.com/' },
+      { label: 'Leonardo',           icon: IconName.Create, href: 'https://app.leonardo.ai/' },
+    ],
+  },
+  {
+    category: 'Video',
+    items: [
+      { label: 'Kling',              icon: IconName.Video,  href: 'https://kling.ai/' },
+      { label: 'Invideo',            icon: IconName.Video,  href: 'https://invideo.io/' },
+      { label: 'Veed',               icon: IconName.Video,  href: 'https://www.veed.io/' },
+      { label: 'Descript',           icon: IconName.Video,  href: 'https://www.descript.com/' },
+    ],
+  },
+  {
+    category: 'Music',
+    items: [
+      { label: 'Suno',               icon: IconName.Globe,  href: 'https://suno.com/' },
+    ],
+  },
+  {
+    category: 'Presentation',
+    items: [
+      { label: 'Gamma',              icon: IconName.FileText, href: 'https://gamma.app/' },
+      { label: 'NotebookLM',         icon: IconName.FileText, href: 'https://notebooklm.google/' },
+      { label: 'Napkin',             icon: IconName.FileText, href: 'https://www.napkin.ai/' },
+    ],
+  },
+  {
+    category: 'UI Design',
+    items: [
+      { label: 'Figma',              icon: IconName.Edit,   href: 'https://www.figma.com/make/' },
+    ],
+  },
 ];
 
 const inactiveClass = 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700/50 hover:text-gray-900 dark:hover:text-white';
@@ -112,6 +157,7 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate }) => {
   const [spcToolsOpen, setSpcToolsOpen] = useState(trainerPage === TrainerPage.SpcTools);
   const [sustainabilityToolsOpen, setSustainabilityToolsOpen] = useState(trainerPage === TrainerPage.SustainabilityTools);
   const [genAiOpen, setGenAiOpen] = useState(trainerPage === TrainerPage.GenAIAuthoring);
+  const [genAiSubOpen, setGenAiSubOpen] = useState<Record<string, boolean>>({});
   const [virtualToolsOpen, setVirtualToolsOpen] = useState(trainerPage === TrainerPage.VirtualTools);
 
   const navigateTo = (page: TrainerPage) => {
@@ -507,16 +553,34 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate }) => {
 
           {genAiOpen && (
             <div className="ml-5 pl-3 border-l border-gray-200 dark:border-gray-700 space-y-0.5">
-              {GENAI_TOOL_ITEMS.map(({ label, icon }) => (
-                <a
-                  key={label}
-                  href="#"
-                  onClick={(e) => { e.preventDefault(); navigateTo(TrainerPage.GenAIAuthoring); }}
-                  className={`group flex items-center gap-2.5 w-full rounded-lg px-2.5 py-2 text-[13px] font-medium transition-all duration-150 ${subItemClass}`}
-                >
-                  <Icon name={icon} className="w-4 h-4 flex-shrink-0 text-gray-400 dark:text-gray-500 group-hover:text-gray-900 dark:group-hover:text-white transition-colors" />
-                  <span className="truncate">{label}</span>
-                </a>
+              {GENAI_LINK_GROUPS.map(({ category, items }) => (
+                <div key={category}>
+                  <button
+                    onClick={() => setGenAiSubOpen(prev => ({ ...prev, [category]: !prev[category] }))}
+                    className={`group flex items-center gap-2.5 w-full rounded-lg px-2.5 py-2 text-[10px] font-bold uppercase tracking-widest text-muted select-none mt-1`}
+                  >
+                    <Icon
+                      name={IconName.ChevronDown}
+                      className={`w-3 h-3 flex-shrink-0 transition-transform duration-200 text-gray-400 dark:text-gray-500 ${
+                        genAiSubOpen[category] ? 'rotate-0' : '-rotate-90'
+                      }`}
+                    />
+                    <span>{category}</span>
+                  </button>
+                  {genAiSubOpen[category] && items.map(({ label, icon, href }) => (
+                    <a
+                      key={label}
+                      href={href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={`group flex items-center gap-2.5 w-full rounded-lg px-2.5 py-2 text-[13px] font-medium transition-all duration-150 ${subItemClass}`}
+                    >
+                      <Icon name={icon} className="w-4 h-4 flex-shrink-0 text-gray-400 dark:text-gray-500 group-hover:text-gray-900 dark:group-hover:text-white transition-colors" />
+                      <span className="truncate">{label}</span>
+                      <Icon name={IconName.ExternalLink} className="w-3 h-3 ml-auto text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </a>
+                  ))}
+                </div>
               ))}
             </div>
           )}
