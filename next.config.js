@@ -2,14 +2,24 @@
 const nextConfig = {
   reactStrictMode: true,
   output: 'standalone',
-  experimental: {
-    instrumentationHook: true,
-  },
   eslint: {
     ignoreDuringBuilds: true,
   },
   typescript: {
     ignoreBuildErrors: true,
+  },
+
+  // Turbopack configuration (Next.js 16 default bundler)
+  turbopack: {
+    resolveAlias: {
+      '@components': './components',
+      '@lib': './lib',
+      '@hooks': './hooks',
+      '@contexts': './contexts',
+      '@app-types': './types',
+      '@styles': './styles',
+      '@utils': './utils',
+    },
   },
 
   // Image optimization
