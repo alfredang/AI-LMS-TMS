@@ -11,20 +11,31 @@ import {
 } from '../components/admin/GrantManagementViews';
 
 import ClaimCheckView from '../components/training-provider/ClaimCheckView';
+import GrantCalculatorView from '../components/finance/GrantCalculatorView';
+import ViewClaimView from '../components/finance/ViewClaimView';
+import CancelClaimView from '../components/finance/CancelClaimView';
+import UploadDocumentView from '../components/finance/UploadDocumentView';
 
 import { ProfilePage } from '../components/ProfilePage';
 import { useLms } from '@contexts/LmsContext';
 import { View } from '@app-types/index';
 
-type FinancePage = 'dashboard' | 'allCourseRuns' | 'searchGrant' | 'viewGrant' | 'claimCheck';
+type FinancePage = 'dashboard' | 'allCourseRuns' | 'grantCalculator' | 'searchGrant' | 'viewGrant' | 'claimCheck' | 'viewClaim' | 'cancelClaim' | 'uploadDocument';
 
 const FinanceLayout: React.FC = () => {
   const { currentView } = useLms();
   const [page, setPage] = useState<FinancePage>('dashboard');
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isDesktopSidebarCollapsed, setIsDesktopSidebarCollapsed] = useState(false);
-  const [grantOpen, setGrantOpen] = useState(false);
-  const [usefulLinksOpen, setUsefulLinksOpen] = useState(false);
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>({
+    grantManagement: true,
+    claimManagement: true,
+    usefulLinks: true,
+  });
+
+  const toggleSection = (key: string) => {
+    setOpenSections(prev => ({ ...prev, [key]: !prev[key] }));
+  };
 
   const handleToggleSidebar = () => {
     if (typeof window !== 'undefined' && window.innerWidth >= 768) {
@@ -43,12 +54,20 @@ const FinanceLayout: React.FC = () => {
     switch (page) {
       case 'allCourseRuns':
         return <AllCourseRunsView />;
+      case 'grantCalculator':
+        return <GrantCalculatorView />;
       case 'searchGrant':
         return <SearchGrantView />;
       case 'viewGrant':
         return <ViewGrantStatusView />;
       case 'claimCheck':
         return <ClaimCheckView />;
+      case 'viewClaim':
+        return <ViewClaimView />;
+      case 'cancelClaim':
+        return <CancelClaimView />;
+      case 'uploadDocument':
+        return <UploadDocumentView />;
       default:
         return <FinanceManagementView />;
     }
@@ -57,146 +76,106 @@ const FinanceLayout: React.FC = () => {
   const getPageTitle = () => {
     switch (page) {
       case 'allCourseRuns': return 'All Course Runs';
+      case 'grantCalculator': return 'Grant Calculator';
       case 'searchGrant': return 'Search Grant';
       case 'viewGrant': return 'View Grant';
       case 'claimCheck': return 'Check / Add Claim';
+      case 'viewClaim': return 'View Claim';
+      case 'cancelClaim': return 'Cancel Claim';
+      case 'uploadDocument': return 'Upload Supporting Document';
       default: return 'Finance Management';
     }
   };
 
-  const activeClass = 'bg-primary/10 text-primary font-semibold';
-  const inactiveClass = 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700/50 hover:text-gray-900 dark:hover:text-white';
+  const activeClass = 'bg-blue-50 text-blue-600 border-l-3 border-blue-500 dark:bg-blue-600/20 dark:text-blue-400 dark:border-blue-500';
+  const inactiveClass = 'text-gray-700 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-slate-700 dark:hover:text-white';
+
+  const NavItem = ({ target, label, isSubItem = false }: { target: FinancePage; label: string; isSubItem?: boolean }) => (
+    <a
+      href="#"
+      onClick={(e) => { e.preventDefault(); navigateTo(target); }}
+      className={`flex items-center rounded-md px-3 py-2 text-sm font-medium transition-colors ${isSubItem ? 'pl-8' : ''} ${
+        page === target ? activeClass : inactiveClass
+      }`}
+    >
+      {label}
+    </a>
+  );
+
+  const NavSection = ({ title, sectionKey, children }: { title: string; sectionKey: string; children: React.ReactNode }) => (
+    <div>
+      <button
+        type="button"
+        onClick={() => toggleSection(sectionKey)}
+        className="w-full flex items-center justify-between px-3 py-1 group cursor-pointer"
+      >
+        <h3 className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400 tracking-wider">{title}</h3>
+        <svg
+          className={`w-3.5 h-3.5 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 transition-transform duration-200 ${openSections[sectionKey] ? 'rotate-180' : ''}`}
+          fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+      {openSections[sectionKey] && (
+        <div className="mt-2 space-y-1">
+          {children}
+        </div>
+      )}
+    </div>
+  );
 
   const sidebarContent = (
-    <div className="flex flex-col h-full bg-white dark:bg-slate-800">
-      <div className="flex-1 px-3 py-4 space-y-1">
-        {/* Finance Management */}
-        <a
-          href="#"
-          onClick={(e) => { e.preventDefault(); navigateTo('dashboard'); }}
-          className={`group flex items-center gap-3 w-full rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-150 ${
-            page === 'dashboard' ? activeClass : inactiveClass
-          }`}
-        >
-          <Icon name={IconName.DollarSign} className={`w-[18px] h-[18px] flex-shrink-0 transition-colors ${page === 'dashboard' ? 'text-primary' : 'text-gray-400 dark:text-gray-500'}`} />
-          <span className="truncate">Finance Management</span>
-        </a>
+    <nav className="space-y-6 p-4 bg-white dark:bg-slate-800 text-gray-900 dark:text-white h-full">
+      <NavItem target="dashboard" label="Finance Management" />
+      <NavItem target="allCourseRuns" label="All Course Runs" />
 
-        {/* All Course Runs */}
-        <a
-          href="#"
-          onClick={(e) => { e.preventDefault(); navigateTo('allCourseRuns'); }}
-          className={`group flex items-center gap-3 w-full rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-150 ${
-            page === 'allCourseRuns' ? activeClass : inactiveClass
-          }`}
-        >
-          <Icon name={IconName.FileText} className={`w-[18px] h-[18px] flex-shrink-0 transition-colors ${page === 'allCourseRuns' ? 'text-primary' : 'text-gray-400 dark:text-gray-500'}`} />
-          <span className="truncate">All Course Runs</span>
-        </a>
+      <NavSection title="Grant Management" sectionKey="grantManagement">
+        <NavItem target="grantCalculator" label="Grant Calculator" isSubItem />
+        <NavItem target="searchGrant" label="Search Grant" isSubItem />
+        <NavItem target="viewGrant" label="View Grant" isSubItem />
+      </NavSection>
 
-        {/* Quickbooks */}
-        <a
-          href="https://quickbooks.intuit.com/sg/"
-          target="_blank"
-          rel="noopener noreferrer"
-          className={`group flex items-center gap-3 w-full rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-150 ${inactiveClass}`}
-        >
-          <Icon name={IconName.DollarSign} className="w-[18px] h-[18px] flex-shrink-0 transition-colors text-gray-400 dark:text-gray-500" />
-          <span className="truncate">Quickbooks</span>
-          <Icon name={IconName.ExternalLink} className="w-3 h-3 ml-auto text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
-        </a>
+      <NavSection title="Claim Management" sectionKey="claimManagement">
+        <NavItem target="claimCheck" label="Check / Add Claim" isSubItem />
+        <NavItem target="viewClaim" label="View Claim" isSubItem />
+        <NavItem target="cancelClaim" label="Cancel Claim" isSubItem />
+        <NavItem target="uploadDocument" label="Upload Supporting Document" isSubItem />
+      </NavSection>
 
-        {/* Grant Management — collapsible */}
-        <div className="pt-3">
-          <button
-            onClick={() => setGrantOpen(prev => !prev)}
-            className="flex items-center justify-between w-full px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-muted select-none"
-          >
-            <span>Grant Management</span>
-            <Icon
-              name={IconName.ChevronDown}
-              className={`w-4 h-4 transition-transform duration-200 ${grantOpen ? 'rotate-0' : '-rotate-90'}`}
-            />
-          </button>
+      <a
+        href="https://quickbooks.intuit.com/sg/"
+        target="_blank"
+        rel="noopener noreferrer"
+        className={`flex items-center rounded-md px-3 py-2 text-sm font-medium transition-colors ${inactiveClass}`}
+      >
+        Quickbooks
+        <svg className="w-3 h-3 ml-auto text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+        </svg>
+      </a>
 
-          {grantOpen && (
-            <div className="space-y-0.5">
-              <a
-                href="#"
-                onClick={(e) => { e.preventDefault(); navigateTo('searchGrant'); }}
-                className={`group flex items-center gap-3 w-full rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-150 ${
-                  page === 'searchGrant' ? activeClass : inactiveClass
-                }`}
-              >
-                <Icon name={IconName.Search} className={`w-[18px] h-[18px] flex-shrink-0 transition-colors ${page === 'searchGrant' ? 'text-primary' : 'text-gray-400 dark:text-gray-500'}`} />
-                <span className="truncate">Search Grant</span>
-              </a>
-              <a
-                href="#"
-                onClick={(e) => { e.preventDefault(); navigateTo('viewGrant'); }}
-                className={`group flex items-center gap-3 w-full rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-150 ${
-                  page === 'viewGrant' ? activeClass : inactiveClass
-                }`}
-              >
-                <Icon name={IconName.Eye} className={`w-[18px] h-[18px] flex-shrink-0 transition-colors ${page === 'viewGrant' ? 'text-primary' : 'text-gray-400 dark:text-gray-500'}`} />
-                <span className="truncate">View Grant</span>
-              </a>
-            </div>
-          )}
-        </div>
-
-        {/* Claim Management */}
-        <div className="pt-3">
+      <NavSection title="Useful Links" sectionKey="usefulLinks">
+        {[
+          { label: 'GeBiz', href: 'https://www.gebiz.gov.sg/' },
+          { label: 'Bizfile', href: 'https://www.bizfile.gov.sg/' },
+          { label: 'CPF', href: 'https://www.cpf.gov.sg/member' },
+        ].map(({ label, href }) => (
           <a
-            href="#"
-            onClick={(e) => { e.preventDefault(); navigateTo('claimCheck'); }}
-            className={`group flex items-center gap-3 w-full rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-150 ${
-              page === 'claimCheck' ? activeClass : inactiveClass
-            }`}
+            key={label}
+            href={href}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={`flex items-center rounded-md pl-8 py-2 text-sm font-medium transition-colors ${inactiveClass}`}
           >
-            <Icon name={IconName.ClipboardCheck} className={`w-[18px] h-[18px] flex-shrink-0 transition-colors ${page === 'claimCheck' ? 'text-primary' : 'text-gray-400 dark:text-gray-500'}`} />
-            <span className="truncate">Check / Add Claim</span>
+            {label}
+            <svg className="w-3 h-3 ml-auto text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+            </svg>
           </a>
-        </div>
-
-        {/* Useful Links — collapsible */}
-        <div className="pt-3">
-          <button
-            onClick={() => setUsefulLinksOpen(prev => !prev)}
-            className={`group flex items-center gap-3 w-full rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-150 ${inactiveClass}`}
-          >
-            <Icon name={IconName.ExternalLink} className="w-[18px] h-[18px] flex-shrink-0 transition-colors text-gray-400 dark:text-gray-500" />
-            <span className="truncate">Useful Links</span>
-            <Icon
-              name={IconName.ChevronDown}
-              className={`w-4 h-4 ml-auto flex-shrink-0 transition-transform duration-200 ${usefulLinksOpen ? 'rotate-0' : '-rotate-90'} text-gray-400 dark:text-gray-500`}
-            />
-          </button>
-
-          {usefulLinksOpen && (
-            <div className="space-y-0.5 ml-4">
-              {[
-                { label: 'GeBiz', href: 'https://www.gebiz.gov.sg/' },
-                { label: 'Bizfile', href: 'https://www.bizfile.gov.sg/' },
-                { label: 'CPF', href: 'https://www.cpf.gov.sg/member' },
-              ].map(({ label, href }) => (
-                <a
-                  key={label}
-                  href={href}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className={`group flex items-center gap-3 w-full rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-150 ${inactiveClass}`}
-                >
-                  <Icon name={IconName.Link} className="w-4 h-4 flex-shrink-0 text-gray-400 dark:text-gray-500" />
-                  <span className="truncate">{label}</span>
-                  <Icon name={IconName.ExternalLink} className="w-3 h-3 ml-auto text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
-                </a>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
+        ))}
+      </NavSection>
+    </nav>
   );
 
   // Profile view — full width, no sidebar

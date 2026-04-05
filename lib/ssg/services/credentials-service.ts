@@ -15,6 +15,8 @@ export interface SSGCredentials {
   certificateContent?: string;
   privateKeyContent?: string;
   ssgApiBaseUrl: string;
+  oauthClientId?: string;
+  oauthClientSecret?: string;
 }
 
 export class SSGCredentialsService {
@@ -34,7 +36,7 @@ export class SSGCredentialsService {
    * @param trainingProviderId Optional ID to get specific training provider's credentials
    * @returns SSG credentials including file contents
    */
-  async getSSGCredentials(trainingProviderId?: number): Promise<SSGCredentials | null> {
+  async getSSGCredentials(trainingProviderId?: number, appOverride?: string): Promise<SSGCredentials | null> {
     try {
       let query = `
         SELECT
@@ -74,14 +76,14 @@ export class SSGCredentialsService {
       }
 
       const row = result.rows[0];
-      const defaultApp = row.ssg_default_app || 'app2';
+      const selectedApp = appOverride || row.ssg_default_app || 'app2';
 
-      // Resolve credentials based on default app
+      // Resolve credentials based on selected app
       let certFile: string | null;
       let keyFile: string | null;
       let encKey: string | null;
 
-      switch (defaultApp) {
+      switch (selectedApp) {
         case 'app1':
           certFile = row.ssg_app1_cert_file;
           keyFile = row.ssg_app1_private_key_file;
@@ -92,6 +94,12 @@ export class SSGCredentialsService {
           keyFile = row.ssg_app3_private_key_file;
           encKey = row.ssg_app3_encryption_key;
           break;
+        case 'app4':
+          // App 4 uses OAuth (client_id/secret), no cert files
+          certFile = null;
+          keyFile = null;
+          encKey = null;
+          break;
         case 'app2':
         default:
           certFile = row.ssg_self_sign_cert_file;
@@ -100,7 +108,20 @@ export class SSGCredentialsService {
           break;
       }
 
-      console.log(`[creds] Using SSG credentials from default app: ${defaultApp}`);
+      console.log(`[creds] Using SSG credentials from app: ${selectedApp}${appOverride ? ' (override)' : ' (default)'}`);
+
+      // For App 4 (OAuth), return OAuth credentials
+      if (selectedApp === 'app4') {
+        return {
+          uen: row.uen || process.env.TRAINING_PARTNER_UEN,
+          encryptionKey: '',
+          certificatePath: '',
+          privateKeyPath: '',
+          ssgApiBaseUrl: 'https://public-api.ssg-wsg.sg',
+          oauthClientId: row.ssg_app4_client_id || process.env.SSG_CLIENT_ID || '',
+          oauthClientSecret: row.ssg_app4_client_secret || process.env.SSG_CLIENT_SECRET || '',
+        } as SSGCredentials;
+      }
 
       // Convert relative paths to absolute paths
       const convertToAbsolutePath = (relativePath: string | null): string => {
