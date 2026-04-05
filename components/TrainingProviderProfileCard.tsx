@@ -4,7 +4,6 @@ import { Button } from './ui/Button';
 import { Icon, IconName } from './ui/Icon';
 import { Spinner } from './ui';
 import { TrainingProviderProfile } from '@app-types/profile';
-import { generateCompanyLogo } from '@lib/services/geminiService';
 import { useLms } from '@contexts/LmsContext';
 import { applyPrimaryColor, useColorScheme, ThemeMode, getCurrentTheme, applyTheme } from '@utils/colorUtils';
 import { getApiUrl, getFileUrl } from '@/lib/urlHelpers';
@@ -193,7 +192,6 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
     const [formData, setFormData] = useState(getInitialFormData(profile));
     const [isSaving, setIsSaving] = useState(false);
     const [newApiKey, setNewApiKey] = useState({ name: '', value: '' });
-    const [isGeneratingLogo, setIsGeneratingLogo] = useState(false);
     const [visibleApiKeys, setVisibleApiKeys] = useState<{ [key: string]: boolean }>({});
     const [isApiKeysOpen, setIsApiKeysOpen] = useState(false);
     const [isCompanyOpen, setIsCompanyOpen] = useState(false);
@@ -204,7 +202,8 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
     const [isAdminSettingsOpen, setIsAdminSettingsOpen] = useState(false);
     const [isSecurityOpen, setIsSecurityOpen] = useState(false);
     const [isGamificationOpen, setIsGamificationOpen] = useState(false);
-    const [isFundingOpen, setIsFundingOpen] = useState(false);
+    const [isSsgFundingOpen, setIsSsgFundingOpen] = useState(false);
+    const [isGstOpen, setIsGstOpen] = useState(false);
     const [isAppearanceOpen, setIsAppearanceOpen] = useState(false);
     const [isEncryptionKeyVisible, setIsEncryptionKeyVisible] = useState(false);
     const [isVisibleGoogleSecret, setIsVisibleGoogleSecret] = useState(false);
@@ -409,23 +408,6 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
         }
     };
 
-    const handleGenerateLogo = async () => {
-        setIsGeneratingLogo(true);
-        try {
-            const newLogoUrl = await generateCompanyLogo(formData.companyName);
-            if (newLogoUrl) {
-                setFormData(prev => ({ ...prev, companyLogoUrl: newLogoUrl }));
-            } else {
-                alert("Failed to generate logo. Please try again.");
-            }
-        } catch (error) {
-            console.error("Logo generation failed:", error);
-            alert("An error occurred while generating the logo.");
-        } finally {
-            setIsGeneratingLogo(false);
-        }
-    };
-
     const handleSave = async () => {
         setIsSaving(true);
         try {
@@ -565,69 +547,90 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
         }
     };
 
+    const handleCancelEdit = () => {
+        setIsEditing(false);
+        setFormData(getInitialFormData(profile));
+    };
+
+    const renderSectionActions = () => (
+        <div className="flex flex-shrink-0 items-center gap-2">
+            {isEditing ? (
+                <>
+                    <Button variant="ghost" size="sm" onClick={handleCancelEdit}>
+                        Cancel
+                    </Button>
+                    <Button size="sm" onClick={handleSave} disabled={isSaving}>
+                        {isSaving ? 'Saving...' : 'Save'}
+                    </Button>
+                </>
+            ) : (
+                <Button size="sm" className="!text-white" onClick={() => setIsEditing(true)}>
+                    <Icon name={IconName.Edit} className="w-4 h-4 mr-2" />
+                    Edit
+                </Button>
+            )}
+        </div>
+    );
+
+    const renderSectionHeader = (
+        title: string,
+        isOpen: boolean,
+        toggle: () => void,
+        titleClassName = 'text-xl font-bold dark:text-white'
+    ) => (
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <button type="button" onClick={toggle} className="group flex flex-1 items-center justify-between text-left">
+                <h2 className={titleClassName}>{title}</h2>
+                <Icon name={IconName.ChevronDown} className={`w-5 h-5 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 transition-transform duration-200 flex-shrink-0 ml-4 ${isOpen ? 'rotate-180' : ''}`} />
+            </button>
+            {renderSectionActions()}
+        </div>
+    );
+
     return (
         <>
-            <Card className="p-8 dark:bg-gray-800 dark:border-gray-700">
-                <div className="flex flex-col sm:flex-row items-center gap-6">
-                    <div className="flex-shrink-0 text-center">
-                        <div className="relative group w-24 h-24">
-                            <img
-                                src={getImageUrl(formData.companyLogoUrl)}
-                                alt={formData.companyName}
-                                className="w-24 h-24 rounded-md object-cover ring-4 ring-blue-500/20"
-                            />
-                            {isGeneratingLogo && (
-                                <div className="absolute inset-0 bg-black/70 flex items-center justify-center rounded-md">
-                                    <Spinner />
-                                </div>
-                            )}
-                            {isEditing && !isGeneratingLogo && (
-                                <>
-                                    <input
-                                        type="file"
-                                        id="logo-upload"
-                                        className="hidden"
-                                        accept="image/*"
-                                        onChange={handleLogoChange}
+            <Card className="overflow-visible p-8 dark:bg-gray-800 dark:border-gray-700">
+                <div className="-mx-8 -mt-8 mb-6 border-b border-gray-700/60 bg-slate-800/95 px-8 pt-8 pb-6">
+                    <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+                        <div className="flex min-w-0 flex-1 flex-col items-center gap-6 sm:flex-row sm:items-center">
+                            <div className="flex-shrink-0 text-center">
+                                <div className="relative group w-24 h-24">
+                                    <img
+                                        src={getImageUrl(formData.companyLogoUrl)}
+                                        alt={formData.companyName}
+                                        className="w-24 h-24 rounded-md object-cover ring-4 ring-blue-500/20"
                                     />
-                                    <label
-                                        htmlFor="logo-upload"
-                                        className="absolute inset-0 bg-black/60 flex items-center justify-center text-white rounded-md cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity"
-                                    >
-                                        <Icon name={IconName.Upload} className="w-8 h-8" />
-                                    </label>
-                                </>
-                            )}
-                        </div>
-                        {isEditing && (
-                            <Button
-                                variant="ghost"
-                                size="sm"
-                                className="mt-2"
-                                onClick={handleGenerateLogo}
-                                disabled={isGeneratingLogo}
-                            >
-                                {isGeneratingLogo ? <Spinner size="sm" /> : 'Generate Logo'}
-                            </Button>
-                        )}
-                    </div>
+                                    {isEditing && (
+                                        <>
+                                            <input
+                                                type="file"
+                                                id="logo-upload"
+                                                className="hidden"
+                                                accept="image/*"
+                                                onChange={handleLogoChange}
+                                            />
+                                            <label
+                                                htmlFor="logo-upload"
+                                                className="absolute inset-0 bg-black/60 flex items-center justify-center text-white rounded-md cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity"
+                                            >
+                                                <Icon name={IconName.Upload} className="w-8 h-8" />
+                                            </label>
+                                        </>
+                                    )}
+                                </div>
+                            </div>
 
-                    <div className="flex-grow text-center sm:text-left">
-                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                            <div>
+                            <div className="min-w-0 flex-1 text-center sm:text-left">
                                 <h1 className="text-3xl font-bold text-on-surface dark:text-white">{formData.companyName}</h1>
                                 <p className="text-subtle text-lg dark:text-gray-400">{formData.companyShortname}</p>
                             </div>
-                            <div className="flex gap-2">
+                        </div>
+
+                        <div className="flex w-full justify-center sm:justify-end lg:w-auto lg:flex-shrink-0">
+                            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
                                 {isEditing ? (
                                     <>
-                                        <Button
-                                            variant="ghost"
-                                            onClick={() => {
-                                                setIsEditing(false);
-                                                setFormData(getInitialFormData(profile));
-                                            }}
-                                        >
+                                        <Button variant="ghost" onClick={handleCancelEdit}>
                                             Cancel
                                         </Button>
                                         <Button onClick={handleSave} disabled={isSaving}>
@@ -635,10 +638,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                         </Button>
                                     </>
                                 ) : (
-                                    <Button
-                                        className="!text-white"
-                                        onClick={() => setIsEditing(true)}
-                                    >
+                                    <Button className="w-full !text-white sm:w-auto" onClick={() => setIsEditing(true)}>
                                         <Icon name={IconName.Edit} className="w-4 h-4 mr-2" />
                                         Edit Company Setting
                                     </Button>
@@ -648,11 +648,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                     </div>
                 </div>
 
-                <div className="border-t my-6 dark:border-gray-700"></div>
-                <button type="button" onClick={() => setIsCompanyOpen(prev => !prev)} className="w-full flex items-center justify-between group">
-                    <h2 className="text-xl font-bold dark:text-white">Company Details</h2>
-                    <Icon name={IconName.ChevronDown} className={`w-5 h-5 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 transition-transform duration-200 flex-shrink-0 ml-4 ${isCompanyOpen ? 'rotate-180' : ''}`} />
-                </button>
+                {renderSectionHeader('Company Details', isCompanyOpen, () => setIsCompanyOpen(prev => !prev))}
                 {isCompanyOpen && (isEditing ? (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
@@ -699,10 +695,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                 ))}
 
                 <div className="border-t my-6"></div>
-                <button type="button" onClick={() => setIsContactOpen(prev => !prev)} className="w-full flex items-center justify-between group">
-                    <h2 className="text-xl font-bold">Company Support Details</h2>
-                    <Icon name={IconName.ChevronDown} className={`w-5 h-5 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 transition-transform duration-200 flex-shrink-0 ml-4 ${isContactOpen ? 'rotate-180' : ''}`} />
-                </button>
+                {renderSectionHeader('Company Support Details', isContactOpen, () => setIsContactOpen(prev => !prev), 'text-xl font-bold')}
                 {isContactOpen && (isEditing ? (
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-4">
                         <div>
@@ -727,13 +720,9 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                 ))}
 
                 <div className="border-t my-6"></div>
-                <button type="button" onClick={() => setIsFundingOpen(prev => !prev)} className="w-full flex items-center justify-between group">
-                    <h2 className="text-xl font-bold">Funding & Tax Settings</h2>
-                    <Icon name={IconName.ChevronDown} className={`w-5 h-5 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 transition-transform duration-200 flex-shrink-0 ml-4 ${isFundingOpen ? 'rotate-180' : ''}`} />
-                </button>
-                {isFundingOpen && (isEditing ? (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                        {/* Normal Funding Rate */}
+                {renderSectionHeader('SSG Funding', isSsgFundingOpen, () => setIsSsgFundingOpen(prev => !prev), 'text-xl font-bold')}
+                {isSsgFundingOpen && (isEditing ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mt-4">
                         <div>
                             <label className="block text-sm font-medium text-on-surface-secondary mb-1">
                                 Normal Funding Rate
@@ -749,10 +738,9 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                             </select>
                         </div>
 
-                        {/* Enhanced Funding Rate */}
                         <div>
                             <label className="block text-sm font-medium text-on-surface-secondary mb-1">
-                                Enhanced Funding Rate (%)
+                                Enhanced Funding Rate
                             </label>
                             <input
                                 type="number"
@@ -763,11 +751,27 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                 min="0"
                             />
                         </div>
+                    </div>
+                ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mt-4">
+                        <ProfileBioItem
+                            label="Normal Funding Rate"
+                            value={`${formData.fundingSettings.normalFunding}%`}
+                        />
+                        <ProfileBioItem
+                            label="Enhanced Funding Rate"
+                            value={`${formData.fundingSettings.enhancedFunding}%`}
+                        />
+                    </div>
+                ))}
 
-                        {/* GST Rate */}
+                <div className="border-t my-6"></div>
+                {renderSectionHeader('GST', isGstOpen, () => setIsGstOpen(prev => !prev), 'text-xl font-bold')}
+                {isGstOpen && (isEditing ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mt-4">
                         <div>
                             <label className="block text-sm font-medium text-on-surface-secondary mb-1">
-                                GST Rate (%)
+                                GST Rate
                             </label>
                             <input
                                 type="number"
@@ -780,7 +784,6 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                             />
                         </div>
 
-                        {/* GST Registered Toggle */}
                         <div className="flex justify-between items-center p-3 bg-surface-elevated rounded-md border border-default">
                             <label className="text-sm text-on-surface">GST Registered</label>
                             <button
@@ -806,32 +809,21 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                         </div>
                     </div>
                 ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mt-4">
                         <ProfileBioItem
-                            label="Normal Funding Rate"
-                            value={`${formData.fundingSettings.normalFunding}%`}
-                        />
-                        <ProfileBioItem
-                            label="Enhanced Funding Rate"
-                            value={`${formData.fundingSettings.enhancedFunding}%`}
+                            label="GST Rate"
+                            value={`${formData.fundingSettings.gstRate}%`}
                         />
                         <ProfileBioItem
                             label="GST Registered"
                             value={formData.fundingSettings.isGstRegistered ? 'Yes' : 'No'}
-                        />
-                        <ProfileBioItem
-                            label="GST Rate"
-                            value={`${formData.fundingSettings.gstRate}%`}
                         />
                     </div>
                 ))}
 
 
                 <div className="border-t my-6"></div>
-                <button type="button" onClick={() => setIsIntegrationsOpen(prev => !prev)} className="w-full flex items-center justify-between group">
-                    <h2 className="text-xl font-bold">Integrations</h2>
-                    <Icon name={IconName.ChevronDown} className={`w-5 h-5 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 transition-transform duration-200 flex-shrink-0 ml-4 ${isIntegrationsOpen ? 'rotate-180' : ''}`} />
-                </button>
+                {renderSectionHeader('Integrations', isIntegrationsOpen, () => setIsIntegrationsOpen(prev => !prev), 'text-xl font-bold')}
                 {isIntegrationsOpen && <div className="space-y-6 font-semibold mt-4">
 
                     {/* ===== Google Subsection ===== */}
@@ -1195,10 +1187,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
 
                 <div className="border-t my-6"></div>
 
-                <button type="button" onClick={() => setIsDocTemplatesOpen(prev => !prev)} className="w-full flex items-center justify-between group">
-                    <h2 className="text-xl font-bold">Document Templates</h2>
-                    <Icon name={IconName.ChevronDown} className={`w-5 h-5 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 transition-transform duration-200 flex-shrink-0 ml-4 ${isDocTemplatesOpen ? 'rotate-180' : ''}`} />
-                </button>
+                {renderSectionHeader('Document Templates', isDocTemplatesOpen, () => setIsDocTemplatesOpen(prev => !prev), 'text-xl font-bold')}
                 {isDocTemplatesOpen && <div className="space-y-4 mt-4">
                     {/* Proforma Invoice Template ID */}
                     <div className="p-3 bg-surface-elevated rounded-md border border-default">
@@ -1276,10 +1265,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                 </div>}
 
                 <div className="border-t my-6"></div>
-                <button type="button" onClick={() => setIsAdminSettingsOpen(prev => !prev)} className="w-full flex items-center justify-between group">
-                    <h2 className="text-xl font-bold">Admin Setting</h2>
-                    <Icon name={IconName.ChevronDown} className={`w-5 h-5 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 transition-transform duration-200 flex-shrink-0 ml-4 ${isAdminSettingsOpen ? 'rotate-180' : ''}`} />
-                </button>
+                {renderSectionHeader('Admin Setting', isAdminSettingsOpen, () => setIsAdminSettingsOpen(prev => !prev), 'text-xl font-bold')}
                 {isAdminSettingsOpen && <div className="space-y-4 font-semibold mt-4">
                     {Object.entries(adminSettingLabels).map(([key, label]) => (
                         <ToggleSwitch
@@ -1293,10 +1279,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                 </div>}
 
                 <div className="border-t my-6"></div>
-                <button type="button" onClick={() => setIsSecurityOpen(prev => !prev)} className="w-full flex items-center justify-between group">
-                    <h2 className="text-xl font-bold">Security Setting</h2>
-                    <Icon name={IconName.ChevronDown} className={`w-5 h-5 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 transition-transform duration-200 flex-shrink-0 ml-4 ${isSecurityOpen ? 'rotate-180' : ''}`} />
-                </button>
+                {renderSectionHeader('Security Setting', isSecurityOpen, () => setIsSecurityOpen(prev => !prev), 'text-xl font-bold')}
                 {isSecurityOpen && <div className="space-y-4 mt-4">
                     {/* Auto Mask Sensitive Data */}
                     <div className="flex justify-between items-center p-3 bg-surface-elevated rounded-md border border-default">
@@ -1465,10 +1448,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
 
                 <div className="border-t my-6"></div>
 
-                <button type="button" onClick={() => setIsSsgOpen(prev => !prev)} className="w-full flex items-center justify-between group">
-                    <h2 className="text-xl font-bold">SSG Authentication Setting</h2>
-                    <Icon name={IconName.ChevronDown} className={`w-5 h-5 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 transition-transform duration-200 flex-shrink-0 ml-4 ${isSsgOpen ? 'rotate-180' : ''}`} />
-                </button>
+                {renderSectionHeader('SSG Authentication Setting', isSsgOpen, () => setIsSsgOpen(prev => !prev), 'text-xl font-bold')}
                 {isSsgOpen && (isEditing ? (
                     <div className="space-y-4">
                         {/* Cert File */}
@@ -1603,17 +1583,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                 ))}
 
                 <div className="border-t my-6"></div>
-                <button
-                    type="button"
-                    onClick={() => setIsApiKeysOpen(prev => !prev)}
-                    className="w-full flex items-center justify-between group"
-                >
-                    <h2 className="text-xl font-bold">Credentials</h2>
-                    <Icon
-                        name={IconName.ChevronDown}
-                        className={`w-5 h-5 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 transition-transform duration-200 flex-shrink-0 ml-4 ${isApiKeysOpen ? 'rotate-180' : ''}`}
-                    />
-                </button>
+                {renderSectionHeader('Credentials', isApiKeysOpen, () => setIsApiKeysOpen(prev => !prev), 'text-xl font-bold')}
                 {isApiKeysOpen && <><div className="space-y-4 mt-4">
                     {FIXED_API_KEY_NAMES.map((keyName) => {
                         const keyValue = (formData.apiKeys || {})[keyName] || '';
@@ -1828,10 +1798,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                 </>}
 
                 <div className="border-t my-6"></div>
-                <button type="button" onClick={() => setIsGamificationOpen(prev => !prev)} className="w-full flex items-center justify-between group">
-                    <h2 className="text-xl font-bold">Gamification Setting</h2>
-                    <Icon name={IconName.ChevronDown} className={`w-5 h-5 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 transition-transform duration-200 flex-shrink-0 ml-4 ${isGamificationOpen ? 'rotate-180' : ''}`} />
-                </button>
+                {renderSectionHeader('Gamification Setting', isGamificationOpen, () => setIsGamificationOpen(prev => !prev), 'text-xl font-bold')}
                 {isGamificationOpen && <div className="space-y-4 font-semibold mt-4">
                     <ToggleSwitch
                         checked={formData.gamingSettings.enableLeaderboard}
@@ -1848,10 +1815,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                 </div>}
 
                 <div className="border-t my-6"></div>
-                <button type="button" onClick={() => setIsAppearanceOpen(prev => !prev)} className="w-full flex items-center justify-between group">
-                    <h2 className="text-xl font-bold">Appearance</h2>
-                    <Icon name={IconName.ChevronDown} className={`w-5 h-5 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 transition-transform duration-200 flex-shrink-0 ml-4 ${isAppearanceOpen ? 'rotate-180' : ''}`} />
-                </button>
+                {renderSectionHeader('Appearance', isAppearanceOpen, () => setIsAppearanceOpen(prev => !prev), 'text-xl font-bold')}
 
                 {isAppearanceOpen && <>{/* Theme Mode Toggle */}
                 <div className="space-y-4">
