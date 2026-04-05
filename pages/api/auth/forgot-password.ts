@@ -13,21 +13,36 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   const { email } = req.body;
+  const requestedEmail = String(email || '').trim();
 
-  if (!email || !email.includes('@')) {
+  if (!requestedEmail || !requestedEmail.includes('@')) {
     return res.status(400).json({ success: false, error: 'Valid email is required' });
   }
 
   try {
-    // Check if user exists
-    const userResult = await pool.query(
-      'SELECT id, email, full_name FROM app_user WHERE LOWER(email) = LOWER($1)',
-      [email]
-    );
+    const colCheck = await pool.query(`
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name = 'app_user'
+        AND column_name = 'secondary_email'
+    `);
+    const hasSecondaryEmail = colCheck.rows.length > 0;
+
+    // Check if user exists by primary or secondary email
+    const userQuery = hasSecondaryEmail
+      ? `SELECT id, email, secondary_email, full_name
+         FROM app_user
+         WHERE LOWER(email) = LOWER($1) OR LOWER(secondary_email) = LOWER($1)`
+      : `SELECT id, email, NULL::text AS secondary_email, full_name
+         FROM app_user
+         WHERE LOWER(email) = LOWER($1)`;
+
+    const userResult = await pool.query(userQuery, [requestedEmail]);
 
     // Always return success to prevent email enumeration
     if (userResult.rows.length === 0) {
-      console.log(`⚠️ Forgot password: user not found for ${email}`);
+      console.log(`⚠️ Forgot password: user not found for ${requestedEmail}`);
       return res.status(200).json({
         success: true,
         message: 'If an account with that email exists, a temporary password has been sent.'
@@ -144,7 +159,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const rawEmail = [
       `From: ${senderName ? `${senderName} <${email_user}>` : email_user}`,
       `Reply-To: ${replyToEmail}`,
-      `To: ${user.email}`,
+      `To: ${requestedEmail}`,
       `Subject: ${subject}`,
       'MIME-Version: 1.0',
       'Content-Type: text/html; charset=utf-8',
@@ -163,7 +178,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       requestBody: { raw: encodedMessage },
     });
 
-    console.log(`✅ Temporary password email sent to ${user.email}`);
+    console.log(`✅ Temporary password email sent to ${requestedEmail} for user ${user.email}`);
 
     return res.status(200).json({
       success: true,
