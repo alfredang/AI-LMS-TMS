@@ -394,6 +394,7 @@ const CreateView: React.FC = () => {
         ]},
         { title: 'Design', description: 'AI-assisted design tools for creating user interfaces, prototypes, and layouts.', items: [
             { label: 'Figma', href: 'https://www.figma.com/make/' },
+            { label: 'Stitch', href: 'https://stitch.withgoogle.com/' },
         ]},
     ];
 

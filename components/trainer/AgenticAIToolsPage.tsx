@@ -21,6 +21,23 @@ const AGENTIC_AI_CATEGORIES = [
       { label: 'Flowise', href: 'https://flowiseai.com/' },
     ],
   },
+  {
+    title: 'Voice Agents',
+    description: 'Build AI-powered voice agents for phone calls, customer support, and conversational interfaces.',
+    items: [
+      { label: 'ElevenLabs', href: 'https://elevenlabs.io/' },
+      { label: 'Retell AI', href: 'https://www.retellai.com/' },
+      { label: 'Vapi', href: 'https://vapi.ai/' },
+    ],
+  },
+  {
+    title: 'Video Agents',
+    description: 'Create AI-generated video avatars and presenters for training, marketing, and communication.',
+    items: [
+      { label: 'HeyGen', href: 'https://www.heygen.com/' },
+      { label: 'Synthesia', href: 'https://www.synthesia.io/' },
+    ],
+  },
 ];
 
 const AgenticAIToolsPage: React.FC = () => {

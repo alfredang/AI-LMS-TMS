@@ -142,6 +142,7 @@ const GENAI_LINK_GROUPS: { category: string; items: { label: string; icon: IconN
     category: 'UI Design',
     items: [
       { label: 'Figma',              icon: IconName.Edit,   href: 'https://www.figma.com/make/' },
+      { label: 'Stitch',             icon: IconName.Edit,   href: 'https://stitch.withgoogle.com/' },
     ],
   },
 ];
@@ -162,6 +163,21 @@ const AGENTIC_AI_GROUPS: { category: string; items: { label: string; icon: IconN
       { label: 'n8n',      icon: IconName.Globe, href: 'https://n8n.io/' },
       { label: 'Langflow',  icon: IconName.Globe, href: 'https://www.langflow.org/' },
       { label: 'Flowise',   icon: IconName.Globe, href: 'https://flowiseai.com/' },
+    ],
+  },
+  {
+    category: 'Voice Agents',
+    items: [
+      { label: 'ElevenLabs', icon: IconName.Globe, href: 'https://elevenlabs.io/' },
+      { label: 'Retell AI',  icon: IconName.Globe, href: 'https://www.retellai.com/' },
+      { label: 'Vapi',       icon: IconName.Globe, href: 'https://vapi.ai/' },
+    ],
+  },
+  {
+    category: 'Video Agents',
+    items: [
+      { label: 'HeyGen',    icon: IconName.Globe, href: 'https://www.heygen.com/' },
+      { label: 'Synthesia',  icon: IconName.Globe, href: 'https://www.synthesia.io/' },
     ],
   },
 ];
