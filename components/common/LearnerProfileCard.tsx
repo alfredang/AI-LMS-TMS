@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Button, Card, Icon, Spinner, IconName } from '../ui';
+import { Button, Card, Icon, IconName } from '../ui';
 import { LearnerProfile, Gender, EmploymentStatus, Nationality, Ethnicity } from '../../types/profile';
 import { calculateAgeGroup, maskNric, formatDate, formatDateForInput } from '../../utils';
 import { ProfileService } from '@lib/services/profileService';
@@ -201,7 +201,6 @@ export const LearnerProfileCard: React.FC<{
     const [formData, setFormData] = useState(profile);
     const [showNric, setShowNric] = useState(false);
     const [showDob, setShowDob] = useState(false);
-    const [isGeneratingAvatar, setIsGeneratingAvatar] = useState(false);
     const [selectedProfilePictureFile, setSelectedProfilePictureFile] = useState<File | null>(null);
     const [profilePicturePreview, setProfilePicturePreview] = useState<string | null>(null);
     const [uploadedProfilePicturePath, setUploadedProfilePicturePath] = useState<string | null>(null);
@@ -260,33 +259,6 @@ export const LearnerProfileCard: React.FC<{
                 // DON'T update formData.profilePictureUrl with the preview - only with actual uploaded path
             };
             reader.readAsDataURL(file);
-        }
-    };
-
-    const handleGenerateAvatar = async () => {
-        setIsGeneratingAvatar(true);
-        try {
-            // Delete old profile picture if it exists and is a file
-            const oldFileUrl = formData.profilePictureUrl;
-            if (oldFileUrl && oldFileUrl.includes('uploads/')) {
-                try {
-                    await fetch(getDeleteFileUrl(oldFileUrl), {
-                        method: 'DELETE'
-                    });
-                    console.log('✅ Old profile picture deleted');
-                } catch (error) {
-                    console.warn('⚠️ Failed to delete old profile picture:', error);
-                }
-            }
-
-            await new Promise(resolve => setTimeout(resolve, 2000));
-            const newAvatarUrl = `https://i.pravatar.cc/150?img=${Math.floor(Math.random() * 50)}`;
-            setFormData(prev => ({ ...prev, profilePictureUrl: newAvatarUrl }));
-        } catch (error) {
-            console.error("Avatar generation failed:", error);
-            alert("An error occurred while generating the avatar.");
-        } finally {
-            setIsGeneratingAvatar(false);
         }
     };
 
@@ -481,12 +453,7 @@ export const LearnerProfileCard: React.FC<{
                     <div className="flex-shrink-0 text-center">
                         <div className="relative group w-24 h-24">
                             <img src={profilePicturePreview || ensureAbsoluteImageUrl(formData.profilePictureUrl) || 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMjAiIGN5PSIyMCIgcj0iMjAiIGZpbGw9IiM5Q0EzQUYiLz4KPGNpcmNsZSBjeD0iMjAiIGN5PSIxNSIgcj0iNiIgZmlsbD0id2hpdGUiLz4KPHBhdGggZD0iTTMwIDMzQzMwIDI3LjQ3NzIgMjUuNTIyOCAyMyAyMCAyM0MxNC40NzcyIDIzIDEwIDI3LjQ3NzIgMTAgMzNIMzBaIiBmaWxsPSJ3aGl0ZSIvPgo8L3N2Zz4K'} alt={formData.name} className="w-24 h-24 rounded-full object-cover ring-4 ring-primary/20" onError={(e) => { e.currentTarget.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMjAiIGN5PSIyMCIgcj0iMjAiIGZpbGw9IiM5Q0EzQUYiLz4KPGNpcmNsZSBjeD0iMjAiIGN5PSIxNSIgcj0iNiIgZmlsbD0id2hpdGUiLz4KPHBhdGggZD0iTTMwIDMzQzMwIDI3LjQ3NzIgMjUuNTIyOCAyMyAyMCAyM0MxNC40NzcyIDIzIDEwIDI3LjQ3NzIgMTAgMzNIMzBaIiBmaWxsPSJ3aGl0ZSIvPgo8L3N2Zz4K'; }} />
-                            {isGeneratingAvatar && (
-                                <div className="absolute inset-0 bg-black bg-opacity-50 rounded-full flex items-center justify-center">
-                                    <Spinner size="sm" className="text-white" />
-                                </div>
-                            )}
-                            {isEditing && !isGeneratingAvatar && (
+                            {isEditing && (
                                 <div className="absolute inset-0 bg-black bg-opacity-50 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
                                     onClick={() => document.getElementById('photo-upload')?.click()}>
                                     <Icon name={IconName.Upload} className="w-6 h-6 text-white" />
@@ -494,18 +461,7 @@ export const LearnerProfileCard: React.FC<{
                             )}
                         </div>
                         {isEditing && (
-                            <>
-                                <input type="file" id="photo-upload" className="hidden" onChange={handlePhotoChange} accept="image/*" />
-                                <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="mt-2 border border-gray-300 dark:border-gray-500 text-gray-700 dark:text-gray-200"
-                                    onClick={handleGenerateAvatar}
-                                    disabled={isGeneratingAvatar}
-                                >
-                                    {isGeneratingAvatar ? <Spinner size="sm" /> : 'Generate Avatar'}
-                                </Button>
-                            </>
+                            <input type="file" id="photo-upload" className="hidden" onChange={handlePhotoChange} accept="image/*" />
                         )}
                     </div>
                     <div className="text-center sm:text-left flex-grow">
