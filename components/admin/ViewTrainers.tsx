@@ -1,4 +1,3 @@
-import { getApiUrl } from '@/lib/urlHelpers';
 import React, { useState, useEffect } from 'react';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
@@ -6,6 +5,7 @@ import { Icon, IconName } from '../ui/Icon';
 import AddTrainerForm from './AddTrainerForm';
 import { BulkUploadTrainersView } from './BulkUploadTrainersView';
 import { SKILLS_FUTURE_INDUSTRIES } from '@app-types/profile';
+import { ensureAbsoluteImageUrl } from '@utils/imageUtils';
 
 interface Trainer {
   trainer_name: string;
@@ -48,6 +48,25 @@ const capitalise = (s: string | null) =>
 
 const TRAINER_TYPES = ['ACLP', 'non-ACLP'];
 const TRAINER_STATUSES = ['Active', 'Inactive'];
+const DEFAULT_TRAINER_AVATAR = `data:image/svg+xml;utf8,${encodeURIComponent(
+  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" fill="none">
+    <circle cx="20" cy="20" r="20" fill="#F3F4F6"/>
+    <circle cx="20" cy="15" r="7" fill="#A3A3A3"/>
+    <path d="M8 34c2.8-6.2 7.5-9.5 12-9.5S29.2 27.8 32 34" fill="#A3A3A3"/>
+  </svg>`
+)}`;
+
+const getTrainerThumbnailSrc = (trainer: Trainer): string => {
+  if (trainer.linkedin_url) {
+    const params = new URLSearchParams({ name: trainer.trainer_name });
+    if (trainer.profile_picture) {
+      params.set('profilePictureUrl', trainer.profile_picture);
+    }
+    return `/api/admin/trainer-image?${params.toString()}`;
+  }
+
+  return ensureAbsoluteImageUrl(trainer.profile_picture) || DEFAULT_TRAINER_AVATAR;
+};
 
 const ViewTrainers: React.FC = () => {
   const [trainers, setTrainers] = useState<Trainer[]>([]);
@@ -360,15 +379,10 @@ const ViewTrainers: React.FC = () => {
                         <div className="flex-shrink-0 h-10 w-10">
                           <img
                             className="h-10 w-10 rounded-full object-cover"
-                            src={trainer.profile_picture
-                              ? (trainer.profile_picture.startsWith('http')
-                                  ? trainer.profile_picture
-                                  : getApiUrl(`/api${trainer.profile_picture}`))
-                              : 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMjAiIGN5PSIyMCIgcj0iMjAiIGZpbGw9IiM5Q0EzQUYiLz4KPGNpcmNsZSBjeD0iMjAiIGN5PSIxNSIgcj0iNiIgZmlsbD0id2hpdGUiLz4KPHBhdGggZD0iTTMwIDMzQzMwIDI3LjQ3NzIgMjUuNTIyOCAyMyAyMCAyM0MxNC40NzcyIDIzIDEwIDI3LjQ3NzIgMTAgMzNIMzBaIiBmaWxsPSJ3aGl0ZSIvPgo8L3N2Zz4K'
-                            }
+                            src={getTrainerThumbnailSrc(trainer)}
                             alt={trainer.trainer_name}
                             onError={(e) => {
-                              e.currentTarget.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMjAiIGN5PSIyMCIgcj0iMjAiIGZpbGw9IiM5Q0EzQUYiLz4KPGNpcmNsZSBjeD0iMjAiIGN5PSIxNSIgcj0iNiIgZmlsbD0id2hpdGUiLz4KPHBhdGggZD0iTTMwIDMzQzMwIDI3LjQ3NzIgMjUuNTIyOCAyMyAyMCAyM0MxNC40NzcyIDIzIDEwIDI3LjQ3NzIgMTAgMzNIMzBaIiBmaWxsPSJ3aGl0ZSIvPgo8L3N2Zz4K';
+                              e.currentTarget.src = DEFAULT_TRAINER_AVATAR;
                             }}
                           />
                         </div>

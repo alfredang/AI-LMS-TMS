@@ -6,26 +6,35 @@
 
 import pg from 'pg';
 import dotenv from 'dotenv';
+dotenv.config({ path: '.env.local' });
 dotenv.config();
 
 const DB_URL = process.env.DATABASE_URL;
-const DRIVE_FOLDER_ID = process.env.DRIVE_FOLDER_ID;
-const CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
-const CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
-const REFRESH_TOKEN = process.env.GOOGLE_REFRESH_TOKEN;
 
 const DELAY_MS = 2500; // delay between LinkedIn fetches
+const FORCE_REFRESH_ALL = process.argv.includes('--all');
 
 let accessToken = '';
+let driveFolderId = '';
+let googleClientId = process.env.GOOGLE_CLIENT_ID || '';
+let googleClientSecret = process.env.GOOGLE_CLIENT_SECRET || '';
+let googleRefreshToken = process.env.GOOGLE_REFRESH_TOKEN || '';
+
+function extractGoogleDriveFolderId(input) {
+  const trimmed = String(input || '').trim();
+  const folderMatch = trimmed.match(/\/folders\/([a-zA-Z0-9_-]+)/);
+  if (folderMatch?.[1]) return folderMatch[1];
+  return trimmed || null;
+}
 
 async function getAccessToken() {
   const res = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
-      client_id: CLIENT_ID,
-      client_secret: CLIENT_SECRET,
-      refresh_token: REFRESH_TOKEN,
+      client_id: googleClientId,
+      client_secret: googleClientSecret,
+      refresh_token: googleRefreshToken,
       grant_type: 'refresh_token',
     }),
   });
@@ -94,7 +103,7 @@ async function uploadToGoogleDrive(fileName, buffer, contentType) {
   const boundary = 'boundary_' + Date.now();
   const metadata = JSON.stringify({
     name: fileName,
-    parents: [DRIVE_FOLDER_ID],
+    parents: [driveFolderId],
   });
 
   const body = Buffer.concat([
@@ -134,18 +143,47 @@ async function uploadToGoogleDrive(fileName, buffer, contentType) {
   });
 
   // Direct image URL
-  return `https://lh3.googleusercontent.com/d/${data.id}`;
+  return `https://drive.google.com/thumbnail?id=${data.id}&sz=w1000`;
 }
 
 async function main() {
   console.log('🚀 Starting LinkedIn photo → Google Drive upload');
 
-  await getAccessToken();
-
+  if (!DB_URL) {
+    throw new Error('DATABASE_URL is not configured.');
+  }
   const pool = new pg.Pool({ connectionString: DB_URL });
 
-  // Get all trainers with LinkedIn URLs but no profile picture (or local path)
-  const { rows: trainers } = await pool.query(`
+  const { rows: companyRows } = await pool.query(`
+    SELECT trainer_profile_image_url, google_client_id, google_client_secret, google_refresh_token
+    FROM training_provider
+    LIMIT 1
+  `);
+
+  const companySettings = companyRows[0] || {};
+  googleClientId = googleClientId || companySettings.google_client_id || '';
+  googleClientSecret = googleClientSecret || companySettings.google_client_secret || '';
+  googleRefreshToken = googleRefreshToken || companySettings.google_refresh_token || '';
+  driveFolderId = extractGoogleDriveFolderId(companySettings.trainer_profile_image_url);
+
+  if (!googleClientId || !googleClientSecret || !googleRefreshToken) {
+    throw new Error('Google OAuth credentials are not configured in Company Settings.');
+  }
+  if (!driveFolderId) {
+    throw new Error('Trainer Profile Image Folder is not configured in Company Settings.');
+  }
+
+  await getAccessToken();
+  console.log('✅ Using Trainer Profile Image Folder from Company Settings');
+
+  const query = FORCE_REFRESH_ALL ? `
+    SELECT u.id, u.full_name, u.email, u.profile_picture_url, tp.linkedin_url
+    FROM app_user u
+    JOIN trainer_profile tp ON u.id = tp.user_id
+    JOIN user_role_map ur ON u.id = ur.user_id AND ur.role = 'Trainer'
+    WHERE tp.linkedin_url IS NOT NULL AND tp.linkedin_url != ''
+    ORDER BY u.full_name
+  ` : `
     SELECT u.id, u.full_name, u.email, u.profile_picture_url, tp.linkedin_url
     FROM app_user u
     JOIN trainer_profile tp ON u.id = tp.user_id
@@ -158,9 +196,11 @@ async function main() {
       OR u.profile_picture_url LIKE '%licdn.com%'
     )
     ORDER BY u.full_name
-  `);
+  `;
 
-  console.log(`📋 Found ${trainers.length} trainers to process\n`);
+  const { rows: trainers } = await pool.query(query);
+
+  console.log(`📋 Found ${trainers.length} trainers to process${FORCE_REFRESH_ALL ? ' (force refresh mode)' : ''}\n`);
 
   let success = 0;
   let failed = 0;

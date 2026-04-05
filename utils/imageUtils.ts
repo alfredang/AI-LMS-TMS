@@ -22,7 +22,7 @@ function extractGoogleDriveFileId(input: string): string | null {
 function normalizeGoogleDriveImageUrl(url: string): string {
   const fileId = extractGoogleDriveFileId(url);
   if (!fileId) return url;
-  return `https://drive.google.com/thumbnail?id=${fileId}&sz=w1000`;
+  return `/api/google-drive/image?fileId=${encodeURIComponent(fileId)}`;
 }
 
 /**
