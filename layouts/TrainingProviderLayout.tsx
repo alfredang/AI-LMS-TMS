@@ -20,6 +20,7 @@ import OtpEmailTemplateView from '../components/training-provider/OtpEmailTempla
 import CertificateEmailTemplateView from '../components/training-provider/CertificateEmailTemplateView';
 import FeedbackEmailTemplateView from '../components/training-provider/FeedbackEmailTemplateView';
 import PasswordResetEmailTemplateView from '../components/training-provider/PasswordResetEmailTemplateView';
+import TrainerInvitationEmailTemplateView from '../components/training-provider/TrainerInvitationEmailTemplateView';
 import FinanceManagementView from '../components/training-provider/FinanceManagementView';
 import TrainingProviderSidebar from '../components/training-provider/TrainingProviderSidebar';
 import SchedulerView from '../components/admin/SchedulerView';
@@ -73,6 +74,8 @@ const TrainingProviderLayout: React.FC = () => {
         return <FeedbackEmailTemplateView />;
       case View.PasswordResetEmailTemplate:
         return <PasswordResetEmailTemplateView />;
+      case View.TrainerInvitationEmailTemplate:
+        return <TrainerInvitationEmailTemplateView />;
       case View.FinanceManagement:
         return <FinanceManagementView />;
       case View.Scheduler:
@@ -100,6 +103,7 @@ const TrainingProviderLayout: React.FC = () => {
       case View.CertificateEmailTemplate: return 'Certificate Email Template';
       case View.FeedbackEmailTemplate: return 'Feedback Email Template';
       case View.PasswordResetEmailTemplate: return 'Password Reset Email Template';
+      case View.TrainerInvitationEmailTemplate: return 'Trainer Invitation Email Template';
       case View.FinanceManagement: return 'Finance Management';
       case View.Scheduler: return 'Task Scheduler';
       default: return 'Dashboard';

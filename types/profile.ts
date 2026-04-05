@@ -281,6 +281,7 @@ export interface TrainingProviderProfile extends BaseProfile {
     autoSendReceiptOnPayment: boolean;
     autoSendCertificateOnCompletion: boolean;
     autoSendThankYouEmail: boolean;
+    upcomingClassesThresholdDays: number;
   };
   securitySettings: {
     autoMaskSensitiveData: boolean;

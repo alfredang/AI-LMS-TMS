@@ -1267,6 +1267,34 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                 <div className="border-t my-6"></div>
                 {renderSectionHeader('Admin Setting', isAdminSettingsOpen, () => setIsAdminSettingsOpen(prev => !prev), 'text-xl font-bold')}
                 {isAdminSettingsOpen && <div className="space-y-4 font-semibold mt-4">
+                    <div className="p-3 bg-surface-elevated rounded-md border border-default">
+                        <label className="block text-sm font-medium text-on-surface-secondary mb-1 font-semibold">
+                            Upcoming Classes Threshold (Days)
+                        </label>
+                        {isEditing ? (
+                            <input
+                                type="number"
+                                min={1}
+                                max={365}
+                                value={formData.adminSettings.upcomingClassesThresholdDays ?? 21}
+                                onChange={(e) =>
+                                    setFormData((prev) => ({
+                                        ...prev,
+                                        adminSettings: {
+                                            ...prev.adminSettings,
+                                            upcomingClassesThresholdDays: Math.max(1, parseInt(e.target.value || '21', 10) || 21),
+                                        },
+                                    }))
+                                }
+                                className={inputClasses}
+                                placeholder="21"
+                            />
+                        ) : (
+                            <p className="text-sm text-on-surface">
+                                {(formData.adminSettings.upcomingClassesThresholdDays ?? 21)} days
+                            </p>
+                        )}
+                    </div>
                     {Object.entries(adminSettingLabels).map(([key, label]) => (
                         <ToggleSwitch
                             key={key}

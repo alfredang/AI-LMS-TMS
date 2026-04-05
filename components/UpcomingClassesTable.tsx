@@ -47,9 +47,14 @@ interface UpcomingClass {
     digitalAttendanceId: string;
     startDate: string;
     endDate: string;
-    trainerName: string;
-    assignedTrainerName: string;
-    assignedTrainerEmail: string;
+    assignedTrainerTpg: string;
+    assignedTrainerTpgEmail: string;
+    assignedTrainerLocal: string;
+    assignedTrainerLocalEmail: string;
+    nextAvailableTrainer: string;
+    nextAvailableTrainerEmail: string;
+    latestInvitationStatus: string;
+    latestInvitationTrainer: string;
     numOfTrainee: number;
 }
 
@@ -76,6 +81,7 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
     const [courseCode, setCourseCode] = useState('');
     const [courseRunId, setCourseRunId] = useState('');
     const [selectedTrainer, setSelectedTrainer] = useState('');
+    const [selectedClassStatus, setSelectedClassStatus] = useState<'all' | 'Confirmed' | 'Pending'>('all');
     const [startDateFrom, setStartDateFrom] = useState('');
     const [endDateUntil, setEndDateUntil] = useState('');
 
@@ -93,16 +99,24 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
     const [loading, setLoading] = useState(true);
     const [totalCount, setTotalCount] = useState(0);
     const [totalPages, setTotalPages] = useState(0);
-    const [stats, setStats] = useState<{ totalClasses: number; totalAssignedTrainers: number }>({ totalClasses: 0, totalAssignedTrainers: 0 });
+    const [stats, setStats] = useState({
+        totalClasses: 0,
+        totalConfirmedClasses: 0,
+        totalPendingClasses: 0,
+        totalAssignedTpgClasses: 0,
+        totalAssignedLocalClasses: 0,
+    });
 
     // Import Run modal states
     const [showImportModal, setShowImportModal] = useState(false);
     const [importRunId, setImportRunId] = useState('');
     const [importLoading, setImportLoading] = useState(false);
     const [importResult, setImportResult] = useState<{ success: boolean; message: string; detail?: string } | null>(null);
+    const [sendingInvitationFor, setSendingInvitationFor] = useState<string | null>(null);
+    const [actionMessage, setActionMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
     const ITEMS_PER_PAGE = 20;
-    const totalUnassignedTrainers = Math.max(stats.totalClasses - stats.totalAssignedTrainers, 0);
+    const totalUnassignedTrainers = Math.max(stats.totalClasses - stats.totalAssignedLocalClasses, 0);
 
     // Fetch trainers from API
     const fetchTrainers = async () => {
@@ -141,6 +155,7 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
             if (debouncedCourseCode) params.append('courseCode', debouncedCourseCode);
             if (debouncedCourseRunId) params.append('courseRunId', debouncedCourseRunId);
             if (selectedTrainer) params.append('trainer', selectedTrainer);
+            if (selectedClassStatus !== 'all') params.append('classStatus', selectedClassStatus);
             if (debouncedStartDate) params.append('startDateFrom', debouncedStartDate);
             if (debouncedEndDate) params.append('endDateUntil', debouncedEndDate);
 
@@ -159,7 +174,10 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                 if (result.data.stats) {
                     setStats({
                         totalClasses: result.data.stats.totalClasses ?? 0,
-                        totalAssignedTrainers: result.data.stats.totalAssignedTrainers ?? result.data.stats.totalTrainers ?? 0,
+                        totalConfirmedClasses: result.data.stats.totalConfirmedClasses ?? 0,
+                        totalPendingClasses: result.data.stats.totalPendingClasses ?? 0,
+                        totalAssignedTpgClasses: result.data.stats.totalAssignedTpgClasses ?? 0,
+                        totalAssignedLocalClasses: result.data.stats.totalAssignedLocalClasses ?? 0,
                     });
                 }
             } else {
@@ -194,12 +212,12 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
     // Reset page immediately for non-debounced filters (dropdowns)
     useEffect(() => {
         setCurrentPage(0);
-    }, [selectedTrainer]);
+    }, [selectedTrainer, selectedClassStatus]);
 
     // Fetch data when debounced filters or pagination change
     useEffect(() => {
         fetchUpcomingClasses();
-    }, [currentPage, debouncedSearch, debouncedCourseTitle, debouncedCourseCode, debouncedCourseRunId, selectedTrainer, debouncedStartDate, debouncedEndDate]);
+    }, [currentPage, debouncedSearch, debouncedCourseTitle, debouncedCourseCode, debouncedCourseRunId, selectedTrainer, selectedClassStatus, debouncedStartDate, debouncedEndDate]);
 
     // Date formatting function
     const formatDateInput = (value: string) => {
@@ -229,6 +247,7 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
         setCourseCode('');
         setCourseRunId('');
         setSelectedTrainer('');
+        setSelectedClassStatus('all');
         setStartDateFrom('');
         setEndDateUntil('');
         setCurrentPage(0);
@@ -284,6 +303,41 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
         }
     };
 
+    const renderTrainerCell = (name: string, email?: string) => {
+        if (!name) {
+            return <span className="text-gray-400 dark:text-gray-500">N/A</span>;
+        }
+        return (
+            <div className="min-w-[180px]">
+                <div className="text-sm text-gray-900 dark:text-white whitespace-normal">{name}</div>
+                {email ? <div className="text-xs text-gray-500 dark:text-gray-400 whitespace-normal">{email}</div> : null}
+            </div>
+        );
+    };
+
+    const handleSendTrainerInvitation = async (classItem: UpcomingClass) => {
+        setSendingInvitationFor(classItem.id);
+        setActionMessage(null);
+        try {
+            const response = await fetch(getApiUrl('/api/admin/send-trainer-invitation'), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ courseRunUuid: classItem.id }),
+            });
+            const result = await response.json();
+            if (!result.success) {
+                throw new Error(result.error || 'Failed to send trainer invitation.');
+            }
+            setActionMessage({ type: 'success', text: result.message || 'Trainer invitation sent.' });
+            await fetchUpcomingClasses();
+        } catch (error) {
+            setActionMessage({ type: 'error', text: error instanceof Error ? error.message : 'Failed to send trainer invitation.' });
+        } finally {
+            setSendingInvitationFor(null);
+            setTimeout(() => setActionMessage(null), 4000);
+        }
+    };
+
     return (
         <div>
             {showTitle && (
@@ -302,18 +356,30 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
 
             {/* KPI Stats */}
             {showTitle && (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6 gap-6 mb-8">
                     <Card className="p-6 text-center">
                         <p className="text-4xl font-bold text-blue-600">{stats.totalClasses}</p>
                         <p className="text-gray-600 dark:text-gray-300 mt-1">Upcoming Classes</p>
                     </Card>
                     <Card className="p-6 text-center">
-                        <p className="text-4xl font-bold text-green-600">{stats.totalAssignedTrainers}</p>
-                        <p className="text-gray-600 dark:text-gray-300 mt-1">Assigned Trainers</p>
+                        <p className="text-4xl font-bold text-green-600">{stats.totalConfirmedClasses}</p>
+                        <p className="text-gray-600 dark:text-gray-300 mt-1">Confirmed Classes</p>
+                    </Card>
+                    <Card className="p-6 text-center">
+                        <p className="text-4xl font-bold text-amber-500">{stats.totalPendingClasses}</p>
+                        <p className="text-gray-600 dark:text-gray-300 mt-1">Pending Classes</p>
+                    </Card>
+                    <Card className="p-6 text-center">
+                        <p className="text-4xl font-bold text-cyan-500">{stats.totalAssignedTpgClasses}</p>
+                        <p className="text-gray-600 dark:text-gray-300 mt-1">Assigned Trainers (TPG)</p>
+                    </Card>
+                    <Card className="p-6 text-center">
+                        <p className="text-4xl font-bold text-emerald-500">{stats.totalAssignedLocalClasses}</p>
+                        <p className="text-gray-600 dark:text-gray-300 mt-1">Assigned Trainers (Local)</p>
                     </Card>
                     <Card className="p-6 text-center">
                         <p className="text-4xl font-bold text-purple-600">{totalUnassignedTrainers}</p>
-                        <p className="text-gray-600 dark:text-gray-300 mt-1">Unassigned Trainers</p>
+                        <p className="text-gray-600 dark:text-gray-300 mt-1">Unssigned Trainers</p>
                     </Card>
                 </div>
             )}
@@ -416,6 +482,19 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                             </select>
                                         </div>
 
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Class Status</label>
+                                            <select
+                                                value={selectedClassStatus}
+                                                onChange={(e) => setSelectedClassStatus(e.target.value as 'all' | 'Confirmed' | 'Pending')}
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                            >
+                                                <option value="all">All</option>
+                                                <option value="Confirmed">Confirmed</option>
+                                                <option value="Pending">Pending</option>
+                                            </select>
+                                        </div>
+
                                         {/* Start Date From */}
                                         <div>
                                             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Start Date (From)</label>
@@ -449,6 +528,11 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                 )}
 
                 {/* Classes Table */}
+                {actionMessage && (
+                    <div className={`mb-4 p-3 rounded-md text-sm ${actionMessage.type === 'success' ? 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-400'}`}>
+                        {actionMessage.text}
+                    </div>
+                )}
                 {loading ? (
                     <div className="text-center py-8">
                         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
@@ -459,7 +543,7 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                         <Icon name={IconName.BookOpen} className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                         <p className="text-gray-500 text-lg">No upcoming classes found</p>
                         <p className="text-gray-400 text-sm mt-2">
-                            {searchQuery || courseTitle || courseCode || courseRunId || selectedTrainer || startDateFrom || endDateUntil
+                            {searchQuery || courseTitle || courseCode || courseRunId || selectedTrainer || selectedClassStatus !== 'all' || startDateFrom || endDateUntil
                                 ? 'Try adjusting your search filters'
                                 : 'No classes are scheduled for the future'}
                         </p>
@@ -477,8 +561,10 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">DA ID</th>
                                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">START DATE</th>
                                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">END DATE</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">TRAINER</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"># OF TRAINEE</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">ASSIGNED TRAINER (TPG)</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">ASSIGNED TRAINER (LOCAL)</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">NEXT AVAILABLE TRAINER</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">SEND TRAINER INVITATION</th>
                                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">ACTIONS</th>
                                     </tr>
                                 </thead>
@@ -496,8 +582,45 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                             <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.digitalAttendanceId || 'N/A'}</td>
                                             <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{formatDate(classItem.startDate)}</td>
                                             <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{formatDate(classItem.endDate)}</td>
-                                            <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.trainerName}</td>
-                                            <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200 text-center">{classItem.numOfTrainee}</td>
+                                            <td className="px-4 py-4 align-top text-sm text-gray-700 dark:text-gray-200">{renderTrainerCell(classItem.assignedTrainerTpg, classItem.assignedTrainerTpgEmail)}</td>
+                                            <td className="px-4 py-4 align-top text-sm text-gray-700 dark:text-gray-200">{renderTrainerCell(classItem.assignedTrainerLocal, classItem.assignedTrainerLocalEmail)}</td>
+                                            <td className="px-4 py-4 align-top text-sm text-gray-700 dark:text-gray-200">{renderTrainerCell(classItem.nextAvailableTrainer, classItem.nextAvailableTrainerEmail)}</td>
+                                            <td className="px-4 py-4 align-top text-sm text-gray-700 dark:text-gray-200">
+                                                <div className="min-w-[180px] space-y-2">
+                                                    {classItem.latestInvitationStatus ? (
+                                                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${classItem.latestInvitationStatus === 'accepted'
+                                                            ? 'bg-green-100 text-green-700'
+                                                            : classItem.latestInvitationStatus === 'declined'
+                                                                ? 'bg-red-100 text-red-700'
+                                                                : 'bg-yellow-100 text-yellow-700'
+                                                            }`}>
+                                                            {classItem.latestInvitationStatus} {classItem.latestInvitationTrainer ? `• ${classItem.latestInvitationTrainer}` : ''}
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-gray-400 dark:text-gray-500 text-xs">No invitation sent</span>
+                                                    )}
+                                                    <div>
+                                                        <Button
+                                                            variant="secondary"
+                                                            size="sm"
+                                                            onClick={() => handleSendTrainerInvitation(classItem)}
+                                                            disabled={!classItem.nextAvailableTrainer || sendingInvitationFor === classItem.id}
+                                                        >
+                                                            {sendingInvitationFor === classItem.id ? (
+                                                                <>
+                                                                    <Icon name={IconName.Spinner} className="w-4 h-4 mr-2" />
+                                                                    Sending...
+                                                                </>
+                                                            ) : (
+                                                                <>
+                                                                    <Icon name={IconName.Send} className="w-4 h-4 mr-2" />
+                                                                    Send Invitation
+                                                                </>
+                                                            )}
+                                                        </Button>
+                                                    </div>
+                                                </div>
+                                            </td>
                                             <td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
                                                 <div className="flex items-center space-x-2">
                                                     <Button

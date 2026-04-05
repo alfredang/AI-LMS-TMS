@@ -1,8 +1,9 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
+import { normalizeTrainerName, splitTrainerList } from '@/lib/trainerInvitations';
 
 interface UpcomingClass {
-  id: string; // UUID of the course run
+  id: string;
   courseRunId: string;
   courseTitle: string;
   courseCode: string;
@@ -10,17 +11,31 @@ interface UpcomingClass {
   digitalAttendanceId: string;
   startDate: string;
   endDate: string;
-  trainerName: string;
-  assignedTrainerName: string;
-  assignedTrainerEmail: string;
+  assignedTrainerTpg: string;
+  assignedTrainerTpgEmail: string;
+  assignedTrainerLocal: string;
+  assignedTrainerLocalEmail: string;
+  nextAvailableTrainer: string;
+  nextAvailableTrainerEmail: string;
+  latestInvitationStatus: string;
+  latestInvitationTrainer: string;
   numOfTrainee: number;
+  trainersList?: string;
 }
 
-export default async function handler(
-  req: NextApiRequest,
-  res: NextApiResponse
-) {
-  // Set CORS headers
+const parseDDMMYYYY = (d: string) => {
+  const p = d.split(/[/-]/);
+  return `${p[2]}-${p[1]}-${p[0]}`;
+};
+
+const isValidDate = (d: any) => {
+  if (typeof d !== 'string' || !/^\d{2}[/-]\d{2}[/-]\d{4}$/.test(d)) return false;
+  const iso = parseDDMMYYYY(d);
+  const parsed = new Date(iso);
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().startsWith(iso);
+};
+
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
@@ -35,244 +50,306 @@ export default async function handler(
   }
 
   try {
+    let thresholdDays = 21;
+    try {
+      const thresholdResult = await pool.query(
+        `SELECT upcoming_classes_threshold_days
+         FROM training_provider
+         LIMIT 1`
+      );
+      const rawThreshold = thresholdResult.rows[0]?.upcoming_classes_threshold_days;
+      const parsedThreshold = parseInt(String(rawThreshold || '21'), 10);
+      if (!Number.isNaN(parsedThreshold) && parsedThreshold > 0) {
+        thresholdDays = parsedThreshold;
+      }
+    } catch (error) {
+      // Column may not exist yet; keep the default.
+    }
+
+    const hasInvitationTable = (
+      await pool.query(`SELECT 1 FROM information_schema.tables WHERE table_name = 'trainer_invitation' LIMIT 1`)
+    ).rows.length > 0;
+    const hasTpgNameColumn = (
+      await pool.query(`SELECT 1 FROM information_schema.columns WHERE table_name = 'course_run' AND column_name = 'tpg_assigned_trainer_name' LIMIT 1`)
+    ).rows.length > 0;
+    const hasTpgEmailColumn = (
+      await pool.query(`SELECT 1 FROM information_schema.columns WHERE table_name = 'course_run' AND column_name = 'tpg_assigned_trainer_email' LIMIT 1`)
+    ).rows.length > 0;
+
+    const tpgNameExpr = hasTpgNameColumn
+      ? `COALESCE(cr.tpg_assigned_trainer_name, cr.assigned_trainer_name)`
+      : `cr.assigned_trainer_name`;
+    const tpgEmailExpr = hasTpgEmailColumn
+      ? `COALESCE(cr.tpg_assigned_trainer_email, cr.assigned_trainer_email)`
+      : `cr.assigned_trainer_email`;
+
     const {
       search,
       courseTitle,
       courseCode,
       courseRunId,
       trainer,
+      classStatus,
       startDateFrom,
       endDateUntil,
       page = 0,
       limit = 20
     } = req.query;
 
-    let upcomingClassesQuery = `
-      SELECT 
-          cr.id,
-          cr.course_run_id,
-          c.title AS course_title,
-          c.course_code,
-          cr.class_status,
-          cr.digital_attendance_id,
-          cr.start_date,
-          cr.end_date,
-          au.full_name AS trainer_name,
-          cr.assigned_trainer_name,
-          cr.assigned_trainer_email,
-          COUNT(e.id) AS num_of_trainee
-      FROM course_run cr
-      JOIN course c 
-          ON cr.course_id = c.id
-      LEFT JOIN app_user au 
-          ON cr.assigned_trainer_email = au.email
-      LEFT JOIN enrollment e 
-          ON e.course_run_id = cr.id
-      WHERE cr.start_date > CURRENT_DATE
-    `;
+    const pageNum = parseInt(page as string, 10) || 0;
+    const limitNum = parseInt(limit as string, 10) || 20;
+    const offset = pageNum * limitNum;
 
     const params: any[] = [];
     let paramIndex = 1;
+    const filters: string[] = [
+      'cr.start_date > CURRENT_DATE',
+      `cr.class_status IN ('Confirmed', 'Pending')`,
+      `cr.start_date <= CURRENT_DATE + ($${paramIndex} * INTERVAL '1 day')`
+    ];
+    params.push(thresholdDays);
+    paramIndex++;
 
-    // Add search filters
     if (search && search !== '') {
-      upcomingClassesQuery += ` AND (
-        c.title ILIKE $${paramIndex} OR 
-        c.course_code ILIKE $${paramIndex} OR 
+      filters.push(`(
+        c.title ILIKE $${paramIndex} OR
+        c.course_code ILIKE $${paramIndex} OR
         cr.course_run_id ILIKE $${paramIndex} OR
-        (EXISTS (SELECT 1 FROM course_run_trainer crt WHERE crt.course_run_id = cr.id AND crt.trainer_name ILIKE $${paramIndex})) OR
-        au.full_name ILIKE $${paramIndex}
-      )`;
+        COALESCE(${tpgNameExpr}, '') ILIKE $${paramIndex} OR
+        c.trainers_list ILIKE $${paramIndex} OR
+        EXISTS (
+          SELECT 1
+          FROM course_run_trainer crt
+          WHERE crt.course_run_id = cr.id AND crt.trainer_name ILIKE $${paramIndex}
+        )
+      )`);
       params.push(`%${search}%`);
       paramIndex++;
     }
 
-    // Add advanced filters
     if (courseTitle && courseTitle !== '') {
-      upcomingClassesQuery += ` AND c.title ILIKE $${paramIndex}`;
+      filters.push(`c.title ILIKE $${paramIndex}`);
       params.push(`%${courseTitle}%`);
       paramIndex++;
     }
 
     if (courseCode && courseCode !== '') {
-      upcomingClassesQuery += ` AND c.course_code ILIKE $${paramIndex}`;
+      filters.push(`c.course_code ILIKE $${paramIndex}`);
       params.push(`%${courseCode}%`);
       paramIndex++;
     }
 
     if (courseRunId && courseRunId !== '') {
-      upcomingClassesQuery += ` AND cr.course_run_id ILIKE $${paramIndex}`;
+      filters.push(`cr.course_run_id ILIKE $${paramIndex}`);
       params.push(`%${courseRunId}%`);
       paramIndex++;
     }
 
     if (trainer && trainer !== '') {
-      upcomingClassesQuery += ` AND (EXISTS (SELECT 1 FROM course_run_trainer crt WHERE crt.course_run_id = cr.id AND crt.trainer_name ILIKE $${paramIndex}) OR au.full_name ILIKE $${paramIndex})`;
+      filters.push(`(
+        COALESCE(${tpgNameExpr}, '') ILIKE $${paramIndex} OR
+        c.trainers_list ILIKE $${paramIndex} OR
+        EXISTS (
+          SELECT 1
+          FROM course_run_trainer crt
+          WHERE crt.course_run_id = cr.id AND crt.trainer_name ILIKE $${paramIndex}
+        )
+      )`);
       params.push(`%${trainer}%`);
       paramIndex++;
     }
 
-    const parseDDMMYYYY = (d: string) => { const p = d.split(/[\/\-]/); return `${p[2]}-${p[1]}-${p[0]}`; };
-    const isValidDate = (d: any) => {
-      if (typeof d !== 'string' || !/^\d{2}[\/\-]\d{2}[\/\-]\d{4}$/.test(d)) return false;
-      const iso = parseDDMMYYYY(d);
-      const parsed = new Date(iso);
-      return !isNaN(parsed.getTime()) && parsed.toISOString().startsWith(iso);
-    };
+    if (classStatus === 'Confirmed' || classStatus === 'Pending') {
+      filters.push(`cr.class_status = $${paramIndex}`);
+      params.push(classStatus);
+      paramIndex++;
+    }
 
     if (isValidDate(startDateFrom)) {
-      upcomingClassesQuery += ` AND cr.start_date >= $${paramIndex}`;
+      filters.push(`cr.start_date >= $${paramIndex}`);
       params.push(parseDDMMYYYY(startDateFrom as string));
       paramIndex++;
     }
 
     if (isValidDate(endDateUntil)) {
-      upcomingClassesQuery += ` AND cr.end_date <= $${paramIndex}`;
+      filters.push(`cr.end_date <= $${paramIndex}`);
       params.push(parseDDMMYYYY(endDateUntil as string));
       paramIndex++;
     }
 
-    upcomingClassesQuery += `
-      GROUP BY 
+    const whereClause = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
+
+    const baseQuery = `
+      FROM course_run cr
+      JOIN course c ON cr.course_id = c.id
+      LEFT JOIN enrollment e ON e.course_run_id = cr.id
+      ${whereClause}
+    `;
+
+    const mainResult = await pool.query(
+      `
+        SELECT
           cr.id,
           cr.course_run_id,
-          c.title,
+          c.title AS course_title,
           c.course_code,
+          c.trainers_list,
           cr.class_status,
           cr.digital_attendance_id,
           cr.start_date,
           cr.end_date,
-          au.full_name,
-          cr.assigned_trainer_name,
-          cr.assigned_trainer_email
-      ORDER BY cr.start_date ASC
-    `;
+          ${tpgNameExpr} AS assigned_trainer_tpg,
+          ${tpgEmailExpr} AS assigned_trainer_tpg_email,
+          COUNT(e.id) AS num_of_trainee
+        ${baseQuery}
+        GROUP BY
+          cr.id,
+          cr.course_run_id,
+          c.title,
+          c.course_code,
+          c.trainers_list,
+          cr.class_status,
+          cr.digital_attendance_id,
+          cr.start_date,
+          cr.end_date,
+          ${tpgNameExpr},
+          ${tpgEmailExpr}
+        ORDER BY cr.start_date ASC
+        LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
+      `,
+      [...params, limitNum, offset]
+    );
 
-    // Add pagination
-    const pageNum = parseInt(page as string) || 0;
-    const limitNum = parseInt(limit as string) || 20;
-    const offset = pageNum * limitNum;
+    const countResult = await pool.query(
+      `SELECT COUNT(DISTINCT cr.id) AS total_count
+       FROM course_run cr
+       JOIN course c ON cr.course_id = c.id
+       ${whereClause}`,
+      params
+    );
 
-    upcomingClassesQuery += ` LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
-    params.push(limitNum, offset);
+    const statsResult = await pool.query(
+      `
+        SELECT
+          COUNT(DISTINCT cr.id) AS total_classes,
+          COUNT(DISTINCT cr.id) FILTER (WHERE cr.class_status = 'Confirmed') AS total_confirmed_classes,
+          COUNT(DISTINCT cr.id) FILTER (WHERE cr.class_status = 'Pending') AS total_pending_classes,
+          COUNT(DISTINCT cr.id) FILTER (
+            WHERE COALESCE(${tpgNameExpr}, '') <> ''
+          ) AS total_assigned_tpg_classes,
+          COUNT(DISTINCT cr.id) FILTER (
+            WHERE EXISTS (SELECT 1 FROM course_run_trainer crt WHERE crt.course_run_id = cr.id)
+          ) AS total_assigned_local_classes
+        FROM course_run cr
+        JOIN course c ON cr.course_id = c.id
+        ${whereClause}
+      `,
+      params
+    );
 
-    const result = await pool.query(upcomingClassesQuery, params);
+    const rows = mainResult.rows;
+    const courseRunIds = rows.map((row) => row.id);
 
-    // Get total count for pagination
-    let countQuery = `
-      SELECT COUNT(DISTINCT cr.course_run_id) AS total_count
-      FROM course_run cr
-      JOIN course c ON cr.course_id = c.id
-      LEFT JOIN app_user au ON cr.assigned_trainer_email = au.email
-      LEFT JOIN enrollment e ON e.course_run_id = cr.id
-      WHERE cr.start_date > CURRENT_DATE
-    `;
+    const localTrainerMap = new Map<string, { names: string[]; emails: string[] }>();
+    if (courseRunIds.length > 0) {
+      const localTrainerResult = await pool.query(
+        `
+          SELECT course_run_id, trainer_name, trainer_email
+          FROM course_run_trainer
+          WHERE course_run_id = ANY($1::uuid[])
+          ORDER BY assigned_at ASC
+        `,
+        [courseRunIds]
+      );
 
-    const countParams: any[] = [];
-    let countParamIndex = 1;
-
-    // Apply same filters for count
-    if (search && search !== '') {
-      countQuery += ` AND (
-        c.title ILIKE $${countParamIndex} OR 
-        c.course_code ILIKE $${countParamIndex} OR 
-        cr.course_run_id ILIKE $${countParamIndex} OR
-        (EXISTS (SELECT 1 FROM course_run_trainer crt WHERE crt.course_run_id = cr.id AND crt.trainer_name ILIKE $${countParamIndex})) OR
-        au.full_name ILIKE $${countParamIndex}
-      )`;
-      countParams.push(`%${search}%`);
-      countParamIndex++;
+      for (const row of localTrainerResult.rows) {
+        const existing = localTrainerMap.get(row.course_run_id) || { names: [], emails: [] };
+        existing.names.push(row.trainer_name || '');
+        existing.emails.push(row.trainer_email || '');
+        localTrainerMap.set(row.course_run_id, existing);
+      }
     }
 
-    if (courseTitle && courseTitle !== '') {
-      countQuery += ` AND c.title ILIKE $${countParamIndex}`;
-      countParams.push(`%${courseTitle}%`);
-      countParamIndex++;
+    const invitationMap = new Map<string, any[]>();
+    if (hasInvitationTable && courseRunIds.length > 0) {
+      const invitationResult = await pool.query(
+        `
+          SELECT course_run_id, trainer_name, trainer_email, status, created_at
+          FROM trainer_invitation
+          WHERE course_run_id = ANY($1::uuid[])
+          ORDER BY created_at DESC
+        `,
+        [courseRunIds]
+      );
+
+      for (const row of invitationResult.rows) {
+        const existing = invitationMap.get(row.course_run_id) || [];
+        existing.push(row);
+        invitationMap.set(row.course_run_id, existing);
+      }
     }
 
-    if (courseCode && courseCode !== '') {
-      countQuery += ` AND c.course_code ILIKE $${countParamIndex}`;
-      countParams.push(`%${courseCode}%`);
-      countParamIndex++;
-    }
+    const upcomingClasses: UpcomingClass[] = rows.map((row) => {
+      const trainerPool = splitTrainerList(row.trainers_list);
+      const normalizedTrainerPool = trainerPool.map((trainerName) => normalizeTrainerName(trainerName));
+      const tpgNormalized = normalizeTrainerName(row.assigned_trainer_tpg);
+      const localTrainerData = localTrainerMap.get(row.id) || { names: [], emails: [] };
+      const filteredLocalPairs = localTrainerData.names
+        .map((name, index) => ({ name, email: localTrainerData.emails[index] || '' }))
+        .filter((trainer) => normalizeTrainerName(trainer.name) !== tpgNormalized);
+      const localAssigned = new Set(filteredLocalPairs.map((trainer) => normalizeTrainerName(trainer.name)));
+      const invitations = invitationMap.get(row.id) || [];
 
-    if (courseRunId && courseRunId !== '') {
-      countQuery += ` AND cr.course_run_id ILIKE $${countParamIndex}`;
-      countParams.push(`%${courseRunId}%`);
-      countParamIndex++;
-    }
+      let nextAvailableTrainer = '';
+      let nextAvailableTrainerEmail = '';
+      let latestInvitationStatus = invitations[0]?.status || '';
+      let latestInvitationTrainer = invitations[0]?.trainer_name || '';
+      const localAssignedIndexes = filteredLocalPairs
+        .map((trainer) => normalizedTrainerPool.lastIndexOf(normalizeTrainerName(trainer.name)))
+        .filter((index) => index >= 0);
+      const startIndex = localAssignedIndexes.length > 0
+        ? Math.max(...localAssignedIndexes) + 1
+        : 0;
 
-    if (trainer && trainer !== '') {
-      countQuery += ` AND (EXISTS (SELECT 1 FROM course_run_trainer crt WHERE crt.course_run_id = cr.id AND crt.trainer_name ILIKE $${countParamIndex}) OR au.full_name ILIKE $${countParamIndex})`;
-      countParams.push(`%${trainer}%`);
-      countParamIndex++;
-    }
+      for (let index = startIndex; index < trainerPool.length; index++) {
+        const trainerName = trainerPool[index];
+        const normalized = normalizedTrainerPool[index];
+        if (!normalized || localAssigned.has(normalized)) continue;
+        const invitation = invitations.find((entry) => normalizeTrainerName(entry.trainer_name) === normalized);
+        if (invitation?.status === 'declined') continue;
+        nextAvailableTrainer = trainerName;
+        nextAvailableTrainerEmail = invitation?.trainer_email || '';
+        if (invitation?.status) {
+          latestInvitationStatus = invitation.status;
+          latestInvitationTrainer = invitation.trainer_name || trainerName;
+        }
+        break;
+      }
 
-    if (isValidDate(startDateFrom)) {
-      countQuery += ` AND cr.start_date >= $${countParamIndex}`;
-      countParams.push(parseDDMMYYYY(startDateFrom as string));
-      countParamIndex++;
-    }
+      return {
+        id: row.id,
+        courseRunId: row.course_run_id,
+        courseTitle: row.course_title,
+        courseCode: row.course_code,
+        classStatus: row.class_status,
+        digitalAttendanceId: row.digital_attendance_id || '',
+        startDate: row.start_date,
+        endDate: row.end_date,
+        assignedTrainerTpg: row.assigned_trainer_tpg || '',
+        assignedTrainerTpgEmail: row.assigned_trainer_tpg_email || '',
+        assignedTrainerLocal: filteredLocalPairs.map((trainer) => trainer.name).filter(Boolean).join(', '),
+        assignedTrainerLocalEmail: filteredLocalPairs.map((trainer) => trainer.email).filter(Boolean).join(', '),
+        nextAvailableTrainer,
+        nextAvailableTrainerEmail,
+        latestInvitationStatus,
+        latestInvitationTrainer,
+        numOfTrainee: parseInt(row.num_of_trainee || '0', 10),
+        trainersList: row.trainers_list || '',
+      };
+    });
 
-    if (isValidDate(endDateUntil)) {
-      countQuery += ` AND cr.end_date <= $${countParamIndex}`;
-      countParams.push(parseDDMMYYYY(endDateUntil as string));
-      countParamIndex++;
-    }
-
-    const countResult = await pool.query(countQuery, countParams);
-    const totalCount = parseInt(countResult.rows[0]?.total_count) || 0;
-
-    // Aggregate stats for KPI cards (across all pages, with same filters)
-    let statsQuery = `
-      SELECT
-        COUNT(DISTINCT cr.id) AS total_classes,
-        COUNT(DISTINCT cr.id) FILTER (
-          WHERE COALESCE(
-            NULLIF(BTRIM(cr.assigned_trainer_name), ''),
-            NULLIF(BTRIM(cr.assigned_trainer_email), ''),
-            NULLIF(BTRIM(au.full_name), '')
-          ) IS NOT NULL
-        ) AS total_assigned_classes,
-        COALESCE(SUM(ec.cnt), 0) AS total_trainees,
-        COUNT(DISTINCT COALESCE(cr.assigned_trainer_name, au.full_name)) FILTER (WHERE COALESCE(cr.assigned_trainer_name, au.full_name) IS NOT NULL) AS total_trainers
-      FROM course_run cr
-      JOIN course c ON cr.course_id = c.id
-      LEFT JOIN app_user au ON cr.assigned_trainer_email = au.email
-      LEFT JOIN (SELECT course_run_id, COUNT(*) AS cnt FROM enrollment GROUP BY course_run_id) ec ON ec.course_run_id = cr.id
-      WHERE cr.start_date > CURRENT_DATE
-    `;
-    // Reuse count filters
-    const statsParams = [...countParams];
-    let statsParamIndex = 1;
-    if (search && search !== '') {
-      statsQuery += ` AND (c.title ILIKE $${statsParamIndex} OR c.course_code ILIKE $${statsParamIndex} OR cr.course_run_id ILIKE $${statsParamIndex} OR (EXISTS (SELECT 1 FROM course_run_trainer crt WHERE crt.course_run_id = cr.id AND crt.trainer_name ILIKE $${statsParamIndex})) OR au.full_name ILIKE $${statsParamIndex})`;
-      statsParamIndex++;
-    }
-    if (courseTitle && courseTitle !== '') { statsQuery += ` AND c.title ILIKE $${statsParamIndex}`; statsParamIndex++; }
-    if (courseCode && courseCode !== '') { statsQuery += ` AND c.course_code ILIKE $${statsParamIndex}`; statsParamIndex++; }
-    if (courseRunId && courseRunId !== '') { statsQuery += ` AND cr.course_run_id ILIKE $${statsParamIndex}`; statsParamIndex++; }
-    if (trainer && trainer !== '') { statsQuery += ` AND (EXISTS (SELECT 1 FROM course_run_trainer crt WHERE crt.course_run_id = cr.id AND crt.trainer_name ILIKE $${statsParamIndex}) OR au.full_name ILIKE $${statsParamIndex})`; statsParamIndex++; }
-    if (isValidDate(startDateFrom)) { statsQuery += ` AND cr.start_date >= $${statsParamIndex}`; statsParamIndex++; }
-    if (isValidDate(endDateUntil)) { statsQuery += ` AND cr.end_date <= $${statsParamIndex}`; statsParamIndex++; }
-
-    const statsResult = await pool.query(statsQuery, statsParams);
     const stats = statsResult.rows[0] || {};
-
-    const upcomingClasses: UpcomingClass[] = result.rows.map(row => ({
-      id: row.id,
-      courseRunId: row.course_run_id,
-      courseTitle: row.course_title,
-      courseCode: row.course_code,
-      classStatus: row.class_status,
-      digitalAttendanceId: row.digital_attendance_id,
-      startDate: row.start_date,
-      endDate: row.end_date,
-      trainerName: row.trainer_name || 'No Trainer Assigned',
-      assignedTrainerName: row.assigned_trainer_name || '',
-      assignedTrainerEmail: row.assigned_trainer_email || '',
-      numOfTrainee: parseInt(row.num_of_trainee) || 0,
-    }));
+    const totalCount = parseInt(countResult.rows[0]?.total_count || '0', 10);
 
     res.status(200).json({
       success: true,
@@ -282,14 +359,14 @@ export default async function handler(
         currentPage: pageNum,
         totalPages: Math.ceil(totalCount / limitNum),
         stats: {
-          totalClasses: parseInt(stats.total_classes) || 0,
-          totalAssignedTrainers: parseInt(stats.total_assigned_classes) || 0,
-          totalTrainees: parseInt(stats.total_trainees) || 0,
-          totalTrainers: parseInt(stats.total_trainers) || 0,
+          totalClasses: parseInt(stats.total_classes || '0', 10),
+          totalConfirmedClasses: parseInt(stats.total_confirmed_classes || '0', 10),
+          totalPendingClasses: parseInt(stats.total_pending_classes || '0', 10),
+          totalAssignedTpgClasses: parseInt(stats.total_assigned_tpg_classes || '0', 10),
+          totalAssignedLocalClasses: parseInt(stats.total_assigned_local_classes || '0', 10),
         }
       }
     });
-
   } catch (error) {
     console.error('Error fetching upcoming classes:', error);
     res.status(500).json({

@@ -529,6 +529,13 @@ async function getTrainingProviderProfile(userId: string) {
     if (r.rows.length > 0 && r.rows[0].support_email) supportEmail = r.rows[0].support_email;
   } catch (e) { /* column doesn't exist yet */ }
 
+  let upcomingClassesThresholdDays = 21;
+  try {
+    const r = await pool.query(`SELECT upcoming_classes_threshold_days FROM training_provider WHERE id = $1`, [profileData.provider_id]);
+    const parsed = parseInt(String(r.rows[0]?.upcoming_classes_threshold_days || '21'), 10);
+    if (!Number.isNaN(parsed) && parsed > 0) upcomingClassesThresholdDays = parsed;
+  } catch (e) { /* column doesn't exist yet */ }
+
   // Safely fetch extra integration columns (each group independent so missing columns don't wipe others)
   let refLinks: any = {};
   // Reference links
@@ -637,7 +644,8 @@ async function getTrainingProviderProfile(userId: string) {
       autoSendInvoiceOnGrantSuccess: profileData.auto_send_invoice || false,
       autoSendReceiptOnPayment: profileData.auto_send_receipt || false,
       autoSendCertificateOnCompletion: profileData.auto_send_certificate || false,
-      autoSendThankYouEmail: profileData.auto_send_thankyou_email || false
+      autoSendThankYouEmail: profileData.auto_send_thankyou_email || false,
+      upcomingClassesThresholdDays
     },
     securitySettings: {
       autoMaskSensitiveData: profileData.auto_mask_sensitive_data || false,

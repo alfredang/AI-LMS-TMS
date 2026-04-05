@@ -695,6 +695,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       await autoCreateAndUpdate([
         { name: 'support_email', value: profileData.contactPerson?.email || null },
       ]);
+      // Admin thresholds
+      await autoCreateAndUpdate([
+        { name: 'upcoming_classes_threshold_days', value: String(profileData.adminSettings?.upcomingClassesThresholdDays || 21) },
+      ]);
 
       // Handle API keys - delete existing and insert new ones (with selected model)
       console.log('🔑 Processing API keys...');

@@ -1,5 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
+import { ensureTpgTrainerColumns } from '@/lib/trainerInvitations';
 
 interface ApiResponse {
   success: boolean;
@@ -109,6 +110,7 @@ export default async function handler(
 
     // Ensure junction table
     await ensureJunctionTable();
+    await ensureTpgTrainerColumns((sql, params) => pool.query(sql, params));
 
     // If trainerId is provided, verify it exists in trainer_profile (FK target); create profile if missing
     let resolvedTrainerId = trainerId || null;
@@ -164,11 +166,11 @@ export default async function handler(
 
     // ── Backfill: migrate existing legacy trainer into junction table if not already there ──
     const legacyTrainer = await pool.query(
-      `SELECT assigned_trainer_id, assigned_trainer_name, assigned_trainer_email
+      `SELECT assigned_trainer_id, assigned_trainer_name, assigned_trainer_email, tpg_assigned_trainer_name
        FROM course_run WHERE id = $1`,
       [courseRunUuid]
     );
-    if (legacyTrainer.rows.length > 0 && legacyTrainer.rows[0].assigned_trainer_name) {
+    if (legacyTrainer.rows.length > 0 && legacyTrainer.rows[0].assigned_trainer_name && !legacyTrainer.rows[0].tpg_assigned_trainer_name) {
       const lt = legacyTrainer.rows[0];
       await pool.query(
         `INSERT INTO course_run_trainer (course_run_id, trainer_id, trainer_name, trainer_email)

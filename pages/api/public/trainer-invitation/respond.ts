@@ -1,0 +1,114 @@
+import type { NextApiRequest, NextApiResponse } from 'next';
+import pool from '@lib/db';
+import { ensureTrainerInvitationTable } from '@/lib/trainerInvitations';
+
+function renderPage(title: string, description: string, tone: 'green' | 'red' | 'gray') {
+  const colors = {
+    green: { bg: '#dcfce7', text: '#166534' },
+    red: { bg: '#fee2e2', text: '#991b1b' },
+    gray: { bg: '#e2e8f0', text: '#334155' },
+  }[tone];
+
+  return `<!doctype html>
+  <html>
+    <head>
+      <meta charset="utf-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1" />
+      <title>${title}</title>
+    </head>
+    <body style="margin:0;font-family:Arial,sans-serif;background:#0f172a;color:#e2e8f0;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:24px;">
+      <div style="max-width:560px;width:100%;background:#1e293b;border-radius:16px;padding:32px;box-shadow:0 20px 50px rgba(15,23,42,0.45);">
+        <div style="display:inline-block;padding:8px 12px;border-radius:999px;background:${colors.bg};color:${colors.text};font-weight:700;margin-bottom:16px;">${title}</div>
+        <p style="margin:0;font-size:16px;line-height:1.6;color:#cbd5e1;">${description}</p>
+      </div>
+    </body>
+  </html>`;
+}
+
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  const { token, action } = req.query;
+
+  if (typeof token !== 'string' || !token || (action !== 'accept' && action !== 'decline')) {
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    return res.status(400).send(renderPage('Invalid Invitation', 'This invitation link is invalid or incomplete.', 'red'));
+  }
+
+  try {
+    await ensureTrainerInvitationTable((sql, params) => pool.query(sql, params));
+
+    const invitationResult = await pool.query(
+      `SELECT ti.*, cr.course_run_id
+       FROM trainer_invitation ti
+       JOIN course_run cr ON cr.id = ti.course_run_id
+       WHERE ti.token = $1
+       LIMIT 1`,
+      [token]
+    );
+    const invitation = invitationResult.rows[0];
+
+    if (!invitation) {
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      return res.status(404).send(renderPage('Invitation Not Found', 'This trainer invitation could not be found or may have expired.', 'red'));
+    }
+
+    if (invitation.status !== 'pending') {
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      return res.status(200).send(renderPage('Already Responded', `This invitation for ${invitation.trainer_name} was already marked as ${invitation.status}.`, 'gray'));
+    }
+
+    await pool.query(
+      `UPDATE trainer_invitation
+       SET status = $1, responded_at = NOW(), updated_at = NOW()
+       WHERE id = $2`,
+      [action === 'accept' ? 'accepted' : 'declined', invitation.id]
+    );
+
+    if (action === 'accept') {
+      const trainerLookup = await pool.query(
+        `SELECT au.id
+         FROM app_user au
+         JOIN trainer_profile tp ON tp.user_id = au.id
+         WHERE LOWER(au.email) = LOWER($1) OR LOWER(au.secondary_email) = LOWER($1)
+         LIMIT 1`,
+        [invitation.trainer_email]
+      );
+      const trainerId = trainerLookup.rows[0]?.id || null;
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS course_run_trainer (
+          id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+          course_run_id UUID NOT NULL REFERENCES course_run(id) ON DELETE CASCADE,
+          trainer_id UUID,
+          trainer_name TEXT NOT NULL,
+          trainer_email TEXT,
+          assigned_at TIMESTAMPTZ DEFAULT NOW()
+        )
+      `);
+      await pool.query(`
+        CREATE UNIQUE INDEX IF NOT EXISTS uq_crt_run_trainer
+        ON course_run_trainer(course_run_id, COALESCE(trainer_id, '00000000-0000-0000-0000-000000000000'))
+      `);
+      await pool.query(
+        `INSERT INTO course_run_trainer (course_run_id, trainer_id, trainer_name, trainer_email)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT (course_run_id, COALESCE(trainer_id, '00000000-0000-0000-0000-000000000000'))
+         DO UPDATE SET trainer_name = EXCLUDED.trainer_name, trainer_email = EXCLUDED.trainer_email`,
+        [invitation.course_run_id, trainerId, invitation.trainer_name, invitation.trainer_email]
+      );
+    }
+
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    return res.status(200).send(
+      renderPage(
+        action === 'accept' ? 'Invitation Accepted' : 'Invitation Declined',
+        action === 'accept'
+          ? `You have accepted the trainer invitation for course run ${invitation.course_run_id}.`
+          : `You have declined the trainer invitation for course run ${invitation.course_run_id}.`,
+        action === 'accept' ? 'green' : 'red'
+      )
+    );
+  } catch (error) {
+    console.error('Error responding to trainer invitation:', error);
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    return res.status(500).send(renderPage('Request Failed', 'We could not process your trainer invitation response.', 'red'));
+  }
+}

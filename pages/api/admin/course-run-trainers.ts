@@ -1,5 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
+import { ensureTpgTrainerColumns } from '@/lib/trainerInvitations';
 
 /**
  * GET /api/admin/course-run-trainers?courseRunUuid=<uuid>
@@ -38,6 +39,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     await ensureTable();
+    await ensureTpgTrainerColumns((sql, params) => pool.query(sql, params));
 
     const result = await pool.query(
       `SELECT id, course_run_id, trainer_id, trainer_name, trainer_email, assigned_at
@@ -50,11 +52,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // If junction table is empty for this run, backfill from legacy columns
     if (result.rows.length === 0) {
       const legacy = await pool.query(
-        `SELECT assigned_trainer_id, assigned_trainer_name, assigned_trainer_email
+        `SELECT assigned_trainer_id, assigned_trainer_name, assigned_trainer_email, tpg_assigned_trainer_name
          FROM course_run WHERE id = $1`,
         [courseRunUuid]
       );
-      if (legacy.rows.length > 0 && legacy.rows[0].assigned_trainer_name) {
+      if (legacy.rows.length > 0 && legacy.rows[0].assigned_trainer_name && !legacy.rows[0].tpg_assigned_trainer_name) {
         const lt = legacy.rows[0];
         await pool.query(
           `INSERT INTO course_run_trainer (course_run_id, trainer_id, trainer_name, trainer_email)
