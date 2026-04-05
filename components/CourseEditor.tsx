@@ -328,6 +328,8 @@ const CourseEditor: React.FC = () => {
     const [isGeneratingImage, setIsGeneratingImage] = useState(false);
     const [availableTrainers, setAvailableTrainers] = useState<TrainerOption[]>([]);
     const [trainerSearch, setTrainerSearch] = useState('');
+    const [draggedApprovedTrainer, setDraggedApprovedTrainer] = useState<string | null>(null);
+    const [approvedTrainerDropTarget, setApprovedTrainerDropTarget] = useState<string | null>(null);
 
     // State to track preview URL for cleanup
     const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
@@ -430,11 +432,16 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
 
     useEffect(() => {
         if (!editingCourse) return;
+
+        const normalizedApprovedTrainers = (editingCourse.approvedTrainers || [])
+            .map((trainer: string) => normalizeApprovedTrainerName(trainer))
+            .filter(Boolean);
+
         setCourse(prev => {
             if (
                 prev.skillsfutureLink === editingCourse.skillsfutureLink &&
                 prev.brochureLink === editingCourse.brochureLink &&
-                JSON.stringify(prev.approvedTrainers || []) === JSON.stringify(editingCourse.approvedTrainers || [])
+                JSON.stringify(prev.approvedTrainers || []) === JSON.stringify(normalizedApprovedTrainers)
             ) {
                 return prev;
             }
@@ -442,22 +449,29 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                 ...prev,
                 skillsfutureLink: editingCourse.skillsfutureLink,
                 brochureLink: editingCourse.brochureLink,
-                approvedTrainers: editingCourse.approvedTrainers || [],
-                numOfTrainers: editingCourse.numOfTrainers || 0,
-                trainersList: editingCourse.trainersList || '',
+                approvedTrainers: normalizedApprovedTrainers,
+                numOfTrainers: normalizedApprovedTrainers.length,
+                trainersList: normalizedApprovedTrainers.join(', '),
             };
         });
     }, [editingCourse]);
 
-    const selectedApprovedTrainers = course.approvedTrainers || [];
+    const normalizeApprovedTrainerName = (trainerName: string) =>
+        String(trainerName || '')
+            .replace(/\s*[\[<(]?[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}[\]>)]?/gi, '')
+            .replace(/\s{2,}/g, ' ')
+            .trim();
+
+    const selectedApprovedTrainers = (course.approvedTrainers || []).map(normalizeApprovedTrainerName).filter(Boolean);
     const availableTrainerChoices = availableTrainers.filter(trainer => {
         const matchesSearch = !trainerSearch || trainer.trainer_name.toLowerCase().includes(trainerSearch.toLowerCase()) || trainer.email.toLowerCase().includes(trainerSearch.toLowerCase());
         return matchesSearch && !selectedApprovedTrainers.includes(trainer.trainer_name);
     });
 
     const addApprovedTrainer = (trainerName: string) => {
-        if (!trainerName || selectedApprovedTrainers.includes(trainerName)) return;
-        const updated = [...selectedApprovedTrainers, trainerName];
+        const normalizedTrainerName = normalizeApprovedTrainerName(trainerName);
+        if (!normalizedTrainerName || selectedApprovedTrainers.includes(normalizedTrainerName)) return;
+        const updated = [...selectedApprovedTrainers, normalizedTrainerName];
         setCourse(prev => ({
             ...prev,
             approvedTrainers: updated,
@@ -468,13 +482,49 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
     };
 
     const removeApprovedTrainer = (trainerName: string) => {
-        const updated = selectedApprovedTrainers.filter(name => name !== trainerName);
+        const normalizedTrainerName = normalizeApprovedTrainerName(trainerName);
+        const updated = selectedApprovedTrainers.filter(name => name !== normalizedTrainerName);
         setCourse(prev => ({
             ...prev,
             approvedTrainers: updated,
             numOfTrainers: updated.length,
             trainersList: updated.join(', ')
         }));
+    };
+
+    const reorderApprovedTrainers = (draggedName: string, targetName: string) => {
+        if (!draggedName || !targetName || draggedName === targetName) return;
+
+        const draggedIndex = selectedApprovedTrainers.indexOf(draggedName);
+        const targetIndex = selectedApprovedTrainers.indexOf(targetName);
+        if (draggedIndex < 0 || targetIndex < 0) return;
+
+        const updated = [...selectedApprovedTrainers];
+        const [movedTrainer] = updated.splice(draggedIndex, 1);
+        updated.splice(targetIndex, 0, movedTrainer);
+
+        setCourse(prev => ({
+            ...prev,
+            approvedTrainers: updated,
+            numOfTrainers: updated.length,
+            trainersList: updated.join(', ')
+        }));
+    };
+
+    const handleApprovedTrainerDragStart = (trainerName: string) => {
+        setDraggedApprovedTrainer(trainerName);
+    };
+
+    const handleApprovedTrainerDragEnd = () => {
+        setDraggedApprovedTrainer(null);
+        setApprovedTrainerDropTarget(null);
+    };
+
+    const handleApprovedTrainerDrop = (targetTrainerName: string) => {
+        if (draggedApprovedTrainer) {
+            reorderApprovedTrainers(draggedApprovedTrainer, targetTrainerName);
+        }
+        handleApprovedTrainerDragEnd();
     };
 
     // Clean up invalid blob URLs from database when editing existing courses
@@ -1794,7 +1844,30 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                     {selectedApprovedTrainers.length > 0 ? (
                                         <div className="flex flex-wrap gap-2">
                                             {selectedApprovedTrainers.map((trainerName) => (
-                                                <span key={trainerName} className="inline-flex items-center gap-2 rounded-full bg-blue-100 px-3 py-1 text-sm text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
+                                                <span
+                                                    key={trainerName}
+                                                    draggable
+                                                    onDragStart={() => handleApprovedTrainerDragStart(trainerName)}
+                                                    onDragEnd={handleApprovedTrainerDragEnd}
+                                                    onDragOver={(e) => {
+                                                        e.preventDefault();
+                                                        if (trainerName !== draggedApprovedTrainer) {
+                                                            setApprovedTrainerDropTarget(trainerName);
+                                                        }
+                                                    }}
+                                                    onDragLeave={() => {
+                                                        if (approvedTrainerDropTarget === trainerName) {
+                                                            setApprovedTrainerDropTarget(null);
+                                                        }
+                                                    }}
+                                                    onDrop={() => handleApprovedTrainerDrop(trainerName)}
+                                                    className={`inline-flex cursor-grab items-center gap-2 rounded-full px-3 py-1 text-sm ${
+                                                        approvedTrainerDropTarget === trainerName
+                                                            ? 'bg-blue-200 text-blue-900 dark:bg-blue-800/60 dark:text-blue-100'
+                                                            : 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300'
+                                                    } ${draggedApprovedTrainer === trainerName ? 'opacity-60' : ''}`}
+                                                    title="Drag to reorder trainer"
+                                                >
                                                     {trainerName}
                                                     <button
                                                         type="button"

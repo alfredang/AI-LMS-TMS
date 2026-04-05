@@ -39,6 +39,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                     tp.certification_tags
                 FROM app_user au
                 INNER JOIN trainer_profile tp ON tp.user_id = au.id
+                INNER JOIN user_role_map urm ON urm.user_id = au.id AND urm.role = 'Trainer'
                 ORDER BY au.full_name;
             `;
 
