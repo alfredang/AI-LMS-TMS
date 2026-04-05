@@ -13,6 +13,10 @@ Congratulations on successfully completing the course {COURSE_NAME}! We are trul
 
 Please find attached your Certificate of Achievement in recognition of your accomplishment.
 
+You can also download your certificate here: {CERTIFICATE_URL}
+
+You may also view and download your certificate anytime from your Profile in the LMS portal.
+
 Your commitment to learning and professional growth is commendable, and we wish you continued success in applying your new skills.
 
 For learners who have achieved at least 75% attendance and passed their assessment for WSQ courses, they can view and download their WSQ SOA (Statement of Attainment) through http://www.MySkillsFuture.gov.sg.
@@ -125,6 +129,7 @@ const CertificateEmailTemplateView: React.FC = () => {
     { name: '{COMPANY_NAME}', desc: 'Your company name from Company Settings' },
     { name: '{COMPANY_SHORT_NAME}', desc: 'Your short company name' },
     { name: '{COMPANY_WEBSITE}', desc: 'Your company website URL' },
+    { name: '{CERTIFICATE_URL}', desc: 'Google Drive download link for the certificate' },
   ];
 
   const companyName = trainingProviderProfile?.companyName || 'Training Provider';
@@ -137,7 +142,8 @@ const CertificateEmailTemplateView: React.FC = () => {
       .replace(/\{COURSE_NAME\}/g, 'WSQ Advanced Certificate in AI')
       .replace(/\{COMPANY_NAME\}/g, companyName)
       .replace(/\{COMPANY_SHORT_NAME\}/g, companyShortName)
-      .replace(/\{COMPANY_WEBSITE\}/g, companyWebsite);
+      .replace(/\{COMPANY_WEBSITE\}/g, companyWebsite)
+      .replace(/\{CERTIFICATE_URL\}/g, 'https://drive.google.com/file/d/example/view');
 
   const previewSubject = replaceVars(subject);
   const previewBody = replaceVars(body);

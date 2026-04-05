@@ -137,7 +137,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       .replace(/\{COURSE_NAME\}/g, courseName)
       .replace(/\{COMPANY_NAME\}/g, tp.name || 'Training Provider')
       .replace(/\{COMPANY_SHORT_NAME\}/g, tp.companyShortname || tp.name || 'Training Provider')
-      .replace(/\{COMPANY_WEBSITE\}/g, tp.companyWebsite || '');
+      .replace(/\{COMPANY_WEBSITE\}/g, tp.companyWebsite || '')
+      .replace(/\{CERTIFICATE_URL\}/g, '');
 
     const defaultBody = `Hello {STUDENT_NAME},
 
@@ -163,7 +164,8 @@ Tel: 61000613 | Email: support@tertiaryinfotech.com | WhatsApp: https://wa.me/65
       .replace(/\{COURSE_NAME\}/g, courseName)
       .replace(/\{COMPANY_NAME\}/g, tp.name || 'Training Provider')
       .replace(/\{COMPANY_SHORT_NAME\}/g, tp.companyShortname || tp.name || 'Training Provider')
-      .replace(/\{COMPANY_WEBSITE\}/g, tp.companyWebsite || '');
+      .replace(/\{COMPANY_WEBSITE\}/g, tp.companyWebsite || '')
+      .replace(/\{CERTIFICATE_URL\}/g, '');
 
     const htmlBody = `
       <div style="font-family: Arial, sans-serif; color: #333;">

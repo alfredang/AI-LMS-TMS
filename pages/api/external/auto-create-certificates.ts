@@ -70,8 +70,9 @@ async function sendCertificateEmail(opts: {
     studentEmail: string;
     courseName: string;
     courseDates: string;
+    certificateUrl?: string;
 }): Promise<void> {
-    const { studentName, studentEmail, courseName, courseDates } = opts;
+    const { studentName, studentEmail, courseName, courseDates, certificateUrl } = opts;
     const tp = await getTrainingPartnerIdentifiers();
 
     // Get training provider Google credentials
@@ -132,20 +133,18 @@ async function sendCertificateEmail(opts: {
         const senderName = tpRow.contact_person_name || '';
         const emailUser = tpRow.email_user;
 
-        const subject = (tpRow.certificate_email_subject || 'Certificate for Completing {COURSE_NAME}')
+        const replacePlaceholders = (text: string) => text
             .replace(/\{STUDENT_NAME\}/g, studentName)
             .replace(/\{COURSE_NAME\}/g, courseName)
             .replace(/\{COMPANY_NAME\}/g, tp.name || 'Training Provider')
             .replace(/\{COMPANY_SHORT_NAME\}/g, tp.companyShortname || tp.name || 'Training Provider')
-            .replace(/\{COMPANY_WEBSITE\}/g, tp.companyWebsite || '');
+            .replace(/\{COMPANY_WEBSITE\}/g, tp.companyWebsite || '')
+            .replace(/\{CERTIFICATE_URL\}/g, certificateUrl || '');
 
-        const defaultBody = `Hello {STUDENT_NAME},\n\nCongratulations on successfully completing the course {COURSE_NAME}! We are truly proud of your perseverance, dedication, and motivation throughout the program.\n\nPlease find attached your Certificate of Achievement in recognition of your accomplishment.\n\nYour commitment to learning and professional growth is commendable, and we wish you continued success in applying your new skills.\n\nFor learners who have achieved at least 75% attendance and passed their assessment for WSQ courses, they can view and download their WSQ SOA (Statement of Attainment) through http://www.MySkillsFuture.gov.sg.\n\nPlease note that SkillsFuture Singapore uses OpenCerts certificates to issue the WSQ Statements of Attainment (SOA). The OpenCerts will be ready for viewing/downloading 4-5 weeks upon completion of WSQ courses.\n\nFeel free to let me know if you need anything else. Thank you.\n\nBest regards,\nSupport Team\n{COMPANY_SHORT_NAME}\nTel: 61000613 | Email: support@tertiaryinfotech.com | WhatsApp: https://wa.me/6561000613`;
-        const bodyText = (tpRow.certificate_email_body || defaultBody)
-            .replace(/\{STUDENT_NAME\}/g, studentName)
-            .replace(/\{COURSE_NAME\}/g, courseName)
-            .replace(/\{COMPANY_NAME\}/g, tp.name || 'Training Provider')
-            .replace(/\{COMPANY_SHORT_NAME\}/g, tp.companyShortname || tp.name || 'Training Provider')
-            .replace(/\{COMPANY_WEBSITE\}/g, tp.companyWebsite || '');
+        const subject = replacePlaceholders(tpRow.certificate_email_subject || 'Certificate for Completing {COURSE_NAME}');
+
+        const defaultBody = `Hello {STUDENT_NAME},\n\nCongratulations on successfully completing the course {COURSE_NAME}! We are truly proud of your perseverance, dedication, and motivation throughout the program.\n\nPlease find attached your Certificate of Achievement in recognition of your accomplishment.\n\nYou can also download your certificate here: {CERTIFICATE_URL}\n\nYou may also view and download your certificate anytime from your Profile in the LMS portal.\n\nYour commitment to learning and professional growth is commendable, and we wish you continued success in applying your new skills.\n\nFor learners who have achieved at least 75% attendance and passed their assessment for WSQ courses, they can view and download their WSQ SOA (Statement of Attainment) through http://www.MySkillsFuture.gov.sg.\n\nPlease note that SkillsFuture Singapore uses OpenCerts certificates to issue the WSQ Statements of Attainment (SOA). The OpenCerts will be ready for viewing/downloading 4-5 weeks upon completion of WSQ courses.\n\nFeel free to let me know if you need anything else. Thank you.\n\nBest regards,\nSupport Team\n{COMPANY_SHORT_NAME}\nTel: 61000613 | Email: support@tertiaryinfotech.com | WhatsApp: https://wa.me/6561000613`;
+        const bodyText = replacePlaceholders(tpRow.certificate_email_body || defaultBody);
 
         const htmlBody = `<div style="font-family: Arial, sans-serif; color: #333;">${bodyText.split('\n').map(line => line.trim() ? `<p>${line}</p>` : '<br/>').join('\n')}</div>`;
 
@@ -281,6 +280,7 @@ export async function runAutomation(targetDate?: string) {
                                     studentEmail: trainee.learner_email,
                                     courseName: run.course_title,
                                     courseDates: run.course_dates || '',
+                                    certificateUrl,
                                 });
                                 console.log(`[auto-create-certificates] Certificate emailed to ${trainee.learner_email}`);
                             } catch (emailErr: any) {
