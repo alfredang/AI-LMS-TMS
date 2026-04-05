@@ -678,6 +678,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       await autoCreateAndUpdate([
         { name: 'magento_backend_url', value: profileData.integrations?.magentoBackendUrl || null },
       ]);
+      // Google Drive extras
+      await autoCreateAndUpdate([
+        { name: 'trainer_profile_image_url', value: profileData.integrations?.trainerProfileImageUrl || null },
+      ]);
       // OpenClaw / Orion
       await autoCreateAndUpdate([
         { name: 'openclaw_mode', value: profileData.integrations?.openClawMode || 'live' },

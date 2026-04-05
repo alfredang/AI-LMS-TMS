@@ -127,7 +127,7 @@ const ToggleSwitch: React.FC<{
     if (!isEditing) {
         return (
             <div className="flex justify-between items-center p-3 bg-surface-elevated rounded-md border border-default">
-                <span className="text-sm text-on-surface">{label}</span>
+                <span className="text-sm font-bold text-on-surface">{label}</span>
                 <span className={`text-sm font-medium ${checked ? 'text-green-500' : 'text-gray-400'}`}>
                     {checked ? 'Enabled' : 'Disabled'}
                 </span>
@@ -137,7 +137,7 @@ const ToggleSwitch: React.FC<{
 
     return (
         <div className="flex justify-between items-center p-3 bg-surface-elevated rounded-md border border-default">
-            <label className="text-sm text-on-surface flex-grow cursor-pointer" onClick={() => onChange(!checked)}>
+            <label className="text-sm font-bold text-on-surface flex-grow cursor-pointer" onClick={() => onChange(!checked)}>
                 {label}
             </label>
             <button
@@ -838,45 +838,12 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                     <div className="p-4 bg-surface-elevated rounded-lg border border-default">
                         <h3 className="text-lg font-bold text-on-surface mb-4">Google</h3>
                         <div className="space-y-4">
-                            <ToggleSwitch
-                                checked={formData.integrations.syncGoogleCalendar}
-                                onChange={(checked) => handleToggleChange('integrations', 'syncGoogleCalendar')}
-                                label="Set Calendar"
-                                isEditing={isEditing}
-                            />
-                            {formData.integrations.syncGoogleCalendar && (
+                            {/* Gmail Configuration */}
+                            <div className="space-y-3">
+                                <h4 className="text-sm font-bold text-on-surface pl-3">Gmail</h4>
                                 <div className="p-3 bg-surface rounded-md border border-default ml-4">
-                                    <label className="block text-sm font-medium text-on-surface-secondary mb-1">
-                                        Calendar Embed URL
-                                    </label>
-                                    {isEditing ? (
-                                        <input
-                                            type="text"
-                                            value={formData.integrations.googleCalendarUrl || ''}
-                                            onChange={(e) =>
-                                                setFormData((prev) => ({
-                                                    ...prev,
-                                                    integrations: {
-                                                        ...prev.integrations,
-                                                        googleCalendarUrl: e.target.value,
-                                                    },
-                                                }))
-                                            }
-                                            className={inputClasses}
-                                            placeholder="Paste your calendar embed URL (Google Calendar, Outlook, etc.)"
-                                        />
-                                    ) : (
-                                        <p className="text-sm text-on-surface truncate">
-                                            {formData.integrations.googleCalendarUrl || 'Not Set'}
-                                        </p>
-                                    )}
-                                </div>
-                            )}
-
-                            {/* Email Configuration */}
-                            <div className="p-3 bg-surface rounded-md border border-default">
-                                <h4 className="text-sm font-bold text-on-surface mb-3">Email Configuration (Google OAuth2)</h4>
-                                <div className="space-y-3">
+                                    <h4 className="text-sm font-bold text-on-surface mb-3">Email Configuration (Google OAuth2)</h4>
+                                    <div className="space-y-3">
                                     {[
                                         { key: 'emailUser', label: 'Email User', placeholder: 'e.g. sales@yourcompany.com', isSecret: false },
                                         { key: 'googleClientId', label: 'Google Client ID', placeholder: 'From Google Cloud Console', isSecret: false },
@@ -941,212 +908,286 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                             )}
                                         </div>
                                     ))}
+                                    </div>
                                 </div>
                             </div>
 
-                            {/* Certificate Folder */}
-                            <div>
-                                <label className="block text-sm font-medium text-on-surface-secondary mb-1">Certificate Folder URL</label>
-                                {isEditing ? (
-                                    <input
-                                        type="text"
-                                        value={formData.integrations.certificateFolderUrl || ''}
-                                        onChange={(e) =>
-                                            setFormData((prev) => ({
-                                                ...prev,
-                                                integrations: {
-                                                    ...prev.integrations,
-                                                    certificateFolderUrl: e.target.value,
-                                                },
-                                            }))
-                                        }
-                                        className={inputClasses}
-                                        placeholder="Google Drive folder URL for storing certificates"
-                                    />
-                                ) : (
-                                    <p className="text-sm text-on-surface truncate">
-                                        {formData.integrations.certificateFolderUrl || 'Not Set'}
-                                    </p>
-                                )}
+                            {/* Google Sheet Configuration */}
+                            <div className="space-y-3">
+                                <h4 className="text-sm font-bold text-on-surface pl-3">Google Sheet</h4>
+                                <div className="p-3 bg-surface rounded-md border border-default ml-4">
+                                    <div className="space-y-3">
+                                        {[
+                                            { key: 'masterListUrl' as const, label: 'Master List' },
+                                            { key: 'tertiaryTmsUrl' as const, label: 'Tertiary TMS' },
+                                            { key: 'tertiaryFmsUrl' as const, label: 'Tertiary FMS' },
+                                            { key: 'tertiaryMmsUrl' as const, label: 'Tertiary MMS' },
+                                            { key: 'tertiaryTpmsUrl' as const, label: 'Tertiary TPMS' },
+                                        ].map(({ key, label }) => (
+                                            <div key={key}>
+                                                <label className="block text-sm font-medium text-on-surface-secondary mb-1">{label}</label>
+                                                {isEditing ? (
+                                                    <input
+                                                        type="text"
+                                                        value={formData.integrations[key] || ''}
+                                                        onChange={(e) =>
+                                                            setFormData((prev) => ({
+                                                                ...prev,
+                                                                integrations: {
+                                                                    ...prev.integrations,
+                                                                    [key]: e.target.value,
+                                                                },
+                                                            }))
+                                                        }
+                                                        className={inputClasses}
+                                                        placeholder={`${label} URL`}
+                                                    />
+                                                ) : (
+                                                    <p className="text-sm text-on-surface truncate">
+                                                        {formData.integrations[key] ? (
+                                                            <a href={formData.integrations[key]} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">
+                                                                {formData.integrations[key]}
+                                                            </a>
+                                                        ) : 'Not Set'}
+                                                    </p>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
                             </div>
-                        </div>
-                    </div>
 
-                    {/* ===== n8n Subsection ===== */}
-                    <div className="p-4 bg-surface-elevated rounded-lg border border-default">
-                        <h3 className="text-lg font-bold text-on-surface mb-4">OpenClaw / Orion</h3>
-                        <div className="space-y-3">
-                            <div>
-                                <label className="block text-sm font-medium text-on-surface-secondary mb-1">Mode</label>
-                                {isEditing ? (
-                                    <select
-                                        value={formData.integrations.openClawMode || 'live'}
-                                        onChange={(e) =>
-                                            setFormData((prev) => ({
-                                                ...prev,
-                                                integrations: {
-                                                    ...prev.integrations,
-                                                    openClawMode: e.target.value as 'live' | 'local',
-                                                },
-                                            }))
-                                        }
-                                        className={inputClasses}
-                                    >
-                                        <option value="live">Remote Live Mode</option>
-                                        <option value="local">Local Test Mode</option>
-                                    </select>
-                                ) : (
-                                    <p className="text-sm text-on-surface">
-                                        {formData.integrations.openClawMode === 'local' ? 'Local Test Mode' : 'Remote Live Mode'}
-                                    </p>
-                                )}
+                            {/* Google Drive Configuration */}
+                            <div className="space-y-3">
+                                <h4 className="text-sm font-bold text-on-surface pl-3">Google Drive</h4>
+                                <div className="p-3 bg-surface rounded-md border border-default ml-4">
+                                    <div className="space-y-3">
+                                        <div>
+                                            <label className="block text-sm font-medium text-on-surface-secondary mb-1">Trainre Profile Image Folder</label>
+                                            {isEditing ? (
+                                                <input
+                                                    type="text"
+                                                    value={formData.integrations.trainerProfileImageUrl || ''}
+                                                    onChange={(e) =>
+                                                        setFormData((prev) => ({
+                                                            ...prev,
+                                                            integrations: {
+                                                                ...prev.integrations,
+                                                                trainerProfileImageUrl: e.target.value,
+                                                            },
+                                                        }))
+                                                    }
+                                                    className={inputClasses}
+                                                    placeholder="Google Drive URL for trainer profile images"
+                                                />
+                                            ) : (
+                                                <p className="text-sm text-on-surface truncate">
+                                                    {formData.integrations.trainerProfileImageUrl || 'Not Set'}
+                                                </p>
+                                            )}
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-on-surface-secondary mb-1">Certificate Folder</label>
+                                            {isEditing ? (
+                                                <input
+                                                    type="text"
+                                                    value={formData.integrations.certificateFolderUrl || ''}
+                                                    onChange={(e) =>
+                                                        setFormData((prev) => ({
+                                                            ...prev,
+                                                            integrations: {
+                                                                ...prev.integrations,
+                                                                certificateFolderUrl: e.target.value,
+                                                            },
+                                                        }))
+                                                    }
+                                                    className={inputClasses}
+                                                    placeholder="Google Drive folder URL for storing certificates"
+                                                />
+                                            ) : (
+                                                <p className="text-sm text-on-surface truncate">
+                                                    {formData.integrations.certificateFolderUrl || 'Not Set'}
+                                                </p>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
-                            {[
-                                { key: 'openClawGatewayUrl' as const, label: 'Live Gateway URL', placeholder: 'e.g. http://10.0.0.1:18789' },
-                                { key: 'openClawLocalGatewayUrl' as const, label: 'Local Testing URL', placeholder: 'e.g. http://76.13.180.29:18789' },
-                                { key: 'openClawHooksPath' as const, label: 'Hooks Path', placeholder: 'e.g. /hooks' },
-                                { key: 'openClawAgentId' as const, label: 'Agent ID', placeholder: 'e.g. main' },
-                                { key: 'openClawCallbackUrl' as const, label: 'Callback URL', placeholder: 'e.g. https://your-app.example.com/api/openclaw/callback' },
-                            ].map(({ key, label, placeholder }) => (
-                                <div key={key}>
-                                    <label className="block text-sm font-medium text-on-surface-secondary mb-1">{label}</label>
+
+                            <ToggleSwitch
+                                checked={formData.integrations.syncGoogleCalendar}
+                                onChange={(checked) => handleToggleChange('integrations', 'syncGoogleCalendar')}
+                                label="Calendar"
+                                isEditing={isEditing}
+                            />
+                            {formData.integrations.syncGoogleCalendar && (
+                                <div className="p-3 bg-surface rounded-md border border-default ml-4">
+                                    <label className="block text-sm font-medium text-on-surface-secondary mb-1">
+                                        Calendar Embed URL
+                                    </label>
                                     {isEditing ? (
                                         <input
                                             type="text"
-                                            value={(formData.integrations as any)[key] || ''}
+                                            value={formData.integrations.googleCalendarUrl || ''}
                                             onChange={(e) =>
                                                 setFormData((prev) => ({
                                                     ...prev,
                                                     integrations: {
                                                         ...prev.integrations,
-                                                        [key]: e.target.value,
+                                                        googleCalendarUrl: e.target.value,
                                                     },
                                                 }))
                                             }
                                             className={inputClasses}
-                                            placeholder={placeholder}
+                                            placeholder="Paste your calendar embed URL (Google Calendar, Outlook, etc.)"
                                         />
                                     ) : (
                                         <p className="text-sm text-on-surface truncate">
-                                            {(formData.integrations as any)[key] ? (
-                                                <a href={(formData.integrations as any)[key]} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">
-                                                    {(formData.integrations as any)[key]}
-                                                </a>
-                                            ) : 'Not Set'}
+                                            {formData.integrations.googleCalendarUrl || 'Not Set'}
                                         </p>
                                     )}
                                 </div>
-                            ))}
-                        </div>
-                    </div>
+                            )}
 
-                    {/* ===== n8n Subsection ===== */}
-                    <div className="p-4 bg-surface-elevated rounded-lg border border-default">
-                        <h3 className="text-lg font-bold text-on-surface mb-4">n8n</h3>
-                        <div className="space-y-3">
-                            {[
-                                { key: 'n8nHost1Url' as const, label: 'Host 1 URL', placeholder: 'e.g. https://n8n-host1.example.com' },
-                                { key: 'n8nHost2Url' as const, label: 'Host 2 URL', placeholder: 'e.g. https://n8n-host2.example.com' },
-                            ].map(({ key, label, placeholder }) => (
-                                <div key={key}>
-                                    <label className="block text-sm font-medium text-on-surface-secondary mb-1">{label}</label>
-                                    {isEditing ? (
-                                        <input
-                                            type="text"
-                                            value={(formData.integrations as any)[key] || ''}
-                                            onChange={(e) =>
-                                                setFormData((prev) => ({
-                                                    ...prev,
-                                                    integrations: {
-                                                        ...prev.integrations,
-                                                        [key]: e.target.value,
-                                                    },
-                                                }))
-                                            }
-                                            className={inputClasses}
-                                            placeholder={placeholder}
-                                        />
-                                    ) : (
-                                        <p className="text-sm text-on-surface truncate">
-                                            {(formData.integrations as any)[key] || 'Not Set'}
-                                        </p>
-                                    )}
+                            {/* Nemo OpenClaw Configuration */}
+                            <div className="space-y-3">
+                                <h4 className="text-sm font-bold text-on-surface pl-3">Nemo OpenClaw</h4>
+                                <div className="p-3 bg-surface rounded-md border border-default ml-4">
+                                    <div className="space-y-3">
+                                        <div>
+                                            <label className="block text-sm font-medium text-on-surface-secondary mb-1">Mode</label>
+                                            {isEditing ? (
+                                                <select
+                                                    value={formData.integrations.openClawMode || 'live'}
+                                                    onChange={(e) =>
+                                                        setFormData((prev) => ({
+                                                            ...prev,
+                                                            integrations: {
+                                                                ...prev.integrations,
+                                                                openClawMode: e.target.value as 'live' | 'local',
+                                                            },
+                                                        }))
+                                                    }
+                                                    className={inputClasses}
+                                                >
+                                                    <option value="live">Remote Live Mode</option>
+                                                    <option value="local">Local Test Mode</option>
+                                                </select>
+                                            ) : (
+                                                <p className="text-sm text-on-surface">
+                                                    {formData.integrations.openClawMode === 'local' ? 'Local Test Mode' : 'Remote Live Mode'}
+                                                </p>
+                                            )}
+                                        </div>
+                                        {[
+                                            { key: 'openClawGatewayUrl' as const, label: 'Live Gateway URL', placeholder: 'e.g. http://10.0.0.1:18789' },
+                                            { key: 'openClawLocalGatewayUrl' as const, label: 'Local Testing URL', placeholder: 'e.g. http://76.13.180.29:18789' },
+                                            { key: 'openClawHooksPath' as const, label: 'Hooks Path', placeholder: 'e.g. /hooks' },
+                                            { key: 'openClawAgentId' as const, label: 'Agent ID', placeholder: 'e.g. main' },
+                                            { key: 'openClawCallbackUrl' as const, label: 'Callback URL', placeholder: 'e.g. https://your-app.example.com/api/openclaw/callback' },
+                                        ].map(({ key, label, placeholder }) => (
+                                            <div key={key}>
+                                                <label className="block text-sm font-medium text-on-surface-secondary mb-1">{label}</label>
+                                                {isEditing ? (
+                                                    <input
+                                                        type="text"
+                                                        value={(formData.integrations as any)[key] || ''}
+                                                        onChange={(e) =>
+                                                            setFormData((prev) => ({
+                                                                ...prev,
+                                                                integrations: {
+                                                                    ...prev.integrations,
+                                                                    [key]: e.target.value,
+                                                                },
+                                                            }))
+                                                        }
+                                                        className={inputClasses}
+                                                        placeholder={placeholder}
+                                                    />
+                                                ) : (
+                                                    <p className="text-sm text-on-surface truncate">
+                                                        {(formData.integrations as any)[key] ? (
+                                                            <a href={(formData.integrations as any)[key]} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">
+                                                                {(formData.integrations as any)[key]}
+                                                            </a>
+                                                        ) : 'Not Set'}
+                                                    </p>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
                                 </div>
-                            ))}
-                        </div>
-                    </div>
-
-                    {/* ===== Magento Subsection ===== */}
-                    <div className="p-4 bg-surface-elevated rounded-lg border border-default">
-                        <h3 className="text-lg font-bold text-on-surface mb-4">Magento</h3>
-                        <div className="space-y-3">
-                            <div>
-                                <label className="block text-sm font-medium text-on-surface-secondary mb-1">Magento Backend URL</label>
-                                {isEditing ? (
-                                    <input
-                                        type="text"
-                                        value={(formData.integrations as any).magentoBackendUrl || ''}
-                                        onChange={(e) =>
-                                            setFormData((prev) => ({
-                                                ...prev,
-                                                integrations: {
-                                                    ...prev.integrations,
-                                                    magentoBackendUrl: e.target.value,
-                                                },
-                                            }))
-                                        }
-                                        className={inputClasses}
-                                        placeholder="e.g. https://magento.example.com/admin"
-                                    />
-                                ) : (
-                                    <p className="text-sm text-on-surface truncate">
-                                        {(formData.integrations as any).magentoBackendUrl || 'Not Set'}
-                                    </p>
-                                )}
                             </div>
-                        </div>
-                    </div>
 
-                    {/* ===== Reference Subsection ===== */}
-                    <div className="p-4 bg-surface-elevated rounded-lg border border-default">
-                        <h3 className="text-lg font-bold text-on-surface mb-4">Reference</h3>
-                        <div className="space-y-3">
-                            {[
-                                { key: 'masterListUrl' as const, label: 'Master List' },
-                                { key: 'tertiaryTmsUrl' as const, label: 'Tertiary TMS' },
-                                { key: 'tertiaryFmsUrl' as const, label: 'Tertiary FMS' },
-                                { key: 'tertiaryMmsUrl' as const, label: 'Tertiary MMS' },
-                                { key: 'tertiaryTpmsUrl' as const, label: 'Tertiary TPMS' },
-                            ].map(({ key, label }) => (
-                                <div key={key}>
-                                    <label className="block text-sm font-medium text-on-surface-secondary mb-1">{label}</label>
-                                    {isEditing ? (
-                                        <input
-                                            type="text"
-                                            value={formData.integrations[key] || ''}
-                                            onChange={(e) =>
-                                                setFormData((prev) => ({
-                                                    ...prev,
-                                                    integrations: {
-                                                        ...prev.integrations,
-                                                        [key]: e.target.value,
-                                                    },
-                                                }))
-                                            }
-                                            className={inputClasses}
-                                            placeholder={`${label} URL`}
-                                        />
-                                    ) : (
-                                        <p className="text-sm text-on-surface truncate">
-                                            {formData.integrations[key] ? (
-                                                <a href={formData.integrations[key]} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">
-                                                    {formData.integrations[key]}
-                                                </a>
-                                            ) : 'Not Set'}
-                                        </p>
-                                    )}
+                            {/* Magento Configuration */}
+                            <div className="space-y-3">
+                                <h4 className="text-sm font-bold text-on-surface pl-3">Magento</h4>
+                                <div className="p-3 bg-surface rounded-md border border-default ml-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-on-surface-secondary mb-1">Magento Backend URL</label>
+                                        {isEditing ? (
+                                            <input
+                                                type="text"
+                                                value={(formData.integrations as any).magentoBackendUrl || ''}
+                                                onChange={(e) =>
+                                                    setFormData((prev) => ({
+                                                        ...prev,
+                                                        integrations: {
+                                                            ...prev.integrations,
+                                                            magentoBackendUrl: e.target.value,
+                                                        },
+                                                    }))
+                                                }
+                                                className={inputClasses}
+                                                placeholder="e.g. https://magento.example.com/admin"
+                                            />
+                                        ) : (
+                                            <p className="text-sm text-on-surface truncate">
+                                                {(formData.integrations as any).magentoBackendUrl || 'Not Set'}
+                                            </p>
+                                        )}
+                                    </div>
                                 </div>
-                            ))}
+                            </div>
+
+                            {/* n8n Configuration */}
+                            <div className="space-y-3">
+                                <h4 className="text-sm font-bold text-on-surface pl-3">n8n</h4>
+                                <div className="p-3 bg-surface rounded-md border border-default ml-4">
+                                    <div className="space-y-3">
+                                        {[
+                                            { key: 'n8nHost1Url' as const, label: 'Host 1 URL', placeholder: 'e.g. https://n8n-host1.example.com' },
+                                            { key: 'n8nHost2Url' as const, label: 'Host 2 URL', placeholder: 'e.g. https://n8n-host2.example.com' },
+                                        ].map(({ key, label, placeholder }) => (
+                                            <div key={key}>
+                                                <label className="block text-sm font-medium text-on-surface-secondary mb-1">{label}</label>
+                                                {isEditing ? (
+                                                    <input
+                                                        type="text"
+                                                        value={(formData.integrations as any)[key] || ''}
+                                                        onChange={(e) =>
+                                                            setFormData((prev) => ({
+                                                                ...prev,
+                                                                integrations: {
+                                                                    ...prev.integrations,
+                                                                    [key]: e.target.value,
+                                                                },
+                                                            }))
+                                                        }
+                                                        className={inputClasses}
+                                                        placeholder={placeholder}
+                                                    />
+                                                ) : (
+                                                    <p className="text-sm text-on-surface truncate">
+                                                        {(formData.integrations as any)[key] || 'Not Set'}
+                                                    </p>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+
                         </div>
                     </div>
 

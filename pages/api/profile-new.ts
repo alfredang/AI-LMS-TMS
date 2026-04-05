@@ -546,6 +546,11 @@ async function getTrainingProviderProfile(userId: string) {
     const r = await pool.query(`SELECT magento_backend_url FROM training_provider WHERE id = $1`, [profileData.provider_id]);
     if (r.rows.length > 0) refLinks = { ...refLinks, ...r.rows[0] };
   } catch (e) { /* columns don't exist */ }
+  // Google Drive extras
+  try {
+    const r = await pool.query(`SELECT trainer_profile_image_url FROM training_provider WHERE id = $1`, [profileData.provider_id]);
+    if (r.rows.length > 0) refLinks = { ...refLinks, ...r.rows[0] };
+  } catch (e) { /* columns don't exist */ }
   // OpenClaw / Orion
   try {
     const r = await pool.query(
@@ -609,6 +614,7 @@ async function getTrainingProviderProfile(userId: string) {
       googleClientSecret: profileData.google_client_secret || '',
       googleRefreshToken: profileData.google_refresh_token || '',
       googleSlidesTemplateId: profileData.google_slides_template_id || '',
+      trainerProfileImageUrl: refLinks.trainer_profile_image_url || '',
       certificateFolderUrl: profileData.certificate_folder_url || '',
       masterListUrl: refLinks.master_list_url || '',
       tertiaryTmsUrl: refLinks.tertiary_tms_url || '',
