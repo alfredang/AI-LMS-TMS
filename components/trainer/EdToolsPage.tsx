@@ -70,6 +70,12 @@ const ED_TOOLS = [
     href: 'https://alfredang.github.io/livepoll/',
   },
   {
+    title: 'MindMaps',
+    description: 'Create and collaborate on mind maps in real time',
+    icon: IconName.Link,
+    href: 'https://alfredang.github.io/mindmapping/',
+  },
+  {
     title: 'Spinning Wheel',
     description: 'Random selection spinner for classroom activities',
     icon: IconName.Spinner,

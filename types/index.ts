@@ -120,6 +120,7 @@ export enum TrainerPage {
   SpcTools = 'spcTools',
   SustainabilityTools = 'sustainabilityTools',
   VirtualTools = 'virtualTools',
+  AgenticAITools = 'agenticAITools',
   LessonDeliveryGuide = 'lessonDeliveryGuide',
   AssessmentGuide = 'assessmentGuide',
 }

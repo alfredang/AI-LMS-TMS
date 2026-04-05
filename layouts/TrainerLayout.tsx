@@ -25,6 +25,7 @@ import SpcToolsPage from '../components/trainer/SpcToolsPage';
 import SustainabilityToolsPage from '../components/trainer/SustainabilityToolsPage';
 import LessonDeliveryGuidePage from '../components/trainer/LessonDeliveryGuidePage';
 import VirtualToolsPage from '../components/trainer/VirtualToolsPage';
+import AgenticAIToolsPage from '../components/trainer/AgenticAIToolsPage';
 import AssessmentGuidePage from '../components/trainer/AssessmentGuidePage';
 
 const PAGE_LABELS: Record<TrainerPage, string> = {
@@ -43,6 +44,7 @@ const PAGE_LABELS: Record<TrainerPage, string> = {
   [TrainerPage.SpcTools]: 'SPC Tools',
   [TrainerPage.SustainabilityTools]: 'Sustainability Tools',
   [TrainerPage.VirtualTools]: 'Virtual Tools',
+  [TrainerPage.AgenticAITools]: 'Agentic AI Tools',
   [TrainerPage.LessonDeliveryGuide]: 'Lesson Delivery Guide',
   [TrainerPage.AssessmentGuide]: 'Assessment Guide',
 };
@@ -88,6 +90,8 @@ const TrainerLayout: React.FC = () => {
         return <SustainabilityToolsPage />;
       case TrainerPage.VirtualTools:
         return <VirtualToolsPage />;
+      case TrainerPage.AgenticAITools:
+        return <AgenticAIToolsPage />;
       case TrainerPage.LessonDeliveryGuide:
         return <LessonDeliveryGuidePage />;
       case TrainerPage.AssessmentGuide:

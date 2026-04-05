@@ -369,6 +369,7 @@ const CreateView: React.FC = () => {
             { label: 'DeepSeek', href: 'https://chat.deepseek.com/' },
             { label: 'Kimi', href: 'https://www.kimi.com/en' },
             { label: 'Qwen', href: 'https://qwen.ai/home' },
+            { label: 'Perplexity', href: 'https://www.perplexity.ai/' },
         ]},
         { title: 'Image', description: 'AI-powered image generation and editing tools for creating visuals, illustrations, and designs.', items: [
             { label: 'Firefly', href: 'https://firefly.adobe.com/' },
@@ -381,6 +382,7 @@ const CreateView: React.FC = () => {
             { label: 'Invideo', href: 'https://invideo.io/' },
             { label: 'Veed', href: 'https://www.veed.io/' },
             { label: 'Descript', href: 'https://www.descript.com/' },
+            { label: 'Pictory', href: 'https://pictory.ai/' },
         ]},
         { title: 'Music', description: 'AI music generation tools for creating original audio and soundtracks.', items: [
             { label: 'Suno', href: 'https://suno.com/' },

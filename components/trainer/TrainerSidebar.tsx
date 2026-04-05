@@ -29,6 +29,7 @@ const ED_TOOL_ITEMS: { label: string; icon: IconName; href: string }[] = [
   { label: 'Collaborative Flow', icon: IconName.Link, href: 'https://alfredang.github.io/collabflow/' },
   { label: 'Collaborative Kanban', icon: IconName.ClipboardCheck, href: 'https://alfredang.github.io/kanban/' },
   { label: 'Live Poll',      icon: IconName.ClipboardCheck, href: 'https://alfredang.github.io/livepoll/' },
+  { label: 'MindMaps', icon: IconName.Link, href: 'https://alfredang.github.io/mindmapping/' },
   { label: 'Spinning Wheel', icon: IconName.Spinner,  href: 'https://alfredang.github.io/spinning-wheel/' },
   { label: '5 Whys',         icon: IconName.Help,     href: 'https://alfredang.github.io/5whys/' },
   { label: 'Fishbone Diagram', icon: IconName.Link,  href: 'https://alfredang.github.io/fishbone/' },
@@ -101,6 +102,7 @@ const GENAI_LINK_GROUPS: { category: string; items: { label: string; icon: IconN
       { label: 'DeepSeek',           icon: IconName.Chat,   href: 'https://chat.deepseek.com/' },
       { label: 'Kimi',               icon: IconName.Chat,   href: 'https://www.kimi.com/en' },
       { label: 'Qwen',               icon: IconName.Chat,   href: 'https://qwen.ai/home' },
+      { label: 'Perplexity',          icon: IconName.Chat,   href: 'https://www.perplexity.ai/' },
     ],
   },
   {
@@ -119,6 +121,7 @@ const GENAI_LINK_GROUPS: { category: string; items: { label: string; icon: IconN
       { label: 'Invideo',            icon: IconName.Video,  href: 'https://invideo.io/' },
       { label: 'Veed',               icon: IconName.Video,  href: 'https://www.veed.io/' },
       { label: 'Descript',           icon: IconName.Video,  href: 'https://www.descript.com/' },
+      { label: 'Pictory',            icon: IconName.Video,  href: 'https://pictory.ai/' },
     ],
   },
   {
@@ -143,6 +146,26 @@ const GENAI_LINK_GROUPS: { category: string; items: { label: string; icon: IconN
   },
 ];
 
+const AGENTIC_AI_GROUPS: { category: string; items: { label: string; icon: IconName; href: string }[] }[] = [
+  {
+    category: 'No Code Platforms',
+    items: [
+      { label: 'AgentX',       icon: IconName.Globe, href: 'https://www.agentx.so/' },
+      { label: 'Opal',         icon: IconName.Globe, href: 'https://opal.google/landing/' },
+      { label: 'Relevance AI', icon: IconName.Globe, href: 'https://relevanceai.com/' },
+      { label: 'Promptly AI',  icon: IconName.Globe, href: 'https://www.promptly.fyi/' },
+    ],
+  },
+  {
+    category: 'Low Code Platforms',
+    items: [
+      { label: 'n8n',      icon: IconName.Globe, href: 'https://n8n.io/' },
+      { label: 'Langflow',  icon: IconName.Globe, href: 'https://www.langflow.org/' },
+      { label: 'Flowise',   icon: IconName.Globe, href: 'https://flowiseai.com/' },
+    ],
+  },
+];
+
 const inactiveClass = 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700/50 hover:text-gray-900 dark:hover:text-white';
 const inactiveIconClass = 'text-gray-400 dark:text-gray-500 group-hover:text-gray-900 dark:group-hover:text-white';
 const subItemClass = 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700/50 hover:text-gray-900 dark:hover:text-white';
@@ -159,6 +182,8 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate }) => {
   const [genAiOpen, setGenAiOpen] = useState(trainerPage === TrainerPage.GenAIAuthoring);
   const [genAiSubOpen, setGenAiSubOpen] = useState<Record<string, boolean>>({});
   const [virtualToolsOpen, setVirtualToolsOpen] = useState(trainerPage === TrainerPage.VirtualTools);
+  const [agenticAiOpen, setAgenticAiOpen] = useState(trainerPage === TrainerPage.AgenticAITools);
+  const [agenticAiSubOpen, setAgenticAiSubOpen] = useState<Record<string, boolean>>({});
 
   const navigateTo = (page: TrainerPage) => {
     setSelectedCourse(null);
@@ -585,6 +610,67 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate }) => {
             </div>
           )}
 
+          {/* Agentic AI Tools — expandable */}
+          <button
+            onClick={() => {
+              setAgenticAiOpen(prev => !prev);
+              navigateTo(TrainerPage.AgenticAITools);
+            }}
+            className={`group flex items-center gap-3 w-full rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-150 ${
+              trainerPage === TrainerPage.AgenticAITools
+                ? 'bg-primary/10 text-primary'
+                : inactiveClass
+            }`}
+          >
+            <Icon
+              name={IconName.Link}
+              className={`w-[18px] h-[18px] flex-shrink-0 transition-colors ${
+                trainerPage === TrainerPage.AgenticAITools ? 'text-primary' : inactiveIconClass
+              }`}
+            />
+            <span className="truncate">Agentic AI Tools</span>
+            <Icon
+              name={IconName.ChevronDown}
+              className={`w-4 h-4 ml-auto flex-shrink-0 transition-transform duration-200 ${
+                agenticAiOpen ? 'rotate-0' : '-rotate-90'
+              } ${trainerPage === TrainerPage.AgenticAITools ? 'text-primary' : 'text-gray-400 dark:text-gray-500'}`}
+            />
+          </button>
+
+          {agenticAiOpen && (
+            <div className="ml-5 pl-3 border-l border-gray-200 dark:border-gray-700 space-y-0.5">
+              {AGENTIC_AI_GROUPS.map(({ category, items }) => (
+                <div key={category}>
+                  <button
+                    onClick={() => setAgenticAiSubOpen(prev => ({ ...prev, [category]: !prev[category] }))}
+                    className={`group flex items-center gap-2.5 w-full rounded-lg px-2.5 py-2 text-[10px] font-bold uppercase tracking-widest text-muted select-none mt-1`}
+                  >
+                    <Icon
+                      name={IconName.ChevronDown}
+                      className={`w-3 h-3 flex-shrink-0 transition-transform duration-200 text-gray-400 dark:text-gray-500 ${
+                        agenticAiSubOpen[category] ? 'rotate-0' : '-rotate-90'
+                      }`}
+                    />
+                    <span>{category}</span>
+                  </button>
+                  {agenticAiSubOpen[category] && items.map(({ label, icon, href }) => (
+                    <a
+                      key={label}
+                      href={href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={`group flex items-center gap-2.5 w-full rounded-lg px-2.5 py-2 text-[13px] font-medium transition-all duration-150 ${subItemClass}`}
+                    >
+                      <Icon name={icon} className="w-4 h-4 flex-shrink-0 text-gray-400 dark:text-gray-500 group-hover:text-gray-900 dark:group-hover:text-white transition-colors" />
+                      <span className="truncate">{label}</span>
+                      <Icon name={IconName.ExternalLink} className="w-3 h-3 ml-auto text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </a>
+                  ))}
+                </div>
+              ))}
+            </div>
+          )}
+
           {/* Virtual Tools — expandable */}
           <button
             onClick={() => {
@@ -629,6 +715,7 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate }) => {
               ))}
             </div>
           )}
+
 
         </div>
       </div>
