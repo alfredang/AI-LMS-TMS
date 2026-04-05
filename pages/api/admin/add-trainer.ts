@@ -1,30 +1,13 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
-import path from 'path';
-import fs from 'fs';
 import bcrypt from 'bcryptjs';
 import multer from 'multer';
 import { promisify } from 'util';
+import { uploadProfileImageBufferToDrive } from '../../../lib/google-drive/profile-image-helpers';
 
-// Configure multer for file uploads
+// Configure multer for in-memory file uploads
 const upload = multer({
-    storage: multer.diskStorage({
-        destination: (req, file, cb) => {
-            const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'trainers', 'profilePicture');
-            if (!fs.existsSync(uploadDir)) {
-                fs.mkdirSync(uploadDir, { recursive: true });
-            }
-            cb(null, uploadDir);
-        },
-        filename: (req, file, cb) => {
-            // Create unique filename with timestamp (same format as trainer-file.ts)
-            const timestamp = Date.now();
-            const originalName = file.originalname || 'profile_pic';
-            // Clean the filename to prevent issues
-            const cleanName = originalName.replace(/[^a-zA-Z0-9.-]/g, '_');
-            cb(null, `${timestamp}_${cleanName}`);
-        }
-    }),
+    storage: multer.memoryStorage(),
     limits: {
         fileSize: 5 * 1024 * 1024, // 5MB limit
     },
@@ -82,9 +65,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const uploadedFile = (req as any).file;
         let finalProfilePictureUrl = profilePictureUrl;
 
-        // If a file was uploaded, use its path instead
+        // If a file was uploaded, send it to Google Drive instead
         if (uploadedFile) {
-            finalProfilePictureUrl = `/uploads/trainers/profilePicture/${uploadedFile.filename}`;
+            const uploadResult = await uploadProfileImageBufferToDrive({
+                buffer: uploadedFile.buffer,
+                mimeType: uploadedFile.mimetype || 'application/octet-stream',
+                originalName: uploadedFile.originalname || 'profile-picture',
+                role: 'trainer',
+                userId: email || fullName,
+            });
+            finalProfilePictureUrl = uploadResult.fileUrl;
         }
 
         // Validation
@@ -118,30 +108,25 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             // Handle profile picture storage
             let storedProfilePictureUrl = finalProfilePictureUrl;
             
-            // If it's a generated avatar URL, download and store locally
+            // If it's a generated avatar URL, copy it into the configured Google Drive folder
             if (finalProfilePictureUrl && finalProfilePictureUrl.startsWith('https://i.pravatar.cc')) {
                 try {
-                    // Download and store the avatar locally
                     const response = await fetch(finalProfilePictureUrl);
                     if (response.ok) {
                         const buffer = await response.arrayBuffer();
-                        const fileName = `trainer_${Date.now()}_${Math.random().toString(36).substr(2, 9)}.jpg`;
-                        const uploadsDir = path.join(process.cwd(), 'public', 'uploads', 'trainers', 'profilePicture');
-                        
-                        // Ensure directory exists
-                        if (!fs.existsSync(uploadsDir)) {
-                            fs.mkdirSync(uploadsDir, { recursive: true });
-                        }
-                        
-                        const filePath = path.join(uploadsDir, fileName);
-                        fs.writeFileSync(filePath, Buffer.from(buffer));
-                        
-                        storedProfilePictureUrl = `/uploads/trainers/profilePicture/${fileName}`;
-                        console.log('✅ Profile picture saved locally:', storedProfilePictureUrl);
+                        const uploadResult = await uploadProfileImageBufferToDrive({
+                            buffer: Buffer.from(buffer),
+                            mimeType: response.headers.get('content-type') || 'image/jpeg',
+                            originalName: `trainer-avatar-${Date.now()}.jpg`,
+                            role: 'trainer',
+                            userId: email || fullName,
+                        });
+                        storedProfilePictureUrl = uploadResult.fileUrl;
+                        console.log('✅ Profile picture saved to Google Drive:', storedProfilePictureUrl);
                     }
                 } catch (error) {
-                    console.error('⚠️ Failed to save profile picture locally:', error);
-                    // Continue with the original URL if local storage fails
+                    console.error('⚠️ Failed to save profile picture to Google Drive:', error);
+                    // Continue with the original URL if Drive upload fails
                 }
             }
 

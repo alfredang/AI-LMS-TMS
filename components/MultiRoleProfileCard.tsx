@@ -11,7 +11,7 @@ import Spinner from './ui/Spinner';
 import { useLms } from '@contexts/LmsContext';
 import { UserRole } from '@app-types/index';
 import { ensureAbsoluteImageUrl } from '@utils/imageUtils';
-import { getApiUrl, getUploadUrl, getDeleteFileUrl, stripBaseUrl } from '@/lib/urlHelpers';
+import { getApiUrl, getUploadUrl, getDeleteFileUrl, getProfileImageImportUrl, stripBaseUrl } from '@/lib/urlHelpers';
 import { ThemeMode, getCurrentTheme, applyTheme } from '@utils/colorUtils';
 import { maskNric, formatDate, formatDateForInput } from '../utils';
 
@@ -356,6 +356,7 @@ export const MultiRoleProfileCard: React.FC = () => {
     // Photo state
     const [selectedProfilePictureFile, setSelectedProfilePictureFile] = useState<File | null>(null);
     const [profilePicturePreviewUrl, setProfilePicturePreviewUrl] = useState<string | null>(null);
+    const [profileImageLink, setProfileImageLink] = useState('');
 
     // File pending state for trainer
     const [trainerPendingCv, setTrainerPendingCv] = useState<File | null>(null);
@@ -382,6 +383,7 @@ export const MultiRoleProfileCard: React.FC = () => {
                 setSharedForm(json.data.shared);
                 setTrainerForm(json.data.trainer || null);
                 setDeveloperForm(json.data.developer || null);
+                setProfileImageLink(json.data.shared?.profilePictureUrl || '');
             }
         } catch (e) { console.error('Failed to fetch multi-role profile:', e); }
         finally { setLoading(false); }
@@ -417,6 +419,7 @@ export const MultiRoleProfileCard: React.FC = () => {
             if (!file.type.startsWith('image/')) { alert('Please select a valid image file.'); return; }
             if (file.size > 5 * 1024 * 1024) { alert('File size must be less than 5MB.'); return; }
             setSelectedProfilePictureFile(file);
+            setProfileImageLink('');
             const reader = new FileReader();
             reader.onloadend = () => { setProfilePicturePreviewUrl(reader.result as string); };
             reader.readAsDataURL(file);
@@ -497,6 +500,7 @@ export const MultiRoleProfileCard: React.FC = () => {
         setSelectedProfilePictureFile(null); setProfilePicturePreviewUrl(null);
         setTrainerPendingCv(null); setTrainerPendingCertsAdd([]); setTrainerPendingCertsDel([]); setTrainerCertFilesToDel([]);
         setDevPendingCv(null); setDevPendingCertsAdd([]); setDevPendingCertsDel([]); setDevCertFilesToDel([]);
+        setProfileImageLink(data.shared.profilePictureUrl || '');
         setIsEditing(false);
     };
 
@@ -522,10 +526,22 @@ export const MultiRoleProfileCard: React.FC = () => {
 
             // 1. Upload profile picture if changed
             let newProfilePicUrl: string | undefined;
-            if (selectedProfilePictureFile) {
+            if (profileImageLink.trim()) {
+                const response = await fetch(getProfileImageImportUrl('trainer', currentUser.id), {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sourceUrl: profileImageLink.trim() })
+                });
+                if (!response.ok) throw new Error(`Profile image URL import failed: ${response.statusText}`);
+                const result = await response.json();
+                if (!result.success) throw new Error(result.error || 'Profile image URL import failed');
+                newProfilePicUrl = result.data.fileUrl.startsWith('http') ? stripBaseUrl(result.data.fileUrl) || result.data.fileUrl : result.data.fileUrl;
+                setProfileImageLink(newProfilePicUrl);
+            } else if (selectedProfilePictureFile) {
                 if (data.shared.profilePictureUrl?.includes('uploads/')) await deleteFile(data.shared.profilePictureUrl);
                 const result = await uploadFile('trainer', 'profilePicture', selectedProfilePictureFile);
                 newProfilePicUrl = result.fileUrl.startsWith('http') ? stripBaseUrl(result.fileUrl) || result.fileUrl : result.fileUrl;
+                setProfileImageLink(newProfilePicUrl);
             }
 
             // 2. Save trainer profile
@@ -653,6 +669,7 @@ export const MultiRoleProfileCard: React.FC = () => {
             setSelectedProfilePictureFile(null); setProfilePicturePreviewUrl(null);
             setTrainerPendingCv(null); setTrainerPendingCertsAdd([]); setTrainerPendingCertsDel([]); setTrainerCertFilesToDel([]);
             setDevPendingCv(null); setDevPendingCertsAdd([]); setDevPendingCertsDel([]); setDevCertFilesToDel([]);
+            if (!newProfilePicUrl) setProfileImageLink(sharedForm.profilePictureUrl || '');
             setIsEditing(false);
             alert('Profile saved successfully!');
             await fetchProfile();
@@ -673,7 +690,7 @@ export const MultiRoleProfileCard: React.FC = () => {
                 <div className="flex flex-col sm:flex-row items-center gap-6">
                     <div className="flex-shrink-0 text-center">
                         <div className="relative group w-24 h-24">
-                            <img src={profilePicturePreviewUrl || ensureAbsoluteImageUrl(sharedForm.profilePictureUrl) || FALLBACK_AVATAR}
+                            <img src={profilePicturePreviewUrl || (isEditing && profileImageLink.trim() ? ensureAbsoluteImageUrl(profileImageLink.trim()) : undefined) || ensureAbsoluteImageUrl(sharedForm.profilePictureUrl) || FALLBACK_AVATAR}
                                 alt={sharedForm.name} className="w-24 h-24 rounded-full object-cover ring-4 ring-secondary/20"
                                 onError={(e) => { e.currentTarget.src = FALLBACK_AVATAR; }} />
                             {isEditing && (
@@ -722,6 +739,7 @@ export const MultiRoleProfileCard: React.FC = () => {
                                 <div><label className="text-sm font-medium">NRIC</label><input type="text" name="nric" value={sharedForm.nric} onChange={handleSharedChange} className={inputClasses} /></div>
                                 <div><label className="text-sm font-medium">Date of Birth</label><input type="date" name="dob" value={formatDateForInput(sharedForm.dob)} onChange={handleSharedChange} className={inputClasses} /></div>
                                 <div><label className="text-sm font-medium">LinkedIn Profile</label><input type="url" name="linkedinUrl" value={sharedForm.linkedinUrl} onChange={handleSharedChange} className={inputClasses} /></div>
+                                <div><label className="text-sm font-medium">Profile Image Link</label><input type="url" value={profileImageLink} onChange={(e) => { setProfileImageLink(e.target.value); if (e.target.value.trim()) { setSelectedProfilePictureFile(null); setProfilePicturePreviewUrl(null); } }} placeholder="Paste image URL to save into Google Drive" className={inputClasses} /></div>
                             </div>
                         ) : (
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">

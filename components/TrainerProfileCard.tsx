@@ -6,7 +6,7 @@ import { Icon, IconName } from './ui/Icon';
 import Spinner from './ui/Spinner';
 import { useLms } from '@contexts/LmsContext';
 import { ensureAbsoluteImageUrl } from '@utils/imageUtils';
-import { getApiUrl, getUploadUrl, getDeleteFileUrl, stripBaseUrl } from '@/lib/urlHelpers';
+import { getApiUrl, getUploadUrl, getDeleteFileUrl, getProfileImageImportUrl, stripBaseUrl } from '@/lib/urlHelpers';
 import { ThemeMode, getCurrentTheme, applyTheme } from '@utils/colorUtils';
 import { maskNric, formatDate, formatDateForInput } from '../utils';
 
@@ -542,10 +542,12 @@ export const TrainerProfileCard: React.FC<{
     const [selectedProfilePictureFile, setSelectedProfilePictureFile] = useState<File | null>(null);
     const [profilePicturePreviewUrl, setProfilePicturePreviewUrl] = useState<string | null>(null);
     const [uploadedProfilePicturePath, setUploadedProfilePicturePath] = useState<string | null>(null);
+    const [profileImageLink, setProfileImageLink] = useState('');
     const [themeMode, setThemeMode] = useState<ThemeMode>(() => getCurrentTheme());
 
     useEffect(() => {
         setFormData(profile);
+        setProfileImageLink(profile.profilePictureUrl || '');
     }, [profile]);
 
     // Handle password update from LoginDetailsCard
@@ -604,6 +606,7 @@ export const TrainerProfileCard: React.FC<{
 
             // Clear any previous uploaded path since we have a new file
             setUploadedProfilePicturePath(null);
+            setProfileImageLink('');
 
             // Create preview URL for immediate display only - don't update formData
             const reader = new FileReader();
@@ -748,6 +751,7 @@ export const TrainerProfileCard: React.FC<{
         setSelectedProfilePictureFile(null);
         setProfilePicturePreviewUrl(null);
         setUploadedProfilePicturePath(null);
+        setProfileImageLink(profile.profilePictureUrl || '');
 
         // Exit edit mode
         setIsEditing(false);
@@ -877,7 +881,33 @@ export const TrainerProfileCard: React.FC<{
 
             // Step 3: Handle profile picture upload if pending
             let currentUploadedPath: string | null = null;
-            if (selectedProfilePictureFile) {
+            if (profileImageLink.trim()) {
+                try {
+                    const response = await fetch(getProfileImageImportUrl('trainer', CURRENT_USER_ID), {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ sourceUrl: profileImageLink.trim() }),
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`Profile image URL import failed: ${response.statusText}`);
+                    }
+
+                    const result = await response.json();
+                    if (!result.success) {
+                        throw new Error(result.error || 'Profile image URL import failed');
+                    }
+
+                    currentUploadedPath = result.data.fileUrl;
+                    setUploadedProfilePicturePath(result.data.fileUrl);
+                    setProfileImageLink(result.data.fileUrl);
+                    console.log('📝 Profile picture path from URL import:', currentUploadedPath);
+                } catch (error) {
+                    console.error('❌ Failed to import trainer profile picture from URL:', error);
+                    alert(`Failed to import profile image: ${error instanceof Error ? error.message : 'Please try again.'}`);
+                    return;
+                }
+            } else if (selectedProfilePictureFile) {
                 try {
                     console.log('� Uploading profile picture:', selectedProfilePictureFile.name);
 
@@ -919,6 +949,7 @@ export const TrainerProfileCard: React.FC<{
                     currentUploadedPath = result.data.fileUrl.startsWith('http')
                         ? stripBaseUrl(result.data.fileUrl) || result.data.fileUrl
                         : result.data.fileUrl;
+                    setProfileImageLink(currentUploadedPath);
 
                     console.log('📝 Profile picture path for database:', currentUploadedPath);
 
@@ -1087,7 +1118,7 @@ export const TrainerProfileCard: React.FC<{
                 <div className="flex flex-col sm:flex-row items-center gap-6">
                     <div className="flex-shrink-0 text-center">
                         <div className="relative group w-24 h-24">
-                            <img src={profilePicturePreviewUrl || ensureAbsoluteImageUrl(formData.profilePictureUrl) || 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMjAiIGN5PSIyMCIgcj0iMjAiIGZpbGw9IiM5Q0EzQUYiLz4KPGNpcmNsZSBjeD0iMjAiIGN5PSIxNSIgcj0iNiIgZmlsbD0id2hpdGUiLz4KPHBhdGggZD0iTTMwIDMzQzMwIDI3LjQ3NzIgMjUuNTIyOCAyMyAyMCAyM0MxNC40NzcyIDIzIDEwIDI3LjQ3NzIgMTAgMzNIMzBaIiBmaWxsPSJ3aGl0ZSIvPgo8L3N2Zz4K'} alt={formData.name} className="w-24 h-24 rounded-full object-cover ring-4 ring-secondary/20" onError={(e) => { e.currentTarget.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMjAiIGN5PSIyMCIgcj0iMjAiIGZpbGw9IiM5Q0EzQUYiLz4KPGNpcmNsZSBjeD0iMjAiIGN5PSIxNSIgcj0iNiIgZmlsbD0id2hpdGUiLz4KPHBhdGggZD0iTTMwIDMzQzMwIDI3LjQ3NzIgMjUuNTIyOCAyMyAyMCAyM0MxNC40NzcyIDIzIDEwIDI3LjQ3NzIgMTAgMzNIMzBaIiBmaWxsPSJ3aGl0ZSIvPgo8L3N2Zz4K'; }} />
+                            <img src={profilePicturePreviewUrl || (isEditing && profileImageLink.trim() ? ensureAbsoluteImageUrl(profileImageLink.trim()) : undefined) || ensureAbsoluteImageUrl(formData.profilePictureUrl) || 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMjAiIGN5PSIyMCIgcj0iMjAiIGZpbGw9IiM5Q0EzQUYiLz4KPGNpcmNsZSBjeD0iMjAiIGN5PSIxNSIgcj0iNiIgZmlsbD0id2hpdGUiLz4KPHBhdGggZD0iTTMwIDMzQzMwIDI3LjQ3NzIgMjUuNTIyOCAyMyAyMCAyM0MxNC40NzcyIDIzIDEwIDI3LjQ3NzIgMTAgMzNIMzBaIiBmaWxsPSJ3aGl0ZSIvPgo8L3N2Zz4K'} alt={formData.name} className="w-24 h-24 rounded-full object-cover ring-4 ring-secondary/20" onError={(e) => { e.currentTarget.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMjAiIGN5PSIyMCIgcj0iMjAiIGZpbGw9IiM5Q0EzQUYiLz4KPGNpcmNsZSBjeD0iMjAiIGN5PSIxNSIgcj0iNiIgZmlsbD0id2hpdGUiLz4KPHBhdGggZD0iTTMwIDMzQzMwIDI3LjQ3NzIgMjUuNTIyOCAyMyAyMCAyM0MxNC40NzcyIDIzIDEwIDI3LjQ3NzIgMTAgMzNIMzBaIiBmaWxsPSJ3aGl0ZSIvPgo8L3N2Zz4K'; }} />
                             {isGeneratingAvatar && (
                                 <div className="absolute inset-0 bg-black bg-opacity-50 rounded-full flex items-center justify-center">
                                     <Spinner size="sm" />
@@ -1138,6 +1169,7 @@ export const TrainerProfileCard: React.FC<{
                                 <div><label className="text-sm font-medium">Date of Birth</label><input type="date" name="dob" value={formatDateForInput((formData as any).dob || '')} onChange={handleChange} className={inputClasses} /></div>
                                 <div><label className="text-sm font-medium">Trainer Type</label><select name="trainerType" value={formData.trainerType} onChange={handleChange} className={inputClasses}>{Object.values(TrainerType).map(t => <option key={t} value={t}>{t}</option>)}</select></div>
                                 <div><label className="text-sm font-medium">LinkedIn Profile</label><input type="url" name="linkedinUrl" value={formData.linkedinUrl || ''} onChange={handleChange} className={inputClasses} /></div>
+                                <div><label className="text-sm font-medium">Profile Image Link</label><input type="url" value={profileImageLink} onChange={(e) => { setProfileImageLink(e.target.value); if (e.target.value.trim()) { setSelectedProfilePictureFile(null); setProfilePicturePreviewUrl(null); } }} placeholder="Paste image URL to save into Google Drive" className={inputClasses} /></div>
                             </div>
                         ) : (
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">

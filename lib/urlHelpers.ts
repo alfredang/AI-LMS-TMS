@@ -81,7 +81,16 @@ export function stripBaseUrl(fullUrl: string | undefined | null): string | undef
  * @returns Full upload API URL
  */
 export function getUploadUrl(role: string, fileType: string): string {
+  if (fileType === 'profilePicture') {
+    return getApiUrl(`/api/upload/profile-picture-drive?role=${encodeURIComponent(role)}&fileType=${encodeURIComponent(fileType)}`);
+  }
   return getApiUrl(`/api/upload/${role}-file?fileType=${fileType}`);
+}
+
+export function getProfileImageImportUrl(role: string, userId?: string): string {
+  const params = new URLSearchParams({ role });
+  if (userId) params.set('userId', userId);
+  return getApiUrl(`/api/upload/profile-picture-from-url?${params.toString()}`);
 }
 
 /**

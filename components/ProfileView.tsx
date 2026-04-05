@@ -13,7 +13,7 @@ import { useTrainerProfile } from '../hooks/useTrainerProfile';
 import { ensureAbsoluteImageUrl } from '@utils/imageUtils';
 import { generateAvatarImage } from '@lib/services/geminiService';
 import { SKILLS_FUTURE_INDUSTRIES } from '@app-types/profile';
-import { getApiUrl, getUploadUrl, getDeleteFileUrl, stripBaseUrl } from '@/lib/urlHelpers';
+import { getApiUrl, getUploadUrl, getDeleteFileUrl, getProfileImageImportUrl, stripBaseUrl } from '@/lib/urlHelpers';
 import { ThemeMode, getCurrentTheme, applyTheme } from '@utils/colorUtils';
 import { maskNric, formatDate, formatDateForInput } from '../utils';
 
@@ -866,10 +866,12 @@ const DeveloperProfileCard: React.FC<{
     const [selectedProfilePictureFile, setSelectedProfilePictureFile] = useState<File | null>(null);
     const [profilePicturePreviewUrl, setProfilePicturePreviewUrl] = useState<string | null>(null);
     const [uploadedProfilePicturePath, setUploadedProfilePicturePath] = useState<string | null>(null);
+    const [profileImageLink, setProfileImageLink] = useState('');
     const [themeMode, setThemeMode] = useState<ThemeMode>(() => getCurrentTheme());
 
     useEffect(() => {
         setFormData(profile);
+        setProfileImageLink(profile.profilePictureUrl || '');
     }, [profile]);
 
     // Handle password update from LoginDetailsCard
@@ -992,6 +994,7 @@ const DeveloperProfileCard: React.FC<{
 
             // Clear any previous uploaded path since we have a new file
             setUploadedProfilePicturePath(null);
+            setProfileImageLink('');
 
             // Create preview URL for immediate display only - don't update formData
             const reader = new FileReader();
@@ -1156,7 +1159,33 @@ const DeveloperProfileCard: React.FC<{
             }
 
             // 4. Upload profile picture if pending
-            if (selectedProfilePictureFile) {
+            if (profileImageLink.trim()) {
+                try {
+                    const response = await fetch(getProfileImageImportUrl('developer', CURRENT_USER_ID), {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ sourceUrl: profileImageLink.trim() })
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`Profile image URL import failed: ${response.statusText}`);
+                    }
+
+                    const result = await response.json();
+                    if (!result.success) {
+                        throw new Error(result.error || 'Profile image URL import failed');
+                    }
+
+                    updateData.profileData.profilePictureUrl = result.data.fileUrl;
+                    setProfileImageLink(result.data.fileUrl);
+                    console.log('✅ Developer profile picture imported from URL successfully:', result.data.fileUrl);
+
+                } catch (error) {
+                    console.error('❌ Failed to import developer profile picture from URL:', error);
+                    alert(`Failed to import profile image: ${error instanceof Error ? error.message : 'Please try again.'}`);
+                    return;
+                }
+            } else if (selectedProfilePictureFile) {
                 try {
                     console.log('� Uploading developer profile picture:', selectedProfilePictureFile.name);
 
@@ -1194,6 +1223,7 @@ const DeveloperProfileCard: React.FC<{
                     }
 
                     updateData.profileData.profilePictureUrl = result.data.fileUrl;
+                    setProfileImageLink(result.data.fileUrl);
                     console.log('✅ Developer profile picture uploaded successfully:', result.data.fileUrl);
 
                 } catch (error) {
@@ -1321,6 +1351,7 @@ const DeveloperProfileCard: React.FC<{
         setCertificationFilesToDelete([]);
         setSelectedProfilePictureFile(null);
         setProfilePicturePreviewUrl(null);
+        setProfileImageLink(profile.profilePictureUrl || '');
 
         // Exit edit mode
         setIsEditing(false);
@@ -1334,7 +1365,7 @@ const DeveloperProfileCard: React.FC<{
                 <div className="flex flex-col sm:flex-row items-center gap-6">
                     <div className="flex-shrink-0 text-center">
                         <div className="relative group w-24 h-24">
-                            <img src={profilePicturePreviewUrl || ensureAbsoluteImageUrl(formData.profilePictureUrl) || 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMjAiIGN5PSIyMCIgcj0iMjAiIGZpbGw9IiM5Q0EzQUYiLz4KPGNpcmNsZSBjeD0iMjAiIGN5PSIxNSIgcj0iNiIgZmlsbD0id2hpdGUiLz4KPHBhdGggZD0iTTMwIDMzQzMwIDI3LjQ3NzIgMjUuNTIyOCAyMyAyMCAyM0MxNC40NzcyIDIzIDEwIDI3LjQ3NzIgMTAgMzNIMzBaIiBmaWxsPSJ3aGl0ZSIvPgo8L3N2Zz4K'} alt={formData.name} className="w-24 h-24 rounded-full object-cover ring-4 ring-green-500/20" onError={(e) => { e.currentTarget.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMjAiIGN5PSIyMCIgcj0iMjAiIGZpbGw9IiM5Q0EzQUYiLz4KPGNpcmNsZSBjeD0iMjAiIGN5PSIxNSIgcj0iNiIgZmlsbD0id2hpdGUiLz4KPHBhdGggZD0iTTMwIDMzQzMwIDI3LjQ3NzIgMjUuNTIyOCAyMyAyMCAyM0MxNC40NzcyIDIzIDEwIDI3LjQ3NzIgMTAgMzNIMzBaIiBmaWxsPSJ3aGl0ZSIvPgo8L3N2Zz4K'; }} />
+                            <img src={profilePicturePreviewUrl || (isEditing && profileImageLink.trim() ? ensureAbsoluteImageUrl(profileImageLink.trim()) : undefined) || ensureAbsoluteImageUrl(formData.profilePictureUrl) || 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMjAiIGN5PSIyMCIgcj0iMjAiIGZpbGw9IiM5Q0EzQUYiLz4KPGNpcmNsZSBjeD0iMjAiIGN5PSIxNSIgcj0iNiIgZmlsbD0id2hpdGUiLz4KPHBhdGggZD0iTTMwIDMzQzMwIDI3LjQ3NzIgMjUuNTIyOCAyMyAyMCAyM0MxNC40NzcyIDIzIDEwIDI3LjQ3NzIgMTAgMzNIMzBaIiBmaWxsPSJ3aGl0ZSIvPgo8L3N2Zz4K'} alt={formData.name} className="w-24 h-24 rounded-full object-cover ring-4 ring-green-500/20" onError={(e) => { e.currentTarget.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMjAiIGN5PSIyMCIgcj0iMjAiIGZpbGw9IiM5Q0EzQUYiLz4KPGNpcmNsZSBjeD0iMjAiIGN5PSIxNSIgcj0iNiIgZmlsbD0id2hpdGUiLz4KPHBhdGggZD0iTTMwIDMzQzMwIDI3LjQ3NzIgMjUuNTIyOCAyMyAyMCAyM0MxNC40NzcyIDIzIDEwIDI3LjQ3NzIgMTAgMzNIMzBaIiBmaWxsPSJ3aGl0ZSIvPgo8L3N2Zz4K'; }} />
                             {isGeneratingAvatar && (
                                 <div className="absolute inset-0 bg-black bg-opacity-50 rounded-full flex items-center justify-center">
                                     <Spinner size="sm" />
@@ -1385,6 +1416,7 @@ const DeveloperProfileCard: React.FC<{
                                 <div><label className="text-sm font-medium">Date of Birth</label><input type="date" name="dob" value={formatDateForInput((formData as any).dob || '')} onChange={handleChange} className={inputClasses} /></div>
                                 <div><label className="text-sm font-medium">Developer Type</label><select name="developerType" value={formData.developerType} onChange={handleChange} className={inputClasses}>{Object.values(DeveloperType).map(t => <option key={t} value={t}>{t}</option>)}</select></div>
                                 <div><label className="text-sm font-medium">LinkedIn Profile</label><input type="url" name="linkedinUrl" value={formData.linkedinUrl || ''} onChange={handleChange} className={inputClasses} /></div>
+                                <div><label className="text-sm font-medium">Profile Image Link</label><input type="url" value={profileImageLink} onChange={(e) => { setProfileImageLink(e.target.value); if (e.target.value.trim()) { setSelectedProfilePictureFile(null); setProfilePicturePreviewUrl(null); } }} placeholder="Paste image URL to save into Google Drive" className={inputClasses} /></div>
                             </div>
                         ) : (
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
@@ -1517,12 +1549,14 @@ const LearnerProfileView: React.FC = () => {
     const [isPasswordVisible, setIsPasswordVisible] = useState(false);
     const [selectedProfilePictureFile, setSelectedProfilePictureFile] = useState<File | null>(null);
     const [profilePicturePreviewUrl, setProfilePicturePreviewUrl] = useState<string | null>(null);
+    const [profileImageLink, setProfileImageLink] = useState('');
 
     const isAdmin = role === UserRole.Admin;
 
     useEffect(() => {
         if (profile) {
             setFormData(profile);
+            setProfileImageLink(profile.profilePictureUrl || '');
         }
     }, [profile]);
 
@@ -1548,6 +1582,7 @@ const LearnerProfileView: React.FC = () => {
 
             // Store the file for later upload and create a preview
             setSelectedProfilePictureFile(file);
+            setProfileImageLink('');
 
             // Create preview URL for immediate display
             const reader = new FileReader();
@@ -1606,8 +1641,43 @@ const LearnerProfileView: React.FC = () => {
     const handleSave = useCallback(async () => {
         if (!formData) return;
         try {
+            let profileToSave = formData;
+
+            // Upload profile picture if a URL was provided
+            if (profileImageLink.trim()) {
+                try {
+                    const response = await fetch(getProfileImageImportUrl('learner'), {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ sourceUrl: profileImageLink.trim() })
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`Image URL import failed: ${response.statusText}`);
+                    }
+
+                    const result = await response.json();
+                    if (!result.success) {
+                        throw new Error(result.error || 'Image URL import failed');
+                    }
+
+                    profileToSave = {
+                        ...profileToSave,
+                        profilePictureUrl: result.data.fileUrl
+                    };
+
+                    setProfileImageLink(result.data.fileUrl);
+                    setFormData(profileToSave);
+
+                    setProfilePicturePreviewUrl(null);
+                } catch (error) {
+                    console.error('❌ Failed to import learner profile picture from URL:', error);
+                    alert(`Failed to import profile image: ${error instanceof Error ? error.message : 'Please try again.'}`);
+                    return;
+                }
+            }
             // Upload profile picture if a new one was selected
-            if (selectedProfilePictureFile) {
+            else if (selectedProfilePictureFile) {
                 try {
                     console.log('📁 Uploading profile picture:', selectedProfilePictureFile.name);
 
@@ -1655,10 +1725,13 @@ const LearnerProfileView: React.FC = () => {
                         : result.data.fileUrl;
 
                     // Update form data with the relative path
-                    setFormData(prev => prev ? {
-                        ...prev,
+                    profileToSave = {
+                        ...profileToSave,
                         profilePictureUrl: relativePath
-                    } : null);
+                    };
+
+                    setProfileImageLink(relativePath);
+                    setFormData(profileToSave);
 
                     // Clear the preview URL since we now have the real URL
                     setProfilePicturePreviewUrl(null);
@@ -1670,19 +1743,20 @@ const LearnerProfileView: React.FC = () => {
                 }
             }
 
-            await saveProfile(formData);
-            updateProfile(formData);
+            await saveProfile(profileToSave);
+            updateProfile(profileToSave);
             setIsEditing(false);
 
             // Clear tracking state
             setSelectedProfilePictureFile(null);
             setProfilePicturePreviewUrl(null);
+            setProfileImageLink(profileToSave.profilePictureUrl || '');
 
         } catch (error) {
             console.error('Failed to save profile:', error);
             alert('Failed to save profile. Please try again.');
         }
-    }, [formData, saveProfile, updateProfile, selectedProfilePictureFile, profile]);
+    }, [formData, saveProfile, updateProfile, selectedProfilePictureFile, profile, profileImageLink]);
 
     const handleCancel = useCallback(() => {
         if (profile) {
@@ -1691,6 +1765,7 @@ const LearnerProfileView: React.FC = () => {
             // Clear preview state when canceling
             setSelectedProfilePictureFile(null);
             setProfilePicturePreviewUrl(null);
+            setProfileImageLink(profile.profilePictureUrl || '');
         }
     }, [profile]);
 
@@ -1891,6 +1966,22 @@ const LearnerProfileView: React.FC = () => {
                                     <option key={nationality} value={nationality}>{nationality}</option>
                                 ))}
                             </select>
+                        </div>
+                        <div>
+                            <label className="text-sm font-medium">Profile Image Link</label>
+                            <input
+                                type="url"
+                                value={profileImageLink}
+                                onChange={(e) => {
+                                    setProfileImageLink(e.target.value);
+                                    if (e.target.value.trim()) {
+                                        setSelectedProfilePictureFile(null);
+                                        setProfilePicturePreviewUrl(null);
+                                    }
+                                }}
+                                placeholder="Paste image URL to save into Google Drive"
+                                className={inputClasses}
+                            />
                         </div>
                     </div>
                 ) : (

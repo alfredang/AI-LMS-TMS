@@ -2,8 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { Button, Card, Icon, Spinner, IconName } from '../ui';
 import { AdminProfile } from '../../types/profile';
 import { useLms } from '@contexts/LmsContext';
-import { getApiUrl, getUploadUrl, getDeleteFileUrl, stripBaseUrl, getFileUrl } from '@/lib/urlHelpers';
+import { getApiUrl, getUploadUrl, getDeleteFileUrl, stripBaseUrl } from '@/lib/urlHelpers';
 import { ThemeMode, getCurrentTheme, applyTheme } from '@utils/colorUtils';
+import { ensureAbsoluteImageUrl } from '@utils/imageUtils';
 
 // CSS classes for inputs
 const inputClasses = "block w-full px-3 py-2 text-on-surface bg-surface border border-default rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent";
@@ -151,24 +152,6 @@ export const AdminProfileCard: React.FC<{ profile: AdminProfile }> = ({ profile 
     const [selectedProfilePictureFile, setSelectedProfilePictureFile] = useState<File | null>(null);
     const [profilePicturePreview, setProfilePicturePreview] = useState<string | null>(null);
     const [themeMode, setThemeMode] = useState<ThemeMode>(() => getCurrentTheme());
-
-    // Helper function to resolve image URL
-    const resolveImageUrl = (url: string | null | undefined): string => {
-        if (!url) return '/api/placeholder/150/150';
-
-        // If it's already a full URL (AI generated or external), return as is
-        if (url.startsWith('http://') || url.startsWith('https://')) {
-            return url;
-        }
-
-        // If it's a relative path to uploads, prepend server URL
-        if (url.startsWith('/uploads/') || url.startsWith('uploads/')) {
-            return getFileUrl(url) || url;
-        }
-
-        // Fallback for any other case
-        return url;
-    };
 
     useEffect(() => {
         setFormData(profile);
@@ -432,7 +415,7 @@ export const AdminProfileCard: React.FC<{ profile: AdminProfile }> = ({ profile 
                 <div className="flex flex-col sm:flex-row items-center gap-6">
                     <div className="flex-shrink-0 text-center">
                         <div className="relative group w-24 h-24">
-                            <img src={profilePicturePreview || resolveImageUrl(formData.profilePictureUrl)} alt={formData.name} className="w-24 h-24 rounded-full object-cover ring-4 ring-indigo-500/20" />
+                            <img src={profilePicturePreview || ensureAbsoluteImageUrl(formData.profilePictureUrl) || '/api/placeholder/150/150'} alt={formData.name} className="w-24 h-24 rounded-full object-cover ring-4 ring-indigo-500/20" />
                             {isGeneratingAvatar && (
                                 <div className="absolute inset-0 bg-black bg-opacity-50 rounded-full flex items-center justify-center">
                                     <Spinner size="sm" className="text-white" />

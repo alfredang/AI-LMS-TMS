@@ -4,6 +4,27 @@
 
 import { getBaseUrl } from '../lib/config';
 
+function extractGoogleDriveFileId(input: string): string | null {
+  const trimmed = input.trim();
+
+  const fileMatch = trimmed.match(/\/d\/([a-zA-Z0-9_-]+)/);
+  if (fileMatch?.[1]) return fileMatch[1];
+
+  const openMatch = trimmed.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+  if (openMatch?.[1]) return openMatch[1];
+
+  const ucMatch = trimmed.match(/\/uc\?export=view&id=([a-zA-Z0-9_-]+)/);
+  if (ucMatch?.[1]) return ucMatch[1];
+
+  return null;
+}
+
+function normalizeGoogleDriveImageUrl(url: string): string {
+  const fileId = extractGoogleDriveFileId(url);
+  if (!fileId) return url;
+  return `https://drive.google.com/thumbnail?id=${fileId}&sz=w1000`;
+}
+
 /**
  * Ensures that image URLs are absolute, pointing to the API server
  * Handles both relative URLs from old data and absolute URLs from new uploads
@@ -26,6 +47,9 @@ export function ensureAbsoluteImageUrl(url: string | undefined | null): string |
 
   // If URL is already absolute (non-localhost), return as-is
   if (url.startsWith('http://') || url.startsWith('https://')) {
+    if (url.includes('drive.google.com')) {
+      return normalizeGoogleDriveImageUrl(url);
+    }
     return url;
   }
 
