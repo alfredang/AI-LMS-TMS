@@ -247,6 +247,12 @@ export interface TrainingProviderProfile extends BaseProfile {
   ssgCertFile?: string;
   ssgPrivateKeyFile?: string;
   ssgEncryptionKey?: string;
+  ssgApp1CertFile?: string;
+  ssgApp1PrivateKeyFile?: string;
+  ssgApp1EncryptionKey?: string;
+  ssgApp3CertFile?: string;
+  ssgApp3PrivateKeyFile?: string;
+  ssgApp3EncryptionKey?: string;
   integrations: {
     syncGoogleCalendar: boolean;
     googleCalendarUrl?: string;

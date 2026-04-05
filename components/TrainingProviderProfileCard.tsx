@@ -23,20 +23,19 @@ const API_KEY_CONFIGS: Record<string, { label: string; models: { value: string; 
     },
     'OPENAI_API_KEY': {
         label: 'OpenAI',
-        defaultModel: 'gpt-4.1',
+        defaultModel: 'gpt-5.1',
         models: [
             { value: 'gpt-5.4', label: 'GPT-5.4' },
-            { value: 'gpt-4.1', label: 'GPT-4.1' },
-            { value: 'gpt-4.1-mini', label: 'GPT-4.1 Mini' },
+            { value: 'gpt-5.1', label: 'GPT-5.1' },
+            { value: 'gpt-5', label: 'GPT-5' },
         ]
     },
     'GEMINI_API_KEY': {
         label: 'Google Gemini',
-        defaultModel: 'gemini-2.5-flash',
+        defaultModel: 'gemini-3-flash-preview',
         models: [
-            { value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
-            { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
-            { value: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash' },
+            { value: 'gemini-3-pro-preview', label: 'Gemini 3 Pro Preview' },
+            { value: 'gemini-3-flash-preview', label: 'Gemini 3 Flash Preview' },
         ]
     },
     'MINIMAX_API_KEY': {
@@ -60,14 +59,15 @@ const API_KEY_CONFIGS: Record<string, { label: string; models: { value: string; 
         label: 'DeepSeek',
         defaultModel: 'deepseek-chat',
         models: [
-            { value: 'deepseek-chat', label: 'DeepSeek V3' },
-            { value: 'deepseek-reasoner', label: 'DeepSeek R1' },
+            { value: 'deepseek-chat', label: 'DeepSeek V3.2 Chat' },
+            { value: 'deepseek-reasoner', label: 'DeepSeek V3.2 Reasoner' },
         ]
     },
     'OPENROUTER_API_KEY': {
         label: 'OpenRouter',
         defaultModel: 'anthropic/claude-sonnet-4',
         models: [
+            { value: 'anthropic/claude-opus-4.6', label: 'Claude Opus 4.6' },
             { value: 'anthropic/claude-sonnet-4', label: 'Claude Sonnet 4' },
             { value: 'openai/gpt-4.1', label: 'GPT-4.1' },
             { value: 'google/gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
@@ -83,10 +83,29 @@ const API_KEY_CONFIGS: Record<string, { label: string; models: { value: string; 
         defaultModel: '',
         models: []
     },
+    'N8N_API_KEY': {
+        label: 'n8n API Key',
+        defaultModel: '',
+        models: []
+    },
 };
 
-// Fixed API Key names - these are the only allowed API key names
-const FIXED_API_KEY_NAMES = Object.keys(API_KEY_CONFIGS) as (keyof typeof API_KEY_CONFIGS)[];
+const LLM_API_KEY_NAMES = [
+    'ANTHROPIC_API_KEY',
+    'OPENAI_API_KEY',
+    'GEMINI_API_KEY',
+    'MINIMAX_API_KEY',
+    'KIMI_API_KEY',
+    'DEEPSEEK_API_KEY',
+    'OPENROUTER_API_KEY',
+] as const;
+const OPENCLAW_API_KEY_NAMES = [
+    'OPENCLAW_HOOKS_TOKEN',
+    'OPENCLAW_GATEWAY_TOKEN',
+] as const;
+const N8N_API_KEY_NAMES = [
+    'N8N_API_KEY',
+] as const;
 
 // Helper function to clean filename for display
 const getCleanDisplayName = (filename: string): string => {
@@ -164,21 +183,18 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
 
     // Transform initial profile data to ensure colorScheme is a string
     const getInitialFormData = (profile: TrainingProviderProfile) => {
-        // Extract default/fallback AI provider from apiKeys (stored as special entries)
+        // Extract default AI provider from apiKeys (stored as special entry)
         const defaultAiProvider = profile.apiKeys?.['DEFAULT_AI_PROVIDER'] || '';
-        const fallbackAiProvider = profile.apiKeys?.['FALLBACK_AI_PROVIDER'] || '';
 
         // Remove special keys from displayed apiKeys
         const cleanApiKeys = { ...profile.apiKeys };
         delete cleanApiKeys['DEFAULT_AI_PROVIDER'];
-        delete cleanApiKeys['FALLBACK_AI_PROVIDER'];
 
-        const transformedProfile: TrainingProviderProfile & { defaultAiProvider: string; fallbackAiProvider: string } = {
+        const transformedProfile: TrainingProviderProfile & { defaultAiProvider: string } = {
             ...profile,
             apiKeys: cleanApiKeys,
             apiKeyModels: profile.apiKeyModels || {},
             defaultAiProvider,
-            fallbackAiProvider
         };
 
         // Handle colorScheme transformation from object to string
@@ -194,6 +210,9 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
     const [newApiKey, setNewApiKey] = useState({ name: '', value: '' });
     const [visibleApiKeys, setVisibleApiKeys] = useState<{ [key: string]: boolean }>({});
     const [isApiKeysOpen, setIsApiKeysOpen] = useState(false);
+    const [isLlmCredentialsOpen, setIsLlmCredentialsOpen] = useState(false);
+    const [isOpenClawCredentialsOpen, setIsOpenClawCredentialsOpen] = useState(false);
+    const [isN8nCredentialsOpen, setIsN8nCredentialsOpen] = useState(false);
     const [isCompanyOpen, setIsCompanyOpen] = useState(false);
     const [isContactOpen, setIsContactOpen] = useState(false);
     const [isDocTemplatesOpen, setIsDocTemplatesOpen] = useState(false);
@@ -206,6 +225,11 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
     const [isGstOpen, setIsGstOpen] = useState(false);
     const [isAppearanceOpen, setIsAppearanceOpen] = useState(false);
     const [isEncryptionKeyVisible, setIsEncryptionKeyVisible] = useState(false);
+    const [isApp1EncryptionKeyVisible, setIsApp1EncryptionKeyVisible] = useState(false);
+    const [isApp3EncryptionKeyVisible, setIsApp3EncryptionKeyVisible] = useState(false);
+    const [isSsgApp1Open, setIsSsgApp1Open] = useState(false);
+    const [isSsgApp2Open, setIsSsgApp2Open] = useState(false);
+    const [isSsgApp3Open, setIsSsgApp3Open] = useState(false);
     const [isVisibleGoogleSecret, setIsVisibleGoogleSecret] = useState(false);
     const [isVisibleGoogleRefreshToken, setIsVisibleGoogleRefreshToken] = useState(false);
     const [themeMode, setThemeMode] = useState<ThemeMode>(() => getCurrentTheme());
@@ -228,6 +252,10 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
     const [proFormaTemplateFile, setProFormaTemplateFile] = useState<File | null>(null);
     const [ssgCertFile, setSsgCertFile] = useState<File | null>(null);
     const [ssgPrivateKeyFile, setSsgPrivateKeyFile] = useState<File | null>(null);
+    const [ssgApp1CertFile, setSsgApp1CertFile] = useState<File | null>(null);
+    const [ssgApp1PrivateKeyFile, setSsgApp1PrivateKeyFile] = useState<File | null>(null);
+    const [ssgApp3CertFile, setSsgApp3CertFile] = useState<File | null>(null);
+    const [ssgApp3PrivateKeyFile, setSsgApp3PrivateKeyFile] = useState<File | null>(null);
 
     const adminSettingLabels: { [key: string]: string } = {
         autoSendProFormaInvoice: "Auto Send Pro Forma Invoice Upon Course Confirmation",
@@ -267,6 +295,172 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
             }
         }));
     };
+
+    const renderCredentialInputs = (keyNames: readonly (keyof typeof API_KEY_CONFIGS)[]) => (
+        <div className="space-y-4">
+            {keyNames.map((keyName) => {
+                const keyValue = (formData.apiKeys || {})[keyName] || '';
+                const selectedModel = (formData.apiKeyModels && keyName in formData.apiKeyModels)
+                    ? formData.apiKeyModels[keyName]
+                    : (API_KEY_CONFIGS[keyName]?.defaultModel || '');
+                const isVisible = visibleApiKeys[keyName];
+                const config = API_KEY_CONFIGS[keyName];
+                const supportsModels = (config?.models?.length || 0) > 0;
+                const isLlmCredential = LLM_API_KEY_NAMES.includes(keyName as typeof LLM_API_KEY_NAMES[number]);
+                const isDefaultProvider = formData.defaultAiProvider === keyName;
+                const inputLabel =
+                    keyName === 'OPENCLAW_HOOKS_TOKEN'
+                        ? ''
+                        : keyName === 'OPENCLAW_GATEWAY_TOKEN'
+                            ? ''
+                            : keyName === 'N8N_API_KEY'
+                                ? ''
+                            : 'API Key';
+
+                return (
+                    <div
+                        key={keyName}
+                        className="p-4 rounded-lg border border-gray-300 dark:border-gray-600 bg-surface"
+                    >
+                        <div className="flex items-center justify-between mb-3">
+                            <span className="font-semibold text-on-surface">
+                                {config?.label || keyName}
+                            </span>
+                            <div className="flex items-center gap-4">
+                                {isLlmCredential && (
+                                    isEditing ? (
+                                        <label className={`flex items-center gap-2 text-sm ${keyValue ? 'text-on-surface' : 'text-subtle'}`}>
+                                            <input
+                                                type="radio"
+                                                name="default-llm-provider"
+                                                checked={isDefaultProvider}
+                                                disabled={!keyValue}
+                                                onChange={() => {
+                                                    if (!keyValue) return;
+                                                    setFormData(prev => ({ ...prev, defaultAiProvider: keyName } as any));
+                                                }}
+                                                className="h-4 w-4 accent-primary"
+                                            />
+                                            Default Model
+                                        </label>
+                                    ) : (
+                                        isDefaultProvider ? (
+                                            <span className="text-sm text-primary font-medium">Default Model</span>
+                                        ) : null
+                                    )
+                                )}
+                                {keyValue && (
+                                    <span className="text-sm text-green-600 dark:text-green-400 flex items-center gap-1.5">
+                                        <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+                                        Configured
+                                    </span>
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="flex flex-col sm:flex-row gap-3">
+                            <div className="flex-1">
+                                {inputLabel && (
+                                    <label className="block text-xs text-subtle mb-1">{inputLabel}</label>
+                                )}
+                                {isEditing ? (
+                                    <div className="relative">
+                                        <input
+                                            type={isVisible ? "text" : "password"}
+                                            value={keyValue}
+                                            onChange={(e) => {
+                                                const newValue = e.target.value;
+                                                setFormData(prev => ({
+                                                    ...prev,
+                                                    apiKeys: {
+                                                        ...(prev.apiKeys || {}),
+                                                        [keyName]: newValue
+                                                    }
+                                                }));
+                                            }}
+                                            placeholder={inputLabel ? `Enter ${inputLabel.toLowerCase()}...` : 'Enter API key...'}
+                                            className="w-full px-3 py-2 text-on-surface bg-surface border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent pr-10"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => setVisibleApiKeys(prev => ({ ...prev, [keyName]: !prev[keyName] }))}
+                                            className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-1"
+                                        >
+                                            <Icon
+                                                name={isVisible ? IconName.EyeOff : IconName.Eye}
+                                                className="w-4 h-4"
+                                            />
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <div className="flex items-center gap-2 px-3 py-2 bg-surface border border-gray-300 dark:border-gray-600 rounded-md">
+                                        <span className="flex-grow text-on-surface font-mono text-sm truncate">
+                                            {keyValue ? (
+                                                isVisible ? keyValue : `••••••••••••••••••••${keyValue.slice(-4)}`
+                                            ) : (
+                                                <span className="text-gray-500 italic">Not set</span>
+                                            )}
+                                        </span>
+                                        {keyValue && (
+                                            <button
+                                                type="button"
+                                                onClick={() => setVisibleApiKeys(prev => ({ ...prev, [keyName]: !prev[keyName] }))}
+                                                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-1 flex-shrink-0"
+                                            >
+                                                <Icon
+                                                    name={isVisible ? IconName.EyeOff : IconName.Eye}
+                                                    className="w-4 h-4"
+                                                />
+                                            </button>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+
+                            {supportsModels && (
+                                <div className="sm:w-48 flex-shrink-0">
+                                    <label className="block text-xs text-subtle mb-1">Model</label>
+                                    {isEditing ? (
+                                        <select
+                                            value={selectedModel}
+                                            onChange={(e) => {
+                                                setFormData(prev => ({
+                                                    ...prev,
+                                                    apiKeyModels: {
+                                                        ...(prev.apiKeyModels || {}),
+                                                        [keyName]: e.target.value
+                                                    }
+                                                }));
+                                            }}
+                                            className="w-full px-3 py-2 text-on-surface bg-surface border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                                            disabled={!keyValue}
+                                        >
+                                            <option value="">None</option>
+                                            {config?.models.map((model) => (
+                                                <option key={model.value} value={model.value}>
+                                                    {model.label}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    ) : (
+                                        <div className="px-3 py-2 bg-surface border border-gray-300 dark:border-gray-600 rounded-md">
+                                            <span className="text-on-surface text-sm">
+                                                {keyValue ? (
+                                                    selectedModel === '' ? 'None' : (config?.models.find(m => m.value === selectedModel)?.label || selectedModel)
+                                                ) : (
+                                                    <span className="text-gray-500 italic">-</span>
+                                                )}
+                                            </span>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                );
+            })}
+        </div>
+    );
 
     const handleToggleChange = (section: 'adminSettings' | 'securitySettings' | 'integrations' | 'gamingSettings' | 'fundingSettings', key: string) => {
         setFormData(prev => {
@@ -342,7 +536,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
         console.log(`🌓 Theme toggled to: ${newTheme}`);
     };
 
-    const handleTemplateUpload = (e: React.ChangeEvent<HTMLInputElement>, field: 'invoiceTemplateUrl' | 'receiptTemplateUrl' | 'certificateTemplateUrl' | 'proFormaInvoiceTemplateUrl' | 'ssgCertFile' | 'ssgPrivateKeyFile') => {
+    const handleTemplateUpload = (e: React.ChangeEvent<HTMLInputElement>, field: 'invoiceTemplateUrl' | 'receiptTemplateUrl' | 'certificateTemplateUrl' | 'proFormaInvoiceTemplateUrl' | 'ssgCertFile' | 'ssgPrivateKeyFile' | 'ssgApp1CertFile' | 'ssgApp1PrivateKeyFile' | 'ssgApp3CertFile' | 'ssgApp3PrivateKeyFile') => {
         const file = e.target.files?.[0];
         if (file) {
             // Debug log to see what's happening with the filename and file details
@@ -381,6 +575,18 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                     break;
                 case 'ssgPrivateKeyFile':
                     setSsgPrivateKeyFile(file);
+                    break;
+                case 'ssgApp1CertFile':
+                    setSsgApp1CertFile(file);
+                    break;
+                case 'ssgApp1PrivateKeyFile':
+                    setSsgApp1PrivateKeyFile(file);
+                    break;
+                case 'ssgApp3CertFile':
+                    setSsgApp3CertFile(file);
+                    break;
+                case 'ssgApp3PrivateKeyFile':
+                    setSsgApp3PrivateKeyFile(file);
                     break;
             }
 
@@ -425,12 +631,9 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                 }
             }
 
-            // Include default/fallback AI provider selections as special API key entries
+            // Include default AI provider selection as a special API key entry
             if (formData.defaultAiProvider) {
                 filteredApiKeys['DEFAULT_AI_PROVIDER'] = formData.defaultAiProvider;
-            }
-            if (formData.fallbackAiProvider) {
-                filteredApiKeys['FALLBACK_AI_PROVIDER'] = formData.fallbackAiProvider;
             }
 
             // Prepare profile data with filtered API keys
@@ -470,6 +673,18 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
             }
             if (ssgPrivateKeyFile) {
                 formDataToSend.append('ssgPrivateKeyFile', ssgPrivateKeyFile);
+            }
+            if (ssgApp1CertFile) {
+                formDataToSend.append('ssgApp1CertFile', ssgApp1CertFile);
+            }
+            if (ssgApp1PrivateKeyFile) {
+                formDataToSend.append('ssgApp1PrivateKeyFile', ssgApp1PrivateKeyFile);
+            }
+            if (ssgApp3CertFile) {
+                formDataToSend.append('ssgApp3CertFile', ssgApp3CertFile);
+            }
+            if (ssgApp3PrivateKeyFile) {
+                formDataToSend.append('ssgApp3PrivateKeyFile', ssgApp3PrivateKeyFile);
             }
 
             // Call the training provider update API
@@ -585,6 +800,26 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
             </button>
             {renderSectionActions()}
         </div>
+    );
+
+    const renderSubsectionHeader = (
+        title: string,
+        isOpen: boolean,
+        toggle: () => void
+    ) => (
+        <button
+            type="button"
+            onClick={toggle}
+            className="w-full rounded-md border border-default bg-surface-elevated px-6 py-5 text-left transition-colors hover:border-primary/40"
+        >
+            <div className="flex items-center justify-between gap-4">
+                <h3 className="text-lg font-bold text-on-surface">{title}</h3>
+                <Icon
+                    name={IconName.ChevronDown}
+                    className={`w-5 h-5 flex-shrink-0 text-gray-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
+                />
+            </div>
+        </button>
     );
 
     return (
@@ -1477,350 +1712,191 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                 <div className="border-t my-6"></div>
 
                 {renderSectionHeader('SSG Authentication Setting', isSsgOpen, () => setIsSsgOpen(prev => !prev), 'text-xl font-bold')}
-                {isSsgOpen && (isEditing ? (
-                    <div className="space-y-4">
-                        {/* Cert File */}
-                        <div>
-                            <label className="block text-sm font-medium text-on-surface-secondary mb-1 font-semibold">
-                                Self Signing Cert File
-                            </label>
-                            <div className="flex items-center gap-2 p-2 bg-surface-elevated rounded-md border border-default">
-                                <span className="text-sm text-on-surface-secondary flex-grow">
-                                    {ssgCertFile
-                                        ? getCleanDisplayName(ssgCertFile.name)
-                                        : formData.ssgCertFile?.split('/').pop() ? getCleanDisplayName(formData.ssgCertFile.split('/').pop() || '') : 'No file uploaded'}
-                                </span>
-                                <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => document.getElementById('ssg-cert-upload')?.click()}
-                                >
-                                    <Icon name={IconName.Upload} className="w-4 h-4 mr-2" />
-                                    Upload
-                                </Button>
-                                <input
-                                    type="file"
-                                    id="ssg-cert-upload"
-                                    accept="*/*"
-                                    className="hidden"
-                                    onChange={(e) => handleTemplateUpload(e, 'ssgCertFile' as any)}
-                                />
-                            </div>
-                        </div>
+                {isSsgOpen && <div className="space-y-4 mt-2">
 
-                        {/* Private Key File */}
-                        <div>
-                            <label className="block text-sm font-medium text-on-surface-secondary mb-1 font-semibold">
-                                Private Key File
-                            </label>
-                            <div className="flex items-center gap-2 p-2 bg-surface-elevated rounded-md border border-default">
-                                <span className="text-sm text-on-surface-secondary flex-grow">
-                                    {ssgPrivateKeyFile
-                                        ? getCleanDisplayName(ssgPrivateKeyFile.name)
-                                        : formData.ssgPrivateKeyFile?.split('/').pop() ? getCleanDisplayName(formData.ssgPrivateKeyFile.split('/').pop() || '') : 'No file uploaded'}
-                                </span>
-                                <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() =>
-                                        document.getElementById('ssg-privatekey-upload')?.click()
-                                    }
-                                >
-                                    <Icon name={IconName.Upload} className="w-4 h-4 mr-2" />
-                                    Upload
-                                </Button>
-                                <input
-                                    type="file"
-                                    id="ssg-privatekey-upload"
-                                    accept="*/*"
-                                    className="hidden"
-                                    onChange={(e) => handleTemplateUpload(e, 'ssgPrivateKeyFile' as any)}
-                                />
-                            </div>
-                        </div>
-
-                        {/* Encryption Key */}
-                        <div>
-                            <label
-                                htmlFor="ssgEncryptionKey"
-                                className="block text-sm font-medium text-on-surface-secondary mb-1 font-semibold"
-                            >
-                                Encryption Key
-                            </label>
-                            <div className="relative">
-                                <input
-                                    type={isEncryptionKeyVisible ? "text" : "password"}
-                                    id="ssgEncryptionKey"
-                                    name="ssgEncryptionKey"
-                                    value={formData.ssgEncryptionKey || ''}
-                                    onChange={(e) =>
-                                        setFormData((prev) => ({ ...prev, ssgEncryptionKey: e.target.value }))
-                                    }
-                                    className={`${inputClasses} pr-10`}
-                                    placeholder="Enter your encryption key"
-                                />
-                                <button
-                                    type="button"
-                                    onClick={() => setIsEncryptionKeyVisible(!isEncryptionKeyVisible)}
-                                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-subtle hover:text-primary"
-                                >
-                                    <Icon
-                                        name={isEncryptionKeyVisible ? IconName.EyeOff : IconName.Eye}
-                                        className="w-4 h-4"
-                                    />
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                        <ProfileBioItem
-                            label="Self Signing Cert File"
-                            value={formData.ssgCertFile ? getCleanDisplayName(formData.ssgCertFile.split('/').pop() || '') : 'Not Uploaded'}
-                        />
-                        <ProfileBioItem
-                            label="Private Key File"
-                            value={formData.ssgPrivateKeyFile ? getCleanDisplayName(formData.ssgPrivateKeyFile.split('/').pop() || '') : 'Not Uploaded'}
-                        />
-                        <ProfileBioItem
-                            label="Encryption Key"
-                            value={
-                                <div className="flex items-center gap-2">
-                                    <span className="font-semibold text-on-surface break-words">
-                                        {formData.ssgEncryptionKey
-                                            ? (isEncryptionKeyVisible ? formData.ssgEncryptionKey : '••••••••••••••••')
-                                            : 'Not Set'
-                                        }
+                    {/* App 1 */}
+                    {renderSubsectionHeader('App 1 (SKILLETO TERTIARY)', isSsgApp1Open, () => setIsSsgApp1Open(prev => !prev))}
+                    {isSsgApp1Open && (isEditing ? (
+                        <div className="space-y-4 ml-4">
+                            <div>
+                                <label className="block text-sm font-medium text-on-surface-secondary mb-1 font-semibold">Self Signing Cert File</label>
+                                <div className="flex items-center gap-2 p-2 bg-surface-elevated rounded-md border border-default">
+                                    <span className="text-sm text-on-surface-secondary flex-grow">
+                                        {ssgApp1CertFile ? getCleanDisplayName(ssgApp1CertFile.name) : formData.ssgApp1CertFile?.split('/').pop() ? getCleanDisplayName(formData.ssgApp1CertFile.split('/').pop() || '') : 'No file uploaded'}
                                     </span>
-                                    {formData.ssgEncryptionKey && (
-                                        <button
-                                            type="button"
-                                            onClick={() => setIsEncryptionKeyVisible(!isEncryptionKeyVisible)}
-                                            className="text-subtle hover:text-primary p-1 rounded-full"
-                                        >
-                                            <Icon
-                                                name={isEncryptionKeyVisible ? IconName.EyeOff : IconName.Eye}
-                                                className="w-4 h-4"
-                                            />
-                                        </button>
-                                    )}
+                                    <Button variant="ghost" size="sm" onClick={() => document.getElementById('ssg-app1-cert-upload')?.click()}>
+                                        <Icon name={IconName.Upload} className="w-4 h-4 mr-2" />Upload
+                                    </Button>
+                                    <input type="file" id="ssg-app1-cert-upload" accept="*/*" className="hidden" onChange={(e) => handleTemplateUpload(e, 'ssgApp1CertFile')} />
                                 </div>
-                            }
-                        />
-                    </div>
-                ))}
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-on-surface-secondary mb-1 font-semibold">Private Key File</label>
+                                <div className="flex items-center gap-2 p-2 bg-surface-elevated rounded-md border border-default">
+                                    <span className="text-sm text-on-surface-secondary flex-grow">
+                                        {ssgApp1PrivateKeyFile ? getCleanDisplayName(ssgApp1PrivateKeyFile.name) : formData.ssgApp1PrivateKeyFile?.split('/').pop() ? getCleanDisplayName(formData.ssgApp1PrivateKeyFile.split('/').pop() || '') : 'No file uploaded'}
+                                    </span>
+                                    <Button variant="ghost" size="sm" onClick={() => document.getElementById('ssg-app1-key-upload')?.click()}>
+                                        <Icon name={IconName.Upload} className="w-4 h-4 mr-2" />Upload
+                                    </Button>
+                                    <input type="file" id="ssg-app1-key-upload" accept="*/*" className="hidden" onChange={(e) => handleTemplateUpload(e, 'ssgApp1PrivateKeyFile')} />
+                                </div>
+                            </div>
+                            <div>
+                                <label htmlFor="ssgApp1EncryptionKey" className="block text-sm font-medium text-on-surface-secondary mb-1 font-semibold">Encryption Key</label>
+                                <div className="relative">
+                                    <input type={isApp1EncryptionKeyVisible ? "text" : "password"} id="ssgApp1EncryptionKey" value={formData.ssgApp1EncryptionKey || ''} onChange={(e) => setFormData((prev) => ({ ...prev, ssgApp1EncryptionKey: e.target.value }))} className={`${inputClasses} pr-10`} placeholder="Enter your encryption key" />
+                                    <button type="button" onClick={() => setIsApp1EncryptionKeyVisible(!isApp1EncryptionKeyVisible)} className="absolute right-3 top-1/2 transform -translate-y-1/2 text-subtle hover:text-primary">
+                                        <Icon name={isApp1EncryptionKeyVisible ? IconName.EyeOff : IconName.Eye} className="w-4 h-4" />
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 ml-4">
+                            <ProfileBioItem label="Self Signing Cert File" value={formData.ssgApp1CertFile ? getCleanDisplayName(formData.ssgApp1CertFile.split('/').pop() || '') : 'Not Uploaded'} />
+                            <ProfileBioItem label="Private Key File" value={formData.ssgApp1PrivateKeyFile ? getCleanDisplayName(formData.ssgApp1PrivateKeyFile.split('/').pop() || '') : 'Not Uploaded'} />
+                            <ProfileBioItem label="Encryption Key" value={
+                                <div className="flex items-center gap-2">
+                                    <span className="font-semibold text-on-surface break-words">{formData.ssgApp1EncryptionKey ? (isApp1EncryptionKeyVisible ? formData.ssgApp1EncryptionKey : '••••••••••••••••') : 'Not Set'}</span>
+                                    {formData.ssgApp1EncryptionKey && (<button type="button" onClick={() => setIsApp1EncryptionKeyVisible(!isApp1EncryptionKeyVisible)} className="text-subtle hover:text-primary p-1 rounded-full"><Icon name={isApp1EncryptionKeyVisible ? IconName.EyeOff : IconName.Eye} className="w-4 h-4" /></button>)}
+                                </div>
+                            } />
+                        </div>
+                    ))}
+
+                    {/* App 2 */}
+                    {renderSubsectionHeader('App 2 (Training Management System)', isSsgApp2Open, () => setIsSsgApp2Open(prev => !prev))}
+                    {isSsgApp2Open && (isEditing ? (
+                        <div className="space-y-4 ml-4">
+                            <div>
+                                <label className="block text-sm font-medium text-on-surface-secondary mb-1 font-semibold">Self Signing Cert File</label>
+                                <div className="flex items-center gap-2 p-2 bg-surface-elevated rounded-md border border-default">
+                                    <span className="text-sm text-on-surface-secondary flex-grow">
+                                        {ssgCertFile ? getCleanDisplayName(ssgCertFile.name) : formData.ssgCertFile?.split('/').pop() ? getCleanDisplayName(formData.ssgCertFile.split('/').pop() || '') : 'No file uploaded'}
+                                    </span>
+                                    <Button variant="ghost" size="sm" onClick={() => document.getElementById('ssg-cert-upload')?.click()}>
+                                        <Icon name={IconName.Upload} className="w-4 h-4 mr-2" />Upload
+                                    </Button>
+                                    <input type="file" id="ssg-cert-upload" accept="*/*" className="hidden" onChange={(e) => handleTemplateUpload(e, 'ssgCertFile')} />
+                                </div>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-on-surface-secondary mb-1 font-semibold">Private Key File</label>
+                                <div className="flex items-center gap-2 p-2 bg-surface-elevated rounded-md border border-default">
+                                    <span className="text-sm text-on-surface-secondary flex-grow">
+                                        {ssgPrivateKeyFile ? getCleanDisplayName(ssgPrivateKeyFile.name) : formData.ssgPrivateKeyFile?.split('/').pop() ? getCleanDisplayName(formData.ssgPrivateKeyFile.split('/').pop() || '') : 'No file uploaded'}
+                                    </span>
+                                    <Button variant="ghost" size="sm" onClick={() => document.getElementById('ssg-privatekey-upload')?.click()}>
+                                        <Icon name={IconName.Upload} className="w-4 h-4 mr-2" />Upload
+                                    </Button>
+                                    <input type="file" id="ssg-privatekey-upload" accept="*/*" className="hidden" onChange={(e) => handleTemplateUpload(e, 'ssgPrivateKeyFile')} />
+                                </div>
+                            </div>
+                            <div>
+                                <label htmlFor="ssgEncryptionKey" className="block text-sm font-medium text-on-surface-secondary mb-1 font-semibold">Encryption Key</label>
+                                <div className="relative">
+                                    <input type={isEncryptionKeyVisible ? "text" : "password"} id="ssgEncryptionKey" value={formData.ssgEncryptionKey || ''} onChange={(e) => setFormData((prev) => ({ ...prev, ssgEncryptionKey: e.target.value }))} className={`${inputClasses} pr-10`} placeholder="Enter your encryption key" />
+                                    <button type="button" onClick={() => setIsEncryptionKeyVisible(!isEncryptionKeyVisible)} className="absolute right-3 top-1/2 transform -translate-y-1/2 text-subtle hover:text-primary">
+                                        <Icon name={isEncryptionKeyVisible ? IconName.EyeOff : IconName.Eye} className="w-4 h-4" />
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 ml-4">
+                            <ProfileBioItem label="Self Signing Cert File" value={formData.ssgCertFile ? getCleanDisplayName(formData.ssgCertFile.split('/').pop() || '') : 'Not Uploaded'} />
+                            <ProfileBioItem label="Private Key File" value={formData.ssgPrivateKeyFile ? getCleanDisplayName(formData.ssgPrivateKeyFile.split('/').pop() || '') : 'Not Uploaded'} />
+                            <ProfileBioItem label="Encryption Key" value={
+                                <div className="flex items-center gap-2">
+                                    <span className="font-semibold text-on-surface break-words">{formData.ssgEncryptionKey ? (isEncryptionKeyVisible ? formData.ssgEncryptionKey : '••••••••••••••••') : 'Not Set'}</span>
+                                    {formData.ssgEncryptionKey && (<button type="button" onClick={() => setIsEncryptionKeyVisible(!isEncryptionKeyVisible)} className="text-subtle hover:text-primary p-1 rounded-full"><Icon name={isEncryptionKeyVisible ? IconName.EyeOff : IconName.Eye} className="w-4 h-4" /></button>)}
+                                </div>
+                            } />
+                        </div>
+                    ))}
+
+                    {/* App 3 */}
+                    {renderSubsectionHeader('App 3 (TIPL Tertiary Infotech Academy)', isSsgApp3Open, () => setIsSsgApp3Open(prev => !prev))}
+                    {isSsgApp3Open && (isEditing ? (
+                        <div className="space-y-4 ml-4">
+                            <div>
+                                <label className="block text-sm font-medium text-on-surface-secondary mb-1 font-semibold">Self Signing Cert File</label>
+                                <div className="flex items-center gap-2 p-2 bg-surface-elevated rounded-md border border-default">
+                                    <span className="text-sm text-on-surface-secondary flex-grow">
+                                        {ssgApp3CertFile ? getCleanDisplayName(ssgApp3CertFile.name) : formData.ssgApp3CertFile?.split('/').pop() ? getCleanDisplayName(formData.ssgApp3CertFile.split('/').pop() || '') : 'No file uploaded'}
+                                    </span>
+                                    <Button variant="ghost" size="sm" onClick={() => document.getElementById('ssg-app3-cert-upload')?.click()}>
+                                        <Icon name={IconName.Upload} className="w-4 h-4 mr-2" />Upload
+                                    </Button>
+                                    <input type="file" id="ssg-app3-cert-upload" accept="*/*" className="hidden" onChange={(e) => handleTemplateUpload(e, 'ssgApp3CertFile')} />
+                                </div>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-on-surface-secondary mb-1 font-semibold">Private Key File</label>
+                                <div className="flex items-center gap-2 p-2 bg-surface-elevated rounded-md border border-default">
+                                    <span className="text-sm text-on-surface-secondary flex-grow">
+                                        {ssgApp3PrivateKeyFile ? getCleanDisplayName(ssgApp3PrivateKeyFile.name) : formData.ssgApp3PrivateKeyFile?.split('/').pop() ? getCleanDisplayName(formData.ssgApp3PrivateKeyFile.split('/').pop() || '') : 'No file uploaded'}
+                                    </span>
+                                    <Button variant="ghost" size="sm" onClick={() => document.getElementById('ssg-app3-key-upload')?.click()}>
+                                        <Icon name={IconName.Upload} className="w-4 h-4 mr-2" />Upload
+                                    </Button>
+                                    <input type="file" id="ssg-app3-key-upload" accept="*/*" className="hidden" onChange={(e) => handleTemplateUpload(e, 'ssgApp3PrivateKeyFile')} />
+                                </div>
+                            </div>
+                            <div>
+                                <label htmlFor="ssgApp3EncryptionKey" className="block text-sm font-medium text-on-surface-secondary mb-1 font-semibold">Encryption Key</label>
+                                <div className="relative">
+                                    <input type={isApp3EncryptionKeyVisible ? "text" : "password"} id="ssgApp3EncryptionKey" value={formData.ssgApp3EncryptionKey || ''} onChange={(e) => setFormData((prev) => ({ ...prev, ssgApp3EncryptionKey: e.target.value }))} className={`${inputClasses} pr-10`} placeholder="Enter your encryption key" />
+                                    <button type="button" onClick={() => setIsApp3EncryptionKeyVisible(!isApp3EncryptionKeyVisible)} className="absolute right-3 top-1/2 transform -translate-y-1/2 text-subtle hover:text-primary">
+                                        <Icon name={isApp3EncryptionKeyVisible ? IconName.EyeOff : IconName.Eye} className="w-4 h-4" />
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 ml-4">
+                            <ProfileBioItem label="Self Signing Cert File" value={formData.ssgApp3CertFile ? getCleanDisplayName(formData.ssgApp3CertFile.split('/').pop() || '') : 'Not Uploaded'} />
+                            <ProfileBioItem label="Private Key File" value={formData.ssgApp3PrivateKeyFile ? getCleanDisplayName(formData.ssgApp3PrivateKeyFile.split('/').pop() || '') : 'Not Uploaded'} />
+                            <ProfileBioItem label="Encryption Key" value={
+                                <div className="flex items-center gap-2">
+                                    <span className="font-semibold text-on-surface break-words">{formData.ssgApp3EncryptionKey ? (isApp3EncryptionKeyVisible ? formData.ssgApp3EncryptionKey : '••••••••••••••••') : 'Not Set'}</span>
+                                    {formData.ssgApp3EncryptionKey && (<button type="button" onClick={() => setIsApp3EncryptionKeyVisible(!isApp3EncryptionKeyVisible)} className="text-subtle hover:text-primary p-1 rounded-full"><Icon name={isApp3EncryptionKeyVisible ? IconName.EyeOff : IconName.Eye} className="w-4 h-4" /></button>)}
+                                </div>
+                            } />
+                        </div>
+                    ))}
+
+                </div>}
 
                 <div className="border-t my-6"></div>
                 {renderSectionHeader('Credentials', isApiKeysOpen, () => setIsApiKeysOpen(prev => !prev), 'text-xl font-bold')}
                 {isApiKeysOpen && <><div className="space-y-4 mt-4">
-                    {FIXED_API_KEY_NAMES.map((keyName) => {
-                        const keyValue = (formData.apiKeys || {})[keyName] || '';
-                        // Fix for allowing "None" (empty string) selection:
-                        // Only fallback to default if the key is NOT present in apiKeyModels
-                        const selectedModel = (formData.apiKeyModels && keyName in formData.apiKeyModels)
-                            ? formData.apiKeyModels[keyName]
-                            : (API_KEY_CONFIGS[keyName]?.defaultModel || '');
-
-                        const isVisible = visibleApiKeys[keyName];
-                        const config = API_KEY_CONFIGS[keyName];
-                        const supportsModels = (config?.models?.length || 0) > 0;
-
-                        return (
-                            <div
-                                key={keyName}
-                                className="p-4 rounded-lg border border-gray-300 dark:border-gray-600 bg-surface"
-                            >
-                                {/* Header with Provider Name and Configured Badge */}
-                                <div className="flex items-center justify-between mb-3">
-                                    <span className="font-semibold text-on-surface">
-                                        {config?.label || keyName}
-                                    </span>
-                                    {keyValue && (
-                                        <span className="text-sm text-green-600 dark:text-green-400 flex items-center gap-1.5">
-                                            <span className="w-2 h-2 bg-green-500 rounded-full"></span>
-                                            Configured
-                                        </span>
-                                    )}
-                                </div>
-
-                                {/* API Key and Model side by side */}
-                                <div className="flex flex-col sm:flex-row gap-3">
-                                    {/* API Key Input */}
-                                    <div className="flex-1">
-                                        <label className="block text-xs text-subtle mb-1">{keyName === 'OPENCLAW_HOOKS_TOKEN' ? 'Hooks Token' : 'API Key'}</label>
-                                        {isEditing ? (
-                                            <div className="relative">
-                                                <input
-                                                    type={isVisible ? "text" : "password"}
-                                                    value={keyValue}
-                                                    onChange={(e) => {
-                                                        const newValue = e.target.value;
-                                                        setFormData(prev => ({
-                                                            ...prev,
-                                                            apiKeys: {
-                                                                ...(prev.apiKeys || {}),
-                                                                [keyName]: newValue
-                                                            }
-                                                        }));
-                                                    }}
-                                                    placeholder="Enter API key..."
-                                                    className="w-full px-3 py-2 text-on-surface bg-surface border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent pr-10"
-                                                />
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setVisibleApiKeys(prev => ({ ...prev, [keyName]: !prev[keyName] }))}
-                                                    className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-1"
-                                                >
-                                                    <Icon
-                                                        name={isVisible ? IconName.EyeOff : IconName.Eye}
-                                                        className="w-4 h-4"
-                                                    />
-                                                </button>
-                                            </div>
-                                        ) : (
-                                            <div className="flex items-center gap-2 px-3 py-2 bg-surface border border-gray-300 dark:border-gray-600 rounded-md">
-                                                <span className="flex-grow text-on-surface font-mono text-sm truncate">
-                                                    {keyValue ? (
-                                                        isVisible ? keyValue : `••••••••••••••••••••${keyValue.slice(-4)}`
-                                                    ) : (
-                                                        <span className="text-gray-500 italic">Not set</span>
-                                                    )}
-                                                </span>
-                                                {keyValue && (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setVisibleApiKeys(prev => ({ ...prev, [keyName]: !prev[keyName] }))}
-                                                        className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-1 flex-shrink-0"
-                                                    >
-                                                        <Icon
-                                                            name={isVisible ? IconName.EyeOff : IconName.Eye}
-                                                            className="w-4 h-4"
-                                                        />
-                                                    </button>
-                                                )}
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    {/* Model Dropdown */}
-                                    {supportsModels && (
-                                        <div className="sm:w-48 flex-shrink-0">
-                                            <label className="block text-xs text-subtle mb-1">Model</label>
-                                            {isEditing ? (
-                                                <select
-                                                    value={selectedModel}
-                                                    onChange={(e) => {
-                                                        setFormData(prev => ({
-                                                            ...prev,
-                                                            apiKeyModels: {
-                                                                ...(prev.apiKeyModels || {}),
-                                                                [keyName]: e.target.value
-                                                            }
-                                                        }));
-                                                    }}
-                                                    className="w-full px-3 py-2 text-on-surface bg-surface border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-                                                    disabled={!keyValue}
-                                                >
-                                                    <option value="">None</option>
-                                                    {config?.models.map((model) => (
-                                                        <option key={model.value} value={model.value}>
-                                                            {model.label}
-                                                        </option>
-                                                    ))}
-                                                </select>
-                                            ) : (
-                                                <div className="px-3 py-2 bg-surface border border-gray-300 dark:border-gray-600 rounded-md">
-                                                    <span className="text-on-surface text-sm">
-                                                        {keyValue ? (
-                                                            selectedModel === '' ? 'None' : (config?.models.find(m => m.value === selectedModel)?.label || selectedModel)
-                                                        ) : (
-                                                            <span className="text-gray-500 italic">-</span>
-                                                        )}
-                                                    </span>
-                                                </div>
-                                            )}
-                                        </div>
-                                    )}
-                                </div>
+                    <div className="space-y-4">
+                        {renderSubsectionHeader('LLM', isLlmCredentialsOpen, () => setIsLlmCredentialsOpen(prev => !prev))}
+                        {isLlmCredentialsOpen && (
+                            <div className="rounded-md border border-default bg-surface p-5">
+                                {renderCredentialInputs(LLM_API_KEY_NAMES)}
                             </div>
-                        );
-                    })}
-                </div>
+                        )}
+                    </div>
 
-                <div className="mt-4 p-4 rounded-lg border-2 border-primary/30 bg-primary/5">
-                    <h3 className="text-lg font-bold mb-1">AI Provider for Chatbot & GenAI Tools</h3>
-                    <p className="text-xs text-muted mb-4">
-                        Select the default AI provider to power the chatbot and GenAI authoring tools. Configure a fallback provider in case the default is unavailable.
-                    </p>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        {/* Default Provider */}
-                        <div>
-                            <label className="block text-sm font-semibold text-on-surface mb-1">Default Provider</label>
-                            {isEditing ? (
-                                <select
-                                    value={formData.defaultAiProvider || ''}
-                                    onChange={(e) => setFormData(prev => ({ ...prev, defaultAiProvider: e.target.value } as any))}
-                                    className="w-full px-3 py-2 text-on-surface bg-surface border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-                                >
-                                    <option value="">— Select default provider —</option>
-                                    {FIXED_API_KEY_NAMES
-                                        .filter(k => (formData.apiKeys || {})[k] && (API_KEY_CONFIGS[k]?.models?.length || 0) > 0)
-                                        .map(k => {
-                                            const modelLabel = API_KEY_CONFIGS[k]?.models.find(m => m.value === formData.apiKeyModels?.[k])?.label;
-                                            return (
-                                                <option key={k} value={k}>
-                                                    {API_KEY_CONFIGS[k]?.label}{modelLabel ? ` — ${modelLabel}` : ''}
-                                                </option>
-                                            );
-                                        })
-                                    }
-                                </select>
-                            ) : (
-                                <div className="px-3 py-2 bg-surface border border-gray-300 dark:border-gray-600 rounded-md text-sm">
-                                    {(() => {
-                                        const dp = formData.defaultAiProvider;
-                                        if (!dp) return <span className="text-gray-500 italic">Not set</span>;
-                                        const config = API_KEY_CONFIGS[dp];
-                                        const modelLabel = config?.models.find(m => m.value === formData.apiKeyModels?.[dp])?.label;
-                                        return <span>{config?.label}{modelLabel ? ` — ${modelLabel}` : ''}</span>;
-                                    })()}
-                                </div>
-                            )}
-                        </div>
-                        {/* Fallback Provider */}
-                        <div>
-                            <label className="block text-sm font-semibold text-on-surface mb-1">Fallback Provider</label>
-                            {isEditing ? (
-                                <select
-                                    value={formData.fallbackAiProvider || ''}
-                                    onChange={(e) => setFormData(prev => ({ ...prev, fallbackAiProvider: e.target.value } as any))}
-                                    className="w-full px-3 py-2 text-on-surface bg-surface border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-                                >
-                                    <option value="">— None —</option>
-                                    {FIXED_API_KEY_NAMES
-                                        .filter(k => (formData.apiKeys || {})[k] && k !== formData.defaultAiProvider && (API_KEY_CONFIGS[k]?.models?.length || 0) > 0)
-                                        .map(k => {
-                                            const modelLabel = API_KEY_CONFIGS[k]?.models.find(m => m.value === formData.apiKeyModels?.[k])?.label;
-                                            return (
-                                                <option key={k} value={k}>
-                                                    {API_KEY_CONFIGS[k]?.label}{modelLabel ? ` — ${modelLabel}` : ''}
-                                                </option>
-                                            );
-                                        })
-                                    }
-                                </select>
-                            ) : (
-                                <div className="px-3 py-2 bg-surface border border-gray-300 dark:border-gray-600 rounded-md text-sm">
-                                    {(() => {
-                                        const fp = formData.fallbackAiProvider;
-                                        if (!fp) return <span className="text-gray-500 italic">None</span>;
-                                        const config = API_KEY_CONFIGS[fp];
-                                        const modelLabel = config?.models.find(m => m.value === formData.apiKeyModels?.[fp])?.label;
-                                        return <span>{config?.label} — {modelLabel || formData.apiKeyModels?.[fp] || 'No model'}</span>;
-                                    })()}
-                                </div>
-                            )}
-                        </div>
+                    <div className="space-y-4">
+                        {renderSubsectionHeader('OpenClaw', isOpenClawCredentialsOpen, () => setIsOpenClawCredentialsOpen(prev => !prev))}
+                        {isOpenClawCredentialsOpen && (
+                            <div className="rounded-md border border-default bg-surface p-5">
+                                {renderCredentialInputs(OPENCLAW_API_KEY_NAMES)}
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="space-y-4">
+                        {renderSubsectionHeader('n8n', isN8nCredentialsOpen, () => setIsN8nCredentialsOpen(prev => !prev))}
+                        {isN8nCredentialsOpen && (
+                            <div className="rounded-md border border-default bg-surface p-5">
+                                {renderCredentialInputs(N8N_API_KEY_NAMES)}
+                            </div>
+                        )}
                     </div>
                 </div>
                 </>}

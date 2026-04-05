@@ -14,7 +14,11 @@ const FOLDER_MAPPING: { [key: string]: string } = {
   'certificateTemplate': 'certificate_template',
   'proFormaInvoiceTemplate': 'pro_forma_invoice_template',
   'ssgCertFile': 'self_signing_cert',
-  'ssgPrivateKeyFile': 'private_key'
+  'ssgPrivateKeyFile': 'private_key',
+  'ssgApp1CertFile': 'ssg_app1_cert',
+  'ssgApp1PrivateKeyFile': 'ssg_app1_private_key',
+  'ssgApp3CertFile': 'ssg_app3_cert',
+  'ssgApp3PrivateKeyFile': 'ssg_app3_private_key'
 };
 
 // Disable body parser to handle multipart form data
@@ -330,6 +334,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const currentProfile = await pool.query(`
       SELECT tp.invoice_template_url, tp.receipt_template_url, tp.certificate_template_url,
              tp.pro_forma_template_url, tp.ssg_self_sign_cert_file, tp.ssg_private_key_file,
+             tp.ssg_app1_cert_file, tp.ssg_app1_private_key_file,
+             tp.ssg_app3_cert_file, tp.ssg_app3_private_key_file,
              au.profile_picture_url
       FROM app_user au
       LEFT JOIN training_provider tp ON tp.id = $2
@@ -386,7 +392,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       { fileKey: 'certificateTemplate', dbField: 'certificate_template_url', oldFile: oldFiles.certificate_template_url },
       { fileKey: 'proFormaInvoiceTemplate', dbField: 'pro_forma_template_url', oldFile: oldFiles.pro_forma_template_url },
       { fileKey: 'ssgCertFile', dbField: 'ssg_self_sign_cert_file', oldFile: oldFiles.ssg_self_sign_cert_file },
-      { fileKey: 'ssgPrivateKeyFile', dbField: 'ssg_private_key_file', oldFile: oldFiles.ssg_private_key_file }
+      { fileKey: 'ssgPrivateKeyFile', dbField: 'ssg_private_key_file', oldFile: oldFiles.ssg_private_key_file },
+      { fileKey: 'ssgApp1CertFile', dbField: 'ssg_app1_cert_file', oldFile: oldFiles.ssg_app1_cert_file },
+      { fileKey: 'ssgApp1PrivateKeyFile', dbField: 'ssg_app1_private_key_file', oldFile: oldFiles.ssg_app1_private_key_file },
+      { fileKey: 'ssgApp3CertFile', dbField: 'ssg_app3_cert_file', oldFile: oldFiles.ssg_app3_cert_file },
+      { fileKey: 'ssgApp3PrivateKeyFile', dbField: 'ssg_app3_private_key_file', oldFile: oldFiles.ssg_app3_private_key_file }
     ];
 
     for (const template of templateFields) {
@@ -544,7 +554,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             gst_rate = $33,
             gst_register = $34,
             color_scheme = $35,
-            company_logo_url = COALESCE($37, company_logo_url)
+            company_logo_url = COALESCE($37, company_logo_url),
+            ssg_app1_cert_file = COALESCE($41, ssg_app1_cert_file),
+            ssg_app1_private_key_file = COALESCE($42, ssg_app1_private_key_file),
+            ssg_app1_encryption_key = $43,
+            ssg_app3_cert_file = COALESCE($44, ssg_app3_cert_file),
+            ssg_app3_private_key_file = COALESCE($45, ssg_app3_private_key_file),
+            ssg_app3_encryption_key = $46
         WHERE id = $36
         RETURNING *
       `;
@@ -589,7 +605,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         filePaths.companyLogoUrl || null,
         profileData.companyEmail || '',
         profileData.companyTel || '',
-        profileData.companyWebsite || ''
+        profileData.companyWebsite || '',
+        filePaths.ssg_app1_cert_file || null,
+        filePaths.ssg_app1_private_key_file || null,
+        profileData.ssgApp1EncryptionKey ?? null,
+        filePaths.ssg_app3_cert_file || null,
+        filePaths.ssg_app3_private_key_file || null,
+        profileData.ssgApp3EncryptionKey ?? null
       ];
 
       console.log('🔍 File upload parameters being sent to database:', {

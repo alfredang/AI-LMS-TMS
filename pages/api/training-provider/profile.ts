@@ -69,6 +69,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           tp.pro_forma_template_url as pro_forma_invoice_template_url,
           tp.ssg_self_sign_cert_file as self_signing_cert_file_url,
           tp.ssg_private_key_file as private_key_file_url,
+          tp.ssg_app1_cert_file,
+          tp.ssg_app1_private_key_file,
+          tp.ssg_app1_encryption_key,
+          tp.ssg_app3_cert_file,
+          tp.ssg_app3_private_key_file,
+          tp.ssg_app3_encryption_key,
           tp.created_at,
           tp.updated_at
         FROM app_user au
@@ -176,6 +182,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         proFormaInvoiceTemplateUrl: profile.pro_forma_invoice_template_url,
         selfSigningCertFileUrl: profile.self_signing_cert_file_url,
         privateKeyFileUrl: profile.private_key_file_url,
+        ssgApp1CertFile: profile.ssg_app1_cert_file,
+        ssgApp1PrivateKeyFile: profile.ssg_app1_private_key_file,
+        ssgApp1EncryptionKey: profile.ssg_app1_encryption_key,
+        ssgApp3CertFile: profile.ssg_app3_cert_file,
+        ssgApp3PrivateKeyFile: profile.ssg_app3_private_key_file,
+        ssgApp3EncryptionKey: profile.ssg_app3_encryption_key,
         createdAt: profile.created_at,
         updatedAt: profile.updated_at
       };
