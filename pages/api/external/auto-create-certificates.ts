@@ -1,7 +1,9 @@
 import { NextApiRequest, NextApiResponse } from 'next';
+import { google } from 'googleapis';
 import pool from '../../../lib/db';
 import crypto from 'crypto';
 import { generateAndUploadCertificate } from '../../../lib/services/certificateService';
+import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdentifiers';
 
 const SCHEDULER_SECRET = process.env.NEXT_PUBLIC_SCHEDULER_SECRET || 'local-dev-fallback';
 
@@ -60,6 +62,126 @@ async function logResult(
     ]);
 }
 
+/**
+ * Sends a certificate email with PDF attachment via Gmail API.
+ */
+async function sendCertificateEmail(opts: {
+    studentName: string;
+    studentEmail: string;
+    courseName: string;
+    courseDates: string;
+}): Promise<void> {
+    const { studentName, studentEmail, courseName, courseDates } = opts;
+    const tp = await getTrainingPartnerIdentifiers();
+
+    // Get training provider Google credentials
+    const result = await pool.query(`
+        SELECT email_user, google_client_id, google_client_secret, google_refresh_token,
+               google_slides_template_id, contact_person_name, company_email,
+               certificate_email_subject, certificate_email_body
+        FROM training_provider LIMIT 1
+    `);
+    if (result.rows.length === 0) throw new Error('Training provider not found');
+    const tpRow = result.rows[0];
+
+    if (!tpRow.email_user || !tpRow.google_client_id || !tpRow.google_client_secret || !tpRow.google_refresh_token || !tpRow.google_slides_template_id) {
+        throw new Error('Google Integration settings incomplete — skipping email');
+    }
+
+    const oauth2Client = new google.auth.OAuth2(tpRow.google_client_id, tpRow.google_client_secret, 'https://developers.google.com/oauthplayground');
+    oauth2Client.setCredentials({ refresh_token: tpRow.google_refresh_token });
+
+    const drive = google.drive({ version: 'v3', auth: oauth2Client });
+    const slides = google.slides({ version: 'v1', auth: oauth2Client });
+    const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
+
+    let tempFileId: string | null = null;
+
+    try {
+        // Generate PDF from Google Slides template
+        const copyResponse = await drive.files.copy({
+            fileId: tpRow.google_slides_template_id,
+            requestBody: { name: `Certificate - ${studentName}` },
+        });
+        tempFileId = copyResponse.data.id!;
+
+        await slides.presentations.batchUpdate({
+            presentationId: tempFileId,
+            requestBody: {
+                requests: [
+                    { replaceAllText: { containsText: { text: '[Student Name]', matchCase: true }, replaceText: studentName } },
+                    { replaceAllText: { containsText: { text: '[Course Name]', matchCase: true }, replaceText: courseName } },
+                    { replaceAllText: { containsText: { text: '[Course Dates]', matchCase: true }, replaceText: courseDates } },
+                ],
+            },
+        });
+
+        const pdfResponse = await drive.files.export(
+            { fileId: tempFileId, mimeType: 'application/pdf' },
+            { responseType: 'arraybuffer' }
+        );
+        const pdfBuffer = Buffer.from(pdfResponse.data as ArrayBuffer);
+
+        await drive.files.delete({ fileId: tempFileId });
+        tempFileId = null;
+
+        // Compose and send email
+        const sanitizedName = studentName.replace(/[^a-zA-Z0-9\s-]/g, '').replace(/\s+/g, '-');
+        const fileName = `${sanitizedName}-Certificate-of-Achievement.pdf`;
+        const boundary = '----CertBoundary' + Date.now();
+        const senderName = tpRow.contact_person_name || '';
+        const emailUser = tpRow.email_user;
+
+        const subject = (tpRow.certificate_email_subject || 'Certificate for Completing {COURSE_NAME}')
+            .replace(/\{STUDENT_NAME\}/g, studentName)
+            .replace(/\{COURSE_NAME\}/g, courseName)
+            .replace(/\{COMPANY_NAME\}/g, tp.name || 'Training Provider')
+            .replace(/\{COMPANY_SHORT_NAME\}/g, tp.companyShortname || tp.name || 'Training Provider')
+            .replace(/\{COMPANY_WEBSITE\}/g, tp.companyWebsite || '');
+
+        const defaultBody = `Hello {STUDENT_NAME},\n\nCongratulations on successfully completing the course {COURSE_NAME}! We are truly proud of your perseverance, dedication, and motivation throughout the program.\n\nPlease find attached your Certificate of Achievement in recognition of your accomplishment.\n\nYour commitment to learning and professional growth is commendable, and we wish you continued success in applying your new skills.\n\nFor learners who have achieved at least 75% attendance and passed their assessment for WSQ courses, they can view and download their WSQ SOA (Statement of Attainment) through http://www.MySkillsFuture.gov.sg.\n\nPlease note that SkillsFuture Singapore uses OpenCerts certificates to issue the WSQ Statements of Attainment (SOA). The OpenCerts will be ready for viewing/downloading 4-5 weeks upon completion of WSQ courses.\n\nFeel free to let me know if you need anything else. Thank you.\n\nBest regards,\nSupport Team\n{COMPANY_SHORT_NAME}\nTel: 61000613 | Email: support@tertiaryinfotech.com | WhatsApp: https://wa.me/6561000613`;
+        const bodyText = (tpRow.certificate_email_body || defaultBody)
+            .replace(/\{STUDENT_NAME\}/g, studentName)
+            .replace(/\{COURSE_NAME\}/g, courseName)
+            .replace(/\{COMPANY_NAME\}/g, tp.name || 'Training Provider')
+            .replace(/\{COMPANY_SHORT_NAME\}/g, tp.companyShortname || tp.name || 'Training Provider')
+            .replace(/\{COMPANY_WEBSITE\}/g, tp.companyWebsite || '');
+
+        const htmlBody = `<div style="font-family: Arial, sans-serif; color: #333;">${bodyText.split('\n').map(line => line.trim() ? `<p>${line}</p>` : '<br/>').join('\n')}</div>`;
+
+        const rawEmail = [
+            `From: ${senderName ? `${senderName} <${emailUser}>` : emailUser}`,
+            `To: ${studentEmail}`,
+            `Subject: ${subject}`,
+            `MIME-Version: 1.0`,
+            `Content-Type: multipart/mixed; boundary="${boundary}"`,
+            '',
+            `--${boundary}`,
+            `Content-Type: text/html; charset="UTF-8"`,
+            '',
+            htmlBody,
+            '',
+            `--${boundary}`,
+            `Content-Type: application/pdf; name="${fileName}"`,
+            `Content-Disposition: attachment; filename="${fileName}"`,
+            `Content-Transfer-Encoding: base64`,
+            '',
+            pdfBuffer.toString('base64'),
+            '',
+            `--${boundary}--`,
+        ].join('\r\n');
+
+        const encodedMessage = Buffer.from(rawEmail).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+
+        await gmail.users.messages.send({ userId: 'me', requestBody: { raw: encodedMessage } });
+        console.log(`[auto-create-certificates] Email sent to ${studentEmail}`);
+    } finally {
+        if (tempFileId) {
+            try { await drive.files.delete({ fileId: tempFileId }); } catch {}
+        }
+    }
+}
+
 export async function runAutomation(targetDate?: string) {
     await ensureLogTable();
 
@@ -72,12 +194,14 @@ export async function runAutomation(targetDate?: string) {
         // 1. Find Course Runs Ending in the window (Last 2 days + Today)
         // This ensures timezone overlaps or previous day failures are caught.
         // If targetDate is provided, we only look at that specific date.
-        const query = targetDate 
-            ? `SELECT cr.id as db_uuid, cr.course_run_id, c.course_code, c.title as course_title
+        const query = targetDate
+            ? `SELECT cr.id as db_uuid, cr.course_run_id, c.course_code, c.title as course_title,
+                      TO_CHAR(cr.start_date AT TIME ZONE 'Asia/Singapore', 'DD Mon YYYY') || ' - ' || TO_CHAR(cr.end_date AT TIME ZONE 'Asia/Singapore', 'DD Mon YYYY') as course_dates
                FROM course_run cr
                JOIN course c ON cr.course_id = c.id
                WHERE DATE(cr.end_date) = $1`
-            : `SELECT cr.id as db_uuid, cr.course_run_id, c.course_code, c.title as course_title
+            : `SELECT cr.id as db_uuid, cr.course_run_id, c.course_code, c.title as course_title,
+                      TO_CHAR(cr.start_date AT TIME ZONE 'Asia/Singapore', 'DD Mon YYYY') || ' - ' || TO_CHAR(cr.end_date AT TIME ZONE 'Asia/Singapore', 'DD Mon YYYY') as course_dates
                FROM course_run cr
                JOIN course c ON cr.course_id = c.id
                WHERE DATE(cr.end_date) >= CURRENT_DATE - INTERVAL '2 days'
@@ -116,10 +240,11 @@ export async function runAutomation(targetDate?: string) {
                 // 3. Fetch attendance score per learner across ALL sessions
                 // Only include learners with confirmed enrollment and ≥60% attendance
                 const attendanceRes = await pool.query(`
-                    SELECT 
+                    SELECT
                         e.id as enrolment_id,
                         e.nric,
                         COALESCE(au.full_name, e.nric, 'Unknown') as learner_name,
+                        COALESCE(au.email, e.email) as learner_email,
                         COUNT(DISTINCT CASE WHEN ca.is_present = true THEN ca.session_id END) as attended_count
                     FROM enrollment e
                     LEFT JOIN app_user au ON e.user_id = au.id
@@ -147,6 +272,24 @@ export async function runAutomation(targetDate?: string) {
                         // 4. Generate and Upload Certificate
                         console.log(`[auto-create-certificates] Generating cert for ${trainee.learner_name} (${attendancePercent}% attendance)`);
                         const certificateUrl = await generateAndUploadCertificate(trainee.enrolment_id, pool, trainee.learner_name);
+
+                        // 5. Send certificate email to learner
+                        if (trainee.learner_email) {
+                            try {
+                                await sendCertificateEmail({
+                                    studentName: trainee.learner_name,
+                                    studentEmail: trainee.learner_email,
+                                    courseName: run.course_title,
+                                    courseDates: run.course_dates || '',
+                                });
+                                console.log(`[auto-create-certificates] Certificate emailed to ${trainee.learner_email}`);
+                            } catch (emailErr: any) {
+                                console.error(`[auto-create-certificates] Failed to email cert to ${trainee.learner_email}:`, emailErr.message);
+                                // Don't fail the whole process if email fails — cert is already generated
+                            }
+                        } else {
+                            console.warn(`[auto-create-certificates] No email for ${trainee.learner_name} — certificate generated but not emailed`);
+                        }
 
                         await logResult(runId, 'created', { ...traineeLogContext, certificateUrl });
                         totalGenerated++;

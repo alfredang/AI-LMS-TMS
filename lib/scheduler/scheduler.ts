@@ -81,8 +81,8 @@ async function seedDefaults() {
         },
         {
             id: 'auto_create_certificates',
-            name: 'Auto-Create Certificates',
-            description: 'Automatically generates certificates at 6:30 PM for learners in courses ending today based on final session attendance.',
+            name: 'Auto-Create Certificates and Send to Learner\'s Email',
+            description: 'Automatically generates certificates and sends them via email to learners in courses ending today based on final session attendance.',
             cron_expression: '30 18 * * *',
             api_endpoint: '/api/external/auto-create-certificates',
         },

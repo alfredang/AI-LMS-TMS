@@ -132,22 +132,31 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     } catch (e) { /* columns don't exist yet */ }
 
-    const subject = (dbSubject || 'Certificate of Achievement: Congratulations!')
+    const subject = (dbSubject || 'Certificate for Completing {COURSE_NAME}')
       .replace(/\{STUDENT_NAME\}/g, studentName)
       .replace(/\{COURSE_NAME\}/g, courseName)
       .replace(/\{COMPANY_NAME\}/g, tp.name || 'Training Provider')
       .replace(/\{COMPANY_SHORT_NAME\}/g, tp.companyShortname || tp.name || 'Training Provider')
       .replace(/\{COMPANY_WEBSITE\}/g, tp.companyWebsite || '');
 
-    const defaultBody = `Dear {STUDENT_NAME},
+    const defaultBody = `Hello {STUDENT_NAME},
 
-Congratulations on successfully completing {COURSE_NAME}!
+Congratulations on successfully completing the course {COURSE_NAME}! We are truly proud of your perseverance, dedication, and motivation throughout the program.
 
-Please find your Certificate of Achievement attached to this email.
+Please find attached your Certificate of Achievement in recognition of your accomplishment.
+
+Your commitment to learning and professional growth is commendable, and we wish you continued success in applying your new skills.
+
+For learners who have achieved at least 75% attendance and passed their assessment for WSQ courses, they can view and download their WSQ SOA (Statement of Attainment) through http://www.MySkillsFuture.gov.sg.
+
+Please note that SkillsFuture Singapore uses OpenCerts certificates to issue the WSQ Statements of Attainment (SOA). The OpenCerts will be ready for viewing/downloading 4-5 weeks upon completion of WSQ courses.
+
+Feel free to let me know if you need anything else. Thank you.
 
 Best regards,
-{COMPANY_NAME}
-{COMPANY_WEBSITE}`;
+Support Team
+{COMPANY_SHORT_NAME}
+Tel: 61000613 | Email: support@tertiaryinfotech.com | WhatsApp: https://wa.me/6561000613`;
 
     const bodyText = (dbBody || defaultBody)
       .replace(/\{STUDENT_NAME\}/g, studentName)

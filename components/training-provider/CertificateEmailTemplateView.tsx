@@ -5,17 +5,26 @@ import { Icon, IconName } from '../ui/Icon';
 import { getApiUrl } from '@/lib/urlHelpers';
 import { useLms } from '@contexts/LmsContext';
 
-const DEFAULT_SUBJECT = 'Certificate of Achievement: Congratulations!';
+const DEFAULT_SUBJECT = 'Certificate for Completing {COURSE_NAME}';
 
-const DEFAULT_BODY = `Dear {STUDENT_NAME},
+const DEFAULT_BODY = `Hello {STUDENT_NAME},
 
-Congratulations on successfully completing {COURSE_NAME}!
+Congratulations on successfully completing the course {COURSE_NAME}! We are truly proud of your perseverance, dedication, and motivation throughout the program.
 
-Please find your Certificate of Achievement attached to this email.
+Please find attached your Certificate of Achievement in recognition of your accomplishment.
+
+Your commitment to learning and professional growth is commendable, and we wish you continued success in applying your new skills.
+
+For learners who have achieved at least 75% attendance and passed their assessment for WSQ courses, they can view and download their WSQ SOA (Statement of Attainment) through http://www.MySkillsFuture.gov.sg.
+
+Please note that SkillsFuture Singapore uses OpenCerts certificates to issue the WSQ Statements of Attainment (SOA). The OpenCerts will be ready for viewing/downloading 4-5 weeks upon completion of WSQ courses.
+
+Feel free to let me know if you need anything else. Thank you.
 
 Best regards,
-{COMPANY_NAME}
-{COMPANY_WEBSITE}`;
+Support Team
+{COMPANY_SHORT_NAME}
+Tel: 61000613 | Email: support@tertiaryinfotech.com | WhatsApp: https://wa.me/6561000613`;
 
 const DEFAULT_CC = '';
 
