@@ -560,7 +560,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             ssg_app1_encryption_key = $43,
             ssg_app3_cert_file = COALESCE($44, ssg_app3_cert_file),
             ssg_app3_private_key_file = COALESCE($45, ssg_app3_private_key_file),
-            ssg_app3_encryption_key = $46
+            ssg_app3_encryption_key = $46,
+            ssg_app4_client_id = $47,
+            ssg_app4_client_secret = $48,
+            ssg_default_app = $49
         WHERE id = $36
         RETURNING *
       `;
@@ -611,7 +614,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         profileData.ssgApp1EncryptionKey ?? null,
         filePaths.ssg_app3_cert_file || null,
         filePaths.ssg_app3_private_key_file || null,
-        profileData.ssgApp3EncryptionKey ?? null
+        profileData.ssgApp3EncryptionKey ?? null,
+        profileData.ssgApp4ClientId ?? null,
+        profileData.ssgApp4ClientSecret ?? null,
+        profileData.ssgDefaultApp || 'app2'
       ];
 
       console.log('🔍 File upload parameters being sent to database:', {

@@ -75,6 +75,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           tp.ssg_app3_cert_file,
           tp.ssg_app3_private_key_file,
           tp.ssg_app3_encryption_key,
+          tp.ssg_app4_client_id,
+          tp.ssg_app4_client_secret,
+          tp.ssg_default_app,
           tp.created_at,
           tp.updated_at
         FROM app_user au
@@ -188,6 +191,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         ssgApp3CertFile: profile.ssg_app3_cert_file,
         ssgApp3PrivateKeyFile: profile.ssg_app3_private_key_file,
         ssgApp3EncryptionKey: profile.ssg_app3_encryption_key,
+        ssgApp4ClientId: profile.ssg_app4_client_id,
+        ssgApp4ClientSecret: profile.ssg_app4_client_secret,
+        ssgDefaultApp: profile.ssg_default_app || 'app2',
         createdAt: profile.created_at,
         updatedAt: profile.updated_at
       };

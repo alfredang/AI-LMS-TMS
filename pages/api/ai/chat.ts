@@ -129,14 +129,14 @@ async function callProvider(config: ProviderConfig, messages: any[], systemPromp
         return data.choices?.[0]?.message?.content || '';
     } else if (provider === 'MINIMAX_API_KEY') {
         // MiniMax API (OpenAI-compatible endpoint)
-        const response = await fetch('https://api.minimax.chat/v1/text/chatcompletion_v2', {
+        const response = await fetch('https://api.minimaxi.chat/v1/chat/completions', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${apiKey}`
             },
             body: JSON.stringify({
-                model: model || 'MiniMax-Text-01',
+                model: model || 'MiniMax-M2.7',
                 messages: [
                     ...(systemPrompt ? [{ role: 'system', content: systemPrompt }] : []),
                     ...messages.map((m: any) => ({

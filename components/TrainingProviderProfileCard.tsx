@@ -230,6 +230,8 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
     const [isSsgApp1Open, setIsSsgApp1Open] = useState(false);
     const [isSsgApp2Open, setIsSsgApp2Open] = useState(false);
     const [isSsgApp3Open, setIsSsgApp3Open] = useState(false);
+    const [isSsgApp4Open, setIsSsgApp4Open] = useState(false);
+    const [isApp4ClientSecretVisible, setIsApp4ClientSecretVisible] = useState(false);
     const [isVisibleGoogleSecret, setIsVisibleGoogleSecret] = useState(false);
     const [isVisibleGoogleRefreshToken, setIsVisibleGoogleRefreshToken] = useState(false);
     const [themeMode, setThemeMode] = useState<ThemeMode>(() => getCurrentTheme());
@@ -786,6 +788,49 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
             )}
         </div>
     );
+
+    const renderSsgAppHeader = (
+        title: string,
+        appKey: string,
+        isOpen: boolean,
+        toggle: () => void
+    ) => {
+        const isDefault = formData.ssgDefaultApp === appKey;
+        return (
+            <button
+                type="button"
+                onClick={toggle}
+                className={`w-full rounded-md border px-6 py-5 text-left transition-colors ${isDefault ? 'border-green-500/40 bg-green-500/5 hover:border-green-500/60' : 'border-default bg-surface-elevated hover:border-primary/40'}`}
+            >
+                <div className="flex items-center justify-between gap-4">
+                    <h3 className={`text-lg font-bold ${isDefault ? 'text-green-400' : 'text-on-surface'}`}>{title}</h3>
+                    <Icon
+                        name={IconName.ChevronDown}
+                        className={`w-5 h-5 flex-shrink-0 text-gray-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
+                    />
+                </div>
+            </button>
+        );
+    };
+
+    const renderDefaultRadio = (appKey: string) => {
+        const isDefault = formData.ssgDefaultApp === appKey;
+        if (!isDefault && !isEditing) return null;
+        return (
+            <div className="mt-2 col-span-full">
+                <button
+                    type="button"
+                    onClick={() => isEditing && setFormData(prev => ({ ...prev, ssgDefaultApp: appKey }))}
+                    className={`flex items-center gap-2.5 px-3 py-2 rounded-lg transition-colors ${isDefault ? 'text-green-400' : 'text-on-surface-secondary hover:text-primary cursor-pointer'}`}
+                >
+                    <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors ${isDefault ? 'border-green-400' : 'border-gray-500'}`}>
+                        {isDefault && <div className="w-2 h-2 rounded-full bg-green-400" />}
+                    </div>
+                    <span className="text-sm font-medium">{isDefault ? 'Default App for SSG API' : 'Set as Default for SSG API'}</span>
+                </button>
+            </div>
+        );
+    };
 
     const renderSectionHeader = (
         title: string,
@@ -1715,7 +1760,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                 {isSsgOpen && <div className="space-y-4 mt-2">
 
                     {/* App 1 */}
-                    {renderSubsectionHeader('App 1 (SKILLETO TERTIARY)', isSsgApp1Open, () => setIsSsgApp1Open(prev => !prev))}
+                    {renderSsgAppHeader('App 1 (SKILLETO TERTIARY)', 'app1', isSsgApp1Open, () => setIsSsgApp1Open(prev => !prev))}
                     {isSsgApp1Open && (isEditing ? (
                         <div className="space-y-4 ml-4">
                             <div>
@@ -1751,6 +1796,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                     </button>
                                 </div>
                             </div>
+                            {renderDefaultRadio('app1')}
                         </div>
                     ) : (
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 ml-4">
@@ -1762,11 +1808,12 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                     {formData.ssgApp1EncryptionKey && (<button type="button" onClick={() => setIsApp1EncryptionKeyVisible(!isApp1EncryptionKeyVisible)} className="text-subtle hover:text-primary p-1 rounded-full"><Icon name={isApp1EncryptionKeyVisible ? IconName.EyeOff : IconName.Eye} className="w-4 h-4" /></button>)}
                                 </div>
                             } />
+                            {renderDefaultRadio('app1')}
                         </div>
                     ))}
 
                     {/* App 2 */}
-                    {renderSubsectionHeader('App 2 (Training Management System)', isSsgApp2Open, () => setIsSsgApp2Open(prev => !prev))}
+                    {renderSsgAppHeader('App 2 (Training Management System)', 'app2', isSsgApp2Open, () => setIsSsgApp2Open(prev => !prev))}
                     {isSsgApp2Open && (isEditing ? (
                         <div className="space-y-4 ml-4">
                             <div>
@@ -1802,6 +1849,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                     </button>
                                 </div>
                             </div>
+                            {renderDefaultRadio('app2')}
                         </div>
                     ) : (
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 ml-4">
@@ -1813,11 +1861,12 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                     {formData.ssgEncryptionKey && (<button type="button" onClick={() => setIsEncryptionKeyVisible(!isEncryptionKeyVisible)} className="text-subtle hover:text-primary p-1 rounded-full"><Icon name={isEncryptionKeyVisible ? IconName.EyeOff : IconName.Eye} className="w-4 h-4" /></button>)}
                                 </div>
                             } />
+                            {renderDefaultRadio('app2')}
                         </div>
                     ))}
 
                     {/* App 3 */}
-                    {renderSubsectionHeader('App 3 (TIPL Tertiary Infotech Academy)', isSsgApp3Open, () => setIsSsgApp3Open(prev => !prev))}
+                    {renderSsgAppHeader('App 3 (TIPL Tertiary Infotech Academy)', 'app3', isSsgApp3Open, () => setIsSsgApp3Open(prev => !prev))}
                     {isSsgApp3Open && (isEditing ? (
                         <div className="space-y-4 ml-4">
                             <div>
@@ -1853,6 +1902,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                     </button>
                                 </div>
                             </div>
+                            {renderDefaultRadio('app3')}
                         </div>
                     ) : (
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 ml-4">
@@ -1864,6 +1914,39 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                     {formData.ssgApp3EncryptionKey && (<button type="button" onClick={() => setIsApp3EncryptionKeyVisible(!isApp3EncryptionKeyVisible)} className="text-subtle hover:text-primary p-1 rounded-full"><Icon name={isApp3EncryptionKeyVisible ? IconName.EyeOff : IconName.Eye} className="w-4 h-4" /></button>)}
                                 </div>
                             } />
+                            {renderDefaultRadio('app3')}
+                        </div>
+                    ))}
+
+                    {/* App 4 */}
+                    {renderSsgAppHeader('App 4 (TMS API)', 'app4', isSsgApp4Open, () => setIsSsgApp4Open(prev => !prev))}
+                    {isSsgApp4Open && (isEditing ? (
+                        <div className="space-y-4 ml-4">
+                            <div>
+                                <label htmlFor="ssgApp4ClientId" className="block text-sm font-medium text-on-surface-secondary mb-1 font-semibold">Client ID</label>
+                                <input type="text" id="ssgApp4ClientId" value={formData.ssgApp4ClientId || ''} onChange={(e) => setFormData((prev) => ({ ...prev, ssgApp4ClientId: e.target.value }))} className={inputClasses} placeholder="Enter Client ID" />
+                            </div>
+                            <div>
+                                <label htmlFor="ssgApp4ClientSecret" className="block text-sm font-medium text-on-surface-secondary mb-1 font-semibold">Client Secret</label>
+                                <div className="relative">
+                                    <input type={isApp4ClientSecretVisible ? "text" : "password"} id="ssgApp4ClientSecret" value={formData.ssgApp4ClientSecret || ''} onChange={(e) => setFormData((prev) => ({ ...prev, ssgApp4ClientSecret: e.target.value }))} className={`${inputClasses} pr-10`} placeholder="Enter Client Secret" />
+                                    <button type="button" onClick={() => setIsApp4ClientSecretVisible(!isApp4ClientSecretVisible)} className="absolute right-3 top-1/2 transform -translate-y-1/2 text-subtle hover:text-primary">
+                                        <Icon name={isApp4ClientSecretVisible ? IconName.EyeOff : IconName.Eye} className="w-4 h-4" />
+                                    </button>
+                                </div>
+                            </div>
+                            {renderDefaultRadio('app4')}
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 ml-4">
+                            <ProfileBioItem label="Client ID" value={formData.ssgApp4ClientId || 'Not Set'} />
+                            <ProfileBioItem label="Client Secret" value={
+                                <div className="flex items-center gap-2">
+                                    <span className="font-semibold text-on-surface break-words">{formData.ssgApp4ClientSecret ? (isApp4ClientSecretVisible ? formData.ssgApp4ClientSecret : '••••••••••••••••') : 'Not Set'}</span>
+                                    {formData.ssgApp4ClientSecret && (<button type="button" onClick={() => setIsApp4ClientSecretVisible(!isApp4ClientSecretVisible)} className="text-subtle hover:text-primary p-1 rounded-full"><Icon name={isApp4ClientSecretVisible ? IconName.EyeOff : IconName.Eye} className="w-4 h-4" /></button>)}
+                                </div>
+                            } />
+                            {renderDefaultRadio('app4')}
                         </div>
                     ))}
 

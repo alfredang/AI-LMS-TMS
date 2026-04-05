@@ -42,7 +42,16 @@ export class SSGCredentialsService {
           ssg_encryption_key,
           ssg_self_sign_cert_file,
           ssg_private_key_file,
-          ssg_api_base_url
+          ssg_api_base_url,
+          ssg_default_app,
+          ssg_app1_cert_file,
+          ssg_app1_private_key_file,
+          ssg_app1_encryption_key,
+          ssg_app3_cert_file,
+          ssg_app3_private_key_file,
+          ssg_app3_encryption_key,
+          ssg_app4_client_id,
+          ssg_app4_client_secret
         FROM
           training_provider
       `;
@@ -65,7 +74,34 @@ export class SSGCredentialsService {
       }
 
       const row = result.rows[0];
-      
+      const defaultApp = row.ssg_default_app || 'app2';
+
+      // Resolve credentials based on default app
+      let certFile: string | null;
+      let keyFile: string | null;
+      let encKey: string | null;
+
+      switch (defaultApp) {
+        case 'app1':
+          certFile = row.ssg_app1_cert_file;
+          keyFile = row.ssg_app1_private_key_file;
+          encKey = row.ssg_app1_encryption_key;
+          break;
+        case 'app3':
+          certFile = row.ssg_app3_cert_file;
+          keyFile = row.ssg_app3_private_key_file;
+          encKey = row.ssg_app3_encryption_key;
+          break;
+        case 'app2':
+        default:
+          certFile = row.ssg_self_sign_cert_file;
+          keyFile = row.ssg_private_key_file;
+          encKey = row.ssg_encryption_key;
+          break;
+      }
+
+      console.log(`[creds] Using SSG credentials from default app: ${defaultApp}`);
+
       // Convert relative paths to absolute paths
       const convertToAbsolutePath = (relativePath: string | null): string => {
         if (!relativePath) return '';
@@ -86,9 +122,9 @@ export class SSGCredentialsService {
       
       const credentials: SSGCredentials = {
         uen: row.uen || process.env.TRAINING_PARTNER_UEN,
-        encryptionKey: row.ssg_encryption_key || process.env.SSG_ENCRYPTION_KEY || process.env.ENCRYPTION_KEY || process.env.CERT_1_ENCRYPTION_KEY || '',
-        certificatePath: convertToAbsolutePath(row.ssg_self_sign_cert_file),
-        privateKeyPath: convertToAbsolutePath(row.ssg_private_key_file),
+        encryptionKey: encKey || process.env.SSG_ENCRYPTION_KEY || process.env.ENCRYPTION_KEY || process.env.CERT_1_ENCRYPTION_KEY || '',
+        certificatePath: convertToAbsolutePath(certFile),
+        privateKeyPath: convertToAbsolutePath(keyFile),
         ssgApiBaseUrl: row.ssg_api_base_url || process.env.SSG_API_BASE_URL || process.env.SSG_API_URL || 'https://api.ssg-wsg.sg'
       };
 

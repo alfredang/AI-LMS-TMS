@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { sendToOpenClaw, sendToMiniMaxDirect } from '../../../lib/openclaw-client';
 import type { ChatMessage } from '../../../lib/openclaw-client';
 import { executeTool } from '../../../lib/nemo-tools';
+import pool from '../../../lib/db';
 
 type ChatRole = 'user' | 'assistant';
 
@@ -197,6 +198,132 @@ function formatRawResults(results: string[]): string {
 }
 
 // ---------------------------------------------------------------------------
+// Default LLM provider resolution — uses the configured default from DB
+// ---------------------------------------------------------------------------
+
+interface LLMProviderConfig {
+  provider: string;
+  apiKey: string;
+  model: string;
+}
+
+async function getDefaultLLMProvider(userId: string): Promise<LLMProviderConfig | null> {
+  try {
+    const result = await pool.query(`
+      SELECT key_name, key_value, selected_model
+      FROM training_provider_api
+      WHERE training_provider_id = COALESCE(
+        (SELECT provider_id FROM training_provider_member WHERE user_id = $1 LIMIT 1),
+        (SELECT provider_id FROM provider_admin_user WHERE user_id = $1 LIMIT 1),
+        (SELECT id FROM training_provider ORDER BY created_at DESC LIMIT 1)
+      )
+    `, [userId]);
+
+    let defaultProviderKey: string | null = null;
+    const configs: Record<string, { apiKey: string; model: string | null }> = {};
+
+    for (const row of result.rows) {
+      if (row.key_name === 'DEFAULT_AI_PROVIDER') {
+        defaultProviderKey = row.key_value;
+      } else if (row.key_value && row.key_name.endsWith('_API_KEY')) {
+        configs[row.key_name] = { apiKey: row.key_value, model: row.selected_model };
+      }
+    }
+
+    // Fall back to Anthropic if no default set
+    if (!defaultProviderKey) {
+      if (configs['ANTHROPIC_API_KEY']?.apiKey) defaultProviderKey = 'ANTHROPIC_API_KEY';
+      else if (configs['GEMINI_API_KEY']?.apiKey) defaultProviderKey = 'GEMINI_API_KEY';
+    }
+
+    if (!defaultProviderKey || !configs[defaultProviderKey]) return null;
+
+    const c = configs[defaultProviderKey];
+    const defaultModels: Record<string, string> = {
+      ANTHROPIC_API_KEY: 'claude-sonnet-4-6-20250527',
+      OPENAI_API_KEY: 'gpt-4o',
+      GEMINI_API_KEY: 'gemini-2.5-flash',
+      MINIMAX_API_KEY: 'MiniMax-M2.7',
+      KIMI_API_KEY: 'moonshot-v1-8k',
+      DEEPSEEK_API_KEY: 'deepseek-chat',
+    };
+
+    return {
+      provider: defaultProviderKey,
+      apiKey: c.apiKey,
+      model: c.model || defaultModels[defaultProviderKey] || 'claude-sonnet-4-6-20250527',
+    };
+  } catch (err) {
+    console.error('[Nemo] Failed to get default LLM provider:', err);
+    return null;
+  }
+}
+
+async function callDefaultLLM(config: LLMProviderConfig, messages: ChatMessage[]): Promise<string> {
+  const { provider, apiKey, model } = config;
+  console.log(`[Nemo] Using default LLM: ${provider} / ${model}`);
+
+  if (provider === 'ANTHROPIC_API_KEY') {
+    const systemMsg = messages.find(m => m.role === 'system');
+    const nonSystemMsgs = messages.filter(m => m.role !== 'system');
+    const body: any = {
+      model,
+      max_tokens: 4096,
+      messages: nonSystemMsgs.map(m => ({ role: m.role, content: m.content })),
+    };
+    if (systemMsg) body.system = systemMsg.content;
+
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify(body),
+    });
+    if (!response.ok) throw new Error(`Anthropic ${response.status}: ${await response.text()}`);
+    const data = await response.json();
+    return data.content?.[0]?.text || '';
+  }
+
+  if (provider === 'GEMINI_API_KEY') {
+    const { GoogleGenerativeAI } = await import('@google/generative-ai');
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const geminiModel = genAI.getGenerativeModel({ model });
+    const prompt = messages.map(m => `${m.role === 'user' ? 'User' : m.role === 'system' ? 'System' : 'Assistant'}: ${m.content}`).join('\n');
+    const result = await geminiModel.generateContent(prompt);
+    return (await result.response).text();
+  }
+
+  // OpenAI-compatible providers (OpenAI, MiniMax, Kimi, DeepSeek)
+  const endpoints: Record<string, string> = {
+    OPENAI_API_KEY: 'https://api.openai.com/v1/chat/completions',
+    MINIMAX_API_KEY: 'https://api.minimaxi.chat/v1/chat/completions',
+    KIMI_API_KEY: 'https://api.moonshot.cn/v1/chat/completions',
+    DEEPSEEK_API_KEY: 'https://api.deepseek.com/chat/completions',
+  };
+  const endpoint = endpoints[provider];
+  if (!endpoint) throw new Error(`Unsupported provider: ${provider}`);
+
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+    body: JSON.stringify({
+      model,
+      messages: messages.map(m => ({ role: m.role, content: m.content })),
+      max_tokens: 4096,
+    }),
+  });
+  if (!response.ok) throw new Error(`${provider} ${response.status}: ${await response.text()}`);
+  const data = await response.json();
+  // MiniMax returns errors with 200 status in base_resp
+  if (data.base_resp?.status_code && data.base_resp.status_code !== 0) {
+    throw new Error(`${provider} error: ${data.base_resp.status_msg || 'Unknown error'} (code ${data.base_resp.status_code})`);
+  }
+  const content = data.choices?.[0]?.message?.content;
+  if (!content) throw new Error(`${provider} returned empty response`);
+  // Strip <think>...</think> reasoning blocks (e.g. MiniMax M2.7)
+  return content.replace(/<think>[\s\S]*?<\/think>\s*/g, '').trim();
+}
+
+// ---------------------------------------------------------------------------
 // Handler
 // ---------------------------------------------------------------------------
 
@@ -233,10 +360,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Detect and execute relevant tools based on keywords
     const toolMatches = detectTools(userQuery);
 
+    // Resolve the default LLM provider from DB config
+    const llmProvider = await getDefaultLLMProvider(currentUser.id);
+
     let text: string;
 
     if (toolMatches.length > 0) {
-      // Data query — run DB tools, then send results to OpenClaw for formatting
+      // Data query — run DB tools, then send results to LLM for formatting
       console.log(`[Nemo] Detected ${toolMatches.length} tools: ${toolMatches.map(m => m.tool).join(', ')}`);
       const startTime = Date.now();
 
@@ -254,39 +384,59 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       console.log(`[Nemo] All tools completed in ${Date.now() - startTime}ms`);
       const toolContext = `\n\n--- Database Results (live data from LMS/TMS) ---\n${results.join('\n\n')}\n--- End Results ---\n\nUse bullet points instead of markdown tables for readability.`;
 
-      const openAiMessages: ChatMessage[] = [
+      const llmMessages: ChatMessage[] = [
         { role: 'system', content: buildSystemPrompt(currentUser, systemPrompt) + toolContext },
         ...normalizedMessages,
       ];
 
-      // Use OpenClaw to format the tool results. If the LLM call fails,
-      // still return the raw data so the user gets a usable answer.
+      // Use the default LLM provider to format results; fall back to OpenClaw, then raw data
       try {
-        text = await sendToOpenClaw({
-          messages: openAiMessages,
-          timeoutMs: 60000,
-          userId: currentUser.id,
-        });
-      } catch (openClawError: any) {
-        console.error('[Nemo] OpenClaw failed while formatting tool results:', openClawError.message);
-        text = formatRawResults(results);
+        if (llmProvider) {
+          text = await callDefaultLLM(llmProvider, llmMessages);
+        } else {
+          console.log('[Nemo] No default LLM configured, falling back to OpenClaw');
+          text = await sendToOpenClaw({ messages: llmMessages, timeoutMs: 60000, userId: currentUser.id });
+        }
+      } catch (llmError: any) {
+        console.error('[Nemo] LLM call failed:', llmError.message);
+        // Try OpenClaw as fallback if default LLM failed
+        try {
+          if (llmProvider) {
+            text = await sendToOpenClaw({ messages: llmMessages, timeoutMs: 60000, userId: currentUser.id });
+          } else {
+            text = formatRawResults(results);
+          }
+        } catch {
+          text = formatRawResults(results);
+        }
       }
     } else {
-      // Simple Q&A still goes through the OpenClaw chat-completions endpoint.
-      console.log('[Nemo] No tools matched, using OpenClaw chat completions');
-      const openAiMessages: ChatMessage[] = [
+      // Simple Q&A — use default LLM provider, fall back to OpenClaw
+      const llmMessages: ChatMessage[] = [
         { role: 'system', content: buildSystemPrompt(currentUser, systemPrompt) },
         ...normalizedMessages,
       ];
 
       try {
-        text = await sendToOpenClaw({
-          messages: openAiMessages,
-          timeoutMs: 60000,
-          userId: currentUser.id,
-        });
+        if (llmProvider) {
+          console.log(`[Nemo] No tools matched, using default LLM: ${llmProvider.provider} / ${llmProvider.model}`);
+          text = await callDefaultLLM(llmProvider, llmMessages);
+        } else {
+          console.log('[Nemo] No tools matched, no default LLM configured, using OpenClaw');
+          text = await sendToOpenClaw({ messages: llmMessages, timeoutMs: 60000, userId: currentUser.id });
+        }
       } catch (error: any) {
-        throw new Error(error?.message || "I'm having trouble connecting to the AI service right now. Please try again in a moment.");
+        // Try OpenClaw as fallback
+        if (llmProvider) {
+          try {
+            console.log('[Nemo] Default LLM failed, falling back to OpenClaw');
+            text = await sendToOpenClaw({ messages: llmMessages, timeoutMs: 60000, userId: currentUser.id });
+          } catch (fallbackError: any) {
+            throw new Error(fallbackError?.message || "I'm having trouble connecting to the AI service right now. Please try again in a moment.");
+          }
+        } else {
+          throw new Error(error?.message || "I'm having trouble connecting to the AI service right now. Please try again in a moment.");
+        }
       }
     }
 
