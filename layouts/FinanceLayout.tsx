@@ -46,6 +46,7 @@ import BizfileAddressView from '../components/finance/BizfileAddressView';
 import BizfileSsicView from '../components/finance/BizfileSsicView';
 import BizfileCapitalView from '../components/finance/BizfileCapitalView';
 import BizfileShareholdersView from '../components/finance/BizfileShareholdersView';
+import QBCustomerView from '../components/finance/QBCustomerView';
 import QBEstimateView from '../components/finance/QBEstimateView';
 import QBInvoiceView from '../components/finance/QBInvoiceView';
 import QBPaymentView from '../components/finance/QBPaymentView';
@@ -60,7 +61,7 @@ type FinancePage =
   | 'claimCheck' | 'viewClaim' | 'cancelClaim' | 'uploadDocument'
   | 'bizfile' | 'bizfileDirectorySearch' | 'bizfileNameSearch'
   | 'bizfileVerification' | 'bizfileKeyDates' | 'bizfileAddress' | 'bizfileSsic' | 'bizfileCapital' | 'bizfileShareholders'
-  | 'qbEstimate' | 'qbInvoice' | 'qbPayment'
+  | 'qbCustomer' | 'qbEstimate' | 'qbInvoice' | 'qbPayment'
   // TPG Management
   | 'tpgCreateClass' | 'tpgSearchCourseRuns' | 'tpgViewCourseRun' | 'tpgEditCourseRun' | 'tpgUploadCourseRuns' | 'tpgDeleteCourseRun'
   | 'tpgAddSessions' | 'tpgSessionTiming' | 'tpgCourseSessions'
@@ -141,6 +142,8 @@ const FinanceLayout: React.FC = () => {
         return <BizfileCapitalView />;
       case 'bizfileShareholders':
         return <BizfileShareholdersView />;
+      case 'qbCustomer':
+        return <QBCustomerView />;
       case 'qbEstimate':
         return <QBEstimateView />;
       case 'qbInvoice':
@@ -201,6 +204,7 @@ const FinanceLayout: React.FC = () => {
       case 'bizfileSsic': return 'Bizfile — SSIC Details';
       case 'bizfileCapital': return 'Bizfile — Company Capital';
       case 'bizfileShareholders': return 'Bizfile — Shareholders';
+      case 'qbCustomer': return 'QuickBooks — Customers';
       case 'qbEstimate': return 'QuickBooks — Quotes';
       case 'qbInvoice': return 'QuickBooks — Invoices';
       case 'qbPayment': return 'QuickBooks — Payments';
@@ -291,7 +295,7 @@ const FinanceLayout: React.FC = () => {
 
   const sidebarContent = (
     <nav className="space-y-6 p-4 bg-white dark:bg-slate-800 text-gray-900 dark:text-white h-full">
-      <NavItem target="dashboard" label="Dashboard" />
+      <NavItem target="dashboard" label="Financial Dashboard" />
       <NavItem target="allCourseRuns" label="All Course Runs" />
 
       <NavSection title="TPG Management" sectionKey="tpgManagement">
@@ -347,6 +351,7 @@ const FinanceLayout: React.FC = () => {
       </NavSection>
 
       <NavSection title="Quickbooks" sectionKey="quickbooks">
+        <NavItem target="qbCustomer" label="Customers" isSubItem />
         <NavItem target="qbEstimate" label="Quotes (Estimates)" isSubItem />
         <NavItem target="qbInvoice" label="Invoices" isSubItem />
         <NavItem target="qbPayment" label="Payments" isSubItem />

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 
-type Tab = 'query' | 'create' | 'pdf' | 'send' | 'delete';
+type Tab = 'query' | 'read' | 'create' | 'pdf' | 'send' | 'void' | 'delete';
 
 export default function QBInvoiceView() {
   const [tab, setTab] = useState<Tab>('query');
@@ -18,9 +18,12 @@ export default function QBInvoiceView() {
   const [description, setDescription] = useState('');
   const [dueDate, setDueDate] = useState('');
 
+  const [readId, setReadId] = useState('');
   const [pdfId, setPdfId] = useState('');
   const [sendId, setSendId] = useState('');
   const [sendTo, setSendTo] = useState('');
+  const [voidId, setVoidId] = useState('');
+  const [voidSyncToken, setVoidSyncToken] = useState('');
   const [deleteId, setDeleteId] = useState('');
   const [syncToken, setSyncToken] = useState('');
 
@@ -60,6 +63,8 @@ export default function QBInvoiceView() {
   };
 
   const handleQuery = () => callApi({ action: 'query', query });
+  const handleRead = () => { if (!readId) { setError('Invoice ID is required.'); return; } callApi({ action: 'read', id: readId }); };
+  const handleVoid = () => { if (!voidId || !voidSyncToken) { setError('ID and SyncToken are required.'); return; } callApi({ action: 'void', body: { Id: voidId, SyncToken: voidSyncToken } }); };
   const handleCreate = () => {
     if (!customerId) { setError('Customer ID is required.'); return; }
     const amt = parseFloat(unitPrice) * parseInt(qty);
@@ -90,8 +95,10 @@ export default function QBInvoiceView() {
       </div>
 
       <div className="flex gap-1 border-b border-gray-200 dark:border-gray-700">
-        {(['query', 'create', 'pdf', 'send', 'delete'] as Tab[]).map(t => (
-          <button key={t} onClick={() => { setTab(t); setResult(null); setError(''); }} className={tabClass(t)}>{t === 'pdf' ? 'Get PDF' : t.charAt(0).toUpperCase() + t.slice(1)}</button>
+        {(['query', 'read', 'create', 'pdf', 'send', 'void', 'delete'] as Tab[]).map(t => (
+          <button key={t} onClick={() => { setTab(t); setResult(null); setError(''); }} className={tabClass(t)}>
+            {t === 'pdf' ? 'Get PDF' : t === 'void' ? 'Void' : t.charAt(0).toUpperCase() + t.slice(1)}
+          </button>
         ))}
       </div>
 
@@ -102,6 +109,13 @@ export default function QBInvoiceView() {
             <input value={query} onChange={e => setQuery(e.target.value)} className="w-full max-w-2xl rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-white px-3 py-2 text-sm font-mono focus:ring-2 focus:ring-primary" />
           </div>
           <button onClick={handleQuery} disabled={loading} className="px-6 py-2.5 rounded-lg bg-primary text-white font-medium text-sm hover:bg-primary/90 disabled:opacity-50">{loading ? 'Querying…' : 'Query Invoices'}</button>
+        </div>
+      )}
+
+      {tab === 'read' && (
+        <div className="space-y-4">
+          <Input label="Invoice ID *" value={readId} onChange={setReadId} placeholder="e.g. 456" />
+          <button onClick={handleRead} disabled={loading} className="px-6 py-2.5 rounded-lg bg-primary text-white font-medium text-sm hover:bg-primary/90 disabled:opacity-50">{loading ? 'Loading…' : 'Read Invoice'}</button>
         </div>
       )}
 
@@ -136,6 +150,17 @@ export default function QBInvoiceView() {
             <Input label="Send To (email)" value={sendTo} onChange={setSendTo} placeholder="Optional override" />
           </div>
           <button onClick={handleSend} disabled={loading} className="px-6 py-2.5 rounded-lg bg-primary text-white font-medium text-sm hover:bg-primary/90 disabled:opacity-50">{loading ? 'Sending…' : 'Send Invoice'}</button>
+        </div>
+      )}
+
+      {tab === 'void' && (
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-xl">
+            <Input label="Invoice ID *" value={voidId} onChange={setVoidId} placeholder="e.g. 456" />
+            <Input label="SyncToken *" value={voidSyncToken} onChange={setVoidSyncToken} placeholder="e.g. 0" />
+          </div>
+          <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400 text-sm">Voiding an invoice zeros it out but keeps the record.</div>
+          <button onClick={handleVoid} disabled={loading} className="px-6 py-2.5 rounded-lg bg-amber-600 text-white font-medium text-sm hover:bg-amber-700 disabled:opacity-50">{loading ? 'Voiding…' : 'Void Invoice'}</button>
         </div>
       )}
 

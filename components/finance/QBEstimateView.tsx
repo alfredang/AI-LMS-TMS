@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 
-type Tab = 'query' | 'create' | 'send' | 'delete';
+type Tab = 'query' | 'read' | 'create' | 'pdf' | 'send' | 'delete';
 
 export default function QBEstimateView() {
   const [tab, setTab] = useState<Tab>('query');
@@ -17,6 +17,10 @@ export default function QBEstimateView() {
   const [qty, setQty] = useState('1');
   const [unitPrice, setUnitPrice] = useState('');
   const [description, setDescription] = useState('');
+
+  // Read / PDF fields
+  const [readId, setReadId] = useState('');
+  const [pdfId, setPdfId] = useState('');
 
   // Send fields
   const [sendId, setSendId] = useState('');
@@ -41,6 +45,23 @@ export default function QBEstimateView() {
   };
 
   const handleQuery = () => callApi({ action: 'query', query });
+  const handleRead = () => { if (!readId) { setError('Estimate ID is required.'); return; } callApi({ action: 'read', id: readId }); };
+  const handlePdf = async () => {
+    if (!pdfId) { setError('Estimate ID is required.'); return; }
+    setError(''); setLoading(true);
+    try {
+      const resp = await fetch('/api/quickbooks/proxy', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'pdf', entity: 'estimate', id: pdfId }),
+      });
+      if (!resp.ok) { const json = await resp.json().catch(() => null); setError(json?.error || `Error ${resp.status}`); return; }
+      const blob = await resp.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = `estimate-${pdfId}.pdf`; a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) { setError(err instanceof Error ? err.message : 'Network error'); }
+    finally { setLoading(false); }
+  };
   const handleCreate = () => {
     if (!customerId) { setError('Customer ID is required.'); return; }
     const amt = parseFloat(unitPrice) * parseInt(qty);
@@ -71,8 +92,10 @@ export default function QBEstimateView() {
       </div>
 
       <div className="flex gap-1 border-b border-gray-200 dark:border-gray-700">
-        {(['query', 'create', 'send', 'delete'] as Tab[]).map(t => (
-          <button key={t} onClick={() => { setTab(t); setResult(null); setError(''); }} className={tabClass(t)}>{t.charAt(0).toUpperCase() + t.slice(1)}</button>
+        {(['query', 'read', 'create', 'pdf', 'send', 'delete'] as Tab[]).map(t => (
+          <button key={t} onClick={() => { setTab(t); setResult(null); setError(''); }} className={tabClass(t)}>
+            {t === 'pdf' ? 'Get PDF' : t.charAt(0).toUpperCase() + t.slice(1)}
+          </button>
         ))}
       </div>
 
@@ -83,6 +106,13 @@ export default function QBEstimateView() {
             <input value={query} onChange={e => setQuery(e.target.value)} className="w-full max-w-2xl rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-white px-3 py-2 text-sm font-mono focus:ring-2 focus:ring-primary" />
           </div>
           <button onClick={handleQuery} disabled={loading} className="px-6 py-2.5 rounded-lg bg-primary text-white font-medium text-sm hover:bg-primary/90 disabled:opacity-50">{loading ? 'Querying…' : 'Query Estimates'}</button>
+        </div>
+      )}
+
+      {tab === 'read' && (
+        <div className="space-y-4">
+          <Input label="Estimate ID *" value={readId} onChange={setReadId} placeholder="e.g. 123" />
+          <button onClick={handleRead} disabled={loading} className="px-6 py-2.5 rounded-lg bg-primary text-white font-medium text-sm hover:bg-primary/90 disabled:opacity-50">{loading ? 'Loading…' : 'Read Estimate'}</button>
         </div>
       )}
 
@@ -97,6 +127,13 @@ export default function QBEstimateView() {
             <Input label="Description" value={description} onChange={setDescription} placeholder="Optional" />
           </div>
           <button onClick={handleCreate} disabled={loading} className="px-6 py-2.5 rounded-lg bg-primary text-white font-medium text-sm hover:bg-primary/90 disabled:opacity-50">{loading ? 'Creating…' : 'Create Estimate'}</button>
+        </div>
+      )}
+
+      {tab === 'pdf' && (
+        <div className="space-y-4">
+          <Input label="Estimate ID *" value={pdfId} onChange={setPdfId} placeholder="e.g. 123" />
+          <button onClick={handlePdf} disabled={loading} className="px-6 py-2.5 rounded-lg bg-primary text-white font-medium text-sm hover:bg-primary/90 disabled:opacity-50">{loading ? 'Downloading…' : 'Download PDF'}</button>
         </div>
       )}
 

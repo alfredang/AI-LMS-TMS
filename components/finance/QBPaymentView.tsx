@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 
-type Tab = 'query' | 'create' | 'delete';
+type Tab = 'query' | 'create' | 'pdf' | 'send' | 'void' | 'delete';
 
 export default function QBPaymentView() {
   const [tab, setTab] = useState<Tab>('query');
@@ -15,6 +15,11 @@ export default function QBPaymentView() {
   const [invoiceId, setInvoiceId] = useState('');
   const [paymentAmt, setPaymentAmt] = useState('');
 
+  const [pdfId, setPdfId] = useState('');
+  const [sendId, setSendId] = useState('');
+  const [sendTo, setSendTo] = useState('');
+  const [voidId, setVoidId] = useState('');
+  const [voidSyncToken, setVoidSyncToken] = useState('');
   const [deleteId, setDeleteId] = useState('');
   const [syncToken, setSyncToken] = useState('');
 
@@ -41,6 +46,24 @@ export default function QBPaymentView() {
     }
     callApi({ action: 'create', body });
   };
+  const handlePdf = async () => {
+    if (!pdfId) { setError('Payment ID is required.'); return; }
+    setError(''); setLoading(true);
+    try {
+      const resp = await fetch('/api/quickbooks/proxy', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'pdf', entity: 'payment', id: pdfId }),
+      });
+      if (!resp.ok) { const json = await resp.json().catch(() => null); setError(json?.error || `Error ${resp.status}`); return; }
+      const blob = await resp.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = `payment-${pdfId}.pdf`; a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) { setError(err instanceof Error ? err.message : 'Network error'); }
+    finally { setLoading(false); }
+  };
+  const handleSend = () => { if (!sendId) { setError('Payment ID is required.'); return; } callApi({ action: 'send', id: sendId, sendTo: sendTo || undefined }); };
+  const handleVoid = () => { if (!voidId || !voidSyncToken) { setError('ID and SyncToken are required.'); return; } callApi({ action: 'void', body: { Id: voidId, SyncToken: voidSyncToken } }); };
   const handleDelete = () => { if (!deleteId || !syncToken) { setError('ID and SyncToken are required.'); return; } callApi({ action: 'delete', body: { Id: deleteId, SyncToken: syncToken } }); };
 
   const tabClass = (t: Tab) => `px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${tab === t ? 'bg-white dark:bg-slate-800 text-primary border-b-2 border-primary' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`;
@@ -53,9 +76,11 @@ export default function QBPaymentView() {
         <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">QuickBooks Online Payment API</p>
       </div>
 
-      <div className="flex gap-1 border-b border-gray-200 dark:border-gray-700">
-        {(['query', 'create', 'delete'] as Tab[]).map(t => (
-          <button key={t} onClick={() => { setTab(t); setResult(null); setError(''); }} className={tabClass(t)}>{t.charAt(0).toUpperCase() + t.slice(1)}</button>
+      <div className="flex flex-wrap gap-1 border-b border-gray-200 dark:border-gray-700">
+        {(['query', 'create', 'pdf', 'send', 'void', 'delete'] as Tab[]).map(t => (
+          <button key={t} onClick={() => { setTab(t); setResult(null); setError(''); }} className={tabClass(t)}>
+            {t === 'pdf' ? 'Get PDF' : t === 'void' ? 'Void' : t.charAt(0).toUpperCase() + t.slice(1)}
+          </button>
         ))}
       </div>
 
@@ -78,6 +103,34 @@ export default function QBPaymentView() {
             <Input label="Payment Amount" value={paymentAmt} onChange={setPaymentAmt} placeholder="Amount against invoice" />
           </div>
           <button onClick={handleCreate} disabled={loading} className="px-6 py-2.5 rounded-lg bg-primary text-white font-medium text-sm hover:bg-primary/90 disabled:opacity-50">{loading ? 'Creating…' : 'Create Payment'}</button>
+        </div>
+      )}
+
+      {tab === 'pdf' && (
+        <div className="space-y-4">
+          <Input label="Payment ID *" value={pdfId} onChange={setPdfId} placeholder="e.g. 789" />
+          <button onClick={handlePdf} disabled={loading} className="px-6 py-2.5 rounded-lg bg-primary text-white font-medium text-sm hover:bg-primary/90 disabled:opacity-50">{loading ? 'Downloading…' : 'Download PDF'}</button>
+        </div>
+      )}
+
+      {tab === 'send' && (
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-xl">
+            <Input label="Payment ID *" value={sendId} onChange={setSendId} placeholder="e.g. 789" />
+            <Input label="Send To (email)" value={sendTo} onChange={setSendTo} placeholder="Optional override" />
+          </div>
+          <button onClick={handleSend} disabled={loading} className="px-6 py-2.5 rounded-lg bg-primary text-white font-medium text-sm hover:bg-primary/90 disabled:opacity-50">{loading ? 'Sending…' : 'Send Payment'}</button>
+        </div>
+      )}
+
+      {tab === 'void' && (
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-xl">
+            <Input label="Payment ID *" value={voidId} onChange={setVoidId} placeholder="e.g. 789" />
+            <Input label="SyncToken *" value={voidSyncToken} onChange={setVoidSyncToken} placeholder="e.g. 0" />
+          </div>
+          <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400 text-sm">Voiding a payment reverses it but keeps the record.</div>
+          <button onClick={handleVoid} disabled={loading} className="px-6 py-2.5 rounded-lg bg-amber-600 text-white font-medium text-sm hover:bg-amber-700 disabled:opacity-50">{loading ? 'Voiding…' : 'Void Payment'}</button>
         </div>
       )}
 
