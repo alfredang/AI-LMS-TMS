@@ -370,12 +370,12 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                         <p className="text-gray-600 dark:text-gray-300 mt-1">Pending Classes</p>
                     </Card>
                     <Card className="p-6 text-center">
-                        <p className="text-4xl font-bold text-cyan-500">{stats.totalAssignedTpgClasses}</p>
-                        <p className="text-gray-600 dark:text-gray-300 mt-1">Assigned Trainers (TPG)</p>
-                    </Card>
-                    <Card className="p-6 text-center">
                         <p className="text-4xl font-bold text-emerald-500">{stats.totalAssignedLocalClasses}</p>
                         <p className="text-gray-600 dark:text-gray-300 mt-1">Assigned Trainers (Local)</p>
+                    </Card>
+                    <Card className="p-6 text-center">
+                        <p className="text-4xl font-bold text-cyan-500">{stats.totalAssignedTpgClasses}</p>
+                        <p className="text-gray-600 dark:text-gray-300 mt-1">Assigned Trainers (TPG)</p>
                     </Card>
                     <Card className="p-6 text-center">
                         <p className="text-4xl font-bold text-purple-600">{totalUnassignedTrainers}</p>
@@ -561,8 +561,8 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">DA ID</th>
                                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">START DATE</th>
                                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">END DATE</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">ASSIGNED TRAINER (TPG)</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">ASSIGNED TRAINER (LOCAL)</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">ASSIGNED TRAINER (LOCAL)</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">ASSIGNED TRAINER (TPG)</th>
                                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">NEXT AVAILABLE TRAINER</th>
                                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">SEND TRAINER INVITATION</th>
                                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">ACTIONS</th>
@@ -582,8 +582,8 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                             <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.digitalAttendanceId || 'N/A'}</td>
                                             <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{formatDate(classItem.startDate)}</td>
                                             <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{formatDate(classItem.endDate)}</td>
-                                            <td className="px-4 py-4 align-top text-sm text-gray-700 dark:text-gray-200">{renderTrainerCell(classItem.assignedTrainerTpg, classItem.assignedTrainerTpgEmail)}</td>
                                             <td className="px-4 py-4 align-top text-sm text-gray-700 dark:text-gray-200">{renderTrainerCell(classItem.assignedTrainerLocal, classItem.assignedTrainerLocalEmail)}</td>
+                                            <td className="px-4 py-4 align-top text-sm text-gray-700 dark:text-gray-200">{renderTrainerCell(classItem.assignedTrainerTpg, classItem.assignedTrainerTpgEmail)}</td>
                                             <td className="px-4 py-4 align-top text-sm text-gray-700 dark:text-gray-200">{renderTrainerCell(classItem.nextAvailableTrainer, classItem.nextAvailableTrainerEmail)}</td>
                                             <td className="px-4 py-4 align-top text-sm text-gray-700 dark:text-gray-200">
                                                 <div className="min-w-[180px] space-y-2">

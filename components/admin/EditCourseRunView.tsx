@@ -160,10 +160,16 @@ export const EditCourseRunView: React.FC = () => {
             setCourseStartDate(startDate);
             setCourseEndDate(toDateInput(run.courseEndDate ?? run.courseDates?.end));
 
-            // Opening = today, Closing = day before course start date
+            // Keep original SSG registration dates; only default if empty
+            console.log('[dates] raw registrationClosingDate:', run.registrationClosingDate, '| registrationDates:', run.registrationDates);
+            const existingOpening = toDateInput(run.registrationOpeningDate ?? run.registrationDates?.opening);
+            const existingClosing = toDateInput(run.registrationClosingDate ?? run.registrationDates?.closing);
+            console.log('[dates] existingOpening:', existingOpening, '| existingClosing:', existingClosing);
             const today = new Date().toISOString().split('T')[0];
-            setOpeningRegistrationDate(today);
-            if (startDate) {
+            setOpeningRegistrationDate(existingOpening || today);
+            if (existingClosing) {
+                setClosingRegistrationDate(existingClosing);
+            } else if (startDate) {
                 const dayBefore = new Date(startDate);
                 dayBefore.setDate(dayBefore.getDate() - 1);
                 setClosingRegistrationDate(dayBefore.toISOString().split('T')[0]);
@@ -283,6 +289,8 @@ export const EditCourseRunView: React.FC = () => {
                     trainerIdNumber: a.nric.trim(),
                 }));
             }
+
+            console.log('📦 Edit Course Run payload:', JSON.stringify(body, null, 2));
 
             const res = await fetch(
                 `/api/ssg/courses/courseRuns/${encodeURIComponent(courseRunId.trim())}?action=edit`,
@@ -453,12 +461,12 @@ export const EditCourseRunView: React.FC = () => {
                     <FormSection title="Registration Dates">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">* Opening Registration Date</label>
-                                <input type="date" value={openingRegistrationDate} onChange={e => setOpeningRegistrationDate(e.target.value)} className={inputClasses} />
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Opening Registration Date</label>
+                                <input type="text" value={openingRegistrationDate} readOnly disabled className={readonlyClasses} />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">* Closing Registration Date</label>
-                                <input type="date" value={closingRegistrationDate} onChange={e => setClosingRegistrationDate(e.target.value)} className={inputClasses} />
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Closing Registration Date</label>
+                                <input type="text" value={closingRegistrationDate} readOnly disabled className={readonlyClasses} />
                             </div>
                         </div>
                     </FormSection>
