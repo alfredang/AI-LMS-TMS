@@ -175,7 +175,7 @@ const FinanceLayout: React.FC = () => {
       case 'tpgViewAssessment': return 'View Assessment';
       case 'tpgSearchGrant': return 'Search Grant';
       case 'tpgViewGrantStatus': return 'View Grant Status';
-      default: return 'Finance Management';
+      default: return 'Financial Dashboard';
     }
   };
 
