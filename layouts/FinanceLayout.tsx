@@ -37,6 +37,15 @@ import GrantCalculatorView from '../components/finance/GrantCalculatorView';
 import ViewClaimView from '../components/finance/ViewClaimView';
 import CancelClaimView from '../components/finance/CancelClaimView';
 import UploadDocumentView from '../components/finance/UploadDocumentView';
+import BizfileView from '../components/finance/BizfileView';
+import BizfileDirectorySearchView from '../components/finance/BizfileDirectorySearchView';
+import BizfileNameSearchView from '../components/finance/BizfileNameSearchView';
+import BizfileVerificationView from '../components/finance/BizfileVerificationView';
+import BizfileKeyDatesView from '../components/finance/BizfileKeyDatesView';
+import BizfileAddressView from '../components/finance/BizfileAddressView';
+import BizfileSsicView from '../components/finance/BizfileSsicView';
+import BizfileCapitalView from '../components/finance/BizfileCapitalView';
+import BizfileShareholdersView from '../components/finance/BizfileShareholdersView';
 
 import { ProfilePage } from '../components/ProfilePage';
 import { useLms } from '@contexts/LmsContext';
@@ -46,6 +55,8 @@ type FinancePage =
   | 'dashboard' | 'allCourseRuns'
   | 'grantCalculator' | 'searchGrant' | 'viewGrant'
   | 'claimCheck' | 'viewClaim' | 'cancelClaim' | 'uploadDocument'
+  | 'bizfile' | 'bizfileDirectorySearch' | 'bizfileNameSearch'
+  | 'bizfileVerification' | 'bizfileKeyDates' | 'bizfileAddress' | 'bizfileSsic' | 'bizfileCapital' | 'bizfileShareholders'
   // TPG Management
   | 'tpgCreateClass' | 'tpgSearchCourseRuns' | 'tpgViewCourseRun' | 'tpgEditCourseRun' | 'tpgUploadCourseRuns' | 'tpgDeleteCourseRun'
   | 'tpgAddSessions' | 'tpgSessionTiming' | 'tpgCourseSessions'
@@ -68,6 +79,7 @@ const FinanceLayout: React.FC = () => {
     tpgAttendance: false,
     tpgAssessment: false,
     tpgGrant: false,
+    bizfile: false,
     usefulLinks: true,
   });
 
@@ -106,6 +118,24 @@ const FinanceLayout: React.FC = () => {
         return <CancelClaimView />;
       case 'uploadDocument':
         return <UploadDocumentView />;
+      case 'bizfile':
+        return <BizfileView />;
+      case 'bizfileDirectorySearch':
+        return <BizfileDirectorySearchView />;
+      case 'bizfileNameSearch':
+        return <BizfileNameSearchView />;
+      case 'bizfileVerification':
+        return <BizfileVerificationView />;
+      case 'bizfileKeyDates':
+        return <BizfileKeyDatesView />;
+      case 'bizfileAddress':
+        return <BizfileAddressView />;
+      case 'bizfileSsic':
+        return <BizfileSsicView />;
+      case 'bizfileCapital':
+        return <BizfileCapitalView />;
+      case 'bizfileShareholders':
+        return <BizfileShareholdersView />;
       // TPG Management — Course Run
       case 'tpgCreateClass': return <CreateNewClassView />;
       case 'tpgSearchCourseRuns': return <SearchCourseRunsView />;
@@ -151,6 +181,15 @@ const FinanceLayout: React.FC = () => {
       case 'viewClaim': return 'View Claim';
       case 'cancelClaim': return 'Cancel Claim';
       case 'uploadDocument': return 'Upload Supporting Document';
+      case 'bizfile': return 'Bizfile — Business Profile';
+      case 'bizfileDirectorySearch': return 'Bizfile — Directory Search';
+      case 'bizfileNameSearch': return 'Bizfile — Name Search';
+      case 'bizfileVerification': return 'Bizfile — Entity Verification';
+      case 'bizfileKeyDates': return 'Bizfile — Registration Key Dates';
+      case 'bizfileAddress': return 'Bizfile — Registered Address';
+      case 'bizfileSsic': return 'Bizfile — SSIC Details';
+      case 'bizfileCapital': return 'Bizfile — Company Capital';
+      case 'bizfileShareholders': return 'Bizfile — Shareholders';
       case 'tpgCreateClass': return 'Create New Class';
       case 'tpgSearchCourseRuns': return 'Search Course Runs';
       case 'tpgViewCourseRun': return 'View Course Run';
@@ -291,6 +330,18 @@ const FinanceLayout: React.FC = () => {
         <NavItem target="viewClaim" label="View Claim" isSubItem />
         <NavItem target="cancelClaim" label="Cancel Claim" isSubItem />
         <NavItem target="uploadDocument" label="Supporting Document" isSubItem />
+      </NavSection>
+
+      <NavSection title="Bizfile" sectionKey="bizfile">
+        <NavItem target="bizfile" label="Business Profile" isSubItem />
+        <NavItem target="bizfileDirectorySearch" label="Entity Directory Search" isSubItem />
+        <NavItem target="bizfileNameSearch" label="Entity Name Search" isSubItem />
+        <NavItem target="bizfileVerification" label="Entity Verification" isSubItem />
+        <NavItem target="bizfileKeyDates" label="Entity Reg Key Dates" isSubItem />
+        <NavItem target="bizfileAddress" label="Entity Reg Address" isSubItem />
+        <NavItem target="bizfileSsic" label="Entity SSIC" isSubItem />
+        <NavItem target="bizfileCapital" label="Company Capital" isSubItem />
+        <NavItem target="bizfileShareholders" label="Company Shareholders" isSubItem />
       </NavSection>
 
       <NavSection title="Useful Links" sectionKey="usefulLinks">
