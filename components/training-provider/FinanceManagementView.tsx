@@ -297,10 +297,10 @@ const FinanceManagementView: React.FC = () => {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-default bg-surface-elevated">
-                  <th className="text-left px-4 py-3 font-medium text-on-surface-secondary">Trainee Name</th>
+                  <th className="text-left px-4 py-3 font-medium text-on-surface-secondary max-w-[140px]">Trainee Name</th>
                   <th className="text-left px-4 py-3 font-medium text-on-surface-secondary">NRIC</th>
-                  <th className="text-left px-4 py-3 font-medium text-on-surface-secondary">Enrollment ID</th>
-                  <th className="text-left px-4 py-3 font-medium text-on-surface-secondary">Grant ID</th>
+                  <th className="text-left px-4 py-3 font-medium text-on-surface-secondary whitespace-nowrap">Enrollment ID</th>
+                  <th className="text-left px-4 py-3 font-medium text-on-surface-secondary whitespace-nowrap">Grant ID</th>
                   <th className="text-left px-4 py-3 font-medium text-on-surface-secondary">Status</th>
                   <th className="text-left px-4 py-3 font-medium text-on-surface-secondary">Funding Scheme</th>
                   <th className="text-right px-4 py-3 font-medium text-on-surface-secondary">Estimated</th>
@@ -319,7 +319,7 @@ const FinanceManagementView: React.FC = () => {
                   <tr><td colSpan={8} className="px-4 py-12 text-center text-on-surface-secondary">No grants found.</td></tr>
                 ) : grants.map((g, i) => (
                   <tr key={`${g.grant_id}-${i}`} className="border-b border-default hover:bg-surface-hover transition-colors">
-                    <td className="px-4 py-3 text-on-surface">{g.trainee_name || '-'}</td>
+                    <td className="px-4 py-3 text-on-surface max-w-[140px] truncate" title={g.trainee_name || ''}>{g.trainee_name || '-'}</td>
                     <td className="px-4 py-3 whitespace-nowrap">
                       <div className="flex items-center gap-1">
                         <span className="text-sm text-on-surface">
@@ -332,11 +332,11 @@ const FinanceManagementView: React.FC = () => {
                         )}
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-on-surface-secondary font-mono text-xs">{g.enrollment_id || '-'}</td>
-                    <td className="px-4 py-3 text-on-surface-secondary font-mono text-xs">{g.grant_id}</td>
+                    <td className="px-4 py-3 text-on-surface-secondary font-mono text-xs whitespace-nowrap">{g.enrollment_id || '-'}</td>
+                    <td className="px-4 py-3 text-on-surface-secondary font-mono text-xs whitespace-nowrap">{g.grant_id}</td>
                     <td className="px-4 py-3">
-                      <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${statusColor(g.status)}`}>
-                        {g.status}
+                      <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap ${statusColor(g.status)}`}>
+                        {g.status?.replace('Grant Processing', 'Processing').replace('Grant ', '') || '-'}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-on-surface-secondary text-xs max-w-[200px] truncate" title={g.funding_scheme_description}>
