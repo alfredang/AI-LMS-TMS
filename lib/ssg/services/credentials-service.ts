@@ -166,15 +166,53 @@ export class SSGCredentialsService {
           .replace(/\r/g, '\n');   // stray CR → LF
       };
 
-      // Read certificate and private key — DB file paths first, env vars as fallback
-      const certEnv = process.env.CERT_VALUE || process.env.CERT_1_CERT;
-      const keyEnv  = process.env.PRIVATE_KEY_VALUE || process.env.CERT_1_KEY;
+      /** Ignore editor placeholders and non-PEM garbage in env. */
+      const usablePemEnv = (raw: string | undefined): string | undefined => {
+        if (raw === undefined || raw === null) return undefined;
+        const t = raw.trim();
+        if (t.length === 0) return undefined;
+        if (/multiline environment variable|edit in normal view/i.test(t)) return undefined;
+        const normalized = resolvePem(t);
+        if (!normalized.includes('-----BEGIN')) return undefined;
+        return raw;
+      };
+
+      const resolveOptionalPath = (p: string | undefined): string => {
+        const t = p?.trim() ?? '';
+        if (!t) return '';
+        // Allow relative paths from project root
+        return path.isAbsolute(t) ? t : path.join(process.cwd(), t);
+      };
+
+      // Read certificate and private key — DB file paths first, then env disk paths, then inline PEM env
+      const certEnv = usablePemEnv(process.env.CERT_VALUE || process.env.CERT_1_CERT);
+      const keyEnv = usablePemEnv(process.env.PRIVATE_KEY_VALUE || process.env.CERT_1_KEY);
+
+      const envCertDisk = resolveOptionalPath(process.env.SSG_CERT_PATH);
+      const envKeyDisk = resolveOptionalPath(process.env.SSG_PRIVATE_KEY_PATH);
+
+      const pickCertPath = (): string => {
+        const db = credentials.certificatePath?.trim() ?? '';
+        if (db && fs.existsSync(db)) return db;
+        if (envCertDisk && fs.existsSync(envCertDisk)) return envCertDisk;
+        return db || envCertDisk;
+      };
+
+      const pickKeyPath = (): string => {
+        const db = credentials.privateKeyPath?.trim() ?? '';
+        if (db && fs.existsSync(db)) return db;
+        if (envKeyDisk && fs.existsSync(envKeyDisk)) return envKeyDisk;
+        return db || envKeyDisk;
+      };
+
+      const certPath = pickCertPath();
+      const keyPath = pickKeyPath();
 
       // Certificate: DB file path first
       try {
-        if (credentials.certificatePath && credentials.certificatePath.trim() !== '' && fs.existsSync(credentials.certificatePath)) {
-          credentials.certificateContent = fs.readFileSync(credentials.certificatePath, 'utf8');
-          console.log(`[creds] Certificate loaded from DB file path: ${credentials.certificatePath}`);
+        if (certPath && certPath.trim() !== '' && fs.existsSync(certPath)) {
+          credentials.certificateContent = fs.readFileSync(certPath, 'utf8');
+          console.log(`[creds] Certificate loaded from file path: ${certPath}`);
         } else if (certEnv) {
           credentials.certificateContent = resolvePem(certEnv);
           console.log('[creds] Certificate loaded from env var');
@@ -192,9 +230,9 @@ export class SSGCredentialsService {
 
       // Private key: DB file path first
       try {
-        if (credentials.privateKeyPath && credentials.privateKeyPath.trim() !== '' && fs.existsSync(credentials.privateKeyPath)) {
-          credentials.privateKeyContent = fs.readFileSync(credentials.privateKeyPath, 'utf8');
-          console.log(`[creds] Private key loaded from DB file path: ${credentials.privateKeyPath}`);
+        if (keyPath && keyPath.trim() !== '' && fs.existsSync(keyPath)) {
+          credentials.privateKeyContent = fs.readFileSync(keyPath, 'utf8');
+          console.log(`[creds] Private key loaded from file path: ${keyPath}`);
         } else if (keyEnv) {
           credentials.privateKeyContent = resolvePem(keyEnv);
           console.log('[creds] Private key loaded from env var');

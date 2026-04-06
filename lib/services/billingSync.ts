@@ -153,7 +153,7 @@ async function enrichLocalEnrollment(enrolmentId: string, record: Record<string,
 // ssg_grants upsert (mirrors populate-grants.js upsertGrant)
 // ---------------------------------------------------------------------------
 
-async function upsertSsgGrant(grant: Record<string, unknown>): Promise<void> {
+export async function upsertSsgGrant(grant: Record<string, unknown>): Promise<void> {
   const enrolment = (grant.enrolment ?? {}) as Record<string, unknown>;
   const scheme = (grant.fundingScheme ?? {}) as Record<string, unknown>;
   const component = (grant.fundingComponent ?? {}) as Record<string, unknown>;
@@ -190,6 +190,110 @@ async function upsertSsgGrant(grant: Record<string, unknown>): Promise<void> {
       JSON.stringify(grant),                           // api_response
     ]
   );
+}
+
+export interface GrantRefreshRowResult {
+  enrolmentId: string;
+  success: boolean;
+  grantsUpserted: number;
+  error?: string;
+}
+
+/**
+ * Fetches grants from SSG for each enrolment reference and upserts into ssg_grants.
+ * Uses the same encrypted /tpg/grants/search path as billing sync (not the legacy Cloud Run JSON API).
+ */
+export async function refreshGrantsForEnrolments(enrolmentIds: string[]): Promise<GrantRefreshRowResult[]> {
+  const unique = Array.from(new Set(enrolmentIds.map((id) => id.trim()).filter(Boolean)));
+  if (unique.length === 0) return [];
+
+  const credentials = await getSSGCredentialsService().getSSGCredentials();
+  if (!credentials) {
+    return unique.map((enrolmentId) => ({
+      enrolmentId,
+      success: false,
+      grantsUpserted: 0,
+      error: 'SSG credentials not configured',
+    }));
+  }
+
+  const tp = await getTrainingPartnerIdentifiers();
+  const ourCode = tp.code;
+
+  const ssgCreds: SSGCredentials = {
+    encryptionKey: credentials.encryptionKey,
+    certificateContent: credentials.certificateContent,
+    privateKeyContent: credentials.privateKeyContent,
+    uen: credentials.uen || tp.uen,
+    ssgApiBaseUrl: credentials.ssgApiBaseUrl,
+  };
+
+  const known = await pool.query(
+    `SELECT enrolment_id FROM ssg_enrolments WHERE enrolment_id = ANY($1::text[])`,
+    [unique]
+  );
+  const knownSet = new Set(known.rows.map((r: { enrolment_id: string }) => r.enrolment_id));
+
+  const results: GrantRefreshRowResult[] = [];
+
+  for (const ref of unique) {
+    if (!knownSet.has(ref)) {
+      results.push({
+        enrolmentId: ref,
+        success: false,
+        grantsUpserted: 0,
+        error: 'Enrolment not found in ssg_enrolments',
+      });
+      continue;
+    }
+
+    try {
+      const grantPayload = {
+        grants: {
+          enrolment: { referenceNumber: ref },
+          trainingPartner: { uen: ssgCreds.uen, code: ourCode },
+        },
+        parameters: { page: 0, pageSize: 100 },
+      };
+
+      const grantResponse = (await ssgEncryptedPost(ssgCreds, '/tpg/grants/search', grantPayload)) as {
+        data?: Record<string, unknown>[];
+      };
+
+      const grants = grantResponse?.data ?? [];
+      let upserted = 0;
+
+      for (const grant of grants) {
+        try {
+          await upsertSsgGrant(grant);
+          upserted++;
+        } catch (err) {
+          console.warn(`[refreshGrantsForEnrolments] Failed to upsert grant for ${ref}:`, (err as Error).message);
+        }
+      }
+
+      if (grants.length > 0 && upserted === 0) {
+        results.push({
+          enrolmentId: ref,
+          success: false,
+          grantsUpserted: 0,
+          error: 'SSG returned grant data but saving to ssg_grants failed for every record',
+        });
+      } else {
+        results.push({ enrolmentId: ref, success: true, grantsUpserted: upserted });
+      }
+    } catch (err) {
+      let msg = err instanceof Error ? err.message : String(err);
+      if (/PEM|no start line|unsupported certificate/i.test(msg)) {
+        msg =
+          'SSG TLS client cert or private key is invalid or not PEM (check training_provider cert/key paths and files, or CERT_VALUE / PRIVATE_KEY_VALUE in .env — must include -----BEGIN …----- lines).';
+      }
+      console.warn(`[refreshGrantsForEnrolments] Grant fetch failed for ${ref}:`, msg);
+      results.push({ enrolmentId: ref, success: false, grantsUpserted: 0, error: msg });
+    }
+  }
+
+  return results;
 }
 
 // ---------------------------------------------------------------------------
