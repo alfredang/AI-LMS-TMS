@@ -69,19 +69,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const hasInvitationTable = (
       await pool.query(`SELECT 1 FROM information_schema.tables WHERE table_name = 'trainer_invitation' LIMIT 1`)
     ).rows.length > 0;
-    const hasTpgNameColumn = (
-      await pool.query(`SELECT 1 FROM information_schema.columns WHERE table_name = 'course_run' AND column_name = 'tpg_assigned_trainer_name' LIMIT 1`)
-    ).rows.length > 0;
-    const hasTpgEmailColumn = (
-      await pool.query(`SELECT 1 FROM information_schema.columns WHERE table_name = 'course_run' AND column_name = 'tpg_assigned_trainer_email' LIMIT 1`)
-    ).rows.length > 0;
-
-    const tpgNameExpr = hasTpgNameColumn
-      ? `COALESCE(cr.tpg_assigned_trainer_name, cr.assigned_trainer_name)`
-      : `cr.assigned_trainer_name`;
-    const tpgEmailExpr = hasTpgEmailColumn
-      ? `COALESCE(cr.tpg_assigned_trainer_email, cr.assigned_trainer_email)`
-      : `cr.assigned_trainer_email`;
+    // TPG column shows ONLY tpg_assigned_trainer_* (no fallback to assigned_trainer_*).
+    // Rows without SSG-synced trainer data will render empty here until sync populates
+    // tpg_assigned_trainer_* from ssg_course_runs.link_course_run_trainer.
+    const tpgNameExpr = `cr.tpg_assigned_trainer_name`;
+    const tpgEmailExpr = `cr.tpg_assigned_trainer_email`;
 
     const {
       search,
@@ -292,19 +284,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const upcomingClasses: UpcomingClass[] = rows.map((row) => {
       const trainerPool = splitTrainerList(row.trainers_list);
       const normalizedTrainerPool = trainerPool.map((trainerName) => normalizeTrainerName(trainerName));
-      const tpgNormalized = normalizeTrainerName(row.assigned_trainer_tpg);
       const localTrainerData = localTrainerMap.get(row.id) || { names: [], emails: [] };
-      const filteredLocalPairs = localTrainerData.names
-        .map((name, index) => ({ name, email: localTrainerData.emails[index] || '' }))
-        .filter((trainer) => normalizeTrainerName(trainer.name) !== tpgNormalized);
-      const localAssigned = new Set(filteredLocalPairs.map((trainer) => normalizeTrainerName(trainer.name)));
+      // LOCAL column shows ALL trainers from course_run_trainer (no dedup against TPG column).
+      const allLocalPairs = localTrainerData.names
+        .map((name, index) => ({ name, email: localTrainerData.emails[index] || '' }));
+      const localAssigned = new Set(allLocalPairs.map((trainer) => normalizeTrainerName(trainer.name)));
       const invitations = invitationMap.get(row.id) || [];
 
       let nextAvailableTrainer = '';
       let nextAvailableTrainerEmail = '';
       let latestInvitationStatus = invitations[0]?.status || '';
       let latestInvitationTrainer = invitations[0]?.trainer_name || '';
-      const localAssignedIndexes = filteredLocalPairs
+      const localAssignedIndexes = allLocalPairs
         .map((trainer) => normalizedTrainerPool.lastIndexOf(normalizeTrainerName(trainer.name)))
         .filter((index) => index >= 0);
       const startIndex = localAssignedIndexes.length > 0
@@ -337,8 +328,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         endDate: row.end_date,
         assignedTrainerTpg: row.assigned_trainer_tpg || '',
         assignedTrainerTpgEmail: row.assigned_trainer_tpg_email || '',
-        assignedTrainerLocal: filteredLocalPairs.map((trainer) => trainer.name).filter(Boolean).join(', '),
-        assignedTrainerLocalEmail: filteredLocalPairs.map((trainer) => trainer.email).filter(Boolean).join(', '),
+        assignedTrainerLocal: allLocalPairs.map((trainer) => trainer.name).filter(Boolean).join(', '),
+        assignedTrainerLocalEmail: allLocalPairs.map((trainer) => trainer.email).filter(Boolean).join(', '),
         nextAvailableTrainer,
         nextAvailableTrainerEmail,
         latestInvitationStatus,
