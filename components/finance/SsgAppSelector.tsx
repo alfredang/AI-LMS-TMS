@@ -9,7 +9,6 @@ import { useLms } from '@contexts/LmsContext';
 import { setSsgAppGlobal } from '@lib/ssgAppState';
 
 const SSG_APP_OPTIONS = [
-  { value: '', label: 'Default' },
   { value: 'app1', label: 'App 1' },
   { value: 'app2', label: 'App 2' },
   { value: 'app3', label: 'App 3' },

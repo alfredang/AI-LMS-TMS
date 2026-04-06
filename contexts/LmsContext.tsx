@@ -310,7 +310,7 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [editingCourse, setEditingCourse] = useState<Course | null>(null);
   const [courseEditMode, setCourseEditMode] = useState<'create' | 'edit' | 'view' | null>(null);
   const [editingCourseRun, setEditingCourseRun] = useState<any | null>(null);
-  const [ssgApp, setSsgApp] = useState<string>('');  // empty = use default from DB
+  const [ssgApp, setSsgApp] = useState<string>('app2');  // default app, user can switch
   const [courseListPage, setCourseListPage] = useState(1);
   const [courseDetail, setCourseDetail] = useState<CourseDetail | null>(null);
   const [resourceLinks, setResourceLinks] = useState<{ id: string; topicId: string; type: string; title: string; url: string }[]>([]);
