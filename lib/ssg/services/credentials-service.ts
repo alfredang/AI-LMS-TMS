@@ -166,8 +166,32 @@ export class SSGCredentialsService {
       };
 
       // Read certificate and private key — DB file paths first, env vars as fallback
-      const certEnv = process.env.CERT_VALUE || process.env.CERT_1_CERT;
-      const keyEnv  = process.env.PRIVATE_KEY_VALUE || process.env.CERT_1_KEY;
+      const certEnvRaw = process.env.CERT_VALUE || process.env.CERT_1_CERT;
+      const keyEnvRaw = process.env.PRIVATE_KEY_VALUE || process.env.CERT_1_KEY;
+
+      // Ignore editor placeholder strings and non-PEM garbage
+      const usablePemEnv = (raw: string | undefined): string | undefined => {
+        if (!raw) return undefined;
+        const t = raw.trim();
+        if (!t) return undefined;
+        if (/multiline environment variable|edit in normal view/i.test(t)) return undefined;
+        const normalized = resolvePem(t);
+        if (!normalized.includes('-----BEGIN')) return undefined;
+        return raw;
+      };
+
+      const certEnv = usablePemEnv(certEnvRaw);
+      const keyEnv = usablePemEnv(keyEnvRaw);
+
+      // Optional direct disk paths for local dev (e.g. certs/*.pem)
+      const resolveOptionalPath = (p: string | undefined): string => {
+        const t = p?.trim() ?? '';
+        if (!t) return '';
+        return path.isAbsolute(t) ? t : path.join(process.cwd(), t);
+      };
+
+      const envCertDisk = resolveOptionalPath(process.env.SSG_CERT_PATH);
+      const envKeyDisk = resolveOptionalPath(process.env.SSG_PRIVATE_KEY_PATH);
 
       // App base URL — used to fetch cert/key files when they can't be read from disk
       const appBaseUrl = (process.env.NEXT_PUBLIC_BASE_URL || process.env.NEXTAUTH_URL || process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || '').replace(/\/$/, '');
@@ -209,6 +233,9 @@ export class SSGCredentialsService {
         if (credentials.certificatePath && credentials.certificatePath.trim() !== '' && fs.existsSync(credentials.certificatePath)) {
           credentials.certificateContent = fs.readFileSync(credentials.certificatePath, 'utf8');
           console.log(`[creds] Certificate loaded from DB file path: ${credentials.certificatePath}`);
+        } else if (envCertDisk && fs.existsSync(envCertDisk)) {
+          credentials.certificateContent = fs.readFileSync(envCertDisk, 'utf8');
+          console.log(`[creds] Certificate loaded from SSG_CERT_PATH: ${envCertDisk}`);
         } else if (certEnv) {
           credentials.certificateContent = resolvePem(certEnv);
           console.log('[creds] Certificate loaded from env var');
@@ -219,6 +246,9 @@ export class SSGCredentialsService {
         const fetchedCert = await loadPemFromPath(certFile);
         if (fetchedCert) {
           credentials.certificateContent = fetchedCert;
+        } else if (envCertDisk && fs.existsSync(envCertDisk)) {
+          credentials.certificateContent = fs.readFileSync(envCertDisk, 'utf8');
+          console.log(`[creds] Certificate loaded from SSG_CERT_PATH (after error): ${envCertDisk}`);
         } else if (certEnv) {
           credentials.certificateContent = resolvePem(certEnv);
           console.log('[creds] Certificate loaded from env var (file read failed)');
@@ -232,6 +262,9 @@ export class SSGCredentialsService {
         if (credentials.privateKeyPath && credentials.privateKeyPath.trim() !== '' && fs.existsSync(credentials.privateKeyPath)) {
           credentials.privateKeyContent = fs.readFileSync(credentials.privateKeyPath, 'utf8');
           console.log(`[creds] Private key loaded from DB file path: ${credentials.privateKeyPath}`);
+        } else if (envKeyDisk && fs.existsSync(envKeyDisk)) {
+          credentials.privateKeyContent = fs.readFileSync(envKeyDisk, 'utf8');
+          console.log(`[creds] Private key loaded from SSG_PRIVATE_KEY_PATH: ${envKeyDisk}`);
         } else if (keyEnv) {
           credentials.privateKeyContent = resolvePem(keyEnv);
           console.log('[creds] Private key loaded from env var');
@@ -242,6 +275,9 @@ export class SSGCredentialsService {
         const fetchedKey = await loadPemFromPath(keyFile);
         if (fetchedKey) {
           credentials.privateKeyContent = fetchedKey;
+        } else if (envKeyDisk && fs.existsSync(envKeyDisk)) {
+          credentials.privateKeyContent = fs.readFileSync(envKeyDisk, 'utf8');
+          console.log(`[creds] Private key loaded from SSG_PRIVATE_KEY_PATH (after error): ${envKeyDisk}`);
         } else if (keyEnv) {
           credentials.privateKeyContent = resolvePem(keyEnv);
           console.log('[creds] Private key loaded from env var (file read failed)');
