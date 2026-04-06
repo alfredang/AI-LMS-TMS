@@ -60,7 +60,6 @@ const FinanceLayout: React.FC = () => {
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isDesktopSidebarCollapsed, setIsDesktopSidebarCollapsed] = useState(false);
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
-    grantManagement: true,
     claimManagement: true,
     tpgManagement: false,
     tpgCourseRun: false,
@@ -242,19 +241,6 @@ const FinanceLayout: React.FC = () => {
       <NavItem target="dashboard" label="Dashboard" />
       <NavItem target="allCourseRuns" label="All Course Runs" />
 
-      <NavSection title="Grant Management" sectionKey="grantManagement">
-        <NavItem target="grantCalculator" label="Grant Calculator" isSubItem />
-        <NavItem target="searchGrant" label="Search Grant" isSubItem />
-        <NavItem target="viewGrant" label="View Grant" isSubItem />
-      </NavSection>
-
-      <NavSection title="Claim Management" sectionKey="claimManagement">
-        <NavItem target="claimCheck" label="Check / Add Claim" isSubItem />
-        <NavItem target="viewClaim" label="View Claim" isSubItem />
-        <NavItem target="cancelClaim" label="Cancel Claim" isSubItem />
-        <NavItem target="uploadDocument" label="Upload Supporting Document" isSubItem />
-      </NavSection>
-
       <NavSection title="TPG Management" sectionKey="tpgManagement">
         <SubSection title="Course Run" sectionKey="tpgCourseRun">
           <NavItem target="tpgCreateClass" label="Create New Class" isSubItem />
@@ -294,9 +280,17 @@ const FinanceLayout: React.FC = () => {
         </SubSection>
 
         <SubSection title="Grant" sectionKey="tpgGrant">
+          <NavItem target="grantCalculator" label="Grant Calculator" isSubItem />
           <NavItem target="tpgSearchGrant" label="Search Grant" isSubItem />
           <NavItem target="tpgViewGrantStatus" label="View Grant Status" isSubItem />
         </SubSection>
+      </NavSection>
+
+      <NavSection title="Claim Management" sectionKey="claimManagement">
+        <NavItem target="claimCheck" label="Check / Add Claim" isSubItem />
+        <NavItem target="viewClaim" label="View Claim" isSubItem />
+        <NavItem target="cancelClaim" label="Cancel Claim" isSubItem />
+        <NavItem target="uploadDocument" label="Upload Supporting Document" isSubItem />
       </NavSection>
 
       <NavSection title="Useful Links" sectionKey="usefulLinks">
