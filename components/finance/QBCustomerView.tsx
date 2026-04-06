@@ -2,7 +2,13 @@ import React, { useState } from 'react';
 
 type Tab = 'query' | 'create';
 
+const QB_APP_OPTIONS = [
+  { value: 'app1', label: 'App 1' },
+  { value: 'app2', label: 'App 2' },
+];
+
 export default function QBCustomerView() {
+  const [selectedApp, setSelectedApp] = useState('app1');
   const [tab, setTab] = useState<Tab>('query');
   const [query, setQuery] = useState('SELECT * FROM Customer MAXRESULTS 20');
   const [result, setResult] = useState<any>(null);
@@ -27,7 +33,7 @@ export default function QBCustomerView() {
     try {
       const resp = await fetch('/api/quickbooks/proxy', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ entity: 'customer', ...body }),
+        body: JSON.stringify({ entity: 'customer', app: selectedApp, ...body }),
       });
       const json = await resp.json();
       if (!resp.ok || !json.success) setError(json.error || `Error ${resp.status}`);
@@ -63,6 +69,18 @@ export default function QBCustomerView() {
       <div>
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Customers</h1>
         <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">QuickBooks Online Customer API</p>
+      </div>
+
+      <div className="flex items-center gap-3">
+        <label className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400 tracking-wider">QuickBooks App</label>
+        <div className="flex gap-1">
+          {QB_APP_OPTIONS.map(opt => (
+            <button key={opt.value} onClick={() => setSelectedApp(opt.value)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${selectedApp === opt.value ? 'bg-green-100 text-green-800 border-2 border-green-500 dark:bg-green-900/30 dark:text-green-400 dark:border-green-500' : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-400 border-2 border-transparent'}`}>
+              {opt.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="flex gap-1 border-b border-gray-200 dark:border-gray-700">

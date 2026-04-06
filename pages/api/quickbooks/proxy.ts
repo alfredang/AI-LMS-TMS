@@ -25,7 +25,7 @@ interface QBOCredentials {
 
 let cachedCreds: QBOCredentials | null = null;
 
-async function getQBOCredentials(): Promise<QBOCredentials | null> {
+async function getQBOCredentials(appOverride?: string): Promise<QBOCredentials | null> {
   try {
     const result = await pool.query(
       `SELECT a.key_name, a.key_value
@@ -37,9 +37,9 @@ async function getQBOCredentials(): Promise<QBOCredentials | null> {
     const map: Record<string, string> = {};
     for (const row of result.rows) map[row.key_name] = row.key_value;
 
-    const defaultApp = map.QUICKBOOKS_DEFAULT_APP || 'app1';
-    const clientId = defaultApp === 'app2' ? map.QUICKBOOKS_APP2_CLIENT_ID : map.QUICKBOOKS_APP1_CLIENT_ID;
-    const clientSecret = defaultApp === 'app2' ? map.QUICKBOOKS_APP2_CLIENT_SECRET : map.QUICKBOOKS_APP1_CLIENT_SECRET;
+    const selectedApp = appOverride || map.QUICKBOOKS_DEFAULT_APP || 'app1';
+    const clientId = selectedApp === 'app2' ? map.QUICKBOOKS_APP2_CLIENT_ID : map.QUICKBOOKS_APP1_CLIENT_ID;
+    const clientSecret = selectedApp === 'app2' ? map.QUICKBOOKS_APP2_CLIENT_SECRET : map.QUICKBOOKS_APP1_CLIENT_SECRET;
     const refreshToken = map.QUICKBOOKS_REFRESH_TOKEN;
     const realmId = map.QUICKBOOKS_REALM_ID;
 
@@ -112,14 +112,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { action, entity, id, query, body: reqBody, sendTo } = req.body;
+  const { action, entity, id, query, body: reqBody, sendTo, app: appOverride } = req.body;
 
   if (!action || !entity) {
     return res.status(400).json({ success: false, error: 'action and entity are required.' });
   }
 
   try {
-    const creds = await getQBOCredentials();
+    const creds = await getQBOCredentials(appOverride);
     if (!creds) {
       return res.status(500).json({ success: false, error: 'QuickBooks credentials not configured. Set Client ID, Client Secret, Refresh Token, and Realm ID in Company Settings.' });
     }
