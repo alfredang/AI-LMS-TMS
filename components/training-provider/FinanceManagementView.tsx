@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Card } from '../ui/Card';
 import { Icon, IconName } from '../ui/Icon';
+import { maskNric } from '../../utils';
 
 type TabView = 'grants' | 'claims';
 
@@ -13,6 +14,7 @@ interface GrantRow {
   estimated_grant_amount: number | null;
   approved_grant_amount: number | null;
   trainee_name: string | null;
+  trainee_nric: string | null;
 }
 
 interface ClaimRow {
@@ -20,6 +22,7 @@ interface ClaimRow {
   grant_id: string;
   enrollment_id: string;
   trainee_name: string | null;
+  individual_nric: string | null;
   course_reference: string;
   claim_status: string;
   claim_amount: number | null;
@@ -83,6 +86,15 @@ const FinanceManagementView: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState('');
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
   const [page, setPage] = useState(0);
+  const [visibleNrics, setVisibleNrics] = useState<Set<string>>(new Set());
+
+  const toggleNricVisibility = (id: string) => {
+    setVisibleNrics(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
 
   // Grants state
   const [grants, setGrants] = useState<GrantRow[]>([]);
@@ -286,6 +298,7 @@ const FinanceManagementView: React.FC = () => {
               <thead>
                 <tr className="border-b border-default bg-surface-elevated">
                   <th className="text-left px-4 py-3 font-medium text-on-surface-secondary">Trainee Name</th>
+                  <th className="text-left px-4 py-3 font-medium text-on-surface-secondary">NRIC</th>
                   <th className="text-left px-4 py-3 font-medium text-on-surface-secondary">Enrollment ID</th>
                   <th className="text-left px-4 py-3 font-medium text-on-surface-secondary">Grant ID</th>
                   <th className="text-left px-4 py-3 font-medium text-on-surface-secondary">Status</th>
@@ -296,17 +309,29 @@ const FinanceManagementView: React.FC = () => {
               </thead>
               <tbody>
                 {isLoading ? (
-                  <tr><td colSpan={7} className="px-4 py-12 text-center text-on-surface-secondary">
+                  <tr><td colSpan={8} className="px-4 py-12 text-center text-on-surface-secondary">
                     <div className="flex items-center justify-center gap-2">
                       <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary" />
                       Loading grants...
                     </div>
                   </td></tr>
                 ) : grants.length === 0 ? (
-                  <tr><td colSpan={7} className="px-4 py-12 text-center text-on-surface-secondary">No grants found.</td></tr>
+                  <tr><td colSpan={8} className="px-4 py-12 text-center text-on-surface-secondary">No grants found.</td></tr>
                 ) : grants.map((g, i) => (
                   <tr key={`${g.grant_id}-${i}`} className="border-b border-default hover:bg-surface-hover transition-colors">
                     <td className="px-4 py-3 text-on-surface">{g.trainee_name || '-'}</td>
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      <div className="flex items-center gap-1">
+                        <span className="text-sm text-on-surface">
+                          {g.trainee_nric ? (visibleNrics.has(g.grant_id) ? g.trainee_nric : maskNric(g.trainee_nric)) : '-'}
+                        </span>
+                        {g.trainee_nric && (
+                          <button onClick={() => toggleNricVisibility(g.grant_id)} className="text-gray-400 hover:text-blue-500 transition-colors" title={visibleNrics.has(g.grant_id) ? 'Hide NRIC' : 'Show NRIC'}>
+                            <Icon name={visibleNrics.has(g.grant_id) ? IconName.EyeOff : IconName.Eye} className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    </td>
                     <td className="px-4 py-3 text-on-surface-secondary font-mono text-xs">{g.enrollment_id || '-'}</td>
                     <td className="px-4 py-3 text-on-surface-secondary font-mono text-xs">{g.grant_id}</td>
                     <td className="px-4 py-3">
@@ -328,6 +353,7 @@ const FinanceManagementView: React.FC = () => {
               <thead>
                 <tr className="border-b border-default bg-surface-elevated">
                   <th className="text-left px-4 py-3 font-medium text-on-surface-secondary">Trainee Name</th>
+                  <th className="text-left px-4 py-3 font-medium text-on-surface-secondary">NRIC</th>
                   <th className="text-left px-4 py-3 font-medium text-on-surface-secondary">Claim ID</th>
                   <th className="text-left px-4 py-3 font-medium text-on-surface-secondary">Enrollment ID</th>
                   <th className="text-left px-4 py-3 font-medium text-on-surface-secondary">Course Ref</th>
@@ -339,17 +365,29 @@ const FinanceManagementView: React.FC = () => {
               </thead>
               <tbody>
                 {isLoading ? (
-                  <tr><td colSpan={8} className="px-4 py-12 text-center text-on-surface-secondary">
+                  <tr><td colSpan={9} className="px-4 py-12 text-center text-on-surface-secondary">
                     <div className="flex items-center justify-center gap-2">
                       <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary" />
                       Loading claims...
                     </div>
                   </td></tr>
                 ) : claims.length === 0 ? (
-                  <tr><td colSpan={8} className="px-4 py-12 text-center text-on-surface-secondary">No claims found.</td></tr>
+                  <tr><td colSpan={9} className="px-4 py-12 text-center text-on-surface-secondary">No claims found.</td></tr>
                 ) : claims.map((c, i) => (
                   <tr key={`${c.claim_id}-${i}`} className="border-b border-default hover:bg-surface-hover transition-colors">
                     <td className="px-4 py-3 text-on-surface">{c.trainee_name || '-'}</td>
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      <div className="flex items-center gap-1">
+                        <span className="text-sm text-on-surface">
+                          {c.individual_nric ? (visibleNrics.has(c.claim_id) ? c.individual_nric : maskNric(c.individual_nric)) : '-'}
+                        </span>
+                        {c.individual_nric && (
+                          <button onClick={() => toggleNricVisibility(c.claim_id)} className="text-gray-400 hover:text-blue-500 transition-colors" title={visibleNrics.has(c.claim_id) ? 'Hide NRIC' : 'Show NRIC'}>
+                            <Icon name={visibleNrics.has(c.claim_id) ? IconName.EyeOff : IconName.Eye} className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    </td>
                     <td className="px-4 py-3 text-on-surface-secondary font-mono text-xs">{c.claim_id}</td>
                     <td className="px-4 py-3 text-on-surface-secondary font-mono text-xs">{c.enrollment_id || '-'}</td>
                     <td className="px-4 py-3 text-on-surface-secondary text-xs">{c.course_reference || '-'}</td>
