@@ -168,7 +168,6 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate }) => {
 
                 <SubSection title="Session" isOpen={openSections.tpgSession} onToggle={() => toggleSection('tpgSession')}>
                     <NavItem page={AdminPage.AddSessions} label="Add Sessions" isSubItem />
-                    <NavItem page={AdminPage.CourseSessionTiming} label="Session Timing" isSubItem />
                     <NavItem page={AdminPage.CourseSessions} label="Course Sessions" isSubItem />
                 </SubSection>
 

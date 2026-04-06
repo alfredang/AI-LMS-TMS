@@ -205,7 +205,6 @@ const AdminLayout: React.FC = () => {
     ],
     [AdminPage.TpgCourseSession]: [
       { title: "Add Sessions", description: "Create the session schedule for a course run.", icon: IconName.Add, onClick: () => setAdminPage(AdminPage.AddSessions) },
-      { title: "Course Session Timing", description: "Adjust timing and sequence for course sessions.", icon: IconName.Clock, onClick: () => setAdminPage(AdminPage.CourseSessionTiming) },
       { title: "Course Sessions", description: "Review the full session list for each course run.", icon: IconName.Calendar, onClick: () => setAdminPage(AdminPage.CourseSessions) },
       { title: "Course Session Attendance", description: "Check session-level attendance details.", icon: IconName.ClipboardCheck, onClick: () => setAdminPage(AdminPage.CourseSessionAttendance) },
     ],
