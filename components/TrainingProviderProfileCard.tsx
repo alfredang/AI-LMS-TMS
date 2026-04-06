@@ -88,6 +88,36 @@ const API_KEY_CONFIGS: Record<string, { label: string; models: { value: string; 
         defaultModel: '',
         models: []
     },
+    'BIZFILE_CLIENT_ID': {
+        label: 'Bizfile Client ID',
+        defaultModel: '',
+        models: []
+    },
+    'BIZFILE_CLIENT_SECRET': {
+        label: 'Bizfile Client Secret',
+        defaultModel: '',
+        models: []
+    },
+    'QUICKBOOKS_APP1_CLIENT_ID': {
+        label: 'Client ID',
+        defaultModel: '',
+        models: []
+    },
+    'QUICKBOOKS_APP1_CLIENT_SECRET': {
+        label: 'Client Secret',
+        defaultModel: '',
+        models: []
+    },
+    'QUICKBOOKS_APP2_CLIENT_ID': {
+        label: 'Client ID',
+        defaultModel: '',
+        models: []
+    },
+    'QUICKBOOKS_APP2_CLIENT_SECRET': {
+        label: 'Client Secret',
+        defaultModel: '',
+        models: []
+    },
 };
 
 const LLM_API_KEY_NAMES = [
@@ -105,6 +135,18 @@ const OPENCLAW_API_KEY_NAMES = [
 ] as const;
 const N8N_API_KEY_NAMES = [
     'N8N_API_KEY',
+] as const;
+const BIZFILE_API_KEY_NAMES = [
+    'BIZFILE_CLIENT_ID',
+    'BIZFILE_CLIENT_SECRET',
+] as const;
+const QUICKBOOKS_APP1_KEY_NAMES = [
+    'QUICKBOOKS_APP1_CLIENT_ID',
+    'QUICKBOOKS_APP1_CLIENT_SECRET',
+] as const;
+const QUICKBOOKS_APP2_KEY_NAMES = [
+    'QUICKBOOKS_APP2_CLIENT_ID',
+    'QUICKBOOKS_APP2_CLIENT_SECRET',
 ] as const;
 
 // Helper function to clean filename for display
@@ -213,6 +255,8 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
     const [isLlmCredentialsOpen, setIsLlmCredentialsOpen] = useState(false);
     const [isOpenClawCredentialsOpen, setIsOpenClawCredentialsOpen] = useState(false);
     const [isN8nCredentialsOpen, setIsN8nCredentialsOpen] = useState(false);
+    const [isBizfileCredentialsOpen, setIsBizfileCredentialsOpen] = useState(false);
+    const [isQuickbooksCredentialsOpen, setIsQuickbooksCredentialsOpen] = useState(false);
     const [isCompanyOpen, setIsCompanyOpen] = useState(false);
     const [isContactOpen, setIsContactOpen] = useState(false);
     const [isDocTemplatesOpen, setIsDocTemplatesOpen] = useState(false);
@@ -1978,6 +2022,131 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                         {isN8nCredentialsOpen && (
                             <div className="rounded-md border border-default bg-surface p-5">
                                 {renderCredentialInputs(N8N_API_KEY_NAMES)}
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="space-y-4">
+                        {renderSubsectionHeader('Bizfile', isBizfileCredentialsOpen, () => setIsBizfileCredentialsOpen(prev => !prev))}
+                        {isBizfileCredentialsOpen && (
+                            <div className="rounded-md border border-default bg-surface p-5">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    {BIZFILE_API_KEY_NAMES.map((keyName) => {
+                                        const keyValue = (formData.apiKeys || {})[keyName] || '';
+                                        const isVisible = visibleApiKeys[keyName];
+                                        const config = API_KEY_CONFIGS[keyName];
+                                        return (
+                                            <div key={keyName}>
+                                                <label className="block text-xs font-medium text-muted mb-1">{config?.label || keyName}</label>
+                                                <div className="flex items-center gap-2">
+                                                    <input
+                                                        type={isVisible ? 'text' : 'password'}
+                                                        value={keyValue}
+                                                        onChange={(e) => {
+                                                            setFormData(prev => ({
+                                                                ...prev,
+                                                                apiKeys: { ...prev.apiKeys, [keyName]: e.target.value }
+                                                            }));
+                                                        }}
+                                                        disabled={!isEditing}
+                                                        placeholder={config?.label || keyName}
+                                                        className="flex-1 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-slate-700 text-on-surface px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary disabled:opacity-60"
+                                                    />
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setVisibleApiKeys(prev => ({ ...prev, [keyName]: !prev[keyName] }))}
+                                                        className="p-2 text-muted hover:text-on-surface transition-colors"
+                                                    >
+                                                        {isVisible
+                                                            ? <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878L3 3m6.878 6.878L21 21" /></svg>
+                                                            : <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                                                        }
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="space-y-4">
+                        {renderSubsectionHeader('Quickbooks', isQuickbooksCredentialsOpen, () => setIsQuickbooksCredentialsOpen(prev => !prev))}
+                        {isQuickbooksCredentialsOpen && (
+                            <div className="rounded-md border border-default bg-surface p-5 space-y-4">
+                                {(['app1', 'app2'] as const).map((appKey) => {
+                                    const keyNames = appKey === 'app1' ? QUICKBOOKS_APP1_KEY_NAMES : QUICKBOOKS_APP2_KEY_NAMES;
+                                    const isDefault = (formData.apiKeys?.QUICKBOOKS_DEFAULT_APP || 'app1') === appKey;
+                                    const appLabel = appKey === 'app1' ? 'App 1' : 'App 2';
+                                    return (
+                                        <div
+                                            key={appKey}
+                                            className={`rounded-lg border-2 p-4 transition-colors ${isDefault ? 'border-green-500 bg-green-50/50 dark:bg-green-900/10' : 'border-gray-200 dark:border-gray-600'}`}
+                                        >
+                                            <div className="flex items-center gap-3 mb-3">
+                                                <label className="flex items-center gap-2 cursor-pointer">
+                                                    <input
+                                                        type="radio"
+                                                        name="quickbooks_default_app"
+                                                        checked={isDefault}
+                                                        disabled={!isEditing}
+                                                        onChange={() => {
+                                                            setFormData(prev => ({
+                                                                ...prev,
+                                                                apiKeys: { ...prev.apiKeys, QUICKBOOKS_DEFAULT_APP: appKey }
+                                                            }));
+                                                        }}
+                                                        className="w-4 h-4 text-green-600 accent-green-600"
+                                                    />
+                                                    <span className="font-semibold text-on-surface">{appLabel}</span>
+                                                </label>
+                                                {isDefault && (
+                                                    <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-green-100 text-green-700 dark:bg-green-800/30 dark:text-green-400">
+                                                        Default
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                                {keyNames.map((keyName) => {
+                                                    const keyValue = (formData.apiKeys || {})[keyName] || '';
+                                                    const isVisible = visibleApiKeys[keyName];
+                                                    const config = API_KEY_CONFIGS[keyName];
+                                                    return (
+                                                        <div key={keyName}>
+                                                            <label className="block text-xs font-medium text-muted mb-1">{config?.label || keyName}</label>
+                                                            <div className="flex items-center gap-2">
+                                                                <input
+                                                                    type={isVisible ? 'text' : 'password'}
+                                                                    value={keyValue}
+                                                                    onChange={(e) => {
+                                                                        setFormData(prev => ({
+                                                                            ...prev,
+                                                                            apiKeys: { ...prev.apiKeys, [keyName]: e.target.value }
+                                                                        }));
+                                                                    }}
+                                                                    disabled={!isEditing}
+                                                                    placeholder={config?.label || keyName}
+                                                                    className="flex-1 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-slate-700 text-on-surface px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary disabled:opacity-60"
+                                                                />
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => setVisibleApiKeys(prev => ({ ...prev, [keyName]: !prev[keyName] }))}
+                                                                    className="p-2 text-muted hover:text-on-surface transition-colors"
+                                                                >
+                                                                    {isVisible
+                                                                        ? <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878L3 3m6.878 6.878L21 21" /></svg>
+                                                                        : <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                                                                    }
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
                             </div>
                         )}
                     </div>

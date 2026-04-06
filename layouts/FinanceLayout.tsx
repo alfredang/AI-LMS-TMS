@@ -8,7 +8,29 @@ import AllCourseRunsView from '../components/finance/AllCourseRunsView';
 import {
   SearchGrantView,
   ViewGrantStatusView,
+  SubmitAssessmentView,
+  UpdateAssessmentView,
+  UploadCourseRunsView,
+  SearchCourseRunsView,
+  SearchEnrolmentView,
+  ViewEnrolmentView,
+  ViewCourseRunView,
+  SearchAssessmentsView,
+  ViewAssessmentView,
+  CancelEnrolmentView,
+  UpdateEnrolmentView,
+  DeleteCourseRunView,
+  UpdateEnrolmentFeesView,
+  CourseSessionAttendanceView,
+  CourseSessionsView,
 } from '../components/admin/GrantManagementViews';
+import { CreateNewClassView } from '../components/admin/CreateNewClassView';
+import EditCourseRunView from '../components/admin/EditCourseRunView';
+import AddSessionsView from '../components/admin/AddSessionsView';
+import CourseSessionTimingView from '../components/admin/CourseSessionTimingView';
+import EnrollLearners from '../components/admin/EnrollLearners';
+import { BulkUploadEnrolmentView } from '../components/admin/BulkEnrolmentViews';
+import TrainerAttendanceDashboard from '../components/trainer/TrainerAttendanceDashboard';
 
 import ClaimCheckView from '../components/training-provider/ClaimCheckView';
 import GrantCalculatorView from '../components/finance/GrantCalculatorView';
@@ -20,7 +42,17 @@ import { ProfilePage } from '../components/ProfilePage';
 import { useLms } from '@contexts/LmsContext';
 import { View } from '@app-types/index';
 
-type FinancePage = 'dashboard' | 'allCourseRuns' | 'grantCalculator' | 'searchGrant' | 'viewGrant' | 'claimCheck' | 'viewClaim' | 'cancelClaim' | 'uploadDocument';
+type FinancePage =
+  | 'dashboard' | 'allCourseRuns'
+  | 'grantCalculator' | 'searchGrant' | 'viewGrant'
+  | 'claimCheck' | 'viewClaim' | 'cancelClaim' | 'uploadDocument'
+  // TPG Management
+  | 'tpgCreateClass' | 'tpgSearchCourseRuns' | 'tpgViewCourseRun' | 'tpgEditCourseRun' | 'tpgUploadCourseRuns' | 'tpgDeleteCourseRun'
+  | 'tpgAddSessions' | 'tpgSessionTiming' | 'tpgCourseSessions'
+  | 'tpgEnrollLearners' | 'tpgUploadEnrolments' | 'tpgSearchEnrolment' | 'tpgViewEnrolment' | 'tpgUpdateEnrolment' | 'tpgCancelEnrolment' | 'tpgUpdateEnrolmentFees'
+  | 'tpgSessionAttendance' | 'tpgCheckAttendance'
+  | 'tpgSubmitAssessment' | 'tpgUpdateAssessment' | 'tpgSearchAssessments' | 'tpgViewAssessment'
+  | 'tpgSearchGrant' | 'tpgViewGrantStatus';
 
 const FinanceLayout: React.FC = () => {
   const { currentView } = useLms();
@@ -30,6 +62,13 @@ const FinanceLayout: React.FC = () => {
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
     grantManagement: true,
     claimManagement: true,
+    tpgManagement: false,
+    tpgCourseRun: false,
+    tpgSession: false,
+    tpgEnrolment: false,
+    tpgAttendance: false,
+    tpgAssessment: false,
+    tpgGrant: false,
     usefulLinks: true,
   });
 
@@ -68,6 +107,36 @@ const FinanceLayout: React.FC = () => {
         return <CancelClaimView />;
       case 'uploadDocument':
         return <UploadDocumentView />;
+      // TPG Management — Course Run
+      case 'tpgCreateClass': return <CreateNewClassView />;
+      case 'tpgSearchCourseRuns': return <SearchCourseRunsView />;
+      case 'tpgViewCourseRun': return <ViewCourseRunView />;
+      case 'tpgEditCourseRun': return <EditCourseRunView />;
+      case 'tpgUploadCourseRuns': return <UploadCourseRunsView />;
+      case 'tpgDeleteCourseRun': return <DeleteCourseRunView />;
+      // TPG Management — Session
+      case 'tpgAddSessions': return <AddSessionsView />;
+      case 'tpgSessionTiming': return <CourseSessionTimingView />;
+      case 'tpgCourseSessions': return <CourseSessionsView />;
+      // TPG Management — Enrolment
+      case 'tpgEnrollLearners': return <EnrollLearners />;
+      case 'tpgUploadEnrolments': return <BulkUploadEnrolmentView />;
+      case 'tpgSearchEnrolment': return <SearchEnrolmentView />;
+      case 'tpgViewEnrolment': return <ViewEnrolmentView />;
+      case 'tpgUpdateEnrolment': return <UpdateEnrolmentView />;
+      case 'tpgCancelEnrolment': return <CancelEnrolmentView />;
+      case 'tpgUpdateEnrolmentFees': return <UpdateEnrolmentFeesView />;
+      // TPG Management — Attendance
+      case 'tpgSessionAttendance': return <CourseSessionAttendanceView />;
+      case 'tpgCheckAttendance': return <div className="max-w-6xl mx-auto"><TrainerAttendanceDashboard /></div>;
+      // TPG Management — Assessment
+      case 'tpgSubmitAssessment': return <SubmitAssessmentView />;
+      case 'tpgUpdateAssessment': return <UpdateAssessmentView />;
+      case 'tpgSearchAssessments': return <SearchAssessmentsView />;
+      case 'tpgViewAssessment': return <ViewAssessmentView />;
+      // TPG Management — Grant
+      case 'tpgSearchGrant': return <SearchGrantView />;
+      case 'tpgViewGrantStatus': return <ViewGrantStatusView />;
       default:
         return <FinanceManagementView />;
     }
@@ -83,6 +152,30 @@ const FinanceLayout: React.FC = () => {
       case 'viewClaim': return 'View Claim';
       case 'cancelClaim': return 'Cancel Claim';
       case 'uploadDocument': return 'Upload Supporting Document';
+      case 'tpgCreateClass': return 'Create New Class';
+      case 'tpgSearchCourseRuns': return 'Search Course Runs';
+      case 'tpgViewCourseRun': return 'View Course Run';
+      case 'tpgEditCourseRun': return 'Edit Course Run';
+      case 'tpgUploadCourseRuns': return 'Upload Course Runs';
+      case 'tpgDeleteCourseRun': return 'Delete Course Run';
+      case 'tpgAddSessions': return 'Add Sessions';
+      case 'tpgSessionTiming': return 'Session Timing';
+      case 'tpgCourseSessions': return 'Course Sessions';
+      case 'tpgEnrollLearners': return 'Enroll Learners';
+      case 'tpgUploadEnrolments': return 'Upload Enrolments';
+      case 'tpgSearchEnrolment': return 'Search Enrolment';
+      case 'tpgViewEnrolment': return 'View Enrolment';
+      case 'tpgUpdateEnrolment': return 'Update Enrolment';
+      case 'tpgCancelEnrolment': return 'Cancel Enrolment';
+      case 'tpgUpdateEnrolmentFees': return 'Update Enrolment Fees';
+      case 'tpgSessionAttendance': return 'Session Attendance';
+      case 'tpgCheckAttendance': return 'Check Attendance';
+      case 'tpgSubmitAssessment': return 'Submit Assessment';
+      case 'tpgUpdateAssessment': return 'Update Assessment';
+      case 'tpgSearchAssessments': return 'Search Assessments';
+      case 'tpgViewAssessment': return 'View Assessment';
+      case 'tpgSearchGrant': return 'Search Grant';
+      case 'tpgViewGrantStatus': return 'View Grant Status';
       default: return 'Finance Management';
     }
   };
@@ -125,9 +218,28 @@ const FinanceLayout: React.FC = () => {
     </div>
   );
 
+  const SubSection = ({ title, sectionKey, children }: { title: string; sectionKey: string; children: React.ReactNode }) => (
+    <div>
+      <button
+        type="button"
+        onClick={() => toggleSection(sectionKey)}
+        className="w-full flex items-center justify-between pl-8 pr-3 py-1.5 group cursor-pointer hover:bg-gray-100 dark:hover:bg-slate-700 rounded-md"
+      >
+        <span className="text-xs font-semibold uppercase text-gray-400 dark:text-gray-500 tracking-wider">{title}</span>
+        <svg
+          className={`w-3 h-3 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 transition-transform duration-200 ${openSections[sectionKey] ? 'rotate-180' : ''}`}
+          fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+      {openSections[sectionKey] && <div className="space-y-1">{children}</div>}
+    </div>
+  );
+
   const sidebarContent = (
     <nav className="space-y-6 p-4 bg-white dark:bg-slate-800 text-gray-900 dark:text-white h-full">
-      <NavItem target="dashboard" label="Finance Management" />
+      <NavItem target="dashboard" label="Dashboard" />
       <NavItem target="allCourseRuns" label="All Course Runs" />
 
       <NavSection title="Grant Management" sectionKey="grantManagement">
@@ -143,20 +255,54 @@ const FinanceLayout: React.FC = () => {
         <NavItem target="uploadDocument" label="Upload Supporting Document" isSubItem />
       </NavSection>
 
-      <a
-        href="https://quickbooks.intuit.com/sg/"
-        target="_blank"
-        rel="noopener noreferrer"
-        className={`flex items-center rounded-md px-3 py-2 text-sm font-medium transition-colors ${inactiveClass}`}
-      >
-        Quickbooks
-        <svg className="w-3 h-3 ml-auto text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-        </svg>
-      </a>
+      <NavSection title="TPG Management" sectionKey="tpgManagement">
+        <SubSection title="Course Run" sectionKey="tpgCourseRun">
+          <NavItem target="tpgCreateClass" label="Create New Class" isSubItem />
+          <NavItem target="tpgSearchCourseRuns" label="Search Course Runs" isSubItem />
+          <NavItem target="tpgViewCourseRun" label="View Course Run" isSubItem />
+          <NavItem target="tpgEditCourseRun" label="Edit Course Run" isSubItem />
+          <NavItem target="tpgUploadCourseRuns" label="Upload Course Runs" isSubItem />
+          <NavItem target="tpgDeleteCourseRun" label="Delete Course Run" isSubItem />
+        </SubSection>
+
+        <SubSection title="Session" sectionKey="tpgSession">
+          <NavItem target="tpgAddSessions" label="Add Sessions" isSubItem />
+          <NavItem target="tpgSessionTiming" label="Session Timing" isSubItem />
+          <NavItem target="tpgCourseSessions" label="Course Sessions" isSubItem />
+        </SubSection>
+
+        <SubSection title="Enrolment" sectionKey="tpgEnrolment">
+          <NavItem target="tpgEnrollLearners" label="Enroll Learners" isSubItem />
+          <NavItem target="tpgUploadEnrolments" label="Upload Enrolments" isSubItem />
+          <NavItem target="tpgSearchEnrolment" label="Search Enrolment" isSubItem />
+          <NavItem target="tpgViewEnrolment" label="View Enrolment" isSubItem />
+          <NavItem target="tpgUpdateEnrolment" label="Update Enrolment" isSubItem />
+          <NavItem target="tpgCancelEnrolment" label="Cancel Enrolment" isSubItem />
+          <NavItem target="tpgUpdateEnrolmentFees" label="Update Enrolment Fees" isSubItem />
+        </SubSection>
+
+        <SubSection title="Attendance" sectionKey="tpgAttendance">
+          <NavItem target="tpgSessionAttendance" label="Session Attendance" isSubItem />
+          <NavItem target="tpgCheckAttendance" label="Check Attendance" isSubItem />
+        </SubSection>
+
+        <SubSection title="Assessment" sectionKey="tpgAssessment">
+          <NavItem target="tpgSubmitAssessment" label="Submit Assessment" isSubItem />
+          <NavItem target="tpgUpdateAssessment" label="Update Assessment" isSubItem />
+          <NavItem target="tpgSearchAssessments" label="Search Assessments" isSubItem />
+          <NavItem target="tpgViewAssessment" label="View Assessment" isSubItem />
+        </SubSection>
+
+        <SubSection title="Grant" sectionKey="tpgGrant">
+          <NavItem target="tpgSearchGrant" label="Search Grant" isSubItem />
+          <NavItem target="tpgViewGrantStatus" label="View Grant Status" isSubItem />
+        </SubSection>
+      </NavSection>
 
       <NavSection title="Useful Links" sectionKey="usefulLinks">
         {[
+          { label: 'Quickbooks', href: 'https://quickbooks.intuit.com/sg/' },
+          { label: 'Vendors@gov', href: 'https://www.vendors.gov.sg/' },
           { label: 'GeBiz', href: 'https://www.gebiz.gov.sg/' },
           { label: 'Bizfile', href: 'https://www.bizfile.gov.sg/' },
           { label: 'CPF', href: 'https://www.cpf.gov.sg/member' },
