@@ -15,6 +15,24 @@ const modeOfTrainingOptions = [
   { value: '10', label: '10 - Work-based/Workplace Learning' },
 ];
 
+/** Normalise a raw mode-of-training value to its numeric code string.
+ * Handles: '9', '9 - Synchronous E-learning', 'Synchronous E-learning', etc. */
+const normalizeModeOfTraining = (raw: any): string => {
+  if (!raw) return '';
+  const s = String(raw).trim();
+  if (['1','2','4','8','9','10'].includes(s)) return s;
+  const leading = s.match(/^(\d+)/);
+  if (leading) return leading[1];
+  const l = s.toLowerCase();
+  if (l.includes('assess'))                           return '8';
+  if (l.includes('sync') || l.includes('synchronous')) return '9';
+  if (l.includes('async') || l.includes('asynchronous')) return '2';
+  if (l.includes('classroom'))                        return '1';
+  if (l.includes('job') || l.includes('ojt'))         return '4';
+  if (l.includes('work'))                             return '10';
+  return '1';
+};
+
 const DAY_START = '09:00';
 const DAY_END = '18:00';
 const EVENING_START = '19:00';
@@ -57,7 +75,9 @@ const addDays = (dateStr: string, days: number): string => {
 
 /**
  * Build sessions from course_session_timing template.
- * Dates: if 1-day course → all use startDate; else consecutive starting from startDate.
+ * Date logic: sessions advance to the next day only when the next session's
+ * start time is earlier than the previous session's end time (i.e. it can't
+ * be on the same day without overlapping). The date is also clamped to endDate.
  */
 const buildAutoSessions = (
   timing: Record<string, any> | null,
@@ -71,17 +91,32 @@ const buildAutoSessions = (
   const max = type === 'evening' ? 3 : 11;
   const sessions: SessionEntry[] = [];
 
+  let currentDate = startDate;
+  let prevEndTime = '';
+
   for (let i = 1; i <= max; i++) {
     const prefix = type === 'evening' ? `session_${i}_evening` : `session_${i}`;
     const startTime = timing[`${prefix}_start_time`] || '';
     const endTime   = timing[`${prefix}_end_time`]   || '';
     if (!startTime && !endTime) break; // stop at first empty slot
 
-    const mode = timing[`${prefix}_mode_of_training`] || defaultMode;
-    const date = startDate
-      ? (isOneDay ? startDate : addDays(startDate, i - 1))
-      : '';
+    const mode = normalizeModeOfTraining(timing[`${prefix}_mode_of_training`]) || normalizeModeOfTraining(defaultMode) || '1';
 
+    let date = '';
+    if (startDate) {
+      if (isOneDay) {
+        date = startDate;
+      } else {
+        // Advance to next day if this session would start before the previous one ends
+        if (prevEndTime && startTime && startTime < prevEndTime) {
+          const next = addDays(currentDate, 1);
+          currentDate = (endDate && next > endDate) ? endDate : next;
+        }
+        date = currentDate;
+      }
+    }
+
+    prevEndTime = endTime;
     sessions.push({ startDate: date, endDate: date, startTime, endTime, modeOfTraining: mode });
   }
   return sessions;
@@ -164,7 +199,7 @@ const AddSessionsView: React.FC = () => {
 
       const startDate = toDateInput(run.courseStartDate ?? run.courseDates?.start);
       const endDate   = toDateInput(run.courseEndDate   ?? run.courseDates?.end);
-      const modeDefault = run.modeOfTraining ?? '1';
+      const modeDefault = normalizeModeOfTraining(run.modeOfTraining) || '1';
 
       setCourseReferenceNumber(courseData.referenceNumber ?? courseData.externalReferenceNumber ?? '');
       setCourseTitle(courseData.title ?? '');
@@ -215,7 +250,7 @@ const AddSessionsView: React.FC = () => {
 
     const startTime = sessionTiming[`${prefix}_start_time`] || (type === 'evening' ? EVENING_START : DAY_START);
     const endTime   = sessionTiming[`${prefix}_end_time`]   || (type === 'evening' ? EVENING_END   : DAY_END);
-    const mode      = sessionTiming[`${prefix}_mode_of_training`] || defaultModeOfTraining;
+    const mode      = normalizeModeOfTraining(sessionTiming[`${prefix}_mode_of_training`]) || normalizeModeOfTraining(defaultModeOfTraining) || '1';
 
     return { startDate: '', endDate: '', startTime, endTime, modeOfTraining: mode };
   };
@@ -237,8 +272,16 @@ const AddSessionsView: React.FC = () => {
           if (isOneDay) {
             date = courseStartDate;
           } else {
-            const lastDate = newSessions.length > 0 ? newSessions[newSessions.length - 1].startDate : '';
-            date = lastDate ? addDays(lastDate, 1) : courseStartDate;
+            const lastSession = newSessions.length > 0 ? newSessions[newSessions.length - 1] : null;
+            const lastDate = lastSession?.startDate || courseStartDate;
+            const lastEndTime = lastSession?.endTime || '';
+            // New day if this session starts before the previous one ends
+            if (lastEndTime && tmpl.startTime && tmpl.startTime < lastEndTime) {
+              const next = addDays(lastDate, 1);
+              date = (courseEndDate && next > courseEndDate) ? courseEndDate : next;
+            } else {
+              date = lastDate || courseStartDate;
+            }
           }
         }
         newSessions.push({ ...tmpl, modeOfTraining: mode, startDate: date, endDate: date });
@@ -265,6 +308,11 @@ const AddSessionsView: React.FC = () => {
         return { ...s, startTime: tmpl.startTime, endTime: tmpl.endTime, modeOfTraining: tmpl.modeOfTraining };
       }));
     }
+  };
+
+  const removeSession = (idx: number) => {
+    setSessions(prev => prev.filter((_, i) => i !== idx));
+    setSessionCount(prev => prev - 1);
   };
 
   const updateSession = (idx: number, field: keyof SessionEntry, value: string) => {
@@ -353,8 +401,26 @@ const AddSessionsView: React.FC = () => {
       const data = await res.json();
 
       if (!res.ok) {
-        const msg = data?.details?.[0] || data?.message || data?.error?.message || `SSG error ${res.status}`;
-        setSubmissionResult({ success: false, message: typeof msg === 'string' ? msg : JSON.stringify(msg), error: data });
+        const details: { field?: string; message?: string }[] = data?.details ?? [];
+        let friendlyMessage: string;
+        if (details.length > 0) {
+          const lines = details.map(d => {
+            const raw = d.message ?? '';
+            // "There is already an existing session (TGS-xxx) in MySF"
+            const existMatch = raw.match(/already an existing session \(([^)]+)\)/i);
+            if (existMatch) {
+              // Extract session number from field e.g. "Session_SeqNo_1:..."
+              const seqMatch = (d.field ?? '').match(/Session_SeqNo_(\d+)/i);
+              const seqNo = seqMatch ? ` ${seqMatch[1]}` : '';
+              return `Session${seqNo} already exists in SSG (${existMatch[1]}). Sessions may have already been added for this course run.`;
+            }
+            return raw || JSON.stringify(d);
+          });
+          friendlyMessage = lines.join('\n');
+        } else {
+          friendlyMessage = data?.message || data?.error?.message || `SSG error ${res.status}`;
+        }
+        setSubmissionResult({ success: false, message: friendlyMessage, error: data });
       } else {
         setSubmissionResult({ success: true, message: `${sessions.length} session(s) added successfully.` });
         setSelectedCourseRunId(null);
@@ -406,7 +472,9 @@ const AddSessionsView: React.FC = () => {
             </div>
             {submissionResult.message && (
               <div className={`mt-2 ${submissionResult.success ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'}`}>
-                {submissionResult.message}
+                {submissionResult.message.split('\n').map((line, i) => (
+                  <p key={i}>{line}</p>
+                ))}
               </div>
             )}
           </div>
@@ -415,7 +483,7 @@ const AddSessionsView: React.FC = () => {
             <Button variant="outline" onClick={() => setSubmissionResult(null)} className="flex-1">
               {submissionResult.success ? 'Add More Sessions' : 'Try Again'}
             </Button>
-            <Button onClick={() => setAdminPage(AdminPage.CourseSessions)} className="flex-1">
+            <Button onClick={() => { setSelectedCourseRunId(courseRunId.trim()); setAdminPage(AdminPage.CourseSessions); }} className="flex-1">
               View Sessions
             </Button>
             <Button variant="outline" onClick={() => setAdminPage(AdminPage.Dashboard)} className="flex-1">
@@ -611,13 +679,22 @@ const AddSessionsView: React.FC = () => {
                 <Card key={idx} className="p-4 border dark:border-gray-700">
                   <div className="flex items-center justify-between mb-3">
                     <h4 className="font-semibold text-gray-800 dark:text-white">Session {idx + 1}</h4>
-                    <span className={`inline-flex px-2 py-0.5 text-xs font-semibold rounded-full ${
-                      sessionType === 'evening'
-                        ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300'
-                        : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
-                    }`}>
-                      {sessionType === 'evening' ? '🌙 Evening' : '☀️ Day'}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className={`inline-flex px-2 py-0.5 text-xs font-semibold rounded-full ${
+                        sessionType === 'evening'
+                          ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300'
+                          : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
+                      }`}>
+                        {sessionType === 'evening' ? '🌙 Evening' : '☀️ Day'}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => removeSession(idx)}
+                        className="text-xs text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 font-medium px-2 py-0.5 rounded hover:bg-red-50 dark:hover:bg-red-900/20"
+                      >
+                        Remove
+                      </button>
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">

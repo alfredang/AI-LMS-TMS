@@ -37,7 +37,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Get SSG credentials from database (using the single training provider)
     const credentialsService = getSSGCredentialsService();
-    const credentials = await credentialsService.getSSGCredentials();
+    const credentials = await credentialsService.getSSGCredentials(undefined, (req.headers['x-ssg-app'] as string) || undefined);
 
     if (!credentials) {
       return res.status(404).json({ error: 'Training provider credentials not found' });

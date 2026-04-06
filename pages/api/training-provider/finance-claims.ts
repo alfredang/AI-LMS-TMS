@@ -46,6 +46,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         sc.grant_id,
         sc.enrollment_id,
         sc.trainee_name,
+        sc.individual_nric,
         sc.course_reference,
         sc.claim_status,
         sc.claim_amount,

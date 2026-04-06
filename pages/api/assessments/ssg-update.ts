@@ -29,7 +29,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const credentials = await getSSGCredentialsService().getSSGCredentials();
+    const credentials = await getSSGCredentialsService().getSSGCredentials(undefined, (req.headers['x-ssg-app'] as string) || undefined);
     if (!credentials) {
       return res.status(500).json({ success: false, error: 'SSG credentials not found' });
     }

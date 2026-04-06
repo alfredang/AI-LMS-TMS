@@ -49,7 +49,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         sg.component_description,
         sg.estimated_grant_amount,
         sg.approved_grant_amount,
-        se.trainee_name
+        se.trainee_name,
+        se.trainee_nric
       FROM ssg_grants sg
       LEFT JOIN ssg_enrolments se ON sg.enrollment_id = se.enrolment_id
       ${whereClause}
