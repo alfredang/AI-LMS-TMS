@@ -220,7 +220,11 @@ const Header: React.FC = () => {
       { view: View.Finance, label: 'TPG Management', icon: IconName.Settings, financePage: 'tpgManagement' },
       { view: View.Finance, label: 'Claim Management', icon: IconName.ClipboardCheck, financePage: 'claimCheck' },
     ],
-    [UserRole.TrainingProvider]: []
+    [UserRole.TrainingProvider]: [
+      { view: View.Dashboard, label: 'Dashboard', icon: IconName.Dashboard },
+      { view: View.Profile, label: 'Company Setting', icon: IconName.MyAccount },
+      { view: View.Scheduler, label: 'Task Scheduler', icon: IconName.Calendar },
+    ]
   };
 
   const navItems = navConfig[role];
@@ -265,7 +269,7 @@ const Header: React.FC = () => {
               const isFinanceItem = 'financePage' in item && item.financePage;
               const isActive = isTrainerItem
                 ? trainerPage === item.trainerPage
-                : isFinanceItem
+                : (isFinanceItem || role === UserRole.TrainingProvider)
                   ? false
                   : (role === UserRole.Admin && isAdminPageActive(item)) || (role !== UserRole.Admin && currentView === item.view);
 
