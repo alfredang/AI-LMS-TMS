@@ -17,6 +17,7 @@ build/
 
 # Local settings (sensitive config, not uploaded to GitHub)
 config/local-settings.json
+service-account.json
 
 # IDE and editor files
 .vscode/
