@@ -46,6 +46,9 @@ import BizfileAddressView from '../components/finance/BizfileAddressView';
 import BizfileSsicView from '../components/finance/BizfileSsicView';
 import BizfileCapitalView from '../components/finance/BizfileCapitalView';
 import BizfileShareholdersView from '../components/finance/BizfileShareholdersView';
+import QBEstimateView from '../components/finance/QBEstimateView';
+import QBInvoiceView from '../components/finance/QBInvoiceView';
+import QBPaymentView from '../components/finance/QBPaymentView';
 
 import { ProfilePage } from '../components/ProfilePage';
 import { useLms } from '@contexts/LmsContext';
@@ -57,6 +60,7 @@ type FinancePage =
   | 'claimCheck' | 'viewClaim' | 'cancelClaim' | 'uploadDocument'
   | 'bizfile' | 'bizfileDirectorySearch' | 'bizfileNameSearch'
   | 'bizfileVerification' | 'bizfileKeyDates' | 'bizfileAddress' | 'bizfileSsic' | 'bizfileCapital' | 'bizfileShareholders'
+  | 'qbEstimate' | 'qbInvoice' | 'qbPayment'
   // TPG Management
   | 'tpgCreateClass' | 'tpgSearchCourseRuns' | 'tpgViewCourseRun' | 'tpgEditCourseRun' | 'tpgUploadCourseRuns' | 'tpgDeleteCourseRun'
   | 'tpgAddSessions' | 'tpgSessionTiming' | 'tpgCourseSessions'
@@ -80,6 +84,7 @@ const FinanceLayout: React.FC = () => {
     tpgAssessment: false,
     tpgGrant: false,
     bizfile: false,
+    quickbooks: false,
     usefulLinks: true,
   });
 
@@ -136,6 +141,12 @@ const FinanceLayout: React.FC = () => {
         return <BizfileCapitalView />;
       case 'bizfileShareholders':
         return <BizfileShareholdersView />;
+      case 'qbEstimate':
+        return <QBEstimateView />;
+      case 'qbInvoice':
+        return <QBInvoiceView />;
+      case 'qbPayment':
+        return <QBPaymentView />;
       // TPG Management — Course Run
       case 'tpgCreateClass': return <CreateNewClassView />;
       case 'tpgSearchCourseRuns': return <SearchCourseRunsView />;
@@ -190,6 +201,9 @@ const FinanceLayout: React.FC = () => {
       case 'bizfileSsic': return 'Bizfile — SSIC Details';
       case 'bizfileCapital': return 'Bizfile — Company Capital';
       case 'bizfileShareholders': return 'Bizfile — Shareholders';
+      case 'qbEstimate': return 'QuickBooks — Quotes';
+      case 'qbInvoice': return 'QuickBooks — Invoices';
+      case 'qbPayment': return 'QuickBooks — Payments';
       case 'tpgCreateClass': return 'Create New Class';
       case 'tpgSearchCourseRuns': return 'Search Course Runs';
       case 'tpgViewCourseRun': return 'View Course Run';
@@ -330,6 +344,12 @@ const FinanceLayout: React.FC = () => {
         <NavItem target="viewClaim" label="View Claim" isSubItem />
         <NavItem target="cancelClaim" label="Cancel Claim" isSubItem />
         <NavItem target="uploadDocument" label="Supporting Document" isSubItem />
+      </NavSection>
+
+      <NavSection title="Quickbooks" sectionKey="quickbooks">
+        <NavItem target="qbEstimate" label="Quotes (Estimates)" isSubItem />
+        <NavItem target="qbInvoice" label="Invoices" isSubItem />
+        <NavItem target="qbPayment" label="Payments" isSubItem />
       </NavSection>
 
       <NavSection title="Bizfile" sectionKey="bizfile">
