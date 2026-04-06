@@ -290,7 +290,7 @@ const FinanceLayout: React.FC = () => {
         <NavItem target="claimCheck" label="Check / Add Claim" isSubItem />
         <NavItem target="viewClaim" label="View Claim" isSubItem />
         <NavItem target="cancelClaim" label="Cancel Claim" isSubItem />
-        <NavItem target="uploadDocument" label="Upload Supporting Document" isSubItem />
+        <NavItem target="uploadDocument" label="Supporting Document" isSubItem />
       </NavSection>
 
       <NavSection title="Useful Links" sectionKey="usefulLinks">
