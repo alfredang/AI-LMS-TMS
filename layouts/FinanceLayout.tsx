@@ -37,6 +37,7 @@ import GrantCalculatorView from '../components/finance/GrantCalculatorView';
 import ViewClaimView from '../components/finance/ViewClaimView';
 import CancelClaimView from '../components/finance/CancelClaimView';
 import UploadDocumentView from '../components/finance/UploadDocumentView';
+import SsgAppSelector from '../components/finance/SsgAppSelector';
 import BizfileView from '../components/finance/BizfileView';
 import BizfileDirectorySearchView from '../components/finance/BizfileDirectorySearchView';
 import BizfileNameSearchView from '../components/finance/BizfileNameSearchView';
@@ -454,6 +455,7 @@ const FinanceLayout: React.FC = () => {
         {/* Main Content Area */}
         <main className="flex-1 overflow-x-hidden">
           <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            {page.startsWith('tpg') && <SsgAppSelector />}
             {renderContent()}
           </div>
         </main>

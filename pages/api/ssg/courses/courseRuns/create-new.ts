@@ -18,7 +18,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Get SSG credentials (using default provider for now)
     const credentialsService = getSSGCredentialsService();
-    const credentials = await credentialsService.getSSGCredentials();
+    const credentials = await credentialsService.getSSGCredentials(undefined, (req.headers['x-ssg-app'] as string) || undefined);
     
     if (!credentials) {
       return res.status(404).json({ 

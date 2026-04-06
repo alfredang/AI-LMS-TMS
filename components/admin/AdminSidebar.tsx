@@ -250,6 +250,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate }) => {
 
             <NavSection title="Useful Links" isOpen={openSections.usefulLinks} onToggle={() => toggleSection('usefulLinks')}>
                 {[
+                    { label: 'TMS Documentation', href: 'https://alfredang.github.io/AI-LMS-TMS/' },
                     { label: 'SSG Process Steps', href: 'https://alfredang.github.io/ssgwsqprocess/index.html' },
                     { label: 'TPGateway', href: 'https://www.tpgateway.gov.sg/' },
                     { label: 'MySkillsFuture Portal', href: 'https://www.myskillsfuture.gov.sg/content/portal/en/index.html' },

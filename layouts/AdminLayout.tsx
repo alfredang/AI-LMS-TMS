@@ -3,6 +3,7 @@ import Header from '../components/Header';
 import Footer from '../components/Footer';
 
 import AiChatbot from '../components/AiChatbot';
+import SsgAppSelector from '../components/finance/SsgAppSelector';
 import { useLms } from '../contexts/LmsContext';
 import { View, AdminPage } from '@app-types';
 import { ProfilePage } from '../components/ProfilePage';
@@ -469,6 +470,7 @@ const AdminLayout: React.FC = () => {
         {/* Main Content Area */}
         <main className="flex-1 min-w-0 overflow-x-hidden">
           <div className={`container mx-auto px-4 sm:px-6 lg:px-8 ${editingCourse ? 'pt-3 pb-8' : 'py-8'}`}>
+            {[AdminPage.CreateNewClass, AdminPage.SearchCourseRuns, AdminPage.ViewCourseRun, AdminPage.EditCourseRun, AdminPage.UploadCourseRuns, AdminPage.DeleteCourseRun, AdminPage.AddSessions, AdminPage.CourseSessionTiming, AdminPage.CourseSessions, AdminPage.EnrollLearners, AdminPage.UploadEnrolments, AdminPage.SearchEnrolment, AdminPage.ViewEnrolment, AdminPage.UpdateEnrolment, AdminPage.CancelEnrolment, AdminPage.UpdateEnrolmentFees, AdminPage.CourseSessionAttendance, AdminPage.CheckAttendance, AdminPage.SubmitAssessment, AdminPage.UpdateAssessment, AdminPage.SearchAssessments, AdminPage.ViewAssessment, AdminPage.SearchGrant, AdminPage.ViewGrantStatus].includes(adminPage) && <SsgAppSelector />}
             {renderContent()}
           </div>
         </main>

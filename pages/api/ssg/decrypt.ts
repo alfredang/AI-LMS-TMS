@@ -31,7 +31,7 @@ export default async function handler(
 
     // Get SSG credentials for the single training provider (no ID needed - will get first one)
     const credentialsService = getSSGCredentialsService();
-    const credentials = await credentialsService.getSSGCredentials(); // No parameter = get first provider
+    const credentials = await credentialsService.getSSGCredentials(undefined, (req.headers['x-ssg-app'] as string) || undefined); // No parameter = get first provider
 
     if (!credentials) {
       return res.status(404).json({
