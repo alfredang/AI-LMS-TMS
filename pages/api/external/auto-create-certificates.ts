@@ -4,6 +4,8 @@ import pool from '../../../lib/db';
 import crypto from 'crypto';
 import { generateAndUploadCertificate } from '../../../lib/services/certificateService';
 import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdentifiers';
+import { getSSGCredentialsService } from '../../../lib/ssg/services/credentials-service';
+import { HttpClient, HTTPRequestBuilder, HttpMethod } from '../../../lib/ssg/utils/http-utils';
 
 const SCHEDULER_SECRET = process.env.NEXT_PUBLIC_SCHEDULER_SECRET || 'local-dev-fallback';
 
@@ -181,6 +183,74 @@ async function sendCertificateEmail(opts: {
     }
 }
 
+/**
+ * Fetch SSG e-attendance for a session and return the set of NRICs marked present.
+ */
+async function fetchSsgSessionAttendance(
+    courseCode: string,
+    courseRunId: string,
+    ssgSessionId: string
+): Promise<Set<string>> {
+    const presentNrics = new Set<string>();
+    try {
+        const credentials = await getSSGCredentialsService().getSSGCredentials();
+        if (!credentials) return presentNrics;
+
+        const ssgBaseUrl = credentials.ssgApiBaseUrl || process.env.SSG_API_URL || 'https://api.ssg-wsg.sg';
+        const encKey = Buffer.from(credentials.encryptionKey, 'base64');
+        const iv = Buffer.from('SSGAPIInitVector', 'utf8');
+        const tp = await getTrainingPartnerIdentifiers();
+        const uen = credentials.uen || tp.uen;
+
+        const builder = new HTTPRequestBuilder()
+            .withEndpoint(ssgBaseUrl, `/tpg/sessions/attendance`)
+            .withMethod(HttpMethod.GET)
+            .withParam('uen', uen)
+            .withParam('courseCode', courseCode)
+            .withParam('courseRunId', courseRunId)
+            .withParam('sessionId', ssgSessionId);
+
+        if (credentials.certificateContent && credentials.privateKeyContent) {
+            builder.withCertificate(credentials.certificateContent, credentials.privateKeyContent);
+        }
+
+        const httpClient = new HttpClient(ssgBaseUrl, {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+        });
+
+        const resp = await httpClient.request(builder.build());
+
+        if (resp.status === 200 && resp.data) {
+            // SSG may return encrypted data — try to decrypt
+            let attendanceData: any = resp.data;
+            if (typeof resp.data === 'string' && !resp.data.startsWith('{')) {
+                try {
+                    const decipher = crypto.createDecipheriv('aes-256-cbc', encKey, iv);
+                    let decrypted = decipher.update(resp.data, 'base64', 'utf8');
+                    decrypted += decipher.final('utf8');
+                    attendanceData = JSON.parse(decrypted);
+                } catch { attendanceData = resp.data; }
+            }
+
+            // Extract present NRICs from SSG response
+            const trainees = attendanceData?.data?.attendance || attendanceData?.attendance || [];
+            if (Array.isArray(trainees)) {
+                for (const t of trainees) {
+                    const status = (t.status || t.attendance || '').toLowerCase();
+                    const nric = t.trainee?.id || t.id || t.nric || '';
+                    if (nric && (status === 'confirmed' || status === 'present' || status === 'attended' || status === '1')) {
+                        presentNrics.add(nric);
+                    }
+                }
+            }
+        }
+    } catch (err) {
+        console.warn(`[auto-create-certificates] SSG attendance fetch failed for session ${ssgSessionId}:`, err instanceof Error ? err.message : err);
+    }
+    return presentNrics;
+}
+
 export async function runAutomation(targetDate?: string) {
     await ensureLogTable();
 
@@ -236,15 +306,14 @@ export async function runAutomation(targetDate?: string) {
                     throw new Error('No sessions found for this course run in local DB.');
                 }
 
-                // 3. Fetch attendance score per learner across ALL sessions
-                // Only include learners with confirmed enrollment and ≥60% attendance
-                const attendanceRes = await pool.query(`
+                // 3. Fetch ALL confirmed learners with their manual (DB) attendance
+                const allLearnersRes = await pool.query(`
                     SELECT
                         e.id as enrolment_id,
                         e.nric,
                         COALESCE(au.full_name, e.nric, 'Unknown') as learner_name,
                         COALESCE(au.email, e.email) as learner_email,
-                        COUNT(DISTINCT CASE WHEN ca.is_present = true THEN ca.session_id END) as attended_count
+                        COUNT(DISTINCT CASE WHEN ca.is_present = true THEN ca.session_id END) as manual_attended
                     FROM enrollment e
                     LEFT JOIN app_user au ON e.user_id = au.id
                     LEFT JOIN course_attendance ca ON ca.user_id = e.user_id AND ca.session_id IN (
@@ -252,12 +321,42 @@ export async function runAutomation(targetDate?: string) {
                     )
                     WHERE e.course_run_id = $1
                       AND LOWER(e.enrolment_status) = 'confirmed'
-                    GROUP BY e.id, e.nric, au.full_name
-                    HAVING COUNT(DISTINCT CASE WHEN ca.is_present = true THEN ca.session_id END)::float / $2::float * 100 >= 60
-                `, [run.db_uuid, totalSessions]);
+                    GROUP BY e.id, e.nric, au.full_name, au.email, e.email
+                `, [run.db_uuid]);
 
-                const eligibleTrainees = attendanceRes.rows;
-                console.log(`[auto-create-certificates] ${run.course_run_id}: ${totalSessions} sessions, ${eligibleTrainees.length} learners with ≥60% attendance.`);
+                // 4. Fetch SSG e-attendance per session and count present per NRIC
+                const sessionsRes = await pool.query(`
+                    SELECT id, ssg_session_id FROM course_session
+                    WHERE course_run_id = $1 AND deleted = false AND ssg_session_id IS NOT NULL
+                `, [run.db_uuid]);
+
+                const ssgAttendanceCount: Record<string, number> = {};
+                for (const sess of sessionsRes.rows) {
+                    if (!sess.ssg_session_id) continue;
+                    try {
+                        const presentNrics = await fetchSsgSessionAttendance(
+                            run.course_code, run.course_run_id, sess.ssg_session_id
+                        );
+                        for (const nric of presentNrics) {
+                            ssgAttendanceCount[nric] = (ssgAttendanceCount[nric] || 0) + 1;
+                        }
+                    } catch (ssgErr) {
+                        console.warn(`[auto-create-certificates] SSG attendance fetch error for session ${sess.ssg_session_id}:`, ssgErr);
+                    }
+                }
+
+                // 5. Use the HIGHER of manual DB attendance vs SSG e-attendance
+                // Learner is eligible if either score is ≥60%
+                const eligibleTrainees = allLearnersRes.rows.filter(trainee => {
+                    const manualCount = parseInt(trainee.manual_attended, 10) || 0;
+                    const ssgCount = ssgAttendanceCount[trainee.nric] || 0;
+                    const bestCount = Math.max(manualCount, ssgCount);
+                    const percent = (bestCount / totalSessions) * 100;
+                    (trainee as any).attended_count = bestCount;
+                    return percent >= 60;
+                });
+                const ssgFetchedCount = Object.keys(ssgAttendanceCount).length;
+                console.log(`[auto-create-certificates] ${run.course_run_id}: ${totalSessions} sessions, ${allLearnersRes.rows.length} enrolled, ${ssgFetchedCount} SSG e-attendance records, ${eligibleTrainees.length} learners with ≥60% attendance (best of manual/e-attendance).`);
 
                 for (const trainee of eligibleTrainees) {
                     const attendancePercent = Math.round((parseInt(trainee.attended_count, 10) / totalSessions) * 100);

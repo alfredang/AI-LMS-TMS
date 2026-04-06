@@ -120,7 +120,7 @@ const ProfileDropdown: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 };
 
 const Header: React.FC = () => {
-  const { role, userRoles, currentView, adminPage, trainerPage, handleNavigation, setAdminPage, setTrainerPage, setSelectedCourse, resetCreateView, resetAdminView, trainingProviderProfile, currentUserProfile, logout } = useLms();
+  const { role, userRoles, currentView, adminPage, trainerPage, financePage, setFinancePage, handleNavigation, setAdminPage, setTrainerPage, setSelectedCourse, resetCreateView, resetAdminView, trainingProviderProfile, currentUserProfile, logout } = useLms();
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isRoleSwitcherOpen, setIsRoleSwitcherOpen] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
@@ -215,7 +215,11 @@ const Header: React.FC = () => {
       { view: View.Admin, label: 'Class Management', icon: IconName.Courses, page: AdminPage.ClassManagement },
       { view: View.Admin, label: 'TPG Management', icon: IconName.DollarSign, page: AdminPage.TpgManagement },
     ],
-    [UserRole.Finance]: [],
+    [UserRole.Finance]: [
+      { view: View.Finance, label: 'Financial Dashboard', icon: IconName.DollarSign, financePage: 'dashboard' },
+      { view: View.Finance, label: 'TPG Management', icon: IconName.Settings, financePage: 'tpgManagement' },
+      { view: View.Finance, label: 'Claim Management', icon: IconName.ClipboardCheck, financePage: 'claimCheck' },
+    ],
     [UserRole.TrainingProvider]: []
   };
 
@@ -258,9 +262,12 @@ const Header: React.FC = () => {
 
               // Trainer page navigation
               const isTrainerItem = 'trainerPage' in item && item.trainerPage;
+              const isFinanceItem = 'financePage' in item && item.financePage;
               const isActive = isTrainerItem
                 ? trainerPage === item.trainerPage
-                : (role === UserRole.Admin && isAdminPageActive(item)) || (role !== UserRole.Admin && currentView === item.view);
+                : isFinanceItem
+                  ? false
+                  : (role === UserRole.Admin && isAdminPageActive(item)) || (role !== UserRole.Admin && currentView === item.view);
 
               return (
                 <a
@@ -281,6 +288,10 @@ const Header: React.FC = () => {
                         resetAdminView();
                       }
                       setAdminPage(item.page);
+                    }
+
+                    if (role === UserRole.Finance && 'financePage' in item) {
+                      setFinancePage(item.financePage);
                     }
 
                     if (item.view === View.Create && currentView === item.view) {
