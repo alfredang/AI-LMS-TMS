@@ -165,7 +165,7 @@ export class SSGCredentialsService {
           .replace(/\r/g, '\n');   // stray CR → LF
       };
 
-      // Read certificate and private key — priority: DB content → fetch from URL → local file → env var
+      // Read certificate and private key — DB file paths first, env vars as fallback
       const certEnv = process.env.CERT_VALUE || process.env.CERT_1_CERT;
       const keyEnv  = process.env.PRIVATE_KEY_VALUE || process.env.CERT_1_KEY;
 
@@ -208,17 +208,12 @@ export class SSGCredentialsService {
       try {
         if (credentials.certificatePath && credentials.certificatePath.trim() !== '' && fs.existsSync(credentials.certificatePath)) {
           credentials.certificateContent = fs.readFileSync(credentials.certificatePath, 'utf8');
-          console.log(`[creds] Certificate loaded from file: ${credentials.certificatePath}`);
+          console.log(`[creds] Certificate loaded from DB file path: ${credentials.certificatePath}`);
+        } else if (certEnv) {
+          credentials.certificateContent = resolvePem(certEnv);
+          console.log('[creds] Certificate loaded from env var');
         } else {
-          const fetchedCert = await loadPemFromPath(certFile);
-          if (fetchedCert) {
-            credentials.certificateContent = fetchedCert;
-          } else if (certEnv) {
-            credentials.certificateContent = resolvePem(certEnv);
-            console.log('[creds] Certificate loaded from env var');
-          } else {
-            console.warn('[creds] ❌ Certificate not found — tried file, URL, env var');
-          }
+          console.warn(`[creds] ❌ Certificate not found — no DB file path and no env var`);
         }
       } catch (fileError) {
         const fetchedCert = await loadPemFromPath(certFile);
@@ -236,17 +231,12 @@ export class SSGCredentialsService {
       try {
         if (credentials.privateKeyPath && credentials.privateKeyPath.trim() !== '' && fs.existsSync(credentials.privateKeyPath)) {
           credentials.privateKeyContent = fs.readFileSync(credentials.privateKeyPath, 'utf8');
-          console.log(`[creds] Private key loaded from file: ${credentials.privateKeyPath}`);
+          console.log(`[creds] Private key loaded from DB file path: ${credentials.privateKeyPath}`);
+        } else if (keyEnv) {
+          credentials.privateKeyContent = resolvePem(keyEnv);
+          console.log('[creds] Private key loaded from env var');
         } else {
-          const fetchedKey = await loadPemFromPath(keyFile);
-          if (fetchedKey) {
-            credentials.privateKeyContent = fetchedKey;
-          } else if (keyEnv) {
-            credentials.privateKeyContent = resolvePem(keyEnv);
-            console.log('[creds] Private key loaded from env var');
-          } else {
-            console.warn('[creds] ❌ Private key not found — tried file, URL, env var');
-          }
+          console.warn(`[creds] ❌ Private key not found — no DB file path and no env var`);
         }
       } catch (fileError) {
         const fetchedKey = await loadPemFromPath(keyFile);
