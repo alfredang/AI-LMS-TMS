@@ -8,17 +8,9 @@ interface CourseEntry {
   courseReferenceNumber: string;
 }
 
-const APP_OPTIONS = [
-  { value: 'app1', label: 'App 1 (Skilleto)' },
-  { value: 'app2', label: 'App 2' },
-  { value: 'app3', label: 'App 3' },
-  { value: 'app4', label: 'App 4 (OAuth)' },
-];
-
 export default function GrantCalculatorView() {
-  const { trainingProviderProfile } = useLms();
+  const { trainingProviderProfile, ssgApp } = useLms();
   const [tab, setTab] = useState<CalcTab>('personalised');
-  const [selectedApp, setSelectedApp] = useState('app1');
   const [uen, setUen] = useState('');
 
   // Auto-populate UEN from company settings or API
@@ -123,7 +115,7 @@ export default function GrantCalculatorView() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           courses,
-          app: selectedApp,
+          app: ssgApp || 'app1',
           applicant: {
             sme: pSme,
             nric: pNric,
@@ -233,22 +225,7 @@ export default function GrantCalculatorView() {
         </p>
       </div>
 
-      {/* SSG App Selector */}
-      <div>
-        <label className="block text-xs font-semibold uppercase text-gray-500 dark:text-gray-400 tracking-wider mb-2">
-          Certificate / OAuth
-        </label>
-        <select
-          value={selectedApp}
-          onChange={(e) => setSelectedApp(e.target.value)}
-          className="w-full max-w-xs rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-white px-3 py-2 text-sm font-medium focus:ring-2 focus:ring-primary focus:border-primary"
-        >
-          {APP_OPTIONS.map((opt) => (
-            <option key={opt.value} value={opt.value}>{opt.label}</option>
-          ))}
-        </select>
-        <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">Personalised Grant Calculator only works with App 1 (Skilleto) certificate.</p>
-      </div>
+      <p className="text-xs text-amber-600 dark:text-amber-400">Personalised Grant Calculator only works with App 1 (Skilleto) certificate.</p>
 
       {/* Tabs */}
       <div className="flex gap-1 border-b border-gray-200 dark:border-gray-700">
