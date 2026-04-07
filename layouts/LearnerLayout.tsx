@@ -11,6 +11,7 @@ import { CourseDetail } from '../components/CourseDetail';
 import HelpAndSupportView from '../components/HelpAndSupportView';
 import BillingHistoryView from '../components/BillingHistoryView';
 import CertificateHistoryView from '../components/CertificateHistoryView';
+import LearnerGrantCalculatorView from '../components/LearnerGrantCalculatorView';
 
 interface NavItem {
   view: View;
@@ -21,6 +22,7 @@ interface NavItem {
 const sidebarItems: NavItem[] = [
   { view: View.Courses, label: 'My Courses', icon: IconName.Courses },
   { view: View.Profile, label: 'My Profile', icon: IconName.MyAccount },
+  { view: View.GrantCalculator, label: 'Grant Calculator', icon: IconName.Calculator },
   { view: View.BillingHistory, label: 'Billing History', icon: IconName.DollarSign },
   { view: View.CertificateHistory, label: 'Certificate History', icon: IconName.Award },
 ];
@@ -53,6 +55,8 @@ const LearnerLayout: React.FC = () => {
         return <ProfilePage />;
       case View.HelpAndSupport:
         return <HelpAndSupportView />;
+      case View.GrantCalculator:
+        return <LearnerGrantCalculatorView />;
       case View.BillingHistory:
         return <BillingHistoryView />;
       case View.CertificateHistory:

@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useLms } from '@contexts/LmsContext';
 
 type CalcTab = 'baseline' | 'personalised';
 
@@ -15,8 +16,22 @@ const APP_OPTIONS = [
 ];
 
 export default function GrantCalculatorView() {
-  const [tab, setTab] = useState<CalcTab>('baseline');
+  const { trainingProviderProfile } = useLms();
+  const [tab, setTab] = useState<CalcTab>('personalised');
   const [selectedApp, setSelectedApp] = useState('app1');
+  const [uen, setUen] = useState('');
+
+  // Auto-populate UEN from company settings or API
+  useEffect(() => {
+    if (trainingProviderProfile?.uen) {
+      setUen(trainingProviderProfile.uen);
+    } else {
+      fetch('/api/training-provider/uen')
+        .then(r => r.json())
+        .then(data => { if (data.uen) setUen(data.uen); })
+        .catch(() => {});
+    }
+  }, [trainingProviderProfile]);
 
   // --- Baseline state ---
   const [coursesText, setCoursesText] = useState('');
@@ -89,15 +104,17 @@ export default function GrantCalculatorView() {
     setPersonalisedError('');
     setPersonalisedResult(null);
 
-    const courses = parseCourses(pCoursesText);
-    if (courses.length === 0) {
-      setPersonalisedError('Please enter at least one course (UEN, CourseRefNo).');
+    if (!pCourseRef) {
+      setPersonalisedError('Course Reference Code is required.');
       return;
     }
-    if (!pNric || !pCourseRef || !pStartDate || !pDob) {
-      setPersonalisedError('NRIC, Course Reference, Start Date, and Date of Birth are required.');
+    if (!uen) {
+      setPersonalisedError('UEN is required.');
       return;
     }
+
+    // Auto-build courses from UEN + Course Ref
+    const courses = [{ trainingPartnerUen: uen, courseReferenceNumber: pCourseRef }];
 
     setPersonalisedLoading(true);
     try {
@@ -214,11 +231,11 @@ export default function GrantCalculatorView() {
 
       {/* Tabs */}
       <div className="flex gap-1 border-b border-gray-200 dark:border-gray-700">
-        <button onClick={() => setTab('baseline')} className={tabClass('baseline')}>
-          Baseline Scheme
-        </button>
         <button onClick={() => setTab('personalised')} className={tabClass('personalised')}>
           Personalised
+        </button>
+        <button onClick={() => setTab('baseline')} className={tabClass('baseline')}>
+          Baseline Scheme
         </button>
       </div>
 
@@ -323,17 +340,25 @@ export default function GrantCalculatorView() {
       {/* Personalised Tab */}
       {tab === 'personalised' && (
         <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Courses (one per line: UEN, CourseRefNo)
-            </label>
-            <textarea
-              value={pCoursesText}
-              onChange={(e) => setPCoursesText(e.target.value)}
-              rows={3}
-              placeholder="201200696W, TGS-2024043419"
-              className="w-full max-w-xl rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-white px-3 py-2 text-sm font-mono focus:ring-2 focus:ring-primary focus:border-primary"
-            />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-xl">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">UEN</label>
+              <input
+                value={uen}
+                onChange={(e) => setUen(e.target.value)}
+                placeholder="e.g. 201200696W"
+                className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-white px-3 py-2 text-sm font-mono focus:ring-2 focus:ring-primary focus:border-primary"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Course Ref Code *</label>
+              <input
+                value={pCourseRef}
+                onChange={(e) => setPCourseRef(e.target.value)}
+                placeholder="TGS-2024043419"
+                className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-white px-3 py-2 text-sm font-mono focus:ring-2 focus:ring-primary focus:border-primary"
+              />
+            </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 max-w-3xl">
@@ -378,15 +403,6 @@ export default function GrantCalculatorView() {
                 <option value="N">No</option>
                 <option value="Y">Yes</option>
               </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Course Reference</label>
-              <input
-                value={pCourseRef}
-                onChange={(e) => setPCourseRef(e.target.value)}
-                placeholder="TGS-2024043419"
-                className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-white px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary"
-              />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Course Start Date</label>

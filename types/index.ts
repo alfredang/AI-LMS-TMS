@@ -13,6 +13,7 @@ export enum View {
   AdminManagement = 'adminManagement',
   Scheduler = 'scheduler',
   Webhooks = 'webhooks',
+  GrantCalculator = 'grantCalculator',
   Documents = 'documents',
   PrivacyPolicy = 'privacyPolicy',
   AcceptableUsePolicy = 'acceptableUsePolicy',

@@ -82,6 +82,7 @@ const ProfileDropdown: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const menuItems = [
     { label: profileLabel, icon: IconName.MyAccount, view: View.Profile },
     ...(role === UserRole.Learner ? [
+      { label: 'Grant Calculator', icon: IconName.Calculator, view: View.GrantCalculator },
       { label: 'Billing History', icon: IconName.DollarSign, view: View.BillingHistory },
       { label: 'Certificate History', icon: IconName.Award, view: View.CertificateHistory },
     ] : []),
