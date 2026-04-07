@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
+import { autoShareCourseResourcesWithTrainer } from '../../../lib/google-drive/drive-helpers';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 // Convert various date formats → ISO string "YYYY-MM-DD"
@@ -242,6 +243,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     await client.query('COMMIT');
 
     console.log(`✅ [${action}] ${trainer.email} → run ${course_run_id}${raCode ? ` (RA: ${raCode})` : ''}`);
+
+    // --- Auto-share Google resources (courseware folder + trainer slides) with the assigned trainer ---
+    if (trainer.email && courseId) {
+      autoShareCourseResourcesWithTrainer(courseId, trainer.email).catch((err) => {
+        console.warn(`⚠️ Non-blocking auto-share error for ${trainer.email}:`, err.message);
+      });
+    }
 
     await pool.query(
       `INSERT INTO assign_trainer_log

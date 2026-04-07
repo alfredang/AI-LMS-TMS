@@ -20,6 +20,122 @@ export async function getDriveClient(): Promise<drive_v3.Drive> {
     return getGoogleDriveClient(pool);
 }
 
+// ── Google File/Folder Sharing ───────────────────────────────────────────────
+
+/**
+ * Extract a Google Drive file or folder ID from various Google URL formats.
+ * Supports:
+ *   - Google Drive folders:  https://drive.google.com/drive/folders/FOLDER_ID
+ *   - Google Drive files:    https://drive.google.com/file/d/FILE_ID/view
+ *   - Google Slides:         https://docs.google.com/presentation/d/FILE_ID/edit
+ *   - Google Docs:           https://docs.google.com/document/d/FILE_ID/edit
+ *   - Google Sheets:         https://docs.google.com/spreadsheets/d/FILE_ID/edit
+ *   - Google Drive open:     https://drive.google.com/open?id=FILE_ID
+ */
+export function extractGoogleFileId(url: string): string | null {
+    if (!url) return null;
+
+    // Pattern: /d/FILE_ID (Slides, Docs, Sheets, Drive file)
+    const dMatch = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+    if (dMatch) return dMatch[1];
+
+    // Pattern: /folders/FOLDER_ID
+    const folderMatch = url.match(/\/folders\/([a-zA-Z0-9_-]+)/);
+    if (folderMatch) return folderMatch[1];
+
+    // Pattern: ?id=FILE_ID or &id=FILE_ID
+    try {
+        const parsed = new URL(url);
+        const idParam = parsed.searchParams.get('id');
+        if (idParam) return idParam;
+    } catch {
+        // Not a valid URL, skip
+    }
+
+    return null;
+}
+
+/**
+ * Share a Google Drive file or folder with a user by email.
+ * Grants read-only access. Non-blocking — errors are logged but not thrown.
+ *
+ * @param drive    - Authenticated Google Drive client
+ * @param fileId   - Google Drive file/folder ID
+ * @param email    - Email address to share with
+ * @param label    - Human-readable label for logging (e.g. "trainer slides")
+ */
+export async function shareGoogleFileWithUser(
+    drive: drive_v3.Drive,
+    fileId: string,
+    email: string,
+    label: string = 'file'
+): Promise<void> {
+    try {
+        await drive.permissions.create({
+            fileId,
+            sendNotificationEmail: false,
+            requestBody: { role: 'reader', type: 'user', emailAddress: email },
+        });
+        console.log(`📂 Auto-shared ${label} with ${email}`);
+    } catch (err: any) {
+        if (err.message?.includes('already exists')) {
+            console.log(`📂 ${email} already has access to ${label}.`);
+        } else {
+            console.warn(`⚠️ Could not share ${label} with ${email}: ${err.message}`);
+        }
+    }
+}
+
+/**
+ * Auto-share all Google resource links from a course with a trainer email.
+ * Fetches courseware_link and trainer_slides_url from the course table, extracts
+ * file/folder IDs, and grants reader access for each.
+ * Non-blocking — errors are logged but never thrown.
+ */
+export async function autoShareCourseResourcesWithTrainer(
+    courseId: string,
+    trainerEmail: string
+): Promise<void> {
+    try {
+        const result = await pool.query(
+            `SELECT courseware_link, trainer_slides_url
+             FROM course
+             WHERE id = $1`,
+            [courseId]
+        );
+
+        if (result.rows.length === 0) return;
+
+        const { courseware_link, trainer_slides_url } = result.rows[0];
+
+        // Collect all Google links to share
+        const linksToShare: { url: string; label: string }[] = [];
+
+        if (courseware_link && courseware_link.includes('google.com')) {
+            linksToShare.push({ url: courseware_link, label: 'courseware folder' });
+        }
+        if (trainer_slides_url && trainer_slides_url.includes('google.com')) {
+            linksToShare.push({ url: trainer_slides_url, label: 'trainer slides' });
+        }
+
+        if (linksToShare.length === 0) return;
+
+        // Authenticate once for all sharing operations
+        const drive = await getDriveClient();
+
+        for (const link of linksToShare) {
+            const fileId = extractGoogleFileId(link.url);
+            if (fileId) {
+                await shareGoogleFileWithUser(drive, fileId, trainerEmail, link.label);
+            } else {
+                console.warn(`⚠️ Could not extract Google file ID from ${link.label} URL: ${link.url}`);
+            }
+        }
+    } catch (error: any) {
+        console.warn(`⚠️ Auto-share course resources error (non-blocking): ${error.message}`);
+    }
+}
+
 // ── In-Memory Folder Cache ───────────────────────────────────────────────────
 
 /**

@@ -1,6 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { ensureTpgTrainerColumns } from '@/lib/trainerInvitations';
+import { autoShareCourseResourcesWithTrainer } from '../../../lib/google-drive/drive-helpers';
 
 interface ApiResponse {
   success: boolean;
@@ -192,6 +193,18 @@ export default async function handler(
 
     // Sync legacy columns so backward-compat code keeps working
     await syncLegacyColumns(courseRunUuid);
+
+    // ── Auto-share Google Drive folders (courseware + trainer slides) ──
+    if (trainerEmail) {
+      // We need course_id to lookup the drive links
+      const crResult = await pool.query(`SELECT course_id FROM course_run WHERE id = $1`, [courseRunUuid]);
+      if (crResult.rows.length > 0) {
+        const courseId = crResult.rows[0].course_id;
+        autoShareCourseResourcesWithTrainer(courseId, trainerEmail).catch(err => {
+          console.warn(`⚠️ Non-blocking auto-share error for ${trainerEmail} in local assign:`, err.message);
+        });
+      }
+    }
 
     console.log('✅ Successfully added trainer to course run (multi-trainer)');
 
