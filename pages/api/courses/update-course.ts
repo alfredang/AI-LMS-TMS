@@ -64,6 +64,7 @@ interface CourseData {
   fundingValidity?: string;
   numOfTrainers?: number;
   trainersList?: string;
+  trainersEmailList?: string;
   writtenAssessmentLink?: string;
   practicalPerformanceAssessmentLink?: string;
   assessmentMethods?: Record<string, { enabled: boolean; link: string }>;
@@ -510,8 +511,9 @@ export default async function handler(
           funding_validity = $34,
           num_of_trainers = $35,
           trainers_list = $36,
+          trainers_email_list = $37,
           updated_at = now()
-        WHERE id = $37
+        WHERE id = $38
         RETURNING id
       `;
 
@@ -552,6 +554,7 @@ export default async function handler(
         courseData.fundingValidity || null,
         courseData.numOfTrainers ?? 0,
         courseData.trainersList || null,
+        courseData.trainersEmailList || null,
         courseId
       ]);
 

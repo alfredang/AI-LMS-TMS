@@ -736,6 +736,8 @@ CREATE TABLE public.course (
     written_assessment_link text,
     assessment_methods jsonb,
     assessment_summary_record_url text,
+    trainers_list text,
+    trainers_email_list text,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT course_assessment_hours_check CHECK ((assessment_hours >= (0)::numeric)),

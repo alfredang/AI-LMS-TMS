@@ -97,6 +97,7 @@ export default async function handler(
         c.funding_validity,
         c.num_of_trainers,
         c.trainers_list,
+        c.trainers_email_list,
         c.resource_links
       FROM course c
       WHERE c.id = $1
@@ -224,6 +225,7 @@ export default async function handler(
       fundingValidity: courseData.funding_validity || null,
       numOfTrainers: courseData.num_of_trainers ?? 0,
       trainersList: courseData.trainers_list || '',
+      trainersEmailList: courseData.trainers_email_list || '',
       approvedTrainers: courseData.trainers_list
         ? String(courseData.trainers_list).split(',').map((name: string) => name.trim()).filter(Boolean)
         : [],

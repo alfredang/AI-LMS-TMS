@@ -452,6 +452,7 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                 approvedTrainers: normalizedApprovedTrainers,
                 numOfTrainers: normalizedApprovedTrainers.length,
                 trainersList: normalizedApprovedTrainers.join(', '),
+                trainersEmailList: editingCourse.trainersEmailList || '',
             };
         });
     }, [editingCourse]);
@@ -461,6 +462,24 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
             .replace(/\s*[\[<(]?[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}[\]>)]?/gi, '')
             .replace(/\s{2,}/g, ' ')
             .trim();
+
+    // Build trainers_email_list aligned to the new name array.
+    // Uses a merged map: existing positional emails + fresh availableTrainers lookup.
+    // This preserves emails during reorder/remove even before availableTrainers loads.
+    const buildTrainersEmailList = (newNames: string[]): string => {
+        const existingNames = (course.trainersList || '').split(',').map(s => s.trim());
+        const existingEmails = (course.trainersEmailList || '').split(',').map(s => s.trim());
+        const nameToEmail = new Map<string, string>();
+        // Layer 1: existing positional pairs (preserves data during reorder/remove)
+        existingNames.forEach((name, i) => {
+            if (name && existingEmails[i]) nameToEmail.set(name, existingEmails[i]);
+        });
+        // Layer 2: fresh data from availableTrainers (overrides if loaded)
+        availableTrainers.forEach(t => {
+            if (t.trainer_name) nameToEmail.set(t.trainer_name, t.email || '');
+        });
+        return newNames.map(name => nameToEmail.get(name) || '').join(', ');
+    };
 
     const selectedApprovedTrainers = (course.approvedTrainers || []).map(normalizeApprovedTrainerName).filter(Boolean);
     const availableTrainerChoices = availableTrainers.filter(trainer => {
@@ -476,7 +495,8 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
             ...prev,
             approvedTrainers: updated,
             numOfTrainers: updated.length,
-            trainersList: updated.join(', ')
+            trainersList: updated.join(', '),
+            trainersEmailList: buildTrainersEmailList(updated),
         }));
         setTrainerSearch('');
     };
@@ -488,7 +508,8 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
             ...prev,
             approvedTrainers: updated,
             numOfTrainers: updated.length,
-            trainersList: updated.join(', ')
+            trainersList: updated.join(', '),
+            trainersEmailList: buildTrainersEmailList(updated),
         }));
     };
 
@@ -507,7 +528,8 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
             ...prev,
             approvedTrainers: updated,
             numOfTrainers: updated.length,
-            trainersList: updated.join(', ')
+            trainersList: updated.join(', '),
+            trainersEmailList: buildTrainersEmailList(updated),
         }));
     };
 

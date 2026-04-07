@@ -31,7 +31,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           c.renewed_status,
           c.brochure_link,
           c.num_of_trainers,
-          c.trainers_list
+          c.trainers_list,
+          c.trainers_email_list
       FROM course c
       ORDER BY c.course_code DESC
     `;
@@ -63,6 +64,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       brochureLink: row.brochure_link || null,
       numOfTrainers: row.num_of_trainers || 0,
       trainersList: row.trainers_list || null,
+      trainersEmailList: row.trainers_email_list || null,
       courseRunId: null,
       startDate: null,
       endDate: null,

@@ -194,6 +194,7 @@ export interface Course {
   learners?: any[];
   numOfTrainers?: number;
   trainersList?: string;
+  trainersEmailList?: string;
   approvedTrainers?: string[];
 }
 
