@@ -338,22 +338,113 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     }
 
+    // Build email-based trainer identity map.
+    // Problem: local assigned trainer may have a different name than the approved list
+    // (e.g. "Dr. Muhammed Siraj" locally vs "Dr. Siraj Mohammad" in approved list).
+    // Solution: use email as the reliable identifier via app_user table.
+    //   - nameToEmail: normalized trainer name -> email
+    //   - emailToNames: email -> set of all known normalized names for that person
+    const nameToEmail = new Map<string, string>();
+    const emailToNames = new Map<string, Set<string>>();
+    {
+      // Collect all approved trainer names and all local trainer emails
+      const approvedNames = new Set<string>();
+      for (const row of rows) {
+        for (const name of splitTrainerList(row.trainers_list)) {
+          approvedNames.add(name);
+        }
+      }
+      const localEmails = new Set<string>();
+      for (const [, data] of localTrainerMap) {
+        for (const e of data.emails) {
+          if (e) localEmails.add(e.toLowerCase().trim());
+        }
+      }
+      // Single query: fetch app_user rows for approved trainer names OR local trainer emails
+      if (approvedNames.size > 0 || localEmails.size > 0) {
+        const result = await pool.query(
+          `SELECT full_name, email FROM app_user
+           WHERE email IS NOT NULL
+             AND (full_name = ANY($1::text[]) OR LOWER(email) = ANY($2::text[]))`,
+          [Array.from(approvedNames), Array.from(localEmails)]
+        );
+        for (const r of result.rows) {
+          const email = (r.email || '').toLowerCase().trim();
+          const name = normalizeTrainerName(r.full_name);
+          if (!email) continue;
+          nameToEmail.set(name, email);
+          if (!emailToNames.has(email)) emailToNames.set(email, new Set());
+          emailToNames.get(email)!.add(name);
+        }
+      }
+    }
+
     const upcomingClasses: UpcomingClass[] = rows.map((row) => {
       const trainerPool = splitTrainerList(row.trainers_list);
-      const normalizedTrainerPool = trainerPool.map((trainerName) => normalizeTrainerName(trainerName));
+      const normalizedTrainerPool = trainerPool.map((n) => normalizeTrainerName(n));
       const localTrainerData = localTrainerMap.get(row.id) || { names: [], emails: [] };
-      // LOCAL column shows ALL trainers from course_run_trainer (no dedup against TPG column).
       const allLocalPairs = localTrainerData.names
         .map((name, index) => ({ name, email: localTrainerData.emails[index] || '' }));
-      const localAssigned = new Set(allLocalPairs.map((trainer) => normalizeTrainerName(trainer.name)));
+
+      // Build set of ALL normalized names that belong to locally assigned trainers
+      // by resolving each local trainer's email to all their known names
+      const localAssignedAllNames = new Set<string>();
+      const localAssignedEmails = new Set<string>();
+      for (const pair of allLocalPairs) {
+        const normName = normalizeTrainerName(pair.name);
+        localAssignedAllNames.add(normName);
+        const email = (pair.email || '').toLowerCase().trim();
+        if (email) {
+          localAssignedEmails.add(email);
+          // Add all names associated with this email (handles name mismatches)
+          const aliases = emailToNames.get(email);
+          if (aliases) {
+            for (const alias of aliases) localAssignedAllNames.add(alias);
+          }
+        }
+        // Also resolve via name -> email -> all names
+        const resolvedEmail = nameToEmail.get(normName);
+        if (resolvedEmail) {
+          localAssignedEmails.add(resolvedEmail);
+          const aliases = emailToNames.get(resolvedEmail);
+          if (aliases) {
+            for (const alias of aliases) localAssignedAllNames.add(alias);
+          }
+        }
+      }
+
       const invitations = invitationMap.get(row.id) || [];
+
+      // Check if an approved trainer is locally assigned (by any known name, email, or word overlap)
+      const isLocallyAssigned = (approvedNormalized: string): boolean => {
+        if (localAssignedAllNames.has(approvedNormalized)) return true;
+        // Check via the approved trainer's email
+        const approvedEmail = nameToEmail.get(approvedNormalized);
+        if (approvedEmail && localAssignedEmails.has(approvedEmail)) return true;
+        // Fallback: word-overlap matching for names that differ but refer to the same person
+        // e.g. "Dr. Siraj Mohammad" vs "Dr. Muhammed Siraj" — share significant name words
+        const approvedWords = new Set(approvedNormalized.split(/\s+/).filter(w => w.length > 2));
+        if (approvedWords.size > 0) {
+          for (const localName of localAssignedAllNames) {
+            const localWords = localName.split(/\s+/).filter(w => w.length > 2);
+            const shared = localWords.filter(w => approvedWords.has(w));
+            // If at least 2 significant words overlap (or 1 if name has only 1 word), match
+            if (shared.length >= 2 || (shared.length >= 1 && (approvedWords.size <= 1 || localWords.length <= 1))) {
+              return true;
+            }
+          }
+        }
+        return false;
+      };
 
       let nextAvailableTrainer = '';
       let nextAvailableTrainerEmail = '';
       let latestInvitationStatus = invitations[0]?.status || '';
       let latestInvitationTrainer = invitations[0]?.trainer_name || '';
-      const localAssignedIndexes = allLocalPairs
-        .map((trainer) => normalizedTrainerPool.lastIndexOf(normalizeTrainerName(trainer.name)))
+
+      // Find index of last assigned trainer in the approved list
+      const localAssignedIndexes = normalizedTrainerPool
+        .map((normalized, idx) => isLocallyAssigned(normalized) ? idx : -1)
         .filter((index) => index >= 0);
       const startIndex = localAssignedIndexes.length > 0
         ? Math.max(...localAssignedIndexes) + 1
@@ -362,11 +453,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       for (let index = startIndex; index < trainerPool.length; index++) {
         const trainerName = trainerPool[index];
         const normalized = normalizedTrainerPool[index];
-        if (!normalized || localAssigned.has(normalized)) continue;
+        if (!normalized || isLocallyAssigned(normalized)) continue;
         const invitation = invitations.find((entry) => normalizeTrainerName(entry.trainer_name) === normalized);
         if (invitation?.status === 'declined') continue;
         nextAvailableTrainer = trainerName;
-        nextAvailableTrainerEmail = invitation?.trainer_email || '';
+        nextAvailableTrainerEmail = invitation?.trainer_email || nameToEmail.get(normalized) || '';
         if (invitation?.status) {
           latestInvitationStatus = invitation.status;
           latestInvitationTrainer = invitation.trainer_name || trainerName;

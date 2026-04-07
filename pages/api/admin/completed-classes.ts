@@ -197,6 +197,7 @@ export default async function handler(
         c.title as "courseTitle", 
         c.course_code as "courseCode",
         cr.class_status as "classStatus",
+        COALESCE(cr.class_type, 'Physical') as "classType",
         cr.digital_attendance_id as "digitalAttendanceId",
         cr.start_date::text as "startDate",
         cr.end_date::text as "endDate",

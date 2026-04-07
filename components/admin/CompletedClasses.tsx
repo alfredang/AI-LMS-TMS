@@ -12,6 +12,7 @@ interface CompletedClass {
   courseTitle: string;
   courseCode: string;
   classStatus: string;
+  classType: string;
   digitalAttendanceId: string;
   startDate: string;
   endDate: string;
@@ -49,7 +50,7 @@ const StatCard: React.FC<{ title: string; value: string | number }> = ({ title, 
 );
 
 const CompletedClasses: React.FC = () => {
-  const { setAdminPage, setSelectedCourseRunId } = useLms();
+  const { setAdminPage, setSelectedCourseRunId, setEditingCourseRun } = useLms();
   const [completedClasses, setCompletedClasses] = useState<CompletedClass[]>([]);
   const [statistics, setStatistics] = useState<Statistics>({
     completedClassesFound: 0,
@@ -219,8 +220,9 @@ const CompletedClasses: React.FC = () => {
     setCurrentPage(0);
   };
 
-  const handleViewDetails = (courseRunId: string) => {
-    setSelectedCourseRunId(courseRunId);
+  const handleViewDetails = (classItem: any) => {
+    setEditingCourseRun(classItem);
+    setSelectedCourseRunId(classItem.courseRunId);
     setAdminPage(AdminPage.ClassDetail);
   };
 
@@ -402,6 +404,8 @@ const CompletedClasses: React.FC = () => {
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Course Run ID</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Course Title</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Course Ref Code</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Class Status</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Class Type</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Start Date</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">End Date</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Trainer</th>
@@ -413,15 +417,17 @@ const CompletedClasses: React.FC = () => {
                   {completedClasses.map((classItem, index) => (
                     <tr key={classItem.courseRunId || index} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
                       <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">{classItem.courseRunId}</td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.courseTitle}</td>
+                      <td className="px-4 py-4 whitespace-nowrap text-sm font-medium"><button type="button" onClick={() => handleViewDetails(classItem)} className="text-left text-blue-600 dark:text-blue-400 hover:underline">{classItem.courseTitle}</button></td>
                       <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.courseCode}</td>
+                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.classStatus}</td>
+                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.classType || 'Physical'}</td>
                       <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{formatDate(classItem.startDate)}</td>
                       <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{formatDate(classItem.endDate)}</td>
                       <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.trainerName}</td>
                       <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700 text-center dark:text-gray-200">{classItem.numOfTrainee}</td>
                       <td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
                         <div className="flex items-center space-x-2">
-                          <Button size="sm" variant="ghost" onClick={() => handleViewDetails(classItem.courseRunId)}>
+                          <Button size="sm" variant="ghost" onClick={() => handleViewDetails(classItem)}>
                             Details
                           </Button>
                         </div>

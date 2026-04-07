@@ -363,7 +363,7 @@ const AdminLayout: React.FC = () => {
       case AdminPage.CourseSessionTiming:
         return <CourseSessionTimingView />;
       case AdminPage.ClassDetail:
-        return <ClassDetailView courseRunId={selectedCourseRunId || undefined} />;
+        return <ClassManagerView courseToEdit={editingCourseRun} viewOnly={true} />;
       case AdminPage.UploadDirectApplication:
         return <UploadDirectApplicationView />;
       case AdminPage.ViewDirectApplication:

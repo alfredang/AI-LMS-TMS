@@ -453,20 +453,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       console.log('✅ Trainer assignment validation passed, sending to SSG API...');
 
-      // First, fetch the existing course run data to get complete venue information
+      // Try to fetch existing course run data for venue info, but don't fail if unavailable
       console.log('📥 Fetching existing course run data for venue information...');
-      const existingCourseRun = await apiClient.viewCourseRun(runId, includeExpired);
-      
-      if (existingCourseRun.error) {
-        console.log('❌ Failed to fetch existing course run data:', existingCourseRun.error);
-        return res.status(existingCourseRun.status || 500).json({
-          error: 'Failed to fetch existing course run data',
-          details: existingCourseRun.error
-        });
+      let existingVenue: any = {};
+      try {
+        const existingCourseRun = await apiClient.viewCourseRun(runId, includeExpired);
+        if (!existingCourseRun.error) {
+          existingVenue = existingCourseRun.data?.run?.venue || {};
+          console.log('📍 Existing venue data:', JSON.stringify(existingVenue, null, 2));
+        } else {
+          console.log('⚠️ Could not fetch existing course run data, using request body venue data instead');
+        }
+      } catch (fetchErr) {
+        console.log('⚠️ Error fetching existing course run data, proceeding with request body data:', fetchErr);
       }
-
-      const existingRunData = existingCourseRun.data?.run;
-      const existingVenue = existingRunData?.venue || {};
 
       console.log('📍 Existing venue data:', JSON.stringify(existingVenue, null, 2));
 

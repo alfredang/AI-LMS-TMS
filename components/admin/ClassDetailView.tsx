@@ -42,6 +42,7 @@ interface OperationalSummary {
   trainer: string;
   startDate: string;
   endDate: string;
+  classType: string;
   mode: string;
   overallAssessment: string;
   tgsRef: string;
@@ -310,7 +311,11 @@ const ClassDetailView: React.FC<ClassDetailViewProps> = ({ courseRunId }) => {
             <p className="font-semibold">{formatDate(classDetail.operationalSummary.startDate)}</p>
           </div>
           <div>
-            <p className="text-sm text-subtle">Mode</p>
+            <p className="text-sm text-subtle">Class Type</p>
+            <p className="font-semibold">{classDetail.operationalSummary.classType || 'Physical'}</p>
+          </div>
+          <div>
+            <p className="text-sm text-subtle">Mode of Learning</p>
             <p className="font-semibold">{classDetail.operationalSummary.mode || 'Not specified'}</p>
           </div>
           <div>

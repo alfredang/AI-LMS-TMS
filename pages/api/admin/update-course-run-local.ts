@@ -26,6 +26,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     courseVacancyCode,
     courseVacancyDescription,
     courseAdminEmail,
+    classStatus,
+    classType,
   } = req.body ?? {};
 
   if (!courseRunId || String(courseRunId).trim() === '') {
@@ -50,8 +52,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
            course_vacancy_code       = $13,
            course_vacancy_description = $14,
            course_admin_email        = $15,
+           class_status              = COALESCE($16, class_status),
+           class_type                = COALESCE($17, class_type),
            updated_at                = NOW()
-       WHERE course_run_id = $16`,
+       WHERE course_run_id = $18`,
       [
         courseStartDate || null,
         courseEndDate || null,
@@ -68,6 +72,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         courseVacancyCode || null,
         courseVacancyDescription || null,
         courseAdminEmail || null,
+        classStatus || null,
+        classType || null,
         String(courseRunId).trim(),
       ]
     );

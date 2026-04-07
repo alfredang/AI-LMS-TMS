@@ -567,11 +567,11 @@ export const EditCourseRunView: React.FC = () => {
                         {/* SSG-assigned trainers (from viewCourseRun response) */}
                         {ssgTrainers.length === 0 ? (
                             <div className="p-4 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg text-sm text-gray-500 dark:text-gray-400 mb-4">
-                                No trainer has been assigned to this course run in SSG yet. Use the form below to assign one.
+                                No TPG trainer has been assigned to this course run yet. Use the form below to assign one.
                             </div>
                         ) : (
                             <div className="mb-6">
-                                <h4 className="text-base font-semibold text-gray-800 dark:text-gray-200 mb-3">Currently Assigned Trainer</h4>
+                                <h4 className="text-base font-semibold text-gray-800 dark:text-gray-200 mb-3">Assigned Trainer (TPG)</h4>
                                 <div className="space-y-4">
                                     {ssgTrainers.map((t, idx) => (
                                         <div key={t.id ?? idx} className="p-4 border border-gray-200 dark:border-gray-600 rounded-lg">
