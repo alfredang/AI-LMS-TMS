@@ -57,6 +57,7 @@ interface UpcomingClass {
     latestInvitationTrainer: string;
     numOfTrainee: number;
     modeOfTraining: string;
+    classType: string;
     attendanceScore: number | null;
 }
 
@@ -576,10 +577,7 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                 <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                                     {upcomingClasses.map((classItem, index) => {
                                         const status = classItem.assignedTrainerLocal ? 'Confirmed' : 'Pending';
-                                        const mode = (classItem.modeOfTraining || '').toLowerCase();
-                                        const courseType = mode.includes('virtual') || mode.includes('online') ? 'Virtual'
-                                            : mode.includes('blended') || mode.includes('hybrid') ? 'Hybrid'
-                                            : 'Physical';
+                                        const courseType = classItem.classType || 'Physical';
                                         return (
                                             <tr key={index} className="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50">
                                                 <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.courseRunId}</td>
@@ -652,10 +650,7 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                 </thead>
                                 <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                                     {upcomingClasses.map((classItem, index) => {
-                                        const mode = (classItem.modeOfTraining || '').toLowerCase();
-                                        const courseType = mode.includes('virtual') || mode.includes('online') ? 'Virtual'
-                                            : mode.includes('blended') || mode.includes('hybrid') ? 'Hybrid'
-                                            : 'Physical';
+                                        const courseType = classItem.classType || 'Physical';
                                         return (
                                         <tr key={index} className="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50">
                                             <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.courseRunId}</td>

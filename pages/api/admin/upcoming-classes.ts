@@ -45,22 +45,48 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return;
   }
 
-  // PUT — Update class status
+  // PUT — Update class status and/or class type
   if (req.method === 'PUT') {
     try {
-      const { id, class_status } = req.body;
-      if (!id || !class_status) {
-        return res.status(400).json({ success: false, error: 'id and class_status are required' });
+      const { id, class_status, class_type } = req.body;
+      if (!id) {
+        return res.status(400).json({ success: false, error: 'id is required' });
       }
-      const validStatuses = ['Confirmed', 'Pending', 'Cancelled'];
-      if (!validStatuses.includes(class_status)) {
-        return res.status(400).json({ success: false, error: `Invalid status. Must be one of: ${validStatuses.join(', ')}` });
+
+      const setClauses: string[] = [];
+      const values: any[] = [];
+      let paramIdx = 1;
+
+      if (class_status) {
+        const validStatuses = ['Confirmed', 'Pending', 'Cancelled'];
+        if (!validStatuses.includes(class_status)) {
+          return res.status(400).json({ success: false, error: `Invalid status. Must be one of: ${validStatuses.join(', ')}` });
+        }
+        setClauses.push(`class_status = $${paramIdx++}`);
+        values.push(class_status);
       }
-      await pool.query('UPDATE course_run SET class_status = $1 WHERE id = $2', [class_status, id]);
+
+      if (class_type) {
+        const validTypes = ['Physical', 'Virtual', 'Hybrid'];
+        if (!validTypes.includes(class_type)) {
+          return res.status(400).json({ success: false, error: `Invalid type. Must be one of: ${validTypes.join(', ')}` });
+        }
+        // Ensure column exists
+        await pool.query('ALTER TABLE course_run ADD COLUMN IF NOT EXISTS class_type TEXT DEFAULT \'Physical\'');
+        setClauses.push(`class_type = $${paramIdx++}`);
+        values.push(class_type);
+      }
+
+      if (setClauses.length === 0) {
+        return res.status(400).json({ success: false, error: 'No fields to update' });
+      }
+
+      values.push(id);
+      await pool.query(`UPDATE course_run SET ${setClauses.join(', ')} WHERE id = $${paramIdx}`, values);
       return res.status(200).json({ success: true });
     } catch (err) {
-      console.error('Error updating class status:', err);
-      return res.status(500).json({ success: false, error: 'Failed to update status' });
+      console.error('Error updating course run:', err);
+      return res.status(500).json({ success: false, error: 'Failed to update' });
     }
   }
 
@@ -109,6 +135,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const pageNum = parseInt(page as string, 10) || 0;
     const limitNum = parseInt(limit as string, 10) || 20;
     const offset = pageNum * limitNum;
+
+    // Ensure class_type column exists
+    await pool.query('ALTER TABLE course_run ADD COLUMN IF NOT EXISTS class_type TEXT DEFAULT \'Physical\'');
 
     const includeOngoing = req.query.includeOngoing === 'true';
 
@@ -212,6 +241,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           cr.digital_attendance_id,
           cr.start_date,
           cr.end_date,
+          cr.class_type,
           ${tpgNameExpr} AS assigned_trainer_tpg,
           ${tpgEmailExpr} AS assigned_trainer_tpg_email,
           COUNT(e.id) AS num_of_trainee
@@ -226,6 +256,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           cr.digital_attendance_id,
           cr.start_date,
           cr.end_date,
+          cr.class_type,
           ${tpgNameExpr},
           ${tpgEmailExpr}
         ORDER BY cr.start_date ASC NULLS LAST
@@ -362,6 +393,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         latestInvitationTrainer,
         numOfTrainee: parseInt(row.num_of_trainee || '0', 10),
         trainersList: row.trainers_list || '',
+        classType: row.class_type || 'Physical',
         modeOfTraining: '',
         attendanceScore: null as number | null,
       };

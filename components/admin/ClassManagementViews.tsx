@@ -216,6 +216,15 @@ export const ClassManagerView: React.FC<ClassManagerViewProps> = ({ courseToEdit
     const [localAssignedTrainerName, setLocalAssignedTrainerName] = useState(courseToEdit?.assignedTrainerName || '');
     const [localAssignedTrainerEmail, setLocalAssignedTrainerEmail] = useState(courseToEdit?.assignedTrainerEmail || '');
 
+    // Class Status and Type
+    const [classStatus, setClassStatus] = useState(courseToEdit?.classStatus || 'Pending');
+    const [classType, setClassType] = useState(() => {
+        const mode = (courseToEdit?.modeOfTraining || '').toLowerCase();
+        if (mode.includes('virtual') || mode.includes('online')) return 'Virtual';
+        if (mode.includes('blended') || mode.includes('hybrid')) return 'Hybrid';
+        return 'Physical';
+    });
+
     // ViewCourseRun state management
     const [includeExpired, setIncludeExpired] = useState(false);
     const [ssgApiResponse, setSsgApiResponse] = useState<any>(null);
@@ -2127,6 +2136,62 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                 )}
                             </div>
                         </FormSection>
+
+                        {/* Class Status & Type */}
+                        {isEditMode && (
+                            <FormSection title="Class Status & Type">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Class Status *</label>
+                                        <select
+                                            value={classStatus}
+                                            onChange={async (e) => {
+                                                const newStatus = e.target.value;
+                                                setClassStatus(newStatus);
+                                                if (courseToEdit?.id) {
+                                                    try {
+                                                        await fetch(getApiUrl('/api/admin/upcoming-classes'), {
+                                                            method: 'PUT',
+                                                            headers: { 'Content-Type': 'application/json' },
+                                                            body: JSON.stringify({ id: courseToEdit.id, class_status: newStatus }),
+                                                        });
+                                                    } catch { /* silent */ }
+                                                }
+                                            }}
+                                            className={inputClasses}
+                                        >
+                                            <option value="Confirmed">Confirmed</option>
+                                            <option value="Pending">Pending</option>
+                                            <option value="Cancelled">Cancelled</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Class Type *</label>
+                                        <select
+                                            value={classType}
+                                            onChange={async (e) => {
+                                                const newType = e.target.value;
+                                                setClassType(newType);
+                                                if (courseToEdit?.id) {
+                                                    try {
+                                                        await fetch(getApiUrl('/api/admin/upcoming-classes'), {
+                                                            method: 'PUT',
+                                                            headers: { 'Content-Type': 'application/json' },
+                                                            body: JSON.stringify({ id: courseToEdit.id, class_type: newType }),
+                                                        });
+                                                    } catch { /* silent */ }
+                                                }
+                                            }}
+                                            className={inputClasses}
+                                        >
+                                            <option value="Physical">Physical</option>
+                                            <option value="Virtual">Virtual</option>
+                                            <option value="Hybrid">Hybrid</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </FormSection>
+                        )}
 
                         {/* Course Vacancy Details */}
                         {isEditMode && (
