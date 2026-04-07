@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Icon, IconName } from '../ui/Icon';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { useLms } from '@contexts/LmsContext';
@@ -22,13 +23,13 @@ interface SchedulerTask {
 const EMAIL_TEMPLATE_TASKS = ['auto_send_course_confirmation', 'auto_create_certificates'];
 
 const EMAIL_TEMPLATES: { value: string; label: string }[] = [
-    { value: 'final_course_confirmation', label: 'Final Course Confirmation' },
-    { value: 'course_confirmation', label: 'Course Confirmation' },
-    { value: 'certificate', label: 'Certificate' },
-    { value: 'feedback', label: 'Feedback' },
-    { value: 'trainer_invitation', label: 'Trainer Invitation' },
-    { value: 'otp', label: 'OTP' },
-    { value: 'password_reset', label: 'Password Reset' },
+    { value: 'final_course_confirmation', label: 'Final Course Confirmation Email' },
+    { value: 'course_confirmation', label: 'Course Confirmation Email' },
+    { value: 'certificate', label: 'Certificate Email' },
+    { value: 'feedback', label: 'Feedback Email' },
+    { value: 'trainer_invitation', label: 'Trainer Invitation Email' },
+    { value: 'otp', label: 'OTP Email' },
+    { value: 'password_reset', label: 'Password Reset Email' },
 ];
 
 // ── Cron Expression Helpers ───────────────────────────────────────────────────
@@ -152,8 +153,23 @@ export const SchedulerView: React.FC = () => {
     const [saving, setSaving] = useState(false);
     const [runningTaskId, setRunningTaskId] = useState<string | null>(null);
     const [actionMessage, setActionMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+    const [templateDropdownOpen, setTemplateDropdownOpen] = useState<string | null>(null);
+    const templateDropdownRef = useRef<HTMLDivElement>(null);
 
     // Fetch tasks
+    // Close template dropdown on outside click
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (templateDropdownRef.current && !templateDropdownRef.current.contains(event.target as Node)) {
+                setTemplateDropdownOpen(null);
+            }
+        };
+        if (templateDropdownOpen) {
+            document.addEventListener('mousedown', handleClickOutside);
+        }
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [templateDropdownOpen]);
+
     const fetchTasks = async () => {
         try {
             setError(null);
@@ -419,38 +435,79 @@ export const SchedulerView: React.FC = () => {
                                 </p>
 
                                 {/* Email Template Selector */}
-                                {EMAIL_TEMPLATE_TASKS.includes(task.id) && (
-                                    <div className="mb-4">
-                                        <label className="font-medium text-gray-500 dark:text-gray-400 text-xs uppercase tracking-wider block mb-1.5">Email Template</label>
-                                        <select
-                                            value={task.email_template || 'final_course_confirmation'}
-                                            onChange={async (e) => {
-                                                const newTemplate = e.target.value;
-                                                try {
-                                                    const res = await fetch('/api/admin/scheduler', {
-                                                        method: 'PUT',
-                                                        headers: { 'Content-Type': 'application/json' },
-                                                        body: JSON.stringify({ taskId: task.id, email_template: newTemplate }),
-                                                    });
-                                                    const data = await res.json();
-                                                    if (data.success) {
-                                                        setTasks(prev => prev.map(t => t.id === task.id ? data.task : t));
-                                                        setActionMessage({ type: 'success', text: `Email template updated to "${EMAIL_TEMPLATES.find(t => t.value === newTemplate)?.label}"` });
-                                                    } else {
-                                                        setActionMessage({ type: 'error', text: data.error || 'Failed to update template' });
-                                                    }
-                                                } catch {
-                                                    setActionMessage({ type: 'error', text: 'Failed to update template' });
-                                                }
-                                            }}
-                                            className="block w-full max-w-xs px-3 py-2 text-sm text-gray-900 dark:text-white bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
-                                        >
-                                            {EMAIL_TEMPLATES.map(t => (
-                                                <option key={t.value} value={t.value}>{t.label}</option>
-                                            ))}
-                                        </select>
-                                    </div>
-                                )}
+                                {EMAIL_TEMPLATE_TASKS.includes(task.id) && (() => {
+                                    const currentTemplate = task.email_template || 'final_course_confirmation';
+                                    const currentLabel = EMAIL_TEMPLATES.find(t => t.value === currentTemplate)?.label || currentTemplate;
+                                    const isOpen = templateDropdownOpen === task.id;
+
+                                    const handleSelect = async (newTemplate: string) => {
+                                        setTemplateDropdownOpen(null);
+                                        if (newTemplate === currentTemplate) return;
+                                        try {
+                                            const res = await fetch('/api/admin/scheduler', {
+                                                method: 'PUT',
+                                                headers: { 'Content-Type': 'application/json' },
+                                                body: JSON.stringify({ taskId: task.id, email_template: newTemplate }),
+                                            });
+                                            const data = await res.json();
+                                            if (data.success) {
+                                                setTasks(prev => prev.map(t => t.id === task.id ? data.task : t));
+                                                setActionMessage({ type: 'success', text: `Email template updated to "${EMAIL_TEMPLATES.find(t => t.value === newTemplate)?.label}"` });
+                                            } else {
+                                                setActionMessage({ type: 'error', text: data.error || 'Failed to update template' });
+                                            }
+                                        } catch {
+                                            setActionMessage({ type: 'error', text: 'Failed to update template' });
+                                        }
+                                    };
+
+                                    return (
+                                        <div className="mb-4">
+                                            <label className="font-medium text-gray-500 dark:text-gray-400 text-xs uppercase tracking-wider block mb-1.5">Email Template</label>
+                                            <div className="relative w-full max-w-sm" ref={isOpen ? templateDropdownRef : undefined}>
+                                                <button
+                                                    onClick={() => setTemplateDropdownOpen(isOpen ? null : task.id)}
+                                                    className="w-full flex items-center justify-between px-3 py-2.5 text-sm font-medium text-gray-900 dark:text-white bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:border-blue-400 dark:hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+                                                >
+                                                    <div className="flex items-center gap-2">
+                                                        <Icon name={IconName.Mail} className="w-4 h-4 text-blue-500" />
+                                                        <span>{currentLabel}</span>
+                                                    </div>
+                                                    <svg className={`w-4 h-4 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                                    </svg>
+                                                </button>
+
+                                                {isOpen && (
+                                                    <div className="absolute z-50 mt-1 w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-xl overflow-hidden">
+                                                        {EMAIL_TEMPLATES.map(t => {
+                                                            const isSelected = t.value === currentTemplate;
+                                                            return (
+                                                                <button
+                                                                    key={t.value}
+                                                                    onClick={() => handleSelect(t.value)}
+                                                                    className={`w-full flex items-center gap-3 px-3 py-2.5 text-sm transition-colors ${
+                                                                        isSelected
+                                                                            ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-semibold'
+                                                                            : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+                                                                    }`}
+                                                                >
+                                                                    <Icon name={IconName.Mail} className={`w-4 h-4 flex-shrink-0 ${isSelected ? 'text-blue-500' : 'text-gray-400 dark:text-gray-500'}`} />
+                                                                    <span className="flex-1 text-left">{t.label}</span>
+                                                                    {isSelected && (
+                                                                        <svg className="w-4 h-4 text-blue-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                                                                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                                                        </svg>
+                                                                    )}
+                                                                </button>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    );
+                                })()}
 
                                 <div className={`grid grid-cols-1 ${editingTaskId === task.id ? 'sm:grid-cols-1' : 'sm:grid-cols-3'} gap-4 text-sm`}>
                                     {/* Schedule */}
