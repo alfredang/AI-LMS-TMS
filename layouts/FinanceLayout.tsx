@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useAppVersion } from '@hooks/useAppVersion';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
 import AiChatbot from '../components/AiChatbot';
@@ -73,6 +74,7 @@ type FinancePage =
 
 const FinanceLayout: React.FC = () => {
   const { currentView, financePage: ctxFinancePage, setFinancePage: ctxSetFinancePage } = useLms();
+  const appVersion = useAppVersion();
   const page = ctxFinancePage as FinancePage;
   const setPage = (p: FinancePage) => ctxSetFinancePage(p);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
@@ -410,7 +412,7 @@ const FinanceLayout: React.FC = () => {
       </NavSection>
 
       <div className="pt-6 mt-6 border-t border-gray-200 dark:border-gray-700">
-        <p className="px-3 text-[10px] text-gray-400 dark:text-gray-300 font-mono">version {process.env.NEXT_PUBLIC_COMMIT_HASH || 'dev'}</p>
+        <p className="px-3 text-[10px] text-gray-400 dark:text-gray-300 font-mono">version {appVersion}</p>
       </div>
     </nav>
   );
