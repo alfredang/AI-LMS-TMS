@@ -988,39 +988,43 @@ export class EditDeleteCourseRunUtils {
     if (session.endTime) payload.endTime = session.endTime;
     if (session.modeOfTraining) payload.modeOfTraining = session.modeOfTraining;
 
-    // Handle session venue - check for both flat session venue fields and nested venue fields
+    // Handle session venue — priority: nested session.venue > sessionFloor/sessionUnit > flat floor/unit
     const venue: any = {};
     let hasSessionVenueInfo = false;
-    
-    // First check for session-specific venue fields (sessionFloor, sessionUnit, etc.)
-    const sessionVenueMapping = {
-      sessionBlock: 'block',
-      sessionStreet: 'street', 
-      sessionFloor: 'floor',
-      sessionUnit: 'unit',
-      sessionBuilding: 'building',
-      sessionPostalCode: 'postalCode',
-      sessionRoom: 'room'
-    };
-    
-    Object.entries(sessionVenueMapping).forEach(([sessionField, venueField]) => {
-      if (session[sessionField as keyof RunSessionEditInfo] !== undefined && session[sessionField as keyof RunSessionEditInfo] !== null) {
-        venue[venueField] = session[sessionField as keyof RunSessionEditInfo];
-        hasSessionVenueInfo = true;
-      }
-    });
-    
-    // If no session-specific venue fields, check for regular venue fields
-    if (!hasSessionVenueInfo) {
-      const regularVenueFields = ['block', 'street', 'floor', 'unit', 'building', 'postalCode', 'room', 'wheelChairAccess', 'primaryVenue'];
-      regularVenueFields.forEach(field => {
-        if (session[field as keyof RunSessionEditInfo] !== undefined && session[field as keyof RunSessionEditInfo] !== null) {
-          venue[field] = session[field as keyof RunSessionEditInfo];
+
+    // 1. Nested venue object (e.g. { venue: { floor, unit, room, postalCode, ... } })
+    const nestedVenue = (session as any).venue;
+    if (nestedVenue && typeof nestedVenue === 'object') {
+      const venueFields = ['block', 'street', 'floor', 'unit', 'building', 'postalCode', 'room', 'wheelChairAccess'];
+      venueFields.forEach(field => {
+        if (nestedVenue[field] !== undefined && nestedVenue[field] !== null && nestedVenue[field] !== '') {
+          venue[field] = nestedVenue[field];
           hasSessionVenueInfo = true;
         }
       });
     }
-    
+
+    // 2. Prefixed session-specific fields (sessionFloor, sessionUnit, etc.)
+    if (!hasSessionVenueInfo) {
+      const sessionVenueMapping: Record<string, string> = {
+        sessionBlock: 'block', sessionStreet: 'street',
+        sessionFloor: 'floor', sessionUnit: 'unit',
+        sessionBuilding: 'building', sessionPostalCode: 'postalCode', sessionRoom: 'room'
+      };
+      Object.entries(sessionVenueMapping).forEach(([sessionField, venueField]) => {
+        const val = session[sessionField as keyof RunSessionEditInfo];
+        if (val !== undefined && val !== null) { venue[venueField] = val; hasSessionVenueInfo = true; }
+      });
+    }
+
+    // 3. Flat venue fields directly on session
+    if (!hasSessionVenueInfo) {
+      ['block', 'street', 'floor', 'unit', 'building', 'postalCode', 'room', 'wheelChairAccess'].forEach(field => {
+        const val = session[field as keyof RunSessionEditInfo];
+        if (val !== undefined && val !== null) { venue[field] = val; hasSessionVenueInfo = true; }
+      });
+    }
+
     if (hasSessionVenueInfo) {
       payload.venue = venue;
     }

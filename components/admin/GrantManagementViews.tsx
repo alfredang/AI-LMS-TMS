@@ -3601,7 +3601,14 @@ export const ViewCourseRunView: React.FC = () => {
             const json = await response.json();
 
             if (!json.success) {
-                throw new Error(json.error || `SSG API error ${response.status}`);
+                const ssgError = json.data?.error;
+                if (response.status === 404 || ssgError?.code === '404') {
+                    setSearchError(`Course Run ID "${courseRunId.trim()}" was not found. Please check the ID and try again.`);
+                } else {
+                    const detail = ssgError?.details?.[0]?.message || ssgError?.message || json.error || `SSG API error ${response.status}`;
+                    setSearchError(detail);
+                }
+                return;
             }
 
             // data = { course: { run: {...}, title, referenceNumber, ... } }
@@ -3800,6 +3807,14 @@ export const ViewCourseRunView: React.FC = () => {
                                         )}
                                     </td>
                                 </tr>
+                                <tr className="hover:bg-gray-50 dark:hover:bg-gray-800">
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-700 dark:text-gray-300">
+                                        Organization UEN
+                                    </td>
+                                    <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
+                                        {run.organizationKey || 'N/A'}
+                                    </td>
+                                </tr>
                                 {/* <tr className="hover:bg-gray-50 dark:hover:bg-gray-800">
                                     <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-700 dark:text-gray-300">
                                         Schedule Info Type
@@ -3816,18 +3831,41 @@ export const ViewCourseRunView: React.FC = () => {
                                         {run.scheduleInfo || 'N/A'}
                                     </td>
                                 </tr> */}
-                                <tr className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-700 dark:text-gray-300">
-                                        Organization UEN
-                                    </td>
-                                    <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
-                                        {run.organizationKey || 'N/A'}
-                                    </td>
-                                </tr>
                             </tbody>
                         </table>
                     </div>
                 </Card>
+
+                {/* Trainer Section */}
+                {run.linkCourseRunTrainer && run.linkCourseRunTrainer.length > 0 && (
+                    <Card className="p-6">
+                        <h4 className="text-base font-bold text-gray-800 dark:text-gray-200 mb-4">Assigned Trainer(s)</h4>
+                        <div className="space-y-3">
+                            {run.linkCourseRunTrainer.map((link: any, idx: number) => {
+                                const t = link.trainer;
+                                if (!t) return null;
+                                return (
+                                    <div key={t.id ?? idx} className="p-4 border border-gray-200 dark:border-gray-600 rounded-lg">
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                            <div>
+                                                <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">Name</p>
+                                                <p className="text-sm font-medium text-gray-900 dark:text-white">{t.name ?? '—'}</p>
+                                            </div>
+                                            <div>
+                                                <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">ID Number</p>
+                                                <p className="text-sm font-mono text-gray-900 dark:text-white">{t.idNumber ?? '—'}</p>
+                                            </div>
+                                            <div>
+                                                <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">Email</p>
+                                                <p className="text-sm text-gray-900 dark:text-white">{t.email ?? '—'}</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </Card>
+                )}
             </div>
         );
     };
@@ -4525,156 +4563,235 @@ export { SearchAssessmentsView, ViewAssessmentView } from './AssessmentViews';
 // ─── Course Sessions View ─────────────────────────────────────────────────────
 
 export const CourseSessionsView: React.FC = () => {
-    const { trainingProviderProfile } = useLms();
-    const [uen, setUen] = useState<string>(trainingProviderProfile?.uen || '');
-    const [courseCode, setCourseCode] = useState<string>('');
-    const [courseRunId, setCourseRunId] = useState<string>('');
+    const { trainingProviderProfile, selectedCourseRunId, setSelectedCourseRunId } = useLms();
+    const [courseRunId, setCourseRunId] = useState<string>(selectedCourseRunId || '');
     const [isSearching, setIsSearching] = useState(false);
     const [searchError, setSearchError] = useState<string | null>(null);
-    const [parsedData, setParsedData] = useState<any>(null);
+    const [sessions, setSessions] = useState<any[]>([]);
+    const [runInfo, setRunInfo] = useState<any>(null);
+    const [courseTitle, setCourseTitle] = useState<string>('');
 
-    const isFormValid = uen.trim() && courseCode.trim() && courseRunId.trim();
+    // Delete state
+    const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null);
+    const [isDeletingAll, setIsDeletingAll] = useState(false);
+    const [deleteResults, setDeleteResults] = useState<{ success: number; failed: number; message: string } | null>(null);
 
-    const handleSearch = async () => {
-        if (!isFormValid) {
-            setSearchError('Please fill in all fields.');
-            return;
+    const activeSessions = sessions.filter(s => !s.deleted);
+
+    useEffect(() => {
+        if (selectedCourseRunId) {
+            setCourseRunId(selectedCourseRunId);
+            fetchSessions(selectedCourseRunId);
+            setSelectedCourseRunId(null);
         }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
+    const toDateStr = (v: any): string => {
+        if (!v) return '';
+        const s = String(v);
+        if (/^\d{8}$/.test(s)) return `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`;
+        return s;
+    };
+
+    const buildDeleteBody = (sessionsToDelete: any[], info: any) => {
+        const run = info.run;
+        return {
+            courseReferenceNumber: info.courseData?.referenceNumber || info.courseData?.externalReferenceNumber || '',
+            openingRegistrationDate: toDateStr(run?.registrationOpeningDate ?? run?.registrationDates?.opening),
+            closingRegistrationDate: toDateStr(run?.registrationClosingDate ?? run?.registrationDates?.closing),
+            courseStartDate: toDateStr(run?.courseStartDate ?? run?.courseDates?.start),
+            courseEndDate: toDateStr(run?.courseEndDate ?? run?.courseDates?.end),
+            scheduleInfoTypeCode: '01',
+            scheduleInfoTypeDescription: 'Description',
+            block: run?.venue?.block || '',
+            street: run?.venue?.street || '',
+            floor: run?.venue?.floor || '',
+            unit: run?.venue?.unit || '',
+            building: run?.venue?.building || '',
+            postalCode: run?.venue?.postalCode || '',
+            room: run?.venue?.room || '',
+            wheelChairAccess: run?.venue?.wheelChairAccess ?? false,
+            courseAdminEmail: run?.courseAdminEmail || '',
+            courseVacancy: run?.courseVacancy || { code: 'A', description: 'Available' },
+            fileName: '',
+            fileContent: '',
+            sessions: sessionsToDelete.map(s => ({
+                sessionId: s.id,
+                startDate: String(s.startDate || ''),
+                endDate: String(s.endDate || ''),
+                startTime: s.startTime || '',
+                endTime: s.endTime || '',
+                modeOfTraining: String(s.modeOfTraining || ''),
+                venue: s.venue || {},
+            })),
+        };
+    };
+
+    const fetchSessions = async (runId: string) => {
         setIsSearching(true);
         setSearchError(null);
-        setParsedData(null);
+        setSessions([]);
+        setRunInfo(null);
+        setCourseTitle('');
+        setDeleteResults(null);
 
         try {
-            const params = new URLSearchParams({
-                courseCode: courseCode.trim(),
-                uen: uen.trim(),
-            });
-
-            const response = await fetch(
-                `/api/ssg/courses/runs/${encodeURIComponent(courseRunId.trim())}/sessions?${params}`
-            );
-
-            const data = await response.json();
-
-            if (!response.ok) {
-                throw new Error(data.error || `Request failed with status ${response.status}`);
+            // Step 1: SSG viewCourseRun → get course reference number + full run details
+            const viewRes = await fetch(`/api/course-runs/view?courseRunId=${encodeURIComponent(runId)}`);
+            const viewData = await viewRes.json();
+            if (!viewData?.success || !viewData?.data?.course) {
+                throw new Error(viewData?.error || `Course run ${runId} not found in SSG.`);
             }
 
-            if (!data?.data?.result?.sessions) {
-                throw new Error('Not Found — No sessions were returned for the provided details.');
-            }
+            const courseData = viewData.data.course;
+            const run = courseData.run;
+            const courseCode = courseData.referenceNumber || courseData.externalReferenceNumber || '';
+            const title = courseData.title || courseCode;
 
-            setParsedData(data.data);
+            if (!courseCode) throw new Error('Could not determine course reference number from SSG response.');
+
+            setCourseTitle(title);
+            setRunInfo({ courseData, run });
+
+            // Step 2: fetch sessions using course code + UEN
+            const uen = trainingProviderProfile?.uen || '';
+            const params = new URLSearchParams({ courseCode, uen });
+            const sessRes = await fetch(`/api/ssg/courses/runs/${encodeURIComponent(runId)}/sessions?${params}`);
+            const sessData = await sessRes.json();
+
+            if (!sessRes.ok) {
+                if (sessRes.status === 404) {
+                    // No sessions registered yet — show empty state, not error
+                    setSessions([]);
+                } else {
+                    throw new Error(sessData.error || `Sessions fetch failed (${sessRes.status})`);
+                }
+            } else {
+                const sessionList = sessData?.data?.result?.sessions ?? sessData?.data?.sessions ?? [];
+                setSessions(sessionList);
+            }
         } catch (err) {
-            setSearchError(err instanceof Error ? err.message : 'Failed to fetch course sessions.');
+            setSearchError(err instanceof Error ? err.message : 'Failed to fetch sessions.');
         } finally {
             setIsSearching(false);
         }
     };
 
-    const handleClear = () => {
-        setUen(trainingProviderProfile?.uen || '');
-        setCourseCode('');
-        setCourseRunId('');
-        setSearchError(null);
-        setParsedData(null);
+    const handleFetch = () => {
+        if (!courseRunId.trim()) return;
+        fetchSessions(courseRunId.trim());
     };
 
-    const sessions: any[] = parsedData?.result?.sessions ?? [];
+    const handleDeleteOne = async (session: any) => {
+        if (!confirm(`Delete session ${session.id}?\n\nDate: ${formatDate(session.startDate)}  ${session.startTime} – ${session.endTime}\n\nThis cannot be undone.`)) return;
+
+        setDeletingSessionId(session.id);
+        setDeleteResults(null);
+        try {
+            if (!runInfo) {
+                setDeleteResults({ success: 0, failed: 1, message: 'Run info not loaded. Please fetch sessions again.' });
+                return;
+            }
+            const body = buildDeleteBody([session], runInfo);
+            const res = await fetch(
+                `/api/ssg/courses/courseRuns/${encodeURIComponent(courseRunId.trim())}?action=delete-sessions`,
+                { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
+            );
+            const result = await res.json();
+            if (!res.ok) {
+                const msg = result?.details?.[0] || result?.message || result?.error?.message || `SSG error ${res.status}`;
+                setDeleteResults({ success: 0, failed: 1, message: typeof msg === 'string' ? msg : JSON.stringify(msg) });
+            } else {
+                setDeleteResults({ success: 1, failed: 0, message: `Session ${session.id} deleted successfully.` });
+                await fetchSessions(courseRunId.trim());
+            }
+        } catch (err) {
+            setDeleteResults({ success: 0, failed: 1, message: err instanceof Error ? err.message : 'Unknown error' });
+        } finally {
+            setDeletingSessionId(null);
+        }
+    };
+
+    const handleDeleteAll = async () => {
+        if (activeSessions.length === 0) return;
+        if (!confirm(`Delete ALL ${activeSessions.length} active session(s) for this course run?\n\nThis cannot be undone.`)) return;
+
+        setIsDeletingAll(true);
+        setDeleteResults(null);
+        try {
+            if (!runInfo) {
+                setDeleteResults({ success: 0, failed: activeSessions.length, message: 'Run info not loaded. Please fetch sessions again.' });
+                return;
+            }
+            const body = buildDeleteBody(activeSessions, runInfo);
+            const res = await fetch(
+                `/api/ssg/courses/courseRuns/${encodeURIComponent(courseRunId.trim())}?action=delete-sessions`,
+                { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
+            );
+            const result = await res.json();
+            if (!res.ok) {
+                const msg = result?.details?.[0] || result?.message || result?.error?.message || `SSG error ${res.status}`;
+                setDeleteResults({ success: 0, failed: activeSessions.length, message: typeof msg === 'string' ? msg : JSON.stringify(msg) });
+            } else {
+                setDeleteResults({ success: activeSessions.length, failed: 0, message: `All ${activeSessions.length} session(s) deleted successfully.` });
+                await fetchSessions(courseRunId.trim());
+            }
+        } catch (err) {
+            setDeleteResults({ success: 0, failed: activeSessions.length, message: err instanceof Error ? err.message : 'Unknown error' });
+        } finally {
+            setIsDeletingAll(false);
+        }
+    };
+
+    const isDeleting = !!deletingSessionId || isDeletingAll;
 
     return (
-        <div>
+        <div className="max-w-7xl mx-auto p-6">
             <h2 className="text-3xl font-bold mb-6 dark:text-white">Course Sessions</h2>
 
-            {/* Search Parameters Card */}
+            {/* Lookup */}
             <Card className="p-6 mb-6">
-                <h3 className="text-lg font-bold text-gray-700 dark:text-gray-200 mb-4">Search Parameters</h3>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                    <div>
+                <h3 className="text-lg font-bold text-gray-700 dark:text-gray-200 mb-4">Course Run Lookup</h3>
+                <div className="flex gap-3 items-end">
+                    <div className="flex-1">
                         <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
-                            Company UEN <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                            type="text"
-                            value={uen}
-                            onChange={(e) => setUen(e.target.value)}
-                            placeholder="e.g. 201200696W"
-                            className={inputClasses}
-                            disabled={isSearching}
-                        />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
-                            Course Code <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                            type="text"
-                            value={courseCode}
-                            onChange={(e) => setCourseCode(e.target.value)}
-                            placeholder="e.g. TGS-2019503161"
-                            className={inputClasses}
-                            disabled={isSearching}
-                        />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
-                            Course Run ID <span className="text-red-500">*</span>
+                            * Course Run ID
                         </label>
                         <input
                             type="text"
                             value={courseRunId}
-                            onChange={(e) => setCourseRunId(e.target.value)}
+                            onChange={e => { setCourseRunId(e.target.value); setSessions([]); setRunInfo(null); setSearchError(null); }}
+                            onKeyDown={e => e.key === 'Enter' && !isSearching && courseRunId.trim() && handleFetch()}
                             placeholder="e.g. 1289568"
                             className={inputClasses}
                             disabled={isSearching}
                         />
                     </div>
-                </div>
-
-                <div className="flex gap-3 justify-end">
-                    <Button
-                        onClick={handleClear}
-                        disabled={isSearching}
-                        className="bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600"
-                    >
-                        Clear
-                    </Button>
-                    <Button
-                        onClick={handleSearch}
-                        disabled={isSearching || !isFormValid}
-                    >
+                    <Button onClick={handleFetch} disabled={isSearching || !courseRunId.trim()}>
                         {isSearching ? (
-                            <div className="flex items-center">
-                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                            <div className="flex items-center gap-2">
+                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
                                 Fetching...
                             </div>
                         ) : (
-                            <>
-                                <Icon name={IconName.Search} className="w-4 h-4 mr-2" />
-                                Fetch Sessions
-                            </>
+                            <><Icon name={IconName.Search} className="w-4 h-4 mr-2" />Fetch Sessions</>
                         )}
                     </Button>
                 </div>
 
+                {courseTitle && !isSearching && (
+                    <div className="mt-3 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg text-sm text-green-800 dark:text-green-300">
+                        ✓ <strong>{courseTitle}</strong> — {sessions.length} session{sessions.length !== 1 ? 's' : ''} found
+                        {activeSessions.length < sessions.length && ` (${activeSessions.length} active)`}
+                    </div>
+                )}
             </Card>
 
-            {/* Loading */}
-            {isSearching && (
-                <div className="flex justify-center py-10">
-                    <div className="text-center">
-                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
-                        <p className="mt-4 text-gray-600 dark:text-gray-400">Fetching course sessions...</p>
-                    </div>
-                </div>
-            )}
-
-            {/* Error Card */}
+            {/* Error */}
             {searchError && !isSearching && (
-                <Card className="p-6 border-red-200 dark:border-red-700">
-                    <div className="flex items-start gap-3 mb-4">
+                <Card className="p-6 mb-6 border-red-200 dark:border-red-700">
+                    <div className="flex items-start gap-3">
                         <div className="flex-shrink-0 w-10 h-10 rounded-full bg-red-100 dark:bg-red-900/40 flex items-center justify-center">
                             <Icon name={IconName.Close} className="w-5 h-5 text-red-600 dark:text-red-400" />
                         </div>
@@ -4683,110 +4800,169 @@ export const CourseSessionsView: React.FC = () => {
                             <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{searchError}</p>
                         </div>
                     </div>
-                    <div className="bg-red-50 dark:bg-red-900/20 rounded-lg p-4 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                </Card>
+            )}
+
+            {/* Delete result banner */}
+            {deleteResults && (
+                <div className={`mb-4 p-4 rounded-lg border text-sm flex items-start gap-3 ${deleteResults.failed === 0 ? 'bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-700' : 'bg-red-50 border-red-200 dark:bg-red-900/20 dark:border-red-700'}`}>
+                    <span className={deleteResults.failed === 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>
+                        {deleteResults.failed === 0 ? '✓' : '✗'}
+                    </span>
+                    <span className={deleteResults.failed === 0 ? 'text-green-800 dark:text-green-300' : 'text-red-800 dark:text-red-300'}>
+                        {deleteResults.message}
+                    </span>
+                    <button onClick={() => setDeleteResults(null)} className="ml-auto text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">✕</button>
+                </div>
+            )}
+
+            {/* Course run info summary */}
+            {runInfo && !isSearching && !searchError && (
+                <Card className="p-5 mb-6">
+                    <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3">Course Run Details</h3>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                         <div>
-                            <span className="font-medium text-gray-700 dark:text-gray-300">Company UEN: </span>
-                            <span className="font-mono text-red-700 dark:text-red-300">{uen}</span>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">Course Reference</p>
+                            <p className="font-mono font-medium text-gray-900 dark:text-white">{runInfo.courseData?.referenceNumber || '—'}</p>
                         </div>
                         <div>
-                            <span className="font-medium text-gray-700 dark:text-gray-300">Course Code: </span>
-                            <span className="font-mono text-red-700 dark:text-red-300">{courseCode}</span>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">Mode of Training</p>
+                            <p className="font-medium text-gray-900 dark:text-white">{modeOfTrainingLabel(runInfo.run?.modeOfTraining)}</p>
                         </div>
                         <div>
-                            <span className="font-medium text-gray-700 dark:text-gray-300">Course Run ID: </span>
-                            <span className="font-mono text-red-700 dark:text-red-300">{courseRunId}</span>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">Course Start</p>
+                            <p className="font-medium text-gray-900 dark:text-white">{formatDate(String(runInfo.run?.courseStartDate || ''))}</p>
+                        </div>
+                        <div>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">Course End</p>
+                            <p className="font-medium text-gray-900 dark:text-white">{formatDate(String(runInfo.run?.courseEndDate || ''))}</p>
+                        </div>
+                        <div>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">Venue</p>
+                            <p className="font-medium text-gray-900 dark:text-white">
+                                {[runInfo.run?.venue?.floor && `Floor ${runInfo.run.venue.floor}`, runInfo.run?.venue?.unit && `#${runInfo.run.venue.unit}`, runInfo.run?.venue?.building].filter(Boolean).join(' · ') || '—'}
+                            </p>
+                        </div>
+                        <div>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">Vacancy</p>
+                            <p className="font-medium text-gray-900 dark:text-white">{runInfo.run?.courseVacancy?.description || '—'}</p>
+                        </div>
+                        <div>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">Admin Email</p>
+                            <p className="font-medium text-gray-900 dark:text-white truncate">{runInfo.run?.courseAdminEmail || '—'}</p>
+                        </div>
+                        <div>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">Registered</p>
+                            <p className="font-medium text-gray-900 dark:text-white">{runInfo.run?.registeredUserCount ?? '—'}</p>
                         </div>
                     </div>
                 </Card>
             )}
 
-            {/* Success Results */}
-            {parsedData && !isSearching && (
+            {/* No sessions state */}
+            {sessions.length === 0 && courseTitle && !isSearching && !searchError && (
+                <Card className="p-6 mb-6">
+                    <div className="text-center py-6 text-gray-500 dark:text-gray-400">
+                        <p className="font-medium text-gray-700 dark:text-gray-300 mb-1">No Sessions Found</p>
+                        <p className="text-sm">No sessions have been registered for this course run in SSG yet.</p>
+                    </div>
+                </Card>
+            )}
+
+            {/* Sessions table */}
+            {sessions.length > 0 && !isSearching && (
                 <Card className="p-6">
                     <div className="flex items-center justify-between mb-4">
                         <h3 className="text-lg font-bold text-gray-700 dark:text-gray-200">Sessions</h3>
                         <span className="text-sm text-gray-500 dark:text-gray-400">
-                            {sessions.length} session{sessions.length !== 1 ? 's' : ''}
-                            {parsedData?.meta?.total != null && ` (total: ${parsedData.meta.total})`}
+                            {sessions.length} total · {activeSessions.length} active
                         </span>
                     </div>
 
-                    {sessions.length === 0 ? (
-                        <div className="text-center py-10 text-gray-500 dark:text-gray-400">
-                            <p className="font-medium">No sessions found for this course run.</p>
-                        </div>
-                    ) : (
-                        <div className="overflow-x-auto">
-                            <table className="min-w-full text-sm">
-                                <thead>
-                                    <tr className="border-b border-gray-200 dark:border-gray-700 text-left">
-                                        <th className="pb-3 pr-4 font-semibold text-gray-600 dark:text-gray-300">#</th>
-                                        <th className="pb-3 pr-4 font-semibold text-gray-600 dark:text-gray-300">Session ID</th>
-                                        <th className="pb-3 pr-4 font-semibold text-gray-600 dark:text-gray-300">Date</th>
-                                        <th className="pb-3 pr-4 font-semibold text-gray-600 dark:text-gray-300">Time</th>
-                                        <th className="pb-3 pr-4 font-semibold text-gray-600 dark:text-gray-300">Mode</th>
-                                        <th className="pb-3 pr-4 font-semibold text-gray-600 dark:text-gray-300">Venue</th>
-                                        <th className="pb-3 pr-4 font-semibold text-gray-600 dark:text-gray-300">Attendance Taken</th>
-                                        <th className="pb-3 font-semibold text-gray-600 dark:text-gray-300">Deleted</th>
+                    <div className="overflow-x-auto">
+                        <table className="min-w-full text-sm">
+                            <thead>
+                                <tr className="border-b border-gray-200 dark:border-gray-700 text-left">
+                                    <th className="pb-3 pr-4 font-semibold text-gray-600 dark:text-gray-300">#</th>
+                                    <th className="pb-3 pr-4 font-semibold text-gray-600 dark:text-gray-300">Session ID</th>
+                                    <th className="pb-3 pr-4 font-semibold text-gray-600 dark:text-gray-300">Date</th>
+                                    <th className="pb-3 pr-4 font-semibold text-gray-600 dark:text-gray-300">Time</th>
+                                    <th className="pb-3 pr-4 font-semibold text-gray-600 dark:text-gray-300">Mode</th>
+                                    <th className="pb-3 pr-4 font-semibold text-gray-600 dark:text-gray-300">Attendance</th>
+                                    <th className="pb-3 pr-4 font-semibold text-gray-600 dark:text-gray-300">Status</th>
+                                    <th className="pb-3 font-semibold text-gray-600 dark:text-gray-300">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {sessions.map((session: any, idx: number) => (
+                                    <tr
+                                        key={session.id}
+                                        className={`border-b border-gray-100 dark:border-gray-800 align-top ${session.deleted ? 'opacity-40' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'}`}
+                                    >
+                                        <td className="py-3 pr-4 text-gray-500 dark:text-gray-400">{idx + 1}</td>
+                                        <td className="py-3 pr-4 font-mono text-xs text-gray-700 dark:text-gray-300">{session.id}</td>
+                                        <td className="py-3 pr-4 text-gray-900 dark:text-white whitespace-nowrap">
+                                            {formatDate(session.startDate)}
+                                            {session.startDate !== session.endDate && (
+                                                <span className="text-gray-500"> – {formatDate(session.endDate)}</span>
+                                            )}
+                                        </td>
+                                        <td className="py-3 pr-4 text-gray-900 dark:text-white whitespace-nowrap">
+                                            {session.startTime} – {session.endTime}
+                                        </td>
+                                        <td className="py-3 pr-4 text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                                            {modeOfTrainingLabel(session.modeOfTraining)}
+                                        </td>
+                                        <td className="py-3 pr-4">
+                                            <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border ${session.attendanceTaken ? 'bg-green-100 text-green-800 border-green-200' : 'bg-gray-100 text-gray-700 border-gray-200'}`}>
+                                                {session.attendanceTaken ? 'Taken' : 'Not Taken'}
+                                            </span>
+                                        </td>
+                                        <td className="py-3 pr-4">
+                                            <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border ${session.deleted ? 'bg-red-100 text-red-800 border-red-200' : 'bg-blue-100 text-blue-800 border-blue-200'}`}>
+                                                {session.deleted ? 'Deleted' : 'Active'}
+                                            </span>
+                                        </td>
+                                        <td className="py-3">
+                                            {!session.deleted && (
+                                                <button
+                                                    onClick={() => handleDeleteOne(session)}
+                                                    disabled={isDeleting}
+                                                    className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-red-50 text-red-700 border border-red-200 hover:bg-red-100 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-red-900/20 dark:text-red-400 dark:border-red-700 dark:hover:bg-red-900/40"
+                                                >
+                                                    {deletingSessionId === session.id ? (
+                                                        <div className="flex items-center gap-1">
+                                                            <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-red-600" />
+                                                            Deleting...
+                                                        </div>
+                                                    ) : 'Delete'}
+                                                </button>
+                                            )}
+                                        </td>
                                     </tr>
-                                </thead>
-                                <tbody>
-                                    {sessions.map((session: any, idx: number) => (
-                                        <tr
-                                            key={session.id}
-                                            className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50 align-top"
-                                        >
-                                            <td className="py-3 pr-4 text-gray-500 dark:text-gray-400">{idx + 1}</td>
-                                            <td className="py-3 pr-4 font-mono text-xs text-gray-700 dark:text-gray-300">{session.id}</td>
-                                            <td className="py-3 pr-4 text-gray-900 dark:text-white whitespace-nowrap">
-                                                {formatDate(session.startDate)}
-                                                {session.startDate !== session.endDate && (
-                                                    <span className="text-gray-500"> – {formatDate(session.endDate)}</span>
-                                                )}
-                                            </td>
-                                            <td className="py-3 pr-4 text-gray-900 dark:text-white whitespace-nowrap">
-                                                {session.startTime} – {session.endTime}
-                                            </td>
-                                            <td className="py-3 pr-4 text-gray-700 dark:text-gray-300 whitespace-nowrap">
-                                                {modeOfTrainingLabel(session.modeOfTraining)}
-                                            </td>
-                                            <td className="py-3 pr-4 text-gray-600 dark:text-gray-400 text-xs">
-                                                {session.venue ? (
-                                                    <div className="space-y-0.5">
-                                                        {session.venue.room && <p className="font-medium text-gray-700 dark:text-gray-300">{session.venue.room}</p>}
-                                                        <p>{[session.venue.building, session.venue.block && `Blk ${session.venue.block}`].filter(Boolean).join(', ')}</p>
-                                                        {(session.venue.floor || session.venue.unit) && (
-                                                            <p>
-                                                                {[session.venue.floor && `Floor ${session.venue.floor}`, session.venue.unit && `Unit ${session.venue.unit}`].filter(Boolean).join(', ')}
-                                                            </p>
-                                                        )}
-                                                        <p>{[session.venue.street, session.venue.postalCode && `S(${session.venue.postalCode})`].filter(Boolean).join(', ')}</p>
-                                                        {session.venue.wheelChairAccess && (
-                                                            <p className="text-green-600 dark:text-green-400">♿ Wheelchair Accessible</p>
-                                                        )}
-                                                    </div>
-                                                ) : '—'}
-                                            </td>
-                                            <td className="py-3 pr-4">
-                                                <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border ${session.attendanceTaken
-                                                    ? 'bg-green-100 text-green-800 border-green-200'
-                                                    : 'bg-gray-100 text-gray-700 border-gray-200'
-                                                    }`}>
-                                                    {session.attendanceTaken ? 'Yes' : 'No'}
-                                                </span>
-                                            </td>
-                                            <td className="py-3">
-                                                <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border ${session.deleted
-                                                    ? 'bg-red-100 text-red-800 border-red-200'
-                                                    : 'bg-gray-100 text-gray-700 border-gray-200'
-                                                    }`}>
-                                                    {session.deleted ? 'Yes' : 'No'}
-                                                </span>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    {/* Delete All */}
+                    {activeSessions.length > 0 && (
+                        <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between">
+                            <p className="text-sm text-gray-500 dark:text-gray-400">
+                                {activeSessions.length} active session{activeSessions.length !== 1 ? 's' : ''} will be deleted
+                            </p>
+                            <button
+                                onClick={handleDeleteAll}
+                                disabled={isDeleting}
+                                className="inline-flex items-center px-4 py-2 rounded-lg text-sm font-medium bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                {isDeletingAll ? (
+                                    <div className="flex items-center gap-2">
+                                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
+                                        Deleting All...
+                                    </div>
+                                ) : `Delete All ${activeSessions.length} Sessions`}
+                            </button>
                         </div>
                     )}
                 </Card>

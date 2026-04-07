@@ -6,6 +6,7 @@ import AddTrainerForm from './AddTrainerForm';
 import { BulkUploadTrainersView } from './BulkUploadTrainersView';
 import { SKILLS_FUTURE_INDUSTRIES } from '@app-types/profile';
 import { ensureAbsoluteImageUrl } from '@utils/imageUtils';
+import { maskNric } from '../../utils';
 
 interface Trainer {
   trainer_name: string;
@@ -21,6 +22,7 @@ interface Trainer {
   areas_of_expertise: string[] | null;
   skills_tags?: string[] | null;
   certification_tags?: string[] | null;
+  nric?: string | null;
   user_id: string;
 }
 
@@ -78,6 +80,15 @@ const ViewTrainers: React.FC = () => {
   const [filterAreasOfExpertise, setFilterAreasOfExpertise] = useState<string[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [showAddTrainerForm, setShowAddTrainerForm] = useState(false);
+  const [visibleNrics, setVisibleNrics] = useState<Set<string>>(new Set());
+
+  const toggleNricVisibility = (userId: string) => {
+    setVisibleNrics(prev => {
+      const next = new Set(prev);
+      if (next.has(userId)) next.delete(userId); else next.add(userId);
+      return next;
+    });
+  };
   const [showBulkUpload, setShowBulkUpload] = useState(false);
 
   // Status update confirmation states
@@ -360,6 +371,7 @@ const ViewTrainers: React.FC = () => {
                 <tr>
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Trainer Name</th>
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Contact</th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">NRIC</th>
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Trainer Type</th>
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Area of Expertise</th>
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Trainer Status</th>
@@ -397,6 +409,24 @@ const ViewTrainers: React.FC = () => {
                         <div className="text-sm text-gray-500 dark:text-gray-400">{trainer.secondary_email}</div>
                       )}
                       <div className="text-sm text-gray-500 dark:text-gray-400">{trainer.telephone || 'N/A'}</div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-gray-900 dark:text-white">
+                          {trainer.nric && trainer.nric !== 'N/A'
+                            ? (visibleNrics.has(trainer.user_id) ? trainer.nric : maskNric(trainer.nric))
+                            : 'N/A'}
+                        </span>
+                        {trainer.nric && trainer.nric !== 'N/A' && (
+                          <button
+                            onClick={() => toggleNricVisibility(trainer.user_id)}
+                            className="text-gray-400 hover:text-blue-500 transition-colors"
+                            title={visibleNrics.has(trainer.user_id) ? 'Hide NRIC' : 'Show full NRIC'}
+                          >
+                            <Icon name={visibleNrics.has(trainer.user_id) ? IconName.EyeOff : IconName.Eye} className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{trainer.trainer_type || 'N/A'}</td>
                     <td className="px-6 py-4">

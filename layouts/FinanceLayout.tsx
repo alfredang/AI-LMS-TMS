@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
 import AiChatbot from '../components/AiChatbot';
@@ -8,34 +8,107 @@ import AllCourseRunsView from '../components/finance/AllCourseRunsView';
 import {
   SearchGrantView,
   ViewGrantStatusView,
+  SubmitAssessmentView,
+  UpdateAssessmentView,
+  UploadCourseRunsView,
+  SearchCourseRunsView,
+  SearchEnrolmentView,
+  ViewEnrolmentView,
+  ViewCourseRunView,
+  SearchAssessmentsView,
+  ViewAssessmentView,
+  CancelEnrolmentView,
+  UpdateEnrolmentView,
+  DeleteCourseRunView,
+  UpdateEnrolmentFeesView,
+  CourseSessionAttendanceView,
+  CourseSessionsView,
 } from '../components/admin/GrantManagementViews';
+import { CreateNewClassView } from '../components/admin/CreateNewClassView';
+import EditCourseRunView from '../components/admin/EditCourseRunView';
+import AddSessionsView from '../components/admin/AddSessionsView';
+import CourseSessionTimingView from '../components/admin/CourseSessionTimingView';
+import EnrollLearners from '../components/admin/EnrollLearners';
+import { BulkUploadEnrolmentView } from '../components/admin/BulkEnrolmentViews';
+import TrainerAttendanceDashboard from '../components/trainer/TrainerAttendanceDashboard';
 
 import ClaimCheckView from '../components/training-provider/ClaimCheckView';
 import GrantCalculatorView from '../components/finance/GrantCalculatorView';
 import ViewClaimView from '../components/finance/ViewClaimView';
 import CancelClaimView from '../components/finance/CancelClaimView';
 import UploadDocumentView from '../components/finance/UploadDocumentView';
+import SsgAppSelector from '../components/finance/SsgAppSelector';
+import BizfileView from '../components/finance/BizfileView';
+import BizfileDirectorySearchView from '../components/finance/BizfileDirectorySearchView';
+import BizfileNameSearchView from '../components/finance/BizfileNameSearchView';
+import BizfileVerificationView from '../components/finance/BizfileVerificationView';
+import BizfileKeyDatesView from '../components/finance/BizfileKeyDatesView';
+import BizfileAddressView from '../components/finance/BizfileAddressView';
+import BizfileSsicView from '../components/finance/BizfileSsicView';
+import BizfileCapitalView from '../components/finance/BizfileCapitalView';
+import BizfileShareholdersView from '../components/finance/BizfileShareholdersView';
+import QBCustomerView from '../components/finance/QBCustomerView';
+import QBEstimateView from '../components/finance/QBEstimateView';
+import QBInvoiceView from '../components/finance/QBInvoiceView';
+import QBPaymentView from '../components/finance/QBPaymentView';
 
 import { ProfilePage } from '../components/ProfilePage';
 import { useLms } from '@contexts/LmsContext';
 import { View } from '@app-types/index';
 
-type FinancePage = 'dashboard' | 'allCourseRuns' | 'grantCalculator' | 'searchGrant' | 'viewGrant' | 'claimCheck' | 'viewClaim' | 'cancelClaim' | 'uploadDocument';
+type FinancePage =
+  | 'dashboard' | 'allCourseRuns'
+  | 'grantCalculator' | 'searchGrant' | 'viewGrant'
+  | 'claimCheck' | 'viewClaim' | 'cancelClaim' | 'uploadDocument'
+  | 'bizfile' | 'bizfileDirectorySearch' | 'bizfileNameSearch'
+  | 'bizfileVerification' | 'bizfileKeyDates' | 'bizfileAddress' | 'bizfileSsic' | 'bizfileCapital' | 'bizfileShareholders'
+  | 'qbCustomer' | 'qbEstimate' | 'qbInvoice' | 'qbPayment'
+  // TPG Management
+  | 'tpgCreateClass' | 'tpgSearchCourseRuns' | 'tpgViewCourseRun' | 'tpgEditCourseRun' | 'tpgUploadCourseRuns' | 'tpgDeleteCourseRun'
+  | 'tpgAddSessions' | 'tpgSessionTiming' | 'tpgCourseSessions'
+  | 'tpgEnrollLearners' | 'tpgUploadEnrolments' | 'tpgSearchEnrolment' | 'tpgViewEnrolment' | 'tpgUpdateEnrolment' | 'tpgCancelEnrolment' | 'tpgUpdateEnrolmentFees'
+  | 'tpgSessionAttendance' | 'tpgCheckAttendance'
+  | 'tpgSubmitAssessment' | 'tpgUpdateAssessment' | 'tpgSearchAssessments' | 'tpgViewAssessment'
+  | 'tpgSearchGrant' | 'tpgViewGrantStatus';
 
 const FinanceLayout: React.FC = () => {
-  const { currentView } = useLms();
-  const [page, setPage] = useState<FinancePage>('dashboard');
+  const { currentView, financePage: ctxFinancePage, setFinancePage: ctxSetFinancePage } = useLms();
+  const page = ctxFinancePage as FinancePage;
+  const setPage = (p: FinancePage) => ctxSetFinancePage(p);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isDesktopSidebarCollapsed, setIsDesktopSidebarCollapsed] = useState(false);
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
-    grantManagement: true,
     claimManagement: true,
+    tpgManagement: false,
+    tpgCourseRun: false,
+    tpgSession: false,
+    tpgEnrolment: false,
+    tpgAttendance: false,
+    tpgAssessment: false,
+    tpgGrant: false,
+    bizfile: false,
+    quickbooks: false,
     usefulLinks: true,
   });
 
   const toggleSection = (key: string) => {
     setOpenSections(prev => ({ ...prev, [key]: !prev[key] }));
   };
+
+  // Auto-open sections when navigating from header
+  useEffect(() => {
+    if (page.startsWith('tpg')) {
+      setOpenSections(prev => ({ ...prev, tpgManagement: true }));
+      // If it's the generic 'tpgManagement' trigger from header, go to first TPG page
+      if (page === ('tpgManagement' as FinancePage)) {
+        setPage('tpgCreateClass');
+        setOpenSections(prev => ({ ...prev, tpgManagement: true, tpgCourseRun: true }));
+      }
+    }
+    if (['claimCheck', 'viewClaim', 'cancelClaim', 'uploadDocument'].includes(page)) {
+      setOpenSections(prev => ({ ...prev, claimManagement: true }));
+    }
+  }, [page]);
 
   const handleToggleSidebar = () => {
     if (typeof window !== 'undefined' && window.innerWidth >= 768) {
@@ -68,6 +141,62 @@ const FinanceLayout: React.FC = () => {
         return <CancelClaimView />;
       case 'uploadDocument':
         return <UploadDocumentView />;
+      case 'bizfile':
+        return <BizfileView />;
+      case 'bizfileDirectorySearch':
+        return <BizfileDirectorySearchView />;
+      case 'bizfileNameSearch':
+        return <BizfileNameSearchView />;
+      case 'bizfileVerification':
+        return <BizfileVerificationView />;
+      case 'bizfileKeyDates':
+        return <BizfileKeyDatesView />;
+      case 'bizfileAddress':
+        return <BizfileAddressView />;
+      case 'bizfileSsic':
+        return <BizfileSsicView />;
+      case 'bizfileCapital':
+        return <BizfileCapitalView />;
+      case 'bizfileShareholders':
+        return <BizfileShareholdersView />;
+      case 'qbCustomer':
+        return <QBCustomerView />;
+      case 'qbEstimate':
+        return <QBEstimateView />;
+      case 'qbInvoice':
+        return <QBInvoiceView />;
+      case 'qbPayment':
+        return <QBPaymentView />;
+      // TPG Management — Course Run
+      case 'tpgCreateClass': return <CreateNewClassView />;
+      case 'tpgSearchCourseRuns': return <SearchCourseRunsView />;
+      case 'tpgViewCourseRun': return <ViewCourseRunView />;
+      case 'tpgEditCourseRun': return <EditCourseRunView />;
+      case 'tpgUploadCourseRuns': return <UploadCourseRunsView />;
+      case 'tpgDeleteCourseRun': return <DeleteCourseRunView />;
+      // TPG Management — Session
+      case 'tpgAddSessions': return <AddSessionsView />;
+      case 'tpgSessionTiming': return <CourseSessionTimingView />;
+      case 'tpgCourseSessions': return <CourseSessionsView />;
+      // TPG Management — Enrolment
+      case 'tpgEnrollLearners': return <EnrollLearners />;
+      case 'tpgUploadEnrolments': return <BulkUploadEnrolmentView />;
+      case 'tpgSearchEnrolment': return <SearchEnrolmentView />;
+      case 'tpgViewEnrolment': return <ViewEnrolmentView />;
+      case 'tpgUpdateEnrolment': return <UpdateEnrolmentView />;
+      case 'tpgCancelEnrolment': return <CancelEnrolmentView />;
+      case 'tpgUpdateEnrolmentFees': return <UpdateEnrolmentFeesView />;
+      // TPG Management — Attendance
+      case 'tpgSessionAttendance': return <CourseSessionAttendanceView />;
+      case 'tpgCheckAttendance': return <div className="max-w-6xl mx-auto"><TrainerAttendanceDashboard /></div>;
+      // TPG Management — Assessment
+      case 'tpgSubmitAssessment': return <SubmitAssessmentView />;
+      case 'tpgUpdateAssessment': return <UpdateAssessmentView />;
+      case 'tpgSearchAssessments': return <SearchAssessmentsView />;
+      case 'tpgViewAssessment': return <ViewAssessmentView />;
+      // TPG Management — Grant
+      case 'tpgSearchGrant': return <SearchGrantView />;
+      case 'tpgViewGrantStatus': return <ViewGrantStatusView />;
       default:
         return <FinanceManagementView />;
     }
@@ -83,7 +212,44 @@ const FinanceLayout: React.FC = () => {
       case 'viewClaim': return 'View Claim';
       case 'cancelClaim': return 'Cancel Claim';
       case 'uploadDocument': return 'Upload Supporting Document';
-      default: return 'Finance Management';
+      case 'bizfile': return 'Bizfile — Business Profile';
+      case 'bizfileDirectorySearch': return 'Bizfile — Directory Search';
+      case 'bizfileNameSearch': return 'Bizfile — Name Search';
+      case 'bizfileVerification': return 'Bizfile — Entity Verification';
+      case 'bizfileKeyDates': return 'Bizfile — Registration Key Dates';
+      case 'bizfileAddress': return 'Bizfile — Registered Address';
+      case 'bizfileSsic': return 'Bizfile — SSIC Details';
+      case 'bizfileCapital': return 'Bizfile — Company Capital';
+      case 'bizfileShareholders': return 'Bizfile — Shareholders';
+      case 'qbCustomer': return 'QuickBooks — Customers';
+      case 'qbEstimate': return 'QuickBooks — Quotes';
+      case 'qbInvoice': return 'QuickBooks — Invoices';
+      case 'qbPayment': return 'QuickBooks — Payments';
+      case 'tpgCreateClass': return 'Create New Class';
+      case 'tpgSearchCourseRuns': return 'Search Course Runs';
+      case 'tpgViewCourseRun': return 'View Course Run';
+      case 'tpgEditCourseRun': return 'Edit Course Run';
+      case 'tpgUploadCourseRuns': return 'Upload Course Runs';
+      case 'tpgDeleteCourseRun': return 'Delete Course Run';
+      case 'tpgAddSessions': return 'Add Sessions';
+      case 'tpgSessionTiming': return 'Session Timing';
+      case 'tpgCourseSessions': return 'Course Sessions';
+      case 'tpgEnrollLearners': return 'Enroll Learners';
+      case 'tpgUploadEnrolments': return 'Upload Enrolments';
+      case 'tpgSearchEnrolment': return 'Search Enrolment';
+      case 'tpgViewEnrolment': return 'View Enrolment';
+      case 'tpgUpdateEnrolment': return 'Update Enrolment';
+      case 'tpgCancelEnrolment': return 'Cancel Enrolment';
+      case 'tpgUpdateEnrolmentFees': return 'Update Enrolment Fees';
+      case 'tpgSessionAttendance': return 'Session Attendance';
+      case 'tpgCheckAttendance': return 'Check Attendance';
+      case 'tpgSubmitAssessment': return 'Submit Assessment';
+      case 'tpgUpdateAssessment': return 'Update Assessment';
+      case 'tpgSearchAssessments': return 'Search Assessments';
+      case 'tpgViewAssessment': return 'View Assessment';
+      case 'tpgSearchGrant': return 'Search Grant';
+      case 'tpgViewGrantStatus': return 'View Grant Status';
+      default: return 'Financial Dashboard';
     }
   };
 
@@ -125,38 +291,105 @@ const FinanceLayout: React.FC = () => {
     </div>
   );
 
+  const SubSection = ({ title, sectionKey, children }: { title: string; sectionKey: string; children: React.ReactNode }) => (
+    <div>
+      <button
+        type="button"
+        onClick={() => toggleSection(sectionKey)}
+        className="w-full flex items-center justify-between pl-8 pr-3 py-1.5 group cursor-pointer hover:bg-gray-100 dark:hover:bg-slate-700 rounded-md"
+      >
+        <span className="text-xs font-semibold uppercase text-gray-400 dark:text-gray-500 tracking-wider">{title}</span>
+        <svg
+          className={`w-3 h-3 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 transition-transform duration-200 ${openSections[sectionKey] ? 'rotate-180' : ''}`}
+          fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+      {openSections[sectionKey] && <div className="space-y-1">{children}</div>}
+    </div>
+  );
+
   const sidebarContent = (
     <nav className="space-y-6 p-4 bg-white dark:bg-slate-800 text-gray-900 dark:text-white h-full">
-      <NavItem target="dashboard" label="Finance Management" />
+      <NavItem target="dashboard" label="Financial Dashboard" />
       <NavItem target="allCourseRuns" label="All Course Runs" />
 
-      <NavSection title="Grant Management" sectionKey="grantManagement">
-        <NavItem target="grantCalculator" label="Grant Calculator" isSubItem />
-        <NavItem target="searchGrant" label="Search Grant" isSubItem />
-        <NavItem target="viewGrant" label="View Grant" isSubItem />
+      <NavSection title="TPG Management" sectionKey="tpgManagement">
+        <SubSection title="Course Run" sectionKey="tpgCourseRun">
+          <NavItem target="tpgCreateClass" label="Create New Class" isSubItem />
+          <NavItem target="tpgSearchCourseRuns" label="Search Course Runs" isSubItem />
+          <NavItem target="tpgViewCourseRun" label="View Course Run" isSubItem />
+          <NavItem target="tpgEditCourseRun" label="Edit Course Run" isSubItem />
+          <NavItem target="tpgUploadCourseRuns" label="Upload Course Runs" isSubItem />
+          <NavItem target="tpgDeleteCourseRun" label="Delete Course Run" isSubItem />
+        </SubSection>
+
+        <SubSection title="Session" sectionKey="tpgSession">
+          <NavItem target="tpgAddSessions" label="Add Sessions" isSubItem />
+          <NavItem target="tpgSessionTiming" label="Session Timing" isSubItem />
+          <NavItem target="tpgCourseSessions" label="Course Sessions" isSubItem />
+        </SubSection>
+
+        <SubSection title="Enrolment" sectionKey="tpgEnrolment">
+          <NavItem target="tpgEnrollLearners" label="Enroll Learners" isSubItem />
+          <NavItem target="tpgUploadEnrolments" label="Upload Enrolments" isSubItem />
+          <NavItem target="tpgSearchEnrolment" label="Search Enrolment" isSubItem />
+          <NavItem target="tpgViewEnrolment" label="View Enrolment" isSubItem />
+          <NavItem target="tpgUpdateEnrolment" label="Update Enrolment" isSubItem />
+          <NavItem target="tpgCancelEnrolment" label="Cancel Enrolment" isSubItem />
+          <NavItem target="tpgUpdateEnrolmentFees" label="Update Enrolment Fees" isSubItem />
+        </SubSection>
+
+        <SubSection title="Attendance" sectionKey="tpgAttendance">
+          <NavItem target="tpgSessionAttendance" label="Session Attendance" isSubItem />
+          <NavItem target="tpgCheckAttendance" label="Check Attendance" isSubItem />
+        </SubSection>
+
+        <SubSection title="Assessment" sectionKey="tpgAssessment">
+          <NavItem target="tpgSubmitAssessment" label="Submit Assessment" isSubItem />
+          <NavItem target="tpgUpdateAssessment" label="Update Assessment" isSubItem />
+          <NavItem target="tpgSearchAssessments" label="Search Assessments" isSubItem />
+          <NavItem target="tpgViewAssessment" label="View Assessment" isSubItem />
+        </SubSection>
+
+        <SubSection title="Grant" sectionKey="tpgGrant">
+          <NavItem target="grantCalculator" label="Grant Calculator" isSubItem />
+          <NavItem target="tpgSearchGrant" label="Search Grant" isSubItem />
+          <NavItem target="tpgViewGrantStatus" label="View Grant Status" isSubItem />
+        </SubSection>
       </NavSection>
 
       <NavSection title="Claim Management" sectionKey="claimManagement">
         <NavItem target="claimCheck" label="Check / Add Claim" isSubItem />
         <NavItem target="viewClaim" label="View Claim" isSubItem />
         <NavItem target="cancelClaim" label="Cancel Claim" isSubItem />
-        <NavItem target="uploadDocument" label="Upload Supporting Document" isSubItem />
+        <NavItem target="uploadDocument" label="Supporting Document" isSubItem />
       </NavSection>
 
-      <a
-        href="https://quickbooks.intuit.com/sg/"
-        target="_blank"
-        rel="noopener noreferrer"
-        className={`flex items-center rounded-md px-3 py-2 text-sm font-medium transition-colors ${inactiveClass}`}
-      >
-        Quickbooks
-        <svg className="w-3 h-3 ml-auto text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-        </svg>
-      </a>
+      <NavSection title="Quickbooks" sectionKey="quickbooks">
+        <NavItem target="qbCustomer" label="Customers" isSubItem />
+        <NavItem target="qbEstimate" label="Quotes (Estimates)" isSubItem />
+        <NavItem target="qbInvoice" label="Invoices" isSubItem />
+        <NavItem target="qbPayment" label="Payments" isSubItem />
+      </NavSection>
+
+      <NavSection title="Bizfile" sectionKey="bizfile">
+        <NavItem target="bizfile" label="Business Profile" isSubItem />
+        <NavItem target="bizfileDirectorySearch" label="Entity Directory Search" isSubItem />
+        <NavItem target="bizfileNameSearch" label="Entity Name Search" isSubItem />
+        <NavItem target="bizfileVerification" label="Entity Verification" isSubItem />
+        <NavItem target="bizfileKeyDates" label="Entity Reg Key Dates" isSubItem />
+        <NavItem target="bizfileAddress" label="Entity Reg Address" isSubItem />
+        <NavItem target="bizfileSsic" label="Entity SSIC" isSubItem />
+        <NavItem target="bizfileCapital" label="Company Capital" isSubItem />
+        <NavItem target="bizfileShareholders" label="Company Shareholders" isSubItem />
+      </NavSection>
 
       <NavSection title="Useful Links" sectionKey="usefulLinks">
         {[
+          { label: 'Quickbooks', href: 'https://quickbooks.intuit.com/sg/' },
+          { label: 'Vendors@gov', href: 'https://www.vendors.gov.sg/' },
           { label: 'GeBiz', href: 'https://www.gebiz.gov.sg/' },
           { label: 'Bizfile', href: 'https://www.bizfile.gov.sg/' },
           { label: 'CPF', href: 'https://www.cpf.gov.sg/member' },
@@ -238,6 +471,7 @@ const FinanceLayout: React.FC = () => {
         {/* Main Content Area */}
         <main className="flex-1 overflow-x-hidden">
           <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            {page.startsWith('tpg') && <SsgAppSelector />}
             {renderContent()}
           </div>
         </main>

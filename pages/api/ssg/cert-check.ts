@@ -20,7 +20,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   // 1. What credentials-service returns (current active cert)
   try {
-    const creds = await getSSGCredentialsService().getSSGCredentials();
+    const creds = await getSSGCredentialsService().getSSGCredentials(undefined, (req.headers['x-ssg-app'] as string) || undefined);
     if (creds) {
       result.active = {
         source: (creds.certificatePath && fs.existsSync(creds.certificatePath)) ? 'file path' : 'env var',

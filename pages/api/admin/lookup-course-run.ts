@@ -56,7 +56,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     // 2. Not in DB — fetch directly from SSG
-    const credentials = await getSSGCredentialsService().getSSGCredentials();
+    const credentials = await getSSGCredentialsService().getSSGCredentials(undefined, (req.headers['x-ssg-app'] as string) || undefined);
     if (!credentials) {
       return res.status(500).json({ error: 'SSG credentials not found' });
     }

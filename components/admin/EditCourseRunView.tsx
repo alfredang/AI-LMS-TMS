@@ -82,9 +82,12 @@ export const EditCourseRunView: React.FC = () => {
     const [courseAdminEmail, setCourseAdminEmail] = useState('');
     const [courseVacancy, setCourseVacancy] = useState('A');
 
-    // ── Trainer (optional) ───────────────────────────────────────────────────
-    const [showTrainer, setShowTrainer] = useState(false);
-    const [trainers, setTrainers] = useState([{ id: 0, trainerType: '1', trainerIdNumber: '' }]);
+    // ── Trainer ───────────────────────────────────────────────────────────────
+    const [ssgTrainers, setSsgTrainers] = useState<any[]>([]); // from SSG linkCourseRunTrainer
+    const [courseRunUuid, setCourseRunUuid] = useState<string | null>(null);
+    const [availableTrainers, setAvailableTrainers] = useState<any[]>([]);
+    const [isFetchingTrainers, setIsFetchingTrainers] = useState(false);
+    const [trainerAssignments, setTrainerAssignments] = useState<{ userId: string; nric: string }[]>([{ userId: '', nric: '' }]);
 
     // ── Submission ───────────────────────────────────────────────────────────
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -93,6 +96,20 @@ export const EditCourseRunView: React.FC = () => {
         message?: string;
         error?: any;
     } | null>(null);
+
+    // ── Fetch trainer data from local DB ─────────────────────────────────────
+    const fetchTrainerData = async () => {
+        setIsFetchingTrainers(true);
+        try {
+            const res = await fetch('/api/admin/trainers-detail');
+            const json = await res.json();
+            if (json.success) setAvailableTrainers(json.data?.trainers || []);
+        } catch {
+            // Non-critical — trainer section will show unavailable state
+        } finally {
+            setIsFetchingTrainers(false);
+        }
+    };
 
     // ── Auto-fetch if navigated from ViewCourseRun ───────────────────────────
     useEffect(() => {
@@ -114,6 +131,9 @@ export const EditCourseRunView: React.FC = () => {
         setIsFetching(true);
         setFetchError(null);
         setIsDataLoaded(false);
+        setSsgTrainers([]);
+        setCourseRunUuid(null);
+        setTrainerAssignments([{ userId: '', nric: '' }]);
 
         try {
             const res = await fetch(`/api/course-runs/view?courseRunId=${encodeURIComponent(id)}`);
@@ -131,11 +151,29 @@ export const EditCourseRunView: React.FC = () => {
             setCourseReferenceNumber(courseData.referenceNumber ?? courseData.externalReferenceNumber ?? '');
             setCourseTitle(courseData.title ?? '');
 
+            // Parse SSG trainer list
+            const ssgLinks: any[] = run.linkCourseRunTrainer ?? [];
+            setSsgTrainers(ssgLinks.map((link: any) => link.trainer).filter(Boolean));
+
             // Populate form fields
-            setCourseStartDate(toDateInput(run.courseStartDate ?? run.courseDates?.start));
-            setCourseEndDate(toDateInput(run.courseEndDate ?? run.courseDates?.end));
-            setOpeningRegistrationDate(toDateInput(run.registrationOpeningDate ?? run.registrationDates?.opening));
-            setClosingRegistrationDate(toDateInput(run.registrationClosingDate ?? run.registrationDates?.closing));
+            const startDate = toDateInput(run.courseStartDate || run.courseDates?.start);
+            setCourseStartDate(startDate);
+            setCourseEndDate(toDateInput(run.courseEndDate || run.courseDates?.end));
+
+            // Use SSG registration dates if available, otherwise fall back to defaults
+            const existingOpening = toDateInput(run.registrationOpeningDate || run.registrationDates?.opening);
+            const existingClosing = toDateInput(run.registrationClosingDate || run.registrationDates?.closing);
+            const today = new Date().toISOString().split('T')[0];
+            setOpeningRegistrationDate(existingOpening || today);
+            if (existingClosing) {
+                setClosingRegistrationDate(existingClosing);
+            } else if (startDate) {
+                const dayBefore = new Date(startDate);
+                dayBefore.setDate(dayBefore.getDate() - 1);
+                setClosingRegistrationDate(dayBefore.toISOString().split('T')[0]);
+            } else {
+                setClosingRegistrationDate('');
+            }
 
             const venue = run.venue ?? {};
             setBlock(venue.block ?? '');
@@ -148,21 +186,30 @@ export const EditCourseRunView: React.FC = () => {
             setWheelchairAccess(venue.wheelChairAccess ? OptionalSelector.YES : OptionalSelector.NO);
 
             setModeOfTraining(run.modeOfTraining ?? '1');
-            setCourseAdminEmail(run.courseAdminEmail ?? '');
+            setCourseAdminEmail('sales@tertiarycourses.com.sg');
             setCourseVacancy(run.courseVacancy?.code ?? 'A');
 
             setIsDataLoaded(true);
+
+            // Also look up the local DB UUID so we can display assigned trainer(s)
+            try {
+                const uuidRes = await fetch(`/api/admin/course-run-uuid?courseRunId=${encodeURIComponent(id)}`);
+                const uuidJson = await uuidRes.json();
+                if (uuidJson.success && uuidJson.uuid) {
+                    setCourseRunUuid(uuidJson.uuid);
+                    await fetchTrainerData();
+                } else {
+                    setCourseRunUuid(null);
+                    setAvailableTrainers([]);
+                }
+            } catch {
+                setCourseRunUuid(null);
+            }
         } catch (err) {
             setFetchError(err instanceof Error ? err.message : 'Failed to fetch course run data');
         } finally {
             setIsFetching(false);
         }
-    };
-
-    const updateTrainerField = (idx: number, field: string, value: any) => {
-        const updated = [...trainers];
-        updated[idx] = { ...updated[idx], [field]: value };
-        setTrainers(updated);
     };
 
     // ── Submit ───────────────────────────────────────────────────────────────
@@ -182,7 +229,6 @@ export const EditCourseRunView: React.FC = () => {
         if (!courseAdminEmail.trim()) missing.push('Course Admin Email');
         if (!courseVacancy) missing.push('Course Vacancy');
 
-        if (showTrainer && !trainers[0]?.trainerIdNumber?.trim()) missing.push('Trainer ID Number');
 
         if (missing.length > 0) {
             alert(`Please fill in the following required fields:\n\n${missing.map(f => `• ${f}`).join('\n')}`);
@@ -233,18 +279,27 @@ export const EditCourseRunView: React.FC = () => {
                 fileContent: '',
             };
 
-            if (showTrainer && trainers[0]?.trainerIdNumber?.trim()) {
-                body.linkCourseRunTrainer = [{
-                    trainerTypeCode: trainers[0].trainerType,
-                    trainerTypeDescription: trainers[0].trainerType === '1' ? 'Existing' : 'New',
-                    trainerIdNumber: trainers[0].trainerIdNumber,
-                }];
+            const validAssignments = trainerAssignments.filter(a => a.nric.trim());
+            if (validAssignments.length > 0) {
+                body.linkCourseRunTrainer = validAssignments.map(a => ({
+                    trainerTypeCode: '1',
+                    trainerTypeDescription: 'Existing',
+                    trainerIdNumber: a.nric.trim(),
+                }));
             }
+
+            console.log('📦 Edit Course Run payload:', JSON.stringify(body, null, 2));
 
             const res = await fetch(
                 `/api/ssg/courses/courseRuns/${encodeURIComponent(courseRunId.trim())}?action=edit`,
                 { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
             );
+
+            const contentType = res.headers.get('content-type') || '';
+            if (!contentType.includes('application/json')) {
+                const text = await res.text();
+                throw new Error(`Server error ${res.status}: ${text.slice(0, 300)}`);
+            }
 
             const data = await res.json();
 
@@ -252,6 +307,30 @@ export const EditCourseRunView: React.FC = () => {
                 const msg = data?.details?.[0] || data?.message || data?.error?.message || `SSG error ${res.status}`;
                 setSubmissionResult({ success: false, message: typeof msg === 'string' ? msg : JSON.stringify(msg), error: data });
             } else {
+                // If a local DB trainer was selected, save to local junction table
+                if (courseRunUuid) {
+                    for (const assignment of trainerAssignments.filter(a => a.userId)) {
+                        const selected = availableTrainers.find(t => t.user_id === assignment.userId);
+                        if (selected) {
+                            try {
+                                await fetch('/api/admin/update-trainer-info', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                        courseRunUuid,
+                                        courseRunId: courseRunId.trim(),
+                                        trainerName: selected.trainer_name,
+                                        trainerEmail: selected.email,
+                                        trainerId: selected.user_id,
+                                        trainerIdNumber: assignment.nric.trim() || undefined,
+                                    }),
+                                });
+                            } catch {
+                                // Non-critical — SSG update already succeeded
+                            }
+                        }
+                    }
+                }
                 setSubmissionResult({ success: true, message: 'Course run updated successfully in SSG.' });
                 // Clear the context ID so navigating back doesn't re-trigger auto-fetch
                 setSelectedCourseRunId(null);
@@ -386,12 +465,12 @@ export const EditCourseRunView: React.FC = () => {
                     <FormSection title="Registration Dates">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">* Opening Registration Date</label>
-                                <input type="date" value={openingRegistrationDate} onChange={e => setOpeningRegistrationDate(e.target.value)} className={inputClasses} />
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Opening Registration Date</label>
+                                <input type="text" value={openingRegistrationDate} readOnly disabled className={readonlyClasses} />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">* Closing Registration Date</label>
-                                <input type="date" value={closingRegistrationDate} onChange={e => setClosingRegistrationDate(e.target.value)} className={inputClasses} />
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Closing Registration Date</label>
+                                <input type="text" value={closingRegistrationDate} readOnly disabled className={readonlyClasses} />
                             </div>
                         </div>
                     </FormSection>
@@ -401,7 +480,15 @@ export const EditCourseRunView: React.FC = () => {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">* Course Start Date</label>
-                                <input type="date" value={courseStartDate} onChange={e => setCourseStartDate(e.target.value)} className={inputClasses} />
+                                <input type="date" value={courseStartDate} onChange={e => {
+                                    setCourseStartDate(e.target.value);
+                                    if (e.target.value) {
+                                        setOpeningRegistrationDate(new Date().toISOString().split('T')[0]);
+                                        const dayBefore = new Date(e.target.value);
+                                        dayBefore.setDate(dayBefore.getDate() - 1);
+                                        setClosingRegistrationDate(dayBefore.toISOString().split('T')[0]);
+                                    }
+                                }} className={inputClasses} />
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">* Course End Date</label>
@@ -473,34 +560,115 @@ export const EditCourseRunView: React.FC = () => {
                         </div>
                     </FormSection>
 
-                    {/* Optional: Trainer */}
+                    {/* Trainer Assignment */}
                     <Card className="p-6">
-                        <div className="flex items-center justify-between mb-4">
-                            <h3 className="text-xl font-bold dark:text-white">Trainer Assignment (Optional)</h3>
-                            <label className="flex items-center gap-2 cursor-pointer">
-                                <input
-                                    type="checkbox"
-                                    checked={showTrainer}
-                                    onChange={e => setShowTrainer(e.target.checked)}
-                                    className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                                />
-                                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Assign Trainer</span>
-                            </label>
-                        </div>
-                        {showTrainer && (
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Trainer Type</label>
-                                    <select value={trainers[0].trainerType} onChange={e => updateTrainerField(0, 'trainerType', e.target.value)} className={inputClasses}>
-                                        <option value="1">1 - Existing</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">* Trainer ID Number</label>
-                                    <input type="text" value={trainers[0].trainerIdNumber} onChange={e => updateTrainerField(0, 'trainerIdNumber', e.target.value)} className={inputClasses} placeholder="Enter trainer NRIC / FIN" />
+                        <h3 className="text-xl font-bold dark:text-white mb-4">Trainer Management</h3>
+
+                        {/* SSG-assigned trainers (from viewCourseRun response) */}
+                        {ssgTrainers.length === 0 ? (
+                            <div className="p-4 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg text-sm text-gray-500 dark:text-gray-400 mb-4">
+                                No trainer has been assigned to this course run in SSG yet. Use the form below to assign one.
+                            </div>
+                        ) : (
+                            <div className="mb-6">
+                                <h4 className="text-base font-semibold text-gray-800 dark:text-gray-200 mb-3">Currently Assigned Trainer</h4>
+                                <div className="space-y-4">
+                                    {ssgTrainers.map((t, idx) => (
+                                        <div key={t.id ?? idx} className="p-4 border border-gray-200 dark:border-gray-600 rounded-lg">
+                                            <p className="text-sm font-bold text-blue-600 dark:text-blue-400 mb-3">Trainer {idx + 1}</p>
+                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                                <div>
+                                                    <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">ID Number</p>
+                                                    <p className="text-sm font-mono text-gray-900 dark:text-white">{t.idNumber ?? '—'}</p>
+                                                </div>
+                                                <div>
+                                                    <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">Name</p>
+                                                    <p className="text-sm text-gray-900 dark:text-white">{t.name ?? '—'}</p>
+                                                </div>
+                                                <div>
+                                                    <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">Email</p>
+                                                    <p className="text-sm text-gray-900 dark:text-white">{t.email ?? '—'}</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
                                 </div>
                             </div>
                         )}
+
+                        {/* Assign Trainer — single unified section */}
+                        <div>
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+                                Select trainers from your database. Their NRIC will be sent to SSG and they will be synced in your local system automatically.
+                            </p>
+                            {isFetchingTrainers ? (
+                                <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500" />
+                                    Loading trainers...
+                                </div>
+                            ) : (
+                                <div className="space-y-3">
+                                    {trainerAssignments.map((assignment, idx) => (
+                                        <div key={idx} className="p-3 border border-gray-200 dark:border-gray-600 rounded-lg space-y-2">
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Trainer {idx + 1}</span>
+                                                {trainerAssignments.length > 1 && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setTrainerAssignments(trainerAssignments.filter((_, i) => i !== idx))}
+                                                        className="text-red-500 hover:text-red-700 text-xs"
+                                                    >Remove</button>
+                                                )}
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Select Trainer</label>
+                                                <select
+                                                    value={assignment.userId}
+                                                    onChange={e => {
+                                                        const selected = availableTrainers.find(t => t.user_id === e.target.value);
+                                                        const updated = [...trainerAssignments];
+                                                        updated[idx] = { userId: e.target.value, nric: selected?.nric || '' };
+                                                        setTrainerAssignments(updated);
+                                                    }}
+                                                    className={inputClasses}
+                                                >
+                                                    <option value="">— Select a trainer —</option>
+                                                    {availableTrainers.map(t => (
+                                                        <option key={t.user_id} value={t.user_id}>
+                                                            {t.trainer_name} {t.email ? `(${t.email})` : ''}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">NRIC/FIN</label>
+                                                <input
+                                                    type="text"
+                                                    value={assignment.nric}
+                                                    onChange={e => {
+                                                        const updated = [...trainerAssignments];
+                                                        updated[idx] = { ...updated[idx], nric: e.target.value };
+                                                        setTrainerAssignments(updated);
+                                                    }}
+                                                    placeholder="e.g. S1234567A"
+                                                    className={inputClasses}
+                                                />
+                                            </div>
+                                        </div>
+                                    ))}
+                                    <button
+                                        type="button"
+                                        onClick={() => setTrainerAssignments([...trainerAssignments, { userId: '', nric: '' }])}
+                                        className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline"
+                                    >
+                                        + Add Another Trainer
+                                    </button>
+                                    <p className="text-xs text-gray-400 dark:text-gray-500">
+                                        Leave blank to keep the existing trainer assignment unchanged when saving.
+                                    </p>
+                                </div>
+                            )}
+                        </div>
                     </Card>
 
                     {/* Action buttons */}

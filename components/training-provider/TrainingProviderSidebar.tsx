@@ -10,7 +10,7 @@ interface TrainingProviderSidebarProps {
 const TrainingProviderSidebar: React.FC<TrainingProviderSidebarProps> = ({ onNavigate }) => {
     const { currentView, handleNavigation, selectedCourse } = useLms();
 
-    const templateViews = [View.OtpEmailTemplate, View.CertificateEmailTemplate, View.FeedbackEmailTemplate, View.PasswordResetEmailTemplate, View.TrainerInvitationEmailTemplate, View.PrivacyPolicy, View.AcceptableUsePolicy];
+    const templateViews = [View.OtpEmailTemplate, View.CertificateEmailTemplate, View.FeedbackEmailTemplate, View.PasswordResetEmailTemplate, View.TrainerInvitationEmailTemplate, View.FinalCourseConfirmationEmailTemplate, View.CourseConfirmationEmailTemplate, View.PrivacyPolicy, View.AcceptableUsePolicy];
     const [templatesOpen, setTemplatesOpen] = useState(templateViews.includes(currentView));
     const [usefulLinksOpen, setUsefulLinksOpen] = useState(false);
 
@@ -21,6 +21,7 @@ const TrainingProviderSidebar: React.FC<TrainingProviderSidebarProps> = ({ onNav
         { view: View.AdminManagement, label: 'Role Management', icon: IconName.Admin },
         { view: View.FinanceManagement, label: 'Finance Management', icon: IconName.DollarSign },
         { view: View.Profile, label: 'Company Setting', icon: IconName.MyAccount },
+        { view: View.SsgApiSummary, label: 'SSG API Summary', icon: IconName.ClipboardCheck },
         { view: View.ApiEndpoints, label: 'API Endpoints', icon: IconName.Link },
         { view: View.Documents, label: 'Documents', icon: IconName.FileText },
         { view: View.Scheduler, label: 'Task Scheduler', icon: IconName.Calendar },
@@ -32,6 +33,8 @@ const TrainingProviderSidebar: React.FC<TrainingProviderSidebarProps> = ({ onNav
         { view: View.FeedbackEmailTemplate, label: 'Feedback Email', icon: IconName.Chat },
         { view: View.PasswordResetEmailTemplate, label: 'Password Reset Email', icon: IconName.Shield },
         { view: View.TrainerInvitationEmailTemplate, label: 'Trainer Invitation Email', icon: IconName.Send },
+        { view: View.FinalCourseConfirmationEmailTemplate, label: 'Final Course Confirmation Email', icon: IconName.Send },
+        { view: View.CourseConfirmationEmailTemplate, label: 'Course Confirmation Email', icon: IconName.Send },
         { view: View.PrivacyPolicy, label: 'Privacy Policy', icon: IconName.Shield },
         { view: View.AcceptableUsePolicy, label: 'Acceptable Use Policy', icon: IconName.ClipboardCheck },
     ];

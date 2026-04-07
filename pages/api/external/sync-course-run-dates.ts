@@ -76,17 +76,6 @@ function parseSsgDate(d: number | string | undefined): string | null {
 export async function runDateSync() {
   await ensureLogTable();
 
-  // De-duplication guard: skip if already ran 3 or more times today (SGT)
-  const recent = await pool.query(
-    `SELECT COUNT(DISTINCT run_id) AS run_count
-     FROM course_run_date_sync_log
-     WHERE (created_at AT TIME ZONE 'Asia/Singapore')::date = (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Singapore')::date`
-  );
-  if (Number(recent.rows[0]?.run_count) >= 3) {
-    console.log(`⏭️ sync-course-run-dates: skipping — already ran 3 times today (SGT)`);
-    return { runId: `skipped_${Date.now()}`, startedAt: new Date().toISOString(), processed: 0, updated: 0, noChange: 0, errors: 0, results: [], skipped: true };
-  }
-
   const runId = `sync_${Date.now()}`;
   const startedAt = new Date().toISOString();
 
@@ -257,9 +246,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     const result = await runDateSync();
-    if (result.skipped) {
-      return res.status(429).json({ success: false, error: 'Daily run limit reached (3 runs/day SGT). Try again tomorrow.' });
-    }
     return res.status(200).json({ success: true, ...result });
   } catch (err) {
     console.error('❌ sync-course-run-dates error:', err);
