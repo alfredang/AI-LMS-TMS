@@ -190,32 +190,12 @@ const BillingHistoryView: React.FC = () => {
 
         {/* Invoice Table */}
         <Card className="p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-xl font-bold">Invoices</h3>
-            <Button
-              onClick={fetchBillingHistory}
-              disabled={loading}
-              className="!bg-primary hover:!bg-primary-hover"
-            >
-              {loading ? (
-                <span className="flex items-center space-x-2">
-                  <Icon name={IconName.Spinner} className="w-4 h-4 animate-spin" />
-                  <span>Loading...</span>
-                </span>
-              ) : (
-                <span className="flex items-center space-x-2">
-                  <Icon name={IconName.Download} className="w-4 h-4" />
-                  <span>Refresh</span>
-                </span>
-              )}
-            </Button>
-          </div>
 
           {!fetched ? (
             <div className="text-center py-12 px-6 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
               <Icon name={IconName.DollarSign} className="w-24 h-24 mx-auto mb-6 text-primary" />
-              <h4 className="text-xl font-bold text-on-surface">No invoices loaded</h4>
-              <p className="mt-2 text-subtle max-w-md mx-auto">Click Refresh to load your billing history.</p>
+              <h4 className="text-xl font-bold text-on-surface">No invoices found</h4>
+              <p className="mt-2 text-subtle max-w-md mx-auto">Your billing history will appear here once invoices are available.</p>
             </div>
           ) : records.length === 0 ? (
             <div className="text-center py-12 px-6 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
@@ -230,79 +210,31 @@ const BillingHistoryView: React.FC = () => {
               <table className="w-full text-sm whitespace-nowrap">
                 <thead>
                   <tr className="border-b border-gray-200 dark:border-gray-700">
-                    <th className="text-left py-3 px-4 font-semibold text-subtle">Enrolment ID</th>
-                    <th className="text-left py-3 px-4 font-semibold text-subtle">Course Run ID</th>
-                    <th className="text-left py-3 px-4 font-semibold text-subtle">Course</th>
-                    <th className="text-left py-3 px-4 font-semibold text-subtle">Course Date</th>
-                    <th className="text-right py-3 px-4 font-semibold text-subtle">Fee (excl. GST)</th>
-                    <th className="text-right py-3 px-4 font-semibold text-subtle">Baseline Funding</th>
-                    <th className="text-right py-3 px-4 font-semibold text-subtle">MCES / SME</th>
-                    <th className="text-right py-3 px-4 font-semibold text-subtle">Nett Payable</th>
-                    <th className="text-center py-3 px-4 font-semibold text-subtle">Payment</th>
-                    <th className="text-center py-3 px-4 font-semibold text-subtle">Status</th>
-                    <th className="text-center py-3 px-4 font-semibold text-subtle">Quotation</th>
+                    <th className="text-left py-3 px-4 font-semibold text-subtle">Course Title</th>
+                    <th className="text-left py-3 px-4 font-semibold text-subtle">Course Ref Code</th>
+                    <th className="text-left py-3 px-4 font-semibold text-subtle">ID</th>
+                    <th className="text-left py-3 px-4 font-semibold text-subtle">Created Date</th>
+                    <th className="text-center py-3 px-4 font-semibold text-subtle">PDF Download</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {records.map((record) => {
-                    const baselineGrant = record.grants.find(g => g.funding_scheme === 'Baseline SkillsFuture Funding');
-                    const enhancedGrant = record.grants.find(g =>
-                      g.funding_scheme === 'Mid-Career Enhanced Subsidy' ||
-                      g.funding_scheme === 'Enhanced Training Support for SMEs' ||
-                      g.funding_scheme === 'IBF STS'
-                    );
-                    const baselineAmt = baselineGrant
-                      ? parseFloat(baselineGrant.approved_amount !== '0.00' ? baselineGrant.approved_amount : baselineGrant.estimated_amount)
-                      : 0;
-                    const enhancedAmt = enhancedGrant
-                      ? parseFloat(enhancedGrant.approved_amount !== '0.00' ? enhancedGrant.approved_amount : enhancedGrant.estimated_amount)
-                      : 0;
-                    const fee = parseFloat(record.course_fees_exclude_gst || '0');
-                    const nettPayable = fee > 0 ? fee - baselineAmt - enhancedAmt : 0;
+                  {[...records].sort((a, b) => {
+                    const dateA = new Date(a.enrolment_date || a.start_date || 0).getTime();
+                    const dateB = new Date(b.enrolment_date || b.start_date || 0).getTime();
+                    return dateB - dateA;
+                  }).map((record) => {
                     const isDownloading = downloadingId === record.id;
-
                     return (
                       <tr key={record.id} className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/30">
-                        <td className="py-3 px-4 font-mono text-xs">{record.enrolment_id || '-'}</td>
-                        <td className="py-3 px-4 font-mono text-xs">{record.course_run_id || '-'}</td>
-                        <td className="py-3 px-4">
-                          <div className="font-semibold text-on-surface">{record.course_title}</div>
-                          <div className="text-xs text-subtle">{record.course_code || '-'}</div>
-                        </td>
-                        <td className="py-3 px-4 text-subtle">{formatDate(record.start_date)}</td>
-                        <td className="py-3 px-4 text-right font-mono">{formatCurrency(record.course_fees_exclude_gst)}</td>
-                        <td className="py-3 px-4 text-right font-mono text-green-600 dark:text-green-400">
-                          {baselineAmt > 0 ? `-${formatCurrency(baselineAmt.toFixed(2))}` : '-'}
-                        </td>
-                        <td className="py-3 px-4 text-right font-mono text-green-600 dark:text-green-400">
-                          {enhancedAmt > 0 ? `-${formatCurrency(enhancedAmt.toFixed(2))}` : '-'}
-                        </td>
-                        <td className="py-3 px-4 text-right font-mono font-semibold">
-                          {fee > 0 ? formatCurrency(nettPayable.toFixed(2)) : '-'}
-                        </td>
-                        <td className="py-3 px-4 text-center">
-                          <span className={`inline-block px-2 py-1 rounded-full text-xs font-semibold ${getPaymentBadge(record.payment_status)}`}>
-                            {record.payment_status || 'Unknown'}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4 text-center">
-                          <span className={`inline-block px-2 py-1 rounded-full text-xs font-semibold ${
-                            record.enrolment_status === 'Confirmed'
-                              ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
-                              : record.enrolment_status === 'Cancelled'
-                              ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
-                              : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-400'
-                          }`}>
-                            {record.enrolment_status || 'Unknown'}
-                          </span>
-                        </td>
-
-                        {/* ── Pro Forma Download ── */}
+                        <td className="py-3 px-4 font-semibold text-on-surface">{record.course_title}</td>
+                        <td className="py-3 px-4 font-mono text-xs text-subtle">{record.course_code || '-'}</td>
+                        <td className="py-3 px-4 font-mono text-xs">{record.enrolment_id || record.id || '-'}</td>
+                        <td className="py-3 px-4 text-subtle">{formatDate(record.enrolment_date || record.start_date)}</td>
                         <td className="py-3 px-4 text-center">
                           <button
                             onClick={() => handleDownload(record)}
                             disabled={isDownloading}
-                            title="Download Pro Forma Invoice"
+                            title="Download PDF"
                             className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-colors
                               bg-blue-50 text-blue-700 hover:bg-blue-100
                               dark:bg-blue-900/20 dark:text-blue-400 dark:hover:bg-blue-900/40
@@ -316,7 +248,7 @@ const BillingHistoryView: React.FC = () => {
                             ) : (
                               <>
                                 <Icon name={IconName.FilePdf} className="w-3.5 h-3.5" />
-                                <span>Pro Forma</span>
+                                <span>Download</span>
                               </>
                             )}
                           </button>
