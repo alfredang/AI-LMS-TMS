@@ -20,6 +20,8 @@ export enum View {
   FeedbackEmailTemplate = 'feedbackEmailTemplate',
   PasswordResetEmailTemplate = 'passwordResetEmailTemplate',
   TrainerInvitationEmailTemplate = 'trainerInvitationEmailTemplate',
+  FinalCourseConfirmationEmailTemplate = 'finalCourseConfirmationEmailTemplate',
+  CourseConfirmationEmailTemplate = 'courseConfirmationEmailTemplate',
   FinanceManagement = 'financeManagement',
   BillingHistory = 'billingHistory',
   CertificateHistory = 'certificateHistory',
