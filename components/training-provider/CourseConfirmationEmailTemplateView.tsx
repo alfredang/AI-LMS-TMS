@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from 'react';
-import { useLms } from '@contexts/LmsContext';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Icon, IconName } from '../ui/Icon';
@@ -53,17 +52,16 @@ We reserve the right to cancel or postpone the course or change the scheduled tr
 Support
 If you have other enquiries, please contact us below:
 
-Tel: {COMPANY_PHONE} (9am to 6pm, Mon-Sun excluding Public Holidays)
-Email: {COMPANY_EMAIL}
+Tel: 6100 0613 (9am to 6pm, Mon-Sun excluding Public Holidays)
+Email: enquiry@tertiaryinfotech.com
 
 Thank you very much for signing up the course and choosing us as your learning partner.
 
-from {COMPANY_SHORT_NAME} Team`;
+from Tertiary Infotech Team`;
 
 const DEFAULT_CC = '';
 
 const CourseConfirmationEmailTemplateView: React.FC = () => {
-  const { trainingProviderProfile } = useLms();
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
   const [cc, setCc] = useState('');
@@ -146,25 +144,12 @@ const CourseConfirmationEmailTemplateView: React.FC = () => {
   const variables = [
     { name: '{COURSE_NAME}', desc: 'The course title' },
     { name: '{COURSE_START_DATE}', desc: 'The course start date and time' },
-    { name: '{COMPANY_NAME}', desc: 'Your company name from Company Settings' },
-    { name: '{COMPANY_SHORT_NAME}', desc: 'Your short company name' },
-    { name: '{COMPANY_PHONE}', desc: 'Your company phone number' },
-    { name: '{COMPANY_EMAIL}', desc: 'Your company email address' },
   ];
-
-  const companyName = trainingProviderProfile?.companyName || 'Training Provider';
-  const companyShortName = trainingProviderProfile?.companyShortname || companyName;
-  const companyPhone = trainingProviderProfile?.phone || '6100 0613';
-  const companyEmail = trainingProviderProfile?.email || 'enquiry@tertiaryinfotech.com';
 
   const replaceVars = (text: string) =>
     text
       .replace(/\{COURSE_NAME\}/g, 'WSQ - R Fundamental and Statistical Analysis for Beginners')
-      .replace(/\{COURSE_START_DATE\}/g, 'Tue Apr 14 2026 09:30:00')
-      .replace(/\{COMPANY_NAME\}/g, companyName)
-      .replace(/\{COMPANY_SHORT_NAME\}/g, companyShortName)
-      .replace(/\{COMPANY_PHONE\}/g, companyPhone)
-      .replace(/\{COMPANY_EMAIL\}/g, companyEmail);
+      .replace(/\{COURSE_START_DATE\}/g, 'Tue Apr 14 2026 09:30:00');
 
   const previewSubject = replaceVars(subject || DEFAULT_SUBJECT);
   const previewBody = replaceVars(body || DEFAULT_BODY);
