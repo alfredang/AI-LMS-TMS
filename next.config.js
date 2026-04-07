@@ -1,5 +1,7 @@
 const { execSync } = require('child_process');
 const COMMIT_HASH = (() => {
+  // Vercel provides VERCEL_GIT_COMMIT_SHA during builds
+  if (process.env.VERCEL_GIT_COMMIT_SHA) return process.env.VERCEL_GIT_COMMIT_SHA.substring(0, 7);
   try { return execSync('git rev-parse --short HEAD').toString().trim(); } catch { return 'dev'; }
 })();
 
