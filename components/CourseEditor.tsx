@@ -802,22 +802,27 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                 renewedStatus: course.renewedStatus,
                 // Include trainer slides URL if it's a link (not upload)
                 trainerSlidesUrl: course.trainerSlidesUrl,
-                lessonPlanUrl: course.lessonPlanUrl || undefined,
-                learnerGuideUrl: course.learnerGuideUrl || undefined,
-                facilitatorGuideUrl: course.facilitatorGuideUrl || undefined,
-                assessmentPlanUrl: course.assessmentPlanUrl || undefined,
-                slidesUrl: course.slidesUrl || undefined,
-                courseLink: course.courseLink || undefined,
-                brochureLink: course.brochureLink || undefined,
-                skillsfutureLink: course.skillsfutureLink || undefined,
-                fundingValidity: course.fundingValidity || undefined,
-                assessmentRecordLink: course.assessmentRecordLink || undefined,
+                lessonPlanUrl: course.lessonPlanUrl || null,
+                learnerGuideUrl: course.learnerGuideUrl || null,
+                facilitatorGuideUrl: course.facilitatorGuideUrl || null,
+                assessmentPlanUrl: course.assessmentPlanUrl || null,
+                slidesUrl: course.slidesUrl || null,
+                courseLink: course.courseLink || null,
+                brochureLink: course.brochureLink || null,
+                skillsfutureLink: course.skillsfutureLink || null,
+                fundingValidity: course.fundingValidity || null,
+                assessmentRecordLink: course.assessmentRecordLink || null,
                 assessmentSummaryRecordUrl: course.assessmentSummaryRecordUrl || '',
                 numOfTrainers: selectedApprovedTrainers.length,
                 trainersList: selectedApprovedTrainers.join(', '),
-                writtenAssessmentLink: writtenAssessmentInputType === 'link' ? (course.writtenAssessmentLink || undefined) : undefined,
-                practicalPerformanceAssessmentLink: practicalPerformanceInputType === 'link' ? (course.practicalPerformanceAssessmentLink || undefined) : undefined,
-                assessmentMethods: course.assessmentMethods || undefined,
+                // Sync assessmentMethods links to legacy columns so view mode always shows latest
+                writtenAssessmentLink: (course.assessmentMethods?.writtenAssessment?.enabled && course.assessmentMethods.writtenAssessment.link)
+                    ? course.assessmentMethods.writtenAssessment.link
+                    : (writtenAssessmentInputType === 'link' ? (course.writtenAssessmentLink || null) : null),
+                practicalPerformanceAssessmentLink: (course.assessmentMethods?.practicalExam?.enabled && course.assessmentMethods.practicalExam.link)
+                    ? course.assessmentMethods.practicalExam.link
+                    : (practicalPerformanceInputType === 'link' ? (course.practicalPerformanceAssessmentLink || null) : null),
+                assessmentMethods: course.assessmentMethods || null,
                 resourceLinks: resourceLinks.filter(rl => rl.url.trim() !== ''),
                 // Convert topics to learning units with position
                 learningUnits: course.topics.map((topic, index) => ({
@@ -1401,12 +1406,20 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                         <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
                             <h3 className="text-xl font-bold mb-4">Assessment Links</h3>
                             <div className="space-y-4">
-                                <LinkField label="Written Exam" value={course.writtenAssessmentLink} />
-                                <LinkField label="Practical Exam" value={course.practicalPerformanceAssessmentLink} />
+                                <LinkField label="Written Exam" value={
+                                    (course.assessmentMethods?.writtenAssessment?.enabled && course.assessmentMethods.writtenAssessment.link)
+                                        ? course.assessmentMethods.writtenAssessment.link
+                                        : course.writtenAssessmentLink
+                                } />
+                                <LinkField label="Practical Exam" value={
+                                    (course.assessmentMethods?.practicalExam?.enabled && course.assessmentMethods.practicalExam.link)
+                                        ? course.assessmentMethods.practicalExam.link
+                                        : course.practicalPerformanceAssessmentLink
+                                } />
                                 {course.assessmentMethods && Object.entries(course.assessmentMethods).map(([key, method]) => {
                                     if (!method?.enabled) return null;
-                                    if (key === 'writtenAssessment' && course.writtenAssessmentLink) return null;
-                                    if (key === 'practicalExam' && course.practicalPerformanceAssessmentLink) return null;
+                                    if (key === 'writtenAssessment') return null;
+                                    if (key === 'practicalExam') return null;
                                     return <LinkField key={key} label={ASSESSMENT_METHOD_LABELS[key as AssessmentMethodKey]} value={method.link} />;
                                 })}
                             </div>

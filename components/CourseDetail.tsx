@@ -264,8 +264,9 @@ const AssessmentsSection: React.FC<{
     }) || [];
 
     const hasLegacyAssessmentLink = (methodKey: string) => {
-        if (methodKey === 'writtenAssessment') return !!course.writtenAssessmentLink;
-        if (methodKey === 'practicalExam') return !!course.practicalPerformanceAssessmentLink;
+        // Written/Practical always rendered via their dedicated sections, so skip in dynamic loop
+        if (methodKey === 'writtenAssessment') return true;
+        if (methodKey === 'practicalExam') return true;
         return false;
     };
 
@@ -866,8 +867,12 @@ const AssessmentsSection: React.FC<{
                 </ul>
             )}
 
-            {/* Written Exam - Show only when link exists AND developer has it enabled (or no assessmentMethods configured) */}
-            {course.writtenAssessmentLink && (!course.assessmentMethods || course.assessmentMethods.writtenAssessment?.enabled) && (userRole === UserRole.Trainer || userRole === UserRole.Admin || userRole === UserRole.Developer || userRole === UserRole.TrainingProvider || writtenPublished) && (
+            {/* Written Exam - Show when legacy link exists OR assessmentMethods has it enabled with a link */}
+            {(() => {
+                const effectiveWrittenLink = (course.assessmentMethods?.writtenAssessment?.enabled && course.assessmentMethods.writtenAssessment.link)
+                    ? course.assessmentMethods.writtenAssessment.link
+                    : course.writtenAssessmentLink;
+                return effectiveWrittenLink && (userRole === UserRole.Trainer || userRole === UserRole.Admin || userRole === UserRole.Developer || userRole === UserRole.TrainingProvider || writtenPublished) && (
                 <div className="mt-1 p-3 bg-gray-100/60 dark:bg-gray-800/60 rounded-lg">
                     <div className="flex items-center justify-between mb-2">
                         <h4 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
@@ -879,12 +884,11 @@ const AssessmentsSection: React.FC<{
                         )}
                     </div>
 
-                    {/* Show Link-based assessment */}
-                    {course.writtenAssessmentLink && (
+                    {effectiveWrittenLink && (
                         <>
                             <div className="flex items-center gap-3 mb-3">
                                 <a
-                                    href={course.writtenAssessmentLink}
+                                    href={effectiveWrittenLink}
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="flex items-center gap-3 p-3 flex-1 min-w-0 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
@@ -976,10 +980,15 @@ const AssessmentsSection: React.FC<{
                         );
                     })()}
                 </div>
-            )}
+            );
+            })()}
 
-            {/* Practical Exam - Show only when link exists AND developer has it enabled (or no assessmentMethods configured) */}
-            {course.practicalPerformanceAssessmentLink && (!course.assessmentMethods || course.assessmentMethods.practicalExam?.enabled) && (userRole === UserRole.Trainer || userRole === UserRole.Admin || userRole === UserRole.Developer || userRole === UserRole.TrainingProvider || practicalPublished) && (
+            {/* Practical Exam - Show when legacy link exists OR assessmentMethods has it enabled with a link */}
+            {(() => {
+                const effectivePracticalLink = (course.assessmentMethods?.practicalExam?.enabled && course.assessmentMethods.practicalExam.link)
+                    ? course.assessmentMethods.practicalExam.link
+                    : course.practicalPerformanceAssessmentLink;
+                return effectivePracticalLink && (userRole === UserRole.Trainer || userRole === UserRole.Admin || userRole === UserRole.Developer || userRole === UserRole.TrainingProvider || practicalPublished) && (
                 <div className="mt-1 p-3 bg-gray-100/60 dark:bg-gray-800/60 rounded-lg">
                     <div className="flex items-center justify-between mb-2">
                         <h4 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
@@ -991,12 +1000,11 @@ const AssessmentsSection: React.FC<{
                         )}
                     </div>
 
-                    {/* Show Link-based assessment */}
-                    {course.practicalPerformanceAssessmentLink && (
+                    {effectivePracticalLink && (
                         <>
                             <div className="flex items-center gap-3 mb-3">
                                 <a
-                                    href={course.practicalPerformanceAssessmentLink}
+                                    href={effectivePracticalLink}
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="flex items-center gap-3 p-3 flex-1 min-w-0 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
@@ -1088,7 +1096,8 @@ const AssessmentsSection: React.FC<{
                         );
                     })()}
                 </div>
-            )}
+            );
+            })()}
 
             {/* Dynamic Assessment Methods — ordered so Written Exam is always first */}
             {course.assessmentMethods && Object.entries(course.assessmentMethods)
