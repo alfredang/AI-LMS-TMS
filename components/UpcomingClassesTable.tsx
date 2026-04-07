@@ -65,11 +65,13 @@ interface Trainer {
 interface UpcomingClassesTableProps {
     showTitle?: boolean;
     showFilters?: boolean;
+    includeOngoing?: boolean;
 }
 
 export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
     showTitle = true,
-    showFilters = true
+    showFilters = true,
+    includeOngoing = false,
 }) => {
     const { setAdminPage, setSelectedCourseRunId, setEditingCourseRun } = useLms();
     const [currentPage, setCurrentPage] = useState(0);
@@ -148,6 +150,9 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                 limit: ITEMS_PER_PAGE.toString(),
                 _t: Date.now().toString(),
             });
+
+            // Include ongoing classes if requested
+            if (includeOngoing) params.append('includeOngoing', 'true');
 
             // Add search and filter parameters (use debounced values for text inputs)
             if (debouncedSearch) params.append('search', debouncedSearch);

@@ -91,14 +91,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const limitNum = parseInt(limit as string, 10) || 20;
     const offset = pageNum * limitNum;
 
+    const includeOngoing = req.query.includeOngoing === 'true';
+
     const params: any[] = [];
     let paramIndex = 1;
     const filters: string[] = [
-      'cr.start_date > CURRENT_DATE',
+      includeOngoing
+        ? '(cr.start_date > CURRENT_DATE OR (cr.start_date <= CURRENT_DATE AND cr.end_date >= CURRENT_DATE))'
+        : 'cr.start_date > CURRENT_DATE',
       `cr.class_status IN ('Confirmed', 'Pending')`,
       `cr.start_date <= CURRENT_DATE + ($${paramIndex} * INTERVAL '1 day')`
     ];
-    params.push(thresholdDays);
+    params.push(includeOngoing ? 365 : thresholdDays);
     paramIndex++;
 
     if (search && search !== '') {

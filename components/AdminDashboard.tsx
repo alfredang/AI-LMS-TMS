@@ -62,7 +62,7 @@ export const AdminDashboard: React.FC = () => {
                 </div>
 
                 <Card className="p-4 overflow-hidden">
-                    <UpcomingClassesTable showTitle={false} showFilters={true} />
+                    <UpcomingClassesTable showTitle={false} showFilters={true} includeOngoing={true} />
                 </Card>
             </div>
     );
