@@ -312,7 +312,8 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [editingCourse, setEditingCourse] = useState<Course | null>(null);
   const [courseEditMode, setCourseEditMode] = useState<'create' | 'edit' | 'view' | null>(null);
   const [editingCourseRun, setEditingCourseRun] = useState<any | null>(null);
-  const [ssgApp, setSsgApp] = useState<string>('app2');  // default app, user can switch
+  const [ssgApp, setSsgApp] = useState<string>('app1');  // default, overridden by DB setting
+  const [ssgAppLoaded, setSsgAppLoaded] = useState(false);
   const [financePage, setFinancePage] = useState<string>('dashboard');
   const [courseListPage, setCourseListPage] = useState(1);
   const [courseDetail, setCourseDetail] = useState<CourseDetail | null>(null);
@@ -363,6 +364,21 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     loadColorScheme();
   }, []);
+
+  // Fetch default SSG app from Company Settings
+  useEffect(() => {
+    if (ssgAppLoaded) return;
+    fetch('/api/training-provider/ssg-default-app')
+      .then(r => r.json())
+      .then(data => {
+        if (data.defaultApp) {
+          setSsgApp(data.defaultApp);
+          console.log(`[LmsContext] SSG default app: ${data.defaultApp}`);
+        }
+        setSsgAppLoaded(true);
+      })
+      .catch(() => setSsgAppLoaded(true));
+  }, [ssgAppLoaded]);
 
   // Check for existing authentication on mount
   useEffect(() => {
