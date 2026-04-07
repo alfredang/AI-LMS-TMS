@@ -199,8 +199,8 @@ const Header: React.FC = () => {
   const navConfig = {
     [UserRole.Learner]: [
       { view: View.Courses, label: 'My Classes', icon: IconName.BookOpen },
-      { view: View.BillingHistory, label: 'Billing', icon: IconName.DollarSign },
       { view: View.CertificateHistory, label: 'Certificate', icon: IconName.Award },
+      { view: View.BillingHistory, label: 'Billing', icon: IconName.DollarSign },
     ],
     [UserRole.Trainer]: [
       { view: View.Dashboard, label: 'My Classes', icon: IconName.BookOpen, trainerPage: TrainerPage.MyClasses },
@@ -220,7 +220,7 @@ const Header: React.FC = () => {
     [UserRole.Finance]: [
       { view: View.Finance, label: 'Financial Dashboard', icon: IconName.DollarSign, financePage: 'dashboard' },
       { view: View.Finance, label: 'TPG Management', icon: IconName.Settings, financePage: 'tpgManagement' },
-      { view: View.Finance, label: 'Claim Management', icon: IconName.ClipboardCheck, financePage: 'claimCheck' },
+      { view: View.Finance, label: 'Claim Management', icon: IconName.ClipboardCheck, financePage: 'claimManagement' },
     ],
     [UserRole.TrainingProvider]: [
       { view: View.Dashboard, label: 'Training Dashboard', icon: IconName.Dashboard },
@@ -272,9 +272,11 @@ const Header: React.FC = () => {
               const isFinanceItem = 'financePage' in item && item.financePage;
               const isActive = isTrainerItem
                 ? trainerPage === item.trainerPage
-                : (isFinanceItem || role === UserRole.TrainingProvider)
-                  ? false
-                  : (role === UserRole.Admin && isAdminPageActive(item)) || (role !== UserRole.Admin && currentView === item.view);
+                : isFinanceItem
+                  ? financePage === item.financePage
+                  : role === UserRole.TrainingProvider
+                    ? false
+                    : (role === UserRole.Admin && isAdminPageActive(item)) || (role !== UserRole.Admin && currentView === item.view);
 
               return (
                 <a

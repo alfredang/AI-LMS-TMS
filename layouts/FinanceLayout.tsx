@@ -4,6 +4,7 @@ import Header from '../components/Header';
 import Footer from '../components/Footer';
 import AiChatbot from '../components/AiChatbot';
 import { Icon, IconName } from '../components/ui/Icon';
+import { Card } from '../components/ui/Card';
 import FinanceManagementView from '../components/training-provider/FinanceManagementView';
 import AllCourseRunsView from '../components/finance/AllCourseRunsView';
 import {
@@ -60,11 +61,12 @@ import { View } from '@app-types/index';
 type FinancePage =
   | 'dashboard' | 'allCourseRuns'
   | 'grantCalculator' | 'searchGrant' | 'viewGrant'
-  | 'claimCheck' | 'viewClaim' | 'cancelClaim' | 'uploadDocument'
+  | 'claimManagement' | 'claimCheck' | 'viewClaim' | 'cancelClaim' | 'uploadDocument'
   | 'bizfile' | 'bizfileDirectorySearch' | 'bizfileNameSearch'
   | 'bizfileVerification' | 'bizfileKeyDates' | 'bizfileAddress' | 'bizfileSsic' | 'bizfileCapital' | 'bizfileShareholders'
   | 'qbCustomer' | 'qbEstimate' | 'qbInvoice' | 'qbPayment'
   // TPG Management
+  | 'tpgManagement' | 'tpgCourseRun' | 'tpgSession' | 'tpgEnrolment' | 'tpgAttendance' | 'tpgAssessment' | 'tpgGrant'
   | 'tpgCreateClass' | 'tpgSearchCourseRuns' | 'tpgViewCourseRun' | 'tpgEditCourseRun' | 'tpgUploadCourseRuns' | 'tpgDeleteCourseRun'
   | 'tpgAddSessions' | 'tpgSessionTiming' | 'tpgCourseSessions'
   | 'tpgEnrollLearners' | 'tpgUploadEnrolments' | 'tpgSearchEnrolment' | 'tpgViewEnrolment' | 'tpgUpdateEnrolment' | 'tpgCancelEnrolment' | 'tpgUpdateEnrolmentFees'
@@ -101,11 +103,6 @@ const FinanceLayout: React.FC = () => {
   useEffect(() => {
     if (page.startsWith('tpg')) {
       setOpenSections(prev => ({ ...prev, tpgManagement: true }));
-      // If it's the generic 'tpgManagement' trigger from header, go to first TPG page
-      if (page === ('tpgManagement' as FinancePage)) {
-        setPage('tpgCreateClass');
-        setOpenSections(prev => ({ ...prev, tpgManagement: true, tpgCourseRun: true }));
-      }
     }
     if (['claimCheck', 'viewClaim', 'cancelClaim', 'uploadDocument'].includes(page)) {
       setOpenSections(prev => ({ ...prev, claimManagement: true }));
@@ -135,6 +132,29 @@ const FinanceLayout: React.FC = () => {
         return <SearchGrantView />;
       case 'viewGrant':
         return <ViewGrantStatusView />;
+      case 'claimManagement': return (
+        <div>
+          <h2 className="text-3xl font-bold mb-6 dark:text-white">Claim Management</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {[
+              { key: 'claimCheck', label: 'Check / Add Claim', icon: IconName.ClipboardCheck, description: 'Check existing claims and add new ones' },
+              { key: 'viewClaim', label: 'View Claim', icon: IconName.InfoCircle, description: 'View claim details and status' },
+              { key: 'cancelClaim', label: 'Cancel Claim', icon: IconName.Close, description: 'Cancel an existing claim' },
+              { key: 'uploadDocument', label: 'Upload Document', icon: IconName.Upload, description: 'Upload supporting documents' },
+            ].map(item => (
+              <button key={item.key} onClick={() => setPage(item.key as FinancePage)} className="block w-full">
+                <Card className="p-6 flex flex-col text-center items-center dark:bg-gray-800 dark:border-gray-700 hover:shadow-lg transition-shadow cursor-pointer h-full">
+                  <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-3">
+                    <Icon name={item.icon} className="w-6 h-6 text-primary" />
+                  </div>
+                  <h3 className="text-xl font-bold mb-2 dark:text-white">{item.label}</h3>
+                  <p className="text-gray-600 dark:text-gray-300 text-sm flex-grow">{item.description}</p>
+                </Card>
+              </button>
+            ))}
+          </div>
+        </div>
+      );
       case 'claimCheck':
         return <ClaimCheckView />;
       case 'viewClaim':
@@ -169,6 +189,177 @@ const FinanceLayout: React.FC = () => {
         return <QBInvoiceView />;
       case 'qbPayment':
         return <QBPaymentView />;
+      // TPG Management — Landing Pages
+      case 'tpgManagement': return (
+        <div>
+          <h2 className="text-3xl font-bold mb-6 dark:text-white">TPG Management</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[
+              { key: 'tpgCourseRun', label: 'Course Run', icon: IconName.Courses, description: 'Create, search, and manage course runs' },
+              { key: 'tpgSession', label: 'Session', icon: IconName.Calendar, description: 'Add and manage course sessions' },
+              { key: 'tpgEnrolment', label: 'Enrolment', icon: IconName.MyAccount, description: 'Enrol learners and manage enrolments' },
+              { key: 'tpgAttendance', label: 'Attendance', icon: IconName.ClipboardCheck, description: 'Track and check session attendance' },
+              { key: 'tpgAssessment', label: 'Assessment', icon: IconName.Award, description: 'Submit, update, and view assessments' },
+              { key: 'tpgGrant', label: 'Grant', icon: IconName.DollarSign, description: 'Search and view grant status' },
+            ].map(cat => (
+              <button key={cat.key} onClick={() => setPage(cat.key as FinancePage)} className="block w-full">
+                <Card className="p-6 flex flex-col text-center items-center dark:bg-gray-800 dark:border-gray-700 hover:shadow-lg transition-shadow cursor-pointer h-full">
+                  <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-3">
+                    <Icon name={cat.icon} className="w-6 h-6 text-primary" />
+                  </div>
+                  <h3 className="text-xl font-bold mb-2 dark:text-white">{cat.label}</h3>
+                  <p className="text-gray-600 dark:text-gray-300 text-sm flex-grow">{cat.description}</p>
+                </Card>
+              </button>
+            ))}
+          </div>
+        </div>
+      );
+      case 'tpgCourseRun': return (
+        <div>
+          <button onClick={() => setPage('tpgManagement')} className="text-sm text-primary hover:underline mb-4 inline-flex items-center gap-1">&larr; Back to TPG Management</button>
+          <h2 className="text-3xl font-bold mb-6 dark:text-white">Course Run</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[
+              { key: 'tpgCreateClass', label: 'Create New Class', icon: IconName.Create, description: 'Create a new course run class' },
+              { key: 'tpgSearchCourseRuns', label: 'Search Course Runs', icon: IconName.Search, description: 'Search for existing course runs' },
+              { key: 'tpgViewCourseRun', label: 'View Course Run', icon: IconName.InfoCircle, description: 'View course run details' },
+              { key: 'tpgEditCourseRun', label: 'Edit Course Run', icon: IconName.Edit, description: 'Edit an existing course run' },
+              { key: 'tpgUploadCourseRuns', label: 'Upload Course Runs', icon: IconName.Upload, description: 'Bulk upload course runs' },
+              { key: 'tpgDeleteCourseRun', label: 'Delete Course Run', icon: IconName.Delete, description: 'Delete a course run' },
+            ].map(item => (
+              <button key={item.key} onClick={() => setPage(item.key as FinancePage)} className="block w-full">
+                <Card className="p-6 flex flex-col text-center items-center dark:bg-gray-800 dark:border-gray-700 hover:shadow-lg transition-shadow cursor-pointer h-full">
+                  <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-3">
+                    <Icon name={item.icon} className="w-6 h-6 text-primary" />
+                  </div>
+                  <h3 className="text-xl font-bold mb-2 dark:text-white">{item.label}</h3>
+                  <p className="text-gray-600 dark:text-gray-300 text-sm flex-grow">{item.description}</p>
+                </Card>
+              </button>
+            ))}
+          </div>
+        </div>
+      );
+      case 'tpgSession': return (
+        <div>
+          <button onClick={() => setPage('tpgManagement')} className="text-sm text-primary hover:underline mb-4 inline-flex items-center gap-1">&larr; Back to TPG Management</button>
+          <h2 className="text-3xl font-bold mb-6 dark:text-white">Session</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[
+              { key: 'tpgAddSessions', label: 'Add Sessions', icon: IconName.Create, description: 'Add new sessions to a course run' },
+              { key: 'tpgSessionTiming', label: 'Session Timing', icon: IconName.Clock, description: 'Configure session timing details' },
+              { key: 'tpgCourseSessions', label: 'Course Sessions', icon: IconName.Calendar, description: 'View and manage course sessions' },
+            ].map(item => (
+              <button key={item.key} onClick={() => setPage(item.key as FinancePage)} className="block w-full">
+                <Card className="p-6 flex flex-col text-center items-center dark:bg-gray-800 dark:border-gray-700 hover:shadow-lg transition-shadow cursor-pointer h-full">
+                  <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-3">
+                    <Icon name={item.icon} className="w-6 h-6 text-primary" />
+                  </div>
+                  <h3 className="text-xl font-bold mb-2 dark:text-white">{item.label}</h3>
+                  <p className="text-gray-600 dark:text-gray-300 text-sm flex-grow">{item.description}</p>
+                </Card>
+              </button>
+            ))}
+          </div>
+        </div>
+      );
+      case 'tpgEnrolment': return (
+        <div>
+          <button onClick={() => setPage('tpgManagement')} className="text-sm text-primary hover:underline mb-4 inline-flex items-center gap-1">&larr; Back to TPG Management</button>
+          <h2 className="text-3xl font-bold mb-6 dark:text-white">Enrolment</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {[
+              { key: 'tpgEnrollLearners', label: 'Enrol Learners', icon: IconName.MyAccount, description: 'Enrol learners into a course run' },
+              { key: 'tpgUploadEnrolments', label: 'Upload Enrolments', icon: IconName.Upload, description: 'Bulk upload enrolment data' },
+              { key: 'tpgSearchEnrolment', label: 'Search Enrolment', icon: IconName.Search, description: 'Search for enrolment records' },
+              { key: 'tpgViewEnrolment', label: 'View Enrolment', icon: IconName.InfoCircle, description: 'View enrolment details' },
+              { key: 'tpgUpdateEnrolment', label: 'Update Enrolment', icon: IconName.Edit, description: 'Update enrolment information' },
+              { key: 'tpgCancelEnrolment', label: 'Cancel Enrolment', icon: IconName.Close, description: 'Cancel an existing enrolment' },
+              { key: 'tpgUpdateEnrolmentFees', label: 'Update Fees', icon: IconName.DollarSign, description: 'Update enrolment fee details' },
+            ].map(item => (
+              <button key={item.key} onClick={() => setPage(item.key as FinancePage)} className="block w-full">
+                <Card className="p-6 flex flex-col text-center items-center dark:bg-gray-800 dark:border-gray-700 hover:shadow-lg transition-shadow cursor-pointer h-full">
+                  <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-3">
+                    <Icon name={item.icon} className="w-6 h-6 text-primary" />
+                  </div>
+                  <h3 className="text-xl font-bold mb-2 dark:text-white">{item.label}</h3>
+                  <p className="text-gray-600 dark:text-gray-300 text-sm flex-grow">{item.description}</p>
+                </Card>
+              </button>
+            ))}
+          </div>
+        </div>
+      );
+      case 'tpgAttendance': return (
+        <div>
+          <button onClick={() => setPage('tpgManagement')} className="text-sm text-primary hover:underline mb-4 inline-flex items-center gap-1">&larr; Back to TPG Management</button>
+          <h2 className="text-3xl font-bold mb-6 dark:text-white">Attendance</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[
+              { key: 'tpgSessionAttendance', label: 'Session Attendance', icon: IconName.ClipboardCheck, description: 'Record session attendance' },
+              { key: 'tpgCheckAttendance', label: 'Check Attendance', icon: IconName.Search, description: 'Check attendance records' },
+            ].map(item => (
+              <button key={item.key} onClick={() => setPage(item.key as FinancePage)} className="block w-full">
+                <Card className="p-6 flex flex-col text-center items-center dark:bg-gray-800 dark:border-gray-700 hover:shadow-lg transition-shadow cursor-pointer h-full">
+                  <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-3">
+                    <Icon name={item.icon} className="w-6 h-6 text-primary" />
+                  </div>
+                  <h3 className="text-xl font-bold mb-2 dark:text-white">{item.label}</h3>
+                  <p className="text-gray-600 dark:text-gray-300 text-sm flex-grow">{item.description}</p>
+                </Card>
+              </button>
+            ))}
+          </div>
+        </div>
+      );
+      case 'tpgAssessment': return (
+        <div>
+          <button onClick={() => setPage('tpgManagement')} className="text-sm text-primary hover:underline mb-4 inline-flex items-center gap-1">&larr; Back to TPG Management</button>
+          <h2 className="text-3xl font-bold mb-6 dark:text-white">Assessment</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {[
+              { key: 'tpgSubmitAssessment', label: 'Submit Assessment', icon: IconName.Upload, description: 'Submit a new assessment' },
+              { key: 'tpgUpdateAssessment', label: 'Update Assessment', icon: IconName.Edit, description: 'Update an existing assessment' },
+              { key: 'tpgSearchAssessments', label: 'Search Assessments', icon: IconName.Search, description: 'Search for assessment records' },
+              { key: 'tpgViewAssessment', label: 'View Assessment', icon: IconName.InfoCircle, description: 'View assessment details' },
+            ].map(item => (
+              <button key={item.key} onClick={() => setPage(item.key as FinancePage)} className="block w-full">
+                <Card className="p-6 flex flex-col text-center items-center dark:bg-gray-800 dark:border-gray-700 hover:shadow-lg transition-shadow cursor-pointer h-full">
+                  <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-3">
+                    <Icon name={item.icon} className="w-6 h-6 text-primary" />
+                  </div>
+                  <h3 className="text-xl font-bold mb-2 dark:text-white">{item.label}</h3>
+                  <p className="text-gray-600 dark:text-gray-300 text-sm flex-grow">{item.description}</p>
+                </Card>
+              </button>
+            ))}
+          </div>
+        </div>
+      );
+      case 'tpgGrant': return (
+        <div>
+          <button onClick={() => setPage('tpgManagement')} className="text-sm text-primary hover:underline mb-4 inline-flex items-center gap-1">&larr; Back to TPG Management</button>
+          <h2 className="text-3xl font-bold mb-6 dark:text-white">Grant</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[
+              { key: 'tpgSearchGrant', label: 'Search Grant', icon: IconName.Search, description: 'Search for grant records' },
+              { key: 'tpgViewGrantStatus', label: 'View Grant Status', icon: IconName.InfoCircle, description: 'View grant status details' },
+              { key: 'grantCalculator', label: 'Grant Calculator', icon: IconName.Calculator, description: 'Calculate grant amounts' },
+            ].map(item => (
+              <button key={item.key} onClick={() => setPage(item.key as FinancePage)} className="block w-full">
+                <Card className="p-6 flex flex-col text-center items-center dark:bg-gray-800 dark:border-gray-700 hover:shadow-lg transition-shadow cursor-pointer h-full">
+                  <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-3">
+                    <Icon name={item.icon} className="w-6 h-6 text-primary" />
+                  </div>
+                  <h3 className="text-xl font-bold mb-2 dark:text-white">{item.label}</h3>
+                  <p className="text-gray-600 dark:text-gray-300 text-sm flex-grow">{item.description}</p>
+                </Card>
+              </button>
+            ))}
+          </div>
+        </div>
+      );
       // TPG Management — Course Run
       case 'tpgCreateClass': return <CreateNewClassView />;
       case 'tpgSearchCourseRuns': return <SearchCourseRunsView />;
@@ -210,6 +401,7 @@ const FinanceLayout: React.FC = () => {
       case 'grantCalculator': return 'Grant Calculator';
       case 'searchGrant': return 'Search Grant';
       case 'viewGrant': return 'View Grant';
+      case 'claimManagement': return 'Claim Management';
       case 'claimCheck': return 'Check / Add Claim';
       case 'viewClaim': return 'View Claim';
       case 'cancelClaim': return 'Cancel Claim';
@@ -227,6 +419,13 @@ const FinanceLayout: React.FC = () => {
       case 'qbEstimate': return 'QuickBooks — Quotes';
       case 'qbInvoice': return 'QuickBooks — Invoices';
       case 'qbPayment': return 'QuickBooks — Payments';
+      case 'tpgManagement': return 'TPG Management';
+      case 'tpgCourseRun': return 'Course Run';
+      case 'tpgSession': return 'Session';
+      case 'tpgEnrolment': return 'Enrolment';
+      case 'tpgAttendance': return 'Attendance';
+      case 'tpgAssessment': return 'Assessment';
+      case 'tpgGrant': return 'Grant';
       case 'tpgCreateClass': return 'Create New Class';
       case 'tpgSearchCourseRuns': return 'Search Course Runs';
       case 'tpgViewCourseRun': return 'View Course Run';
