@@ -198,6 +198,7 @@ const Header: React.FC = () => {
 
   const navConfig = {
     [UserRole.Learner]: [
+      { view: View.Courses, label: 'My Classes', icon: IconName.BookOpen },
       { view: View.Courses, label: 'Certificate Delivery', icon: IconName.Award, href: 'https://goo.gl/R2eumq' },
       { view: View.Courses, label: 'TRAQOM Survey', icon: IconName.ClipboardCheck, href: 'https://ssgtraqom.qualtrics.com/jfe/form/SV_3K9i7rTJ9OLsauW?Q_CHL=qr' },
     ],
