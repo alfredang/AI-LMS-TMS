@@ -391,7 +391,7 @@ export const SchedulerView: React.FC = () => {
             {!loading && !error && (
                 <div className="space-y-4">
                     {tasks.map(task => (
-                        <Card key={task.id} className="p-0 overflow-hidden">
+                        <Card key={task.id} className={`p-0 ${templateDropdownOpen === task.id ? '' : 'overflow-hidden'}`}>
                             {/* Card Header */}
                             <div className={`px-6 py-4 flex items-center justify-between border-b ${
                                 task.enabled
