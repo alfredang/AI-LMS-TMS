@@ -577,13 +577,12 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                         const status = classItem.assignedTrainerLocal ? 'Confirmed' : 'Pending';
                                         const mode = (classItem.modeOfTraining || '').toLowerCase();
                                         const courseType = mode.includes('virtual') || mode.includes('online') ? 'Virtual'
-                                            : mode.includes('classroom') || mode.includes('physical') ? 'Physical'
                                             : mode.includes('blended') || mode.includes('hybrid') ? 'Hybrid'
-                                            : classItem.modeOfTraining || '—';
+                                            : 'Physical';
                                         return (
                                             <tr key={index} className="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50">
                                                 <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.courseRunId}</td>
-                                                <td className="px-4 py-2 text-sm font-medium text-gray-900 dark:text-white">{classItem.courseTitle}</td>
+                                                <td className="px-4 py-2 text-sm font-medium text-gray-900 dark:text-white min-w-[350px]">{classItem.courseTitle}</td>
                                                 <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.courseCode}</td>
                                                 <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{courseType}</td>
                                                 <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{formatDate(classItem.startDate)}</td>
