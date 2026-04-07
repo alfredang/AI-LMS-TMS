@@ -479,7 +479,7 @@ export const SchedulerView: React.FC = () => {
                                                 </button>
 
                                                 {isOpen && (
-                                                    <div className="absolute z-50 mt-1 w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-xl max-h-60 overflow-y-auto">
+                                                    <div className="absolute z-50 bottom-full mb-1 w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-xl max-h-60 overflow-y-auto">
                                                         {EMAIL_TEMPLATES.map(t => {
                                                             const isSelected = t.value === currentTemplate;
                                                             return (
