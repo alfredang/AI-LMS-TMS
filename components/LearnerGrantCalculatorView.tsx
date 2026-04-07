@@ -58,18 +58,42 @@ export default function LearnerGrantCalculatorView() {
 
   const extractFeeSummary = (data: any) => {
     if (!data) return [];
-    const courses = data?.data?.courses || data?.courses || [];
     const rows: any[] = [];
+
+    // Handle personalised format: data.data.funding
+    const funding = data?.data?.funding;
+    if (funding) {
+      const approvedFee = funding.approvedCourseFee?.amount ?? null;
+      const grants = funding.eligibleGrants || [];
+      let totalGrant = 0;
+      for (const g of grants) totalGrant += parseFloat(g.amount || '0');
+      const nettFee = funding.nettFee?.amount ?? (approvedFee != null ? approvedFee - totalGrant : null);
+      rows.push({
+        courseName: courseRef || '—',
+        courseRef: courseRef,
+        tpName: uen || '—',
+        tpUen: uen,
+        approvedFee,
+        totalGrant,
+        feeAfterGrant: nettFee,
+        components: grants,
+      });
+      return rows;
+    }
+
+    // Handle baseline format: data.courses or data.data.courses
+    const courses = data?.data?.courses || data?.courses || [];
     for (const course of courses) {
-      const courseName = course?.courseTitle || course?.courseName || course?.courseReferenceNumber || '—';
-      const courseRefNum = course?.courseReferenceNumber || '';
-      const tpName = course?.trainingPartnerName || course?.trainingPartner?.name || '—';
-      const tpUen = course?.trainingPartnerUen || course?.trainingPartner?.uen || '';
-      const approvedFee = course?.approvedCourseFee ?? course?.courseFee ?? null;
-      const components = course?.fundingComponents || course?.grantComponents || [];
+      const courseName = course?.courseTitle || course?.courseName || course?.course?.title || course?.courseReferenceNumber || '—';
+      const courseRefNum = course?.courseReferenceNumber || course?.course?.referenceNumber || '';
+      const tpName = course?.trainingPartnerName || course?.trainingPartner?.name || course?.course?.trainingPartner?.name || '—';
+      const tpUen = course?.trainingPartnerUen || course?.trainingPartner?.uen || course?.course?.trainingPartner?.uen || '';
+      const fundingData = course?.funding || course;
+      const approvedFee = fundingData?.approvedCourseFee?.amount ?? course?.approvedCourseFee ?? course?.courseFee ?? null;
+      const components = fundingData?.eligibleGrants || fundingData?.eligibleGrantDetails || course?.fundingComponents || course?.grantComponents || [];
       let totalGrant = 0;
       for (const comp of components) totalGrant += parseFloat(comp?.grantAmount || comp?.amount || '0');
-      const feeAfterGrant = approvedFee != null ? parseFloat(approvedFee) - totalGrant : null;
+      const feeAfterGrant = fundingData?.nettFee?.amount ?? (approvedFee != null ? parseFloat(String(approvedFee)) - totalGrant : null);
       rows.push({ courseName, courseRef: courseRefNum, tpName, tpUen, approvedFee, totalGrant, feeAfterGrant, components });
     }
     return rows;
@@ -90,7 +114,7 @@ export default function LearnerGrantCalculatorView() {
           courses,
           app: selectedApp,
           applicant: { sme, nric, nricType, employerSponsored },
-          course: { referenceNumber: courseRef, startDate: startDate || undefined },
+          course: { referenceNumber: courseRef },
           trainee: { idType: 'NRIC', id: nric, dateOfBirth: dob || undefined, sponsoringEmployerUen: sponsorUen || undefined },
         }),
       });
@@ -163,11 +187,6 @@ export default function LearnerGrantCalculatorView() {
             <option value="N">No</option>
             <option value="Y">Yes</option>
           </select>
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Course Start Date</label>
-          <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)}
-            className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-white px-3 py-2 text-sm focus:ring-2 focus:ring-primary" />
         </div>
       </div>
 

@@ -132,7 +132,6 @@ export default function GrantCalculatorView() {
           },
           course: {
             referenceNumber: pCourseRef,
-            startDate: pStartDate,
           },
           trainee: {
             idType: 'NRIC',
@@ -165,21 +164,42 @@ export default function GrantCalculatorView() {
   // Extract fee summary rows from SSG response
   const extractFeeSummary = (data: any) => {
     if (!data) return [];
-    // SSG response may have data.data.courses or data.courses
-    const courses = data?.data?.courses || data?.courses || [];
     const rows: any[] = [];
-    for (const course of courses) {
-      const courseName = course?.courseTitle || course?.courseName || course?.courseReferenceNumber || '—';
-      const courseRef = course?.courseReferenceNumber || '';
-      const tpName = course?.trainingPartnerName || course?.trainingPartner?.name || '—';
-      const tpUen = course?.trainingPartnerUen || course?.trainingPartner?.uen || '';
-      const approvedFee = course?.approvedCourseFee ?? course?.courseFee ?? null;
-      const components = course?.fundingComponents || course?.grantComponents || [];
+
+    // Handle personalised format: data.data.funding
+    const funding = data?.data?.funding;
+    if (funding) {
+      const approvedFee = funding.approvedCourseFee?.amount ?? null;
+      const grants = funding.eligibleGrants || [];
       let totalGrant = 0;
-      for (const comp of components) {
-        totalGrant += parseFloat(comp?.grantAmount || comp?.amount || '0');
-      }
-      const feeAfterGrant = approvedFee != null ? parseFloat(approvedFee) - totalGrant : null;
+      for (const g of grants) totalGrant += parseFloat(g.amount || '0');
+      const nettFee = funding.nettFee?.amount ?? (approvedFee != null ? approvedFee - totalGrant : null);
+      rows.push({
+        courseName: pCourseRef || '—',
+        courseRef: pCourseRef,
+        tpName: uen || '—',
+        tpUen: uen,
+        approvedFee,
+        totalGrant,
+        feeAfterGrant: nettFee,
+        components: grants,
+      });
+      return rows;
+    }
+
+    // Handle baseline format: data.courses or data.data.courses
+    const courses = data?.data?.courses || data?.courses || [];
+    for (const course of courses) {
+      const courseName = course?.courseTitle || course?.courseName || course?.course?.title || course?.courseReferenceNumber || '—';
+      const courseRef = course?.courseReferenceNumber || course?.course?.referenceNumber || '';
+      const tpName = course?.trainingPartnerName || course?.trainingPartner?.name || course?.course?.trainingPartner?.name || '—';
+      const tpUen = course?.trainingPartnerUen || course?.trainingPartner?.uen || course?.course?.trainingPartner?.uen || '';
+      const fundingData = course?.funding || course;
+      const approvedFee = fundingData?.approvedCourseFee?.amount ?? course?.approvedCourseFee ?? course?.courseFee ?? null;
+      const components = fundingData?.eligibleGrants || fundingData?.eligibleGrantDetails || course?.fundingComponents || course?.grantComponents || [];
+      let totalGrant = 0;
+      for (const comp of components) totalGrant += parseFloat(comp?.grantAmount || comp?.amount || '0');
+      const feeAfterGrant = fundingData?.nettFee?.amount ?? (approvedFee != null ? parseFloat(String(approvedFee)) - totalGrant : null);
       rows.push({
         courseName,
         courseRef,
@@ -403,15 +423,6 @@ export default function GrantCalculatorView() {
                 <option value="N">No</option>
                 <option value="Y">Yes</option>
               </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Course Start Date</label>
-              <input
-                type="date"
-                value={pStartDate}
-                onChange={(e) => setPStartDate(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-white px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary"
-              />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Date of Birth</label>
