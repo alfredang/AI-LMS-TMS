@@ -19,6 +19,9 @@ interface SchedulerTask {
 
 // ── Cron Expression Helpers ───────────────────────────────────────────────────
 
+const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const DAY_ABBREVS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
 /** Convert a cron expression like "0 14 * * *" to a human-readable string */
 function describeCron(expr: string): string {
     const parts = expr.trim().split(/\s+/);
@@ -26,41 +29,60 @@ function describeCron(expr: string): string {
 
     const [minute, hour, dayOfMonth, month, dayOfWeek] = parts;
 
-    // Simple daily pattern: "M H * * *"
-    if (dayOfMonth === '*' && month === '*' && dayOfWeek === '*') {
-        const h = parseInt(hour, 10);
-        const m = parseInt(minute, 10);
-        if (!isNaN(h) && !isNaN(m)) {
-            const period = h >= 12 ? 'PM' : 'AM';
-            const displayH = h === 0 ? 12 : h > 12 ? h - 12 : h;
-            const displayM = String(m).padStart(2, '0');
-            return `Daily at ${displayH}:${displayM} ${period} SGT`;
+    const h = parseInt(hour, 10);
+    const m = parseInt(minute, 10);
+    if (isNaN(h) || isNaN(m)) return expr;
+
+    const period = h >= 12 ? 'PM' : 'AM';
+    const displayH = h === 0 ? 12 : h > 12 ? h - 12 : h;
+    const displayM = String(m).padStart(2, '0');
+    const timeStr = `${displayH}:${displayM} ${period} SGT`;
+
+    // Weekly pattern: "M H * * N"
+    if (dayOfMonth === '*' && month === '*' && dayOfWeek !== '*') {
+        const dow = parseInt(dayOfWeek, 10);
+        if (!isNaN(dow) && dow >= 0 && dow <= 6) {
+            return `Every ${DAY_NAMES[dow]} at ${timeStr}`;
         }
+    }
+
+    // Daily pattern: "M H * * *"
+    if (dayOfMonth === '*' && month === '*' && dayOfWeek === '*') {
+        return `Daily at ${timeStr}`;
     }
 
     return expr;
 }
 
-/** Convert "HH:MM" 24-hour time to cron minute/hour parts */
-function timeToCron(time: string): { minute: string; hour: string } | null {
-    const match = time.match(/^(\d{1,2}):(\d{2})$/);
-    if (!match) return null;
-    const hour = parseInt(match[1], 10);
-    const minute = parseInt(match[2], 10);
-    if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return null;
-    return { minute: String(minute), hour: String(hour) };
+interface ParsedSchedule {
+    hour: number;
+    minute: number;
+    frequency: 'daily' | 'weekly';
+    dayOfWeek: number; // 0=Sun, 1=Mon, ..., 6=Sat
 }
 
-/** Extract HH:MM from a daily cron expression, or null */
-function cronToTime(expr: string): string | null {
+/** Parse a cron expression into structured schedule data */
+function parseCron(expr: string): ParsedSchedule | null {
     const parts = expr.trim().split(/\s+/);
     if (parts.length < 5) return null;
     const [minute, hour, dom, mon, dow] = parts;
-    if (dom !== '*' || mon !== '*' || dow !== '*') return null;
+    if (dom !== '*' || mon !== '*') return null;
     const h = parseInt(hour, 10);
     const m = parseInt(minute, 10);
     if (isNaN(h) || isNaN(m)) return null;
-    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+
+    if (dow !== '*') {
+        const d = parseInt(dow, 10);
+        if (isNaN(d) || d < 0 || d > 6) return null;
+        return { hour: h, minute: m, frequency: 'weekly', dayOfWeek: d };
+    }
+    return { hour: h, minute: m, frequency: 'daily', dayOfWeek: 1 };
+}
+
+/** Build a cron expression from structured schedule data */
+function buildCron(schedule: ParsedSchedule): string {
+    const dow = schedule.frequency === 'weekly' ? String(schedule.dayOfWeek) : '*';
+    return `${schedule.minute} ${schedule.hour} * * ${dow}`;
 }
 
 // ── Status Badge ──────────────────────────────────────────────────────────────
@@ -107,7 +129,11 @@ export const SchedulerView: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
-    const [editTime, setEditTime] = useState('');
+    const [editHour, setEditHour] = useState(2);
+    const [editMinute, setEditMinute] = useState(0);
+    const [editPeriod, setEditPeriod] = useState<'AM' | 'PM'>('PM');
+    const [editFrequency, setEditFrequency] = useState<'daily' | 'weekly'>('daily');
+    const [editDayOfWeek, setEditDayOfWeek] = useState(1); // 0=Sun..6=Sat
     const [saving, setSaving] = useState(false);
     const [runningTaskId, setRunningTaskId] = useState<string | null>(null);
     const [actionMessage, setActionMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -167,13 +193,20 @@ export const SchedulerView: React.FC = () => {
 
     // Save time change
     const saveTimeChange = async (task: SchedulerTask) => {
-        const parsed = timeToCron(editTime);
-        if (!parsed) {
-            setActionMessage({ type: 'error', text: 'Invalid time format. Use HH:MM (24-hour).' });
-            return;
+        // Convert 12-hour to 24-hour
+        let hour24 = editHour;
+        if (editPeriod === 'AM') {
+            hour24 = editHour === 12 ? 0 : editHour;
+        } else {
+            hour24 = editHour === 12 ? 12 : editHour + 12;
         }
 
-        const newCron = `${parsed.minute} ${parsed.hour} * * *`;
+        const newCron = buildCron({
+            hour: hour24,
+            minute: editMinute,
+            frequency: editFrequency,
+            dayOfWeek: editDayOfWeek,
+        });
         setSaving(true);
 
         try {
@@ -244,8 +277,23 @@ export const SchedulerView: React.FC = () => {
 
     // Start editing
     const startEditing = (task: SchedulerTask) => {
-        const time = cronToTime(task.cron_expression);
-        setEditTime(time || '14:00');
+        const parsed = parseCron(task.cron_expression);
+        if (parsed) {
+            const h24 = parsed.hour;
+            const period = h24 >= 12 ? 'PM' : 'AM';
+            const h12 = h24 === 0 ? 12 : h24 > 12 ? h24 - 12 : h24;
+            setEditHour(h12);
+            setEditMinute(parsed.minute);
+            setEditPeriod(period as 'AM' | 'PM');
+            setEditFrequency(parsed.frequency);
+            setEditDayOfWeek(parsed.dayOfWeek);
+        } else {
+            setEditHour(2);
+            setEditMinute(0);
+            setEditPeriod('PM');
+            setEditFrequency('daily');
+            setEditDayOfWeek(1);
+        }
         setEditingTaskId(task.id);
     };
 
@@ -355,31 +403,105 @@ export const SchedulerView: React.FC = () => {
                                     {task.description}
                                 </p>
 
-                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
+                                <div className={`grid grid-cols-1 ${editingTaskId === task.id ? 'sm:grid-cols-1' : 'sm:grid-cols-3'} gap-4 text-sm`}>
                                     {/* Schedule */}
-                                    <div>
+                                    <div className={editingTaskId === task.id ? 'sm:col-span-3' : ''}>
                                         <span className="font-medium text-gray-500 dark:text-gray-400 text-xs uppercase tracking-wider">Schedule</span>
                                         {editingTaskId === task.id ? (
-                                            <div className="mt-1 flex items-center gap-2">
-                                                <input
-                                                    type="time"
-                                                    value={editTime}
-                                                    onChange={e => setEditTime(e.target.value)}
-                                                    className="block w-28 px-2 py-1 text-sm text-gray-900 dark:text-white bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                />
-                                                <button
-                                                    onClick={() => saveTimeChange(task)}
-                                                    disabled={saving}
-                                                    className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 text-sm font-medium disabled:opacity-50"
-                                                >
-                                                    {saving ? '...' : 'Save'}
-                                                </button>
-                                                <button
-                                                    onClick={() => setEditingTaskId(null)}
-                                                    className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 text-sm"
-                                                >
-                                                    Cancel
-                                                </button>
+                                            <div className="mt-2 space-y-3">
+                                                {/* Frequency Toggle */}
+                                                <div className="flex items-center gap-1 p-1 bg-gray-100 dark:bg-gray-700 rounded-lg w-fit">
+                                                    {(['daily', 'weekly'] as const).map(f => (
+                                                        <button
+                                                            key={f}
+                                                            onClick={() => setEditFrequency(f)}
+                                                            className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                                                                editFrequency === f
+                                                                    ? 'bg-blue-600 text-white shadow-sm'
+                                                                    : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white'
+                                                            }`}
+                                                        >
+                                                            {f.charAt(0).toUpperCase() + f.slice(1)}
+                                                        </button>
+                                                    ))}
+                                                </div>
+
+                                                {/* Day of Week Selector (weekly only) */}
+                                                {editFrequency === 'weekly' && (
+                                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                                        {DAY_ABBREVS.map((day, idx) => (
+                                                            <button
+                                                                key={day}
+                                                                onClick={() => setEditDayOfWeek(idx)}
+                                                                className={`w-10 h-10 rounded-full text-xs font-semibold transition-colors ${
+                                                                    editDayOfWeek === idx
+                                                                        ? 'bg-blue-600 text-white shadow-sm'
+                                                                        : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                                                                }`}
+                                                            >
+                                                                {day}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                )}
+
+                                                {/* Time Picker */}
+                                                <div className="flex items-center gap-2">
+                                                    <div className="flex items-center bg-gray-100 dark:bg-gray-700 rounded-lg p-1 gap-1">
+                                                        {/* Hour */}
+                                                        <select
+                                                            value={editHour}
+                                                            onChange={e => setEditHour(parseInt(e.target.value, 10))}
+                                                            className="bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm font-medium rounded-md px-2 py-1.5 border-0 focus:ring-2 focus:ring-blue-500 appearance-none cursor-pointer"
+                                                        >
+                                                            {Array.from({ length: 12 }, (_, i) => i + 1).map(h => (
+                                                                <option key={h} value={h}>{String(h).padStart(2, '0')}</option>
+                                                            ))}
+                                                        </select>
+                                                        <span className="text-gray-400 dark:text-gray-500 font-bold text-lg">:</span>
+                                                        {/* Minute */}
+                                                        <select
+                                                            value={editMinute}
+                                                            onChange={e => setEditMinute(parseInt(e.target.value, 10))}
+                                                            className="bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm font-medium rounded-md px-2 py-1.5 border-0 focus:ring-2 focus:ring-blue-500 appearance-none cursor-pointer"
+                                                        >
+                                                            {Array.from({ length: 60 }, (_, i) => i).map(m => (
+                                                                <option key={m} value={m}>{String(m).padStart(2, '0')}</option>
+                                                            ))}
+                                                        </select>
+                                                        {/* AM/PM */}
+                                                        <div className="flex rounded-md overflow-hidden ml-1">
+                                                            {(['AM', 'PM'] as const).map(p => (
+                                                                <button
+                                                                    key={p}
+                                                                    onClick={() => setEditPeriod(p)}
+                                                                    className={`px-3 py-1.5 text-xs font-semibold transition-colors ${
+                                                                        editPeriod === p
+                                                                            ? 'bg-blue-600 text-white'
+                                                                            : 'bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                                                                    }`}
+                                                                >
+                                                                    {p}
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Save / Cancel */}
+                                                    <button
+                                                        onClick={() => saveTimeChange(task)}
+                                                        disabled={saving}
+                                                        className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
+                                                    >
+                                                        {saving ? 'Saving...' : 'Save'}
+                                                    </button>
+                                                    <button
+                                                        onClick={() => setEditingTaskId(null)}
+                                                        className="px-4 py-1.5 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 text-sm font-medium rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                                                    >
+                                                        Cancel
+                                                    </button>
+                                                </div>
                                             </div>
                                         ) : (
                                             <div className="mt-1 flex items-center gap-2">
@@ -397,21 +519,23 @@ export const SchedulerView: React.FC = () => {
                                         )}
                                     </div>
 
-                                    {/* Last Run */}
-                                    <div>
-                                        <span className="font-medium text-gray-500 dark:text-gray-400 text-xs uppercase tracking-wider">Last Run</span>
-                                        <p className="mt-1 text-gray-900 dark:text-white">
-                                            {formatDate(task.last_run_at)}
-                                        </p>
-                                    </div>
-
-                                    {/* API Endpoint */}
-                                    <div>
-                                        <span className="font-medium text-gray-500 dark:text-gray-400 text-xs uppercase tracking-wider">Endpoint</span>
-                                        <p className="mt-1 font-mono text-xs text-gray-600 dark:text-gray-400 truncate" title={task.api_endpoint}>
-                                            {task.api_endpoint}
-                                        </p>
-                                    </div>
+                                    {/* Last Run & Endpoint - shown below when editing */}
+                                    {editingTaskId !== task.id && (
+                                        <>
+                                            <div>
+                                                <span className="font-medium text-gray-500 dark:text-gray-400 text-xs uppercase tracking-wider">Last Run</span>
+                                                <p className="mt-1 text-gray-900 dark:text-white">
+                                                    {formatDate(task.last_run_at)}
+                                                </p>
+                                            </div>
+                                            <div>
+                                                <span className="font-medium text-gray-500 dark:text-gray-400 text-xs uppercase tracking-wider">Endpoint</span>
+                                                <p className="mt-1 font-mono text-xs text-gray-600 dark:text-gray-400 truncate" title={task.api_endpoint}>
+                                                    {task.api_endpoint}
+                                                </p>
+                                            </div>
+                                        </>
+                                    )}
                                 </div>
 
                                 {/* Run Now Button + View Logs link */}
