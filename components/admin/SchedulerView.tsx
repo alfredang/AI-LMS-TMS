@@ -438,8 +438,10 @@ export const SchedulerView: React.FC = () => {
                                     {task.description}
                                 </p>
 
-                                {/* Email Template Selector */}
-                                {EMAIL_TEMPLATE_TASKS.includes(task.id) && (() => {
+                                {/* Email Template & Days in Advance Settings */}
+                                {(EMAIL_TEMPLATE_TASKS.includes(task.id) || DAYS_IN_ADVANCE_TASKS.includes(task.id)) && (() => {
+                                    const showTemplate = EMAIL_TEMPLATE_TASKS.includes(task.id);
+                                    const showDays = DAYS_IN_ADVANCE_TASKS.includes(task.id);
                                     const currentTemplate = task.email_template || 'final_course_confirmation';
                                     const currentLabel = EMAIL_TEMPLATES.find(t => t.value === currentTemplate)?.label || currentTemplate;
                                     const isOpen = templateDropdownOpen === task.id;
@@ -465,108 +467,86 @@ export const SchedulerView: React.FC = () => {
                                         }
                                     };
 
-                                    return (
-                                        <div className="mb-4">
-                                            <label className="font-medium text-gray-500 dark:text-gray-400 text-xs uppercase tracking-wider block mb-1.5">Email Template</label>
-                                            <div className="relative w-full max-w-sm" ref={isOpen ? templateDropdownRef : undefined}>
-                                                <button
-                                                    onClick={() => setTemplateDropdownOpen(isOpen ? null : task.id)}
-                                                    className="w-full flex items-center justify-between px-3 py-2.5 text-sm font-medium text-gray-900 dark:text-white bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:border-blue-400 dark:hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
-                                                >
-                                                    <div className="flex items-center gap-2">
-                                                        <Icon name={IconName.Mail} className="w-4 h-4 text-blue-500" />
-                                                        <span>{currentLabel}</span>
-                                                    </div>
-                                                    <svg className={`w-4 h-4 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                                    </svg>
-                                                </button>
+                                    const handleDaysChange = async (delta: number) => {
+                                        const current = task.days_in_advance ?? 3;
+                                        const newVal = current + delta;
+                                        if (newVal < 1 || newVal > 30) return;
+                                        try {
+                                            const res = await fetch('/api/admin/scheduler', {
+                                                method: 'PUT',
+                                                headers: { 'Content-Type': 'application/json' },
+                                                body: JSON.stringify({ taskId: task.id, days_in_advance: newVal }),
+                                            });
+                                            const data = await res.json();
+                                            if (data.success) setTasks(prev => prev.map(t => t.id === task.id ? data.task : t));
+                                        } catch { /* silent */ }
+                                    };
 
-                                                {isOpen && (
-                                                    <div className="absolute z-50 mt-1 w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-xl max-h-60 overflow-y-auto">
-                                                        {EMAIL_TEMPLATES.map(t => {
-                                                            const isSelected = t.value === currentTemplate;
-                                                            return (
-                                                                <button
-                                                                    key={t.value}
-                                                                    onClick={() => handleSelect(t.value)}
-                                                                    className={`w-full flex items-center gap-3 px-3 py-2.5 text-sm transition-colors ${
-                                                                        isSelected
-                                                                            ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-semibold'
-                                                                            : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
-                                                                    }`}
-                                                                >
-                                                                    <Icon name={IconName.Mail} className={`w-4 h-4 flex-shrink-0 ${isSelected ? 'text-blue-500' : 'text-gray-400 dark:text-gray-500'}`} />
-                                                                    <span className="flex-1 text-left">{t.label}</span>
-                                                                    {isSelected && (
-                                                                        <svg className="w-4 h-4 text-blue-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                                                                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                                                                        </svg>
-                                                                    )}
-                                                                </button>
-                                                            );
-                                                        })}
+                                    return (
+                                        <div className="mb-4 flex flex-wrap items-end gap-6">
+                                            {showTemplate && (
+                                                <div>
+                                                    <label className="font-medium text-gray-500 dark:text-gray-400 text-xs uppercase tracking-wider block mb-1.5">Email Template</label>
+                                                    <div className="relative w-72" ref={isOpen ? templateDropdownRef : undefined}>
+                                                        <button
+                                                            onClick={() => setTemplateDropdownOpen(isOpen ? null : task.id)}
+                                                            className="w-full flex items-center justify-between px-3 py-2 text-sm font-medium text-gray-900 dark:text-white bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:border-blue-400 dark:hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+                                                        >
+                                                            <div className="flex items-center gap-2">
+                                                                <Icon name={IconName.Mail} className="w-4 h-4 text-blue-500" />
+                                                                <span>{currentLabel}</span>
+                                                            </div>
+                                                            <svg className={`w-4 h-4 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                                            </svg>
+                                                        </button>
+
+                                                        {isOpen && (
+                                                            <div className="absolute z-50 mt-1 w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-xl max-h-60 overflow-y-auto">
+                                                                {EMAIL_TEMPLATES.map(t => {
+                                                                    const isSelected = t.value === currentTemplate;
+                                                                    return (
+                                                                        <button
+                                                                            key={t.value}
+                                                                            onClick={() => handleSelect(t.value)}
+                                                                            className={`w-full flex items-center gap-3 px-3 py-2.5 text-sm transition-colors ${
+                                                                                isSelected
+                                                                                    ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-semibold'
+                                                                                    : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+                                                                            }`}
+                                                                        >
+                                                                            <Icon name={IconName.Mail} className={`w-4 h-4 flex-shrink-0 ${isSelected ? 'text-blue-500' : 'text-gray-400 dark:text-gray-500'}`} />
+                                                                            <span className="flex-1 text-left">{t.label}</span>
+                                                                            {isSelected && (
+                                                                                <svg className="w-4 h-4 text-blue-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                                                                                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                                                                </svg>
+                                                                            )}
+                                                                        </button>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                        )}
                                                     </div>
-                                                )}
-                                            </div>
+                                                </div>
+                                            )}
+
+                                            {showDays && (
+                                                <div>
+                                                    <label className="font-medium text-gray-500 dark:text-gray-400 text-xs uppercase tracking-wider block mb-1.5">Days in Advance</label>
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="flex items-center bg-gray-100 dark:bg-gray-700 rounded-lg p-1 gap-1">
+                                                            <button onClick={() => handleDaysChange(-1)} className="w-7 h-7 flex items-center justify-center rounded-md bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 font-bold transition-colors">−</button>
+                                                            <span className="w-8 text-center text-sm font-bold text-gray-900 dark:text-white">{task.days_in_advance ?? 3}</span>
+                                                            <button onClick={() => handleDaysChange(1)} className="w-7 h-7 flex items-center justify-center rounded-md bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 font-bold transition-colors">+</button>
+                                                        </div>
+                                                        <span className="text-xs text-gray-500 dark:text-gray-400">day{(task.days_in_advance ?? 3) !== 1 ? 's' : ''} before class</span>
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
                                     );
                                 })()}
-
-                                {/* Days in Advance Setting */}
-                                {DAYS_IN_ADVANCE_TASKS.includes(task.id) && (
-                                    <div className="mb-4">
-                                        <label className="font-medium text-gray-500 dark:text-gray-400 text-xs uppercase tracking-wider block mb-1.5">Days in Advance</label>
-                                        <div className="flex items-center gap-3">
-                                            <div className="flex items-center bg-gray-100 dark:bg-gray-700 rounded-lg p-1 gap-1">
-                                                <button
-                                                    onClick={async () => {
-                                                        const current = task.days_in_advance ?? 3;
-                                                        if (current <= 1) return;
-                                                        const newVal = current - 1;
-                                                        try {
-                                                            const res = await fetch('/api/admin/scheduler', {
-                                                                method: 'PUT',
-                                                                headers: { 'Content-Type': 'application/json' },
-                                                                body: JSON.stringify({ taskId: task.id, days_in_advance: newVal }),
-                                                            });
-                                                            const data = await res.json();
-                                                            if (data.success) setTasks(prev => prev.map(t => t.id === task.id ? data.task : t));
-                                                        } catch { /* silent */ }
-                                                    }}
-                                                    className="w-8 h-8 flex items-center justify-center rounded-md bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 font-bold text-lg transition-colors"
-                                                >
-                                                    −
-                                                </button>
-                                                <span className="w-10 text-center text-sm font-bold text-gray-900 dark:text-white">
-                                                    {task.days_in_advance ?? 3}
-                                                </span>
-                                                <button
-                                                    onClick={async () => {
-                                                        const current = task.days_in_advance ?? 3;
-                                                        if (current >= 30) return;
-                                                        const newVal = current + 1;
-                                                        try {
-                                                            const res = await fetch('/api/admin/scheduler', {
-                                                                method: 'PUT',
-                                                                headers: { 'Content-Type': 'application/json' },
-                                                                body: JSON.stringify({ taskId: task.id, days_in_advance: newVal }),
-                                                            });
-                                                            const data = await res.json();
-                                                            if (data.success) setTasks(prev => prev.map(t => t.id === task.id ? data.task : t));
-                                                        } catch { /* silent */ }
-                                                    }}
-                                                    className="w-8 h-8 flex items-center justify-center rounded-md bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 font-bold text-lg transition-colors"
-                                                >
-                                                    +
-                                                </button>
-                                            </div>
-                                            <span className="text-sm text-gray-500 dark:text-gray-400">
-                                                day{(task.days_in_advance ?? 3) !== 1 ? 's' : ''} before class starts
-                                            </span>
-                                        </div>
-                                    </div>
-                                )}
 
                                 <div className={`grid grid-cols-1 ${editingTaskId === task.id ? 'sm:grid-cols-1' : 'sm:grid-cols-3'} gap-4 text-sm`}>
                                     {/* Schedule */}
