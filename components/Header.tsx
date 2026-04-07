@@ -199,8 +199,8 @@ const Header: React.FC = () => {
   const navConfig = {
     [UserRole.Learner]: [
       { view: View.Courses, label: 'My Classes', icon: IconName.BookOpen },
-      { view: View.Courses, label: 'Certificate Delivery', icon: IconName.Award, href: 'https://goo.gl/R2eumq' },
-      { view: View.Courses, label: 'TRAQOM Survey', icon: IconName.ClipboardCheck, href: 'https://ssgtraqom.qualtrics.com/jfe/form/SV_3K9i7rTJ9OLsauW?Q_CHL=qr' },
+      { view: View.BillingHistory, label: 'Billing', icon: IconName.DollarSign },
+      { view: View.CertificateHistory, label: 'Certificate', icon: IconName.Award },
     ],
     [UserRole.Trainer]: [
       { view: View.Dashboard, label: 'My Classes', icon: IconName.BookOpen, trainerPage: TrainerPage.MyClasses },
@@ -308,7 +308,7 @@ const Header: React.FC = () => {
                     }
                   }}
                   className={`flex items-center justify-center space-x-1 px-2 sm:px-2.5 xl:px-3 py-2 rounded-md text-xs xl:text-sm font-medium transition-colors whitespace-nowrap ${isActive
-                    ? 'bg-primary text-white'
+                    ? 'text-primary'
                     : 'text-on-surface hover:bg-surface-elevated hover:text-primary'
                     }`}
                 >
