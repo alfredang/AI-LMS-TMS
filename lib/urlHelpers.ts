@@ -11,9 +11,15 @@ import { getBaseUrl } from './config';
  * @returns Full API URL
  */
 export function getApiUrl(path: string): string {
-  const baseUrl = getBaseUrl();
   // Ensure path starts with /
   const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+  // On the client side, always use relative URLs so requests go to the current origin.
+  // Absolute URLs built from NEXT_PUBLIC_BASE_URL can point to the wrong host (e.g. prod)
+  // when running locally, causing "Failed to fetch" / CORS errors.
+  if (typeof window !== 'undefined') {
+    return normalizedPath;
+  }
+  const baseUrl = getBaseUrl();
   return `${baseUrl}${normalizedPath}`;
 }
 

@@ -25,9 +25,39 @@ export interface SchedulerTask {
     updated_at: string;
 }
 
-// ── In-memory map of active cron jobs ─────────────────────────────────────────
+// ── Cross-module-instance singleton state ─────────────────────────────────────
+// Turbopack bundles this module into multiple chunks (one per entry point that
+// imports it — e.g. instrumentation.ts and pages/api/admin/scheduler.ts), each
+// with its own JavaScript module instance and its own top-level state. We hoist
+// shared state onto globalThis so all instances see the same Map and Set.
+// Without this, scheduleTask()'s "stop existing job" logic can't see jobs
+// registered by sibling module instances → cron jobs stack → tasks fire 2×.
+// Root cause: .project/research/rca-scheduler-double-fire.md
 
-const activeJobs = new Map<string, ScheduledTask>();
+type SchedulerGlobals = {
+    activeJobs: Map<string, ScheduledTask>;
+    inFlight: Set<string>;
+    initialized: boolean;
+};
+
+const globalRef = globalThis as unknown as { __lmsScheduler?: SchedulerGlobals };
+
+if (!globalRef.__lmsScheduler) {
+    globalRef.__lmsScheduler = {
+        activeJobs: new Map<string, ScheduledTask>(),
+        inFlight: new Set<string>(),
+        initialized: false,
+    };
+}
+
+const schedulerState = globalRef.__lmsScheduler;
+
+// Diagnostic: every module instance gets a unique ID logged at load time.
+// After deploy, look for two different INSTANCE_ID values in container logs
+// alongside identical activeJobs.size — that proves the singleton works.
+// TODO: remove this diagnostic log in a follow-up commit once verified.
+const INSTANCE_ID = Math.random().toString(36).slice(2, 8);
+console.log(`⏰ [Scheduler] module instance loaded — instance=${INSTANCE_ID} activeJobs.size=${schedulerState.activeJobs.size} initialized=${schedulerState.initialized}`);
 
 // ── Ensure the scheduler_config table exists ──────────────────────────────────
 
@@ -143,8 +173,19 @@ function getDirectHandler(taskId: string): TaskHandler | undefined {
 // ── Execute a scheduled task ──────────────────────────────────────────────────
 
 async function executeTask(task: SchedulerTask) {
+    // In-flight lock — defense-in-depth against duplicate invocations from any
+    // source (sibling module instance's cron, admin Run Now while cron is mid-run,
+    // or any future code path). Lives on globalThis singleton so all module
+    // instances share the same lock set. JavaScript's single-threaded event loop
+    // makes the has-then-add sequence atomic.
+    if (schedulerState.inFlight.has(task.id)) {
+        console.log(`⏰ [Scheduler] "${task.name}" already running — skipping duplicate invocation [instance=${INSTANCE_ID}]`);
+        return { success: false, error: 'already in-flight' };
+    }
+    schedulerState.inFlight.add(task.id);
+
     const startTime = new Date();
-    console.log(`⏰ [Scheduler] Running "${task.name}" at ${startTime.toISOString()}`);
+    console.log(`⏰ [Scheduler] Running "${task.name}" at ${startTime.toISOString()} [instance=${INSTANCE_ID}]`);
 
     try {
         let data: any;
@@ -202,17 +243,20 @@ async function executeTask(task: SchedulerTask) {
         ).catch(() => {});
 
         return { success: false, error: errorMsg };
+    } finally {
+        // Always release the lock, even on error/throw, so future invocations work.
+        schedulerState.inFlight.delete(task.id);
     }
 }
 
 // ── Schedule a single task ────────────────────────────────────────────────────
 
 function scheduleTask(task: SchedulerTask) {
-    // Stop existing job if any
-    const existing = activeJobs.get(task.id);
+    // Stop existing job if any (cross-instance via globalThis singleton)
+    const existing = schedulerState.activeJobs.get(task.id);
     if (existing) {
         existing.stop();
-        activeJobs.delete(task.id);
+        schedulerState.activeJobs.delete(task.id);
     }
 
     if (!task.enabled) {
@@ -231,15 +275,21 @@ function scheduleTask(task: SchedulerTask) {
         timezone: 'Asia/Singapore',
     });
 
-    activeJobs.set(task.id, job);
-    console.log(`⏰ [Scheduler] Scheduled "${task.name}" — cron: ${task.cron_expression} (SGT)`);
+    schedulerState.activeJobs.set(task.id, job);
+    console.log(`⏰ [Scheduler] Scheduled "${task.name}" — cron: ${task.cron_expression} (SGT) [instance=${INSTANCE_ID}]`);
 }
 
 // ── Initialise all scheduled tasks ────────────────────────────────────────────
 
 export async function initScheduler() {
+    // Idempotency guard — safe to call from multiple module instances.
+    // initialized is on the globalThis singleton so any instance can see it.
+    if (schedulerState.initialized) {
+        console.log(`⏰ [Scheduler] initScheduler called again — already initialised, skipping [instance=${INSTANCE_ID}]`);
+        return;
+    }
     try {
-        console.log('⏰ [Scheduler] Initialising...');
+        console.log(`⏰ [Scheduler] Initialising... [instance=${INSTANCE_ID}]`);
         await ensureSchedulerTable();
         await seedDefaults();
 
@@ -251,7 +301,9 @@ export async function initScheduler() {
             scheduleTask(task);
         }
 
-        console.log(`⏰ [Scheduler] Initialised ${result.rows.length} task(s)`);
+        // Only mark initialised on the success path so a failed init can be retried.
+        schedulerState.initialized = true;
+        console.log(`⏰ [Scheduler] Initialised ${result.rows.length} task(s) [instance=${INSTANCE_ID}]`);
     } catch (err) {
         console.error('⏰ [Scheduler] Failed to initialise:', err);
     }
@@ -266,11 +318,11 @@ export async function reloadTask(taskId: string) {
     );
 
     if (result.rows.length === 0) {
-        // Task was deleted — stop it
-        const existing = activeJobs.get(taskId);
+        // Task was deleted — stop it (cross-instance via globalThis singleton)
+        const existing = schedulerState.activeJobs.get(taskId);
         if (existing) {
             existing.stop();
-            activeJobs.delete(taskId);
+            schedulerState.activeJobs.delete(taskId);
         }
         return;
     }

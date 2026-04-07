@@ -337,7 +337,7 @@ const AdminLayout: React.FC = () => {
       case AdminPage.ViewCourseRun:
         return <ViewCourseRunView />;
       case AdminPage.EditCourseRun:
-        return <EditCourseRunView />;
+        return <EditCourseRunView key={selectedCourseRunId ?? 'edit-course-run'} />;
       case AdminPage.SearchAssessments:
         return <SearchAssessmentsView />;
       case AdminPage.ViewAssessment:

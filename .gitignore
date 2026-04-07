@@ -17,6 +17,7 @@ build/
 
 # Local settings (sensitive config, not uploaded to GitHub)
 config/local-settings.json
+service-account.json
 
 # IDE and editor files
 .vscode/
@@ -81,6 +82,9 @@ jspm_packages/
 
 # dotenv environment variables file
 .env
+
+# Local SSG certificates / keys (never commit)
+certs/
 
 # parcel-bundler cache (https://parceljs.org/)
 .cache
