@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
 import AiChatbot from '../components/AiChatbot';
@@ -72,8 +72,9 @@ type FinancePage =
   | 'tpgSearchGrant' | 'tpgViewGrantStatus';
 
 const FinanceLayout: React.FC = () => {
-  const { currentView } = useLms();
-  const [page, setPage] = useState<FinancePage>('dashboard');
+  const { currentView, financePage: ctxFinancePage, setFinancePage: ctxSetFinancePage } = useLms();
+  const page = ctxFinancePage as FinancePage;
+  const setPage = (p: FinancePage) => ctxSetFinancePage(p);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isDesktopSidebarCollapsed, setIsDesktopSidebarCollapsed] = useState(false);
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
@@ -93,6 +94,21 @@ const FinanceLayout: React.FC = () => {
   const toggleSection = (key: string) => {
     setOpenSections(prev => ({ ...prev, [key]: !prev[key] }));
   };
+
+  // Auto-open sections when navigating from header
+  useEffect(() => {
+    if (page.startsWith('tpg')) {
+      setOpenSections(prev => ({ ...prev, tpgManagement: true }));
+      // If it's the generic 'tpgManagement' trigger from header, go to first TPG page
+      if (page === ('tpgManagement' as FinancePage)) {
+        setPage('tpgCreateClass');
+        setOpenSections(prev => ({ ...prev, tpgManagement: true, tpgCourseRun: true }));
+      }
+    }
+    if (['claimCheck', 'viewClaim', 'cancelClaim', 'uploadDocument'].includes(page)) {
+      setOpenSections(prev => ({ ...prev, claimManagement: true }));
+    }
+  }, [page]);
 
   const handleToggleSidebar = () => {
     if (typeof window !== 'undefined' && window.innerWidth >= 768) {

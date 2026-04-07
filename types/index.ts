@@ -22,7 +22,8 @@ export enum View {
   TrainerInvitationEmailTemplate = 'trainerInvitationEmailTemplate',
   FinanceManagement = 'financeManagement',
   BillingHistory = 'billingHistory',
-  CertificateHistory = 'certificateHistory'
+  CertificateHistory = 'certificateHistory',
+  SsgApiSummary = 'ssgApiSummary'
 }
 
 export enum UserRole {

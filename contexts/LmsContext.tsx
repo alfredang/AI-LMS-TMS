@@ -246,6 +246,8 @@ interface LmsContextType {
   setEditingCourseRun: (courseRun: any | null) => void;
   ssgApp: string;
   setSsgApp: (app: string) => void;
+  financePage: string;
+  setFinancePage: (page: string) => void;
   courseListPage: number;
   setCourseListPage: (page: number) => void;
   courseDetail: CourseDetail | null;
@@ -311,6 +313,7 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [courseEditMode, setCourseEditMode] = useState<'create' | 'edit' | 'view' | null>(null);
   const [editingCourseRun, setEditingCourseRun] = useState<any | null>(null);
   const [ssgApp, setSsgApp] = useState<string>('app2');  // default app, user can switch
+  const [financePage, setFinancePage] = useState<string>('dashboard');
   const [courseListPage, setCourseListPage] = useState(1);
   const [courseDetail, setCourseDetail] = useState<CourseDetail | null>(null);
   const [resourceLinks, setResourceLinks] = useState<{ id: string; topicId: string; type: string; title: string; url: string }[]>([]);
@@ -1597,6 +1600,8 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setEditingCourseRun,
     ssgApp,
     setSsgApp,
+    financePage,
+    setFinancePage,
     courseListPage,
     setCourseListPage,
     courseDetail,

@@ -156,15 +156,13 @@ export const EditCourseRunView: React.FC = () => {
             setSsgTrainers(ssgLinks.map((link: any) => link.trainer).filter(Boolean));
 
             // Populate form fields
-            const startDate = toDateInput(run.courseStartDate ?? run.courseDates?.start);
+            const startDate = toDateInput(run.courseStartDate || run.courseDates?.start);
             setCourseStartDate(startDate);
-            setCourseEndDate(toDateInput(run.courseEndDate ?? run.courseDates?.end));
+            setCourseEndDate(toDateInput(run.courseEndDate || run.courseDates?.end));
 
-            // Keep original SSG registration dates; only default if empty
-            console.log('[dates] raw registrationClosingDate:', run.registrationClosingDate, '| registrationDates:', run.registrationDates);
+            // Use SSG registration dates when present (?? avoids treating "" as missing vs ||)
             const existingOpening = toDateInput(run.registrationOpeningDate ?? run.registrationDates?.opening);
             const existingClosing = toDateInput(run.registrationClosingDate ?? run.registrationDates?.closing);
-            console.log('[dates] existingOpening:', existingOpening, '| existingClosing:', existingClosing);
             const today = new Date().toISOString().split('T')[0];
             setOpeningRegistrationDate(existingOpening || today);
             if (existingClosing) {
@@ -296,6 +294,12 @@ export const EditCourseRunView: React.FC = () => {
                 `/api/ssg/courses/courseRuns/${encodeURIComponent(courseRunId.trim())}?action=edit`,
                 { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
             );
+
+            const contentType = res.headers.get('content-type') || '';
+            if (!contentType.includes('application/json')) {
+                const text = await res.text();
+                throw new Error(`Server error ${res.status}: ${text.slice(0, 300)}`);
+            }
 
             const data = await res.json();
 
@@ -479,6 +483,7 @@ export const EditCourseRunView: React.FC = () => {
                                 <input type="date" value={courseStartDate} onChange={e => {
                                     setCourseStartDate(e.target.value);
                                     if (e.target.value) {
+                                        setOpeningRegistrationDate(new Date().toISOString().split('T')[0]);
                                         const dayBefore = new Date(e.target.value);
                                         dayBefore.setDate(dayBefore.getDate() - 1);
                                         setClosingRegistrationDate(dayBefore.toISOString().split('T')[0]);

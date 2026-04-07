@@ -1174,7 +1174,11 @@ CREATE TABLE public.training_provider (
     privacy_policy text,
     acceptable_use_policy text,
     otp_email_subject text,
-    otp_email_body text
+    otp_email_body text,
+    app1_cert_expiry               TIMESTAMP WITH TIME ZONE,
+    app2_cert_expiry               TIMESTAMP WITH TIME ZONE,
+    app3_cert_expiry               TIMESTAMP WITH TIME ZONE,
+    app4_secret_last_generated_at  TIMESTAMP WITH TIME ZONE
 );
 
 
@@ -2259,6 +2263,20 @@ CREATE INDEX IF NOT EXISTS idx_link_assessment_submission_course_run ON public.l
 
 COMMENT ON TABLE public.link_assessment_submission IS 'Tracks file submissions for link-based assessments (Written/Practical). Separate from the submission table which handles file-based assessments.';
 COMMENT ON COLUMN public.link_assessment_submission.assessment_type IS 'Type of link-based assessment: written or practical';
+
+-- api_subscription: SSG API subscription status per app
+CREATE TABLE IF NOT EXISTS public.api_subscription (
+    id          SERIAL PRIMARY KEY,
+    api_name    VARCHAR(255) NOT NULL,
+    version     VARCHAR(50),
+    app1_status VARCHAR(50),   -- SKILLETO TERTIARY
+    app2_status VARCHAR(50),   -- Training Management System
+    app3_status VARCHAR(50),   -- Tertiary Infotech Academy
+    app4_status VARCHAR(50),   -- TMS API (OAuth)
+    sort_order  INT NOT NULL DEFAULT 0,
+    created_at  TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at  TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
 
 -- Completed on 2026-01-21 00:30:37
 

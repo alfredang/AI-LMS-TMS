@@ -21,6 +21,7 @@ const TrainingProviderSidebar: React.FC<TrainingProviderSidebarProps> = ({ onNav
         { view: View.AdminManagement, label: 'Role Management', icon: IconName.Admin },
         { view: View.FinanceManagement, label: 'Finance Management', icon: IconName.DollarSign },
         { view: View.Profile, label: 'Company Setting', icon: IconName.MyAccount },
+        { view: View.SsgApiSummary, label: 'SSG API Summary', icon: IconName.ClipboardCheck },
         { view: View.ApiEndpoints, label: 'API Endpoints', icon: IconName.Link },
         { view: View.Documents, label: 'Documents', icon: IconName.FileText },
         { view: View.Scheduler, label: 'Task Scheduler', icon: IconName.Calendar },
