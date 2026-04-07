@@ -226,7 +226,6 @@ const Header: React.FC = () => {
       { view: View.Dashboard, label: 'Training Dashboard', icon: IconName.Dashboard },
       { view: View.Profile, label: 'Company Setting', icon: IconName.MyAccount },
       { view: View.Scheduler, label: 'Task Scheduler', icon: IconName.Calendar },
-      { view: View.Webhooks, label: 'Webhooks', icon: IconName.Link },
     ]
   };
 
@@ -274,9 +273,7 @@ const Header: React.FC = () => {
                 ? trainerPage === item.trainerPage
                 : isFinanceItem
                   ? financePage === item.financePage
-                  : role === UserRole.TrainingProvider
-                    ? false
-                    : (role === UserRole.Admin && isAdminPageActive(item)) || (role !== UserRole.Admin && currentView === item.view);
+                  : (role === UserRole.Admin && isAdminPageActive(item)) || (role !== UserRole.Admin && currentView === item.view);
 
               return (
                 <a
