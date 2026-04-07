@@ -1629,6 +1629,34 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                             </p>
                         )}
                     </div>
+                    <div className="p-3 bg-surface-elevated rounded-md border border-default">
+                        <label className="block text-sm font-medium text-on-surface-secondary mb-1 font-semibold">
+                            Certificate Attendance Threshold (%)
+                        </label>
+                        {isEditing ? (
+                            <input
+                                type="number"
+                                min={1}
+                                max={100}
+                                value={formData.adminSettings.certificateAttendanceThreshold ?? 60}
+                                onChange={(e) =>
+                                    setFormData((prev) => ({
+                                        ...prev,
+                                        adminSettings: {
+                                            ...prev.adminSettings,
+                                            certificateAttendanceThreshold: Math.min(100, Math.max(1, parseInt(e.target.value || '60', 10) || 60)),
+                                        },
+                                    }))
+                                }
+                                className={inputClasses}
+                                placeholder="60"
+                            />
+                        ) : (
+                            <p className="text-sm text-on-surface">
+                                {(formData.adminSettings.certificateAttendanceThreshold ?? 60)}%
+                            </p>
+                        )}
+                    </div>
                     {Object.entries(adminSettingLabels).map(([key, label]) => (
                         <ToggleSwitch
                             key={key}

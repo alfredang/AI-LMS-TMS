@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useLms } from '@contexts/LmsContext';
+import { useAppVersion } from '@hooks/useAppVersion';
 import { View } from '@app-types';
 import { Icon, IconName } from '../ui/Icon';
 
@@ -9,13 +10,14 @@ interface TrainingProviderSidebarProps {
 
 const TrainingProviderSidebar: React.FC<TrainingProviderSidebarProps> = ({ onNavigate }) => {
     const { currentView, handleNavigation, selectedCourse } = useLms();
+    const appVersion = useAppVersion();
 
-    const templateViews = [View.OtpEmailTemplate, View.CertificateEmailTemplate, View.FeedbackEmailTemplate, View.PasswordResetEmailTemplate, View.TrainerInvitationEmailTemplate, View.PrivacyPolicy, View.AcceptableUsePolicy];
+    const templateViews = [View.OtpEmailTemplate, View.CertificateEmailTemplate, View.FeedbackEmailTemplate, View.PasswordResetEmailTemplate, View.TrainerInvitationEmailTemplate, View.FinalCourseConfirmationEmailTemplate, View.CourseConfirmationEmailTemplate, View.PrivacyPolicy, View.AcceptableUsePolicy];
     const [templatesOpen, setTemplatesOpen] = useState(templateViews.includes(currentView));
     const [usefulLinksOpen, setUsefulLinksOpen] = useState(false);
 
     const navItems = [
-        { view: View.Dashboard, label: 'Dashboard', icon: IconName.Dashboard },
+        { view: View.Dashboard, label: 'Training Dashboard', icon: IconName.Dashboard },
         { view: View.Courses, label: 'Courses', icon: IconName.Courses },
         { view: View.UserManagement, label: 'User Management', icon: IconName.Users },
         { view: View.AdminManagement, label: 'Role Management', icon: IconName.Admin },
@@ -33,6 +35,8 @@ const TrainingProviderSidebar: React.FC<TrainingProviderSidebarProps> = ({ onNav
         { view: View.FeedbackEmailTemplate, label: 'Feedback Email', icon: IconName.Chat },
         { view: View.PasswordResetEmailTemplate, label: 'Password Reset Email', icon: IconName.Shield },
         { view: View.TrainerInvitationEmailTemplate, label: 'Trainer Invitation Email', icon: IconName.Send },
+        { view: View.FinalCourseConfirmationEmailTemplate, label: 'Final Course Confirmation Email', icon: IconName.Send },
+        { view: View.CourseConfirmationEmailTemplate, label: 'Course Confirmation Email', icon: IconName.Send },
         { view: View.PrivacyPolicy, label: 'Privacy Policy', icon: IconName.Shield },
         { view: View.AcceptableUsePolicy, label: 'Acceptable Use Policy', icon: IconName.ClipboardCheck },
     ];
@@ -157,6 +161,10 @@ const TrainingProviderSidebar: React.FC<TrainingProviderSidebarProps> = ({ onNav
                         You have full training provider privileges. Handle user data with care.
                     </p>
                 </div>
+            </div>
+
+            <div className="pt-6 mt-6 border-t border-gray-200 dark:border-gray-700">
+                <p className="px-3 text-[10px] text-gray-400 dark:text-gray-300 font-mono">version {appVersion}</p>
             </div>
         </nav>
     );

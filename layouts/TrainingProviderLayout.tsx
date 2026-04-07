@@ -21,6 +21,8 @@ import CertificateEmailTemplateView from '../components/training-provider/Certif
 import FeedbackEmailTemplateView from '../components/training-provider/FeedbackEmailTemplateView';
 import PasswordResetEmailTemplateView from '../components/training-provider/PasswordResetEmailTemplateView';
 import TrainerInvitationEmailTemplateView from '../components/training-provider/TrainerInvitationEmailTemplateView';
+import FinalCourseConfirmationEmailTemplateView from '../components/training-provider/FinalCourseConfirmationEmailTemplateView';
+import CourseConfirmationEmailTemplateView from '../components/training-provider/CourseConfirmationEmailTemplateView';
 import FinanceManagementView from '../components/training-provider/FinanceManagementView';
 import TrainingProviderSidebar from '../components/training-provider/TrainingProviderSidebar';
 import SchedulerView from '../components/admin/SchedulerView';
@@ -77,6 +79,10 @@ const TrainingProviderLayout: React.FC = () => {
         return <PasswordResetEmailTemplateView />;
       case View.TrainerInvitationEmailTemplate:
         return <TrainerInvitationEmailTemplateView />;
+      case View.FinalCourseConfirmationEmailTemplate:
+        return <FinalCourseConfirmationEmailTemplateView />;
+      case View.CourseConfirmationEmailTemplate:
+        return <CourseConfirmationEmailTemplateView />;
       case View.FinanceManagement:
         return <FinanceManagementView />;
       case View.Scheduler:
@@ -107,6 +113,8 @@ const TrainingProviderLayout: React.FC = () => {
       case View.FeedbackEmailTemplate: return 'Feedback Email Template';
       case View.PasswordResetEmailTemplate: return 'Password Reset Email Template';
       case View.TrainerInvitationEmailTemplate: return 'Trainer Invitation Email Template';
+      case View.FinalCourseConfirmationEmailTemplate: return 'Final Course Confirmation Email Template';
+      case View.CourseConfirmationEmailTemplate: return 'Course Confirmation Email Template';
       case View.FinanceManagement: return 'Finance Management';
       case View.Scheduler: return 'Task Scheduler';
       case View.SsgApiSummary: return 'SSG API Summary';

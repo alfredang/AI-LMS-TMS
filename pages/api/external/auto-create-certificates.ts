@@ -81,7 +81,7 @@ async function sendCertificateEmail(opts: {
     const result = await pool.query(`
         SELECT email_user, google_client_id, google_client_secret, google_refresh_token,
                google_slides_template_id, contact_person_name, company_email,
-               certificate_email_subject, certificate_email_body
+               certificate_email_subject, certificate_email_body, certificate_email_cc
         FROM training_provider LIMIT 1
     `);
     if (result.rows.length === 0) throw new Error('Training provider not found');
@@ -153,6 +153,7 @@ async function sendCertificateEmail(opts: {
         const rawEmail = [
             `From: ${senderName ? `${senderName} <${emailUser}>` : emailUser}`,
             `To: ${studentEmail}`,
+            ...(tpRow.certificate_email_cc ? [`Cc: ${tpRow.certificate_email_cc}`] : []),
             `Subject: ${subject}`,
             `MIME-Version: 1.0`,
             `Content-Type: multipart/mixed; boundary="${boundary}"`,
@@ -260,6 +261,17 @@ export async function runAutomation(targetDate?: string) {
     console.log(`[auto-create-certificates] Starting run ${runId} ${dateLabel} at ${new Date().toISOString()}`);
 
     try {
+        // 0. Read attendance threshold from admin settings (default 60%)
+        let attendanceThreshold = 60;
+        try {
+            const tpRes = await pool.query(`SELECT admin_settings FROM training_provider LIMIT 1`);
+            const adminSettings = tpRes.rows[0]?.admin_settings;
+            if (adminSettings?.certificateAttendanceThreshold) {
+                attendanceThreshold = parseInt(adminSettings.certificateAttendanceThreshold, 10) || 60;
+            }
+        } catch { /* use default */ }
+        console.log(`[auto-create-certificates] Attendance threshold: ${attendanceThreshold}%`);
+
         // 1. Find Course Runs Ending in the window (Last 2 days + Today)
         // This ensures timezone overlaps or previous day failures are caught.
         // If targetDate is provided, we only look at that specific date.
@@ -337,7 +349,7 @@ export async function runAutomation(targetDate?: string) {
                         const presentNrics = await fetchSsgSessionAttendance(
                             run.course_code, run.course_run_id, sess.ssg_session_id
                         );
-                        for (const nric of presentNrics) {
+                        for (const nric of Array.from(presentNrics)) {
                             ssgAttendanceCount[nric] = (ssgAttendanceCount[nric] || 0) + 1;
                         }
                     } catch (ssgErr) {
@@ -353,10 +365,10 @@ export async function runAutomation(targetDate?: string) {
                     const bestCount = Math.max(manualCount, ssgCount);
                     const percent = (bestCount / totalSessions) * 100;
                     (trainee as any).attended_count = bestCount;
-                    return percent >= 60;
+                    return percent >= attendanceThreshold;
                 });
                 const ssgFetchedCount = Object.keys(ssgAttendanceCount).length;
-                console.log(`[auto-create-certificates] ${run.course_run_id}: ${totalSessions} sessions, ${allLearnersRes.rows.length} enrolled, ${ssgFetchedCount} SSG e-attendance records, ${eligibleTrainees.length} learners with ≥60% attendance (best of manual/e-attendance).`);
+                console.log(`[auto-create-certificates] ${run.course_run_id}: ${totalSessions} sessions, ${allLearnersRes.rows.length} enrolled, ${ssgFetchedCount} SSG e-attendance records, ${eligibleTrainees.length} learners with ≥${attendanceThreshold}% attendance (best of manual/e-attendance).`);
 
                 for (const trainee of eligibleTrainees) {
                     const attendancePercent = Math.round((parseInt(trainee.attended_count, 10) / totalSessions) * 100);

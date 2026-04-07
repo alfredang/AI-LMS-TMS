@@ -20,6 +20,18 @@ export async function getDriveClient(): Promise<drive_v3.Drive> {
     return getGoogleDriveClient(pool);
 }
 
+// ── In-Memory Folder Cache ───────────────────────────────────────────────────
+
+/**
+ * Cache to mitigate Google Drive Search API eventual consistency (index delay).
+ * Format: Map<"parentFolderId::lower_case_folder_name", "folderId">
+ */
+const folderCache = new Map<string, string>();
+
+function getCacheKey(parentId: string, name: string): string {
+    return `${parentId}::${name.trim().toLowerCase()}`;
+}
+
 // ── Subfolder Helpers ────────────────────────────────────────────────────────
 
 /**
@@ -31,6 +43,11 @@ export async function findSubfolder(
     parentFolderId: string,
     folderName: string
 ): Promise<string | null> {
+    const cacheKey = getCacheKey(parentFolderId, folderName);
+    if (folderCache.has(cacheKey)) {
+        return folderCache.get(cacheKey)!;
+    }
+
     const safeName = folderName.replace(/'/g, "\\'");
     // Try exact match first
     let response = await drive.files.list({
@@ -40,7 +57,9 @@ export async function findSubfolder(
     });
 
     if (response.data.files && response.data.files.length > 0) {
-        return response.data.files[0].id!;
+        const id = response.data.files[0].id!;
+        folderCache.set(cacheKey, id);
+        return id;
     }
 
     // Fallback: search all folders in parent to handle trailing spaces or case differences
@@ -56,7 +75,9 @@ export async function findSubfolder(
         const target = folderName.trim().toLowerCase();
         const matched = files.find(f => f.name && f.name.trim().toLowerCase() === target);
         if (matched) {
-            return matched.id!;
+            const id = matched.id!;
+            folderCache.set(cacheKey, id);
+            return id;
         }
     }
 
@@ -93,12 +114,18 @@ export async function findSessionFolderByStartDate(
             });
             if (matched) {
                 console.log(`📁 Matched session folder by start date + common name "${trainerCommonName}": ${matched.name}`);
-                return matched.id!;
+                const id = matched.id!;
+                folderCache.set(getCacheKey(parentFolderId, matched.name!), id);
+                return id;
             }
         }
         // Fallback: match by start date prefix only
         const matched = files.find(f => f.name?.startsWith(startDatePrefix));
-        if (matched) return matched.id!;
+        if (matched) {
+            const id = matched.id!;
+            folderCache.set(getCacheKey(parentFolderId, matched.name!), id);
+            return id;
+        }
     }
     return null;
 }
@@ -120,7 +147,9 @@ export async function createSubfolder(
         fields: 'id',
     });
 
-    return response.data.id!;
+    const id = response.data.id!;
+    folderCache.set(getCacheKey(parentFolderId, folderName), id);
+    return id;
 }
 
 // ── Folder Name Builders ─────────────────────────────────────────────────────
@@ -161,6 +190,15 @@ export async function findCourseFolderByTgsRef(
     courseCode: string,
     courseName: string
 ): Promise<string | null> {
+    const expectedName = tgsRef && courseName && !courseName.includes(tgsRef)
+        ? `${tgsRef} ${courseName}`.trim()
+        : (`${courseCode} ${courseName}`).trim() || 'Unknown Course';
+        
+    const cacheKey = getCacheKey(rootFolderId, expectedName);
+    if (folderCache.has(cacheKey)) {
+        return folderCache.get(cacheKey)!;
+    }
+
     if (tgsRef) {
         const safeTgsRef = tgsRef.replace(/'/g, "\\'");
         const tgsResponse = await drive.files.list({
@@ -169,10 +207,11 @@ export async function findCourseFolderByTgsRef(
             spaces: 'drive',
         });
         if (tgsResponse.data.files && tgsResponse.data.files.length > 0) {
-            return tgsResponse.data.files[0].id!;
+            const id = tgsResponse.data.files[0].id!;
+            folderCache.set(cacheKey, id);
+            return id;
         }
     } else {
-        const expectedName = (`${courseCode} ${courseName}`).trim() || 'Unknown Course';
         return findSubfolder(drive, rootFolderId, expectedName);
     }
     return null;
