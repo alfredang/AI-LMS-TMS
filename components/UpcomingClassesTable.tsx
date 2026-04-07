@@ -548,40 +548,52 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                 ) : (
                     <>
                         <div className="overflow-x-auto">
-                            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                            <table className="divide-y divide-gray-200 dark:divide-gray-700" style={{ tableLayout: 'fixed', width: '2030px' }}>
+                                <colgroup>
+                                    <col style={{ width: '90px' }} />
+                                    <col style={{ width: '480px' }} />
+                                    <col style={{ width: '160px' }} />
+                                    <col style={{ width: '90px' }} />
+                                    <col style={{ width: '90px' }} />
+                                    <col style={{ width: '90px' }} />
+                                    <col style={{ width: '200px' }} />
+                                    <col style={{ width: '200px' }} />
+                                    <col style={{ width: '180px' }} />
+                                    <col style={{ width: '120px' }} />
+                                    <col style={{ width: '80px' }} />
+                                    <col style={{ width: '80px' }} />
+                                </colgroup>
                                 <thead className="bg-gray-50 dark:bg-gray-700/50">
                                     <tr className="border-b dark:border-gray-700">
                                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">COURSE RUN ID</th>
                                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">COURSE TITLE</th>
                                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">COURSE REF CODE</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">CLASS STATUS</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">DA ID</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">STATUS</th>
                                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">START DATE</th>
                                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">END DATE</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">ASSIGNED TRAINER (TPG)</th>
                                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">ASSIGNED TRAINER (LOCAL)</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">ASSIGNED TRAINER (TPG)</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">NEXT AVAILABLE TRAINER</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">SEND TRAINER INVITATION</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">ACTIONS</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">NEXT TRAINER</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">INVITE NEXT TRAINER</th>
+                                        <th colSpan={2} className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">ACTIONS</th>
                                     </tr>
                                 </thead>
                                 <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                                     {upcomingClasses.map((classItem, index) => (
                                         <tr key={index} className="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50">
                                             <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.courseRunId}</td>
-                                            <td className="px-4 py-2 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">{classItem.courseTitle}</td>
+                                            <td className="px-4 py-2 text-sm font-medium text-gray-900 dark:text-white overflow-hidden text-ellipsis">{classItem.courseTitle}</td>
                                             <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.courseCode}</td>
                                             <td className="px-4 py-2 whitespace-nowrap text-sm">
                                                 <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(classItem.classStatus || 'Unknown')}`}>
                                                     {classItem.classStatus}
                                                 </span>
                                             </td>
-                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.digitalAttendanceId || 'N/A'}</td>
                                             <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{formatDate(classItem.startDate)}</td>
                                             <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{formatDate(classItem.endDate)}</td>
-                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{renderTrainerCell(classItem.assignedTrainerLocal, classItem.assignedTrainerLocalEmail)}</td>
                                             <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{renderTrainerCell(classItem.assignedTrainerTpg, classItem.assignedTrainerTpgEmail)}</td>
-                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{renderTrainerCell(classItem.nextAvailableTrainer, classItem.nextAvailableTrainerEmail)}</td>
+                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{renderTrainerCell(classItem.assignedTrainerLocal, classItem.assignedTrainerLocalEmail)}</td>
+                                            <td className="px-4 py-2 text-sm text-gray-700 dark:text-gray-200 max-w-[150px]">{renderTrainerCell(classItem.nextAvailableTrainer, classItem.nextAvailableTrainerEmail)}</td>
                                             <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">
                                                 <div className="flex items-center gap-2">
                                                     {classItem.latestInvitationStatus && (
@@ -603,39 +615,35 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                                         {sendingInvitationFor === classItem.id ? (
                                                             <Icon name={IconName.Spinner} className="w-3.5 h-3.5 animate-spin" />
                                                         ) : (
-                                                            <Icon name={IconName.Send} className="w-3.5 h-3.5" />
+                                                            <>
+                                                                <Icon name={IconName.Send} className="w-3.5 h-3.5 mr-1" />
+                                                                SEND INVITE
+                                                            </>
                                                         )}
                                                     </Button>
                                                 </div>
                                             </td>
                                             <td className="px-4 py-2 whitespace-nowrap text-sm font-medium">
-                                                <div className="flex items-center space-x-2">
-                                                    <Button
-                                                        size="sm"
-                                                        variant="ghost"
-                                                        onClick={() => handleViewDetails(classItem.courseRunId)}
-                                                    >
-                                                        Details
-                                                    </Button>
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="sm"
-                                                        onClick={() => handleEditClass(classItem)}
-                                                        className="!text-blue-600 hover:!bg-blue-50"
-                                                    >
-                                                        <Icon name={IconName.Edit} className="w-4 h-4 mr-1" />
-                                                        Edit
-                                                    </Button>
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="sm"
-                                                        onClick={() => handleDelete(classItem.courseRunId, classItem.courseTitle)}
-                                                        className="!text-red-600 hover:!bg-red-50"
-                                                    >
-                                                        <Icon name={IconName.Delete} className="w-4 h-4 mr-1" />
-                                                        Delete
-                                                    </Button>
-                                                </div>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() => handleEditClass(classItem)}
+                                                    className="!text-blue-600 hover:!bg-blue-50"
+                                                >
+                                                    <Icon name={IconName.Edit} className="w-4 h-4 mr-1" />
+                                                    Edit
+                                                </Button>
+                                            </td>
+                                            <td className="px-4 py-2 whitespace-nowrap text-sm font-medium">
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() => handleDelete(classItem.courseRunId, classItem.courseTitle)}
+                                                    className="!text-red-600 hover:!bg-red-50"
+                                                >
+                                                    <Icon name={IconName.Delete} className="w-4 h-4 mr-1" />
+                                                    Delete
+                                                </Button>
                                             </td>
                                         </tr>
                                     ))}
