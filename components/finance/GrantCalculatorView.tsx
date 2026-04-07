@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLms } from '@contexts/LmsContext';
+import SsgAppSelector from './SsgAppSelector';
 
 type CalcTab = 'baseline' | 'personalised';
 
@@ -225,7 +226,8 @@ export default function GrantCalculatorView() {
         </p>
       </div>
 
-      <p className="text-xs text-amber-600 dark:text-amber-400">Personalised Grant Calculator only works with App 1 (Skilleto) certificate.</p>
+      <SsgAppSelector />
+      <p className="text-xs text-amber-600 dark:text-amber-400 -mt-2">Personalised Grant Calculator only works with App 1 (Skilleto) certificate.</p>
 
       {/* Tabs */}
       <div className="flex gap-1 border-b border-gray-200 dark:border-gray-700">
