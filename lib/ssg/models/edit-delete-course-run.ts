@@ -1033,6 +1033,29 @@ export class EditDeleteCourseRunUtils {
   }
 
   /**
+   * Build a minimal payload to update ONLY the linkCourseRunTrainer field.
+   * Avoids sending empty/zero values for dates, venue, etc. that could
+   * inadvertently overwrite existing SSG data.
+   */
+  static toTrainerUpdatePayload(runInfo: EditRunInfo, uen: string): any {
+    // Each element must be { trainer: { photo, trainerType, idNumber } }
+    // per the SSG API schema for existing trainers.
+    const trainers = (runInfo.linkCourseRunTrainer || []).map(trainer => ({
+      trainer: EditDeleteCourseRunUtils.trainerToPayload(trainer),
+    }));
+    return {
+      course: {
+        courseReferenceNumber: runInfo.courseReferenceNumber,
+        trainingProvider: { uen },
+        run: {
+          action: 'update',
+          linkCourseRunTrainer: trainers,
+        },
+      },
+    };
+  }
+
+  /**
    * Convert trainer info to payload format
    */
   private static trainerToPayload(trainer: RunTrainerEditInfo): any {

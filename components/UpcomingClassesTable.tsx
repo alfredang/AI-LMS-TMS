@@ -59,11 +59,15 @@ interface UpcomingClass {
     modeOfTraining: string;
     classType: string;
     attendanceScore: number | null;
+    trainersList: string;
 }
 
 interface Trainer {
     trainer_name: string;
 }
+
+const splitTrainerList = (list: string): string[] =>
+    (list || '').split(',').map(s => s.trim()).filter(Boolean);
 
 interface UpcomingClassesTableProps {
     showTitle?: boolean;
@@ -119,6 +123,8 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
     const [importResult, setImportResult] = useState<{ success: boolean; message: string; detail?: string } | null>(null);
     const [sendingInvitationFor, setSendingInvitationFor] = useState<string | null>(null);
     const [actionMessage, setActionMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+    // Per-row next trainer overrides (courseRun UUID → selected trainer name)
+    const [nextTrainerOverrides, setNextTrainerOverrides] = useState<Record<string, string>>({});
 
     const ITEMS_PER_PAGE = 20;
     const totalUnassignedTrainers = Math.max(stats.totalClasses - stats.totalAssignedLocalClasses, 0);
@@ -325,10 +331,11 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
         setSendingInvitationFor(classItem.id);
         setActionMessage(null);
         try {
+            const overrideTrainerName = nextTrainerOverrides[classItem.id] || undefined;
             const response = await fetch(getApiUrl('/api/admin/send-trainer-invitation'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ courseRunUuid: classItem.id }),
+                body: JSON.stringify({ courseRunUuid: classItem.id, overrideTrainerName }),
             });
             const result = await response.json();
             if (!result.success) {
@@ -686,7 +693,25 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                             <td className="px-4 py-2 whitespace-nowrap text-sm text-center text-gray-700 dark:text-gray-200">{classItem.numOfTrainee}</td>
                                             <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{renderTrainerCell(classItem.assignedTrainerTpg, classItem.assignedTrainerTpgEmail)}</td>
                                             <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{renderTrainerCell(classItem.assignedTrainerLocal, classItem.assignedTrainerLocalEmail)}</td>
-                                            <td className="px-4 py-2 text-sm text-gray-700 dark:text-gray-200 max-w-[150px]">{renderTrainerCell(classItem.nextAvailableTrainer, classItem.nextAvailableTrainerEmail)}</td>
+                                            <td className="px-4 py-2 text-sm text-gray-700 dark:text-gray-200">
+                                                {classItem.nextAvailableTrainer ? (() => {
+                                                    const courseTrainers = splitTrainerList(classItem.trainersList);
+                                                    return (
+                                                        <select
+                                                            value={nextTrainerOverrides[classItem.id] ?? classItem.nextAvailableTrainer}
+                                                            onChange={e => setNextTrainerOverrides(prev => ({ ...prev, [classItem.id]: e.target.value }))}
+                                                            className="w-full min-w-[160px] border border-gray-300 dark:border-gray-600 rounded-md px-2 py-1 text-xs bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                        >
+                                                            <option value="">-- Reassign Trainer --</option>
+                                                            {courseTrainers.map(name => (
+                                                                <option key={name} value={name}>{name}</option>
+                                                            ))}
+                                                        </select>
+                                                    );
+                                                })() : (
+                                                    <span className="text-gray-400 text-xs italic">—</span>
+                                                )}
+                                            </td>
                                             <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">
                                                 <div className="flex items-center gap-2">
                                                     {classItem.latestInvitationStatus && (
@@ -703,7 +728,7 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                                         variant="secondary"
                                                         size="sm"
                                                         onClick={() => handleSendTrainerInvitation(classItem)}
-                                                        disabled={!classItem.nextAvailableTrainer || sendingInvitationFor === classItem.id}
+                                                        disabled={!(nextTrainerOverrides[classItem.id] || classItem.nextAvailableTrainer) || sendingInvitationFor === classItem.id}
                                                     >
                                                         {sendingInvitationFor === classItem.id ? (
                                                             <Icon name={IconName.Spinner} className="w-3.5 h-3.5 animate-spin" />

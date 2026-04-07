@@ -154,6 +154,13 @@ async function seedDefaults() {
             cron_expression: '0 2 * * *', // 2:00 AM SGT daily
             api_endpoint: '/api/external/upcoming-course-runs',
         },
+        {
+            id: 'sync_trainer_to_tpg',
+            name: 'Sync Trainer (Local) to TPG/SSG',
+            description: 'For each upcoming course run that has a locally assigned trainer but no TPG trainer, calls SSG Edit Course Run to push the trainer (with NRIC if available) to TPG. Runs daily at 3:00 AM SGT.',
+            cron_expression: '0 3 * * *', // 3:00 AM SGT daily
+            api_endpoint: '/api/external/sync-trainer-to-tpg',
+        },
     ];
 
     const ids = defaults.map(t => t.id);
@@ -215,6 +222,10 @@ function getDirectHandler(taskId: string): TaskHandler | undefined {
         directHandlers.set('upcoming_course_runs', async () => {
             const { runUpcomingCourseRuns } = await import('../../pages/api/external/upcoming-course-runs');
             return runUpcomingCourseRuns();
+        });
+        directHandlers.set('sync_trainer_to_tpg', async () => {
+            const { runSyncTrainerToTpg } = await import('../../pages/api/external/sync-trainer-to-tpg');
+            return runSyncTrainerToTpg();
         });
     }
     return directHandlers.get(taskId);

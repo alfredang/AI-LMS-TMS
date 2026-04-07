@@ -261,6 +261,56 @@ export class SSGCourseAPI {
   }
 
   /**
+   * Update ONLY the linkCourseRunTrainer for a course run.
+   * Sends a minimal payload — no dates/venue/vacancy — to avoid overwriting existing SSG data.
+   */
+  async editCourseRunTrainerOnly(
+    runId: string,
+    runInfo: EditRunInfo,
+    includeExpired: OptionalSelector = OptionalSelector.NO
+  ): Promise<SSGApiResponse<any>> {
+    try {
+      if (!this.credentials.encryptionKey) {
+        throw new Error('Encryption key is required for editing course runs');
+      }
+
+      const builder = new HTTPRequestBuilder()
+        .withEndpoint(this.baseUrl, `/courses/courseRuns/edit/${runId}`)
+        .withMethod(HttpMethod.POST);
+
+      if (this.credentials.certificateContent && this.credentials.privateKeyContent) {
+        builder.withCertificate(this.credentials.certificateContent, this.credentials.privateKeyContent);
+      }
+
+      switch (includeExpired) {
+        case OptionalSelector.YES:
+          builder.withParam('includeExpiredCourses', 'true');
+          break;
+        case OptionalSelector.NO:
+          builder.withParam('includeExpiredCourses', 'false');
+          break;
+      }
+
+      const payload = EditDeleteCourseRunUtils.toTrainerUpdatePayload(runInfo, this.credentials.uen);
+      console.log('🎓 Trainer-only payload for SSG API:', JSON.stringify(payload, null, 2));
+
+      const encryptedPayload = Cryptography.encryptJSON(this.credentials.encryptionKey, payload);
+      builder.withBody(encryptedPayload);
+
+      const config = builder.build();
+      return await handleRequest(this.httpClient, config);
+    } catch (error) {
+      return {
+        error: {
+          code: 'EDIT_COURSE_RUN_TRAINER_ERROR',
+          message: error instanceof Error ? error.message : 'Unknown error',
+        },
+        status: 0,
+      };
+    }
+  }
+
+  /**
    * Add sessions to course run - SEPARATE method for session addition
    * Uses the specialized toAddSessionPayload function
    */

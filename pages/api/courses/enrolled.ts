@@ -91,6 +91,7 @@ export default async function handler(
         GROUP BY course_id
       ) assessment_count ON c.id = assessment_count.course_id
       WHERE u.id = $1
+        AND e.enrolment_status != 'Admin Removed'
       ORDER BY cr.start_date DESC
     `;
 

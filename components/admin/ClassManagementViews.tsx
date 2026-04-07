@@ -3229,7 +3229,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                 {assignedTrainersList.length > 0 ? (
                                     <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-md p-4">
                                         <div className="space-y-2">
-                                            {assignedTrainersList.map((t: any) => {
+                                            {assignedTrainersList.slice(0, 1).map((t: any) => {
                                                 const trainerDetail = availableTrainers.find((at: any) =>
                                                     (at.email && t.trainer_email && at.email.toLowerCase() === t.trainer_email.toLowerCase()) ||
                                                     (at.trainer_name && t.trainer_name && at.trainer_name.toLowerCase() === t.trainer_name.toLowerCase())
@@ -3886,7 +3886,7 @@ export const AssignTrainerView: React.FC = () => {
             courseRuns
                 .map(run => {
                     const local = localAssignments[run.id];
-                    return local?.name || run.assignedTrainerName;
+                    return local?.name || run.primaryAssignedTrainerName;
                 })
                 .filter(Boolean)
         )
@@ -3899,7 +3899,7 @@ export const AssignTrainerView: React.FC = () => {
     // Apply client-side filters
     const filteredRuns = courseRuns.filter(run => {
         const local = localAssignments[run.id];
-        const trainerName = local?.name ?? run.assignedTrainerName;
+        const trainerName = local?.name ?? run.primaryAssignedTrainerName;
 
         if (filterNoTrainer && trainerName) return false;
         if (filterTrainerName && trainerName !== filterTrainerName) return false;
@@ -3915,7 +3915,7 @@ export const AssignTrainerView: React.FC = () => {
     const totalClasses = courseRuns.length;
     const trainersAssigned = courseRuns.filter(run => {
         const local = localAssignments[run.id];
-        return (local?.name ?? run.assignedTrainerName);
+        return (local?.name ?? run.primaryAssignedTrainerName);
     }).length;
     const missingTrainers = totalClasses - trainersAssigned;
 
@@ -4058,6 +4058,7 @@ export const AssignTrainerView: React.FC = () => {
                                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Course Run ID</th>
                                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Course Title</th>
                                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Course Ref Code</th>
+                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Class Status</th>
                                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Trainer</th>
                                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Action</th>
                                 </tr>
@@ -4065,7 +4066,7 @@ export const AssignTrainerView: React.FC = () => {
                             <tbody className="bg-white divide-y divide-gray-200 dark:bg-gray-800 dark:divide-gray-700">
                                 {paginatedRuns.map(run => {
                                     const local = localAssignments[run.id];
-                                    const currentName = local?.name ?? run.assignedTrainerName;
+                                    const currentName = local?.name ?? run.primaryAssignedTrainerName;
                                     const currentEmail = local?.email ?? run.assignedTrainerEmail;
                                     const isExpanded = selectedRunId === run.id;
 
@@ -4083,6 +4084,20 @@ export const AssignTrainerView: React.FC = () => {
                                                 </td>
                                                 <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">
                                                     {run.courseCode || '—'}
+                                                </td>
+                                                <td className="px-4 py-3 whitespace-nowrap text-sm">
+                                                    {run.classStatus ? (
+                                                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                                            run.classStatus === 'Confirmed'  ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' :
+                                                            run.classStatus === 'Cancelled'  ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300' :
+                                                            run.classStatus === 'Pending'    ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300' :
+                                                            'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
+                                                        }`}>
+                                                            {run.classStatus}
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-gray-400">—</span>
+                                                    )}
                                                 </td>
                                                 <td className="px-4 py-3 whitespace-nowrap text-sm">
                                                     {currentName ? (
@@ -4121,7 +4136,7 @@ export const AssignTrainerView: React.FC = () => {
                                             {/* Expanded assignment form row */}
                                             {isExpanded && (
                                                 <tr>
-                                                    <td colSpan={6} className="px-4 py-4 bg-gray-50 dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700">
+                                                    <td colSpan={7} className="px-4 py-4 bg-gray-50 dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700">
                                                         <div className="max-w-2xl space-y-4">
                                                             {/* Detailed Trainers List (Multi-Trainer) */}
                                                             <div className="bg-white dark:bg-gray-800 p-4 border border-gray-200 dark:border-gray-700 rounded-lg">
