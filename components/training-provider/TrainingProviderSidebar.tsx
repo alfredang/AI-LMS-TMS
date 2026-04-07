@@ -160,6 +160,10 @@ const TrainingProviderSidebar: React.FC<TrainingProviderSidebarProps> = ({ onNav
                     </p>
                 </div>
             </div>
+
+            <div className="pt-6 mt-6 border-t border-gray-200 dark:border-gray-700">
+                <p className="px-3 text-[10px] text-gray-400 dark:text-gray-300 font-mono">version {process.env.NEXT_PUBLIC_COMMIT_HASH || 'dev'}</p>
+            </div>
         </nav>
     );
 };

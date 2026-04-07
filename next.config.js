@@ -1,3 +1,8 @@
+const { execSync } = require('child_process');
+const COMMIT_HASH = (() => {
+  try { return execSync('git rev-parse --short HEAD').toString().trim(); } catch { return 'dev'; }
+})();
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
@@ -65,7 +70,7 @@ const nextConfig = {
   // Only expose PUBLIC environment variables
   // NEVER expose database credentials or secrets here
   env: {
-    // Public variables only (prefixed with NEXT_PUBLIC_)
+    NEXT_PUBLIC_COMMIT_HASH: COMMIT_HASH,
   },
 };
 
