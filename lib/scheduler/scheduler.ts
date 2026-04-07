@@ -98,6 +98,8 @@ async function seedDefaults() {
         description: string;
         cron_expression: string;
         api_endpoint: string;
+        email_template?: string;
+        days_in_advance?: number;
     }> = [
         {
             id: 'auto_create_trainer_folders',
@@ -129,10 +131,21 @@ async function seedDefaults() {
         },
         {
             id: 'auto_send_course_confirmation',
-            name: 'Auto Send Final Course Confirmation Emails',
-            description: 'Sends Final Course Confirmation emails to all confirmed learners in course runs starting in 3 days. Uses the email template configured in Company Settings.',
+            name: 'Auto Send Final Class Confirm Emails',
+            description: 'Sends Final Class Confirm emails to all confirmed learners in course runs starting soon. Uses the email template configured in Company Settings.',
             cron_expression: '0 9 * * *', // 9:00 AM daily
             api_endpoint: '/api/external/auto-send-course-confirmation',
+            email_template: 'final_course_confirmation',
+            days_in_advance: 3,
+        },
+        {
+            id: 'auto_send_class_confirmation',
+            name: 'Auto Send Class Confirm Emails',
+            description: 'Sends Class Confirm emails to all confirmed learners in course runs starting soon. Uses the email template configured in Company Settings.',
+            cron_expression: '0 10 * * *', // 10:00 AM daily
+            api_endpoint: '/api/external/auto-send-course-confirmation',
+            email_template: 'course_confirmation',
+            days_in_advance: 7,
         },
         {
             id: 'upcoming_course_runs',
@@ -151,12 +164,12 @@ async function seedDefaults() {
 
     for (const task of defaults) {
         await pool.query(
-            `INSERT INTO scheduler_config (id, name, description, cron_expression, api_endpoint)
-             VALUES ($1, $2, $3, $4, $5)
-             ON CONFLICT (id) DO UPDATE SET 
+            `INSERT INTO scheduler_config (id, name, description, cron_expression, api_endpoint, email_template, days_in_advance)
+             VALUES ($1, $2, $3, $4, $5, $6, $7)
+             ON CONFLICT (id) DO UPDATE SET
                 name = EXCLUDED.name,
                 description = EXCLUDED.description`,
-            [task.id, task.name, task.description, task.cron_expression, task.api_endpoint]
+            [task.id, task.name, task.description, task.cron_expression, task.api_endpoint, task.email_template || null, task.days_in_advance ?? null]
         );
     }
 }
@@ -189,7 +202,11 @@ function getDirectHandler(taskId: string): TaskHandler | undefined {
         });
         directHandlers.set('auto_send_course_confirmation', async () => {
             const { runAutomation } = await import('../../pages/api/external/auto-send-course-confirmation');
-            return runAutomation();
+            return runAutomation('auto_send_course_confirmation');
+        });
+        directHandlers.set('auto_send_class_confirmation', async () => {
+            const { runAutomation } = await import('../../pages/api/external/auto-send-course-confirmation');
+            return runAutomation('auto_send_class_confirmation');
         });
         directHandlers.set('sync_course_run_dates', async () => {
             const { runDateSync } = await import('../../pages/api/external/sync-course-run-dates');

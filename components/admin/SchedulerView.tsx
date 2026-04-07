@@ -21,10 +21,10 @@ interface SchedulerTask {
 }
 
 // Tasks that support email template selection
-const EMAIL_TEMPLATE_TASKS = ['auto_send_course_confirmation', 'auto_create_certificates'];
+const EMAIL_TEMPLATE_TASKS = ['auto_send_course_confirmation', 'auto_send_class_confirmation', 'auto_create_certificates'];
 
 // Tasks that support days-in-advance setting
-const DAYS_IN_ADVANCE_TASKS = ['auto_send_course_confirmation'];
+const DAYS_IN_ADVANCE_TASKS = ['auto_send_course_confirmation', 'auto_send_class_confirmation'];
 
 const EMAIL_TEMPLATES: { value: string; label: string }[] = [
     { value: 'final_course_confirmation', label: 'Final Class Confirm Email' },
@@ -139,6 +139,7 @@ const TASK_LOG_PAGE: Record<string, AdminPage> = {
     sync_course_run_dates:          AdminPage.CourseRunDateSyncLogs,
     upcoming_course_runs:           AdminPage.UpcomingCourseRunsLog,
     auto_send_course_confirmation:  AdminPage.CourseConfirmationEmailLogs,
+    auto_send_class_confirmation:   AdminPage.CourseConfirmationEmailLogs,
 };
 
 // ── Main Component ────────────────────────────────────────────────────────────

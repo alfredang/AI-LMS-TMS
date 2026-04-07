@@ -154,11 +154,11 @@ async function sendConfirmationEmail(opts: {
 
 // ── Main automation ──────────────────────────────────────────────────────────
 
-export async function runAutomation() {
+export async function runAutomation(taskId: string = 'auto_send_course_confirmation') {
     await ensureLogTable();
 
     const runId = crypto.randomUUID();
-    console.log(`[auto-send-confirmation] Starting run ${runId} at ${new Date().toISOString()}`);
+    console.log(`[auto-send-confirmation] Starting run ${runId} (task: ${taskId}) at ${new Date().toISOString()}`);
 
     try {
         // 0. Read scheduler config for email template and days in advance
@@ -166,7 +166,8 @@ export async function runAutomation() {
         let daysInAdvance = 3;
         try {
             const configRes = await pool.query(
-                `SELECT email_template, days_in_advance FROM scheduler_config WHERE id = 'auto_send_course_confirmation'`
+                `SELECT email_template, days_in_advance FROM scheduler_config WHERE id = $1`,
+                [taskId]
             );
             if (configRes.rows[0]?.email_template) {
                 templatePrefix = configRes.rows[0].email_template;
