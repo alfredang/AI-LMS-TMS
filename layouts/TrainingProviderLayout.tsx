@@ -24,6 +24,7 @@ import TrainerInvitationEmailTemplateView from '../components/training-provider/
 import FinanceManagementView from '../components/training-provider/FinanceManagementView';
 import TrainingProviderSidebar from '../components/training-provider/TrainingProviderSidebar';
 import SchedulerView from '../components/admin/SchedulerView';
+import SsgApiSummaryView from '../components/training-provider/SsgApiSummaryView';
 import { Card } from '../components/ui/Card';
 
 const TrainingProviderLayout: React.FC = () => {
@@ -80,6 +81,8 @@ const TrainingProviderLayout: React.FC = () => {
         return <FinanceManagementView />;
       case View.Scheduler:
         return <SchedulerView />;
+      case View.SsgApiSummary:
+        return <SsgApiSummaryView />;
       default:
         return <TrainingProviderDashboard />;
     }
@@ -106,6 +109,7 @@ const TrainingProviderLayout: React.FC = () => {
       case View.TrainerInvitationEmailTemplate: return 'Trainer Invitation Email Template';
       case View.FinanceManagement: return 'Finance Management';
       case View.Scheduler: return 'Task Scheduler';
+      case View.SsgApiSummary: return 'SSG API Summary';
       default: return 'Dashboard';
     }
   };
