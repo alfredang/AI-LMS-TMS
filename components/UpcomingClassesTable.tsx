@@ -548,13 +548,13 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                 ) : (
                     <>
                         <div className="overflow-x-auto">
-                            <table className="divide-y divide-gray-200 dark:divide-gray-700" style={{ tableLayout: 'fixed', width: '2030px' }}>
+                            <table className="divide-y divide-gray-200 dark:divide-gray-700" style={{ tableLayout: 'fixed', width: '2050px' }}>
                                 <colgroup>
                                     <col style={{ width: '90px' }} />
                                     <col style={{ width: '480px' }} />
                                     <col style={{ width: '160px' }} />
                                     <col style={{ width: '90px' }} />
-                                    <col style={{ width: '90px' }} />
+                                    <col style={{ width: '110px' }} />
                                     <col style={{ width: '90px' }} />
                                     <col style={{ width: '200px' }} />
                                     <col style={{ width: '200px' }} />
@@ -571,8 +571,8 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">STATUS</th>
                                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">START DATE</th>
                                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">END DATE</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">ASSIGNED TRAINER (TPG)</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">ASSIGNED TRAINER (LOCAL)</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">TRAINER (TPG)</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">TRAINER (LOCAL)</th>
                                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">NEXT TRAINER</th>
                                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">INVITE NEXT TRAINER</th>
                                         <th colSpan={2} className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">ACTIONS</th>
@@ -585,9 +585,14 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                             <td className="px-4 py-2 text-sm font-medium text-gray-900 dark:text-white overflow-hidden text-ellipsis">{classItem.courseTitle}</td>
                                             <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.courseCode}</td>
                                             <td className="px-4 py-2 whitespace-nowrap text-sm">
-                                                <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(classItem.classStatus || 'Unknown')}`}>
-                                                    {classItem.classStatus}
-                                                </span>
+                                                {(() => {
+                                                    const status = classItem.assignedTrainerLocal ? 'Confirmed' : 'Pending';
+                                                    return (
+                                                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(status)}`}>
+                                                            {status}
+                                                        </span>
+                                                    );
+                                                })()}
                                             </td>
                                             <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{formatDate(classItem.startDate)}</td>
                                             <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{formatDate(classItem.endDate)}</td>
