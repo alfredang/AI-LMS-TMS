@@ -1127,9 +1127,18 @@ const LearnerCourseList: React.FC = () => {
 
     // Classify courses by date
     const classifyCourse = (course: any): 'current' | 'upcoming' | 'past' => {
-        const today = new Date(new Date().toDateString());
-        const start = course.startDate ? new Date(course.startDate) : null;
-        const end = course.endDate ? new Date(course.endDate) : null;
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        const parseLocalDate = (dateStr: string | null | undefined) => {
+            if (!dateStr) return null;
+            const d = new Date(dateStr);
+            d.setHours(0, 0, 0, 0);
+            return d;
+        };
+
+        const start = parseLocalDate(course.startDate);
+        const end = parseLocalDate(course.endDate);
 
         if (start && start > today) return 'upcoming';
         if (end && end < today) return 'past';

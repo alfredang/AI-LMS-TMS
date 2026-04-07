@@ -25,7 +25,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       params.push(`%${search}%`);
     }
 
-    query += ` ORDER BY u.full_name LIMIT 200`;
+    query += ` ORDER BY u.full_name LIMIT 5000`;
 
     const result = await pool.query(query, params);
 
