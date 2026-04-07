@@ -343,8 +343,39 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         latestInvitationTrainer,
         numOfTrainee: parseInt(row.num_of_trainee || '0', 10),
         trainersList: row.trainers_list || '',
+        modeOfTraining: '',
+        attendanceScore: null as number | null,
       };
     });
+
+    // Fetch mode_of_training and attendance scores for all course runs
+    if (courseRunIds.length > 0) {
+      // Mode of training from first session
+      const modeResult = await pool.query(`
+        SELECT DISTINCT ON (course_run_id) course_run_id, mode_of_training
+        FROM course_session
+        WHERE course_run_id = ANY($1::uuid[]) AND deleted = false
+        ORDER BY course_run_id, COALESCE(start_date, '9999-12-31') ASC, session_number ASC
+      `, [courseRunIds]);
+      const modeMap = new Map(modeResult.rows.map((r: any) => [r.course_run_id, r.mode_of_training || '']));
+
+      // Attendance scores: average of is_present across all sessions per course run
+      const attendanceResult = await pool.query(`
+        SELECT
+          cs.course_run_id,
+          ROUND(AVG(CASE WHEN ca.is_present THEN 100.0 ELSE 0.0 END))::int AS avg_score
+        FROM course_attendance ca
+        JOIN course_session cs ON ca.session_id = cs.id
+        WHERE cs.course_run_id = ANY($1::uuid[]) AND cs.deleted = false
+        GROUP BY cs.course_run_id
+      `, [courseRunIds]);
+      const attendanceMap = new Map(attendanceResult.rows.map((r: any) => [r.course_run_id, parseInt(r.avg_score, 10)]));
+
+      for (const cls of upcomingClasses) {
+        cls.modeOfTraining = modeMap.get(cls.id) || '';
+        cls.attendanceScore = attendanceMap.get(cls.id) ?? null;
+      }
+    }
 
     const stats = statsResult.rows[0] || {};
     const totalCount = parseInt(countResult.rows[0]?.total_count || '0', 10);
