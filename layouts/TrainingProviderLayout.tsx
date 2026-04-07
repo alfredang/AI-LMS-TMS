@@ -26,6 +26,7 @@ import CourseConfirmationEmailTemplateView from '../components/training-provider
 import FinanceManagementView from '../components/training-provider/FinanceManagementView';
 import TrainingProviderSidebar from '../components/training-provider/TrainingProviderSidebar';
 import SchedulerView from '../components/admin/SchedulerView';
+import WebhooksView from '../components/training-provider/WebhooksView';
 import SsgApiSummaryView from '../components/training-provider/SsgApiSummaryView';
 import { Card } from '../components/ui/Card';
 
@@ -87,6 +88,8 @@ const TrainingProviderLayout: React.FC = () => {
         return <FinanceManagementView />;
       case View.Scheduler:
         return <SchedulerView />;
+      case View.Webhooks:
+        return <WebhooksView />;
       case View.SsgApiSummary:
         return <SsgApiSummaryView />;
       default:
@@ -117,6 +120,7 @@ const TrainingProviderLayout: React.FC = () => {
       case View.CourseConfirmationEmailTemplate: return 'Course Confirmation Email Template';
       case View.FinanceManagement: return 'Finance Management';
       case View.Scheduler: return 'Task Scheduler';
+      case View.Webhooks: return 'Webhooks';
       case View.SsgApiSummary: return 'SSG API Summary';
       default: return 'Dashboard';
     }
