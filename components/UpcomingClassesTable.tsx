@@ -619,12 +619,13 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                 </tbody>
                             </table>
                           ) : (
-                            <table className="divide-y divide-gray-200 dark:divide-gray-700" style={{ tableLayout: 'fixed', width: '2050px' }}>
+                            <table className="divide-y divide-gray-200 dark:divide-gray-700" style={{ tableLayout: 'fixed', width: '2150px' }}>
                                 <colgroup>
                                     <col style={{ width: '90px' }} />
-                                    <col style={{ width: '480px' }} />
+                                    <col style={{ width: '420px' }} />
                                     <col style={{ width: '160px' }} />
-                                    <col style={{ width: '90px' }} />
+                                    <col style={{ width: '110px' }} />
+                                    <col style={{ width: '100px' }} />
                                     <col style={{ width: '110px' }} />
                                     <col style={{ width: '90px' }} />
                                     <col style={{ width: '200px' }} />
@@ -632,39 +633,56 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                     <col style={{ width: '180px' }} />
                                     <col style={{ width: '120px' }} />
                                     <col style={{ width: '80px' }} />
-                                    <col style={{ width: '80px' }} />
                                 </colgroup>
                                 <thead className="bg-gray-50 dark:bg-gray-700/50">
                                     <tr className="border-b dark:border-gray-700">
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">COURSE RUN ID</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">COURSE TITLE</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">COURSE REF CODE</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">STATUS</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">START DATE</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">END DATE</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">TRAINER (TPG)</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">TRAINER (LOCAL)</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">NEXT TRAINER</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">INVITE NEXT TRAINER</th>
-                                        <th colSpan={2} className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">ACTIONS</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Course Run ID</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Course Title</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Course Ref Code</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Class Type</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Start Date</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">End Date</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Trainer (TPG)</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Trainer (Local)</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Next Trainer</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Invite Next Trainer</th>
+                                        <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"></th>
                                     </tr>
                                 </thead>
                                 <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                                    {upcomingClasses.map((classItem, index) => (
+                                    {upcomingClasses.map((classItem, index) => {
+                                        const mode = (classItem.modeOfTraining || '').toLowerCase();
+                                        const courseType = mode.includes('virtual') || mode.includes('online') ? 'Virtual'
+                                            : mode.includes('blended') || mode.includes('hybrid') ? 'Hybrid'
+                                            : 'Physical';
+                                        return (
                                         <tr key={index} className="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50">
                                             <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.courseRunId}</td>
                                             <td className="px-4 py-2 text-sm font-medium text-gray-900 dark:text-white overflow-hidden text-ellipsis">{classItem.courseTitle}</td>
                                             <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.courseCode}</td>
                                             <td className="px-4 py-2 whitespace-nowrap text-sm">
-                                                {(() => {
-                                                    const status = classItem.assignedTrainerLocal ? 'Confirmed' : 'Pending';
-                                                    return (
-                                                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(status)}`}>
-                                                            {status}
-                                                        </span>
-                                                    );
-                                                })()}
+                                                <select
+                                                    value={classItem.classStatus}
+                                                    onChange={async (e) => {
+                                                        const newStatus = e.target.value;
+                                                        try {
+                                                            await fetch(getApiUrl('/api/admin/upcoming-classes'), {
+                                                                method: 'PUT',
+                                                                headers: { 'Content-Type': 'application/json' },
+                                                                body: JSON.stringify({ id: classItem.id, class_status: newStatus }),
+                                                            });
+                                                            setUpcomingClasses(prev => prev.map(c => c.id === classItem.id ? { ...c, classStatus: newStatus } : c));
+                                                        } catch { /* silent */ }
+                                                    }}
+                                                    className={`text-xs font-semibold rounded-full px-2 py-1 border-0 cursor-pointer focus:ring-2 focus:ring-blue-500 ${getStatusColor(classItem.classStatus)}`}
+                                                >
+                                                    <option value="Confirmed">Confirmed</option>
+                                                    <option value="Pending">Pending</option>
+                                                    <option value="Cancelled">Cancelled</option>
+                                                </select>
                                             </td>
+                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{courseType}</td>
                                             <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{formatDate(classItem.startDate)}</td>
                                             <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{formatDate(classItem.endDate)}</td>
                                             <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{renderTrainerCell(classItem.assignedTrainerTpg, classItem.assignedTrainerTpgEmail)}</td>
@@ -701,28 +719,17 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                             </td>
                                             <td className="px-4 py-2 whitespace-nowrap text-sm font-medium">
                                                 <Button
-                                                    variant="ghost"
+                                                    variant="primary"
                                                     size="sm"
                                                     onClick={() => handleEditClass(classItem)}
-                                                    className="!text-blue-600 hover:!bg-blue-50"
                                                 >
                                                     <Icon name={IconName.Edit} className="w-4 h-4 mr-1" />
                                                     Edit
                                                 </Button>
                                             </td>
-                                            <td className="px-4 py-2 whitespace-nowrap text-sm font-medium">
-                                                <Button
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    onClick={() => handleDelete(classItem.courseRunId, classItem.courseTitle)}
-                                                    className="!text-red-600 hover:!bg-red-50"
-                                                >
-                                                    <Icon name={IconName.Delete} className="w-4 h-4 mr-1" />
-                                                    Delete
-                                                </Button>
-                                            </td>
                                         </tr>
-                                    ))}
+                                        );
+                                    })}
                                 </tbody>
                             </table>
                           )}

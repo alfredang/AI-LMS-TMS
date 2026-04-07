@@ -45,6 +45,25 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return;
   }
 
+  // PUT — Update class status
+  if (req.method === 'PUT') {
+    try {
+      const { id, class_status } = req.body;
+      if (!id || !class_status) {
+        return res.status(400).json({ success: false, error: 'id and class_status are required' });
+      }
+      const validStatuses = ['Confirmed', 'Pending', 'Cancelled'];
+      if (!validStatuses.includes(class_status)) {
+        return res.status(400).json({ success: false, error: `Invalid status. Must be one of: ${validStatuses.join(', ')}` });
+      }
+      await pool.query('UPDATE course_run SET class_status = $1 WHERE id = $2', [class_status, id]);
+      return res.status(200).json({ success: true });
+    } catch (err) {
+      console.error('Error updating class status:', err);
+      return res.status(500).json({ success: false, error: 'Failed to update status' });
+    }
+  }
+
   if (req.method !== 'GET') {
     return res.status(405).json({ message: 'Method not allowed' });
   }
