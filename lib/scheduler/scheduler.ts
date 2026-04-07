@@ -20,6 +20,7 @@ export interface SchedulerTask {
     enabled: boolean;
     api_endpoint: string;
     email_template: string | null;
+    days_in_advance: number | null;
     last_run_at: string | null;
     last_status: string | null;
     created_at: string;
@@ -72,15 +73,19 @@ async function ensureSchedulerTable() {
             enabled          BOOLEAN NOT NULL DEFAULT true,
             api_endpoint     TEXT NOT NULL,
             email_template   TEXT,
+            days_in_advance  INTEGER DEFAULT 3,
             last_run_at      TIMESTAMPTZ,
             last_status      TEXT,
             created_at       TIMESTAMPTZ DEFAULT NOW(),
             updated_at       TIMESTAMPTZ DEFAULT NOW()
         )
     `);
-    // Add email_template column if it doesn't exist (for existing installations)
+    // Add columns if they don't exist (for existing installations)
     await pool.query(`
         ALTER TABLE scheduler_config ADD COLUMN IF NOT EXISTS email_template TEXT
+    `);
+    await pool.query(`
+        ALTER TABLE scheduler_config ADD COLUMN IF NOT EXISTS days_in_advance INTEGER DEFAULT 3
     `);
 }
 
@@ -373,7 +378,7 @@ export async function getSchedulerTasks(): Promise<SchedulerTask[]> {
 
 export async function updateTaskSchedule(
     taskId: string,
-    updates: { cron_expression?: string; enabled?: boolean; email_template?: string | null }
+    updates: { cron_expression?: string; enabled?: boolean; email_template?: string | null; days_in_advance?: number | null }
 ): Promise<SchedulerTask | null> {
     const setClauses: string[] = ['updated_at = NOW()'];
     const values: any[] = [];
@@ -395,6 +400,11 @@ export async function updateTaskSchedule(
     if (updates.email_template !== undefined) {
         setClauses.push(`email_template = $${paramIdx++}`);
         values.push(updates.email_template);
+    }
+
+    if (updates.days_in_advance !== undefined) {
+        setClauses.push(`days_in_advance = $${paramIdx++}`);
+        values.push(updates.days_in_advance);
     }
 
     values.push(taskId);

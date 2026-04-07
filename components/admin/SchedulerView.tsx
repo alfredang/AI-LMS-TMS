@@ -13,6 +13,7 @@ interface SchedulerTask {
     enabled: boolean;
     api_endpoint: string;
     email_template: string | null;
+    days_in_advance: number | null;
     last_run_at: string | null;
     last_status: string | null;
     created_at: string;
@@ -21,6 +22,9 @@ interface SchedulerTask {
 
 // Tasks that support email template selection
 const EMAIL_TEMPLATE_TASKS = ['auto_send_course_confirmation', 'auto_create_certificates'];
+
+// Tasks that support days-in-advance setting
+const DAYS_IN_ADVANCE_TASKS = ['auto_send_course_confirmation'];
 
 const EMAIL_TEMPLATES: { value: string; label: string }[] = [
     { value: 'final_course_confirmation', label: 'Final Class Confirm Email' },
@@ -508,6 +512,61 @@ export const SchedulerView: React.FC = () => {
                                         </div>
                                     );
                                 })()}
+
+                                {/* Days in Advance Setting */}
+                                {DAYS_IN_ADVANCE_TASKS.includes(task.id) && (
+                                    <div className="mb-4">
+                                        <label className="font-medium text-gray-500 dark:text-gray-400 text-xs uppercase tracking-wider block mb-1.5">Days in Advance</label>
+                                        <div className="flex items-center gap-3">
+                                            <div className="flex items-center bg-gray-100 dark:bg-gray-700 rounded-lg p-1 gap-1">
+                                                <button
+                                                    onClick={async () => {
+                                                        const current = task.days_in_advance ?? 3;
+                                                        if (current <= 1) return;
+                                                        const newVal = current - 1;
+                                                        try {
+                                                            const res = await fetch('/api/admin/scheduler', {
+                                                                method: 'PUT',
+                                                                headers: { 'Content-Type': 'application/json' },
+                                                                body: JSON.stringify({ taskId: task.id, days_in_advance: newVal }),
+                                                            });
+                                                            const data = await res.json();
+                                                            if (data.success) setTasks(prev => prev.map(t => t.id === task.id ? data.task : t));
+                                                        } catch { /* silent */ }
+                                                    }}
+                                                    className="w-8 h-8 flex items-center justify-center rounded-md bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 font-bold text-lg transition-colors"
+                                                >
+                                                    −
+                                                </button>
+                                                <span className="w-10 text-center text-sm font-bold text-gray-900 dark:text-white">
+                                                    {task.days_in_advance ?? 3}
+                                                </span>
+                                                <button
+                                                    onClick={async () => {
+                                                        const current = task.days_in_advance ?? 3;
+                                                        if (current >= 30) return;
+                                                        const newVal = current + 1;
+                                                        try {
+                                                            const res = await fetch('/api/admin/scheduler', {
+                                                                method: 'PUT',
+                                                                headers: { 'Content-Type': 'application/json' },
+                                                                body: JSON.stringify({ taskId: task.id, days_in_advance: newVal }),
+                                                            });
+                                                            const data = await res.json();
+                                                            if (data.success) setTasks(prev => prev.map(t => t.id === task.id ? data.task : t));
+                                                        } catch { /* silent */ }
+                                                    }}
+                                                    className="w-8 h-8 flex items-center justify-center rounded-md bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 font-bold text-lg transition-colors"
+                                                >
+                                                    +
+                                                </button>
+                                            </div>
+                                            <span className="text-sm text-gray-500 dark:text-gray-400">
+                                                day{(task.days_in_advance ?? 3) !== 1 ? 's' : ''} before class starts
+                                            </span>
+                                        </div>
+                                    </div>
+                                )}
 
                                 <div className={`grid grid-cols-1 ${editingTaskId === task.id ? 'sm:grid-cols-1' : 'sm:grid-cols-3'} gap-4 text-sm`}>
                                     {/* Schedule */}

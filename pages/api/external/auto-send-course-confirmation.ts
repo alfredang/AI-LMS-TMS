@@ -161,17 +161,21 @@ export async function runAutomation() {
     console.log(`[auto-send-confirmation] Starting run ${runId} at ${new Date().toISOString()}`);
 
     try {
-        // 0. Determine which email template to use from scheduler config
+        // 0. Read scheduler config for email template and days in advance
         let templatePrefix = 'final_course_confirmation';
+        let daysInAdvance = 3;
         try {
             const configRes = await pool.query(
-                `SELECT email_template FROM scheduler_config WHERE id = 'auto_send_course_confirmation'`
+                `SELECT email_template, days_in_advance FROM scheduler_config WHERE id = 'auto_send_course_confirmation'`
             );
             if (configRes.rows[0]?.email_template) {
                 templatePrefix = configRes.rows[0].email_template;
             }
+            if (configRes.rows[0]?.days_in_advance != null) {
+                daysInAdvance = configRes.rows[0].days_in_advance;
+            }
         } catch { /* use default */ }
-        console.log(`[auto-send-confirmation] Using email template: ${templatePrefix}`);
+        console.log(`[auto-send-confirmation] Using email template: ${templatePrefix}, days in advance: ${daysInAdvance}`);
 
         const subjectCol = `${templatePrefix}_email_subject`;
         const bodyCol = `${templatePrefix}_email_body`;
@@ -207,7 +211,7 @@ export async function runAutomation() {
             return { success: false, error: `Email template "${templatePrefix}" not configured` };
         }
 
-        // 2. Find course runs starting in 3 days
+        // 2. Find course runs starting in N days
         const courseRunsRes = await pool.query(`
             SELECT cr.id as db_uuid, cr.course_run_id, c.course_code, c.title as course_title,
                    TO_CHAR(cr.start_date, 'DD Mon YYYY') as start_date_display,
@@ -215,11 +219,11 @@ export async function runAutomation() {
                    TO_CHAR(cr.start_date, 'DD Mon YYYY') || ' - ' || TO_CHAR(cr.end_date, 'DD Mon YYYY') as course_dates
             FROM course_run cr
             JOIN course c ON cr.course_id = c.id
-            WHERE DATE(cr.start_date) = CURRENT_DATE + INTERVAL '3 days'
-        `);
+            WHERE DATE(cr.start_date) = CURRENT_DATE + $1 * INTERVAL '1 day'
+        `, [daysInAdvance]);
 
         const courseRuns = courseRunsRes.rows;
-        console.log(`[auto-send-confirmation] Found ${courseRuns.length} course runs starting in 3 days.`);
+        console.log(`[auto-send-confirmation] Found ${courseRuns.length} course runs starting in ${daysInAdvance} days.`);
 
         if (courseRuns.length === 0) {
             return { success: true, runId, stats: { totalSent: 0, totalSkipped: 0, totalErrors: 0 } };
