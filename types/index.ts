@@ -100,6 +100,7 @@ export enum AdminPage {
   TrainerFolderLogs = 'trainerFolderLogs',
   AutoCreateCertificatesLog = 'autoCreateCertificatesLog',
   CourseRunDateSyncLogs = 'courseRunDateSyncLogs',
+  UpcomingCourseRunsLog = 'upcomingCourseRunsLog',
   BackfillEnrollments = 'backfillEnrollments',
   FetchUpcomingEnrolments = 'fetchUpcomingEnrolments',
   CreateCertificate = 'createCertificate',

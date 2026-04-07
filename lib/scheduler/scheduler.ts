@@ -116,6 +116,13 @@ async function seedDefaults() {
             cron_expression: '30 18 * * *',
             api_endpoint: '/api/external/auto-create-certificates',
         },
+        {
+            id: 'upcoming_course_runs',
+            name: 'Fetch TGS Enrolments & Assign Trainers',
+            description: 'For each upcoming TGS- course run within the configured threshold window, searches SSG for enrolments and assigns trainers accordingly. Runs daily at 2:00 AM SGT.',
+            cron_expression: '0 2 * * *', // 2:00 AM SGT daily
+            api_endpoint: '/api/external/upcoming-course-runs',
+        },
     ];
 
     const ids = defaults.map(t => t.id);
@@ -165,6 +172,10 @@ function getDirectHandler(taskId: string): TaskHandler | undefined {
         directHandlers.set('sync_course_run_dates', async () => {
             const { runDateSync } = await import('../../pages/api/external/sync-course-run-dates');
             return runDateSync();
+        });
+        directHandlers.set('upcoming_course_runs', async () => {
+            const { runUpcomingCourseRuns } = await import('../../pages/api/external/upcoming-course-runs');
+            return runUpcomingCourseRuns();
         });
     }
     return directHandlers.get(taskId);

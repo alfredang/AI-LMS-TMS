@@ -42,15 +42,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       [nric, courseRunId]
     );
 
-    // 2. Delete enrollment record for this course run
+    // 2. Soft-delete enrollment: mark as Admin Removed so SSG sync does not re-add the learner
     if (userId) {
       await client.query(
-        `DELETE FROM enrollment WHERE course_run_id = $1 AND user_id = $2`,
+        `UPDATE enrollment
+         SET enrolment_status = 'Admin Removed', updated_at = NOW()
+         WHERE course_run_id = $1 AND user_id = $2`,
         [courseRunId, userId]
       );
     } else if (!nric.startsWith('_uid_')) {
       await client.query(
-        `DELETE FROM enrollment WHERE course_run_id = $1 AND nric = $2`,
+        `UPDATE enrollment
+         SET enrolment_status = 'Admin Removed', updated_at = NOW()
+         WHERE course_run_id = $1 AND nric = $2`,
         [courseRunId, nric]
       );
     }

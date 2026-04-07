@@ -31,9 +31,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const userId = userResult.rows[0].id;
 
-    // Delete the enrollment for this course run
+    // Soft-delete: mark as Admin Removed so SSG sync does not re-add the learner
     const result = await client.query(
-      `DELETE FROM enrollment WHERE user_id = $1 AND course_run_id = $2`,
+      `UPDATE enrollment
+       SET enrolment_status = 'Admin Removed', updated_at = NOW()
+       WHERE user_id = $1 AND course_run_id = $2`,
       [userId, courseRunId]
     );
 

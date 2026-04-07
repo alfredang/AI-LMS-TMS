@@ -96,6 +96,7 @@ const TASK_LOG_PAGE: Record<string, AdminPage> = {
     auto_create_learners:       AdminPage.AutomationLogs,
     auto_create_trainer_folders: AdminPage.TrainerFolderLogs,
     sync_course_run_dates:      AdminPage.CourseRunDateSyncLogs,
+    upcoming_course_runs:       AdminPage.UpcomingCourseRunsLog,
 };
 
 // ── Main Component ────────────────────────────────────────────────────────────

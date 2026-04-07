@@ -89,6 +89,43 @@ export class SSGCourseAPI {
   }
 
   /**
+   * Search course runs by course reference number (course code)
+   * Calls GET /courses/courseRuns/reference
+   */
+  async searchCourseRunsByCode(
+    courseReferenceNumber: string,
+    options: { page?: number; pageSize?: number; includeExpired?: boolean; uen?: string } = {}
+  ): Promise<SSGApiResponse<any>> {
+    try {
+      const { page = 0, pageSize = 40, includeExpired = false, uen } = options;
+
+      const builder = new HTTPRequestBuilder()
+        .withEndpoint(this.baseUrl, '/courses/courseRuns/reference')
+        .withMethod(HttpMethod.GET)
+        .withParam('uen', uen || this.credentials.uen || '')
+        .withParam('courseReferenceNumber', courseReferenceNumber)
+        .withParam('pageSize', String(pageSize))
+        .withParam('page', String(page))
+        .withParam('includeExpiredCourses', String(includeExpired));
+
+      if (this.credentials.certificateContent && this.credentials.privateKeyContent) {
+        builder.withCertificate(this.credentials.certificateContent, this.credentials.privateKeyContent);
+      }
+
+      const config = builder.build();
+      return await handleRequest<any>(this.httpClient, config);
+    } catch (error) {
+      return {
+        error: {
+          code: 'SEARCH_COURSE_RUNS_ERROR',
+          message: error instanceof Error ? error.message : 'Unknown error'
+        },
+        status: 0
+      };
+    }
+  }
+
+  /**
    * Add/publish course run
    * Equivalent to Python AddCourseRun class
    */
@@ -618,6 +655,13 @@ export class CourseOperations {
 
   async getCourseRun(runId: string, includeExpired?: OptionalSelector) {
     return this.api.viewCourseRun(runId, includeExpired);
+  }
+
+  async getCourseRunsByCode(
+    courseReferenceNumber: string,
+    options?: { page?: number; pageSize?: number; includeExpired?: boolean; uen?: string }
+  ) {
+    return this.api.searchCourseRunsByCode(courseReferenceNumber, options);
   }
 
   async createCourseRun(runInfo: AddRunInfo, includeExpired?: OptionalSelector) {

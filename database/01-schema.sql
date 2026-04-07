@@ -2266,6 +2266,24 @@ CREATE INDEX IF NOT EXISTS idx_link_assessment_submission_course_run ON public.l
 COMMENT ON TABLE public.link_assessment_submission IS 'Tracks file submissions for link-based assessments (Written/Practical). Separate from the submission table which handles file-based assessments.';
 COMMENT ON COLUMN public.link_assessment_submission.assessment_type IS 'Type of link-based assessment: written or practical';
 
+-- upcoming_course_runs_log: results from the daily upcoming TGS course runs fetch
+CREATE TABLE IF NOT EXISTS public.upcoming_course_runs_log (
+    id              SERIAL PRIMARY KEY,
+    run_id          TEXT NOT NULL,
+    created_at      TIMESTAMPTZ DEFAULT NOW(),
+    course_run_id   TEXT,
+    course_title    TEXT,
+    course_code     TEXT,
+    db_start_date   TEXT,
+    db_end_date     TEXT,
+    ssg_start_date  TEXT,
+    ssg_end_date    TEXT,
+    mode_of_learning TEXT,
+    vacancy_code    TEXT,
+    status          TEXT NOT NULL DEFAULT 'pending',
+    error_message   TEXT
+);
+
 -- api_subscription: SSG API subscription status per app
 CREATE TABLE IF NOT EXISTS public.api_subscription (
     id          SERIAL PRIMARY KEY,

@@ -40,15 +40,25 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     let resolvedUserId = userId;
     let userEmail = manualEmail || null;
     let userNric = '';
+    let enrollmentRestored = false;
 
     if (userId) {
       // Dropdown mode: look up user info
       const existing = await client.query(
-        `SELECT id FROM enrollment WHERE user_id = $1 AND course_run_id = $2`,
+        `SELECT id, enrolment_status FROM enrollment WHERE user_id = $1 AND course_run_id = $2`,
         [userId, courseRunUuid]
       );
       if (existing.rows.length > 0) {
-        return res.status(409).json({ success: false, error: 'Student is already enrolled in this course run' });
+        if (existing.rows[0].enrolment_status === 'Admin Removed') {
+          // Re-activate the soft-deleted enrollment
+          await client.query(
+            `UPDATE enrollment SET enrolment_status = 'Confirmed', updated_at = NOW() WHERE id = $1`,
+            [existing.rows[0].id]
+          );
+          enrollmentRestored = true;
+        } else {
+          return res.status(409).json({ success: false, error: 'Student is already enrolled in this course run' });
+        }
       }
 
       const userInfoResult = await client.query(
@@ -79,11 +89,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             [resolvedUserId]
           );
           const existingEnroll = await client.query(
-            `SELECT id FROM enrollment WHERE user_id = $1 AND course_run_id = $2`,
+            `SELECT id, enrolment_status FROM enrollment WHERE user_id = $1 AND course_run_id = $2`,
             [resolvedUserId, courseRunUuid]
           );
           if (existingEnroll.rows.length > 0) {
-            return res.status(409).json({ success: false, error: 'Student is already enrolled in this course run' });
+            if (existingEnroll.rows[0].enrolment_status === 'Admin Removed') {
+              // Re-activate the soft-deleted enrollment
+              await client.query(
+                `UPDATE enrollment SET enrolment_status = 'Confirmed', updated_at = NOW() WHERE id = $1`,
+                [existingEnroll.rows[0].id]
+              );
+              enrollmentRestored = true;
+            } else {
+              return res.status(409).json({ success: false, error: 'Student is already enrolled in this course run' });
+            }
           }
         } else {
           // Create app_user with default password
@@ -128,12 +147,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     }
 
-    // Create enrollment
-    await client.query(
-      `INSERT INTO enrollment (id, user_id, course_id, course_run_id, progress_percent, payment_status, assessment_status, enrolment_date, email, nric, created_at, updated_at)
-       VALUES (gen_random_uuid(), $1, $2, $3, 0, 'Unpaid', 'Pending', CURRENT_DATE, $4, $5, NOW(), NOW())`,
-      [resolvedUserId, courseId, courseRunUuid, userEmail || null, userNric || null]
-    );
+    // Create enrollment (skip if we just restored an Admin Removed row)
+    if (!enrollmentRestored) {
+      await client.query(
+        `INSERT INTO enrollment (id, user_id, course_id, course_run_id, progress_percent, payment_status, assessment_status, enrolment_date, email, nric, created_at, updated_at)
+         VALUES (gen_random_uuid(), $1, $2, $3, 0, 'Unpaid', 'Pending', CURRENT_DATE, $4, $5, NOW(), NOW())`,
+        [resolvedUserId, courseId, courseRunUuid, userEmail || null, userNric || null]
+      );
+    }
 
     // Add learner to all existing sessions for manual attendance tracking
     // Use NRIC if available, otherwise _uid_<userId> as identifier (matches handleAddManualLearner pattern)
@@ -152,7 +173,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     await client.query('COMMIT');
-    res.status(200).json({ success: true, message: 'Student enrolled successfully' });
+    res.status(200).json({ success: true, message: enrollmentRestored ? 'Student re-enrolled successfully' : 'Student enrolled successfully' });
   } catch (error) {
     await client.query('ROLLBACK');
     console.error('Error assigning student:', error);

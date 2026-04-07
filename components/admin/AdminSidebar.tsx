@@ -303,6 +303,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate }) => {
                 <NavItem page={AdminPage.TrainerFolderLogs} label="Auto Create Assessment Records Log" isSubItem />
                 <NavItem page={AdminPage.AutoCreateCertificatesLog} label="Auto Create Certificates Log" isSubItem />
                 <NavItem page={AdminPage.CourseRunDateSyncLogs} label="Course Run Date Sync Log" isSubItem />
+                <NavItem page={AdminPage.UpcomingCourseRunsLog} label="TGS Enrolments & Assign Trainers Log" isSubItem />
             </NavSection>
 
             <div className="pt-6 mt-6 border-t border-gray-200 dark:border-gray-700">

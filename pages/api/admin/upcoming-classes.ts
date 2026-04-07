@@ -70,8 +70,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       await pool.query(`SELECT 1 FROM information_schema.tables WHERE table_name = 'trainer_invitation' LIMIT 1`)
     ).rows.length > 0;
     // TPG column shows ONLY tpg_assigned_trainer_* (no fallback to assigned_trainer_*).
-    // Rows without SSG-synced trainer data will render empty here until sync populates
-    // tpg_assigned_trainer_* from ssg_course_runs.link_course_run_trainer.
+    // Rows without SSG-synced trainer data will render empty/N/A.
     const tpgNameExpr = `cr.tpg_assigned_trainer_name`;
     const tpgEmailExpr = `cr.tpg_assigned_trainer_email`;
 
@@ -328,8 +327,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         endDate: row.end_date,
         assignedTrainerTpg: row.assigned_trainer_tpg || '',
         assignedTrainerTpgEmail: row.assigned_trainer_tpg_email || '',
-        assignedTrainerLocal: allLocalPairs.map((trainer) => trainer.name).filter(Boolean).join(', '),
-        assignedTrainerLocalEmail: allLocalPairs.map((trainer) => trainer.email).filter(Boolean).join(', '),
+        assignedTrainerLocal: allLocalPairs[0]?.name || '',
+        assignedTrainerLocalEmail: allLocalPairs[0]?.email || '',
         nextAvailableTrainer,
         nextAvailableTrainerEmail,
         latestInvitationStatus,
