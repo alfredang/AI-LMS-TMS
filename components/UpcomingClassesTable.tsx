@@ -305,13 +305,10 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
 
     const renderTrainerCell = (name: string, email?: string) => {
         if (!name) {
-            return <span className="text-gray-400 dark:text-gray-500">N/A</span>;
+            return <span className="text-gray-400 dark:text-gray-500 text-xs">N/A</span>;
         }
         return (
-            <div className="min-w-[180px]">
-                <div className="text-sm text-gray-900 dark:text-white whitespace-normal">{name}</div>
-                {email ? <div className="text-xs text-gray-500 dark:text-gray-400 whitespace-normal">{email}</div> : null}
-            </div>
+            <span className="text-sm text-gray-900 dark:text-white" title={email || ''}>{name}</span>
         );
     };
 
@@ -571,57 +568,47 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                 <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                                     {upcomingClasses.map((classItem, index) => (
                                         <tr key={index} className="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                                            <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.courseRunId}</td>
-                                            <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">{classItem.courseTitle}</td>
-                                            <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.courseCode}</td>
-                                            <td className="px-4 py-4 whitespace-nowrap text-sm">
+                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.courseRunId}</td>
+                                            <td className="px-4 py-2 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">{classItem.courseTitle}</td>
+                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.courseCode}</td>
+                                            <td className="px-4 py-2 whitespace-nowrap text-sm">
                                                 <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(classItem.classStatus || 'Unknown')}`}>
                                                     {classItem.classStatus}
                                                 </span>
                                             </td>
-                                            <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.digitalAttendanceId || 'N/A'}</td>
-                                            <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{formatDate(classItem.startDate)}</td>
-                                            <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{formatDate(classItem.endDate)}</td>
-                                            <td className="px-4 py-4 align-top text-sm text-gray-700 dark:text-gray-200">{renderTrainerCell(classItem.assignedTrainerLocal, classItem.assignedTrainerLocalEmail)}</td>
-                                            <td className="px-4 py-4 align-top text-sm text-gray-700 dark:text-gray-200">{renderTrainerCell(classItem.assignedTrainerTpg, classItem.assignedTrainerTpgEmail)}</td>
-                                            <td className="px-4 py-4 align-top text-sm text-gray-700 dark:text-gray-200">{renderTrainerCell(classItem.nextAvailableTrainer, classItem.nextAvailableTrainerEmail)}</td>
-                                            <td className="px-4 py-4 align-top text-sm text-gray-700 dark:text-gray-200">
-                                                <div className="min-w-[180px] space-y-2">
-                                                    {classItem.latestInvitationStatus ? (
-                                                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${classItem.latestInvitationStatus === 'accepted'
+                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.digitalAttendanceId || 'N/A'}</td>
+                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{formatDate(classItem.startDate)}</td>
+                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{formatDate(classItem.endDate)}</td>
+                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{renderTrainerCell(classItem.assignedTrainerLocal, classItem.assignedTrainerLocalEmail)}</td>
+                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{renderTrainerCell(classItem.assignedTrainerTpg, classItem.assignedTrainerTpgEmail)}</td>
+                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{renderTrainerCell(classItem.nextAvailableTrainer, classItem.nextAvailableTrainerEmail)}</td>
+                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">
+                                                <div className="flex items-center gap-2">
+                                                    {classItem.latestInvitationStatus && (
+                                                        <span className={`inline-flex px-2 py-0.5 text-xs font-semibold rounded-full ${classItem.latestInvitationStatus === 'accepted'
                                                             ? 'bg-green-100 text-green-700'
                                                             : classItem.latestInvitationStatus === 'declined'
                                                                 ? 'bg-red-100 text-red-700'
                                                                 : 'bg-yellow-100 text-yellow-700'
                                                             }`}>
-                                                            {classItem.latestInvitationStatus} {classItem.latestInvitationTrainer ? `• ${classItem.latestInvitationTrainer}` : ''}
+                                                            {classItem.latestInvitationStatus}
                                                         </span>
-                                                    ) : (
-                                                        <span className="text-gray-400 dark:text-gray-500 text-xs">No invitation sent</span>
                                                     )}
-                                                    <div>
-                                                        <Button
-                                                            variant="secondary"
-                                                            size="sm"
-                                                            onClick={() => handleSendTrainerInvitation(classItem)}
-                                                            disabled={!classItem.nextAvailableTrainer || sendingInvitationFor === classItem.id}
-                                                        >
-                                                            {sendingInvitationFor === classItem.id ? (
-                                                                <>
-                                                                    <Icon name={IconName.Spinner} className="w-4 h-4 mr-2" />
-                                                                    Sending...
-                                                                </>
-                                                            ) : (
-                                                                <>
-                                                                    <Icon name={IconName.Send} className="w-4 h-4 mr-2" />
-                                                                    Send Invitation
-                                                                </>
-                                                            )}
-                                                        </Button>
-                                                    </div>
+                                                    <Button
+                                                        variant="secondary"
+                                                        size="sm"
+                                                        onClick={() => handleSendTrainerInvitation(classItem)}
+                                                        disabled={!classItem.nextAvailableTrainer || sendingInvitationFor === classItem.id}
+                                                    >
+                                                        {sendingInvitationFor === classItem.id ? (
+                                                            <Icon name={IconName.Spinner} className="w-3.5 h-3.5 animate-spin" />
+                                                        ) : (
+                                                            <Icon name={IconName.Send} className="w-3.5 h-3.5" />
+                                                        )}
+                                                    </Button>
                                                 </div>
                                             </td>
-                                            <td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
+                                            <td className="px-4 py-2 whitespace-nowrap text-sm font-medium">
                                                 <div className="flex items-center space-x-2">
                                                     <Button
                                                         size="sm"
