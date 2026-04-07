@@ -196,6 +196,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate }) => {
                 </SubSection>
 
                 <SubSection title="Grant" isOpen={openSections.tpgGrant} onToggle={() => toggleSection('tpgGrant')}>
+                    <NavItem page={AdminPage.GrantCalculator} label="Grant Calculator" isSubItem />
                     <NavItem page={AdminPage.SearchGrant} label="Search Grant" isSubItem />
                     <NavItem page={AdminPage.ViewGrantStatus} label="View Grant Status" isSubItem />
                 </SubSection>

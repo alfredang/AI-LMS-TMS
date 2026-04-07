@@ -67,6 +67,7 @@ export enum AdminPage {
   AddCourseRun = 'addCourseRun',
   ApplyNewGrant = 'applyNewGrant',
   ViewGrantStatus = 'viewGrantStatus',
+  GrantCalculator = 'grantCalculator',
   SubmitAssessment = 'submitAssessment',
   UpdateAssessment = 'updateAssessment',
   ApplyNewClaim = 'applyNewClaim',
