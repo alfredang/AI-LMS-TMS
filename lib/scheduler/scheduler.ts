@@ -19,6 +19,7 @@ export interface SchedulerTask {
     cron_expression: string;
     enabled: boolean;
     api_endpoint: string;
+    email_template: string | null;
     last_run_at: string | null;
     last_status: string | null;
     created_at: string;
@@ -70,11 +71,16 @@ async function ensureSchedulerTable() {
             cron_expression  TEXT NOT NULL,
             enabled          BOOLEAN NOT NULL DEFAULT true,
             api_endpoint     TEXT NOT NULL,
+            email_template   TEXT,
             last_run_at      TIMESTAMPTZ,
             last_status      TEXT,
             created_at       TIMESTAMPTZ DEFAULT NOW(),
             updated_at       TIMESTAMPTZ DEFAULT NOW()
         )
+    `);
+    // Add email_template column if it doesn't exist (for existing installations)
+    await pool.query(`
+        ALTER TABLE scheduler_config ADD COLUMN IF NOT EXISTS email_template TEXT
     `);
 }
 
@@ -367,7 +373,7 @@ export async function getSchedulerTasks(): Promise<SchedulerTask[]> {
 
 export async function updateTaskSchedule(
     taskId: string,
-    updates: { cron_expression?: string; enabled?: boolean }
+    updates: { cron_expression?: string; enabled?: boolean; email_template?: string | null }
 ): Promise<SchedulerTask | null> {
     const setClauses: string[] = ['updated_at = NOW()'];
     const values: any[] = [];
@@ -384,6 +390,11 @@ export async function updateTaskSchedule(
     if (updates.enabled !== undefined) {
         setClauses.push(`enabled = $${paramIdx++}`);
         values.push(updates.enabled);
+    }
+
+    if (updates.email_template !== undefined) {
+        setClauses.push(`email_template = $${paramIdx++}`);
+        values.push(updates.email_template);
     }
 
     values.push(taskId);

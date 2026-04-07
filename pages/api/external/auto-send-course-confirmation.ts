@@ -161,13 +161,34 @@ export async function runAutomation() {
     console.log(`[auto-send-confirmation] Starting run ${runId} at ${new Date().toISOString()}`);
 
     try {
+        // 0. Determine which email template to use from scheduler config
+        let templatePrefix = 'final_course_confirmation';
+        try {
+            const configRes = await pool.query(
+                `SELECT email_template FROM scheduler_config WHERE id = 'auto_send_course_confirmation'`
+            );
+            if (configRes.rows[0]?.email_template) {
+                templatePrefix = configRes.rows[0].email_template;
+            }
+        } catch { /* use default */ }
+        console.log(`[auto-send-confirmation] Using email template: ${templatePrefix}`);
+
+        const subjectCol = `${templatePrefix}_email_subject`;
+        const bodyCol = `${templatePrefix}_email_body`;
+        const ccCol = `${templatePrefix}_email_cc`;
+
         // 1. Fetch training provider settings + email template
+        // Ensure columns exist (templates are added dynamically via ALTER TABLE)
+        await pool.query(`ALTER TABLE training_provider ADD COLUMN IF NOT EXISTS ${subjectCol} TEXT`);
+        await pool.query(`ALTER TABLE training_provider ADD COLUMN IF NOT EXISTS ${bodyCol} TEXT`);
+        await pool.query(`ALTER TABLE training_provider ADD COLUMN IF NOT EXISTS ${ccCol} TEXT`);
+
         const tpResult = await pool.query(`
             SELECT email_user, google_client_id, google_client_secret, google_refresh_token,
                    contact_person_name, company_phone, company_email,
-                   final_course_confirmation_email_subject,
-                   final_course_confirmation_email_body,
-                   final_course_confirmation_email_cc
+                   ${subjectCol} as email_subject,
+                   ${bodyCol} as email_body,
+                   ${ccCol} as email_cc
             FROM training_provider LIMIT 1
         `);
         if (tpResult.rows.length === 0) {
@@ -177,13 +198,13 @@ export async function runAutomation() {
         const tpRow = tpResult.rows[0];
         const tp = await getTrainingPartnerIdentifiers();
 
-        const emailSubject = tpRow.final_course_confirmation_email_subject || '';
-        const emailBody = tpRow.final_course_confirmation_email_body || '';
-        const emailCc = tpRow.final_course_confirmation_email_cc || '';
+        const emailSubject = tpRow.email_subject || '';
+        const emailBody = tpRow.email_body || '';
+        const emailCc = tpRow.email_cc || '';
 
         if (!emailSubject && !emailBody) {
-            console.warn('[auto-send-confirmation] No Final Course Confirmation Email template configured — skipping');
-            return { success: false, error: 'Email template not configured' };
+            console.warn(`[auto-send-confirmation] No "${templatePrefix}" email template configured — skipping`);
+            return { success: false, error: `Email template "${templatePrefix}" not configured` };
         }
 
         // 2. Find course runs starting in 3 days

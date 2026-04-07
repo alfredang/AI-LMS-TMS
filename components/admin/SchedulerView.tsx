@@ -11,11 +11,25 @@ interface SchedulerTask {
     cron_expression: string;
     enabled: boolean;
     api_endpoint: string;
+    email_template: string | null;
     last_run_at: string | null;
     last_status: string | null;
     created_at: string;
     updated_at: string;
 }
+
+// Tasks that support email template selection
+const EMAIL_TEMPLATE_TASKS = ['auto_send_course_confirmation', 'auto_create_certificates'];
+
+const EMAIL_TEMPLATES: { value: string; label: string }[] = [
+    { value: 'final_course_confirmation', label: 'Final Course Confirmation' },
+    { value: 'course_confirmation', label: 'Course Confirmation' },
+    { value: 'certificate', label: 'Certificate' },
+    { value: 'feedback', label: 'Feedback' },
+    { value: 'trainer_invitation', label: 'Trainer Invitation' },
+    { value: 'otp', label: 'OTP' },
+    { value: 'password_reset', label: 'Password Reset' },
+];
 
 // ── Cron Expression Helpers ───────────────────────────────────────────────────
 
@@ -403,6 +417,40 @@ export const SchedulerView: React.FC = () => {
                                 <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
                                     {task.description}
                                 </p>
+
+                                {/* Email Template Selector */}
+                                {EMAIL_TEMPLATE_TASKS.includes(task.id) && (
+                                    <div className="mb-4">
+                                        <label className="font-medium text-gray-500 dark:text-gray-400 text-xs uppercase tracking-wider block mb-1.5">Email Template</label>
+                                        <select
+                                            value={task.email_template || 'final_course_confirmation'}
+                                            onChange={async (e) => {
+                                                const newTemplate = e.target.value;
+                                                try {
+                                                    const res = await fetch('/api/admin/scheduler', {
+                                                        method: 'PUT',
+                                                        headers: { 'Content-Type': 'application/json' },
+                                                        body: JSON.stringify({ taskId: task.id, email_template: newTemplate }),
+                                                    });
+                                                    const data = await res.json();
+                                                    if (data.success) {
+                                                        setTasks(prev => prev.map(t => t.id === task.id ? data.task : t));
+                                                        setActionMessage({ type: 'success', text: `Email template updated to "${EMAIL_TEMPLATES.find(t => t.value === newTemplate)?.label}"` });
+                                                    } else {
+                                                        setActionMessage({ type: 'error', text: data.error || 'Failed to update template' });
+                                                    }
+                                                } catch {
+                                                    setActionMessage({ type: 'error', text: 'Failed to update template' });
+                                                }
+                                            }}
+                                            className="block w-full max-w-xs px-3 py-2 text-sm text-gray-900 dark:text-white bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                                        >
+                                            {EMAIL_TEMPLATES.map(t => (
+                                                <option key={t.value} value={t.value}>{t.label}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                )}
 
                                 <div className={`grid grid-cols-1 ${editingTaskId === task.id ? 'sm:grid-cols-1' : 'sm:grid-cols-3'} gap-4 text-sm`}>
                                     {/* Schedule */}
