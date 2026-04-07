@@ -391,9 +391,9 @@ export const SchedulerView: React.FC = () => {
             {!loading && !error && (
                 <div className="space-y-4">
                     {tasks.map(task => (
-                        <Card key={task.id} className={`p-0 ${templateDropdownOpen === task.id ? '' : 'overflow-hidden'}`}>
+                        <Card key={task.id} className="p-0 overflow-visible">
                             {/* Card Header */}
-                            <div className={`px-6 py-4 flex items-center justify-between border-b ${
+                            <div className={`px-6 py-4 flex items-center justify-between border-b rounded-t-lg ${
                                 task.enabled
                                     ? 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700'
                                     : 'bg-gray-50 dark:bg-gray-900 border-gray-100 dark:border-gray-800'
@@ -479,7 +479,7 @@ export const SchedulerView: React.FC = () => {
                                                 </button>
 
                                                 {isOpen && (
-                                                    <div className="absolute z-50 bottom-full mb-1 w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-xl max-h-60 overflow-y-auto">
+                                                    <div className="absolute z-50 mt-1 w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-xl max-h-60 overflow-y-auto">
                                                         {EMAIL_TEMPLATES.map(t => {
                                                             const isSelected = t.value === currentTemplate;
                                                             return (
