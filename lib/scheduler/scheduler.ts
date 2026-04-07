@@ -117,6 +117,13 @@ async function seedDefaults() {
             api_endpoint: '/api/external/auto-create-certificates',
         },
         {
+            id: 'auto_send_course_confirmation',
+            name: 'Auto Send Final Course Confirmation Emails',
+            description: 'Sends Final Course Confirmation emails to all confirmed learners in course runs starting in 3 days. Uses the email template configured in Company Settings.',
+            cron_expression: '0 9 * * *', // 9:00 AM daily
+            api_endpoint: '/api/external/auto-send-course-confirmation',
+        },
+        {
             id: 'upcoming_course_runs',
             name: 'Fetch TGS Enrolments & Assign Trainers',
             description: 'For each upcoming TGS- course run within the configured threshold window, searches SSG for enrolments and assigns trainers accordingly. Runs daily at 2:00 AM SGT.',
@@ -167,6 +174,10 @@ function getDirectHandler(taskId: string): TaskHandler | undefined {
         });
         directHandlers.set('auto_create_certificates', async () => {
             const { runAutomation } = await import('../../pages/api/external/auto-create-certificates');
+            return runAutomation();
+        });
+        directHandlers.set('auto_send_course_confirmation', async () => {
+            const { runAutomation } = await import('../../pages/api/external/auto-send-course-confirmation');
             return runAutomation();
         });
         directHandlers.set('sync_course_run_dates', async () => {

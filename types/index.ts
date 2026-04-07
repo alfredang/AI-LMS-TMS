@@ -101,6 +101,7 @@ export enum AdminPage {
   AutoCreateCertificatesLog = 'autoCreateCertificatesLog',
   CourseRunDateSyncLogs = 'courseRunDateSyncLogs',
   UpcomingCourseRunsLog = 'upcomingCourseRunsLog',
+  CourseConfirmationEmailLogs = 'courseConfirmationEmailLogs',
   BackfillEnrollments = 'backfillEnrollments',
   FetchUpcomingEnrolments = 'fetchUpcomingEnrolments',
   CreateCertificate = 'createCertificate',

@@ -6393,3 +6393,166 @@ export const UpcomingCourseRunsLogView: React.FC = () => {
     </div>
   );
 };
+
+// ── Course Confirmation Email Logs ───────────────────────────────────────────
+
+interface ConfirmationEmailLogRow {
+  id: number;
+  run_id: string;
+  course_run_id: string | null;
+  course_title: string | null;
+  course_code: string | null;
+  learner_name: string | null;
+  learner_email: string | null;
+  status: string;
+  error_message: string | null;
+  created_at: string;
+}
+
+export const CourseConfirmationEmailLogsView: React.FC = () => {
+  const { setAdminPage } = useLms();
+  const [logs, setLogs] = useState<ConfirmationEmailLogRow[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [expandedDates, setExpandedDates] = useState<Set<string>>(new Set());
+
+  const fetchLogs = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/admin/course-confirmation-email-logs?limit=500');
+      const json = await res.json();
+      if (json.success) setLogs(json.data);
+    } catch {
+      /* silent */
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { fetchLogs(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const batches = useMemo(() => {
+    const map = new Map<string, ConfirmationEmailLogRow[]>();
+    for (const log of logs) {
+      if (!map.has(log.run_id)) map.set(log.run_id, []);
+      map.get(log.run_id)!.push(log);
+    }
+    return Array.from(map.entries());
+  }, [logs]);
+
+  useEffect(() => {
+    if (batches.length > 0) {
+      setExpandedDates(new Set([batches[0][0]]));
+    }
+  }, [batches.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const toggleDate = (key: string) => {
+    setExpandedDates(prev => {
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
+      return next;
+    });
+  };
+
+  const statusBadge = (status: string) => {
+    const map: Record<string, string> = {
+      sent:    'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
+      skipped: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300',
+      error:   'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
+    };
+    return (
+      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${map[status] ?? map.error}`}>
+        {status}
+      </span>
+    );
+  };
+
+  return (
+    <div>
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+        <h2 className="text-3xl font-bold dark:text-white">Course Confirmation Email Logs</h2>
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" onClick={fetchLogs} disabled={loading}>
+            {loading ? 'Refreshing…' : 'Refresh'}
+          </Button>
+          <Button variant="ghost" onClick={() => setAdminPage(AdminPage.Scheduler)}>
+            ← Back to Scheduler
+          </Button>
+        </div>
+      </div>
+
+      {loading && logs.length === 0 && (
+        <div className="flex justify-center py-16">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto" />
+            <p className="mt-4 text-gray-600 dark:text-gray-400">Loading logs...</p>
+          </div>
+        </div>
+      )}
+
+      {!loading && logs.length === 0 && (
+        <Card className="p-10">
+          <div className="text-center text-gray-500 dark:text-gray-400">
+            <p className="text-lg font-medium">No confirmation email logs yet</p>
+            <p className="text-sm mt-1">Logs will appear here after the scheduled task runs.</p>
+          </div>
+        </Card>
+      )}
+
+      {batches.map(([runId, entries]) => {
+        const isOpen = expandedDates.has(runId);
+        const date = entries[0]?.created_at ? new Date(entries[0].created_at).toLocaleString('en-SG', {
+          day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Asia/Singapore',
+        }) : runId;
+        const sentCount = entries.filter(e => e.status === 'sent').length;
+        const errorCount = entries.filter(e => e.status === 'error').length;
+        const skippedCount = entries.filter(e => e.status === 'skipped').length;
+
+        return (
+          <div key={runId} className="mb-3">
+            <button onClick={() => toggleDate(runId)} className="w-full flex items-center justify-between px-4 py-3 bg-gray-100 dark:bg-gray-800 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
+              <div className="flex items-center gap-3">
+                <span className={`transform transition-transform ${isOpen ? 'rotate-90' : ''}`}>▶</span>
+                <span className="font-semibold text-gray-900 dark:text-white">{date}</span>
+                <span className="text-xs text-gray-500 dark:text-gray-400">({entries.length} records)</span>
+              </div>
+              <div className="flex items-center gap-2 text-xs">
+                {sentCount > 0 && <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 font-semibold">{sentCount} sent</span>}
+                {skippedCount > 0 && <span className="px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300 font-semibold">{skippedCount} skipped</span>}
+                {errorCount > 0 && <span className="px-2 py-0.5 rounded-full bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300 font-semibold">{errorCount} errors</span>}
+              </div>
+            </button>
+
+            {isOpen && (
+              <div className="mt-1 overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-xs text-gray-500 dark:text-gray-400 uppercase">
+                      <th className="px-3 py-2">Status</th>
+                      <th className="px-3 py-2">Learner</th>
+                      <th className="px-3 py-2">Email</th>
+                      <th className="px-3 py-2">Course</th>
+                      <th className="px-3 py-2">Course Run ID</th>
+                      <th className="px-3 py-2">Error</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                    {entries.map(entry => (
+                      <tr key={entry.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                        <td className="px-3 py-2">{statusBadge(entry.status)}</td>
+                        <td className="px-3 py-2 text-gray-900 dark:text-white">{entry.learner_name || '—'}</td>
+                        <td className="px-3 py-2 text-gray-600 dark:text-gray-400 font-mono text-xs">{entry.learner_email || '—'}</td>
+                        <td className="px-3 py-2 text-gray-900 dark:text-white">{entry.course_title || '—'}</td>
+                        <td className="px-3 py-2 text-gray-500 dark:text-gray-400 font-mono text-xs">{entry.course_run_id || '—'}</td>
+                        <td className="px-3 py-2 text-red-600 dark:text-red-400 text-xs max-w-xs truncate" title={entry.error_message || ''}>{entry.error_message || '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+};

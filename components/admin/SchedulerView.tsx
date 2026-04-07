@@ -115,10 +115,11 @@ const StatusBadge: React.FC<{ status: string | null }> = ({ status }) => {
 // ── Task ID → Log Page mapping ────────────────────────────────────────────────
 
 const TASK_LOG_PAGE: Record<string, AdminPage> = {
-    auto_create_learners:       AdminPage.AutomationLogs,
-    auto_create_trainer_folders: AdminPage.TrainerFolderLogs,
-    sync_course_run_dates:      AdminPage.CourseRunDateSyncLogs,
-    upcoming_course_runs:       AdminPage.UpcomingCourseRunsLog,
+    auto_create_learners:           AdminPage.AutomationLogs,
+    auto_create_trainer_folders:    AdminPage.TrainerFolderLogs,
+    sync_course_run_dates:          AdminPage.CourseRunDateSyncLogs,
+    upcoming_course_runs:           AdminPage.UpcomingCourseRunsLog,
+    auto_send_course_confirmation:  AdminPage.CourseConfirmationEmailLogs,
 };
 
 // ── Main Component ────────────────────────────────────────────────────────────
