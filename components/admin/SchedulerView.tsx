@@ -23,8 +23,8 @@ interface SchedulerTask {
 const EMAIL_TEMPLATE_TASKS = ['auto_send_course_confirmation', 'auto_create_certificates'];
 
 const EMAIL_TEMPLATES: { value: string; label: string }[] = [
-    { value: 'final_course_confirmation', label: 'Final Course Confirmation Email' },
-    { value: 'course_confirmation', label: 'Course Confirmation Email' },
+    { value: 'final_course_confirmation', label: 'Final Class Confirm Email' },
+    { value: 'course_confirmation', label: 'Class Confirm Email' },
     { value: 'certificate', label: 'Certificate Email' },
     { value: 'feedback', label: 'Feedback Email' },
     { value: 'trainer_invitation', label: 'Trainer Invitation Email' },
