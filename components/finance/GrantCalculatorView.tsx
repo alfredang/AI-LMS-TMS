@@ -247,6 +247,7 @@ export default function GrantCalculatorView() {
             <option key={opt.value} value={opt.value}>{opt.label}</option>
           ))}
         </select>
+        <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">Personalised Grant Calculator only works with App 1 (Skilleto) certificate.</p>
       </div>
 
       {/* Tabs */}
@@ -300,7 +301,7 @@ export default function GrantCalculatorView() {
                       <th className="text-left px-4 py-3 font-semibold">Training Partner</th>
                       <th className="text-right px-4 py-3 font-semibold">Approved Fee</th>
                       <th className="text-right px-4 py-3 font-semibold">Grant Amount</th>
-                      <th className="text-right px-4 py-3 font-semibold">Fee After Grant</th>
+                      <th className="text-right px-4 py-3 font-semibold">Fee After Grant (w/o GST)</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -469,7 +470,7 @@ export default function GrantCalculatorView() {
                       <th className="text-left px-4 py-3 font-semibold">Training Partner</th>
                       <th className="text-right px-4 py-3 font-semibold">Approved Fee</th>
                       <th className="text-right px-4 py-3 font-semibold">Grant Amount</th>
-                      <th className="text-right px-4 py-3 font-semibold">Fee After Grant</th>
+                      <th className="text-right px-4 py-3 font-semibold">Fee After Grant (w/o GST)</th>
                     </tr>
                   </thead>
                   <tbody>

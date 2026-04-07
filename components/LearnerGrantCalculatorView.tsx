@@ -136,6 +136,7 @@ export default function LearnerGrantCalculatorView() {
           className="w-full max-w-xs rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-white px-3 py-2 text-sm font-medium focus:ring-2 focus:ring-primary focus:border-primary">
           {APP_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
         </select>
+        <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">Personalised Grant Calculator only works with App 1 (Skilleto) certificate.</p>
       </div>
 
       {/* Main Fields */}
@@ -204,27 +205,27 @@ export default function LearnerGrantCalculatorView() {
             <table className="w-full text-sm border-collapse">
               <thead>
                 <tr className="bg-gray-800 dark:bg-slate-700 text-white">
-                  <th className="text-left px-4 py-3 font-semibold">Course</th>
-                  <th className="text-left px-4 py-3 font-semibold">Training Partner</th>
-                  <th className="text-right px-4 py-3 font-semibold">Approved Fee</th>
-                  <th className="text-right px-4 py-3 font-semibold">Grant Amount</th>
-                  <th className="text-right px-4 py-3 font-semibold">Fee After Grant</th>
+                  <th className="text-left px-6 py-3 font-semibold w-1/5">Course</th>
+                  <th className="text-left px-6 py-3 font-semibold w-1/5">Training Partner</th>
+                  <th className="text-right px-6 py-3 font-semibold w-1/5">Approved Fee</th>
+                  <th className="text-right px-6 py-3 font-semibold w-1/5">Grant Amount</th>
+                  <th className="text-right px-6 py-3 font-semibold w-1/5">Fee After Grant (w/o GST)</th>
                 </tr>
               </thead>
               <tbody>
                 {extractFeeSummary(result).length > 0 ? extractFeeSummary(result).map((row, i) => (
                   <tr key={i} className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-slate-700/50">
-                    <td className="px-4 py-3">
+                    <td className="px-6 py-3">
                       <div className="font-medium text-gray-900 dark:text-white">{row.courseName}</div>
                       <div className="text-xs text-gray-500 dark:text-gray-400">{row.courseRef}</div>
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-6 py-3">
                       <div className="text-gray-900 dark:text-white">{row.tpName}</div>
                       <div className="text-xs text-gray-500 dark:text-gray-400">{row.tpUen}</div>
                     </td>
-                    <td className="px-4 py-3 text-right font-mono tabular-nums">{formatCurrency(row.approvedFee)}</td>
-                    <td className="px-4 py-3 text-right font-mono tabular-nums text-green-600 dark:text-green-400">− {formatCurrency(row.totalGrant)}</td>
-                    <td className="px-4 py-3 text-right font-mono tabular-nums font-bold text-primary">{formatCurrency(row.feeAfterGrant)}</td>
+                    <td className="px-6 py-3 text-right font-mono tabular-nums">{formatCurrency(row.approvedFee)}</td>
+                    <td className="px-6 py-3 text-right font-mono tabular-nums text-green-600 dark:text-green-400">− {formatCurrency(row.totalGrant)}</td>
+                    <td className="px-6 py-3 text-right font-mono tabular-nums font-bold text-primary">{formatCurrency(row.feeAfterGrant)}</td>
                   </tr>
                 )) : (
                   <tr><td colSpan={5} className="px-4 py-6 text-center text-gray-500 dark:text-gray-400">No course data returned. Check the JSON response.</td></tr>
