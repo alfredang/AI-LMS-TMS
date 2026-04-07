@@ -12,6 +12,7 @@ export enum View {
   ApiEndpoints = 'apiEndpoints',
   AdminManagement = 'adminManagement',
   Scheduler = 'scheduler',
+  Webhooks = 'webhooks',
   Documents = 'documents',
   PrivacyPolicy = 'privacyPolicy',
   AcceptableUsePolicy = 'acceptableUsePolicy',

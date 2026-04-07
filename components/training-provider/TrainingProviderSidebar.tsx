@@ -27,6 +27,7 @@ const TrainingProviderSidebar: React.FC<TrainingProviderSidebarProps> = ({ onNav
         { view: View.ApiEndpoints, label: 'API Endpoints', icon: IconName.Link },
         { view: View.Documents, label: 'Documents', icon: IconName.FileText },
         { view: View.Scheduler, label: 'Task Scheduler', icon: IconName.Calendar },
+        { view: View.Webhooks, label: 'Webhooks', icon: IconName.Link },
     ];
 
     const templateItems = [
