@@ -605,10 +605,9 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                                 </td>
                                                 <td className="px-4 py-2 whitespace-nowrap text-sm font-medium">
                                                     <Button
-                                                        variant="ghost"
+                                                        variant="primary"
                                                         size="sm"
                                                         onClick={() => handleEditClass(classItem)}
-                                                        className="!text-blue-600 hover:!bg-blue-50"
                                                     >
                                                         <Icon name={IconName.Edit} className="w-4 h-4 mr-1" />
                                                         Edit
