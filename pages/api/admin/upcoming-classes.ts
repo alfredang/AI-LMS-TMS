@@ -223,8 +223,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       `
         SELECT
           COUNT(DISTINCT cr.id) AS total_classes,
-          COUNT(DISTINCT cr.id) FILTER (WHERE cr.class_status = 'Confirmed') AS total_confirmed_classes,
-          COUNT(DISTINCT cr.id) FILTER (WHERE cr.class_status = 'Pending') AS total_pending_classes,
+          COUNT(DISTINCT cr.id) FILTER (
+            WHERE EXISTS (SELECT 1 FROM course_run_trainer crt WHERE crt.course_run_id = cr.id)
+          ) AS total_confirmed_classes,
+          COUNT(DISTINCT cr.id) FILTER (
+            WHERE NOT EXISTS (SELECT 1 FROM course_run_trainer crt WHERE crt.course_run_id = cr.id)
+          ) AS total_pending_classes,
           COUNT(DISTINCT cr.id) FILTER (
             WHERE COALESCE(${tpgNameExpr}, '') <> ''
           ) AS total_assigned_tpg_classes,
