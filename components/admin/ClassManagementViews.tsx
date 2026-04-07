@@ -2190,6 +2190,30 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                         </select>
                                     </div>
                                 </div>
+                                <div className="mt-4 flex items-center gap-3">
+                                    <Button
+                                        onClick={async () => {
+                                            if (!courseToEdit?.id) return;
+                                            try {
+                                                const res = await fetch(getApiUrl('/api/admin/upcoming-classes'), {
+                                                    method: 'PUT',
+                                                    headers: { 'Content-Type': 'application/json' },
+                                                    body: JSON.stringify({ id: courseToEdit.id, class_status: classStatus, class_type: classType }),
+                                                });
+                                                const data = await res.json();
+                                                if (data.success) {
+                                                    showInfoPopup('Class Status & Type saved successfully');
+                                                } else {
+                                                    showErrorPopup(data.error || 'Failed to save');
+                                                }
+                                            } catch {
+                                                showErrorPopup('Failed to save Class Status & Type');
+                                            }
+                                        }}
+                                    >
+                                        Save Status & Type
+                                    </Button>
+                                </div>
                             </FormSection>
                         )}
 
