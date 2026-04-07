@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useLms } from '@contexts/LmsContext';
+import { useAppVersion } from '@hooks/useAppVersion';
 import { View } from '@app-types';
 import { Icon, IconName } from '../ui/Icon';
 
@@ -9,6 +10,7 @@ interface TrainingProviderSidebarProps {
 
 const TrainingProviderSidebar: React.FC<TrainingProviderSidebarProps> = ({ onNavigate }) => {
     const { currentView, handleNavigation, selectedCourse } = useLms();
+    const appVersion = useAppVersion();
 
     const templateViews = [View.OtpEmailTemplate, View.CertificateEmailTemplate, View.FeedbackEmailTemplate, View.PasswordResetEmailTemplate, View.TrainerInvitationEmailTemplate, View.FinalCourseConfirmationEmailTemplate, View.CourseConfirmationEmailTemplate, View.PrivacyPolicy, View.AcceptableUsePolicy];
     const [templatesOpen, setTemplatesOpen] = useState(templateViews.includes(currentView));
@@ -162,7 +164,7 @@ const TrainingProviderSidebar: React.FC<TrainingProviderSidebarProps> = ({ onNav
             </div>
 
             <div className="pt-6 mt-6 border-t border-gray-200 dark:border-gray-700">
-                <p className="px-3 text-[10px] text-gray-400 dark:text-gray-300 font-mono">version {process.env.NEXT_PUBLIC_COMMIT_HASH || 'dev'}</p>
+                <p className="px-3 text-[10px] text-gray-400 dark:text-gray-300 font-mono">version {appVersion}</p>
             </div>
         </nav>
     );

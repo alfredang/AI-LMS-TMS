@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useLms } from '@contexts/LmsContext';
 import { AdminPage } from '@app-types';
+import { useAppVersion } from '@hooks/useAppVersion';
 
 interface NavSectionProps {
     title: string;
@@ -74,6 +75,7 @@ const USEFUL_LINKS = [
 
 const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate }) => {
     const { adminPage, setAdminPage, setEditingCourseRun, setEditingCourse, setSelectedCourse, setCourseEditMode, trainingProviderProfile } = useLms();
+    const appVersion = useAppVersion();
 
     const [openSections, setOpenSections] = useState<Record<string, boolean>>({
         calendar: false,
@@ -303,7 +305,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate }) => {
             </NavSection>
 
             <div className="pt-6 mt-6 border-t border-gray-200 dark:border-gray-700">
-                <p className="px-3 text-[10px] text-gray-400 dark:text-gray-300 font-mono">version {process.env.NEXT_PUBLIC_COMMIT_HASH || 'dev'}</p>
+                <p className="px-3 text-[10px] text-gray-400 dark:text-gray-300 font-mono">version {appVersion}</p>
             </div>
         </nav>
     );
