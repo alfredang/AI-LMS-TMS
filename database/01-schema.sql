@@ -1127,7 +1127,7 @@ CREATE TABLE public.training_provider (
     ssg_app3_encryption_key text,
     ssg_app4_client_id text,
     ssg_app4_client_secret text,
-    ssg_default_app text DEFAULT 'app2',
+    ssg_default_app text DEFAULT 'app1',
     color_scheme text,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,

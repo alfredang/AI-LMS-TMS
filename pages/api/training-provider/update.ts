@@ -617,7 +617,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         profileData.ssgApp3EncryptionKey ?? null,
         profileData.ssgApp4ClientId ?? null,
         profileData.ssgApp4ClientSecret ?? null,
-        profileData.ssgDefaultApp || 'app2'
+        profileData.ssgDefaultApp || 'app1'
       ];
 
       console.log('🔍 File upload parameters being sent to database:', {
