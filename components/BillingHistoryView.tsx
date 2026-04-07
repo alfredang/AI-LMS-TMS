@@ -54,11 +54,53 @@ const getPaymentBadge = (status: string | null) => {
   }
 };
 
+// ── Download handler ──────────────────────────────────────────────────────────
+// Calls /api/billing/proforma, receives a PDF blob, triggers browser download.
+
+const downloadProForma = async (record: BillingRecord): Promise<void> => {
+  const res = await fetch('/api/billing/proforma', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      enrolment_id: record.enrolment_id,
+      full_name: record.full_name,
+      course_title: record.course_title,
+      course_code: record.course_code,
+      course_fees_exclude_gst: record.course_fees_exclude_gst,
+      start_date: record.start_date,
+      grants: record.grants,
+      // Pass MCES eligibility based on grants
+      eligibility: record.is_mces_eligible ? 'above' : 'below',
+      sponsorship_type: 'Self-Sponsored', // adjust if you store this on the record
+    }),
+  });
+
+  if (!res.ok) {
+    throw new Error('Failed to generate PDF');
+  }
+
+  // Trigger browser download
+  const blob = await res.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  const orderNum = (record.enrolment_id ?? record.id).replace('#', '');
+  a.download = `ProFormaInvoice_${orderNum}.pdf`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
+};
+
+// ── Component ─────────────────────────────────────────────────────────────────
+
 const BillingHistoryView: React.FC = () => {
   const { currentUser } = useLms();
   const [records, setRecords] = useState<BillingRecord[]>([]);
   const [loading, setLoading] = useState(false);
   const [fetched, setFetched] = useState(false);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
 
   const fetchBillingHistory = useCallback(async () => {
     if (!currentUser?.id) return;
@@ -81,6 +123,19 @@ const BillingHistoryView: React.FC = () => {
     fetchBillingHistory();
   }, [fetchBillingHistory]);
 
+  const handleDownload = async (record: BillingRecord) => {
+    setDownloadingId(record.id);
+    setDownloadError(null);
+    try {
+      await downloadProForma(record);
+    } catch (err) {
+      console.error('[BillingHistory] Download error:', err);
+      setDownloadError('Failed to generate invoice. Please try again.');
+    } finally {
+      setDownloadingId(null);
+    }
+  };
+
   const paidCount = records.filter(r => r.payment_status === 'Paid').length;
   const unpaidCount = records.filter(r => r.payment_status === 'Unpaid').length;
 
@@ -88,6 +143,7 @@ const BillingHistoryView: React.FC = () => {
     <div>
       <h2 className="text-3xl font-bold mb-6">Billing History</h2>
       <div className="grid grid-cols-1 gap-6">
+
         {/* Summary Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <Card className="p-5">
@@ -125,6 +181,13 @@ const BillingHistoryView: React.FC = () => {
           </Card>
         </div>
 
+        {/* Error banner */}
+        {downloadError && (
+          <div className="px-4 py-3 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 text-sm">
+            {downloadError}
+          </div>
+        )}
+
         {/* Invoice Table */}
         <Card className="p-6">
           <div className="flex items-center justify-between mb-4">
@@ -152,9 +215,7 @@ const BillingHistoryView: React.FC = () => {
             <div className="text-center py-12 px-6 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
               <Icon name={IconName.DollarSign} className="w-24 h-24 mx-auto mb-6 text-primary" />
               <h4 className="text-xl font-bold text-on-surface">No invoices loaded</h4>
-              <p className="mt-2 text-subtle max-w-md mx-auto">
-                Click Refresh to load your billing history.
-              </p>
+              <p className="mt-2 text-subtle max-w-md mx-auto">Click Refresh to load your billing history.</p>
             </div>
           ) : records.length === 0 ? (
             <div className="text-center py-12 px-6 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
@@ -179,6 +240,7 @@ const BillingHistoryView: React.FC = () => {
                     <th className="text-right py-3 px-4 font-semibold text-subtle">Nett Payable</th>
                     <th className="text-center py-3 px-4 font-semibold text-subtle">Payment</th>
                     <th className="text-center py-3 px-4 font-semibold text-subtle">Status</th>
+                    <th className="text-center py-3 px-4 font-semibold text-subtle">Quotation</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -197,6 +259,7 @@ const BillingHistoryView: React.FC = () => {
                       : 0;
                     const fee = parseFloat(record.course_fees_exclude_gst || '0');
                     const nettPayable = fee > 0 ? fee - baselineAmt - enhancedAmt : 0;
+                    const isDownloading = downloadingId === record.id;
 
                     return (
                       <tr key={record.id} className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/30">
@@ -232,6 +295,31 @@ const BillingHistoryView: React.FC = () => {
                           }`}>
                             {record.enrolment_status || 'Unknown'}
                           </span>
+                        </td>
+
+                        {/* ── Pro Forma Download ── */}
+                        <td className="py-3 px-4 text-center">
+                          <button
+                            onClick={() => handleDownload(record)}
+                            disabled={isDownloading}
+                            title="Download Pro Forma Invoice"
+                            className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-colors
+                              bg-blue-50 text-blue-700 hover:bg-blue-100
+                              dark:bg-blue-900/20 dark:text-blue-400 dark:hover:bg-blue-900/40
+                              disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {isDownloading ? (
+                              <>
+                                <Icon name={IconName.Spinner} className="w-3.5 h-3.5 animate-spin" />
+                                <span>Generating...</span>
+                              </>
+                            ) : (
+                              <>
+                                <Icon name={IconName.FilePdf} className="w-3.5 h-3.5" />
+                                <span>Pro Forma</span>
+                              </>
+                            )}
+                          </button>
                         </td>
                       </tr>
                     );
