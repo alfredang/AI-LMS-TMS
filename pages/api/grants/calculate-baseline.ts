@@ -7,8 +7,7 @@ import { HttpClient, HTTPRequestBuilder, HttpMethod } from '../../../lib/ssg/uti
  * Calculate baseline grant via SSG Grant Calculator API (v3.0).
  * Body: { courses: [{ trainingPartnerUen, courseReferenceNumber }], app?: string }
  *
- * This endpoint does NOT use encryption — it sends plain JSON.
- * Supports cert auth (App 1/2/3) and OAuth (App 4).
+ * Sends plain JSON (no encryption) with x-api-version: v3.0 and mTLS cert auth.
  */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -18,10 +17,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const { courses, app } = req.body;
 
   if (!courses || !Array.isArray(courses) || courses.length === 0) {
-    return res.status(400).json({
-      success: false,
-      error: 'courses array is required. Each entry needs trainingPartnerUen and courseReferenceNumber.',
-    });
+    return res.status(400).json({ success: false, error: 'courses array is required.' });
   }
 
   try {
@@ -39,10 +35,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       .withHeader('x-api-version', 'v3.0')
       .withBody(ssgPayload);
 
-    // App 4 uses OAuth bearer token; others use mTLS certificate
     if (credentials.oauthClientId && credentials.oauthClientSecret) {
-      const token = await getOAuthToken(ssgBaseUrl, credentials.oauthClientId, credentials.oauthClientSecret);
-      builder.withHeader('Authorization', `Bearer ${token}`);
+      const basic = Buffer.from(`${credentials.oauthClientId}:${credentials.oauthClientSecret}`).toString('base64');
+      const tokenResp = await fetch(`${ssgBaseUrl}/dp-oauth/oauth/token`, {
+        method: 'POST',
+        headers: { 'Authorization': `Basic ${basic}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'grant_type=client_credentials',
+      });
+      if (!tokenResp.ok) throw new Error(`OAuth token failed: ${tokenResp.status}`);
+      const tokenData = await tokenResp.json();
+      builder.withHeader('Authorization', `Bearer ${tokenData.access_token}`);
     } else if (credentials.certificateContent && credentials.privateKeyContent) {
       builder.withCertificate(credentials.certificateContent, credentials.privateKeyContent);
     }
@@ -53,46 +55,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
 
     const httpResponse = await httpClient.request(builder.build());
-
     console.log(`📊 SSG Grant Calculator [${app || 'default'}] response [${httpResponse.status}]:`, JSON.stringify(httpResponse.data));
 
     if (httpResponse.status !== 200) {
-      return res.status(httpResponse.status).json({
-        success: false,
-        error: `SSG error ${httpResponse.status}`,
-        details: httpResponse.data,
-      });
+      return res.status(httpResponse.status).json({ success: false, error: `SSG error ${httpResponse.status}`, details: httpResponse.data });
     }
 
     return res.status(200).json({ success: true, data: httpResponse.data });
 
   } catch (error) {
     console.error('❌ Grant Calculator error:', error);
-    return res.status(500).json({
-      success: false,
-      error: error instanceof Error ? error.message : 'Internal server error',
-    });
+    return res.status(500).json({ success: false, error: error instanceof Error ? error.message : 'Internal server error' });
   }
-}
-
-/** Fetch OAuth bearer token for App 4 (public API) */
-async function getOAuthToken(baseUrl: string, clientId: string, clientSecret: string): Promise<string> {
-  const tokenUrl = `${baseUrl}/dp-oauth/oauth/token`;
-  const basic = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
-
-  const resp = await fetch(tokenUrl, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Basic ${basic}`,
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
-    body: 'grant_type=client_credentials',
-  });
-
-  if (!resp.ok) {
-    throw new Error(`OAuth token request failed: ${resp.status} ${resp.statusText}`);
-  }
-
-  const data = await resp.json();
-  return data.access_token;
 }

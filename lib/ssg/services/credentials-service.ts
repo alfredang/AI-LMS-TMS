@@ -142,7 +142,7 @@ export class SSGCredentialsService {
       
       const credentials: SSGCredentials = {
         uen: row.uen || process.env.TRAINING_PARTNER_UEN,
-        encryptionKey: encKey || process.env.SSG_ENCRYPTION_KEY || process.env.ENCRYPTION_KEY || process.env.CERT_1_ENCRYPTION_KEY || '',
+        encryptionKey: encKey || process.env.CERT_1_ENCRYPTION_KEY || process.env.SSG_ENCRYPTION_KEY || process.env.ENCRYPTION_KEY || '',
         certificatePath: convertToAbsolutePath(certFile),
         privateKeyPath: convertToAbsolutePath(keyFile),
         ssgApiBaseUrl: row.ssg_api_base_url || process.env.SSG_API_BASE_URL || process.env.SSG_API_URL || 'https://api.ssg-wsg.sg'
@@ -284,6 +284,12 @@ export class SSGCredentialsService {
         } else {
           console.error('[creds] Error reading private key file:', fileError);
         }
+      }
+
+      // If cert was loaded from env (CERT_1), ensure encryption key matches
+      if (certEnv && credentials.certificateContent === resolvePem(certEnv) && process.env.CERT_1_ENCRYPTION_KEY) {
+        credentials.encryptionKey = process.env.CERT_1_ENCRYPTION_KEY;
+        console.log('[creds] Encryption key overridden to match env cert (CERT_1)');
       }
 
       // Log encryption key source
