@@ -205,7 +205,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           cr.end_date,
           ${tpgNameExpr},
           ${tpgEmailExpr}
-        ORDER BY cr.start_date ASC
+        ORDER BY cr.start_date ASC NULLS LAST
         LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
       `,
       [...params, limitNum, offset]
