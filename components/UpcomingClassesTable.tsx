@@ -570,6 +570,7 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Trainer (TPG)</th>
                                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Trainer (Local)</th>
                                         <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Attendance</th>
+                                        <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"></th>
                                     </tr>
                                 </thead>
                                 <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
@@ -601,6 +602,17 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                                     ) : (
                                                         <span className="text-gray-400">—</span>
                                                     )}
+                                                </td>
+                                                <td className="px-4 py-2 whitespace-nowrap text-sm font-medium">
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        onClick={() => handleEditClass(classItem)}
+                                                        className="!text-blue-600 hover:!bg-blue-50"
+                                                    >
+                                                        <Icon name={IconName.Edit} className="w-4 h-4 mr-1" />
+                                                        Edit
+                                                    </Button>
                                                 </td>
                                             </tr>
                                         );
