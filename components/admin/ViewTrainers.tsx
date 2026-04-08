@@ -161,16 +161,15 @@ const ViewTrainers: React.FC = () => {
 
   // Sync single trainer image: prompt for LinkedIn image URL, download, upload to Drive
   const handleSyncLinkedInImage = async (trainer: Trainer) => {
-    // Open LinkedIn profile so admin can copy the image URL
-    if (trainer.linkedin_url) {
-      window.open(trainer.linkedin_url.startsWith('http') ? trainer.linkedin_url : `https://${trainer.linkedin_url}`, '_blank');
-    }
+    const linkedinUrl = trainer.linkedin_url?.startsWith('http') ? trainer.linkedin_url : `https://${trainer.linkedin_url}`;
 
     const imageUrl = prompt(
-      `Paste the LinkedIn profile image URL for ${trainer.trainer_name}:\n\n` +
-      `1. Right-click the profile photo on LinkedIn\n` +
-      `2. Select "Copy image address"\n` +
-      `3. Paste below:`
+      `Sync profile image for ${trainer.trainer_name}\n\n` +
+      `Steps:\n` +
+      `1. Open LinkedIn: ${linkedinUrl}\n` +
+      `2. Right-click the profile photo\n` +
+      `3. Select "Copy image address"\n` +
+      `4. Paste the image URL below:`
     );
 
     if (!imageUrl || !imageUrl.trim()) return;
