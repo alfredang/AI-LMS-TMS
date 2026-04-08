@@ -472,8 +472,8 @@ const OngoingClasses: React.FC = () => {
                           size="sm"
                           onClick={() => handleViewDetails(classItem)}
                         >
-                          <Icon name={IconName.Edit} className="w-4 h-4 mr-1" />
-                          Details
+                          <Icon name={IconName.Eye} className="w-4 h-4 mr-1" />
+                          View
                         </Button>
                       </td>
                     </tr>
@@ -488,23 +488,30 @@ const OngoingClasses: React.FC = () => {
                 <p className="text-sm text-gray-500 dark:text-gray-400">
                   Showing {currentPage * ITEMS_PER_PAGE + 1} to {Math.min((currentPage + 1) * ITEMS_PER_PAGE, total)} of {total} classes
                 </p>
-                <div className="flex gap-2">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setCurrentPage(Math.max(0, currentPage - 1))}
-                    disabled={currentPage === 0}
-                  >
-                    Previous
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setCurrentPage(Math.min(totalPages - 1, currentPage + 1))}
-                    disabled={currentPage >= totalPages - 1}
-                  >
-                    Next
-                  </Button>
+                <div className="flex items-center gap-1">
+                  <Button variant="ghost" size="sm" onClick={() => setCurrentPage(0)} disabled={currentPage === 0}>First</Button>
+                  <Button variant="ghost" size="sm" onClick={() => setCurrentPage(currentPage - 1)} disabled={currentPage === 0}>Prev</Button>
+                  {(() => {
+                    const pages: number[] = [];
+                    const maxVisible = 5;
+                    let start = Math.max(0, currentPage - Math.floor(maxVisible / 2));
+                    let end = Math.min(totalPages - 1, start + maxVisible - 1);
+                    if (end - start < maxVisible - 1) start = Math.max(0, end - maxVisible + 1);
+                    if (start > 0) pages.push(0);
+                    if (start > 1) pages.push(-1);
+                    for (let i = start; i <= end; i++) pages.push(i);
+                    if (end < totalPages - 2) pages.push(-2);
+                    if (end < totalPages - 1) pages.push(totalPages - 1);
+                    return pages.map((p, idx) =>
+                      p < 0 ? (
+                        <span key={`ellipsis-${idx}`} className="px-1 text-gray-400 dark:text-gray-500">...</span>
+                      ) : (
+                        <button key={p} onClick={() => setCurrentPage(p)} className={`px-3 py-1 text-sm rounded-md ${p === currentPage ? 'bg-blue-600 text-white font-semibold' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'}`}>{p + 1}</button>
+                      )
+                    );
+                  })()}
+                  <Button variant="ghost" size="sm" onClick={() => setCurrentPage(currentPage + 1)} disabled={currentPage >= totalPages - 1}>Next</Button>
+                  <Button variant="ghost" size="sm" onClick={() => setCurrentPage(totalPages - 1)} disabled={currentPage >= totalPages - 1}>Last</Button>
                 </div>
               </div>
             )}
