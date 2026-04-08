@@ -159,6 +159,7 @@ export const SchedulerView: React.FC = () => {
     const [runningTaskId, setRunningTaskId] = useState<string | null>(null);
     const [actionMessage, setActionMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
     const [templateDropdownOpen, setTemplateDropdownOpen] = useState<string | null>(null);
+    const [searchQuery, setSearchQuery] = useState('');
     const templateDropdownRef = useRef<HTMLDivElement>(null);
 
     // Fetch tasks
@@ -355,6 +356,18 @@ export const SchedulerView: React.FC = () => {
                 Manage automated tasks and their schedules. All times are in Singapore Time (SGT).
             </p>
 
+            {/* Search Bar */}
+            <div className="relative mb-6">
+                <Icon name={IconName.Search} className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <input
+                    type="text"
+                    placeholder="Search tasks..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400"
+                />
+            </div>
+
             {/* Action message */}
             {actionMessage && (
                 <div className={`mb-4 px-4 py-3 rounded-lg text-sm font-medium flex items-center gap-2 ${
@@ -395,7 +408,13 @@ export const SchedulerView: React.FC = () => {
             {/* Task Cards */}
             {!loading && !error && (
                 <div className="space-y-4">
-                    {tasks.map(task => (
+                    {tasks.filter(task => {
+                        if (!searchQuery.trim()) return true;
+                        const q = searchQuery.toLowerCase();
+                        return task.name.toLowerCase().includes(q)
+                            || task.description.toLowerCase().includes(q)
+                            || task.api_endpoint.toLowerCase().includes(q);
+                    }).map(task => (
                         <Card key={task.id} className="p-0 overflow-visible">
                             {/* Card Header */}
                             <div className={`px-6 py-4 flex items-center justify-between border-b rounded-t-lg ${
