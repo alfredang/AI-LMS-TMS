@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Icon, IconName } from '../ui/Icon';
@@ -102,6 +102,63 @@ const ViewTrainers: React.FC = () => {
   const [nricEditValue, setNricEditValue] = useState('');
   const [savingNric, setSavingNric] = useState(false);
   const [nricMessage, setNricMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // Profile image upload
+  const [uploadingImageFor, setUploadingImageFor] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const uploadTargetRef = useRef<string | null>(null);
+
+  const handleImageUploadClick = (userId: string) => {
+    uploadTargetRef.current = userId;
+    fileInputRef.current?.click();
+  };
+
+  const handleImageFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    const userId = uploadTargetRef.current;
+    if (!file || !userId) return;
+    e.target.value = '';
+
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Image must be under 5MB');
+      return;
+    }
+
+    setUploadingImageFor(userId);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const uploadRes = await fetch(`/api/upload/profile-picture-drive?role=trainer&userId=${userId}`, {
+        method: 'POST',
+        body: formData,
+      });
+      const uploadData = await uploadRes.json();
+
+      if (uploadData.success) {
+        // Update profile_picture_url in DB
+        await fetch('/api/profile/update-trainer', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId,
+            profileData: { profilePictureUrl: uploadData.data.fileUrl },
+          }),
+        });
+
+        // Update local state
+        setTrainers(prev => prev.map(t =>
+          t.user_id === userId ? { ...t, profile_picture: uploadData.data.fileUrl } : t
+        ));
+      } else {
+        alert('Upload failed: ' + (uploadData.error || 'Unknown error'));
+      }
+    } catch (err) {
+      alert('Upload failed');
+    } finally {
+      setUploadingImageFor(null);
+    }
+  };
 
   const itemsPerPage = 10;
   const inputClasses = "w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400";
@@ -265,6 +322,14 @@ const ViewTrainers: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      {/* Hidden file input for profile image upload */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/gif,image/webp"
+        className="hidden"
+        onChange={handleImageFileChange}
+      />
       {/* Header */}
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white">View Trainers</h1>
@@ -423,7 +488,11 @@ const ViewTrainers: React.FC = () => {
                   <tr key={`${trainer.trainer_name}-${index}`} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center">
-                        <div className="flex-shrink-0 h-10 w-10">
+                        <div
+                          className="flex-shrink-0 h-10 w-10 relative group cursor-pointer"
+                          onClick={() => handleImageUploadClick(trainer.user_id)}
+                          title="Click to upload profile image"
+                        >
                           <img
                             className="h-10 w-10 rounded-full object-cover"
                             src={getTrainerThumbnailSrc(trainer)}
@@ -432,6 +501,15 @@ const ViewTrainers: React.FC = () => {
                               e.currentTarget.src = DEFAULT_TRAINER_AVATAR;
                             }}
                           />
+                          {uploadingImageFor === trainer.user_id ? (
+                            <div className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-full">
+                              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white" />
+                            </div>
+                          ) : (
+                            <div className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
+                              <Icon name={IconName.Upload} className="w-4 h-4 text-white" />
+                            </div>
+                          )}
                         </div>
                         <div className="ml-4">
                           <div className="text-sm font-medium text-gray-900 dark:text-white">{trainer.trainer_name}</div>
