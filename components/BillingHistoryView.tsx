@@ -136,50 +136,14 @@ const BillingHistoryView: React.FC = () => {
     }
   };
 
-  const paidCount = records.filter(r => r.payment_status === 'Paid').length;
-  const unpaidCount = records.filter(r => r.payment_status === 'Unpaid').length;
+  const receiptCount = records.filter(r => r.payment_status === 'Paid').length;
+  const invoiceCount = records.filter(r => r.payment_status !== 'Paid' && r.start_date && new Date(r.start_date) <= new Date()).length;
+  const proformaCount = records.filter(r => r.payment_status !== 'Paid' && (!r.start_date || new Date(r.start_date) > new Date())).length;
 
   return (
     <div>
       <h2 className="text-3xl font-bold mb-6">Billing History</h2>
       <div className="grid grid-cols-1 gap-6">
-
-        {/* Summary Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <Card className="p-5">
-            <div className="flex items-center space-x-3">
-              <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
-                <Icon name={IconName.FilePdf} className="w-6 h-6 text-blue-600 dark:text-blue-400" />
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-subtle">Total Invoices</p>
-                <p className="text-2xl font-bold text-on-surface">{records.length}</p>
-              </div>
-            </div>
-          </Card>
-          <Card className="p-5">
-            <div className="flex items-center space-x-3">
-              <div className="p-2 bg-green-100 dark:bg-green-900/30 rounded-lg">
-                <Icon name={IconName.CheckCircle} className="w-6 h-6 text-green-600 dark:text-green-400" />
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-subtle">Paid</p>
-                <p className="text-2xl font-bold text-on-surface">{paidCount}</p>
-              </div>
-            </div>
-          </Card>
-          <Card className="p-5">
-            <div className="flex items-center space-x-3">
-              <div className="p-2 bg-amber-100 dark:bg-amber-900/30 rounded-lg">
-                <Icon name={IconName.Clock} className="w-6 h-6 text-amber-600 dark:text-amber-400" />
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-subtle">Pending</p>
-                <p className="text-2xl font-bold text-on-surface">{unpaidCount}</p>
-              </div>
-            </div>
-          </Card>
-        </div>
 
         {/* Error banner */}
         {downloadError && (
@@ -212,6 +176,7 @@ const BillingHistoryView: React.FC = () => {
                   <tr className="border-b border-gray-200 dark:border-gray-700">
                     <th className="text-left py-3 px-4 font-semibold text-subtle">Course Title</th>
                     <th className="text-left py-3 px-4 font-semibold text-subtle">Course Ref Code</th>
+                    <th className="text-left py-3 px-4 font-semibold text-subtle">Type</th>
                     <th className="text-left py-3 px-4 font-semibold text-subtle">ID</th>
                     <th className="text-left py-3 px-4 font-semibold text-subtle">Created Date</th>
                     <th className="text-center py-3 px-4 font-semibold text-subtle">PDF Download</th>
@@ -228,6 +193,14 @@ const BillingHistoryView: React.FC = () => {
                       <tr key={record.id} className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/30">
                         <td className="py-3 px-4 font-semibold text-on-surface">{record.course_title}</td>
                         <td className="py-3 px-4 font-mono text-xs text-subtle">{record.course_code || '-'}</td>
+                        <td className="py-3 px-4 text-xs">
+                          {(() => {
+                            if (record.payment_status === 'Paid') return <span className="px-2 py-0.5 rounded-full bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 font-semibold">Receipt</span>;
+                            const started = record.start_date && new Date(record.start_date) <= new Date();
+                            if (started) return <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400 font-semibold">Invoice</span>;
+                            return <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 font-semibold">Proforma Invoice</span>;
+                          })()}
+                        </td>
                         <td className="py-3 px-4 font-mono text-xs">{record.enrolment_id || record.id || '-'}</td>
                         <td className="py-3 px-4 text-subtle">{formatDate(record.enrolment_date || record.start_date)}</td>
                         <td className="py-3 px-4 text-center">

@@ -10,6 +10,7 @@ interface ClassDetailsResponse {
       trainer: string;
       startDate: string;
       endDate: string;
+      classType: string;
       mode: string;
       overallAssessment: string;
       tgsRef: string;
@@ -69,6 +70,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse<ClassDetailsRes
           cr.assigned_trainer_name AS trainer,
           cr.start_date AS start_date,
           cr.end_date AS end_date,
+          COALESCE(cr.class_type, 'Physical') AS class_type,
           cr.mode_of_learning AS mode,
           c.course_code AS tgs_ref,
           cr.course_run_id AS course_run_id,
@@ -220,6 +222,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse<ClassDetailsRes
           trainer: trainerDisplay,
           startDate: basicData.start_date,
           endDate: basicData.end_date,
+          classType: basicData.class_type || 'Physical',
           mode: basicData.mode,
           overallAssessment,
           tgsRef: basicData.tgs_ref,

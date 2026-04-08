@@ -198,8 +198,9 @@ const Header: React.FC = () => {
 
   const navConfig = {
     [UserRole.Learner]: [
-      { view: View.Courses, label: 'Certificate Delivery', icon: IconName.Award, href: 'https://goo.gl/R2eumq' },
-      { view: View.Courses, label: 'TRAQOM Survey', icon: IconName.ClipboardCheck, href: 'https://ssgtraqom.qualtrics.com/jfe/form/SV_3K9i7rTJ9OLsauW?Q_CHL=qr' },
+      { view: View.Courses, label: 'My Classes', icon: IconName.BookOpen },
+      { view: View.CertificateHistory, label: 'Certificate', icon: IconName.Award },
+      { view: View.BillingHistory, label: 'Billing', icon: IconName.DollarSign },
     ],
     [UserRole.Trainer]: [
       { view: View.Dashboard, label: 'My Classes', icon: IconName.BookOpen, trainerPage: TrainerPage.MyClasses },
@@ -219,13 +220,12 @@ const Header: React.FC = () => {
     [UserRole.Finance]: [
       { view: View.Finance, label: 'Financial Dashboard', icon: IconName.DollarSign, financePage: 'dashboard' },
       { view: View.Finance, label: 'TPG Management', icon: IconName.Settings, financePage: 'tpgManagement' },
-      { view: View.Finance, label: 'Claim Management', icon: IconName.ClipboardCheck, financePage: 'claimCheck' },
+      { view: View.Finance, label: 'Claim Management', icon: IconName.ClipboardCheck, financePage: 'claimManagement' },
     ],
     [UserRole.TrainingProvider]: [
       { view: View.Dashboard, label: 'Training Dashboard', icon: IconName.Dashboard },
       { view: View.Profile, label: 'Company Setting', icon: IconName.MyAccount },
       { view: View.Scheduler, label: 'Task Scheduler', icon: IconName.Calendar },
-      { view: View.Webhooks, label: 'Webhooks', icon: IconName.Link },
     ]
   };
 
@@ -271,8 +271,8 @@ const Header: React.FC = () => {
               const isFinanceItem = 'financePage' in item && item.financePage;
               const isActive = isTrainerItem
                 ? trainerPage === item.trainerPage
-                : (isFinanceItem || role === UserRole.TrainingProvider)
-                  ? false
+                : isFinanceItem
+                  ? financePage === item.financePage
                   : (role === UserRole.Admin && isAdminPageActive(item)) || (role !== UserRole.Admin && currentView === item.view);
 
               return (
@@ -307,7 +307,7 @@ const Header: React.FC = () => {
                     }
                   }}
                   className={`flex items-center justify-center space-x-1 px-2 sm:px-2.5 xl:px-3 py-2 rounded-md text-xs xl:text-sm font-medium transition-colors whitespace-nowrap ${isActive
-                    ? 'bg-primary text-white'
+                    ? 'text-primary'
                     : 'text-on-surface hover:bg-surface-elevated hover:text-primary'
                     }`}
                 >

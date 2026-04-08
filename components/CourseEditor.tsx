@@ -1844,7 +1844,7 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
 
                     {role === UserRole.Admin ? (
                         <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
-                            <h3 className="text-xl font-bold mb-4 dark:text-white">Assigned Trainers</h3>
+                            <h3 className="text-xl font-bold mb-4 dark:text-white">Approved Trainers</h3>
                             <div className="space-y-4">
                                 <div>
                                     <label htmlFor="trainerSearch" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Add Trainer</label>

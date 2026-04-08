@@ -17,6 +17,7 @@ interface NavItem {
   view: View;
   label: string;
   icon: IconName;
+  href?: string;
 }
 
 const sidebarItems: NavItem[] = [
@@ -25,6 +26,8 @@ const sidebarItems: NavItem[] = [
   { view: View.GrantCalculator, label: 'Grant Calculator', icon: IconName.Calculator },
   { view: View.BillingHistory, label: 'Billing History', icon: IconName.DollarSign },
   { view: View.CertificateHistory, label: 'Certificate History', icon: IconName.Award },
+  { view: View.Courses, label: 'Certificate Delivery', icon: IconName.Award, href: 'https://docs.google.com/forms/d/e/1FAIpQLSegSnbaBMlH3ghEskSPDqI19lbkVx05zFPdHvP9Ltf3Nlv6EQ/viewform' },
+  { view: View.Courses, label: 'TRAQOM Survey', icon: IconName.ClipboardCheck, href: 'https://ssgtraqom.qualtrics.com/jfe/form/SV_3K9i7rTJ9OLsauW?Q_CHL=qr' },
 ];
 
 const LearnerLayout: React.FC = () => {
@@ -83,12 +86,14 @@ const LearnerLayout: React.FC = () => {
     <div className="flex flex-col h-full bg-white dark:bg-slate-800">
       <div className="flex-1 px-3 py-4 space-y-1">
         {sidebarItems.map((item) => {
-          const isActive = currentView === item.view && !selectedCourse;
+          const isActive = !item.href && currentView === item.view && !selectedCourse;
           return (
             <a
-              key={item.view}
-              href="#"
-              onClick={(e) => { e.preventDefault(); navigateTo(item.view); }}
+              key={item.label}
+              href={item.href || '#'}
+              target={item.href ? '_blank' : undefined}
+              rel={item.href ? 'noopener noreferrer' : undefined}
+              onClick={item.href ? undefined : (e) => { e.preventDefault(); navigateTo(item.view); }}
               className={`group flex items-center gap-3 w-full rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-150 ${
                 isActive ? activeClass : inactiveClass
               }`}

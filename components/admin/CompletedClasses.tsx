@@ -12,6 +12,7 @@ interface CompletedClass {
   courseTitle: string;
   courseCode: string;
   classStatus: string;
+  classType: string;
   digitalAttendanceId: string;
   startDate: string;
   endDate: string;
@@ -49,7 +50,7 @@ const StatCard: React.FC<{ title: string; value: string | number }> = ({ title, 
 );
 
 const CompletedClasses: React.FC = () => {
-  const { setAdminPage, setSelectedCourseRunId } = useLms();
+  const { setAdminPage, setSelectedCourseRunId, setEditingCourseRun } = useLms();
   const [completedClasses, setCompletedClasses] = useState<CompletedClass[]>([]);
   const [statistics, setStatistics] = useState<Statistics>({
     completedClassesFound: 0,
@@ -219,8 +220,9 @@ const CompletedClasses: React.FC = () => {
     setCurrentPage(0);
   };
 
-  const handleViewDetails = (courseRunId: string) => {
-    setSelectedCourseRunId(courseRunId);
+  const handleViewDetails = (classItem: any) => {
+    setEditingCourseRun(classItem);
+    setSelectedCourseRunId(classItem.courseRunId);
     setAdminPage(AdminPage.ClassDetail);
   };
 
@@ -396,35 +398,60 @@ const CompletedClasses: React.FC = () => {
         ) : (
           <>
             <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+              <table className="divide-y divide-gray-200 dark:divide-gray-700" style={{ tableLayout: 'fixed', width: '1850px' }}>
+                <colgroup>
+                  <col style={{ width: '90px' }} />
+                  <col style={{ width: '420px' }} />
+                  <col style={{ width: '160px' }} />
+                  <col style={{ width: '110px' }} />
+                  <col style={{ width: '100px' }} />
+                  <col style={{ width: '110px' }} />
+                  <col style={{ width: '110px' }} />
+                  <col style={{ width: '80px' }} />
+                  <col style={{ width: '200px' }} />
+                  <col style={{ width: '200px' }} />
+                  <col style={{ width: '70px' }} />
+                </colgroup>
                 <thead className="bg-gray-50 dark:bg-gray-700/50">
-                  <tr className="border-b">
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Course Run ID</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Course Title</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Course Ref Code</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Start Date</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">End Date</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Trainer</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"># of Trainee</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Actions</th>
+                  <tr className="border-b dark:border-gray-700">
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Course Run ID</th>
+                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Course Title</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Course Ref Code</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Class Status</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Class Type</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Start Date</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">End Date</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Learners</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Trainer (TPG)</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Trainer (Local)</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"></th>
                   </tr>
                 </thead>
-                <tbody className="bg-white divide-y divide-gray-200 dark:bg-gray-800 dark:divide-gray-700">
-                  {completedClasses.map((classItem, index) => (
-                    <tr key={classItem.courseRunId || index} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                      <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">{classItem.courseRunId}</td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.courseTitle}</td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.courseCode}</td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{formatDate(classItem.startDate)}</td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{formatDate(classItem.endDate)}</td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.trainerName}</td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700 text-center dark:text-gray-200">{classItem.numOfTrainee}</td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
-                        <div className="flex items-center space-x-2">
-                          <Button size="sm" variant="ghost" onClick={() => handleViewDetails(classItem.courseRunId)}>
-                            Details
-                          </Button>
-                        </div>
+                <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                  {completedClasses.map((classItem: any, index) => (
+                    <tr key={classItem.courseRunId || index} className="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                      <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.courseRunId}</td>
+                      <td className="px-4 py-2 text-sm font-medium overflow-hidden text-ellipsis"><button type="button" onClick={() => handleViewDetails(classItem)} className="text-left text-blue-600 dark:text-blue-400 hover:underline">{classItem.courseTitle}</button></td>
+                      <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.courseCode}</td>
+                      <td className="px-4 py-2 whitespace-nowrap text-sm">
+                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                          classItem.classStatus === 'Confirmed' ? 'bg-green-100 text-green-800' :
+                          classItem.classStatus === 'Pending' ? 'bg-yellow-100 text-yellow-800' :
+                          classItem.classStatus === 'Cancelled' ? 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-200' :
+                          'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+                        }`}>{classItem.classStatus}</span>
+                      </td>
+                      <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.classType || 'Physical'}</td>
+                      <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{formatDate(classItem.startDate)}</td>
+                      <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{formatDate(classItem.endDate)}</td>
+                      <td className="px-4 py-2 whitespace-nowrap text-sm text-center text-gray-700 dark:text-gray-200">{classItem.numOfTrainee}</td>
+                      <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.assignedTrainerTpg || <span className="text-gray-400">—</span>}</td>
+                      <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.assignedTrainerLocal || <span className="text-gray-400">—</span>}</td>
+                      <td className="px-4 py-2 whitespace-nowrap text-sm font-medium">
+                        <Button variant="primary" size="sm" onClick={() => handleViewDetails(classItem)}>
+                          <Icon name={IconName.Edit} className="w-4 h-4 mr-1" />
+                          Details
+                        </Button>
                       </td>
                     </tr>
                   ))}

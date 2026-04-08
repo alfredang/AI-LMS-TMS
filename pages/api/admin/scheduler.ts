@@ -33,7 +33,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // PUT — Update schedule
     if (req.method === 'PUT') {
-        const { taskId, cron_expression, enabled } = req.body ?? {};
+        const { taskId, cron_expression, enabled, email_template, days_in_advance } = req.body ?? {};
 
         if (!taskId) {
             return res.status(400).json({ success: false, error: 'taskId is required' });
@@ -43,6 +43,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             const updated = await updateTaskSchedule(taskId, {
                 cron_expression,
                 enabled,
+                email_template,
+                days_in_advance,
             });
 
             if (!updated) {

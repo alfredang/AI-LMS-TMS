@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Icon, IconName } from '../ui/Icon';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { useLms } from '@contexts/LmsContext';
@@ -11,13 +12,34 @@ interface SchedulerTask {
     cron_expression: string;
     enabled: boolean;
     api_endpoint: string;
+    email_template: string | null;
+    days_in_advance: number | null;
     last_run_at: string | null;
     last_status: string | null;
     created_at: string;
     updated_at: string;
 }
 
+// Tasks that support email template selection
+const EMAIL_TEMPLATE_TASKS = ['auto_send_course_confirmation', 'auto_send_class_confirmation', 'auto_create_certificates'];
+
+// Tasks that support days-in-advance setting
+const DAYS_IN_ADVANCE_TASKS = ['auto_send_course_confirmation', 'auto_send_class_confirmation'];
+
+const EMAIL_TEMPLATES: { value: string; label: string }[] = [
+    { value: 'final_course_confirmation', label: 'Final Class Confirm Email' },
+    { value: 'course_confirmation', label: 'Class Confirm Email' },
+    { value: 'certificate', label: 'Certificate Email' },
+    { value: 'feedback', label: 'Feedback Email' },
+    { value: 'trainer_invitation', label: 'Trainer Invitation Email' },
+    { value: 'otp', label: 'OTP Email' },
+    { value: 'password_reset', label: 'Password Reset Email' },
+];
+
 // ── Cron Expression Helpers ───────────────────────────────────────────────────
+
+const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const DAY_ABBREVS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 /** Convert a cron expression like "0 14 * * *" to a human-readable string */
 function describeCron(expr: string): string {
@@ -26,41 +48,60 @@ function describeCron(expr: string): string {
 
     const [minute, hour, dayOfMonth, month, dayOfWeek] = parts;
 
-    // Simple daily pattern: "M H * * *"
-    if (dayOfMonth === '*' && month === '*' && dayOfWeek === '*') {
-        const h = parseInt(hour, 10);
-        const m = parseInt(minute, 10);
-        if (!isNaN(h) && !isNaN(m)) {
-            const period = h >= 12 ? 'PM' : 'AM';
-            const displayH = h === 0 ? 12 : h > 12 ? h - 12 : h;
-            const displayM = String(m).padStart(2, '0');
-            return `Daily at ${displayH}:${displayM} ${period} SGT`;
+    const h = parseInt(hour, 10);
+    const m = parseInt(minute, 10);
+    if (isNaN(h) || isNaN(m)) return expr;
+
+    const period = h >= 12 ? 'PM' : 'AM';
+    const displayH = h === 0 ? 12 : h > 12 ? h - 12 : h;
+    const displayM = String(m).padStart(2, '0');
+    const timeStr = `${displayH}:${displayM} ${period} SGT`;
+
+    // Weekly pattern: "M H * * N"
+    if (dayOfMonth === '*' && month === '*' && dayOfWeek !== '*') {
+        const dow = parseInt(dayOfWeek, 10);
+        if (!isNaN(dow) && dow >= 0 && dow <= 6) {
+            return `Every ${DAY_NAMES[dow]} at ${timeStr}`;
         }
+    }
+
+    // Daily pattern: "M H * * *"
+    if (dayOfMonth === '*' && month === '*' && dayOfWeek === '*') {
+        return `Daily at ${timeStr}`;
     }
 
     return expr;
 }
 
-/** Convert "HH:MM" 24-hour time to cron minute/hour parts */
-function timeToCron(time: string): { minute: string; hour: string } | null {
-    const match = time.match(/^(\d{1,2}):(\d{2})$/);
-    if (!match) return null;
-    const hour = parseInt(match[1], 10);
-    const minute = parseInt(match[2], 10);
-    if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return null;
-    return { minute: String(minute), hour: String(hour) };
+interface ParsedSchedule {
+    hour: number;
+    minute: number;
+    frequency: 'daily' | 'weekly';
+    dayOfWeek: number; // 0=Sun, 1=Mon, ..., 6=Sat
 }
 
-/** Extract HH:MM from a daily cron expression, or null */
-function cronToTime(expr: string): string | null {
+/** Parse a cron expression into structured schedule data */
+function parseCron(expr: string): ParsedSchedule | null {
     const parts = expr.trim().split(/\s+/);
     if (parts.length < 5) return null;
     const [minute, hour, dom, mon, dow] = parts;
-    if (dom !== '*' || mon !== '*' || dow !== '*') return null;
+    if (dom !== '*' || mon !== '*') return null;
     const h = parseInt(hour, 10);
     const m = parseInt(minute, 10);
     if (isNaN(h) || isNaN(m)) return null;
-    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+
+    if (dow !== '*') {
+        const d = parseInt(dow, 10);
+        if (isNaN(d) || d < 0 || d > 6) return null;
+        return { hour: h, minute: m, frequency: 'weekly', dayOfWeek: d };
+    }
+    return { hour: h, minute: m, frequency: 'daily', dayOfWeek: 1 };
+}
+
+/** Build a cron expression from structured schedule data */
+function buildCron(schedule: ParsedSchedule): string {
+    const dow = schedule.frequency === 'weekly' ? String(schedule.dayOfWeek) : '*';
+    return `${schedule.minute} ${schedule.hour} * * ${dow}`;
 }
 
 // ── Status Badge ──────────────────────────────────────────────────────────────
@@ -93,10 +134,12 @@ const StatusBadge: React.FC<{ status: string | null }> = ({ status }) => {
 // ── Task ID → Log Page mapping ────────────────────────────────────────────────
 
 const TASK_LOG_PAGE: Record<string, AdminPage> = {
-    auto_create_learners:       AdminPage.AutomationLogs,
-    auto_create_trainer_folders: AdminPage.TrainerFolderLogs,
-    sync_course_run_dates:      AdminPage.CourseRunDateSyncLogs,
-    upcoming_course_runs:       AdminPage.UpcomingCourseRunsLog,
+    auto_create_learners:           AdminPage.AutomationLogs,
+    auto_create_trainer_folders:    AdminPage.TrainerFolderLogs,
+    sync_course_run_dates:          AdminPage.CourseRunDateSyncLogs,
+    upcoming_course_runs:           AdminPage.UpcomingCourseRunsLog,
+    auto_send_course_confirmation:  AdminPage.CourseConfirmationEmailLogs,
+    auto_send_class_confirmation:   AdminPage.CourseConfirmationEmailLogs,
 };
 
 // ── Main Component ────────────────────────────────────────────────────────────
@@ -107,12 +150,31 @@ export const SchedulerView: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
-    const [editTime, setEditTime] = useState('');
+    const [editHour, setEditHour] = useState(2);
+    const [editMinute, setEditMinute] = useState(0);
+    const [editPeriod, setEditPeriod] = useState<'AM' | 'PM'>('PM');
+    const [editFrequency, setEditFrequency] = useState<'daily' | 'weekly'>('daily');
+    const [editDayOfWeek, setEditDayOfWeek] = useState(1); // 0=Sun..6=Sat
     const [saving, setSaving] = useState(false);
     const [runningTaskId, setRunningTaskId] = useState<string | null>(null);
     const [actionMessage, setActionMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+    const [templateDropdownOpen, setTemplateDropdownOpen] = useState<string | null>(null);
+    const templateDropdownRef = useRef<HTMLDivElement>(null);
 
     // Fetch tasks
+    // Close template dropdown on outside click
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (templateDropdownRef.current && !templateDropdownRef.current.contains(event.target as Node)) {
+                setTemplateDropdownOpen(null);
+            }
+        };
+        if (templateDropdownOpen) {
+            document.addEventListener('mousedown', handleClickOutside);
+        }
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [templateDropdownOpen]);
+
     const fetchTasks = async () => {
         try {
             setError(null);
@@ -167,13 +229,20 @@ export const SchedulerView: React.FC = () => {
 
     // Save time change
     const saveTimeChange = async (task: SchedulerTask) => {
-        const parsed = timeToCron(editTime);
-        if (!parsed) {
-            setActionMessage({ type: 'error', text: 'Invalid time format. Use HH:MM (24-hour).' });
-            return;
+        // Convert 12-hour to 24-hour
+        let hour24 = editHour;
+        if (editPeriod === 'AM') {
+            hour24 = editHour === 12 ? 0 : editHour;
+        } else {
+            hour24 = editHour === 12 ? 12 : editHour + 12;
         }
 
-        const newCron = `${parsed.minute} ${parsed.hour} * * *`;
+        const newCron = buildCron({
+            hour: hour24,
+            minute: editMinute,
+            frequency: editFrequency,
+            dayOfWeek: editDayOfWeek,
+        });
         setSaving(true);
 
         try {
@@ -244,8 +313,23 @@ export const SchedulerView: React.FC = () => {
 
     // Start editing
     const startEditing = (task: SchedulerTask) => {
-        const time = cronToTime(task.cron_expression);
-        setEditTime(time || '14:00');
+        const parsed = parseCron(task.cron_expression);
+        if (parsed) {
+            const h24 = parsed.hour;
+            const period = h24 >= 12 ? 'PM' : 'AM';
+            const h12 = h24 === 0 ? 12 : h24 > 12 ? h24 - 12 : h24;
+            setEditHour(h12);
+            setEditMinute(parsed.minute);
+            setEditPeriod(period as 'AM' | 'PM');
+            setEditFrequency(parsed.frequency);
+            setEditDayOfWeek(parsed.dayOfWeek);
+        } else {
+            setEditHour(2);
+            setEditMinute(0);
+            setEditPeriod('PM');
+            setEditFrequency('daily');
+            setEditDayOfWeek(1);
+        }
         setEditingTaskId(task.id);
     };
 
@@ -312,9 +396,9 @@ export const SchedulerView: React.FC = () => {
             {!loading && !error && (
                 <div className="space-y-4">
                     {tasks.map(task => (
-                        <Card key={task.id} className="p-0 overflow-hidden">
+                        <Card key={task.id} className="p-0 overflow-visible">
                             {/* Card Header */}
-                            <div className={`px-6 py-4 flex items-center justify-between border-b ${
+                            <div className={`px-6 py-4 flex items-center justify-between border-b rounded-t-lg ${
                                 task.enabled
                                     ? 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700'
                                     : 'bg-gray-50 dark:bg-gray-900 border-gray-100 dark:border-gray-800'
@@ -355,31 +439,215 @@ export const SchedulerView: React.FC = () => {
                                     {task.description}
                                 </p>
 
-                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
+                                {/* Email Template & Days in Advance Settings */}
+                                {(EMAIL_TEMPLATE_TASKS.includes(task.id) || DAYS_IN_ADVANCE_TASKS.includes(task.id)) && (() => {
+                                    const showTemplate = EMAIL_TEMPLATE_TASKS.includes(task.id);
+                                    const showDays = DAYS_IN_ADVANCE_TASKS.includes(task.id);
+                                    const currentTemplate = task.email_template || 'final_course_confirmation';
+                                    const currentLabel = EMAIL_TEMPLATES.find(t => t.value === currentTemplate)?.label || currentTemplate;
+                                    const isOpen = templateDropdownOpen === task.id;
+
+                                    const handleSelect = async (newTemplate: string) => {
+                                        setTemplateDropdownOpen(null);
+                                        if (newTemplate === currentTemplate) return;
+                                        try {
+                                            const res = await fetch('/api/admin/scheduler', {
+                                                method: 'PUT',
+                                                headers: { 'Content-Type': 'application/json' },
+                                                body: JSON.stringify({ taskId: task.id, email_template: newTemplate }),
+                                            });
+                                            const data = await res.json();
+                                            if (data.success) {
+                                                setTasks(prev => prev.map(t => t.id === task.id ? data.task : t));
+                                                setActionMessage({ type: 'success', text: `Email template updated to "${EMAIL_TEMPLATES.find(t => t.value === newTemplate)?.label}"` });
+                                            } else {
+                                                setActionMessage({ type: 'error', text: data.error || 'Failed to update template' });
+                                            }
+                                        } catch {
+                                            setActionMessage({ type: 'error', text: 'Failed to update template' });
+                                        }
+                                    };
+
+                                    const handleDaysChange = async (delta: number) => {
+                                        const current = task.days_in_advance ?? 3;
+                                        const newVal = current + delta;
+                                        if (newVal < 1 || newVal > 30) return;
+                                        try {
+                                            const res = await fetch('/api/admin/scheduler', {
+                                                method: 'PUT',
+                                                headers: { 'Content-Type': 'application/json' },
+                                                body: JSON.stringify({ taskId: task.id, days_in_advance: newVal }),
+                                            });
+                                            const data = await res.json();
+                                            if (data.success) setTasks(prev => prev.map(t => t.id === task.id ? data.task : t));
+                                        } catch { /* silent */ }
+                                    };
+
+                                    return (
+                                        <div className="mb-4 flex flex-wrap items-end gap-6">
+                                            {showTemplate && (
+                                                <div>
+                                                    <label className="font-medium text-gray-500 dark:text-gray-400 text-xs uppercase tracking-wider block mb-1.5">Email Template</label>
+                                                    <div className="relative w-72" ref={isOpen ? templateDropdownRef : undefined}>
+                                                        <button
+                                                            onClick={() => setTemplateDropdownOpen(isOpen ? null : task.id)}
+                                                            className="w-full flex items-center justify-between px-3 py-2 text-sm font-medium text-gray-900 dark:text-white bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:border-blue-400 dark:hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+                                                        >
+                                                            <div className="flex items-center gap-2">
+                                                                <Icon name={IconName.Mail} className="w-4 h-4 text-blue-500" />
+                                                                <span>{currentLabel}</span>
+                                                            </div>
+                                                            <svg className={`w-4 h-4 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                                            </svg>
+                                                        </button>
+
+                                                        {isOpen && (
+                                                            <div className="absolute z-50 mt-1 w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-xl max-h-60 overflow-y-auto">
+                                                                {EMAIL_TEMPLATES.map(t => {
+                                                                    const isSelected = t.value === currentTemplate;
+                                                                    return (
+                                                                        <button
+                                                                            key={t.value}
+                                                                            onClick={() => handleSelect(t.value)}
+                                                                            className={`w-full flex items-center gap-3 px-3 py-2.5 text-sm transition-colors ${
+                                                                                isSelected
+                                                                                    ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-semibold'
+                                                                                    : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+                                                                            }`}
+                                                                        >
+                                                                            <Icon name={IconName.Mail} className={`w-4 h-4 flex-shrink-0 ${isSelected ? 'text-blue-500' : 'text-gray-400 dark:text-gray-500'}`} />
+                                                                            <span className="flex-1 text-left">{t.label}</span>
+                                                                            {isSelected && (
+                                                                                <svg className="w-4 h-4 text-blue-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                                                                                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                                                                </svg>
+                                                                            )}
+                                                                        </button>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {showDays && (
+                                                <div>
+                                                    <label className="font-medium text-gray-500 dark:text-gray-400 text-xs uppercase tracking-wider block mb-1.5">Days in Advance</label>
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="flex items-center bg-gray-100 dark:bg-gray-700 rounded-lg p-1 gap-1">
+                                                            <button onClick={() => handleDaysChange(-1)} className="w-7 h-7 flex items-center justify-center rounded-md bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 font-bold transition-colors">−</button>
+                                                            <span className="w-8 text-center text-sm font-bold text-gray-900 dark:text-white">{task.days_in_advance ?? 3}</span>
+                                                            <button onClick={() => handleDaysChange(1)} className="w-7 h-7 flex items-center justify-center rounded-md bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 font-bold transition-colors">+</button>
+                                                        </div>
+                                                        <span className="text-xs text-gray-500 dark:text-gray-400">day{(task.days_in_advance ?? 3) !== 1 ? 's' : ''} before class</span>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })()}
+
+                                <div className={`grid grid-cols-1 ${editingTaskId === task.id ? 'sm:grid-cols-1' : 'sm:grid-cols-3'} gap-4 text-sm`}>
                                     {/* Schedule */}
-                                    <div>
+                                    <div className={editingTaskId === task.id ? 'sm:col-span-3' : ''}>
                                         <span className="font-medium text-gray-500 dark:text-gray-400 text-xs uppercase tracking-wider">Schedule</span>
                                         {editingTaskId === task.id ? (
-                                            <div className="mt-1 flex items-center gap-2">
-                                                <input
-                                                    type="time"
-                                                    value={editTime}
-                                                    onChange={e => setEditTime(e.target.value)}
-                                                    className="block w-28 px-2 py-1 text-sm text-gray-900 dark:text-white bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                />
-                                                <button
-                                                    onClick={() => saveTimeChange(task)}
-                                                    disabled={saving}
-                                                    className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 text-sm font-medium disabled:opacity-50"
-                                                >
-                                                    {saving ? '...' : 'Save'}
-                                                </button>
-                                                <button
-                                                    onClick={() => setEditingTaskId(null)}
-                                                    className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 text-sm"
-                                                >
-                                                    Cancel
-                                                </button>
+                                            <div className="mt-2 space-y-3">
+                                                {/* Frequency Toggle */}
+                                                <div className="flex items-center gap-1 p-1 bg-gray-100 dark:bg-gray-700 rounded-lg w-fit">
+                                                    {(['daily', 'weekly'] as const).map(f => (
+                                                        <button
+                                                            key={f}
+                                                            onClick={() => setEditFrequency(f)}
+                                                            className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                                                                editFrequency === f
+                                                                    ? 'bg-blue-600 text-white shadow-sm'
+                                                                    : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white'
+                                                            }`}
+                                                        >
+                                                            {f.charAt(0).toUpperCase() + f.slice(1)}
+                                                        </button>
+                                                    ))}
+                                                </div>
+
+                                                {/* Day of Week Selector (weekly only) */}
+                                                {editFrequency === 'weekly' && (
+                                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                                        {DAY_ABBREVS.map((day, idx) => (
+                                                            <button
+                                                                key={day}
+                                                                onClick={() => setEditDayOfWeek(idx)}
+                                                                className={`w-10 h-10 rounded-full text-xs font-semibold transition-colors ${
+                                                                    editDayOfWeek === idx
+                                                                        ? 'bg-blue-600 text-white shadow-sm'
+                                                                        : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                                                                }`}
+                                                            >
+                                                                {day}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                )}
+
+                                                {/* Time Picker */}
+                                                <div className="flex items-center gap-2">
+                                                    <div className="flex items-center bg-gray-100 dark:bg-gray-700 rounded-lg p-1 gap-1">
+                                                        {/* Hour */}
+                                                        <select
+                                                            value={editHour}
+                                                            onChange={e => setEditHour(parseInt(e.target.value, 10))}
+                                                            className="bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm font-medium rounded-md px-2 py-1.5 border-0 focus:ring-2 focus:ring-blue-500 appearance-none cursor-pointer"
+                                                        >
+                                                            {Array.from({ length: 12 }, (_, i) => i + 1).map(h => (
+                                                                <option key={h} value={h}>{String(h).padStart(2, '0')}</option>
+                                                            ))}
+                                                        </select>
+                                                        <span className="text-gray-400 dark:text-gray-500 font-bold text-lg">:</span>
+                                                        {/* Minute */}
+                                                        <select
+                                                            value={editMinute}
+                                                            onChange={e => setEditMinute(parseInt(e.target.value, 10))}
+                                                            className="bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm font-medium rounded-md px-2 py-1.5 border-0 focus:ring-2 focus:ring-blue-500 appearance-none cursor-pointer"
+                                                        >
+                                                            {Array.from({ length: 60 }, (_, i) => i).map(m => (
+                                                                <option key={m} value={m}>{String(m).padStart(2, '0')}</option>
+                                                            ))}
+                                                        </select>
+                                                        {/* AM/PM */}
+                                                        <div className="flex rounded-md overflow-hidden ml-1">
+                                                            {(['AM', 'PM'] as const).map(p => (
+                                                                <button
+                                                                    key={p}
+                                                                    onClick={() => setEditPeriod(p)}
+                                                                    className={`px-3 py-1.5 text-xs font-semibold transition-colors ${
+                                                                        editPeriod === p
+                                                                            ? 'bg-blue-600 text-white'
+                                                                            : 'bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                                                                    }`}
+                                                                >
+                                                                    {p}
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Save / Cancel */}
+                                                    <button
+                                                        onClick={() => saveTimeChange(task)}
+                                                        disabled={saving}
+                                                        className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
+                                                    >
+                                                        {saving ? 'Saving...' : 'Save'}
+                                                    </button>
+                                                    <button
+                                                        onClick={() => setEditingTaskId(null)}
+                                                        className="px-4 py-1.5 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 text-sm font-medium rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                                                    >
+                                                        Cancel
+                                                    </button>
+                                                </div>
                                             </div>
                                         ) : (
                                             <div className="mt-1 flex items-center gap-2">
@@ -397,21 +665,23 @@ export const SchedulerView: React.FC = () => {
                                         )}
                                     </div>
 
-                                    {/* Last Run */}
-                                    <div>
-                                        <span className="font-medium text-gray-500 dark:text-gray-400 text-xs uppercase tracking-wider">Last Run</span>
-                                        <p className="mt-1 text-gray-900 dark:text-white">
-                                            {formatDate(task.last_run_at)}
-                                        </p>
-                                    </div>
-
-                                    {/* API Endpoint */}
-                                    <div>
-                                        <span className="font-medium text-gray-500 dark:text-gray-400 text-xs uppercase tracking-wider">Endpoint</span>
-                                        <p className="mt-1 font-mono text-xs text-gray-600 dark:text-gray-400 truncate" title={task.api_endpoint}>
-                                            {task.api_endpoint}
-                                        </p>
-                                    </div>
+                                    {/* Last Run & Endpoint - shown below when editing */}
+                                    {editingTaskId !== task.id && (
+                                        <>
+                                            <div>
+                                                <span className="font-medium text-gray-500 dark:text-gray-400 text-xs uppercase tracking-wider">Last Run</span>
+                                                <p className="mt-1 text-gray-900 dark:text-white">
+                                                    {formatDate(task.last_run_at)}
+                                                </p>
+                                            </div>
+                                            <div>
+                                                <span className="font-medium text-gray-500 dark:text-gray-400 text-xs uppercase tracking-wider">Endpoint</span>
+                                                <p className="mt-1 font-mono text-xs text-gray-600 dark:text-gray-400 truncate" title={task.api_endpoint}>
+                                                    {task.api_endpoint}
+                                                </p>
+                                            </div>
+                                        </>
+                                    )}
                                 </div>
 
                                 {/* Run Now Button + View Logs link */}

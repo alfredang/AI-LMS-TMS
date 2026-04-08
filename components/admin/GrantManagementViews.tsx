@@ -3839,7 +3839,7 @@ export const ViewCourseRunView: React.FC = () => {
                 {/* Trainer Section */}
                 {run.linkCourseRunTrainer && run.linkCourseRunTrainer.length > 0 && (
                     <Card className="p-6">
-                        <h4 className="text-base font-bold text-gray-800 dark:text-gray-200 mb-4">Assigned Trainer(s)</h4>
+                        <h4 className="text-base font-bold text-gray-800 dark:text-gray-200 mb-4">Assigned Trainer (TPG)</h4>
                         <div className="space-y-3">
                             {run.linkCourseRunTrainer.map((link: any, idx: number) => {
                                 const t = link.trainer;

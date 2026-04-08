@@ -25,6 +25,7 @@ const CertificateHistoryView: React.FC = () => {
   const [records, setRecords] = useState<CertificateRecord[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!currentUser?.id) return;
@@ -48,6 +49,32 @@ const CertificateHistoryView: React.FC = () => {
     fetchCertificates();
   }, [currentUser?.id]);
 
+  const handleDownloadCertificate = async (record: CertificateRecord) => {
+    setDownloadingId(record.enrollment_id);
+    try {
+      if (record.certificate_url) {
+        window.open(record.certificate_url, '_blank');
+      } else {
+        const res = await fetch('/api/learner/generate-certificate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ enrolmentId: record.enrollment_id }),
+        });
+        const data = await res.json();
+        if (data.success && data.fileUrl) {
+          window.open(data.fileUrl, '_blank');
+          setRecords(prev => prev.map(r =>
+            r.enrollment_id === record.enrollment_id ? { ...r, certificate_url: data.fileUrl } : r
+          ));
+        }
+      }
+    } catch (err) {
+      console.error('Certificate download error:', err);
+    } finally {
+      setDownloadingId(null);
+    }
+  };
+
   const getStatusBadge = (status: string, certUrl: string | null) => {
     if (certUrl) {
       return { label: 'Ready', className: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' };
@@ -66,43 +93,6 @@ const CertificateHistoryView: React.FC = () => {
       <div>
         <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Certificate History</h2>
         <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">View and download your course certificates</p>
-      </div>
-
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Card className="p-4 dark:bg-gray-800 dark:border-gray-700">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/30">
-              <Icon name={IconName.Award} className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-            </div>
-            <div>
-              <p className="text-sm text-gray-500 dark:text-gray-400">Total Courses</p>
-              <p className="text-xl font-bold text-gray-900 dark:text-white">{records.length}</p>
-            </div>
-          </div>
-        </Card>
-        <Card className="p-4 dark:bg-gray-800 dark:border-gray-700">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-green-100 dark:bg-green-900/30">
-              <Icon name={IconName.CheckCircle} className="w-5 h-5 text-green-600 dark:text-green-400" />
-            </div>
-            <div>
-              <p className="text-sm text-gray-500 dark:text-gray-400">Certificates Ready</p>
-              <p className="text-xl font-bold text-gray-900 dark:text-white">{readyCount}</p>
-            </div>
-          </div>
-        </Card>
-        <Card className="p-4 dark:bg-gray-800 dark:border-gray-700">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-amber-100 dark:bg-amber-900/30">
-              <Icon name={IconName.Clock} className="w-5 h-5 text-amber-600 dark:text-amber-400" />
-            </div>
-            <div>
-              <p className="text-sm text-gray-500 dark:text-gray-400">Pending</p>
-              <p className="text-xl font-bold text-gray-900 dark:text-white">{pendingCount}</p>
-            </div>
-          </div>
-        </Card>
       </div>
 
       {/* Certificate Table */}
@@ -126,11 +116,11 @@ const CertificateHistoryView: React.FC = () => {
             <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
               <thead className="bg-gray-50 dark:bg-gray-900/50">
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Course</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Course Title</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Course Ref Code</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Course Run ID</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Course Date</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Assessment</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Certificate</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Action</th>
+                  <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">PDF Download</th>
                 </tr>
               </thead>
               <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
@@ -138,36 +128,34 @@ const CertificateHistoryView: React.FC = () => {
                   const status = getStatusBadge(record.assessment_status, record.certificate_url);
                   return (
                     <tr key={record.enrollment_id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                      <td className="px-4 py-3">
-                        <div className="text-sm font-medium text-gray-900 dark:text-white">{record.course_title}</div>
-                        {record.course_code && (
-                          <div className="text-xs text-gray-500 dark:text-gray-400">{record.course_code}</div>
-                        )}
-                      </td>
+                      <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-white">{record.course_title}</td>
+                      <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">{record.course_code || '-'}</td>
+                      <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">{record.course_run_id || '-'}</td>
                       <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">
                         {record.start_date ? `${formatDate(record.start_date)} - ${formatDate(record.end_date)}` : '-'}
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">
-                        {record.assessment_status}
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${status.className}`}>
-                          {status.label}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        {record.certificate_url ? (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => window.open(record.certificate_url!, '_blank')}
-                          >
-                            <Icon name={IconName.Download} className="w-4 h-4 mr-1" />
-                            Download
-                          </Button>
-                        ) : (
-                          <span className="text-xs text-gray-400 dark:text-gray-500">-</span>
-                        )}
+                      <td className="px-4 py-3 text-center">
+                        <button
+                          onClick={() => handleDownloadCertificate(record)}
+                          disabled={downloadingId === record.enrollment_id}
+                          title="Download PDF"
+                          className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-colors
+                            bg-blue-50 text-blue-700 hover:bg-blue-100
+                            dark:bg-blue-900/20 dark:text-blue-400 dark:hover:bg-blue-900/40
+                            disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {downloadingId === record.enrollment_id ? (
+                            <>
+                              <Icon name={IconName.Spinner} className="w-3.5 h-3.5 animate-spin" />
+                              <span>Generating...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Icon name={IconName.FilePdf} className="w-3.5 h-3.5" />
+                              <span>Download</span>
+                            </>
+                          )}
+                        </button>
                       </td>
                     </tr>
                   );

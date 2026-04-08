@@ -130,6 +130,7 @@ interface EditRunInfo {
 
 interface ClassManagerViewProps {
     courseToEdit?: any | null;
+    viewOnly?: boolean;
 }
 
 // FormSection component definition moved outside to prevent re-creation on re-renders
@@ -140,10 +141,10 @@ const FormSection: React.FC<{ title: string; children: React.ReactNode }> = ({ t
     </Card>
 );
 
-export const ClassManagerView: React.FC<ClassManagerViewProps> = ({ courseToEdit }) => {
-    const { setAdminPage, currentUser } = useLms();
+export const ClassManagerView: React.FC<ClassManagerViewProps> = ({ courseToEdit, viewOnly = false }) => {
+    const { setAdminPage, setEditingCourseRun, currentUser } = useLms();
     const isEditMode = !!courseToEdit;
-    const title = isEditMode ? 'Edit Class' : 'Create New Class';
+    const title = viewOnly ? 'Class Details' : (isEditMode ? 'Edit Class' : 'Create New Class');
 
     // Get current user's email for courseAdminEmail
     const currentUserEmail = currentUser?.email || "";
@@ -158,7 +159,14 @@ export const ClassManagerView: React.FC<ClassManagerViewProps> = ({ courseToEdit
     }, [currentUser, currentUserEmail]);
 
     // Tab state for navigation
-    const [activeTab, setActiveTab] = useState<'courseRun' | 'sessions' | 'trainer'>('courseRun');
+    const [activeTab, setActiveTab] = useState<'courseRun' | 'sessions' | 'enrollments' | 'trainer'>('courseRun');
+    const [enrolledLearners, setEnrolledLearners] = useState<Array<{
+        user_id: string; full_name: string; email: string; nric: string | null;
+        tel: string | null; sponsorship_type: string | null; enrolment_id: string | null;
+        grant_id: string | null; grant_amount: number | null; sf_claim_amount: number | null;
+    }>>([]);
+    const [enrollmentsLoading, setEnrollmentsLoading] = useState(false);
+    const [visibleNrics, setVisibleNrics] = useState<Set<string>>(new Set());
 
     // Form state management
     const [courseRunId, setCourseRunId] = useState('');
@@ -210,11 +218,21 @@ export const ClassManagerView: React.FC<ClassManagerViewProps> = ({ courseToEdit
     const [dbTrainerAssignMode, setDbTrainerAssignMode] = useState<'dropdown' | 'manual'>('dropdown');
     const [manualTrainerName, setManualTrainerName] = useState('');
     const [manualTrainerEmail, setManualTrainerEmail] = useState('');
+    const [manualTrainerContact, setManualTrainerContact] = useState('');
     // Track all locally-assigned trainers from junction table
     const [assignedTrainersList, setAssignedTrainersList] = useState<any[]>([]);
     // Legacy single-trainer state (kept for backward compat during transition)
     const [localAssignedTrainerName, setLocalAssignedTrainerName] = useState(courseToEdit?.assignedTrainerName || '');
     const [localAssignedTrainerEmail, setLocalAssignedTrainerEmail] = useState(courseToEdit?.assignedTrainerEmail || '');
+
+    // Class Status and Type
+    const [classStatus, setClassStatus] = useState(courseToEdit?.classStatus || 'Pending');
+    const [classType, setClassType] = useState(() => {
+        const mode = (courseToEdit?.modeOfTraining || '').toLowerCase();
+        if (mode.includes('virtual') || mode.includes('online')) return 'Virtual';
+        if (mode.includes('blended') || mode.includes('hybrid')) return 'Hybrid';
+        return 'Physical';
+    });
 
     // ViewCourseRun state management
     const [includeExpired, setIncludeExpired] = useState(false);
@@ -582,6 +600,23 @@ export const ClassManagerView: React.FC<ClassManagerViewProps> = ({ courseToEdit
             return `${startDate} - ${endDate}`; // Single day course
         } else {
             return `${startDate} - ${endDate}`; // Multi-day course
+        }
+    };
+
+    // Function to fetch enrolled learners
+    const fetchEnrolledLearners = async () => {
+        if (!courseToEdit?.id) return;
+        setEnrollmentsLoading(true);
+        try {
+            const res = await fetch(getApiUrl(`/api/admin/course-run-enrollments?courseRunId=${courseToEdit.id}`));
+            const data = await res.json();
+            if (data.success) {
+                setEnrolledLearners(data.data);
+            }
+        } catch (error) {
+            console.error('Error fetching enrollments:', error);
+        } finally {
+            setEnrollmentsLoading(false);
         }
     };
 
@@ -1585,6 +1620,8 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=update-sessions
                 courseVacancyCode: editFormData.courseVacancy?.code || undefined,
                 courseVacancyDescription: editFormData.courseVacancy?.description || undefined,
                 courseAdminEmail: editFormData.courseAdminEmail || currentUserEmail,
+                classStatus: classStatus || undefined,
+                classType: classType || undefined,
             };
 
             const response = await fetch(getApiUrl('/api/admin/update-course-run-local'), {
@@ -2021,12 +2058,44 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
         }
     }, [activeTab, courseRunId, courseReferenceNumber, includeExpiredSessions, specifyMonthYear, selectedMonth, selectedYear]);
 
+    // Fetch enrolled learners when Enrollments tab is activated
+    useEffect(() => {
+        if (isEditMode && activeTab === 'enrollments' && courseToEdit?.id) {
+            fetchEnrolledLearners();
+        }
+    }, [activeTab, courseToEdit?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
     return (
         <div>
             <div className="flex justify-between items-center mb-6">
                 <h2 className="text-3xl font-bold">{title}</h2>
                 <div>
-                    <Button variant="ghost" onClick={() => setAdminPage(AdminPage.Dashboard)} className="mr-2">Cancel</Button>
+                    <Button variant="ghost" onClick={() => setAdminPage(AdminPage.Dashboard)} className="mr-2">{viewOnly ? 'Back to List' : 'Cancel'}</Button>
+                    {viewOnly && isEditMode && (
+                        <Button
+                            onClick={() => {
+                                setEditingCourseRun(courseToEdit);
+                                setAdminPage(AdminPage.EditClass);
+                            }}
+                            className="bg-blue-600 hover:bg-blue-700 text-white"
+                        >
+                            Edit Class
+                        </Button>
+                    )}
+                    {!viewOnly && isEditMode && activeTab === 'courseRun' && (
+                        <Button
+                            onClick={handleUpdateCourseRunOnly}
+                            disabled={loading}
+                            className="bg-blue-600 hover:bg-blue-700 text-white"
+                        >
+                            {loading ? (
+                                <div className="flex items-center">
+                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                                    Saving...
+                                </div>
+                            ) : 'Save to Local Database'}
+                        </Button>
+                    )}
                     {!isEditMode && (
                         <Button onClick={() => {
                             showInfoPopup('Create mode functionality will be implemented');
@@ -2045,7 +2114,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
             {isEditMode && (
                 <div className="border-b border-gray-200 dark:border-gray-700 mb-6">
                     <nav className="-mb-px flex space-x-8">
-                        {(['courseRun', 'sessions', 'trainer'] as const).map(tab => (
+                        {(['courseRun', 'sessions', 'enrollments', 'trainer'] as const).map(tab => (
                             <button
                                 key={tab}
                                 onClick={() => setActiveTab(tab)}
@@ -2055,7 +2124,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                         : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:border-gray-300 dark:hover:border-gray-500'
                                 }`}
                             >
-                                {tab === 'courseRun' ? 'Course Run' : tab === 'sessions' ? 'Sessions' : 'Trainer'}
+                                {tab === 'courseRun' ? 'Course Run' : tab === 'sessions' ? 'Sessions' : tab === 'enrollments' ? 'Enrolled Learners' : 'Trainer'}
                             </button>
                         ))}
                     </nav>
@@ -2094,6 +2163,18 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                         )}
 
                         <FormSection title="Basic Class Information">
+                            {isEditMode && courseToEdit?.courseTitle && (
+                                <div className="mb-4">
+                                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Course Title</label>
+                                    <input
+                                        type="text"
+                                        value={courseToEdit.courseTitle}
+                                        className={`${inputClasses} ${disabledInputClasses}`}
+                                        readOnly
+                                        disabled
+                                    />
+                                </div>
+                            )}
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
@@ -2127,6 +2208,62 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                 )}
                             </div>
                         </FormSection>
+
+                        {/* Class Status & Type */}
+                        {isEditMode && (
+                            <FormSection title="Class Status & Type">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Class Status *</label>
+                                        <select
+                                            value={classStatus}
+                                            onChange={async (e) => {
+                                                const newStatus = e.target.value;
+                                                setClassStatus(newStatus);
+                                                if (courseToEdit?.id) {
+                                                    try {
+                                                        await fetch(getApiUrl('/api/admin/upcoming-classes'), {
+                                                            method: 'PUT',
+                                                            headers: { 'Content-Type': 'application/json' },
+                                                            body: JSON.stringify({ id: courseToEdit.id, class_status: newStatus }),
+                                                        });
+                                                    } catch { /* silent */ }
+                                                }
+                                            }}
+                                            className={inputClasses}
+                                        >
+                                            <option value="Confirmed">Confirmed</option>
+                                            <option value="Pending">Pending</option>
+                                            <option value="Cancelled">Cancelled</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Class Type *</label>
+                                        <select
+                                            value={classType}
+                                            onChange={async (e) => {
+                                                const newType = e.target.value;
+                                                setClassType(newType);
+                                                if (courseToEdit?.id) {
+                                                    try {
+                                                        await fetch(getApiUrl('/api/admin/upcoming-classes'), {
+                                                            method: 'PUT',
+                                                            headers: { 'Content-Type': 'application/json' },
+                                                            body: JSON.stringify({ id: courseToEdit.id, class_type: newType }),
+                                                        });
+                                                    } catch { /* silent */ }
+                                                }
+                                            }}
+                                            className={inputClasses}
+                                        >
+                                            <option value="Physical">Physical</option>
+                                            <option value="Virtual">Virtual</option>
+                                            <option value="Hybrid">Hybrid</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </FormSection>
+                        )}
 
                         {/* Course Vacancy Details */}
                         {isEditMode && (
@@ -2325,20 +2462,6 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                     />
                                 </div>
 
-                                <div className="flex justify-end mt-6">
-                                    <Button
-                                        onClick={handleUpdateCourseRunOnly}
-                                        disabled={loading}
-                                        className="bg-blue-600 hover:bg-blue-700 text-white"
-                                    >
-                                        {loading ? (
-                                            <div className="flex items-center">
-                                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                                                Saving...
-                                            </div>
-                                        ) : 'Save to Local Database'}
-                                    </Button>
-                                </div>
                             </FormSection>
                         )}
                     </>
@@ -2354,11 +2477,55 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
 
                             {!sessionsLoading && (
                                 <>
+                                    {/* Add New Session button at top right */}
+                                    <div className="flex justify-end mb-2">
+                                        <Button
+                                            type="button"
+                                            variant="primary"
+                                            onClick={toggleNewSessionForm}
+                                            className="bg-green-600 text-white hover:bg-green-700"
+                                        >
+                                            {showNewSessionForm ? 'Cancel Add Session' : 'Add New Session'}
+                                        </Button>
+                                    </div>
+
                                     {hasExistingSessions ? (
                                         <div className="space-y-4">
-                                            {existingSessions.map((session: any, index: number) => (
+                                            {/* Sessions Table */}
+                                            <div className="overflow-x-auto">
+                                                <table className="w-full text-sm whitespace-nowrap">
+                                                    <thead className="bg-gray-100 dark:bg-gray-700/60">
+                                                        <tr>
+                                                            <th className="text-left py-3 px-3 font-semibold">Session</th>
+                                                            <th className="text-left py-3 px-3 font-semibold">Date</th>
+                                                            <th className="text-left py-3 px-3 font-semibold">Time</th>
+                                                            <th className="text-left py-3 px-3 font-semibold">Mode</th>
+                                                            <th className="text-right py-3 px-3 font-semibold"></th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {existingSessions.map((session: any, index: number) => (
+                                                            <tr key={session.id || index} className="border-b border-gray-100 dark:border-gray-800">
+                                                                <td className="py-3 px-3 text-gray-500 font-medium">S{index + 1}</td>
+                                                                <td className="py-3 px-3">{session.startDate ? formatDateForDisplay(session.startDate) : 'N/A'} - {session.endDate ? formatDateForDisplay(session.endDate) : 'N/A'}</td>
+                                                                <td className="py-3 px-3">{session.startTime || 'N/A'} - {session.endTime || 'N/A'}</td>
+                                                                <td className="py-3 px-3">{getModeLabel(session.modeOfTraining)}</td>
+                                                                <td className="py-3 px-3 text-right">
+                                                                    <Button variant="ghost" onClick={() => startEditingSession(index)} className="!text-blue-600 hover:!bg-blue-50" size="sm">Edit</Button>
+                                                                </td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+
+                                            {/* Inline edit form for a selected session */}
+                                            {editingSessionIndex !== null && existingSessions[editingSessionIndex] && (() => {
+                                                const index = editingSessionIndex;
+                                                const session = existingSessions[index];
+                                                return (
                                                 <Card key={session.id || index} className="p-4 bg-gray-50 dark:bg-gray-800/60">
-                                                    {editingSessionIndex === index ? (
+                                                    {true ? (
                                                         // Editing mode for existing session
                                                         <div className="space-y-3">
                                                             <h4 className="font-medium text-blue-600">Edit Session {index + 1}</h4>
@@ -2624,64 +2791,14 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                                 </button>
                                                             </div>
                                                         </div>
-                                                    ) : (
-                                                        // Display mode for existing session
-                                                        <div className="space-y-2">
-                                                            <div className="flex justify-between items-start">
-                                                                <h4 className="font-medium">Session {index + 1}</h4>
-                                                                <div className="flex space-x-2">
-                                                                    <Button
-                                                                        variant="ghost"
-                                                                        onClick={() => startEditingSession(index)}
-                                                                        className="!text-blue-600 hover:!bg-blue-50"
-                                                                    >
-                                                                        Edit
-                                                                    </Button>
-                                                                    <Button
-                                                                        variant="ghost"
-                                                                        onClick={() => deleteExistingSession(session.id, index)}
-                                                                        className="!text-red-600 hover:!bg-red-50"
-                                                                    >
-                                                                        Delete
-                                                                    </Button>
-                                                                </div>
-                                                            </div>
-                                                            <div className="grid grid-cols-3 gap-4 text-sm">
-                                                                <div>
-                                                                    <span className="font-medium">Date:</span> {session.startDate ? formatDateForDisplay(session.startDate) : 'N/A'} - {session.endDate ? formatDateForDisplay(session.endDate) : 'N/A'}
-                                                                </div>
-                                                                <div>
-                                                                    <span className="font-medium">Time:</span> {session.startTime || 'N/A'} - {session.endTime || 'N/A'}
-                                                                </div>
-                                                                <div>
-                                                                    <span className="font-medium">Mode:</span> {getModeLabel(session.modeOfTraining)}
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    )}
+                                                    ) : null}
                                                 </Card>
-                                            ))}
-
-                                            <Button
-                                                type="button"
-                                                variant="primary"
-                                                onClick={toggleNewSessionForm}
-                                                className="w-full px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
-                                            >
-                                                {showNewSessionForm ? 'Cancel Add Session' : 'Add New Session'}
-                                            </Button>
+                                                );
+                                            })()}
                                         </div>
                                     ) : (
-                                        // No existing sessions - show add form
                                         <div className="text-center py-8">
-                                            <p className="text-gray-600 mb-4">No existing sessions found.</p>
-                                            <button
-                                                type="button"
-                                                onClick={toggleNewSessionForm}
-                                                className="px-6 py-3 bg-green-600 text-white rounded hover:bg-green-700"
-                                            >
-                                                {showNewSessionForm ? 'Cancel' : 'Add First Session'}
-                                            </button>
+                                            <p className="text-gray-500 dark:text-gray-400">No existing sessions found.</p>
                                         </div>
                                     )}
 
@@ -2872,297 +2989,574 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                     </FormSection>
                 )}
 
+                {/* Enrolled Learners Tab */}
+                {isEditMode && activeTab === 'enrollments' && (
+                    <FormSection title="Enrolled Learners">
+                        {enrollmentsLoading ? (
+                            <div className="flex items-center justify-center py-8">
+                                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500 mr-3"></div>
+                                Loading enrollments...
+                            </div>
+                        ) : enrolledLearners.length === 0 ? (
+                            <p className="text-gray-500 dark:text-gray-400 py-4">No learners enrolled in this course run.</p>
+                        ) : (
+                            <div>
+                                <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                                    {enrolledLearners.length} learner{enrolledLearners.length !== 1 ? 's' : ''} enrolled
+                                </p>
+                                <div className="overflow-x-auto">
+                                    <table className="text-sm whitespace-nowrap min-w-max w-full">
+                                        <thead className="bg-gray-100 dark:bg-gray-700/60">
+                                            <tr>
+                                                <th className="text-left py-3 px-3 font-semibold">#</th>
+                                                <th className="text-left py-3 px-3 font-semibold">Name</th>
+                                                <th className="text-left py-3 px-3 font-semibold">NRIC</th>
+                                                <th className="text-left py-3 px-3 font-semibold">Email</th>
+                                                <th className="text-left py-3 px-3 font-semibold">Tel</th>
+                                                <th className="text-left py-3 px-3 font-semibold">Sponsorship</th>
+                                                <th className="text-left py-3 px-3 font-semibold">Enrollment ID</th>
+                                                <th className="text-left py-3 px-3 font-semibold">Grant ID</th>
+                                                <th className="text-right py-3 px-3 font-semibold">Grant Amt</th>
+                                                <th className="text-right py-3 px-3 font-semibold">SF Claim Amt</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {enrolledLearners.map((learner, idx) => {
+                                                const nric = learner.nric || '';
+                                                const isVisible = visibleNrics.has(learner.user_id);
+                                                const maskedNric = nric.length >= 5
+                                                    ? `${nric[0]}${'X'.repeat(nric.length - 5)}${nric.slice(-4)}`
+                                                    : nric || '-';
+                                                return (
+                                                <tr key={`${learner.user_id}-${idx}`} className="border-b border-gray-100 dark:border-gray-800">
+                                                    <td className="py-3 px-3 text-gray-500">{idx + 1}</td>
+                                                    <td className="py-3 px-3">{learner.full_name}</td>
+                                                    <td className="py-3 px-3 font-mono">
+                                                        <span className="inline-flex items-center gap-1.5">
+                                                            {isVisible ? nric || '-' : maskedNric}
+                                                            {nric && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => setVisibleNrics(prev => {
+                                                                        const next = new Set(Array.from(prev));
+                                                                        if (next.has(learner.user_id)) next.delete(learner.user_id);
+                                                                        else next.add(learner.user_id);
+                                                                        return next;
+                                                                    })}
+                                                                    className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                                                                    title={isVisible ? 'Hide NRIC' : 'Show NRIC'}
+                                                                >
+                                                                    {isVisible ? (
+                                                                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21" /></svg>
+                                                                    ) : (
+                                                                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                                                                    )}
+                                                                </button>
+                                                            )}
+                                                        </span>
+                                                    </td>
+                                                    <td className="py-3 px-3">{learner.email}</td>
+                                                    <td className="py-3 px-3">{learner.tel || '-'}</td>
+                                                    <td className="py-3 px-3">
+                                                        {learner.sponsorship_type === 'Employer' ? (
+                                                            <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">Employer</span>
+                                                        ) : learner.sponsorship_type === 'Individual' ? (
+                                                            <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">Self</span>
+                                                        ) : (
+                                                            <span className="text-gray-400">-</span>
+                                                        )}
+                                                    </td>
+                                                    <td className="py-3 px-3 font-mono text-xs">{learner.enrolment_id || '-'}</td>
+                                                    <td className="py-3 px-3 font-mono text-xs">{learner.grant_id || '-'}</td>
+                                                    <td className="py-3 px-3 text-right">{learner.grant_amount != null ? `$${Number(learner.grant_amount).toFixed(2)}` : '-'}</td>
+                                                    <td className="py-3 px-3 text-right">{learner.sf_claim_amount != null ? `$${Number(learner.sf_claim_amount).toFixed(2)}` : '-'}</td>
+                                                </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        )}
+                    </FormSection>
+                )}
+
                 {/* Trainer Tab */}
                 {isEditMode && activeTab === 'trainer' && (
                     <FormSection title="Trainer Management">
                         <div className="space-y-6">
-                            {/* Currently Assigned Local Trainers */}
-                            {assignedTrainersList.length > 0 ? (
-                                <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-md p-4">
-                                    <h4 className="text-sm font-semibold text-green-800 dark:text-green-300 mb-3">
-                                        Assigned Trainers (Local System) — {assignedTrainersList.length}
-                                    </h4>
-                                    <div className="space-y-2">
-                                        {assignedTrainersList.map((t: any) => (
-                                            <div key={t.id} className="flex items-center justify-between bg-white dark:bg-gray-800 border border-green-200 dark:border-green-700/50 rounded-lg px-4 py-2.5">
-                                                <div className="flex flex-wrap gap-4 text-sm">
-                                                    <div>
-                                                        <span className="font-bold text-gray-700 dark:text-gray-300">Name:</span>{' '}
-                                                        <span className="text-gray-900 dark:text-white">{t.trainer_name}</span>
-                                                    </div>
-                                                    {t.trainer_email && (
-                                                        <div>
-                                                            <span className="font-bold text-gray-700 dark:text-gray-300">Email:</span>{' '}
-                                                            <span className="text-gray-900 dark:text-white">{t.trainer_email}</span>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                                <button
-                                                    type="button"
-                                                    onClick={(e) => handleRemoveTrainerLocal(t.id, t.trainer_name, e)}
-                                                    disabled={loading}
-                                                    className="ml-3 px-2.5 py-1 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
-                                                    title={`Remove ${t.trainer_name}`}
-                                                >
-                                                    ✕ Remove
-                                                </button>
-                                            </div>
-                                        ))}
+                            {/* Assigned Trainer (Local) */}
+                            <div>
+                                <div className="flex items-center justify-between mb-3">
+                                    <div>
+                                        <h4 className="text-lg font-medium text-gray-900 dark:text-white">Assigned Trainer (Local)</h4>
+                                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Manually assigned by the system or admin.</p>
                                     </div>
-                                    <p className="text-xs text-green-700 dark:text-green-400 mt-2">
-                                        These trainers can view this class in their attendance dashboard.
-                                    </p>
-                                </div>
-                            ) : localAssignedTrainerName ? (
-                                <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-md p-4">
-                                    <h4 className="text-sm font-semibold text-green-800 dark:text-green-300 mb-2">Assigned Trainer (Local System)</h4>
-                                    <div className="flex flex-wrap gap-6 text-sm">
-                                        <div>
-                                            <span className="font-bold text-gray-700 dark:text-gray-300">Name:</span>{' '}
-                                            <span className="text-gray-900 dark:text-white">{localAssignedTrainerName}</span>
-                                        </div>
-                                        {localAssignedTrainerEmail && (
-                                            <div>
-                                                <span className="font-bold text-gray-700 dark:text-gray-300">Email:</span>{' '}
-                                                <span className="text-gray-900 dark:text-white">{localAssignedTrainerEmail}</span>
-                                            </div>
-                                        )}
+                                    <div className="flex items-center gap-2">
+                                        <select
+                                            value={selectedDbTrainerId || manualTrainerName}
+                                            onChange={(e) => {
+                                                const val = e.target.value;
+                                                if (!val) { setSelectedDbTrainerId(''); setManualTrainerName(''); setManualTrainerEmail(''); return; }
+                                                const td = availableTrainers.find((at: any) => at.user_id === val);
+                                                if (td) { setSelectedDbTrainerId(td.user_id); setManualTrainerName(td.trainer_name); setManualTrainerEmail(td.email || ''); }
+                                                else { setSelectedDbTrainerId(''); setManualTrainerName(val); setManualTrainerEmail(''); }
+                                            }}
+                                            className="px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
+                                        >
+                                            <option value="">-- Reassign Trainer --</option>
+                                            {courseToEdit?.trainersList
+                                                ? courseToEdit.trainersList.split(',').map((t: string) => t.trim()).filter(Boolean).map((name: string, idx: number) => {
+                                                    const td = availableTrainers.find((at: any) => at.trainer_name?.toLowerCase() === name.toLowerCase());
+                                                    return <option key={idx} value={td?.user_id || name}>{name}</option>;
+                                                })
+                                                : availableTrainers.map((t: any) => (
+                                                    <option key={t.user_id} value={t.user_id}>{t.trainer_name}</option>
+                                                ))
+                                            }
+                                        </select>
+                                        <Button
+                                            type="button"
+                                            onClick={(e) => handleAssignTrainerLocal(e)}
+                                            disabled={loading || (!selectedDbTrainerId && !manualTrainerName)}
+                                            className="bg-blue-600 hover:bg-blue-700 text-white"
+                                            size="sm"
+                                        >
+                                            {loading ? 'Saving...' : 'Re-Assign'}
+                                        </Button>
+                                        <Button
+                                            type="button"
+                                            onClick={() => setDbTrainerAssignMode(dbTrainerAssignMode === 'manual' ? '' as any : 'manual')}
+                                            className={`${dbTrainerAssignMode === 'manual' ? 'bg-gray-500 hover:bg-gray-600' : 'bg-green-600 hover:bg-green-700'} text-white`}
+                                            size="sm"
+                                        >
+                                            {dbTrainerAssignMode === 'manual' ? 'Cancel' : 'Add New Trainer'}
+                                        </Button>
+                                        <Button
+                                            type="button"
+                                            onClick={async () => {
+                                                const localEmail = assignedTrainersList[0]?.trainer_email || localAssignedTrainerEmail;
+                                                const localName = assignedTrainersList[0]?.trainer_name || localAssignedTrainerName;
+                                                if (!localName) { showErrorPopup('No local trainer assigned.'); return; }
+                                                const match = availableTrainers.find((t: any) =>
+                                                    (localEmail && t.email?.toLowerCase() === localEmail.toLowerCase()) ||
+                                                    (localName && t.trainer_name?.toLowerCase() === localName.toLowerCase())
+                                                );
+                                                const nric = match?.nric;
+                                                if (!nric || nric === 'NA') {
+                                                    showErrorPopup('No NRIC found for the assigned local trainer. Please ensure the trainer has an NRIC on file.');
+                                                    return;
+                                                }
+                                                if (!ssgApiResponse?.data?.course?.run) {
+                                                    // No SSG data — save locally only
+                                                    setLoading(true);
+                                                    try {
+                                                        await fetch(getApiUrl('/api/admin/rename-trainer'), {
+                                                            method: 'POST',
+                                                            headers: { 'Content-Type': 'application/json' },
+                                                            body: JSON.stringify({ action: 'update-tpg-trainer', courseRunId, trainerName: localName, trainerEmail: localEmail })
+                                                        });
+                                                        showSuccessPopup(`TPG trainer saved locally as ${localName}. SSG data not available — sync will update TPG when available.`);
+                                                    } catch { showErrorPopup('Failed to save TPG trainer.'); }
+                                                    finally { setLoading(false); }
+                                                    return;
+                                                }
+                                                // SSG data available — try SSG API
+                                                const runData = ssgApiResponse.data.course.run;
+                                                const requestBody = {
+                                                    course: {
+                                                        courseReferenceNumber: courseReferenceNumber,
+                                                        trainingProvider: { uen: runData.organizationKey },
+                                                        run: {
+                                                            action: "update",
+                                                            registrationDates: { opening: runData.registrationOpeningDate || runData.registrationDates?.opening || 0, closing: runData.registrationClosingDate || runData.registrationDates?.closing || 0 },
+                                                            courseDates: { start: runData.courseStartDate || runData.courseDates?.start || 0, end: runData.courseEndDate || runData.courseDates?.end || 0 },
+                                                            scheduleInfoType: { code: "01", description: "Description" },
+                                                            scheduleInfo: "Schedule",
+                                                            venue: runData.venue || {},
+                                                            courseAdminEmail: runData.courseAdminEmail || currentUserEmail,
+                                                            courseVacancy: runData.courseVacancy || { code: "A", description: "Available" },
+                                                            file: { Name: "", content: "" },
+                                                            linkCourseRunTrainer: [{ trainer: { photo: { name: "", content: "" }, trainerType: { code: "1", description: "Existing" }, idNumber: nric } }]
+                                                        }
+                                                    }
+                                                };
+                                                showConfirmPopup(
+                                                    `Assign trainer ${localName} (NRIC: ${nric}) to TPG via SSG API?`,
+                                                    async () => {
+                                                        setLoading(true);
+                                                        try {
+                                                            const response = await fetch(`/api/ssg/courses/courseRuns/${courseRunId}?includeExpiredCourses=true&action=assign-trainer`, {
+                                                                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(requestBody)
+                                                            });
+                                                            if (response.ok) {
+                                                                showSuccessPopup(`Trainer ${localName} assigned to TPG successfully!`);
+                                                                // Re-fetch SSG data to update TPG display
+                                                                const updated = await fetch(`/api/ssg/courses?runId=${courseRunId}&includeExpired=false`);
+                                                                if (updated.ok) setSsgApiResponse(await updated.json());
+                                                                // Also save locally
+                                                                await fetch(getApiUrl('/api/admin/rename-trainer'), {
+                                                                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                                                    body: JSON.stringify({ action: 'update-tpg-trainer', courseRunId, trainerName: localName, trainerEmail: localEmail })
+                                                                });
+                                                            } else {
+                                                                const errData = await response.json().catch(() => ({}));
+                                                                const detail = errData.details?.[0]?.message || errData.message || '';
+                                                                // Save locally as fallback
+                                                                await fetch(getApiUrl('/api/admin/rename-trainer'), {
+                                                                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                                                    body: JSON.stringify({ action: 'update-tpg-trainer', courseRunId, trainerName: localName, trainerEmail: localEmail })
+                                                                });
+                                                                if (detail.includes('Existing_Trainer_NotFound')) {
+                                                                    showInfoPopup(`Trainer ${localName} is not registered in the SSG TP Profile yet. TPG trainer has been saved locally. Please register the trainer in SSG first.`);
+                                                                } else {
+                                                                    showInfoPopup(`SSG API returned: ${detail || 'Unknown error'}. TPG trainer saved locally as ${localName}.`);
+                                                                }
+                                                            }
+                                                        } catch { showErrorPopup('Failed to assign trainer to TPG.'); }
+                                                        finally { setLoading(false); }
+                                                    }
+                                                );
+                                            }}
+                                            disabled={loading || (!assignedTrainersList.length && !localAssignedTrainerName)}
+                                            className="bg-purple-600 hover:bg-purple-700 text-white"
+                                            size="sm"
+                                        >
+                                            {loading ? 'Assigning...' : 'Assign to TPG'}
+                                        </Button>
                                     </div>
-                                    <p className="text-xs text-green-700 dark:text-green-400 mt-2">
-                                        This trainer can view this class in their attendance dashboard.
-                                    </p>
                                 </div>
-                            ) : (
-                                <div className="bg-gray-50 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700 rounded-md p-4 text-sm text-gray-500 dark:text-gray-400">
-                                    No trainer has been locally assigned to this course run yet. Use the form below to assign one.
-                                </div>
-                            )}
-
-                            {/* Display Assigned Trainer Information */}
-                            {ssgApiResponse?.data?.course?.run ? (
-                                <div>
-                                    <h4 className="text-lg font-medium text-gray-900 dark:text-white mb-4">Currently Assigned Trainer</h4>
-                                    {ssgApiResponse.data.course.run.linkCourseRunTrainer &&
-                                        ssgApiResponse.data.course.run.linkCourseRunTrainer.length > 0 ? (
-                                        <div className="space-y-4">
-                                            {ssgApiResponse.data.course.run.linkCourseRunTrainer.map((trainerLink: any, index: number) => {
-                                                const trainer = trainerLink.trainer;
+                                {assignedTrainersList.length > 0 ? (
+                                    <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-md p-4">
+                                        <div className="space-y-2">
+                                            {assignedTrainersList.slice(0, 1).map((t: any) => {
+                                                const trainerDetail = availableTrainers.find((at: any) =>
+                                                    (at.email && t.trainer_email && at.email.toLowerCase() === t.trainer_email.toLowerCase()) ||
+                                                    (at.trainer_name && t.trainer_name && at.trainer_name.toLowerCase() === t.trainer_name.toLowerCase())
+                                                );
                                                 return (
-                                                    <Card key={index} className="p-4 bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-700">
-                                                        <div className="flex justify-between items-start">
-                                                            <div className="flex-1">
-                                                                <h5 className="text-md font-semibold text-blue-800 dark:text-blue-300 mb-2">
-                                                                    Trainer {index + 1}
-                                                                </h5>
-                                                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                                                                    <div>
-                                                                        <span className="font-bold text-gray-700 dark:text-gray-300 ">ID Number:</span>
-                                                                        <div className="text-gray-900 dark:text-white">{trainer.idNumber}</div>
-                                                                    </div>
-                                                                    <div>
-                                                                        <span className="font-bold text-gray-700 dark:text-gray-300">Name:</span>
-                                                                        <div className="text-gray-900 dark:text-white">{trainer.name}</div>
-                                                                    </div>
-                                                                    <div>
-                                                                        <span className="font-bold text-gray-700 dark:text-gray-300">Email:</span>
-                                                                        <div className="text-gray-900 dark:text-white">{trainer.email}</div>
-                                                                    </div>
-                                                                </div>
-                                                            </div>
+                                                <div key={t.id} className="flex items-center justify-between bg-white dark:bg-gray-800 border border-green-200 dark:border-green-700/50 rounded-lg px-4 py-2.5">
+                                                    <div className="flex flex-wrap gap-4 text-sm">
+                                                        <div>
+                                                            <span className="font-bold text-gray-700 dark:text-gray-300">Name:</span>{' '}
+                                                            <span className="text-gray-900 dark:text-white">{t.trainer_name}</span>
                                                         </div>
-                                                    </Card>
+                                                        {t.trainer_email && (
+                                                            <div>
+                                                                <span className="font-bold text-gray-700 dark:text-gray-300">Email:</span>{' '}
+                                                                <span className="text-gray-900 dark:text-white">{t.trainer_email}</span>
+                                                            </div>
+                                                        )}
+                                                        {trainerDetail?.telephone && (
+                                                            <div>
+                                                                <span className="font-bold text-gray-700 dark:text-gray-300">Contact (HP):</span>{' '}
+                                                                <span className="text-gray-900 dark:text-white">{trainerDetail.telephone}</span>
+                                                            </div>
+                                                        )}
+                                                        <div>
+                                                            <span className="font-bold text-gray-700 dark:text-gray-300">NRIC:</span>{' '}
+                                                            {trainerDetail?.nric && trainerDetail.nric !== 'NA' ? (
+                                                                <span className="text-gray-900 dark:text-white font-mono">{trainerDetail.nric}</span>
+                                                            ) : (
+                                                                <span className="text-amber-500 dark:text-amber-400 text-xs italic">Not on file</span>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                    <button
+                                                        type="button"
+                                                        onClick={(e) => handleRemoveTrainerLocal(t.id, t.trainer_name, e)}
+                                                        disabled={loading}
+                                                        className="ml-3 px-2.5 py-1 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
+                                                        title={`Remove ${t.trainer_name}`}
+                                                    >
+                                                        ✕ Remove
+                                                    </button>
+                                                </div>
                                                 );
                                             })}
                                         </div>
-                                    ) : (
-                                        <Card className="p-6 bg-gray-50 dark:bg-gray-800/60 border-gray-200 dark:border-gray-700 text-center">
-                                            <div className="text-gray-600 dark:text-gray-300">
-                                                <svg className="mx-auto h-12 w-12 text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                                                </svg>
-                                                <h5 className="text-lg font-medium text-gray-900 dark:text-white mb-2">No Trainer Assigned</h5>
-                                                <p className="text-sm text-gray-500 dark:text-gray-400">
-                                                    No trainer has been assigned to this course run yet. Use the form below to assign a trainer.
-                                                </p>
-                                            </div>
-                                        </Card>
-                                    )}
-                                </div>
-                            ) : (
-                                <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-md p-4">
-                                    <div className="flex">
-                                        <div className="flex-shrink-0">
-                                            <svg className="h-5 w-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
-                                                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                                            </svg>
-                                        </div>
-                                        <div className="ml-3">
-                                            <h3 className="text-sm font-medium text-yellow-800 dark:text-yellow-300">
-                                                Course Run Data Required
-                                            </h3>
-                                            <p className="text-sm text-yellow-700 dark:text-yellow-400 mt-1">
-                                                Please fetch SSG course run data first to view assigned trainer information.
-                                            </p>
-                                        </div>
                                     </div>
-                                </div>
-                            )}
-
-                            {/* Assign New Trainer Form */}
-                            <div className="border-t dark:border-gray-700 pt-6">
-                                <h4 className="text-lg font-medium text-gray-900 dark:text-white mb-4">Assign New Trainer</h4>
-
-                                {Array.from({ length: trainerCount }, (_, index) => {
-                                    const trainerInfo = getTrainerData(index);
-                                    // Set default trainer type to "1" (Existing) if not already set
-                                    const trainerType = trainerInfo.trainerTypeCode || '1';
-
-                                    // Ensure the default value is set in the data
-                                    if (!trainerInfo.trainerTypeCode) {
-                                        updateTrainerField(index, 'trainerTypeCode', '1');
-                                    }
-
-                                    return (
-                                        <Card key={index} className="p-4 bg-gray-50 dark:bg-gray-800/60">
-                                            <div className="space-y-4">
-                                                {/* Hidden Trainer Type field - always set to "1" (Existing) for request body */}
-                                                <input
-                                                    type="hidden"
-                                                    value="1"
-                                                    onChange={(e) => updateTrainerField(index, 'trainerTypeCode', e.target.value)}
-                                                />
-
-                                                {/* Trainer ID Number field - always displayed */}
-                                                <div>
-                                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Trainer ID Number *</label>
-                                                    <input
-                                                        type="text"
-                                                        value={trainerInfo.trainerIdNumber || ''}
-                                                        onChange={(e) => updateTrainerField(index, 'trainerIdNumber', e.target.value)}
-                                                        className={inputClasses}
-                                                        placeholder="Enter existing trainer ID"
-                                                        required
-                                                    />
-                                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                                        Enter the ID number of an existing trainer to assign them to this course run.
-                                                    </p>
-                                                </div>
-                                            </div>
-                                        </Card>
+                                ) : localAssignedTrainerName ? (() => {
+                                    const trainerDetail = availableTrainers.find((at: any) =>
+                                        (at.email && localAssignedTrainerEmail && at.email.toLowerCase() === localAssignedTrainerEmail.toLowerCase()) ||
+                                        (at.trainer_name && at.trainer_name.toLowerCase() === localAssignedTrainerName.toLowerCase())
                                     );
-                                })}
-
-                                <div className="flex justify-end mt-6">
-                                    <Button
-                                        onClick={handleUpdateTrainer}
-                                        disabled={loading}
-                                        className="bg-purple-600 hover:bg-purple-700 text-white"
-                                    >
-                                        {loading ? (
-                                            <div className="flex items-center">
-                                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                                                Assigning Trainer...
+                                    return (
+                                    <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-md p-4">
+                                        <div className="flex flex-wrap gap-6 text-sm">
+                                            <div>
+                                                <span className="font-bold text-gray-700 dark:text-gray-300">Name:</span>{' '}
+                                                <span className="text-gray-900 dark:text-white">{localAssignedTrainerName}</span>
                                             </div>
-                                        ) : 'Assign Trainer'}
-                                    </Button>
-                                </div>
-                            </div>
-
-                            {/* Local DB Trainer Assignment */}
-                            <div className="border-t dark:border-gray-700 pt-6 mt-6">
-                                <h4 className="text-lg font-medium text-gray-900 dark:text-white mb-1">Assign Trainer (Local Database)</h4>
-                                <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-                                    Select a trainer from your system so they can view this class in their attendance dashboard.
-                                </p>
-
-                                {/* Toggle: dropdown vs manual */}
-                                <div className="flex gap-3 mb-4">
-                                    <button
-                                        type="button"
-                                        onClick={() => setDbTrainerAssignMode('dropdown')}
-                                        className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
-                                            dbTrainerAssignMode === 'dropdown'
-                                                ? 'bg-blue-600 text-white'
-                                                : 'border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
-                                        }`}
-                                    >
-                                        Select from list
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => setDbTrainerAssignMode('manual')}
-                                        className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
-                                            dbTrainerAssignMode === 'manual'
-                                                ? 'bg-blue-600 text-white'
-                                                : 'border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
-                                        }`}
-                                    >
-                                        Enter manually
-                                    </button>
-                                </div>
-
-                                {dbTrainerAssignMode === 'dropdown' ? (
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                            Trainer <span className="text-red-500">*</span>
-                                        </label>
-                                        {availableTrainers.length === 0 ? (
-                                            <p className="text-sm text-gray-500 italic">Loading trainers...</p>
-                                        ) : (
-                                            <SearchableSelect
-                                                options={availableTrainers.map((t: any) => ({ value: t.user_id, label: `${t.trainer_name} (${t.email})` }))}
-                                                value={selectedDbTrainerId}
-                                                onChange={setSelectedDbTrainerId}
-                                                placeholder="— Search trainer by name or email —"
-                                                className={inputClasses}
-                                            />
-                                        )}
+                                            {localAssignedTrainerEmail && (
+                                                <div>
+                                                    <span className="font-bold text-gray-700 dark:text-gray-300">Email:</span>{' '}
+                                                    <span className="text-gray-900 dark:text-white">{localAssignedTrainerEmail}</span>
+                                                </div>
+                                            )}
+                                            {trainerDetail?.telephone && (
+                                                <div>
+                                                    <span className="font-bold text-gray-700 dark:text-gray-300">Contact (HP):</span>{' '}
+                                                    <span className="text-gray-900 dark:text-white">{trainerDetail.telephone}</span>
+                                                </div>
+                                            )}
+                                            <div>
+                                                <span className="font-bold text-gray-700 dark:text-gray-300">NRIC:</span>{' '}
+                                                {trainerDetail?.nric && trainerDetail.nric !== 'NA' ? (
+                                                    <span className="text-gray-900 dark:text-white font-mono">{trainerDetail.nric}</span>
+                                                ) : (
+                                                    <span className="text-amber-500 dark:text-amber-400 text-xs italic">Not on file</span>
+                                                )}
+                                            </div>
+                                        </div>
                                     </div>
-                                ) : (
-                                    <div className="space-y-3">
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                                Trainer Name <span className="text-red-500">*</span>
-                                            </label>
-                                            <input
-                                                type="text"
-                                                placeholder="Full name"
-                                                value={manualTrainerName}
-                                                onChange={e => setManualTrainerName(e.target.value)}
-                                                className={inputClasses}
-                                            />
-                                        </div>
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                                Trainer Email
-                                            </label>
-                                            <input
-                                                type="email"
-                                                placeholder="email@example.com"
-                                                value={manualTrainerEmail}
-                                                onChange={e => setManualTrainerEmail(e.target.value)}
-                                                className={inputClasses}
-                                            />
-                                        </div>
+                                    );
+                                })() : (
+                                    <div className="bg-gray-50 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700 rounded-md p-4 text-sm text-gray-500 dark:text-gray-400">
+                                        No trainer has been locally assigned yet.
                                     </div>
                                 )}
 
-                                <div className="flex justify-end mt-4">
-                                    <Button
-                                        type="button"
-                                        onClick={(e) => handleAssignTrainerLocal(e)}
-                                        disabled={loading}
-                                        className="bg-green-600 hover:bg-green-700 text-white"
-                                    >
-                                        {loading ? (
-                                            <div className="flex items-center">
-                                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                                                Saving...
+
+                                {/* Inline Add New Trainer form */}
+                                {dbTrainerAssignMode === 'manual' && (
+                                    <div className="mt-4 border border-green-200 dark:border-green-700 rounded-lg p-4 bg-green-50/50 dark:bg-green-900/10">
+                                        <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Add a new trainer:</p>
+                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Name <span className="text-red-500">*</span></label>
+                                                <input type="text" placeholder="Full name" value={manualTrainerName} onChange={e => setManualTrainerName(e.target.value)} className={inputClasses} />
                                             </div>
-                                        ) : 'Save Local Assignment'}
-                                    </Button>
-                                </div>
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Email</label>
+                                                <input type="email" placeholder="email@example.com" value={manualTrainerEmail} onChange={e => setManualTrainerEmail(e.target.value)} className={inputClasses} />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Contact (HP)</label>
+                                                <input type="tel" placeholder="Phone number" value={manualTrainerContact || ''} onChange={e => setManualTrainerContact(e.target.value)} className={inputClasses} />
+                                            </div>
+                                        </div>
+                                        <div className="flex justify-end mt-4">
+                                            <Button type="button" onClick={(e) => handleAssignTrainerLocal(e)} disabled={loading} className="bg-green-600 hover:bg-green-700 text-white">
+                                                {loading ? 'Saving...' : 'Add & Assign Trainer'}
+                                            </Button>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
+
+                            {/* Assigned Trainer (TPG) */}
+                            {(() => {
+                                // Use freshly fetched SSG data if available, otherwise fall back to initial courseToEdit data
+                                const ssgTrainers = ssgApiResponse?.data?.course?.run?.linkCourseRunTrainer;
+                                const tpgName = ssgTrainers?.[0]?.trainer?.name || courseToEdit?.assignedTrainerTpg;
+                                const tpgEmail = ssgTrainers?.[0]?.trainer?.email || courseToEdit?.assignedTrainerTpgEmail;
+                                const tpgId = ssgTrainers?.[0]?.trainer?.idNumber;
+                                return (
+                                <div>
+                                    <h4 className="text-lg font-medium text-gray-900 dark:text-white mb-3">Assigned Trainer (TPG)</h4>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">Auto-pulled from the SSG/TPG API.</p>
+                                    {tpgName ? (
+                                        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-md p-4">
+                                            <div className="flex flex-wrap gap-6 text-sm">
+                                                <div>
+                                                    <span className="font-bold text-gray-700 dark:text-gray-300">Name:</span>{' '}
+                                                    <span className="text-gray-900 dark:text-white">{tpgName}</span>
+                                                </div>
+                                                {tpgEmail && (
+                                                    <div>
+                                                        <span className="font-bold text-gray-700 dark:text-gray-300">Email:</span>{' '}
+                                                        <span className="text-gray-900 dark:text-white">{tpgEmail}</span>
+                                                    </div>
+                                                )}
+                                                {tpgId && (
+                                                    <div>
+                                                        <span className="font-bold text-gray-700 dark:text-gray-300">NRIC:</span>{' '}
+                                                        <span className="text-gray-900 dark:text-white font-mono">{tpgId}</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="bg-gray-50 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700 rounded-md p-4 text-sm text-gray-500 dark:text-gray-400">
+                                            No TPG trainer assigned. Data will appear after SSG/TPG sync or after clicking "Assign to TPG".
+                                        </div>
+                                    )}
+                                </div>
+                                );
+                            })()}
+
+                            {/* Next Available Trainer */}
+                            <div>
+                                <h4 className="text-lg font-medium text-gray-900 dark:text-white mb-3">Next Available Trainer</h4>
+                                {courseToEdit?.nextAvailableTrainer ? (() => {
+                                    const nextDetail = availableTrainers.find((at: any) =>
+                                        (at.email && courseToEdit.nextAvailableTrainerEmail && at.email.toLowerCase() === courseToEdit.nextAvailableTrainerEmail.toLowerCase()) ||
+                                        (at.trainer_name && at.trainer_name.toLowerCase() === courseToEdit.nextAvailableTrainer.toLowerCase())
+                                    );
+                                    return (
+                                    <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-700 rounded-md p-4">
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex flex-wrap gap-6 text-sm">
+                                                <div>
+                                                    <span className="font-bold text-gray-700 dark:text-gray-300">Name:</span>{' '}
+                                                    <span className="text-gray-900 dark:text-white">{courseToEdit.nextAvailableTrainer}</span>
+                                                </div>
+                                                {(courseToEdit.nextAvailableTrainerEmail || nextDetail?.email) && (
+                                                    <div>
+                                                        <span className="font-bold text-gray-700 dark:text-gray-300">Email:</span>{' '}
+                                                        <span className="text-gray-900 dark:text-white">{courseToEdit.nextAvailableTrainerEmail || nextDetail?.email}</span>
+                                                    </div>
+                                                )}
+                                                {nextDetail?.telephone && (
+                                                    <div>
+                                                        <span className="font-bold text-gray-700 dark:text-gray-300">Contact (HP):</span>{' '}
+                                                        <span className="text-gray-900 dark:text-white">{nextDetail.telephone}</span>
+                                                    </div>
+                                                )}
+                                                {courseToEdit.latestInvitationStatus && (
+                                                    <div>
+                                                        <span className="font-bold text-gray-700 dark:text-gray-300">Invitation Status:</span>{' '}
+                                                        <span className={`font-medium ${
+                                                            courseToEdit.latestInvitationStatus === 'accepted' ? 'text-green-600 dark:text-green-400' :
+                                                            courseToEdit.latestInvitationStatus === 'declined' ? 'text-red-600 dark:text-red-400' :
+                                                            courseToEdit.latestInvitationStatus === 'pending' ? 'text-yellow-600 dark:text-yellow-400' :
+                                                            'text-gray-900 dark:text-white'
+                                                        }`}>{courseToEdit.latestInvitationStatus}</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <Button
+                                                onClick={async () => {
+                                                    if (!courseToEdit?.id) return;
+                                                    try {
+                                                        setLoading(true);
+                                                        const res = await fetch(getApiUrl('/api/admin/send-trainer-invitation'), {
+                                                            method: 'POST',
+                                                            headers: { 'Content-Type': 'application/json' },
+                                                            body: JSON.stringify({ courseRunUuid: courseToEdit.id }),
+                                                        });
+                                                        const data = await res.json();
+                                                        if (data.success) {
+                                                            showSuccessPopup(`Invitation sent to ${data.trainerName || courseToEdit.nextAvailableTrainer}`);
+                                                        } else {
+                                                            showErrorPopup(data.error || 'Failed to send invitation');
+                                                        }
+                                                    } catch {
+                                                        showErrorPopup('Failed to send trainer invitation');
+                                                    } finally {
+                                                        setLoading(false);
+                                                    }
+                                                }}
+                                                disabled={loading}
+                                                className="bg-orange-600 hover:bg-orange-700 text-white ml-4 whitespace-nowrap"
+                                            >
+                                                {loading ? 'Sending...' : 'Send Invitation'}
+                                            </Button>
+                                        </div>
+                                    </div>
+                                    );
+                                })() : (
+                                    <div className="bg-gray-50 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700 rounded-md p-4 text-sm text-gray-500 dark:text-gray-400">
+                                        No next available trainer in the approved list.
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Approved Trainers List */}
+                            <div>
+                                <h4 className="text-lg font-medium text-gray-900 dark:text-white mb-3">Approved Trainers for This Course</h4>
+                                <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">Trainers approved to teach this course (from course record). The next available trainer follows the assigned local trainer in this order.</p>
+                                {courseToEdit?.trainersList ? (() => {
+                                    const approvedTrainers = courseToEdit.trainersList.split(',').map((t: string) => t.trim()).filter(Boolean);
+                                    const nextName = courseToEdit.nextAvailableTrainer;
+
+                                    // Build bidirectional name <-> email maps from availableTrainers (app_user data)
+                                    const dbNameToEmail = new Map<string, string>();
+                                    const emailToDbNames = new Map<string, Set<string>>();
+                                    availableTrainers.forEach((t: any) => {
+                                        if (t.trainer_name && t.email) {
+                                            const name = t.trainer_name.toLowerCase().trim();
+                                            const email = t.email.toLowerCase().trim();
+                                            dbNameToEmail.set(name, email);
+                                            if (!emailToDbNames.has(email)) emailToDbNames.set(email, new Set());
+                                            emailToDbNames.get(email)!.add(name);
+                                        }
+                                    });
+
+                                    // Collect all local assigned emails and expand to ALL known names via email
+                                    const localEmails = new Set<string>();
+                                    const localAllNames = new Set<string>();
+                                    assignedTrainersList.forEach((t: any) => {
+                                        if (t.trainer_name) localAllNames.add(t.trainer_name.toLowerCase().trim());
+                                        if (t.trainer_email) localEmails.add(t.trainer_email.toLowerCase().trim());
+                                    });
+                                    if (localAssignedTrainerName) localAllNames.add(localAssignedTrainerName.toLowerCase().trim());
+                                    if (localAssignedTrainerEmail) localEmails.add(localAssignedTrainerEmail.toLowerCase().trim());
+                                    // Expand: for each local email, add all names associated with that email
+                                    localEmails.forEach(email => {
+                                        const names = emailToDbNames.get(email);
+                                        if (names) names.forEach(n => localAllNames.add(n));
+                                    });
+
+                                    // Match: an approved trainer is locally assigned if their name, email, or word overlap matches
+                                    const isLocallyAssigned = (approvedName: string) => {
+                                        const lower = approvedName.toLowerCase().trim();
+                                        if (localAllNames.has(lower)) return true;
+                                        const approvedEmail = dbNameToEmail.get(lower);
+                                        if (approvedEmail && localEmails.has(approvedEmail)) return true;
+                                        // Word-overlap fallback for name mismatches (e.g. "Dr. Siraj Mohammad" vs "Dr. Muhammed Siraj")
+                                        const approvedWords = lower.split(/\s+/).filter((w: string) => w.length > 2);
+                                        if (approvedWords.length > 0) {
+                                            const approvedSet = new Set(approvedWords);
+                                            const localNamesArr = Array.from(localAllNames);
+                                            for (let i = 0; i < localNamesArr.length; i++) {
+                                                const localWords = localNamesArr[i].split(/\s+/).filter((w: string) => w.length > 2);
+                                                const shared = localWords.filter((w: string) => approvedSet.has(w));
+                                                if (shared.length >= 2 || (shared.length >= 1 && (approvedWords.length <= 1 || localWords.length <= 1))) {
+                                                    return true;
+                                                }
+                                            }
+                                        }
+                                        return false;
+                                    };
+
+                                    return (
+                                        <div className="bg-gray-50 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700 rounded-md p-4">
+                                            <div className="space-y-2">
+                                                {approvedTrainers.map((trainerName: string, idx: number) => {
+                                                    const isLocal = isLocallyAssigned(trainerName);
+                                                    const isNext = nextName && trainerName.toLowerCase().trim() === nextName.toLowerCase().trim();
+                                                    return (
+                                                        <div key={idx} className={`flex items-center justify-between text-sm py-1.5 px-3 rounded border ${
+                                                            isLocal ? 'bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700' :
+                                                            isNext ? 'bg-orange-50 dark:bg-orange-900/20 border-orange-300 dark:border-orange-700' :
+                                                            'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700'
+                                                        }`}>
+                                                            <div className="flex items-center">
+                                                                <span className="text-gray-400 mr-3 w-6 text-right">{idx + 1}.</span>
+                                                                <span className="text-gray-900 dark:text-white">{trainerName}</span>
+                                                            </div>
+                                                            {isLocal && (
+                                                                <span className="text-xs font-medium text-green-600 dark:text-green-400 ml-2">Assigned (Local)</span>
+                                                            )}
+                                                            {isNext && !isLocal && (
+                                                                <span className="text-xs font-medium text-orange-600 dark:text-orange-400 ml-2">Next Available</span>
+                                                            )}
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    );
+                                })() : (
+                                    <div className="bg-gray-50 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700 rounded-md p-4 text-sm text-gray-500 dark:text-gray-400">
+                                        No approved trainers list available for this course.
+                                    </div>
+                                )}
+                            </div>
+
+
                         </div>
                     </FormSection>
                 )}
@@ -3492,7 +3886,7 @@ export const AssignTrainerView: React.FC = () => {
             courseRuns
                 .map(run => {
                     const local = localAssignments[run.id];
-                    return local?.name || run.assignedTrainerName;
+                    return local?.name || run.primaryAssignedTrainerName;
                 })
                 .filter(Boolean)
         )
@@ -3505,7 +3899,7 @@ export const AssignTrainerView: React.FC = () => {
     // Apply client-side filters
     const filteredRuns = courseRuns.filter(run => {
         const local = localAssignments[run.id];
-        const trainerName = local?.name ?? run.assignedTrainerName;
+        const trainerName = local?.name ?? run.primaryAssignedTrainerName;
 
         if (filterNoTrainer && trainerName) return false;
         if (filterTrainerName && trainerName !== filterTrainerName) return false;
@@ -3521,7 +3915,7 @@ export const AssignTrainerView: React.FC = () => {
     const totalClasses = courseRuns.length;
     const trainersAssigned = courseRuns.filter(run => {
         const local = localAssignments[run.id];
-        return (local?.name ?? run.assignedTrainerName);
+        return (local?.name ?? run.primaryAssignedTrainerName);
     }).length;
     const missingTrainers = totalClasses - trainersAssigned;
 
@@ -3664,6 +4058,7 @@ export const AssignTrainerView: React.FC = () => {
                                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Course Run ID</th>
                                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Course Title</th>
                                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Course Ref Code</th>
+                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Class Status</th>
                                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Trainer</th>
                                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Action</th>
                                 </tr>
@@ -3671,7 +4066,7 @@ export const AssignTrainerView: React.FC = () => {
                             <tbody className="bg-white divide-y divide-gray-200 dark:bg-gray-800 dark:divide-gray-700">
                                 {paginatedRuns.map(run => {
                                     const local = localAssignments[run.id];
-                                    const currentName = local?.name ?? run.assignedTrainerName;
+                                    const currentName = local?.name ?? run.primaryAssignedTrainerName;
                                     const currentEmail = local?.email ?? run.assignedTrainerEmail;
                                     const isExpanded = selectedRunId === run.id;
 
@@ -3689,6 +4084,20 @@ export const AssignTrainerView: React.FC = () => {
                                                 </td>
                                                 <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">
                                                     {run.courseCode || '—'}
+                                                </td>
+                                                <td className="px-4 py-3 whitespace-nowrap text-sm">
+                                                    {run.classStatus ? (
+                                                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                                            run.classStatus === 'Confirmed'  ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' :
+                                                            run.classStatus === 'Cancelled'  ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300' :
+                                                            run.classStatus === 'Pending'    ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300' :
+                                                            'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
+                                                        }`}>
+                                                            {run.classStatus}
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-gray-400">—</span>
+                                                    )}
                                                 </td>
                                                 <td className="px-4 py-3 whitespace-nowrap text-sm">
                                                     {currentName ? (
@@ -3727,7 +4136,7 @@ export const AssignTrainerView: React.FC = () => {
                                             {/* Expanded assignment form row */}
                                             {isExpanded && (
                                                 <tr>
-                                                    <td colSpan={6} className="px-4 py-4 bg-gray-50 dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700">
+                                                    <td colSpan={7} className="px-4 py-4 bg-gray-50 dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700">
                                                         <div className="max-w-2xl space-y-4">
                                                             {/* Detailed Trainers List (Multi-Trainer) */}
                                                             <div className="bg-white dark:bg-gray-800 p-4 border border-gray-200 dark:border-gray-700 rounded-lg">
@@ -4455,6 +4864,7 @@ export const AddCourseView: React.FC = () => {
                             <select value={form.courseType} onChange={e => setForm(p => ({ ...p, courseType: e.target.value }))} className={inputClasses}>
                                 <option value="Non-WSQ">Non-WSQ</option>
                                 <option value="WSQ">WSQ</option>
+                                <option value="IBF">IBF</option>
                             </select>
                         </div>
                         <div>
@@ -6381,6 +6791,169 @@ export const UpcomingCourseRunsLogView: React.FC = () => {
                         <td className="px-3 py-2 whitespace-nowrap">{row.vacancy_code ?? '—'}</td>
                         <td className="px-3 py-2">{statusBadge(row.status)}</td>
                         <td className="px-3 py-2 text-red-600 dark:text-red-400 max-w-[180px] truncate">{row.error_message ?? ''}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
+// ── Course Confirmation Email Logs ───────────────────────────────────────────
+
+interface ConfirmationEmailLogRow {
+  id: number;
+  run_id: string;
+  course_run_id: string | null;
+  course_title: string | null;
+  course_code: string | null;
+  learner_name: string | null;
+  learner_email: string | null;
+  status: string;
+  error_message: string | null;
+  created_at: string;
+}
+
+export const CourseConfirmationEmailLogsView: React.FC = () => {
+  const { setAdminPage } = useLms();
+  const [logs, setLogs] = useState<ConfirmationEmailLogRow[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [expandedDates, setExpandedDates] = useState<Set<string>>(new Set());
+
+  const fetchLogs = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/admin/course-confirmation-email-logs?limit=500');
+      const json = await res.json();
+      if (json.success) setLogs(json.data);
+    } catch {
+      /* silent */
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { fetchLogs(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const batches = useMemo(() => {
+    const map = new Map<string, ConfirmationEmailLogRow[]>();
+    for (const log of logs) {
+      if (!map.has(log.run_id)) map.set(log.run_id, []);
+      map.get(log.run_id)!.push(log);
+    }
+    return Array.from(map.entries());
+  }, [logs]);
+
+  useEffect(() => {
+    if (batches.length > 0) {
+      setExpandedDates(new Set([batches[0][0]]));
+    }
+  }, [batches.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const toggleDate = (key: string) => {
+    setExpandedDates(prev => {
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
+      return next;
+    });
+  };
+
+  const statusBadge = (status: string) => {
+    const map: Record<string, string> = {
+      sent:    'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
+      skipped: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300',
+      error:   'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
+    };
+    return (
+      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${map[status] ?? map.error}`}>
+        {status}
+      </span>
+    );
+  };
+
+  return (
+    <div>
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+        <h2 className="text-3xl font-bold dark:text-white">Course Confirmation Email Logs</h2>
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" onClick={fetchLogs} disabled={loading}>
+            {loading ? 'Refreshing…' : 'Refresh'}
+          </Button>
+          <Button variant="ghost" onClick={() => setAdminPage(AdminPage.Scheduler)}>
+            ← Back to Scheduler
+          </Button>
+        </div>
+      </div>
+
+      {loading && logs.length === 0 && (
+        <div className="flex justify-center py-16">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto" />
+            <p className="mt-4 text-gray-600 dark:text-gray-400">Loading logs...</p>
+          </div>
+        </div>
+      )}
+
+      {!loading && logs.length === 0 && (
+        <Card className="p-10">
+          <div className="text-center text-gray-500 dark:text-gray-400">
+            <p className="text-lg font-medium">No confirmation email logs yet</p>
+            <p className="text-sm mt-1">Logs will appear here after the scheduled task runs.</p>
+          </div>
+        </Card>
+      )}
+
+      {batches.map(([runId, entries]) => {
+        const isOpen = expandedDates.has(runId);
+        const date = entries[0]?.created_at ? new Date(entries[0].created_at).toLocaleString('en-SG', {
+          day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Asia/Singapore',
+        }) : runId;
+        const sentCount = entries.filter(e => e.status === 'sent').length;
+        const errorCount = entries.filter(e => e.status === 'error').length;
+        const skippedCount = entries.filter(e => e.status === 'skipped').length;
+
+        return (
+          <div key={runId} className="mb-3">
+            <button onClick={() => toggleDate(runId)} className="w-full flex items-center justify-between px-4 py-3 bg-gray-100 dark:bg-gray-800 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
+              <div className="flex items-center gap-3">
+                <span className={`transform transition-transform ${isOpen ? 'rotate-90' : ''}`}>▶</span>
+                <span className="font-semibold text-gray-900 dark:text-white">{date}</span>
+                <span className="text-xs text-gray-500 dark:text-gray-400">({entries.length} records)</span>
+              </div>
+              <div className="flex items-center gap-2 text-xs">
+                {sentCount > 0 && <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 font-semibold">{sentCount} sent</span>}
+                {skippedCount > 0 && <span className="px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300 font-semibold">{skippedCount} skipped</span>}
+                {errorCount > 0 && <span className="px-2 py-0.5 rounded-full bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300 font-semibold">{errorCount} errors</span>}
+              </div>
+            </button>
+
+            {isOpen && (
+              <div className="mt-1 overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-xs text-gray-500 dark:text-gray-400 uppercase">
+                      <th className="px-3 py-2">Status</th>
+                      <th className="px-3 py-2">Learner</th>
+                      <th className="px-3 py-2">Email</th>
+                      <th className="px-3 py-2">Course</th>
+                      <th className="px-3 py-2">Course Run ID</th>
+                      <th className="px-3 py-2">Error</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                    {entries.map(entry => (
+                      <tr key={entry.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                        <td className="px-3 py-2">{statusBadge(entry.status)}</td>
+                        <td className="px-3 py-2 text-gray-900 dark:text-white">{entry.learner_name || '—'}</td>
+                        <td className="px-3 py-2 text-gray-600 dark:text-gray-400 font-mono text-xs">{entry.learner_email || '—'}</td>
+                        <td className="px-3 py-2 text-gray-900 dark:text-white">{entry.course_title || '—'}</td>
+                        <td className="px-3 py-2 text-gray-500 dark:text-gray-400 font-mono text-xs">{entry.course_run_id || '—'}</td>
+                        <td className="px-3 py-2 text-red-600 dark:text-red-400 text-xs max-w-xs truncate" title={entry.error_message || ''}>{entry.error_message || '—'}</td>
                       </tr>
                     ))}
                   </tbody>

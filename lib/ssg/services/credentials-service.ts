@@ -76,7 +76,7 @@ export class SSGCredentialsService {
       }
 
       const row = result.rows[0];
-      const selectedApp = appOverride || row.ssg_default_app || 'app2';
+      const selectedApp = appOverride || row.ssg_default_app || 'app1';
 
       // Resolve credentials based on selected app
       let certFile: string | null;

@@ -25,7 +25,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     await ensureTrainerInvitationTemplateColumns((sql, params) => pool.query(sql, params));
     await ensureTpgTrainerColumns((sql, params) => pool.query(sql, params));
 
-    const { courseRunUuid } = req.body;
+    const { courseRunUuid, overrideTrainerName } = req.body;
     if (!courseRunUuid || typeof courseRunUuid !== 'string') {
       return res.status(400).json({ success: false, error: 'courseRunUuid is required' });
     }
@@ -62,18 +62,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(404).json({ success: false, error: 'Course run not found' });
     }
 
-    const trainerPool = splitTrainerList(classRow.trainers_list);
-    const localTrainerSet = new Set(((classRow.local_trainers || []) as any[]).map((trainer) => normalizeTrainerName(trainer.trainerName)));
     const invitationHistory = Array.isArray(classRow.invitations) ? classRow.invitations : [];
 
     let nextTrainerName = '';
-    for (const trainerName of trainerPool) {
-      const normalized = normalizeTrainerName(trainerName);
-      if (!normalized || localTrainerSet.has(normalized)) continue;
-      const invite = invitationHistory.find((entry: any) => normalizeTrainerName(entry?.trainerName) === normalized);
-      if (invite?.status === 'declined') continue;
-      nextTrainerName = trainerName;
-      break;
+    if (overrideTrainerName && typeof overrideTrainerName === 'string' && overrideTrainerName.trim()) {
+      // Admin explicitly selected a trainer from the dropdown
+      nextTrainerName = overrideTrainerName.trim();
+    } else {
+      // Auto-compute next trainer from the priority list
+      const trainerPool = splitTrainerList(classRow.trainers_list);
+      const localTrainerSet = new Set(((classRow.local_trainers || []) as any[]).map((trainer) => normalizeTrainerName(trainer.trainerName)));
+      for (const trainerName of trainerPool) {
+        const normalized = normalizeTrainerName(trainerName);
+        if (!normalized || localTrainerSet.has(normalized)) continue;
+        const invite = invitationHistory.find((entry: any) => normalizeTrainerName(entry?.trainerName) === normalized);
+        if (invite?.status === 'declined') continue;
+        nextTrainerName = trainerName;
+        break;
+      }
     }
 
     if (!nextTrainerName) {

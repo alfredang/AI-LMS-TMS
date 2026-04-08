@@ -45,6 +45,51 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return;
   }
 
+  // PUT — Update class status and/or class type
+  if (req.method === 'PUT') {
+    try {
+      const { id, class_status, class_type } = req.body;
+      if (!id) {
+        return res.status(400).json({ success: false, error: 'id is required' });
+      }
+
+      const setClauses: string[] = [];
+      const values: any[] = [];
+      let paramIdx = 1;
+
+      if (class_status) {
+        const validStatuses = ['Confirmed', 'Pending', 'Cancelled'];
+        if (!validStatuses.includes(class_status)) {
+          return res.status(400).json({ success: false, error: `Invalid status. Must be one of: ${validStatuses.join(', ')}` });
+        }
+        setClauses.push(`class_status = $${paramIdx++}`);
+        values.push(class_status);
+      }
+
+      if (class_type) {
+        const validTypes = ['Physical', 'Virtual', 'Hybrid'];
+        if (!validTypes.includes(class_type)) {
+          return res.status(400).json({ success: false, error: `Invalid type. Must be one of: ${validTypes.join(', ')}` });
+        }
+        // Ensure column exists
+        await pool.query('ALTER TABLE course_run ADD COLUMN IF NOT EXISTS class_type TEXT DEFAULT \'Physical\'');
+        setClauses.push(`class_type = $${paramIdx++}`);
+        values.push(class_type);
+      }
+
+      if (setClauses.length === 0) {
+        return res.status(400).json({ success: false, error: 'No fields to update' });
+      }
+
+      values.push(id);
+      await pool.query(`UPDATE course_run SET ${setClauses.join(', ')} WHERE id = $${paramIdx}`, values);
+      return res.status(200).json({ success: true });
+    } catch (err) {
+      console.error('Error updating course run:', err);
+      return res.status(500).json({ success: false, error: 'Failed to update' });
+    }
+  }
+
   if (req.method !== 'GET') {
     return res.status(405).json({ message: 'Method not allowed' });
   }
@@ -91,14 +136,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const limitNum = parseInt(limit as string, 10) || 20;
     const offset = pageNum * limitNum;
 
+    // Ensure class_type column exists
+    await pool.query('ALTER TABLE course_run ADD COLUMN IF NOT EXISTS class_type TEXT DEFAULT \'Physical\'');
+
+    const includeOngoing = req.query.includeOngoing === 'true';
+
     const params: any[] = [];
     let paramIndex = 1;
     const filters: string[] = [
-      'cr.start_date > CURRENT_DATE',
+      includeOngoing
+        ? '(cr.start_date > CURRENT_DATE OR (cr.start_date <= CURRENT_DATE AND cr.end_date >= CURRENT_DATE))'
+        : 'cr.start_date > CURRENT_DATE',
       `cr.class_status IN ('Confirmed', 'Pending')`,
       `cr.start_date <= CURRENT_DATE + ($${paramIndex} * INTERVAL '1 day')`
     ];
-    params.push(thresholdDays);
+    params.push(includeOngoing ? 365 : thresholdDays);
     paramIndex++;
 
     if (search && search !== '') {
@@ -189,6 +241,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           cr.digital_attendance_id,
           cr.start_date,
           cr.end_date,
+          cr.class_type,
           ${tpgNameExpr} AS assigned_trainer_tpg,
           ${tpgEmailExpr} AS assigned_trainer_tpg_email,
           COUNT(e.id) AS num_of_trainee
@@ -203,9 +256,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           cr.digital_attendance_id,
           cr.start_date,
           cr.end_date,
+          cr.class_type,
           ${tpgNameExpr},
           ${tpgEmailExpr}
-        ORDER BY cr.start_date ASC
+        ORDER BY cr.start_date ASC NULLS LAST
         LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
       `,
       [...params, limitNum, offset]
@@ -284,22 +338,113 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     }
 
+    // Build email-based trainer identity map.
+    // Problem: local assigned trainer may have a different name than the approved list
+    // (e.g. "Dr. Muhammed Siraj" locally vs "Dr. Siraj Mohammad" in approved list).
+    // Solution: use email as the reliable identifier via app_user table.
+    //   - nameToEmail: normalized trainer name -> email
+    //   - emailToNames: email -> set of all known normalized names for that person
+    const nameToEmail = new Map<string, string>();
+    const emailToNames = new Map<string, Set<string>>();
+    {
+      // Collect all approved trainer names and all local trainer emails
+      const approvedNames = new Set<string>();
+      for (const row of rows) {
+        for (const name of splitTrainerList(row.trainers_list)) {
+          approvedNames.add(name);
+        }
+      }
+      const localEmails = new Set<string>();
+      for (const [, data] of localTrainerMap) {
+        for (const e of data.emails) {
+          if (e) localEmails.add(e.toLowerCase().trim());
+        }
+      }
+      // Single query: fetch app_user rows for approved trainer names OR local trainer emails
+      if (approvedNames.size > 0 || localEmails.size > 0) {
+        const result = await pool.query(
+          `SELECT full_name, email FROM app_user
+           WHERE email IS NOT NULL
+             AND (full_name = ANY($1::text[]) OR LOWER(email) = ANY($2::text[]))`,
+          [Array.from(approvedNames), Array.from(localEmails)]
+        );
+        for (const r of result.rows) {
+          const email = (r.email || '').toLowerCase().trim();
+          const name = normalizeTrainerName(r.full_name);
+          if (!email) continue;
+          nameToEmail.set(name, email);
+          if (!emailToNames.has(email)) emailToNames.set(email, new Set());
+          emailToNames.get(email)!.add(name);
+        }
+      }
+    }
+
     const upcomingClasses: UpcomingClass[] = rows.map((row) => {
       const trainerPool = splitTrainerList(row.trainers_list);
-      const normalizedTrainerPool = trainerPool.map((trainerName) => normalizeTrainerName(trainerName));
+      const normalizedTrainerPool = trainerPool.map((n) => normalizeTrainerName(n));
       const localTrainerData = localTrainerMap.get(row.id) || { names: [], emails: [] };
-      // LOCAL column shows ALL trainers from course_run_trainer (no dedup against TPG column).
       const allLocalPairs = localTrainerData.names
         .map((name, index) => ({ name, email: localTrainerData.emails[index] || '' }));
-      const localAssigned = new Set(allLocalPairs.map((trainer) => normalizeTrainerName(trainer.name)));
+
+      // Build set of ALL normalized names that belong to locally assigned trainers
+      // by resolving each local trainer's email to all their known names
+      const localAssignedAllNames = new Set<string>();
+      const localAssignedEmails = new Set<string>();
+      for (const pair of allLocalPairs) {
+        const normName = normalizeTrainerName(pair.name);
+        localAssignedAllNames.add(normName);
+        const email = (pair.email || '').toLowerCase().trim();
+        if (email) {
+          localAssignedEmails.add(email);
+          // Add all names associated with this email (handles name mismatches)
+          const aliases = emailToNames.get(email);
+          if (aliases) {
+            for (const alias of aliases) localAssignedAllNames.add(alias);
+          }
+        }
+        // Also resolve via name -> email -> all names
+        const resolvedEmail = nameToEmail.get(normName);
+        if (resolvedEmail) {
+          localAssignedEmails.add(resolvedEmail);
+          const aliases = emailToNames.get(resolvedEmail);
+          if (aliases) {
+            for (const alias of aliases) localAssignedAllNames.add(alias);
+          }
+        }
+      }
+
       const invitations = invitationMap.get(row.id) || [];
+
+      // Check if an approved trainer is locally assigned (by any known name, email, or word overlap)
+      const isLocallyAssigned = (approvedNormalized: string): boolean => {
+        if (localAssignedAllNames.has(approvedNormalized)) return true;
+        // Check via the approved trainer's email
+        const approvedEmail = nameToEmail.get(approvedNormalized);
+        if (approvedEmail && localAssignedEmails.has(approvedEmail)) return true;
+        // Fallback: word-overlap matching for names that differ but refer to the same person
+        // e.g. "Dr. Siraj Mohammad" vs "Dr. Muhammed Siraj" — share significant name words
+        const approvedWords = new Set(approvedNormalized.split(/\s+/).filter(w => w.length > 2));
+        if (approvedWords.size > 0) {
+          for (const localName of localAssignedAllNames) {
+            const localWords = localName.split(/\s+/).filter(w => w.length > 2);
+            const shared = localWords.filter(w => approvedWords.has(w));
+            // If at least 2 significant words overlap (or 1 if name has only 1 word), match
+            if (shared.length >= 2 || (shared.length >= 1 && (approvedWords.size <= 1 || localWords.length <= 1))) {
+              return true;
+            }
+          }
+        }
+        return false;
+      };
 
       let nextAvailableTrainer = '';
       let nextAvailableTrainerEmail = '';
       let latestInvitationStatus = invitations[0]?.status || '';
       let latestInvitationTrainer = invitations[0]?.trainer_name || '';
-      const localAssignedIndexes = allLocalPairs
-        .map((trainer) => normalizedTrainerPool.lastIndexOf(normalizeTrainerName(trainer.name)))
+
+      // Find index of last assigned trainer in the approved list
+      const localAssignedIndexes = normalizedTrainerPool
+        .map((normalized, idx) => isLocallyAssigned(normalized) ? idx : -1)
         .filter((index) => index >= 0);
       const startIndex = localAssignedIndexes.length > 0
         ? Math.max(...localAssignedIndexes) + 1
@@ -308,11 +453,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       for (let index = startIndex; index < trainerPool.length; index++) {
         const trainerName = trainerPool[index];
         const normalized = normalizedTrainerPool[index];
-        if (!normalized || localAssigned.has(normalized)) continue;
+        if (!normalized || isLocallyAssigned(normalized)) continue;
         const invitation = invitations.find((entry) => normalizeTrainerName(entry.trainer_name) === normalized);
         if (invitation?.status === 'declined') continue;
         nextAvailableTrainer = trainerName;
-        nextAvailableTrainerEmail = invitation?.trainer_email || '';
+        nextAvailableTrainerEmail = invitation?.trainer_email || nameToEmail.get(normalized) || '';
         if (invitation?.status) {
           latestInvitationStatus = invitation.status;
           latestInvitationTrainer = invitation.trainer_name || trainerName;
@@ -339,8 +484,40 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         latestInvitationTrainer,
         numOfTrainee: parseInt(row.num_of_trainee || '0', 10),
         trainersList: row.trainers_list || '',
+        classType: row.class_type || 'Physical',
+        modeOfTraining: '',
+        attendanceScore: null as number | null,
       };
     });
+
+    // Fetch mode_of_training and attendance scores for all course runs
+    if (courseRunIds.length > 0) {
+      // Mode of training from first session
+      const modeResult = await pool.query(`
+        SELECT DISTINCT ON (course_run_id) course_run_id, mode_of_training
+        FROM course_session
+        WHERE course_run_id = ANY($1::uuid[]) AND deleted = false
+        ORDER BY course_run_id, COALESCE(start_date, '9999-12-31') ASC, session_number ASC
+      `, [courseRunIds]);
+      const modeMap = new Map(modeResult.rows.map((r: any) => [r.course_run_id, r.mode_of_training || '']));
+
+      // Attendance scores: average of is_present across all sessions per course run
+      const attendanceResult = await pool.query(`
+        SELECT
+          cs.course_run_id,
+          ROUND(AVG(CASE WHEN ca.is_present THEN 100.0 ELSE 0.0 END))::int AS avg_score
+        FROM course_attendance ca
+        JOIN course_session cs ON ca.session_id = cs.id
+        WHERE cs.course_run_id = ANY($1::uuid[]) AND cs.deleted = false
+        GROUP BY cs.course_run_id
+      `, [courseRunIds]);
+      const attendanceMap = new Map(attendanceResult.rows.map((r: any) => [r.course_run_id, parseInt(r.avg_score, 10)]));
+
+      for (const cls of upcomingClasses) {
+        cls.modeOfTraining = modeMap.get(cls.id) || '';
+        cls.attendanceScore = attendanceMap.get(cls.id) ?? null;
+      }
+    }
 
     const stats = statsResult.rows[0] || {};
     const totalCount = parseInt(countResult.rows[0]?.total_count || '0', 10);

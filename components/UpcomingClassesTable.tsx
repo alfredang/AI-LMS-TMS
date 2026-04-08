@@ -56,20 +56,29 @@ interface UpcomingClass {
     latestInvitationStatus: string;
     latestInvitationTrainer: string;
     numOfTrainee: number;
+    modeOfTraining: string;
+    classType: string;
+    attendanceScore: number | null;
+    trainersList: string;
 }
 
 interface Trainer {
     trainer_name: string;
 }
 
+const splitTrainerList = (list: string): string[] =>
+    (list || '').split(',').map(s => s.trim()).filter(Boolean);
+
 interface UpcomingClassesTableProps {
     showTitle?: boolean;
     showFilters?: boolean;
+    includeOngoing?: boolean;
 }
 
 export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
     showTitle = true,
-    showFilters = true
+    showFilters = true,
+    includeOngoing = false,
 }) => {
     const { setAdminPage, setSelectedCourseRunId, setEditingCourseRun } = useLms();
     const [currentPage, setCurrentPage] = useState(0);
@@ -114,6 +123,8 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
     const [importResult, setImportResult] = useState<{ success: boolean; message: string; detail?: string } | null>(null);
     const [sendingInvitationFor, setSendingInvitationFor] = useState<string | null>(null);
     const [actionMessage, setActionMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+    // Per-row next trainer overrides (courseRun UUID → selected trainer name)
+    const [nextTrainerOverrides, setNextTrainerOverrides] = useState<Record<string, string>>({});
 
     const ITEMS_PER_PAGE = 20;
     const totalUnassignedTrainers = Math.max(stats.totalClasses - stats.totalAssignedLocalClasses, 0);
@@ -148,6 +159,9 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                 limit: ITEMS_PER_PAGE.toString(),
                 _t: Date.now().toString(),
             });
+
+            // Include ongoing classes if requested
+            if (includeOngoing) params.append('includeOngoing', 'true');
 
             // Add search and filter parameters (use debounced values for text inputs)
             if (debouncedSearch) params.append('search', debouncedSearch);
@@ -258,8 +272,9 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
         setAdminPage(AdminPage.EditClass);
     };
 
-    const handleViewDetails = (courseRunId: string) => {
-        setSelectedCourseRunId(courseRunId);
+    const handleViewDetails = (classItem: UpcomingClass) => {
+        setEditingCourseRun(classItem);
+        setSelectedCourseRunId(classItem.courseRunId);
         setAdminPage(AdminPage.ClassDetail);
     };
 
@@ -316,10 +331,11 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
         setSendingInvitationFor(classItem.id);
         setActionMessage(null);
         try {
+            const overrideTrainerName = nextTrainerOverrides[classItem.id] || undefined;
             const response = await fetch(getApiUrl('/api/admin/send-trainer-invitation'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ courseRunUuid: classItem.id }),
+                body: JSON.stringify({ courseRunUuid: classItem.id, overrideTrainerName }),
             });
             const result = await response.json();
             if (!result.success) {
@@ -368,15 +384,15 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                     </Card>
                     <Card className="p-6 text-center">
                         <p className="text-4xl font-bold text-emerald-500">{stats.totalAssignedLocalClasses}</p>
-                        <p className="text-gray-600 dark:text-gray-300 mt-1">Assigned Trainers (Local)</p>
+                        <p className="text-gray-600 dark:text-gray-300 mt-1">Trainer (Local)</p>
                     </Card>
                     <Card className="p-6 text-center">
                         <p className="text-4xl font-bold text-cyan-500">{stats.totalAssignedTpgClasses}</p>
-                        <p className="text-gray-600 dark:text-gray-300 mt-1">Assigned Trainers (TPG)</p>
+                        <p className="text-gray-600 dark:text-gray-300 mt-1">Trainer (TPG)</p>
                     </Card>
                     <Card className="p-6 text-center">
                         <p className="text-4xl font-bold text-purple-600">{totalUnassignedTrainers}</p>
-                        <p className="text-gray-600 dark:text-gray-300 mt-1">Unssigned Trainers</p>
+                        <p className="text-gray-600 dark:text-gray-300 mt-1">Unassigned Trainers</p>
                     </Card>
                 </div>
             )}
@@ -548,57 +564,154 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                 ) : (
                     <>
                         <div className="overflow-x-auto">
-                            <table className="divide-y divide-gray-200 dark:divide-gray-700" style={{ tableLayout: 'fixed', width: '2050px' }}>
+                          {includeOngoing ? (
+                            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                                <thead className="bg-gray-50 dark:bg-gray-700/50">
+                                    <tr className="border-b dark:border-gray-700">
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Course Run ID</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider text-center">Course Title</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Course Ref Code</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Class Type</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Start Date</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">End Date</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Class Status</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Learners</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Trainer (TPG)</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Trainer (Local)</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Attendance</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"></th>
+                                    </tr>
+                                </thead>
+                                <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                                    {upcomingClasses.map((classItem, index) => {
+                                        const status = classItem.assignedTrainerLocal ? 'Confirmed' : 'Pending';
+                                        const classType = classItem.classType || 'Physical';
+                                        return (
+                                            <tr key={index} className="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                                                <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.courseRunId}</td>
+                                                <td className="px-4 py-2 text-sm font-medium min-w-[350px]"><button type="button" onClick={() => handleViewDetails(classItem)} className="text-left text-blue-600 dark:text-blue-400 hover:underline">{classItem.courseTitle}</button></td>
+                                                <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.courseCode}</td>
+                                                <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classType}</td>
+                                                <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{formatDate(classItem.startDate)}</td>
+                                                <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{formatDate(classItem.endDate)}</td>
+                                                <td className="px-4 py-2 whitespace-nowrap text-sm">
+                                                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(status)}`}>{status}</span>
+                                                </td>
+                                                <td className="px-4 py-2 whitespace-nowrap text-sm text-center text-gray-700 dark:text-gray-200">{classItem.numOfTrainee}</td>
+                                                <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{renderTrainerCell(classItem.assignedTrainerTpg, classItem.assignedTrainerTpgEmail)}</td>
+                                                <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{renderTrainerCell(classItem.assignedTrainerLocal, classItem.assignedTrainerLocalEmail)}</td>
+                                                <td className="px-4 py-2 whitespace-nowrap text-sm text-center">
+                                                    {classItem.attendanceScore != null ? (
+                                                        <span className={`font-semibold ${classItem.attendanceScore >= 75 ? 'text-green-600' : classItem.attendanceScore >= 50 ? 'text-yellow-600' : 'text-red-600'}`}>
+                                                            {classItem.attendanceScore}%
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-gray-400">—</span>
+                                                    )}
+                                                </td>
+                                                <td className="px-4 py-2 whitespace-nowrap text-sm font-medium">
+                                                    <Button
+                                                        variant="primary"
+                                                        size="sm"
+                                                        onClick={() => handleEditClass(classItem)}
+                                                    >
+                                                        <Icon name={IconName.Edit} className="w-4 h-4 mr-1" />
+                                                        Edit
+                                                    </Button>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                          ) : (
+                            <table className="divide-y divide-gray-200 dark:divide-gray-700" style={{ tableLayout: 'fixed', width: '2230px' }}>
                                 <colgroup>
                                     <col style={{ width: '90px' }} />
-                                    <col style={{ width: '480px' }} />
+                                    <col style={{ width: '420px' }} />
                                     <col style={{ width: '160px' }} />
-                                    <col style={{ width: '90px' }} />
+                                    <col style={{ width: '110px' }} />
+                                    <col style={{ width: '100px' }} />
                                     <col style={{ width: '110px' }} />
                                     <col style={{ width: '90px' }} />
+                                    <col style={{ width: '80px' }} />
                                     <col style={{ width: '200px' }} />
                                     <col style={{ width: '200px' }} />
                                     <col style={{ width: '180px' }} />
                                     <col style={{ width: '120px' }} />
                                     <col style={{ width: '80px' }} />
-                                    <col style={{ width: '80px' }} />
                                 </colgroup>
                                 <thead className="bg-gray-50 dark:bg-gray-700/50">
                                     <tr className="border-b dark:border-gray-700">
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">COURSE RUN ID</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">COURSE TITLE</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">COURSE REF CODE</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">STATUS</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">START DATE</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">END DATE</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">TRAINER (TPG)</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">TRAINER (LOCAL)</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">NEXT TRAINER</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">INVITE NEXT TRAINER</th>
-                                        <th colSpan={2} className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">ACTIONS</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Course Run ID</th>
+                                        <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Course Title</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Course Ref Code</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Class Status</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Class Type</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Start Date</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">End Date</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Learners</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Trainer (TPG)</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Trainer (Local)</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Next Trainer</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Invite Next Trainer</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"></th>
                                     </tr>
                                 </thead>
                                 <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                                    {upcomingClasses.map((classItem, index) => (
+                                    {upcomingClasses.map((classItem, index) => {
+                                        const classType = classItem.classType || 'Physical';
+                                        return (
                                         <tr key={index} className="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50">
                                             <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.courseRunId}</td>
-                                            <td className="px-4 py-2 text-sm font-medium text-gray-900 dark:text-white overflow-hidden text-ellipsis">{classItem.courseTitle}</td>
+                                            <td className="px-4 py-2 text-sm font-medium overflow-hidden text-ellipsis"><button type="button" onClick={() => handleViewDetails(classItem)} className="text-left text-blue-600 dark:text-blue-400 hover:underline">{classItem.courseTitle}</button></td>
                                             <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.courseCode}</td>
                                             <td className="px-4 py-2 whitespace-nowrap text-sm">
-                                                {(() => {
-                                                    const status = classItem.assignedTrainerLocal ? 'Confirmed' : 'Pending';
-                                                    return (
-                                                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(status)}`}>
-                                                            {status}
-                                                        </span>
-                                                    );
-                                                })()}
+                                                <select
+                                                    value={classItem.classStatus}
+                                                    onChange={async (e) => {
+                                                        const newStatus = e.target.value;
+                                                        try {
+                                                            await fetch(getApiUrl('/api/admin/upcoming-classes'), {
+                                                                method: 'PUT',
+                                                                headers: { 'Content-Type': 'application/json' },
+                                                                body: JSON.stringify({ id: classItem.id, class_status: newStatus }),
+                                                            });
+                                                            setUpcomingClasses(prev => prev.map(c => c.id === classItem.id ? { ...c, classStatus: newStatus } : c));
+                                                        } catch { /* silent */ }
+                                                    }}
+                                                    className={`text-xs font-semibold rounded-full px-2 py-1 border-0 cursor-pointer focus:ring-2 focus:ring-blue-500 ${getStatusColor(classItem.classStatus)}`}
+                                                >
+                                                    <option value="Confirmed">Confirmed</option>
+                                                    <option value="Pending">Pending</option>
+                                                    <option value="Cancelled">Cancelled</option>
+                                                </select>
                                             </td>
+                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classType}</td>
                                             <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{formatDate(classItem.startDate)}</td>
                                             <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{formatDate(classItem.endDate)}</td>
+                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-center text-gray-700 dark:text-gray-200">{classItem.numOfTrainee}</td>
                                             <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{renderTrainerCell(classItem.assignedTrainerTpg, classItem.assignedTrainerTpgEmail)}</td>
                                             <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{renderTrainerCell(classItem.assignedTrainerLocal, classItem.assignedTrainerLocalEmail)}</td>
-                                            <td className="px-4 py-2 text-sm text-gray-700 dark:text-gray-200 max-w-[150px]">{renderTrainerCell(classItem.nextAvailableTrainer, classItem.nextAvailableTrainerEmail)}</td>
+                                            <td className="px-4 py-2 text-sm text-gray-700 dark:text-gray-200">
+                                                {classItem.nextAvailableTrainer ? (() => {
+                                                    const courseTrainers = splitTrainerList(classItem.trainersList);
+                                                    return (
+                                                        <select
+                                                            value={nextTrainerOverrides[classItem.id] ?? classItem.nextAvailableTrainer}
+                                                            onChange={e => setNextTrainerOverrides(prev => ({ ...prev, [classItem.id]: e.target.value }))}
+                                                            className="w-full min-w-[160px] border border-gray-300 dark:border-gray-600 rounded-md px-2 py-1 text-xs bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                        >
+                                                            <option value="">-- Reassign Trainer --</option>
+                                                            {courseTrainers.map(name => (
+                                                                <option key={name} value={name}>{name}</option>
+                                                            ))}
+                                                        </select>
+                                                    );
+                                                })() : (
+                                                    <span className="text-gray-400 text-xs italic">—</span>
+                                                )}
+                                            </td>
                                             <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">
                                                 <div className="flex items-center gap-2">
                                                     {classItem.latestInvitationStatus && (
@@ -615,7 +728,7 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                                         variant="secondary"
                                                         size="sm"
                                                         onClick={() => handleSendTrainerInvitation(classItem)}
-                                                        disabled={!classItem.nextAvailableTrainer || sendingInvitationFor === classItem.id}
+                                                        disabled={!(nextTrainerOverrides[classItem.id] || classItem.nextAvailableTrainer) || sendingInvitationFor === classItem.id}
                                                     >
                                                         {sendingInvitationFor === classItem.id ? (
                                                             <Icon name={IconName.Spinner} className="w-3.5 h-3.5 animate-spin" />
@@ -630,30 +743,20 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                             </td>
                                             <td className="px-4 py-2 whitespace-nowrap text-sm font-medium">
                                                 <Button
-                                                    variant="ghost"
+                                                    variant="primary"
                                                     size="sm"
                                                     onClick={() => handleEditClass(classItem)}
-                                                    className="!text-blue-600 hover:!bg-blue-50"
                                                 >
                                                     <Icon name={IconName.Edit} className="w-4 h-4 mr-1" />
                                                     Edit
                                                 </Button>
                                             </td>
-                                            <td className="px-4 py-2 whitespace-nowrap text-sm font-medium">
-                                                <Button
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    onClick={() => handleDelete(classItem.courseRunId, classItem.courseTitle)}
-                                                    className="!text-red-600 hover:!bg-red-50"
-                                                >
-                                                    <Icon name={IconName.Delete} className="w-4 h-4 mr-1" />
-                                                    Delete
-                                                </Button>
-                                            </td>
                                         </tr>
-                                    ))}
+                                        );
+                                    })}
                                 </tbody>
                             </table>
+                          )}
                         </div>
 
                         {/* Pagination */}

@@ -68,7 +68,7 @@ export default async function handler(
     const offset = pageNum * limitNum;
 
     // Build WHERE conditions for filtering completed classes
-    let whereConditions = ['cr.end_date < CURRENT_DATE'];
+    let whereConditions = ['cr.end_date <= CURRENT_DATE'];
     let paramCounter = 1;
     const queryParams: any[] = [];
 
@@ -197,6 +197,7 @@ export default async function handler(
         c.title as "courseTitle", 
         c.course_code as "courseCode",
         cr.class_status as "classStatus",
+        COALESCE(cr.class_type, 'Physical') as "classType",
         cr.digital_attendance_id as "digitalAttendanceId",
         cr.start_date::text as "startDate",
         cr.end_date::text as "endDate",
@@ -205,9 +206,15 @@ export default async function handler(
           cr.assigned_trainer_name,
           'Unassigned'
         ) as "trainerName",
+        cr.tpg_assigned_trainer_name as "assignedTrainerTpg",
+        cr.tpg_assigned_trainer_email as "assignedTrainerTpgEmail",
+        COALESCE(
+          NULLIF((SELECT STRING_AGG(crt.trainer_name, ', ') FROM course_run_trainer crt WHERE crt.course_run_id = cr.id), ''),
+          ''
+        ) as "assignedTrainerLocal",
         (
           SELECT COUNT(*)
-          FROM enrollment e 
+          FROM enrollment e
           WHERE e.course_run_id = cr.id
         ) as "numOfTrainee"
       FROM course_run cr
@@ -221,7 +228,7 @@ export default async function handler(
         GROUP BY course_run_id
       ) trainee_count ON cr.id = trainee_count.course_run_id
       WHERE ${whereClause}
-      ORDER BY cr.course_run_id DESC
+      ORDER BY cr.course_run_id::bigint DESC
       LIMIT $${paramCounter} OFFSET $${paramCounter + 1}
     `;
 

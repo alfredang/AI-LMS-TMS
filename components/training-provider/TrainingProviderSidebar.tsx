@@ -36,8 +36,8 @@ const TrainingProviderSidebar: React.FC<TrainingProviderSidebarProps> = ({ onNav
         { view: View.FeedbackEmailTemplate, label: 'Feedback Email', icon: IconName.Chat },
         { view: View.PasswordResetEmailTemplate, label: 'Password Reset Email', icon: IconName.Shield },
         { view: View.TrainerInvitationEmailTemplate, label: 'Trainer Invitation Email', icon: IconName.Send },
-        { view: View.FinalCourseConfirmationEmailTemplate, label: 'Final Course Confirmation Email', icon: IconName.Send },
-        { view: View.CourseConfirmationEmailTemplate, label: 'Course Confirmation Email', icon: IconName.Send },
+        { view: View.FinalCourseConfirmationEmailTemplate, label: 'Final Class Confirm Email', icon: IconName.Send },
+        { view: View.CourseConfirmationEmailTemplate, label: 'Class Confirm Email', icon: IconName.Send },
         { view: View.PrivacyPolicy, label: 'Privacy Policy', icon: IconName.Shield },
         { view: View.AcceptableUsePolicy, label: 'Acceptable Use Policy', icon: IconName.ClipboardCheck },
     ];

@@ -162,7 +162,7 @@ const FinalCourseConfirmationEmailTemplateView: React.FC = () => {
           <div>
             <h3 className="text-2xl font-bold leading-6 text-gray-900 dark:text-white flex items-center gap-2">
               <Icon name={IconName.Send} className="w-7 h-7" />
-              Final Course Confirmation Email Template
+              Final Class Confirm Email Template
             </h3>
             <p className="mt-2 max-w-4xl text-sm text-gray-500 dark:text-gray-400">
               Customise the final confirmation email sent to learners before the course starts.

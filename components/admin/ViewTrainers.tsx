@@ -97,6 +97,12 @@ const ViewTrainers: React.FC = () => {
   const [targetStatus, setTargetStatus] = useState<'Active' | 'Inactive' | null>(null);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
 
+  // Inline NRIC editing states
+  const [editingNricId, setEditingNricId] = useState<string | null>(null);
+  const [nricEditValue, setNricEditValue] = useState('');
+  const [savingNric, setSavingNric] = useState(false);
+  const [nricMessage, setNricMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
   const itemsPerPage = 10;
   const inputClasses = "w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400";
 
@@ -158,6 +164,28 @@ const ViewTrainers: React.FC = () => {
       alert(`Failed to update trainer status: ${error instanceof Error ? error.message : 'Please try again.'}`);
     } finally {
       setIsUpdatingStatus(false);
+    }
+  };
+
+  const handleSaveNric = async (userId: string) => {
+    setSavingNric(true);
+    setNricMessage(null);
+    try {
+      const res = await fetch('/api/admin/update-trainer-nric', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, nric: nricEditValue }),
+      });
+      const result = await res.json();
+      if (!result.success) throw new Error(result.message || 'Failed to update NRIC');
+      setTrainers(prev => prev.map(t => t.user_id === userId ? { ...t, nric: nricEditValue || null } : t));
+      setNricMessage({ type: 'success', text: 'NRIC saved.' });
+      setEditingNricId(null);
+      setTimeout(() => setNricMessage(null), 3000);
+    } catch (err) {
+      setNricMessage({ type: 'error', text: err instanceof Error ? err.message : 'Failed to save NRIC' });
+    } finally {
+      setSavingNric(false);
     }
   };
 
@@ -251,6 +279,13 @@ const ViewTrainers: React.FC = () => {
           </Button>
         </div>
       </div>
+
+      {/* NRIC save feedback */}
+      {nricMessage && (
+        <div className={`px-4 py-2 rounded-md text-sm ${nricMessage.type === 'success' ? 'bg-green-50 border border-green-200 text-green-800 dark:bg-green-900/20 dark:border-green-700 dark:text-green-300' : 'bg-red-50 border border-red-200 text-red-800 dark:bg-red-900/20 dark:border-red-700 dark:text-red-300'}`}>
+          {nricMessage.text}
+        </div>
+      )}
 
       {/* KPI Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -411,22 +446,65 @@ const ViewTrainers: React.FC = () => {
                       <div className="text-sm text-gray-500 dark:text-gray-400">{trainer.telephone || 'N/A'}</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm text-gray-900 dark:text-white">
-                          {trainer.nric && trainer.nric !== 'N/A'
-                            ? (visibleNrics.has(trainer.user_id) ? trainer.nric : maskNric(trainer.nric))
-                            : 'N/A'}
-                        </span>
-                        {trainer.nric && trainer.nric !== 'N/A' && (
+                      {editingNricId === trainer.user_id ? (
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            value={nricEditValue}
+                            onChange={e => setNricEditValue(e.target.value)}
+                            placeholder="e.g. S1234567A"
+                            className="w-32 px-2 py-1 text-sm border border-blue-400 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white dark:border-blue-500"
+                            autoFocus
+                            onKeyDown={e => {
+                              if (e.key === 'Enter') handleSaveNric(trainer.user_id);
+                              if (e.key === 'Escape') setEditingNricId(null);
+                            }}
+                          />
                           <button
-                            onClick={() => toggleNricVisibility(trainer.user_id)}
-                            className="text-gray-400 hover:text-blue-500 transition-colors"
-                            title={visibleNrics.has(trainer.user_id) ? 'Hide NRIC' : 'Show full NRIC'}
+                            onClick={() => handleSaveNric(trainer.user_id)}
+                            disabled={savingNric}
+                            className="text-green-600 hover:text-green-800 disabled:opacity-50"
+                            title="Save"
                           >
-                            <Icon name={visibleNrics.has(trainer.user_id) ? IconName.EyeOff : IconName.Eye} className="w-4 h-4" />
+                            <Icon name={IconName.Check} className="w-4 h-4" />
                           </button>
-                        )}
-                      </div>
+                          <button
+                            onClick={() => setEditingNricId(null)}
+                            disabled={savingNric}
+                            className="text-red-500 hover:text-red-700 disabled:opacity-50"
+                            title="Cancel"
+                          >
+                            <Icon name={IconName.Close} className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-gray-900 dark:text-white">
+                            {trainer.nric && trainer.nric !== 'N/A'
+                              ? (visibleNrics.has(trainer.user_id) ? trainer.nric : maskNric(trainer.nric))
+                              : <span className="text-gray-400 italic">N/A</span>}
+                          </span>
+                          {trainer.nric && trainer.nric !== 'N/A' && (
+                            <button
+                              onClick={() => toggleNricVisibility(trainer.user_id)}
+                              className="text-gray-400 hover:text-blue-500 transition-colors"
+                              title={visibleNrics.has(trainer.user_id) ? 'Hide NRIC' : 'Show full NRIC'}
+                            >
+                              <Icon name={visibleNrics.has(trainer.user_id) ? IconName.EyeOff : IconName.Eye} className="w-4 h-4" />
+                            </button>
+                          )}
+                          <button
+                            onClick={() => {
+                              setEditingNricId(trainer.user_id);
+                              setNricEditValue(trainer.nric && trainer.nric !== 'N/A' ? trainer.nric : '');
+                            }}
+                            className="text-gray-400 hover:text-blue-500 transition-colors"
+                            title="Edit NRIC"
+                          >
+                            <Icon name={IconName.Edit} className="w-4 h-4" />
+                          </button>
+                        </div>
+                      )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{trainer.trainer_type || 'N/A'}</td>
                     <td className="px-6 py-4">

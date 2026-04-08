@@ -19,6 +19,8 @@ export interface SchedulerTask {
     cron_expression: string;
     enabled: boolean;
     api_endpoint: string;
+    email_template: string | null;
+    days_in_advance: number | null;
     last_run_at: string | null;
     last_status: string | null;
     created_at: string;
@@ -70,11 +72,20 @@ async function ensureSchedulerTable() {
             cron_expression  TEXT NOT NULL,
             enabled          BOOLEAN NOT NULL DEFAULT true,
             api_endpoint     TEXT NOT NULL,
+            email_template   TEXT,
+            days_in_advance  INTEGER DEFAULT 3,
             last_run_at      TIMESTAMPTZ,
             last_status      TEXT,
             created_at       TIMESTAMPTZ DEFAULT NOW(),
             updated_at       TIMESTAMPTZ DEFAULT NOW()
         )
+    `);
+    // Add columns if they don't exist (for existing installations)
+    await pool.query(`
+        ALTER TABLE scheduler_config ADD COLUMN IF NOT EXISTS email_template TEXT
+    `);
+    await pool.query(`
+        ALTER TABLE scheduler_config ADD COLUMN IF NOT EXISTS days_in_advance INTEGER DEFAULT 3
     `);
 }
 
@@ -87,6 +98,8 @@ async function seedDefaults() {
         description: string;
         cron_expression: string;
         api_endpoint: string;
+        email_template?: string;
+        days_in_advance?: number;
     }> = [
         {
             id: 'auto_create_trainer_folders',
@@ -117,11 +130,36 @@ async function seedDefaults() {
             api_endpoint: '/api/external/auto-create-certificates',
         },
         {
+            id: 'auto_send_course_confirmation',
+            name: 'Auto Send Final Class Confirm Emails',
+            description: 'Sends Final Class Confirm emails to all confirmed learners in course runs starting soon. Uses the email template configured in Company Settings.',
+            cron_expression: '0 9 * * *', // 9:00 AM daily
+            api_endpoint: '/api/external/auto-send-course-confirmation',
+            email_template: 'final_course_confirmation',
+            days_in_advance: 3,
+        },
+        {
+            id: 'auto_send_class_confirmation',
+            name: 'Auto Send Class Confirm Emails',
+            description: 'Sends Class Confirm emails to all confirmed learners in course runs starting soon. Uses the email template configured in Company Settings.',
+            cron_expression: '0 10 * * *', // 10:00 AM daily
+            api_endpoint: '/api/external/auto-send-course-confirmation',
+            email_template: 'course_confirmation',
+            days_in_advance: 7,
+        },
+        {
             id: 'upcoming_course_runs',
             name: 'Fetch TGS Enrolments & Assign Trainers',
             description: 'For each upcoming TGS- course run within the configured threshold window, searches SSG for enrolments and assigns trainers accordingly. Runs daily at 2:00 AM SGT.',
             cron_expression: '0 2 * * *', // 2:00 AM SGT daily
             api_endpoint: '/api/external/upcoming-course-runs',
+        },
+        {
+            id: 'sync_trainer_to_tpg',
+            name: 'Sync Trainer (Local) to TPG/SSG',
+            description: 'For each upcoming course run that has a locally assigned trainer but no TPG trainer, calls SSG Edit Course Run to push the trainer (with NRIC if available) to TPG. Runs daily at 3:00 AM SGT.',
+            cron_expression: '0 3 * * *', // 3:00 AM SGT daily
+            api_endpoint: '/api/external/sync-trainer-to-tpg',
         },
     ];
 
@@ -133,12 +171,12 @@ async function seedDefaults() {
 
     for (const task of defaults) {
         await pool.query(
-            `INSERT INTO scheduler_config (id, name, description, cron_expression, api_endpoint)
-             VALUES ($1, $2, $3, $4, $5)
-             ON CONFLICT (id) DO UPDATE SET 
+            `INSERT INTO scheduler_config (id, name, description, cron_expression, api_endpoint, email_template, days_in_advance)
+             VALUES ($1, $2, $3, $4, $5, $6, $7)
+             ON CONFLICT (id) DO UPDATE SET
                 name = EXCLUDED.name,
                 description = EXCLUDED.description`,
-            [task.id, task.name, task.description, task.cron_expression, task.api_endpoint]
+            [task.id, task.name, task.description, task.cron_expression, task.api_endpoint, task.email_template || null, task.days_in_advance ?? null]
         );
     }
 }
@@ -169,6 +207,14 @@ function getDirectHandler(taskId: string): TaskHandler | undefined {
             const { runAutomation } = await import('../../pages/api/external/auto-create-certificates');
             return runAutomation();
         });
+        directHandlers.set('auto_send_course_confirmation', async () => {
+            const { runAutomation } = await import('../../pages/api/external/auto-send-course-confirmation');
+            return runAutomation('auto_send_course_confirmation');
+        });
+        directHandlers.set('auto_send_class_confirmation', async () => {
+            const { runAutomation } = await import('../../pages/api/external/auto-send-course-confirmation');
+            return runAutomation('auto_send_class_confirmation');
+        });
         directHandlers.set('sync_course_run_dates', async () => {
             const { runDateSync } = await import('../../pages/api/external/sync-course-run-dates');
             return runDateSync();
@@ -176,6 +222,10 @@ function getDirectHandler(taskId: string): TaskHandler | undefined {
         directHandlers.set('upcoming_course_runs', async () => {
             const { runUpcomingCourseRuns } = await import('../../pages/api/external/upcoming-course-runs');
             return runUpcomingCourseRuns();
+        });
+        directHandlers.set('sync_trainer_to_tpg', async () => {
+            const { runSyncTrainerToTpg } = await import('../../pages/api/external/sync-trainer-to-tpg');
+            return runSyncTrainerToTpg();
         });
     }
     return directHandlers.get(taskId);
@@ -356,7 +406,7 @@ export async function getSchedulerTasks(): Promise<SchedulerTask[]> {
 
 export async function updateTaskSchedule(
     taskId: string,
-    updates: { cron_expression?: string; enabled?: boolean }
+    updates: { cron_expression?: string; enabled?: boolean; email_template?: string | null; days_in_advance?: number | null }
 ): Promise<SchedulerTask | null> {
     const setClauses: string[] = ['updated_at = NOW()'];
     const values: any[] = [];
@@ -373,6 +423,16 @@ export async function updateTaskSchedule(
     if (updates.enabled !== undefined) {
         setClauses.push(`enabled = $${paramIdx++}`);
         values.push(updates.enabled);
+    }
+
+    if (updates.email_template !== undefined) {
+        setClauses.push(`email_template = $${paramIdx++}`);
+        values.push(updates.email_template);
+    }
+
+    if (updates.days_in_advance !== undefined) {
+        setClauses.push(`days_in_advance = $${paramIdx++}`);
+        values.push(updates.days_in_advance);
     }
 
     values.push(taskId);

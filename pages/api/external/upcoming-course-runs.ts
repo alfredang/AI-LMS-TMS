@@ -58,6 +58,19 @@ async function ensureLogTable() {
   `);
 }
 
+// ── Map SSG modeOfTraining code to local mode_of_learning string ─────────────
+
+function parseModeOfLearning(code: string | number | undefined): string {
+  switch (String(code ?? '')) {
+    case '1': return 'Physical';      // Classroom
+    case '2': return 'Online';        // E-learning
+    case '3': return 'On the Job';    // On-the-job
+    case '4': return 'Hybrid';        // Blended
+    case '5': return 'Practical';     // Practical/Practicum
+    default:  return 'Physical';      // fallback
+  }
+}
+
 // ── Parse SSG 8-digit date integer to YYYY-MM-DD ─────────────────────────────
 
 function parseSsgDate(d: number | string | undefined): string | null {
@@ -240,9 +253,13 @@ export async function runUpcomingCourseRuns() {
         const ssgRunId     = String(run.id ?? run.courseRunId ?? '');
         const ssgStartDate = parseSsgDate(run.courseStartDate ?? run.courseDates?.start);
         const ssgEndDate   = parseSsgDate(run.courseEndDate   ?? run.courseDates?.end);
-        const modeOfLearning = run.modeOfTraining ?? null;
+        const modeOfLearning = parseModeOfLearning(run.modeOfTraining);
         const vacancyCode  = run.courseVacancy?.code ?? null;
         const vacancyDesc  = run.courseVacancy?.description ?? null;
+        const qrCodeLink   = run.qrCodeLink ?? '';
+        const raCode       = qrCodeLink.startsWith('https://www.myskillsfuture.gov.sg/api/take-attendance/')
+          ? qrCodeLink.replace('https://www.myskillsfuture.gov.sg/api/take-attendance/', '')
+          : null;
 
         if (!ssgRunId) continue;
 
@@ -327,12 +344,14 @@ export async function runUpcomingCourseRuns() {
                     `INSERT INTO course_run
                        (id, course_id, course_run_id, class_status,
                         start_date, end_date,
+                        mode_of_learning,
+                        digital_attendance_id,
                         course_vacancy_code, course_vacancy_description,
                         created_at, updated_at)
-                     VALUES (gen_random_uuid(), $1, $2, 'Confirmed',
-                             $3::date, $4::date, $5, $6, NOW(), NOW())
+                     VALUES (gen_random_uuid(), $1, $2, 'Pending',
+                             $3::date, $4::date, $5, $6, $7, $8, NOW(), NOW())
                      ON CONFLICT (course_id, course_run_id) DO NOTHING`,
-                    [courseId, ssgRunId, ssgStartDate, ssgEndDate, vacancyCode, vacancyDesc]
+                    [courseId, ssgRunId, ssgStartDate, ssgEndDate, modeOfLearning, raCode, vacancyCode, vacancyDesc]
                   );
                 }
               } else {
@@ -341,11 +360,13 @@ export async function runUpcomingCourseRuns() {
                   `UPDATE course_run
                    SET start_date = $2::date,
                        end_date   = $3::date,
-                       course_vacancy_code        = $4,
-                       course_vacancy_description = $5,
+                       mode_of_learning           = $4,
+                       digital_attendance_id      = COALESCE($5, digital_attendance_id),
+                       course_vacancy_code        = $6,
+                       course_vacancy_description = $7,
                        updated_at = NOW()
                    WHERE course_run_id = $1`,
-                  [ssgRunId, ssgStartDate, ssgEndDate, vacancyCode, vacancyDesc]
+                  [ssgRunId, ssgStartDate, ssgEndDate, modeOfLearning, raCode, vacancyCode, vacancyDesc]
                 );
               }
             } else {
@@ -506,18 +527,23 @@ export async function runUpcomingCourseRuns() {
           [run.id, primary.id, primary.name, primary.email, fromSSG]
         );
 
-        // Insert all trainers into junction table (additive, no duplicates)
-        for (const t of candidates) {
-          await pool.query(
-            `INSERT INTO course_run_trainer (course_run_id, trainer_id, trainer_name, trainer_email)
-             VALUES ($1, $2, $3, $4)
-             ON CONFLICT (course_run_id, COALESCE(trainer_id, '00000000-0000-0000-0000-000000000000'))
-             DO UPDATE SET trainer_name = EXCLUDED.trainer_name, trainer_email = EXCLUDED.trainer_email`,
-            [run.id, t.id, t.name, t.email]
-          );
+        // Only write to course_run_trainer junction table (Trainer Local column)
+        // when trainer came from SSG linkCourseRunTrainer.
+        // Fallback trainers (email list / name list) only go to legacy columns — they
+        // should NOT appear as a locally-assigned trainer.
+        if (fromSSG) {
+          for (const t of candidates) {
+            await pool.query(
+              `INSERT INTO course_run_trainer (course_run_id, trainer_id, trainer_name, trainer_email)
+               VALUES ($1, $2, $3, $4)
+               ON CONFLICT (course_run_id, COALESCE(trainer_id, '00000000-0000-0000-0000-000000000000'))
+               DO UPDATE SET trainer_name = EXCLUDED.trainer_name, trainer_email = EXCLUDED.trainer_email`,
+              [run.id, t.id, t.name, t.email]
+            );
+          }
         }
 
-        console.log(`    ✅ assigned ${candidates.length} trainer(s) → run ${run.course_run_id}: ${candidates.map(t => t.name).join(', ')}`);
+        console.log(`    ✅ assigned ${candidates.length} trainer(s) [fromSSG=${fromSSG}] → run ${run.course_run_id}: ${candidates.map(t => t.name).join(', ')}`);
       } catch (trainerErr: any) {
         console.error(`    ❌ trainer assignment failed for ${run.course_run_id}:`, trainerErr.message);
       }
