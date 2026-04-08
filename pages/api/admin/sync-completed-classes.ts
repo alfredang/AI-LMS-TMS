@@ -137,7 +137,34 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           continue;
         }
 
-        // Ensure course exists in DB
+        // ── Check enrollments FIRST — only create DB records if enrollments exist ──
+        await sleep(RATE_LIMIT_MS);
+        let enrolments: any[] = [];
+        try {
+          const enrolResult = await enrolmentAPI.searchEnrolment({
+            parameters: { page: 0, pageSize: 100 },
+            enrolment: {
+              course: { run: { id: ssgRunId } },
+              trainingPartner: { uen: tp.uen, code: tp.code }
+            }
+          } as any);
+
+          if (!enrolResult.error) {
+            enrolments = Array.isArray(enrolResult.data) ? enrolResult.data : [];
+          }
+        } catch (err) {
+          console.log(`  ⚠️ Enrolment check failed for ${ssgRunId}: ${err instanceof Error ? err.message : 'unknown'}`);
+        }
+
+        if (enrolments.length === 0) {
+          console.log(`  ⏭️ Skipping ${ssgRunId} — no enrollments, will not create in DB`);
+          debugErrors.push({ runId: ssgRunId, error: 'No enrollments — skipped', status: 0 });
+          continue;
+        }
+
+        console.log(`  ✅ ${ssgRunId} has ${enrolments.length} enrollments — creating/updating DB records`);
+
+        // Ensure course + course_run exist in DB
         const client = await pool.connect();
         try {
           await client.query('BEGIN');
@@ -172,8 +199,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           let crUuid: string;
           if (crRow.rows.length === 0) {
             const ins = await client.query(
-              `INSERT INTO course_run (course_id, course_run_id, start_date, end_date)
-               VALUES ($1, $2, $3::date, $4::date) RETURNING id`,
+              `INSERT INTO course_run (course_id, course_run_id, start_date, end_date, class_status)
+               VALUES ($1, $2, $3::date, $4::date, 'Confirmed') RETURNING id`,
               [courseUuid, ssgRunId, runStartDate, runEndDate]
             );
             crUuid = ins.rows[0].id;
@@ -202,8 +229,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             start_date: runStartDate,
             end_date: runEndDate,
             class_status: null,
-            enrolment_count: 0, // will be populated during enrollment sync
-          });
+            enrolment_count: enrolments.length,
+            _prefetchedEnrolments: enrolments, // pass to avoid re-fetching
+          } as any);
         } catch (dbErr) {
           await client.query('ROLLBACK');
           console.error(`  ❌ DB error for run ${ssgRunId}:`, dbErr);
@@ -282,29 +310,36 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       errors: [] as string[],
     };
 
-    // ── 3a. Fetch SSG enrollments ────────────────────────────────────────
+    // ── 3a. Fetch SSG enrollments (or use pre-fetched from specific mode) ──
+    const prefetched = (cr as any)._prefetchedEnrolments;
     try {
-      const enrolResult = await enrolmentAPI.searchEnrolment({
-        parameters: { page: 0, pageSize: 100 },
-        enrolment: {
-          course: { run: { id: ssgRunId } },
-          trainingPartner: { uen: tp.uen, code: tp.code }
+      let enrolments: any[] = [];
+
+      // In specific mode, enrollments were already fetched during the pre-check
+      if (prefetched) {
+        enrolments = prefetched;
+      } else {
+        const enrolResult = await enrolmentAPI.searchEnrolment({
+          parameters: { page: 0, pageSize: 100 },
+          enrolment: {
+            course: { run: { id: ssgRunId } },
+            trainingPartner: { uen: tp.uen, code: tp.code }
+          }
+        } as any);
+
+        if (!enrolResult.error) {
+          enrolments = Array.isArray(enrolResult.data) ? enrolResult.data : [];
+        } else {
+          const code = String(enrolResult.status);
+          if (code !== '404') {
+            result.errors.push(`SSG enrolment error ${code}: ${enrolResult.error?.message ?? ''}`);
+          }
         }
-      } as any);
+      }
 
-      if (!enrolResult.error) {
-        const enrolments = Array.isArray(enrolResult.data) ? enrolResult.data : [];
-        result.ssgEnrolmentsFetched = enrolments.length;
+      result.ssgEnrolmentsFetched = enrolments.length;
 
-        // In specific mode, skip course runs with zero enrollments
-        if (isSpecificMode && enrolments.length === 0) {
-          console.log(`  ⏭️ Skipping ${ssgRunId} — no enrollments from SSG`);
-          result.errors.push('Skipped: no enrollments found from SSG');
-          results.push(result);
-          await sleep(RATE_LIMIT_MS);
-          continue;
-        }
-
+      if (enrolments.length > 0) {
         // Upsert enrollments
         const client = await pool.connect();
         try {
@@ -368,27 +403,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         } finally {
           client.release();
         }
-      } else {
-        const code = String(enrolResult.status);
-        if (isSpecificMode) {
-          console.log(`  ⏭️ Skipping ${ssgRunId} — SSG enrolment error ${code}`);
-          if (code === '404') {
-            result.errors.push('Skipped: no enrollments found (404)');
-          } else {
-            result.errors.push(`SSG enrolment error ${code}: ${enrolResult.error?.message ?? ''}`);
-          }
-          results.push(result);
-          await sleep(RATE_LIMIT_MS);
-          continue;
-        }
-        if (code !== '404') {
-          result.errors.push(`SSG enrolment error ${code}: ${enrolResult.error?.message ?? ''}`);
-        }
       }
     } catch (err) {
       result.errors.push(`Enrolment fetch error: ${err instanceof Error ? err.message : 'unknown'}`);
     }
-    await sleep(RATE_LIMIT_MS);
+    if (!prefetched) await sleep(RATE_LIMIT_MS);
 
     // ── 3b. Fetch SSG sessions and attendance ────────────────────────────
     try {
