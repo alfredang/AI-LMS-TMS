@@ -675,25 +675,40 @@ const ViewTrainers: React.FC = () => {
                       )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                      {trainer.status === 'Active' ? (
+                      <div className="flex flex-col gap-1">
                         <Button
                           variant="ghost"
-                          onClick={() => handleStatusChange(trainer, 'Inactive')}
-                          className="text-red-600 hover:text-red-800 hover:bg-red-50 dark:hover:bg-red-900/20"
+                          onClick={() => handleImageUploadClick(trainer.user_id)}
+                          disabled={uploadingImageFor === trainer.user_id}
+                          className="text-blue-600 hover:text-blue-800 hover:bg-blue-50 dark:hover:bg-blue-900/20"
                         >
-                          <Icon name={IconName.Close} className="w-4 h-4 mr-1" />
-                          Deactivate
+                          {uploadingImageFor === trainer.user_id ? (
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-1" />
+                          ) : (
+                            <Icon name={IconName.Upload} className="w-4 h-4 mr-1" />
+                          )}
+                          {uploadingImageFor === trainer.user_id ? 'Uploading...' : 'Upload Photo'}
                         </Button>
-                      ) : (
-                        <Button
-                          variant="ghost"
-                          onClick={() => handleStatusChange(trainer, 'Active')}
-                          className="text-green-600 hover:text-green-800 hover:bg-green-50 dark:hover:bg-green-900/20"
-                        >
-                          <Icon name={IconName.Check} className="w-4 h-4 mr-1" />
-                          Activate
-                        </Button>
-                      )}
+                        {trainer.status === 'Active' ? (
+                          <Button
+                            variant="ghost"
+                            onClick={() => handleStatusChange(trainer, 'Inactive')}
+                            className="text-red-600 hover:text-red-800 hover:bg-red-50 dark:hover:bg-red-900/20"
+                          >
+                            <Icon name={IconName.Close} className="w-4 h-4 mr-1" />
+                            Deactivate
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="ghost"
+                            onClick={() => handleStatusChange(trainer, 'Active')}
+                            className="text-green-600 hover:text-green-800 hover:bg-green-50 dark:hover:bg-green-900/20"
+                          >
+                            <Icon name={IconName.Check} className="w-4 h-4 mr-1" />
+                            Activate
+                          </Button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
