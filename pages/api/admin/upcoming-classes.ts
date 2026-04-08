@@ -465,12 +465,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         break;
       }
 
+      // Derive class status: Confirmed if local trainer assigned, Pending otherwise
+      const hasLocalTrainer = !!(allLocalPairs[0]?.name);
+      const derivedStatus = hasLocalTrainer ? 'Confirmed' : 'Pending';
+
+      // Persist to DB if status changed
+      if (row.class_status !== derivedStatus) {
+        pool.query(`UPDATE course_run SET class_status = $1, updated_at = NOW() WHERE id = $2`, [derivedStatus, row.id]).catch(() => {});
+      }
+
       return {
         id: row.id,
         courseRunId: row.course_run_id,
         courseTitle: row.course_title,
         courseCode: row.course_code,
-        classStatus: row.class_status,
+        classStatus: derivedStatus,
         digitalAttendanceId: row.digital_attendance_id || '',
         startDate: row.start_date,
         endDate: row.end_date,

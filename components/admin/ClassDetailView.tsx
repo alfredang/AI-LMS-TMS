@@ -314,6 +314,12 @@ const ClassDetailView: React.FC<ClassDetailViewProps> = ({ courseRunId }) => {
             <p className="text-sm text-subtle">Class Type</p>
             <p className="font-semibold">{classDetail.operationalSummary.classType || 'Physical'}</p>
           </div>
+          {classDetail.operationalSummary.virtualMeetingLink && (
+            <div>
+              <p className="text-sm text-subtle">Google Meet</p>
+              <a href={classDetail.operationalSummary.virtualMeetingLink} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline text-sm font-medium">{classDetail.operationalSummary.virtualMeetingLink}</a>
+            </div>
+          )}
           <div>
             <p className="text-sm text-subtle">Mode of Learning</p>
             <p className="font-semibold">{classDetail.operationalSummary.mode || 'Not specified'}</p>
