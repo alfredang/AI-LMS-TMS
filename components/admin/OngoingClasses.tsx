@@ -468,10 +468,11 @@ const OngoingClasses: React.FC = () => {
                       <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.assignedTrainerLocal || <span className="text-gray-400">—</span>}</td>
                       <td className="px-4 py-2 whitespace-nowrap text-sm font-medium">
                         <Button
+                          variant="primary"
                           size="sm"
-                          variant="ghost"
                           onClick={() => handleViewDetails(classItem)}
                         >
+                          <Icon name={IconName.Edit} className="w-4 h-4 mr-1" />
                           Details
                         </Button>
                       </td>

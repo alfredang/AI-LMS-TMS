@@ -206,9 +206,15 @@ export default async function handler(
           cr.assigned_trainer_name,
           'Unassigned'
         ) as "trainerName",
+        cr.tpg_assigned_trainer_name as "assignedTrainerTpg",
+        cr.tpg_assigned_trainer_email as "assignedTrainerTpgEmail",
+        COALESCE(
+          NULLIF((SELECT STRING_AGG(crt.trainer_name, ', ') FROM course_run_trainer crt WHERE crt.course_run_id = cr.id), ''),
+          ''
+        ) as "assignedTrainerLocal",
         (
           SELECT COUNT(*)
-          FROM enrollment e 
+          FROM enrollment e
           WHERE e.course_run_id = cr.id
         ) as "numOfTrainee"
       FROM course_run cr
