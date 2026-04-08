@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Icon, IconName } from '../ui/Icon';
+import { ssgFetch } from '../../lib/ssgAppState';
 
 interface CourseRunRow {
   enrolment_id: string | null;
@@ -305,6 +306,10 @@ const AllCourseRunsView: React.FC = () => {
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [syncFrom, setSyncFrom] = useState(() => new Date(Date.now() - 30 * 86400_000).toISOString().slice(0, 10));
+  const [syncTo, setSyncTo] = useState(() => new Date().toISOString().slice(0, 10));
+  const [syncing, setSyncing] = useState(false);
+  const [syncToast, setSyncToast] = useState<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
   const tableScrollRef = useRef<HTMLDivElement>(null);
   const theadRef = useRef<HTMLTableSectionElement>(null);
@@ -339,6 +344,41 @@ const AllCourseRunsView: React.FC = () => {
   }, [page, debouncedSearch, statusFilter, sortOrder]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  useEffect(() => {
+    if (!syncToast) return;
+    const t = setTimeout(() => setSyncToast(null), 8000);
+    return () => clearTimeout(t);
+  }, [syncToast]);
+
+  const runSync = async () => {
+    setSyncing(true);
+    setSyncToast(null);
+    try {
+      const from = syncFrom <= syncTo ? syncFrom : syncTo;
+      const to = syncFrom <= syncTo ? syncTo : syncFrom;
+      if (from !== syncFrom) {
+        setSyncFrom(from);
+        setSyncTo(to);
+      }
+      const res = await ssgFetch('/api/finance/sync-all-course-runs-from-ssg', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ from, to }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Sync failed');
+      const up = json?.totals?.upsertedEnrolments ?? 0;
+      const gr = json?.totals?.enrolmentsForGrantRefresh ?? 0;
+      const cb = json?.totals?.claimsEnrollmentIdBackfilled ?? 0;
+      setSyncToast(`Synced ${up} enrolment(s), refreshed grants for ${gr}, backfilled ${cb} claim link(s).`);
+      await fetchData();
+    } catch (e) {
+      setSyncToast(e instanceof Error ? e.message : 'Sync failed');
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   const totalPages = Math.ceil(total / PAGE_SIZE);
   const statusOptions = stats?.byStatus.map(s => s.status) ?? [];
@@ -377,7 +417,8 @@ const AllCourseRunsView: React.FC = () => {
 
       {/* Search + Filter */}
       <Card className="p-4">
-        <div className="flex flex-col sm:flex-row gap-3">
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-col sm:flex-row gap-3">
           <div className="relative flex-1">
             <Icon name={IconName.Search} className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-on-surface-secondary" />
             <input
@@ -406,8 +447,52 @@ const AllCourseRunsView: React.FC = () => {
             <option value="newest">Newest First</option>
             <option value="oldest">Oldest First</option>
           </select>
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-end">
+            <div className="flex gap-3 flex-wrap items-end">
+              <div>
+                <label className="block text-xs font-semibold text-on-surface-secondary mb-1">Sync from (course run start date)</label>
+                <input
+                  type="date"
+                  value={syncFrom}
+                  onChange={(e) => setSyncFrom(e.target.value)}
+                  className="px-3 py-2 text-sm bg-surface border border-default rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-on-surface"
+                  disabled={syncing}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-on-surface-secondary mb-1">Sync to</label>
+                <input
+                  type="date"
+                  value={syncTo}
+                  onChange={(e) => setSyncTo(e.target.value)}
+                  className="px-3 py-2 text-sm bg-surface border border-default rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-on-surface"
+                  disabled={syncing}
+                />
+              </div>
+            </div>
+            <div className="flex gap-2 sm:ml-auto">
+              <Button
+                variant="outline"
+                onClick={() => { setSyncFrom(new Date(Date.now() - 30 * 86400_000).toISOString().slice(0, 10)); setSyncTo(new Date().toISOString().slice(0, 10)); }}
+                disabled={syncing}
+              >
+                Last 30 days
+              </Button>
+              <Button onClick={() => void runSync()} disabled={syncing}>
+                {syncing ? 'Syncing…' : 'Sync latest from SSG'}
+              </Button>
+            </div>
+          </div>
         </div>
       </Card>
+
+      {syncToast && (
+        <div className={`p-3 rounded-lg text-sm ${syncToast.toLowerCase().includes('failed') ? 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300' : 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300'}`}>
+          {syncToast}
+        </div>
+      )}
 
       {/* Error */}
       {error && (
