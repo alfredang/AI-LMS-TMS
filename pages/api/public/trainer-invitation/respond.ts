@@ -6,6 +6,7 @@ import {
   ensureTrainerInvitationTemplateColumns,
   renderInvitationTemplate,
   convertPlainTextToHtml,
+  buildInvitationHtmlEmail,
   formatDateLabel,
   createInvitationToken,
   normalizeTrainerName,
@@ -180,15 +181,18 @@ async function sendNextTrainerInvitation(courseRunUuid: string, tp: any) {
       tp.trainer_invitation_email_body || DEFAULT_TRAINER_INVITATION_BODY,
       replacements
     );
-    const htmlBody = `
-      <div style="font-family: Arial, sans-serif; font-size: 14px; color: #334155; line-height: 1.6;">
-        ${convertPlainTextToHtml(body)}
-        <div style="margin-top: 24px; display: flex; gap: 12px;">
-          <a href="${acceptUrl}" style="background:#16a34a;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:600;">Accept Invitation</a>
-          <a href="${declineUrl}" style="background:#dc2626;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:600;">Decline Invitation</a>
-        </div>
-      </div>
-    `;
+    const htmlBody = buildInvitationHtmlEmail({
+      trainerName: trainer.full_name || nextTrainerName,
+      courseTitle: cr.course_title || '',
+      courseCode: cr.course_code || '',
+      courseRunId: cr.course_run_id || '',
+      startDate: formatDateLabel(cr.start_date),
+      endDate: formatDateLabel(cr.end_date),
+      tpgTrainer: cr.tpg_assigned_trainer_name || 'N/A',
+      acceptUrl,
+      declineUrl,
+      companyName: tp.company_shortname || tp.company_name || 'Training Provider',
+    });
 
     await sendFollowUpEmail(trainer.email, subject, htmlBody, tp);
 
@@ -236,8 +240,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     if (invitation.status !== 'pending') {
+      const msg = invitation.status === 'accepted'
+        ? `This invitation has already been accepted. ${invitation.trainer_name} is assigned to this class.`
+        : invitation.status === 'declined'
+        ? `This invitation was declined. The class may have been assigned to another trainer.`
+        : `This invitation for ${invitation.trainer_name} was already marked as ${invitation.status}.`;
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
-      return res.status(200).send(renderPage('Already Responded', `This invitation for ${invitation.trainer_name} was already marked as ${invitation.status}.`, 'gray'));
+      return res.status(200).send(renderPage('Already Responded', msg, 'gray'));
     }
 
     // Update invitation status

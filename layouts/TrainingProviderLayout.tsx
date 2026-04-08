@@ -29,6 +29,7 @@ import TrainingProviderSidebar from '../components/training-provider/TrainingPro
 import SchedulerView from '../components/admin/SchedulerView';
 import { AutomationLogsView, TrainerFolderLogsView, CourseRunDateSyncLogsView, UpcomingCourseRunsLogView, CourseConfirmationEmailLogsView } from '../components/admin/ClassManagementViews';
 import TrainerResponseEmailTemplatesView from '../components/training-provider/TrainerResponseEmailTemplatesView';
+import WorkflowGuidesView from '../components/training-provider/WorkflowGuidesView';
 import WebhooksView from '../components/training-provider/WebhooksView';
 import SsgApiSummaryView from '../components/training-provider/SsgApiSummaryView';
 import { Card } from '../components/ui/Card';
@@ -97,6 +98,8 @@ const TrainingProviderLayout: React.FC = () => {
         return <TrainerInvitationEmailTemplateView />;
       case View.TrainerResponseEmailTemplates:
         return <TrainerResponseEmailTemplatesView />;
+      case View.WorkflowGuides:
+        return <WorkflowGuidesView />;
       case View.FinalCourseConfirmationEmailTemplate:
         return <FinalCourseConfirmationEmailTemplateView />;
       case View.CourseConfirmationEmailTemplate:
@@ -134,6 +137,7 @@ const TrainingProviderLayout: React.FC = () => {
       case View.PasswordResetEmailTemplate: return 'Password Reset Email Template';
       case View.TrainerInvitationEmailTemplate: return 'Trainer Invitation Email Template';
       case View.TrainerResponseEmailTemplates: return 'Trainer Accept/Decline Email Templates';
+      case View.WorkflowGuides: return 'Workflow Guides';
       case View.FinalCourseConfirmationEmailTemplate: return 'Final Course Confirmation Email Template';
       case View.CourseConfirmationEmailTemplate: return 'Course Confirmation Email Template';
       case View.FinanceManagement: return 'Finance Management';

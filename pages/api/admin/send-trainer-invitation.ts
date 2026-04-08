@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { google } from 'googleapis';
 import pool from '@lib/db';
 import {
+  buildInvitationHtmlEmail,
   convertPlainTextToHtml,
   createInvitationToken,
   DEFAULT_TRAINER_INVITATION_BODY,
@@ -139,15 +140,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const subject = renderInvitationTemplate(tp.trainer_invitation_email_subject || DEFAULT_TRAINER_INVITATION_SUBJECT, replacements);
     const body = renderInvitationTemplate(tp.trainer_invitation_email_body || DEFAULT_TRAINER_INVITATION_BODY, replacements);
-    const htmlBody = `
-      <div style="font-family: Arial, sans-serif; font-size: 14px; color: #334155; line-height: 1.6;">
-        ${convertPlainTextToHtml(body)}
-        <div style="margin-top: 24px; display: flex; gap: 12px;">
-          <a href="${acceptUrl}" style="background:#16a34a;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:600;">Accept Invitation</a>
-          <a href="${declineUrl}" style="background:#dc2626;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:600;">Decline Invitation</a>
-        </div>
-      </div>
-    `;
+    const htmlBody = buildInvitationHtmlEmail({
+      trainerName: trainer.full_name || nextTrainerName,
+      courseTitle: classRow.course_title || '',
+      courseCode: classRow.course_code || '',
+      courseRunId: classRow.course_run_id || '',
+      startDate: formatDateLabel(classRow.start_date),
+      endDate: formatDateLabel(classRow.end_date),
+      tpgTrainer: classRow.tpg_assigned_trainer_name || 'N/A',
+      acceptUrl,
+      declineUrl,
+      companyName: tp.company_shortname || tp.company_name || 'Training Provider',
+    });
 
     const oauth2Client = new google.auth.OAuth2(
       google_client_id,

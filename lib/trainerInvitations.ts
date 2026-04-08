@@ -128,6 +128,58 @@ export function renderInvitationTemplate(template: string, replacements: Record<
   }, template);
 }
 
+export function buildInvitationHtmlEmail(params: {
+  trainerName: string;
+  courseTitle: string;
+  courseCode: string;
+  courseRunId: string;
+  startDate: string;
+  endDate: string;
+  tpgTrainer: string;
+  acceptUrl: string;
+  declineUrl: string;
+  companyName: string;
+}) {
+  const { trainerName, courseTitle, courseCode, courseRunId, startDate, endDate, tpgTrainer, acceptUrl, declineUrl, companyName } = params;
+  return `
+<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#1e293b;">
+  <p style="margin:0 0 16px;">Hi ${trainerName},</p>
+  <p style="margin:0 0 16px;">You are invited to facilitate the following class:</p>
+
+  <table style="width:100%;border-collapse:collapse;margin:0 0 20px;">
+    <tr><td style="padding:6px 12px;font-weight:600;color:#475569;width:180px;">Course</td><td style="padding:6px 12px;font-weight:700;color:#0f172a;">${courseTitle}</td></tr>
+    <tr style="background:#f8fafc;"><td style="padding:6px 12px;font-weight:600;color:#475569;">Course Reference Code</td><td style="padding:6px 12px;">${courseCode}</td></tr>
+    <tr><td style="padding:6px 12px;font-weight:600;color:#475569;">Course Run ID</td><td style="padding:6px 12px;">${courseRunId}</td></tr>
+    <tr style="background:#f8fafc;"><td style="padding:6px 12px;font-weight:600;color:#475569;">Start Date</td><td style="padding:6px 12px;">${startDate}</td></tr>
+    <tr><td style="padding:6px 12px;font-weight:600;color:#475569;">End Date</td><td style="padding:6px 12px;">${endDate}</td></tr>
+    <tr style="background:#f8fafc;"><td style="padding:6px 12px;font-weight:600;color:#475569;">Assigned Trainer (TPG)</td><td style="padding:6px 12px;">${tpgTrainer}</td></tr>
+  </table>
+
+  <p style="margin:0 0 20px;">Please review this invitation and choose one of the options below:</p>
+
+  <table cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
+    <tr>
+      <td style="padding-right:16px;">
+        <a href="${acceptUrl}" style="display:inline-block;background:#16a34a;color:#ffffff;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:700;font-size:15px;">✓ Accept Invitation</a>
+      </td>
+      <td>
+        <a href="${declineUrl}" style="display:inline-block;background:#dc2626;color:#ffffff;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:700;font-size:15px;">✗ Decline Invitation</a>
+      </td>
+    </tr>
+  </table>
+
+  <p style="margin:0 0 8px;">Once accepted, please check the TMS portal to view your upcoming class:</p>
+  <p style="margin:0 0 20px;"><a href="https://ai-lms-tms.tertiaryinfo.tech" style="color:#2563eb;text-decoration:none;font-weight:600;">ai-lms-tms.tertiaryinfo.tech</a></p>
+
+  <p style="margin:0 0 8px;">Warm regards,</p>
+  <p style="margin:0 0 24px;font-weight:600;">${companyName}</p>
+
+  <div style="border-top:1px solid #e2e8f0;padding-top:12px;">
+    <p style="margin:0;font-size:12px;color:#94a3b8;font-style:italic;">This is an automated email. Please do not reply directly to this message.</p>
+  </div>
+</div>`;
+}
+
 export function convertPlainTextToHtml(text: string) {
   return text
     .split('\n')

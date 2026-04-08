@@ -28,7 +28,8 @@ export enum View {
   FinanceManagement = 'financeManagement',
   BillingHistory = 'billingHistory',
   CertificateHistory = 'certificateHistory',
-  SsgApiSummary = 'ssgApiSummary'
+  SsgApiSummary = 'ssgApiSummary',
+  WorkflowGuides = 'workflowGuides'
 }
 
 export enum UserRole {
