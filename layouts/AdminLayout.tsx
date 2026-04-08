@@ -59,6 +59,7 @@ import { BulkUploadEnrolmentView } from '../components/admin/BulkEnrolmentViews'
 import TrainerAttendanceDashboard from '../components/trainer/TrainerAttendanceDashboard';
 import AdminCalendarView from '../components/admin/AdminCalendarView';
 import SchedulerView from '../components/admin/SchedulerView';
+import WorkflowGuidesView from '../components/training-provider/WorkflowGuidesView';
 import AddSessionsView from '../components/admin/AddSessionsView';
 import CourseSessionTimingView from '../components/admin/CourseSessionTimingView';
 
@@ -410,6 +411,8 @@ const AdminLayout: React.FC = () => {
         return <AdminCalendarView />;
       case AdminPage.Scheduler:
         return <SchedulerView />;
+      case AdminPage.WorkflowGuides:
+        return <WorkflowGuidesView />;
       default:
         return <AdminDashboard />;
     }

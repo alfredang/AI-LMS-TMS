@@ -91,6 +91,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate }) => {
         tpgGrant: false,
         logging: false,
         certificate: false,
+        workflowGuides: false,
         referenceLinks: false,
         n8nLinks: false,
         usefulLinks: false,
@@ -207,6 +208,13 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate }) => {
                 <NavItem page={AdminPage.DeleteCertificate} label="Delete Certificate" isSubItem />
                 <NavItem page={AdminPage.SendCertificateSG} label="Send Certificate (SG)" isSubItem />
                 <NavItem page={AdminPage.SendCertificateGH} label="Send Certificate (GH)" isSubItem />
+            </NavSection>
+
+            <NavSection title="Workflow Guides" isOpen={openSections.workflowGuides} onToggle={() => toggleSection('workflowGuides')}>
+                <NavItem page={AdminPage.WorkflowGuides} label="Trainer Invitation" isSubItem />
+                <NavItem page={AdminPage.WorkflowGuides} label="Certificate" isSubItem />
+                <NavItem page={AdminPage.WorkflowGuides} label="Lesson Delivery" isSubItem />
+                <NavItem page={AdminPage.WorkflowGuides} label="Assessment" isSubItem />
             </NavSection>
 
             <NavSection title="Reference Links" isOpen={openSections.referenceLinks} onToggle={() => toggleSection('referenceLinks')}>

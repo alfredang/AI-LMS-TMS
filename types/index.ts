@@ -113,6 +113,7 @@ export enum AdminPage {
   SendCertificateGH = 'sendCertificateGH',
   Calendar = 'calendar',
   Scheduler = 'scheduler',
+  WorkflowGuides = 'workflowGuides',
 }
 
 export enum TrainerPage {

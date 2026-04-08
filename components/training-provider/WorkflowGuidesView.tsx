@@ -54,8 +54,8 @@ const WORKFLOWS: Workflow[] = [
     ],
   },
   {
-    id: 'certification',
-    title: 'Certification Workflow',
+    id: 'certificate',
+    title: 'Certificate Workflow',
     icon: '🎓',
     color: 'border-green-500 bg-green-50 dark:bg-green-900/10',
     description: 'Auto-generate certificates after class completion, store in Google Drive, and email to learners.',

@@ -87,7 +87,7 @@ const TrainingProviderSidebar: React.FC<TrainingProviderSidebarProps> = ({ onNav
                     <div className="ml-4 mt-1 space-y-1">
                         {[
                             { id: 'trainer-invitation', label: 'Trainer Invitation', icon: '📨' },
-                            { id: 'certification', label: 'Certification', icon: '🎓' },
+                            { id: 'certificate', label: 'Certificate', icon: '🎓' },
                             { id: 'proforma-invoice', label: 'Proforma Invoice', icon: '🧾' },
                             { id: 'invoice', label: 'Invoice', icon: '📄' },
                             { id: 'receipt', label: 'Receipt', icon: '🧾' },

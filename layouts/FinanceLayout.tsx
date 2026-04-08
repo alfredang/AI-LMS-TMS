@@ -6,6 +6,7 @@ import AiChatbot from '../components/AiChatbot';
 import { Icon, IconName } from '../components/ui/Icon';
 import { Card } from '../components/ui/Card';
 import FinanceManagementView from '../components/training-provider/FinanceManagementView';
+import WorkflowGuidesView from '../components/training-provider/WorkflowGuidesView';
 import AllCourseRunsView from '../components/finance/AllCourseRunsView';
 import {
   SearchGrantView,
@@ -79,7 +80,8 @@ type FinancePage =
   | 'tpgEnrollLearners' | 'tpgUploadEnrolments' | 'tpgSearchEnrolment' | 'tpgViewEnrolment' | 'tpgUpdateEnrolment' | 'tpgCancelEnrolment' | 'tpgUpdateEnrolmentFees'
   | 'tpgSessionAttendance' | 'tpgCheckAttendance'
   | 'tpgSubmitAssessment' | 'tpgUpdateAssessment' | 'tpgSearchAssessments' | 'tpgViewAssessment'
-  | 'tpgSearchGrant' | 'tpgViewGrantStatus';
+  | 'tpgSearchGrant' | 'tpgViewGrantStatus'
+  | 'workflowGuides';
 
 const FinanceLayout: React.FC = () => {
   const { currentView, financePage: ctxFinancePage, setFinancePage: ctxSetFinancePage } = useLms();
@@ -100,6 +102,7 @@ const FinanceLayout: React.FC = () => {
     tpgGrant: false,
     bizfile: false,
     quickbooks: false,
+    workflowGuides: false,
     usefulLinks: true,
   });
 
@@ -492,6 +495,7 @@ const FinanceLayout: React.FC = () => {
       // TPG Management — Grant
       case 'tpgSearchGrant': return <SearchGrantView />;
       case 'tpgViewGrantStatus': return <ViewGrantStatusView />;
+      case 'workflowGuides': return <WorkflowGuidesView />;
       default:
         return <FinanceManagementView />;
     }
@@ -564,6 +568,7 @@ const FinanceLayout: React.FC = () => {
       case 'tpgViewAssessment': return 'View Assessment';
       case 'tpgSearchGrant': return 'Search Grant';
       case 'tpgViewGrantStatus': return 'View Grant Status';
+      case 'workflowGuides': return 'Workflow Guides';
       default: return 'Financial Dashboard';
     }
   };
@@ -713,6 +718,13 @@ const FinanceLayout: React.FC = () => {
         <NavItem target="bizfileSsic" label="Entity SSIC" isSubItem />
         <NavItem target="bizfileCapital" label="Company Capital" isSubItem />
         <NavItem target="bizfileShareholders" label="Company Shareholders" isSubItem />
+      </NavSection>
+
+      <NavSection title="Workflow Guides" sectionKey="workflowGuides">
+        <NavItem target="workflowGuides" label="Billing History" isSubItem />
+        <NavItem target="workflowGuides" label="Proforma Invoice" isSubItem />
+        <NavItem target="workflowGuides" label="Invoice" isSubItem />
+        <NavItem target="workflowGuides" label="Receipt" isSubItem />
       </NavSection>
 
       <NavSection title="Useful Links" sectionKey="usefulLinks">
