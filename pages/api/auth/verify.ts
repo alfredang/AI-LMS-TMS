@@ -99,12 +99,12 @@ export default async function handler(
 
     const user = userResult.rows[0];
 
-    // Check if account is disabled
-    if (user.account_status === 'disabled') {
-      console.log('❌ Auth Verify: Account disabled for user:', user.email);
+    // Check if account is not active (disabled, inactive, suspended, etc.)
+    if (user.account_status && user.account_status.toLowerCase() !== 'active') {
+      console.log('❌ Auth Verify: Account not active for user:', user.email, '| Status:', user.account_status);
       return res.status(403).json({
         success: false,
-        error: 'Your account has been disabled. Please contact an administrator.'
+        error: 'Your account has been deactivated. Please contact an administrator.'
       });
     }
 

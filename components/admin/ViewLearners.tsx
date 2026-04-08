@@ -54,6 +54,11 @@ const ViewLearners: React.FC = () => {
   const [targetStatus, setTargetStatus] = useState<'active' | 'inactive' | null>(null);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
 
+  // Delete confirmation
+  const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
+  const [deletingLearner, setDeletingLearner] = useState<Learner | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
   const itemsPerPage = 10;
   const inputClasses = "w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400";
 
@@ -111,6 +116,33 @@ const ViewLearners: React.FC = () => {
       alert(`Failed to update learner status: ${error instanceof Error ? error.message : 'Please try again.'}`);
     } finally {
       setIsUpdatingStatus(false);
+    }
+  };
+
+  const handleDeleteClick = (learner: Learner) => {
+    setDeletingLearner(learner);
+    setShowDeleteConfirmation(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!deletingLearner) return;
+    try {
+      setIsDeleting(true);
+      const response = await fetch('/api/training-provider/hard-delete-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: deletingLearner.user_id })
+      });
+      const result = await response.json();
+      if (!response.ok || !result.success) throw new Error(result.message || 'Failed to delete');
+      alert(`Learner ${deletingLearner.learner_name} deleted successfully.`);
+      await fetchLearners();
+    } catch (error) {
+      alert(`Failed to delete learner: ${error instanceof Error ? error.message : 'Please try again.'}`);
+    } finally {
+      setIsDeleting(false);
+      setShowDeleteConfirmation(false);
+      setDeletingLearner(null);
     }
   };
 
@@ -358,25 +390,34 @@ const ViewLearners: React.FC = () => {
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm">
-                      {(learner.account_status || '').toLowerCase() === 'active' ? (
+                      <div className="flex items-center gap-1">
+                        {(learner.account_status || '').toLowerCase() === 'active' ? (
+                          <Button
+                            variant="ghost"
+                            onClick={() => handleStatusChange(learner, 'inactive')}
+                            className="text-red-600 hover:text-red-800 hover:bg-red-50 dark:hover:bg-red-900/20"
+                          >
+                            <Icon name={IconName.Close} className="w-4 h-4 mr-1" />
+                            Deactivate
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="ghost"
+                            onClick={() => handleStatusChange(learner, 'active')}
+                            className="text-green-600 hover:text-green-800 hover:bg-green-50 dark:hover:bg-green-900/20"
+                          >
+                            <Icon name={IconName.Check} className="w-4 h-4 mr-1" />
+                            Activate
+                          </Button>
+                        )}
                         <Button
                           variant="ghost"
-                          onClick={() => handleStatusChange(learner, 'inactive')}
-                          className="text-red-600 hover:text-red-800 hover:bg-red-50 dark:hover:bg-red-900/20"
+                          onClick={() => handleDeleteClick(learner)}
+                          className="text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
                         >
-                          <Icon name={IconName.Close} className="w-4 h-4 mr-1" />
-                          Deactivate
+                          <Icon name={IconName.Delete} className="w-4 h-4" />
                         </Button>
-                      ) : (
-                        <Button
-                          variant="ghost"
-                          onClick={() => handleStatusChange(learner, 'active')}
-                          className="text-green-600 hover:text-green-800 hover:bg-green-50 dark:hover:bg-green-900/20"
-                        >
-                          <Icon name={IconName.Check} className="w-4 h-4 mr-1" />
-                          Activate
-                        </Button>
-                      )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -449,6 +490,52 @@ const ViewLearners: React.FC = () => {
                     </>
                   ) : (
                     `${targetStatus === 'active' ? 'Activate' : 'Deactivate'} Learner`
+                  )}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Dialog */}
+      {showDeleteConfirmation && deletingLearner && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full mx-auto">
+            <div className="p-6">
+              <div className="flex items-center gap-4 mb-4">
+                <div className="w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0 bg-red-100 dark:bg-red-900/30">
+                  <Icon name={IconName.Delete} className="w-6 h-6 text-red-600 dark:text-red-400" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Delete Learner</h3>
+              </div>
+              <p className="text-gray-700 dark:text-gray-300 mb-2">
+                Are you sure you want to <strong>permanently delete</strong> the learner{' '}
+                <strong>&quot;{deletingLearner.learner_name}&quot;</strong>?
+              </p>
+              <p className="text-sm text-red-600 dark:text-red-400 mb-6">
+                This action cannot be undone. All enrollments, submissions, and records for this learner will be removed.
+              </p>
+              <div className="flex gap-3 justify-end">
+                <Button
+                  variant="ghost"
+                  onClick={() => { setShowDeleteConfirmation(false); setDeletingLearner(null); }}
+                  disabled={isDeleting}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={confirmDelete}
+                  disabled={isDeleting}
+                  className="bg-red-600 hover:bg-red-700 text-white"
+                >
+                  {isDeleting ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                      Deleting...
+                    </>
+                  ) : (
+                    'Delete Permanently'
                   )}
                 </Button>
               </div>
