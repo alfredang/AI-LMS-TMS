@@ -197,6 +197,7 @@ const AdminLayout: React.FC = () => {
   const appVersion = useAppVersion();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isDesktopSidebarOpen, setIsDesktopSidebarOpen] = useState(true);
+  const [selectedWorkflowId, setSelectedWorkflowId] = useState<string | null>(null);
 
   const tpgSubDashboards: Partial<Record<AdminPage, NavBoxProps[]>> = {
     [AdminPage.TpgDirectApplication]: [
@@ -412,7 +413,7 @@ const AdminLayout: React.FC = () => {
       case AdminPage.Scheduler:
         return <SchedulerView />;
       case AdminPage.WorkflowGuides:
-        return <WorkflowGuidesView />;
+        return <WorkflowGuidesView initialWorkflowId={selectedWorkflowId || undefined} />;
       default:
         return <AdminDashboard />;
     }
@@ -469,7 +470,7 @@ const AdminLayout: React.FC = () => {
               </button>
             </div>
             <div className="flex-1 overflow-y-auto">
-              <AdminSidebar onNavigate={() => setIsSidebarOpen(false)} />
+              <AdminSidebar onNavigate={() => setIsSidebarOpen(false)} onSelectWorkflow={setSelectedWorkflowId} />
             </div>
           </div>
         </div>
@@ -480,7 +481,7 @@ const AdminLayout: React.FC = () => {
         {/* Desktop Sidebar - toggled by hamburger button */}
         <aside className={`${isDesktopSidebarOpen ? 'hidden md:flex' : 'hidden'} w-64 flex-shrink-0 bg-white dark:bg-slate-800 border-r border-gray-200 dark:border-slate-700`}>
           <div className="w-full flex flex-col h-full">
-            <div className="flex-1"><AdminSidebar /></div>
+            <div className="flex-1"><AdminSidebar onSelectWorkflow={setSelectedWorkflowId} /></div>
             <p className="px-3 pb-2 text-[10px] text-gray-400 dark:text-gray-300 font-mono">version {appVersion}</p>
           </div>
         </aside>

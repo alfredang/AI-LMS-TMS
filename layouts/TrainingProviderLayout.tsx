@@ -39,6 +39,7 @@ const TrainingProviderLayout: React.FC = () => {
   const appVersion = useAppVersion();
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isDesktopSidebarCollapsed, setIsDesktopSidebarCollapsed] = useState(false);
+  const [selectedWorkflowId, setSelectedWorkflowId] = useState<string | null>(null);
 
   const handleToggleSidebar = () => {
     if (typeof window !== 'undefined' && window.innerWidth >= 768) {
@@ -99,7 +100,7 @@ const TrainingProviderLayout: React.FC = () => {
       case View.TrainerResponseEmailTemplates:
         return <TrainerResponseEmailTemplatesView />;
       case View.WorkflowGuides:
-        return <WorkflowGuidesView />;
+        return <WorkflowGuidesView initialWorkflowId={selectedWorkflowId || undefined} />;
       case View.FinalCourseConfirmationEmailTemplate:
         return <FinalCourseConfirmationEmailTemplateView />;
       case View.CourseConfirmationEmailTemplate:
@@ -181,7 +182,7 @@ const TrainingProviderLayout: React.FC = () => {
               </button>
             </div>
             <div className="flex-1 overflow-y-auto">
-              <TrainingProviderSidebar onNavigate={() => setIsMobileSidebarOpen(false)} />
+              <TrainingProviderSidebar onNavigate={() => setIsMobileSidebarOpen(false)} onSelectWorkflow={setSelectedWorkflowId} />
             </div>
           </div>
         </div>
@@ -193,7 +194,7 @@ const TrainingProviderLayout: React.FC = () => {
         {!isDesktopSidebarCollapsed && (
           <aside className="hidden md:flex w-64 flex-shrink-0 bg-white dark:bg-slate-800 border-r border-gray-200 dark:border-slate-700">
             <div className="w-full flex flex-col h-full">
-              <div className="flex-1"><TrainingProviderSidebar /></div>
+              <div className="flex-1"><TrainingProviderSidebar onSelectWorkflow={setSelectedWorkflowId} /></div>
             </div>
           </aside>
         )}

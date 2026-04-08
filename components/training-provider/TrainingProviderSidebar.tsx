@@ -6,9 +6,10 @@ import { Icon, IconName } from '../ui/Icon';
 
 interface TrainingProviderSidebarProps {
     onNavigate?: () => void;
+    onSelectWorkflow?: (workflowId: string) => void;
 }
 
-const TrainingProviderSidebar: React.FC<TrainingProviderSidebarProps> = ({ onNavigate }) => {
+const TrainingProviderSidebar: React.FC<TrainingProviderSidebarProps> = ({ onNavigate, onSelectWorkflow }) => {
     const { currentView, handleNavigation, selectedCourse } = useLms();
     const appVersion = useAppVersion();
 
@@ -94,11 +95,12 @@ const TrainingProviderSidebar: React.FC<TrainingProviderSidebarProps> = ({ onNav
                             { id: 'billing-history', label: 'Billing History', icon: '💰' },
                             { id: 'lesson-delivery', label: 'Lesson Delivery', icon: '📚' },
                             { id: 'assessment', label: 'Assessment', icon: '📝' },
+                            { id: 'ssg-process-steps', label: 'SSG Process Steps', icon: '🏛️' },
                         ].map(item => (
                             <a
                                 key={item.id}
                                 href="#"
-                                onClick={(e) => { e.preventDefault(); handleClick(View.WorkflowGuides); }}
+                                onClick={(e) => { e.preventDefault(); handleClick(View.WorkflowGuides); onSelectWorkflow?.(item.id); }}
                                 className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-slate-700 dark:hover:text-white transition-colors"
                             >
                                 <span className="text-sm">{item.icon}</span>

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card } from '../ui/Card';
 import { Icon, IconName } from '../ui/Icon';
 
@@ -20,6 +20,7 @@ interface Workflow {
   endpoints?: { method: string; url: string; description: string }[];
   emailTemplates?: { name: string; path: string; description: string }[];
   dbTables?: { name: string; description: string }[];
+  externalUrl?: string;
 }
 
 const WORKFLOWS: Workflow[] = [
@@ -192,6 +193,29 @@ const WORKFLOWS: Workflow[] = [
       { name: 'submission', description: 'Learner submissions and grades: assessment_id, user_id, grade, comments' },
     ],
   },
+  {
+    id: 'ssg-process-steps',
+    title: 'SSG Process Steps',
+    icon: '🏛️',
+    color: 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/10',
+    description: 'Complete SSG WSQ process from Course Dashboards to Certificates — all 13 stages of the WSQ workflow.',
+    externalUrl: 'https://alfredang.github.io/ssgwsqprocess/index.html',
+    steps: [
+      { title: '1. Course Dashboards', detail: 'Overview of course management dashboards and key metrics. Access the SSG portal to view course listings, approval statuses, and training provider performance indicators.', type: 'action' },
+      { title: '2. Course Applications', detail: 'Managing and processing course applications. Submit new course applications to SSG for approval, track application status, and manage required documentation.', type: 'action' },
+      { title: '3. Course Runs', detail: 'Setting up and administering course runs. Create course runs on the TPGateway portal with session dates, venues, trainers, and vacancy information.', type: 'action' },
+      { title: '4. Grant Calculator', detail: 'Calculating eligible training grants. Use the SSG grant calculator to determine funding amounts for different learner categories (SC, PR, MCES-eligible).', type: 'logic' },
+      { title: '5. Trainee Enrolment', detail: 'Enrolling trainees into approved courses. Process enrolment through the SSG portal, verify learner eligibility, and submit enrolment records.', type: 'action' },
+      { title: '6. Attendance', detail: 'Recording and managing trainee attendance. Submit digital attendance records to SSG, track attendance rates, and manage makeup sessions.', type: 'action' },
+      { title: '7. Assessments', detail: 'Conducting assessments and recording results. Manage WSQ assessments, record competency outcomes (C/NYC), and submit results to SSG.', type: 'action' },
+      { title: '8. Grants', detail: 'Applying for and managing training grants. Submit grant applications to SSG, track approval status, and manage grant disbursement.', type: 'logic' },
+      { title: '9. Claims', detail: 'Submitting and tracking grant claims. File claims for approved grants, upload supporting documents, and monitor claim processing status.', type: 'action' },
+      { title: '10. Outcome Submission', detail: 'Submitting training outcomes and competency results. Submit final training outcomes to SSG including assessment results and completion status.', type: 'success' },
+      { title: '11. Financial Transactions', detail: 'Viewing and managing financial transactions. Track grant disbursements, reconcile payments, and monitor financial records on the SSG portal.', type: 'logic' },
+      { title: '12. Refunds', detail: 'Processing refund requests and adjustments. Handle grant refunds, process overpayment returns, and manage financial adjustments with SSG.', type: 'warning' },
+      { title: '13. Certificates', detail: 'Generating and issuing training certificates. Issue WSQ certificates to competent learners, manage certificate records, and handle re-issuance requests.', type: 'success' },
+    ],
+  },
 ];
 
 const stepColors: Record<StepType, { bg: string; border: string; icon: string; label: string }> = {
@@ -206,12 +230,23 @@ const stepColors: Record<StepType, { bg: string; border: string; icon: string; l
 
 interface WorkflowGuidesViewProps {
   initialWorkflowId?: string;
+  visibleWorkflows?: string[];
 }
 
-const WorkflowGuidesView: React.FC<WorkflowGuidesViewProps> = ({ initialWorkflowId }) => {
+const WorkflowGuidesView: React.FC<WorkflowGuidesViewProps> = ({ initialWorkflowId, visibleWorkflows }) => {
   const [selectedWorkflow, setSelectedWorkflow] = useState<string | null>(initialWorkflowId || null);
 
-  const workflow = WORKFLOWS.find(w => w.id === selectedWorkflow);
+  useEffect(() => {
+    if (initialWorkflowId !== undefined) {
+      setSelectedWorkflow(initialWorkflowId || null);
+    }
+  }, [initialWorkflowId]);
+
+  const filteredWorkflows = visibleWorkflows
+    ? WORKFLOWS.filter(w => visibleWorkflows.includes(w.id))
+    : WORKFLOWS;
+
+  const workflow = filteredWorkflows.find(w => w.id === selectedWorkflow);
 
   // Card grid view
   if (!workflow) {
@@ -224,7 +259,20 @@ const WorkflowGuidesView: React.FC<WorkflowGuidesViewProps> = ({ initialWorkflow
           </p>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {WORKFLOWS.map(w => (
+          {filteredWorkflows.map(w => w.externalUrl ? (
+            <a
+              key={w.id}
+              href={w.externalUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={`text-left p-5 rounded-xl border-l-4 ${w.color} border border-gray-200 dark:border-gray-700 hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 block`}
+            >
+              <div className="text-3xl mb-3">{w.icon}</div>
+              <h3 className="font-bold text-gray-900 dark:text-white mb-1">{w.title}</h3>
+              <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">{w.description}</p>
+              <p className="text-xs text-blue-600 dark:text-blue-400 mt-3 font-medium">{w.steps.length} steps — Opens in new tab ↗</p>
+            </a>
+          ) : (
             <button
               key={w.id}
               onClick={() => setSelectedWorkflow(w.id)}
