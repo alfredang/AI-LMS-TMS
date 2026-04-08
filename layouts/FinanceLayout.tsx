@@ -112,7 +112,7 @@ const FinanceLayout: React.FC = () => {
     if (page.startsWith('tpg')) {
       setOpenSections(prev => ({ ...prev, tpgManagement: true }));
     }
-    if (page.startsWith('auto')) {
+    if (page.startsWith('auto') || page === 'allCourseRuns') {
       setOpenSections(prev => ({ ...prev, courseRunAutomations: true }));
     }
     if (['claimCheck', 'viewClaim', 'cancelClaim', 'uploadDocument'].includes(page)) {
@@ -628,9 +628,8 @@ const FinanceLayout: React.FC = () => {
   const sidebarContent = (
     <nav className="space-y-6 p-4 bg-white dark:bg-slate-800 text-gray-900 dark:text-white h-full">
       <NavItem target="dashboard" label="Financial Dashboard" />
-      <NavItem target="allCourseRuns" label="All Course Runs" />
-
-      <NavSection title="Course Run Automations" sectionKey="courseRunAutomations">
+      <NavSection title="FMS (n8n)" sectionKey="courseRunAutomations">
+        <NavItem target="allCourseRuns" label="View All Course Runs" isSubItem />
         <NavItem target="autoProcessEnrolments" label="Process Enrolments" isSubItem />
         <NavItem target="autoManualEnrolment" label="Manual Enrolment" isSubItem />
         <NavItem target="autoCreateEnrolmentsErrorStatus" label="Create Enrolments For Error Status" isSubItem />
