@@ -18,7 +18,7 @@ const TrainingProviderSidebar: React.FC<TrainingProviderSidebarProps> = ({ onNav
 
     const navItems = [
         { view: View.Dashboard, label: 'Training Dashboard', icon: IconName.Dashboard },
-        { view: View.Courses, label: 'Courses', icon: IconName.Courses },
+        { view: View.Courses, label: 'Course Management', icon: IconName.Courses },
         { view: View.UserManagement, label: 'User Management', icon: IconName.Users },
         { view: View.AdminManagement, label: 'Role Management', icon: IconName.Admin },
         { view: View.FinanceManagement, label: 'Finance Management', icon: IconName.DollarSign },
