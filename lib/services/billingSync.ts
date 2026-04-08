@@ -228,25 +228,9 @@ export async function refreshGrantsForEnrolments(enrolmentIds: string[]): Promis
     ssgApiBaseUrl: credentials.ssgApiBaseUrl,
   };
 
-  const known = await pool.query(
-    `SELECT enrolment_id FROM ssg_enrolments WHERE enrolment_id = ANY($1::text[])`,
-    [unique]
-  );
-  const knownSet = new Set(known.rows.map((r: { enrolment_id: string }) => r.enrolment_id));
-
   const results: GrantRefreshRowResult[] = [];
 
   for (const ref of unique) {
-    if (!knownSet.has(ref)) {
-      results.push({
-        enrolmentId: ref,
-        success: false,
-        grantsUpserted: 0,
-        error: 'Enrolment not found in ssg_enrolments',
-      });
-      continue;
-    }
-
     try {
       const grantPayload = {
         grants: {

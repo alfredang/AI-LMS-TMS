@@ -47,14 +47,6 @@ interface Stats {
   byStatus: { status: string; count: number }[];
 }
 
-interface AutomationActionMeta {
-  id: string;
-  menuLabel: string;
-  kind: string;
-  description: string;
-  configured: boolean;
-}
-
 const formatCurrency = (amount: number | null): string => {
   if (amount === null || amount === undefined) return '-';
   return `$${amount.toLocaleString('en-SG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -93,7 +85,6 @@ const PAGE_SIZE = 20;
 
 // Column group header styling
 const groupHeaderColors: Record<string, string> = {
-  select: 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300',
   course: 'bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300',
   trainee: 'bg-green-50 dark:bg-green-950 text-green-700 dark:text-green-300',
   sponsor: 'bg-purple-50 dark:bg-purple-950 text-purple-700 dark:text-purple-300',
@@ -314,18 +305,9 @@ const AllCourseRunsView: React.FC = () => {
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [selectedEnrolmentIds, setSelectedEnrolmentIds] = useState<string[]>([]);
-  const [showGrantsConfirm, setShowGrantsConfirm] = useState(false);
-  const [grantsProcessing, setGrantsProcessing] = useState(false);
-  const [automationActions, setAutomationActions] = useState<AutomationActionMeta[]>([]);
-  const [automationActionsLoading, setAutomationActionsLoading] = useState(true);
-  const [selectedWebhookId, setSelectedWebhookId] = useState('');
-  const [webhookRunning, setWebhookRunning] = useState(false);
-  const [toast, setToast] = useState<{ message: string; variant: 'success' | 'error' } | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
   const tableScrollRef = useRef<HTMLDivElement>(null);
   const theadRef = useRef<HTMLTableSectionElement>(null);
-  const selectAllRef = useRef<HTMLInputElement>(null);
 
   // Debounce search
   useEffect(() => {
@@ -358,166 +340,6 @@ const AllCourseRunsView: React.FC = () => {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      setAutomationActionsLoading(true);
-      try {
-        const res = await fetch('/api/finance/automation/list');
-        const json = await res.json();
-        if (!cancelled && res.ok && Array.isArray(json.actions)) {
-          setAutomationActions(json.actions);
-        }
-      } catch {
-        if (!cancelled) setAutomationActions([]);
-      } finally {
-        if (!cancelled) setAutomationActionsLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, []);
-
-  const n8nWorkflowOptions = automationActions.filter((a) => a.kind === 'n8n_webhook');
-
-  const pageEnrolmentIds = rows
-    .map((r) => r.enrolment_id)
-    .filter((id): id is string => Boolean(id));
-  const selectedOnPage = pageEnrolmentIds.filter((id) => selectedEnrolmentIds.includes(id));
-  const allPageSelected =
-    pageEnrolmentIds.length > 0 && selectedOnPage.length === pageEnrolmentIds.length;
-
-  useEffect(() => {
-    const el = selectAllRef.current;
-    if (!el) return;
-    el.indeterminate =
-      selectedOnPage.length > 0 && selectedOnPage.length < pageEnrolmentIds.length;
-  }, [selectedOnPage.length, pageEnrolmentIds.length]);
-
-  useEffect(() => {
-    if (!toast) return;
-    const t = setTimeout(() => setToast(null), 6000);
-    return () => clearTimeout(t);
-  }, [toast]);
-
-  const toggleSelectAllPage = () => {
-    if (allPageSelected) {
-      setSelectedEnrolmentIds((prev) => prev.filter((id) => !pageEnrolmentIds.includes(id)));
-    } else {
-      setSelectedEnrolmentIds((prev) => Array.from(new Set([...prev, ...pageEnrolmentIds])));
-    }
-  };
-
-  const toggleRowSelected = (enrolmentId: string) => {
-    setSelectedEnrolmentIds((prev) =>
-      prev.includes(enrolmentId) ? prev.filter((id) => id !== enrolmentId) : [...prev, enrolmentId]
-    );
-  };
-
-  const openProcessGrants = () => {
-    if (selectedEnrolmentIds.length === 0) {
-      setToast({
-        variant: 'error',
-        message: 'Select one or more table rows before processing grants.',
-      });
-      return;
-    }
-    const needsConfirm = selectedEnrolmentIds.length > 1;
-    if (needsConfirm) setShowGrantsConfirm(true);
-    else void runProcessGrants();
-  };
-
-  const runProcessGrants = async () => {
-    setShowGrantsConfirm(false);
-    setGrantsProcessing(true);
-    try {
-      const res = await fetch('/api/finance/automation/process-grants', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enrolmentIds: selectedEnrolmentIds }),
-      });
-      const json = await res.json();
-      if (!res.ok) {
-        throw new Error(json.error || 'Request failed');
-      }
-      const { summary, results } = json as {
-        summary?: { succeeded?: number; failed?: number; total?: number };
-        results?: Array<{ enrolmentId: string; success: boolean; error?: string; grantsUpserted?: number }>;
-      };
-      const s = summary?.succeeded ?? 0;
-      const f = summary?.failed ?? 0;
-
-      if (f === 0) {
-        setToast({
-          variant: 'success',
-          message:
-            s === 0
-              ? 'No enrolments processed.'
-              : `Grants refreshed for ${s} enrolment(s).`,
-        });
-        setSelectedEnrolmentIds([]);
-      } else {
-        const failedRows = (results ?? []).filter((r) => !r.success);
-        const detail = failedRows
-          .map((r) => `${r.enrolmentId}: ${r.error?.trim() || 'Unknown error'}`)
-          .join(' · ');
-        setToast({
-          variant: 'error',
-          message:
-            detail.length > 0
-              ? `${s} ok, ${f} failed — ${detail}`
-              : `${s} ok, ${f} failed.`,
-        });
-      }
-
-      await fetchData();
-    } catch (e) {
-      setToast({
-        variant: 'error',
-        message: e instanceof Error ? e.message : 'Failed to process grants',
-      });
-    } finally {
-      setGrantsProcessing(false);
-    }
-  };
-
-  const runN8nWorkflow = async () => {
-    if (!selectedWebhookId) return;
-    const meta = n8nWorkflowOptions.find((a) => a.id === selectedWebhookId);
-    if (!meta?.configured) {
-      setToast({
-        variant: 'error',
-        message: 'This workflow has no webhook URL in server environment variables.',
-      });
-      return;
-    }
-    setWebhookRunning(true);
-    try {
-      const res = await fetch(
-        `/api/finance/automation/${encodeURIComponent(selectedWebhookId)}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({}),
-        }
-      );
-      const json = await res.json();
-      if (!res.ok) {
-        throw new Error(json.error || 'Request failed');
-      }
-      setToast({
-        variant: 'success',
-        message: `${meta.menuLabel}: triggered successfully.`,
-      });
-    } catch (e) {
-      setToast({
-        variant: 'error',
-        message: e instanceof Error ? e.message : 'Workflow failed',
-      });
-    } finally {
-      setWebhookRunning(false);
-    }
-  };
-
   const totalPages = Math.ceil(total / PAGE_SIZE);
   const statusOptions = stats?.byStatus.map(s => s.status) ?? [];
 
@@ -526,19 +348,6 @@ const AllCourseRunsView: React.FC = () => {
 
   return (
     <div className="space-y-6 relative">
-      {toast && (
-        <div
-          className={`fixed bottom-6 right-6 z-[60] max-w-md px-4 py-3 rounded-lg shadow-lg text-sm ${
-            toast.variant === 'success'
-              ? 'bg-green-800 text-white'
-              : 'bg-red-800 text-white'
-          }`}
-          role="status"
-        >
-          {toast.message}
-        </div>
-      )}
-
       {/* Header */}
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold text-on-surface">All Course Runs</h2>
@@ -600,108 +409,6 @@ const AllCourseRunsView: React.FC = () => {
         </div>
       </Card>
 
-      {/* Automation: SSG row action + n8n workflows */}
-      <Card className="p-3 sm:p-4">
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between md:gap-6">
-          <div className="flex items-center gap-3 min-w-0">
-            <div
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/15 text-primary"
-              aria-hidden
-            >
-              <Icon name={IconName.Cloud} className="w-5 h-5 opacity-90" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-sm font-semibold text-on-surface tracking-tight">Finance automation</p>
-              {selectedEnrolmentIds.length > 0 ? (
-                <p className="text-xs text-on-surface-secondary mt-0.5">
-                  {selectedEnrolmentIds.length} row{selectedEnrolmentIds.length === 1 ? '' : 's'} selected
-                </p>
-              ) : (
-                <p className="text-xs text-on-surface-secondary mt-0.5">SSG grants · n8n workflows</p>
-              )}
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-stretch sm:justify-end sm:gap-2 md:flex-nowrap md:max-w-3xl md:ml-auto">
-            <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-              {selectedEnrolmentIds.length > 0 && (
-                <Button variant="ghost" size="sm" onClick={() => setSelectedEnrolmentIds([])}>
-                  Clear
-                </Button>
-              )}
-              <Button
-                size="sm"
-                disabled={grantsProcessing || loading}
-                onClick={openProcessGrants}
-                className="gap-1.5"
-              >
-                {grantsProcessing ? (
-                  <>
-                    <span className="inline-block h-3.5 w-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                    Grants…
-                  </>
-                ) : (
-                  <>
-                    <Icon name={IconName.ClipboardCheck} className="w-4 h-4" />
-                    Process grants (SSG)
-                  </>
-                )}
-              </Button>
-            </div>
-
-            <div
-              className="hidden sm:block w-px self-stretch min-h-[2.25rem] bg-gray-200 dark:bg-gray-600 shrink-0 sm:mx-1"
-              aria-hidden
-            />
-
-            <div className="flex flex-1 flex-col gap-2 sm:flex-row sm:items-stretch sm:min-w-[min(100%,18rem)] sm:max-w-xl">
-              <select
-                value={selectedWebhookId}
-                onChange={(e) => setSelectedWebhookId(e.target.value)}
-                disabled={automationActionsLoading || n8nWorkflowOptions.length === 0}
-                title={
-                  automationActionsLoading
-                    ? 'Loading workflows…'
-                    : 'Choose a workflow, then Run'
-                }
-                className="w-full flex-1 px-3 py-2 text-sm bg-surface border border-default rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-on-surface disabled:opacity-60 min-h-[2.25rem]"
-              >
-                <option value="">
-                  {automationActionsLoading ? 'Loading workflows…' : 'Choose workflow…'}
-                </option>
-                {n8nWorkflowOptions.map((a) => (
-                  <option key={a.id} value={a.id} disabled={!a.configured}>
-                    {a.menuLabel}
-                    {!a.configured ? ' — not configured' : ''}
-                  </option>
-                ))}
-              </select>
-              <Button
-                variant="outline"
-                size="sm"
-                className="shrink-0 w-full sm:w-auto sm:min-w-[4.5rem] min-h-[2.25rem]"
-                disabled={
-                  !selectedWebhookId ||
-                  webhookRunning ||
-                  automationActionsLoading ||
-                  !n8nWorkflowOptions.find((a) => a.id === selectedWebhookId)?.configured
-                }
-                onClick={() => void runN8nWorkflow()}
-              >
-                {webhookRunning ? (
-                  <>
-                    <span className="inline-block h-3.5 w-3.5 border-2 border-current/30 border-t-current rounded-full animate-spin mr-2" />
-                    Running…
-                  </>
-                ) : (
-                  'Run'
-                )}
-              </Button>
-            </div>
-          </div>
-        </div>
-      </Card>
-
       {/* Error */}
       {error && (
         <div className="p-3 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 rounded-lg text-sm">
@@ -720,7 +427,6 @@ const AllCourseRunsView: React.FC = () => {
             {/* Group Headers */}
             <thead ref={theadRef}>
               <tr className="bg-surface dark:bg-slate-900">
-                <th colSpan={1} className={`text-center text-[10px] uppercase tracking-wider px-2 py-1.5 border-b-2 border-slate-300 dark:border-slate-600 ${groupHeaderColors.select}`}>Select</th>
                 <th colSpan={5} className={`text-center text-[10px] uppercase tracking-wider px-2 py-1.5 border-b-2 border-blue-300 dark:border-blue-600 ${groupHeaderColors.course}`}>Course</th>
                 <th colSpan={5} className={`text-center text-[10px] uppercase tracking-wider px-2 py-1.5 border-b-2 border-green-300 dark:border-green-600 ${groupHeaderColors.trainee}`}>Trainee</th>
                 <th colSpan={4} className={`text-center text-[10px] uppercase tracking-wider px-2 py-1.5 border-b-2 border-purple-300 dark:border-purple-600 ${groupHeaderColors.sponsor}`}>Employer</th>
@@ -733,17 +439,6 @@ const AllCourseRunsView: React.FC = () => {
               </tr>
               {/* Column Headers */}
               <tr className="border-b border-default bg-surface-elevated">
-                <th className={`${headerCell} w-10 text-center`}>
-                  <input
-                    ref={selectAllRef}
-                    type="checkbox"
-                    className="rounded border-default"
-                    checked={allPageSelected}
-                    onChange={toggleSelectAllPage}
-                    disabled={pageEnrolmentIds.length === 0 || loading}
-                    title="Select all on this page"
-                  />
-                </th>
                 {/* Course (5) */}
                 <th className={headerCell}>Course Run</th>
                 <th className={headerCell}>Course Code</th>
@@ -786,33 +481,19 @@ const AllCourseRunsView: React.FC = () => {
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={30} className="px-4 py-12 text-center text-on-surface-secondary">
+                <tr><td colSpan={29} className="px-4 py-12 text-center text-on-surface-secondary">
                   <div className="flex items-center justify-center gap-2">
                     <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary" />
                     Loading enrolments...
                   </div>
                 </td></tr>
               ) : rows.length === 0 ? (
-                <tr><td colSpan={30} className="px-4 py-12 text-center text-on-surface-secondary">No enrolments found.</td></tr>
+                <tr><td colSpan={29} className="px-4 py-12 text-center text-on-surface-secondary">No enrolments found.</td></tr>
               ) : rows.map((r, i) => {
                 const totalTG = (Number(r.bl_amount) || 0) + (Number(r.nbl_amount) || 0);
-                const eid = r.enrolment_id;
-                const rowSelectable = Boolean(eid);
-                const enrolmentKey = eid ?? `row-${i}`;
+                const enrolmentKey = r.enrolment_id ?? `row-${i}`;
                 return (
                   <tr key={enrolmentKey} className="border-b border-default hover:bg-surface-hover transition-colors">
-                    <td className={`${cell} text-center`}>
-                      {rowSelectable && eid ? (
-                        <input
-                          type="checkbox"
-                          className="rounded border-default"
-                          checked={selectedEnrolmentIds.includes(eid)}
-                          onChange={() => toggleRowSelected(eid)}
-                        />
-                      ) : (
-                        <span className="text-on-surface-secondary">—</span>
-                      )}
-                    </td>
                     {/* Course */}
                     <td className={`${cell} text-on-surface-secondary font-mono`}>{r.course_run_number || '-'}</td>
                     <td className={`${cell} text-on-surface-secondary font-mono`}>{r.course_reference || '-'}</td>
@@ -906,34 +587,6 @@ const AllCourseRunsView: React.FC = () => {
           </div>
         </div>
       </Card>
-
-      {showGrantsConfirm && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full mx-auto">
-            <div className="p-6">
-              <div className="flex items-center gap-4 mb-4">
-                <div className="w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0 bg-amber-100 dark:bg-amber-900/30">
-                  <Icon name={IconName.InfoCircle} className="w-6 h-6 text-amber-700 dark:text-amber-300" />
-                </div>
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Process grants</h3>
-              </div>
-              <p className="text-gray-700 dark:text-gray-300 mb-6">
-                Refresh grant data from SSG for{' '}
-                <strong>{selectedEnrolmentIds.length}</strong> selected enrolment(s)? This calls SSG and
-                updates <code className="text-xs bg-gray-100 dark:bg-gray-900 px-1 rounded">ssg_grants</code>.
-              </p>
-              <div className="flex gap-3 justify-end">
-                <Button variant="ghost" onClick={() => setShowGrantsConfirm(false)} disabled={grantsProcessing}>
-                  Cancel
-                </Button>
-                <Button onClick={() => void runProcessGrants()} disabled={grantsProcessing}>
-                  {grantsProcessing ? 'Processing…' : 'Confirm'}
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

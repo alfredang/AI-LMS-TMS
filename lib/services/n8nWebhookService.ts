@@ -6,6 +6,15 @@ export interface N8nWebhookResult {
 }
 
 const MAX_BODY_LOG = 2000;
+const DEFAULT_TIMEOUT_MS = 10 * 60_000; // 10 minutes
+
+function getTimeoutMs() {
+  const raw = process.env.N8N_WEBHOOK_TIMEOUT_MS;
+  const parsed = raw ? Number(raw) : NaN;
+  const ms = Number.isFinite(parsed) ? parsed : DEFAULT_TIMEOUT_MS;
+  // clamp between 5s and 30m
+  return Math.min(30 * 60_000, Math.max(5_000, Math.floor(ms)));
+}
 
 /**
  * POST (or GET) to an n8n webhook URL with JSON body for POST.
@@ -24,7 +33,8 @@ export async function triggerN8nWebhook(
       init.body = JSON.stringify(options.body ?? { trigger: true });
     }
 
-    const res = await fetch(url, { ...init, signal: AbortSignal.timeout(120_000) });
+    const timeoutMs = getTimeoutMs();
+    const res = await fetch(url, { ...init, signal: AbortSignal.timeout(timeoutMs) });
     const text = await res.text();
     const bodySnippet = text.length > MAX_BODY_LOG ? `${text.slice(0, MAX_BODY_LOG)}…` : text;
 

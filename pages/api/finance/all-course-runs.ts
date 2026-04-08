@@ -11,6 +11,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const page = parseInt(req.query.page as string) || 0;
     const limit = Math.min(parseInt(req.query.limit as string) || 20, 100);
     const search = (req.query.search as string || '').trim();
+    const courseRunId = (req.query.courseRunId as string || '').trim();
     const status = (req.query.status as string || '').trim();
     const sort = req.query.sort === 'oldest' ? 'ASC' : 'DESC';
     const offset = page * limit;
@@ -29,6 +30,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         OR se.trainee_nric ILIKE $${paramIndex}
       )`);
       params.push(`%${search}%`);
+      paramIndex++;
+    }
+
+    if (courseRunId) {
+      conditions.push(`(
+        se.course_run_id = $${paramIndex}
+        OR se.raw_data->'course'->'run'->>'id' = $${paramIndex}
+      )`);
+      params.push(courseRunId);
       paramIndex++;
     }
 

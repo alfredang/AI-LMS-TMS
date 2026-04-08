@@ -71,7 +71,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const payload =
         method === 'GET' ? undefined : { ...clientPayload, trigger: true as const };
 
+      const startedAt = Date.now();
       const webhookResult = await triggerN8nWebhook(url, { method, body: payload });
+      const durationMs = Math.max(0, Date.now() - startedAt);
 
       if (!webhookResult.ok) {
         return res.status(502).json({
@@ -80,6 +82,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           error: webhookResult.error || 'Webhook request failed',
           statusCode: webhookResult.statusCode,
           bodySnippet: webhookResult.bodySnippet,
+          durationMs,
         });
       }
 
@@ -88,6 +91,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         action: def.id,
         statusCode: webhookResult.statusCode,
         bodySnippet: webhookResult.bodySnippet,
+        durationMs,
       });
     }
 

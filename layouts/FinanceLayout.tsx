@@ -38,6 +38,8 @@ import GrantCalculatorView from '../components/finance/GrantCalculatorView';
 import ViewClaimView from '../components/finance/ViewClaimView';
 import CancelClaimView from '../components/finance/CancelClaimView';
 import UploadDocumentView from '../components/finance/UploadDocumentView';
+import ProcessGrantsView from '../components/finance/automation/ProcessGrantsView';
+import SimpleWebhookActionView from '../components/finance/automation/SimpleWebhookActionView';
 import SsgAppSelector from '../components/finance/SsgAppSelector';
 import BizfileView from '../components/finance/BizfileView';
 import BizfileDirectorySearchView from '../components/finance/BizfileDirectorySearchView';
@@ -61,6 +63,11 @@ type FinancePage =
   | 'dashboard' | 'allCourseRuns'
   | 'grantCalculator' | 'searchGrant' | 'viewGrant'
   | 'claimCheck' | 'viewClaim' | 'cancelClaim' | 'uploadDocument'
+  // Finance automation (migrated from Google Sheets "Start Processing")
+  | 'autoProcessEnrolments' | 'autoManualEnrolment' | 'autoCreateEnrolmentsErrorStatus' | 'autoCreateEmployerEnrolment' | 'autoAppendCancelledClassTrainees'
+  | 'autoUpdateAssessment'
+  | 'autoProcessGrants' | 'autoUpdateGrantStatusTotal' | 'autoGrantQuery' | 'autoDirectApplication' | 'autoCheckDuplicatesDA'
+  | 'autoUpdateClaimIdAllCourseRun'
   | 'bizfile' | 'bizfileDirectorySearch' | 'bizfileNameSearch'
   | 'bizfileVerification' | 'bizfileKeyDates' | 'bizfileAddress' | 'bizfileSsic' | 'bizfileCapital' | 'bizfileShareholders'
   | 'qbCustomer' | 'qbEstimate' | 'qbInvoice' | 'qbPayment'
@@ -80,6 +87,7 @@ const FinanceLayout: React.FC = () => {
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isDesktopSidebarCollapsed, setIsDesktopSidebarCollapsed] = useState(false);
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
+    courseRunAutomations: true,
     claimManagement: true,
     tpgManagement: false,
     tpgCourseRun: false,
@@ -107,6 +115,9 @@ const FinanceLayout: React.FC = () => {
         setOpenSections(prev => ({ ...prev, tpgManagement: true, tpgCourseRun: true }));
       }
     }
+    if (page.startsWith('auto')) {
+      setOpenSections(prev => ({ ...prev, courseRunAutomations: true }));
+    }
     if (['claimCheck', 'viewClaim', 'cancelClaim', 'uploadDocument'].includes(page)) {
       setOpenSections(prev => ({ ...prev, claimManagement: true }));
     }
@@ -129,6 +140,97 @@ const FinanceLayout: React.FC = () => {
     switch (page) {
       case 'allCourseRuns':
         return <AllCourseRunsView />;
+      // Finance automation pages
+      case 'autoProcessEnrolments':
+        return (
+          <SimpleWebhookActionView
+            title="Process Enrolments"
+            description="Run the enrolment processing automation (legacy sheet workflow migrated to n8n)."
+            actionId="process-enrolment-grants-backup"
+          />
+        );
+      case 'autoManualEnrolment':
+        return (
+          <SimpleWebhookActionView
+            title="Manual Enrolment"
+            description="Trigger the manual enrolment automation workflow in n8n."
+            actionId="manual-enrolment"
+          />
+        );
+      case 'autoCreateEnrolmentsErrorStatus':
+        return (
+          <SimpleWebhookActionView
+            title="Create Enrolments For Error Status"
+            description="Trigger the n8n workflow that creates enrolments for error-status records."
+            actionId="create-enrolments-error-status"
+          />
+        );
+      case 'autoCreateEmployerEnrolment':
+        return (
+          <SimpleWebhookActionView
+            title="Create Employer Enrolment"
+            description="Trigger the employer/company-sponsored enrolment workflow in n8n."
+            actionId="company-sponsored-enrolment"
+          />
+        );
+      case 'autoAppendCancelledClassTrainees':
+        return (
+          <SimpleWebhookActionView
+            title="Append Cancelled Class Trainees"
+            description="Trigger the workflow that appends cancelled class trainees data (enrolment & invoice related)."
+            actionId="append-cancelled-class-trainees"
+          />
+        );
+      case 'autoUpdateAssessment':
+        return (
+          <SimpleWebhookActionView
+            title="Update Assessment"
+            description="Trigger the assessment update/sync workflow (legacy sheet automation)."
+            actionId="update-assessment"
+          />
+        );
+      case 'autoProcessGrants':
+        return <ProcessGrantsView />;
+      case 'autoUpdateGrantStatusTotal':
+        return (
+          <SimpleWebhookActionView
+            title="Update Grant Status & Total Grant"
+            description="Trigger the workflow that recalculates and updates grant status and totals."
+            actionId="update-grant-status-total"
+          />
+        );
+      case 'autoGrantQuery':
+        return (
+          <SimpleWebhookActionView
+            title="For Grant Query"
+            description="Trigger the workflow used for grant query follow-ups."
+            actionId="grant-query"
+          />
+        );
+      case 'autoDirectApplication':
+        return (
+          <SimpleWebhookActionView
+            title="For Direct Application"
+            description="Trigger the direct application enrolment workflow."
+            actionId="direct-application-enrolment"
+          />
+        );
+      case 'autoCheckDuplicatesDA':
+        return (
+          <SimpleWebhookActionView
+            title="Check Duplicates for DA"
+            description="Trigger the direct application duplicate check workflow."
+            actionId="check-duplicates-da"
+          />
+        );
+      case 'autoUpdateClaimIdAllCourseRun':
+        return (
+          <SimpleWebhookActionView
+            title="Update Claim ID In All Course Run"
+            description="Trigger the workflow that updates claim IDs across course runs."
+            actionId="update-claim-id-all-course-run"
+          />
+        );
       case 'grantCalculator':
         return <GrantCalculatorView />;
       case 'searchGrant':
@@ -207,6 +309,18 @@ const FinanceLayout: React.FC = () => {
   const getPageTitle = () => {
     switch (page) {
       case 'allCourseRuns': return 'All Course Runs';
+      case 'autoProcessEnrolments': return 'Process Enrolments';
+      case 'autoManualEnrolment': return 'Manual Enrolment';
+      case 'autoCreateEnrolmentsErrorStatus': return 'Create Enrolments For Error Status';
+      case 'autoCreateEmployerEnrolment': return 'Create Employer Enrolment';
+      case 'autoAppendCancelledClassTrainees': return 'Append Cancelled Class Trainees';
+      case 'autoUpdateAssessment': return 'Update Assessment';
+      case 'autoProcessGrants': return 'Process Grants';
+      case 'autoUpdateGrantStatusTotal': return 'Update Grant Status & Total Grant';
+      case 'autoGrantQuery': return 'For Grant Query';
+      case 'autoDirectApplication': return 'For Direct Application';
+      case 'autoCheckDuplicatesDA': return 'Check Duplicates for DA';
+      case 'autoUpdateClaimIdAllCourseRun': return 'Update Claim ID In All Course Run';
       case 'grantCalculator': return 'Grant Calculator';
       case 'searchGrant': return 'Search Grant';
       case 'viewGrant': return 'View Grant';
@@ -316,6 +430,21 @@ const FinanceLayout: React.FC = () => {
     <nav className="space-y-6 p-4 bg-white dark:bg-slate-800 text-gray-900 dark:text-white h-full">
       <NavItem target="dashboard" label="Financial Dashboard" />
       <NavItem target="allCourseRuns" label="All Course Runs" />
+
+      <NavSection title="Course Run Automations" sectionKey="courseRunAutomations">
+        <NavItem target="autoProcessEnrolments" label="Process Enrolments" isSubItem />
+        <NavItem target="autoManualEnrolment" label="Manual Enrolment" isSubItem />
+        <NavItem target="autoCreateEnrolmentsErrorStatus" label="Create Enrolments For Error Status" isSubItem />
+        <NavItem target="autoCreateEmployerEnrolment" label="Create Employer Enrolment" isSubItem />
+        <NavItem target="autoAppendCancelledClassTrainees" label="Append Cancelled Class Trainees" isSubItem />
+        <NavItem target="autoUpdateAssessment" label="Update Assessment" isSubItem />
+        <NavItem target="autoProcessGrants" label="Process Grants" isSubItem />
+        <NavItem target="autoUpdateGrantStatusTotal" label="Update Grant Status & Total Grant" isSubItem />
+        <NavItem target="autoGrantQuery" label="For Grant Query" isSubItem />
+        <NavItem target="autoDirectApplication" label="For Direct Application" isSubItem />
+        <NavItem target="autoCheckDuplicatesDA" label="Check Duplicates for DA" isSubItem />
+        <NavItem target="autoUpdateClaimIdAllCourseRun" label="Update Claim ID In All Course Run" isSubItem />
+      </NavSection>
 
       <NavSection title="TPG Management" sectionKey="tpgManagement">
         <SubSection title="Course Run" sectionKey="tpgCourseRun">
