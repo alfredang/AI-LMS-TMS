@@ -24,7 +24,7 @@ async function ensureColumns() {
   await pool.query(`ALTER TABLE course_run ADD COLUMN IF NOT EXISTS virtual_meeting_link TEXT`);
 }
 
-export async function runSyncGoogleCalendar() {
+export async function runSyncGoogleCalendar(options?: { startDate?: string; endDate?: string }) {
   await ensureColumns();
 
   const credentials = await getGoogleCredentials(pool);
@@ -67,13 +67,14 @@ export async function runSyncGoogleCalendar() {
   oauth2Client.setCredentials({ refresh_token: credentials.refreshToken });
   const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
 
-  // Fetch events for the next 21 days
+  // Fetch events for the date range
   const now = new Date();
-  const futureDate = new Date(now.getTime() + LOOK_AHEAD_DAYS * 24 * 60 * 60 * 1000);
+  const startDate = options?.startDate ? new Date(options.startDate) : now;
+  const futureDate = options?.endDate ? new Date(options.endDate + 'T23:59:59') : new Date(startDate.getTime() + LOOK_AHEAD_DAYS * 24 * 60 * 60 * 1000);
 
   const eventsResponse = await calendar.events.list({
     calendarId,
-    timeMin: now.toISOString(),
+    timeMin: startDate.toISOString(),
     timeMax: futureDate.toISOString(),
     singleEvents: true,
     orderBy: 'startTime',
@@ -89,9 +90,9 @@ export async function runSyncGoogleCalendar() {
             c.title AS course_title
      FROM course_run cr
      JOIN course c ON c.id = cr.course_id
-     WHERE cr.start_date >= CURRENT_DATE
-       AND cr.start_date <= $1::date`,
-    [futureDate.toISOString().slice(0, 10)]
+     WHERE cr.start_date >= $1::date
+       AND cr.start_date <= $2::date`,
+    [startDate.toISOString().slice(0, 10), futureDate.toISOString().slice(0, 10)]
   );
 
   // Build lookup maps
@@ -208,7 +209,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const result = await runSyncGoogleCalendar();
+    const { startDate, endDate } = req.body || {};
+    const result = await runSyncGoogleCalendar({ startDate, endDate });
     return res.status(200).json(result);
   } catch (error) {
     console.error('❌ [Calendar Sync] Error:', error);

@@ -228,11 +228,15 @@ export const ClassManagerView: React.FC<ClassManagerViewProps> = ({ courseToEdit
     // Class Status and Type
     const [classStatus, setClassStatus] = useState(courseToEdit?.classStatus || 'Pending');
     const [classType, setClassType] = useState(() => {
+        // Use DB class_type first, then fallback to modeOfTraining
+        if (courseToEdit?.classType && courseToEdit.classType !== 'Physical') return courseToEdit.classType;
+        if (courseToEdit?.classType) return courseToEdit.classType;
         const mode = (courseToEdit?.modeOfTraining || '').toLowerCase();
         if (mode.includes('virtual') || mode.includes('online')) return 'Virtual';
         if (mode.includes('blended') || mode.includes('hybrid')) return 'Hybrid';
         return 'Physical';
     });
+    const [virtualMeetingLink, setVirtualMeetingLink] = useState(courseToEdit?.virtualMeetingLink || '');
 
     // ViewCourseRun state management
     const [includeExpired, setIncludeExpired] = useState(false);
@@ -2261,6 +2265,47 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                             <option value="Hybrid">Hybrid</option>
                                         </select>
                                     </div>
+                                </div>
+                            </FormSection>
+                        )}
+
+                        {/* Google Meet Link */}
+                        {isEditMode && (
+                            <FormSection title="Google Meet Link">
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Virtual Meeting Link</label>
+                                    <div className="flex gap-3">
+                                        <input
+                                            type="url"
+                                            value={virtualMeetingLink}
+                                            onChange={(e) => setVirtualMeetingLink(e.target.value)}
+                                            placeholder="https://meet.google.com/xxx-xxxx-xxx"
+                                            className={inputClasses}
+                                        />
+                                        <Button
+                                            variant="primary"
+                                            size="sm"
+                                            onClick={async () => {
+                                                if (courseToEdit?.id) {
+                                                    try {
+                                                        await fetch(getApiUrl('/api/admin/upcoming-classes'), {
+                                                            method: 'PUT',
+                                                            headers: { 'Content-Type': 'application/json' },
+                                                            body: JSON.stringify({ id: courseToEdit.id, virtual_meeting_link: virtualMeetingLink }),
+                                                        });
+                                                    } catch { /* silent */ }
+                                                }
+                                            }}
+                                        >
+                                            Save
+                                        </Button>
+                                    </div>
+                                    {virtualMeetingLink && (
+                                        <a href={virtualMeetingLink} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 mt-2 text-sm text-blue-600 hover:underline">
+                                            Open Google Meet
+                                        </a>
+                                    )}
+                                    <p className="mt-1 text-xs text-gray-400">Synced from Google Calendar for [VIRTUAL] classes, or enter manually.</p>
                                 </div>
                             </FormSection>
                         )}

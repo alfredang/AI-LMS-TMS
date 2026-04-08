@@ -48,7 +48,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   // PUT — Update class status and/or class type
   if (req.method === 'PUT') {
     try {
-      const { id, class_status, class_type } = req.body;
+      const { id, class_status, class_type, virtual_meeting_link } = req.body;
       if (!id) {
         return res.status(400).json({ success: false, error: 'id is required' });
       }
@@ -75,6 +75,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         await pool.query('ALTER TABLE course_run ADD COLUMN IF NOT EXISTS class_type TEXT DEFAULT \'Physical\'');
         setClauses.push(`class_type = $${paramIdx++}`);
         values.push(class_type);
+      }
+
+      if (virtual_meeting_link !== undefined) {
+        await pool.query('ALTER TABLE course_run ADD COLUMN IF NOT EXISTS virtual_meeting_link TEXT');
+        setClauses.push(`virtual_meeting_link = $${paramIdx++}`);
+        values.push(virtual_meeting_link);
       }
 
       if (setClauses.length === 0) {
@@ -242,6 +248,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           cr.start_date,
           cr.end_date,
           cr.class_type,
+          cr.virtual_meeting_link,
           ${tpgNameExpr} AS assigned_trainer_tpg,
           ${tpgEmailExpr} AS assigned_trainer_tpg_email,
           COUNT(e.id) AS num_of_trainee
@@ -257,6 +264,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           cr.start_date,
           cr.end_date,
           cr.class_type,
+          cr.virtual_meeting_link,
           ${tpgNameExpr},
           ${tpgEmailExpr}
         ORDER BY cr.start_date ASC NULLS LAST
@@ -494,6 +502,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         numOfTrainee: parseInt(row.num_of_trainee || '0', 10),
         trainersList: row.trainers_list || '',
         classType: row.class_type || 'Physical',
+        virtualMeetingLink: row.virtual_meeting_link || '',
         modeOfTraining: '',
         attendanceScore: null as number | null,
       };
