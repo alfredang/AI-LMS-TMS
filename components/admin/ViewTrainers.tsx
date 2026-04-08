@@ -159,42 +159,27 @@ const ViewTrainers: React.FC = () => {
     }
   };
 
-  // Sync single trainer image: prompt for LinkedIn image URL, download, upload to Drive
-  const handleSyncLinkedInImage = async (trainer: Trainer) => {
-    const linkedinUrl = trainer.linkedin_url?.startsWith('http') ? trainer.linkedin_url : `https://${trainer.linkedin_url}`;
-
-    const imageUrl = prompt(
-      `Sync profile image for ${trainer.trainer_name}\n\n` +
-      `Steps:\n` +
-      `1. Open LinkedIn: ${linkedinUrl}\n` +
-      `2. Right-click the profile photo\n` +
-      `3. Select "Copy image address"\n` +
-      `4. Paste the image URL below:`
-    );
-
-    if (!imageUrl || !imageUrl.trim()) return;
-
+  // Sync single trainer image: auto-match from Google Drive folder by name
+  const handleSyncImage = async (trainer: Trainer) => {
     setUploadingImageFor(trainer.user_id);
     setSyncMessage(null);
     try {
-      // Download the image via our proxy API
-      const res = await fetch('/api/admin/download-linkedin-image', {
+      const res = await fetch('/api/admin/sync-trainer-images-from-drive', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: trainer.user_id,
-          trainerName: trainer.trainer_name,
-          imageUrl: imageUrl.trim(),
-        }),
+        body: JSON.stringify({ trainerIds: [trainer.user_id] }),
       });
       const data = await res.json();
-      if (data.success) {
-        setTrainers(prev => prev.map(t =>
-          t.user_id === trainer.user_id ? { ...t, profile_picture: data.data.fileUrl } : t
-        ));
-        setSyncMessage({ type: 'success', text: `Profile image saved to Google Drive for ${trainer.trainer_name}` });
+      if (data.success && data.summary.updated > 0) {
+        const updatedUrl = data.results.find((r: any) => r.status === 'updated')?.imageUrl;
+        if (updatedUrl) {
+          setTrainers(prev => prev.map(t =>
+            t.user_id === trainer.user_id ? { ...t, profile_picture: updatedUrl } : t
+          ));
+        }
+        setSyncMessage({ type: 'success', text: `Profile image synced from Google Drive for ${trainer.trainer_name}` });
       } else {
-        setSyncMessage({ type: 'error', text: data.error || 'Failed to download image.' });
+        setSyncMessage({ type: 'error', text: `No matching image found in Google Drive for ${trainer.trainer_name}. Upload the image to the trainer image folder first.` });
       }
     } catch {
       setSyncMessage({ type: 'error', text: 'Failed to sync image.' });
@@ -767,35 +752,19 @@ const ViewTrainers: React.FC = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                       <div className="flex items-center gap-2">
-                        {trainer.linkedin_url ? (
-                          <Button
-                            variant="ghost"
-                            onClick={() => handleSyncLinkedInImage(trainer)}
-                            disabled={uploadingImageFor === trainer.user_id}
-                            className="text-purple-600 hover:text-purple-800 hover:bg-purple-50 dark:hover:bg-purple-900/20"
-                          >
-                            {uploadingImageFor === trainer.user_id ? (
-                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-purple-600 mr-1" />
-                            ) : (
-                              <Icon name={IconName.User} className="w-4 h-4 mr-1" />
-                            )}
-                            {uploadingImageFor === trainer.user_id ? 'Syncing...' : 'Sync Image'}
-                          </Button>
-                        ) : (
-                          <Button
-                            variant="ghost"
-                            onClick={() => handleImageUploadClick(trainer.user_id)}
-                            disabled={uploadingImageFor === trainer.user_id}
-                            className="text-blue-600 hover:text-blue-800 hover:bg-blue-50 dark:hover:bg-blue-900/20"
-                          >
-                            {uploadingImageFor === trainer.user_id ? (
-                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-1" />
-                            ) : (
-                              <Icon name={IconName.Upload} className="w-4 h-4 mr-1" />
-                            )}
-                            {uploadingImageFor === trainer.user_id ? 'Uploading...' : 'Upload Photo'}
-                          </Button>
-                        )}
+                        <Button
+                          variant="ghost"
+                          onClick={() => handleSyncImage(trainer)}
+                          disabled={uploadingImageFor === trainer.user_id}
+                          className="text-purple-600 hover:text-purple-800 hover:bg-purple-50 dark:hover:bg-purple-900/20"
+                        >
+                          {uploadingImageFor === trainer.user_id ? (
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-purple-600 mr-1" />
+                          ) : (
+                            <Icon name={IconName.User} className="w-4 h-4 mr-1" />
+                          )}
+                          {uploadingImageFor === trainer.user_id ? 'Syncing...' : 'Sync Image'}
+                        </Button>
                         {trainer.status === 'Active' ? (
                           <Button
                             variant="ghost"
