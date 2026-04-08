@@ -74,7 +74,8 @@ export default async function handler(
         e.enrolment_date,
         cr.start_date,
         cr.end_date,
-        cr.class_status
+        cr.class_status,
+        COALESCE(cr.class_type, 'Physical') AS class_type
       FROM app_user u
       JOIN enrollment e ON u.id = e.user_id
       JOIN course c ON e.course_id = c.id
@@ -145,6 +146,7 @@ export default async function handler(
       startDate: row.start_date,
       endDate: row.end_date,
       classStatus: row.class_status,
+      classType: (row as any).class_type || 'Physical',
       enrollmentStatus: 'enrolled' // Hardcoded as all these are enrolled courses
     }));
 

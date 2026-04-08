@@ -68,6 +68,7 @@ const OngoingClasses: React.FC = () => {
   const [courseCode, setCourseCode] = useState('');
   const [courseRunId, setCourseRunId] = useState('');
   const [selectedTrainer, setSelectedTrainer] = useState('');
+  const [selectedClassType, setSelectedClassType] = useState<'all' | 'Physical' | 'Virtual' | 'Hybrid'>('all');
   const [startDateFrom, setStartDateFrom] = useState('');
   const [endDateUntil, setEndDateUntil] = useState('');
 
@@ -122,6 +123,7 @@ const OngoingClasses: React.FC = () => {
       if (debouncedCourseCode) params.append('courseCode', debouncedCourseCode);
       if (debouncedCourseRunId) params.append('courseRunId', debouncedCourseRunId);
       if (selectedTrainer) params.append('trainer', selectedTrainer);
+      if (selectedClassType !== 'all') params.append('classType', selectedClassType);
       if (debouncedStartDate) params.append('startDateFrom', debouncedStartDate);
       if (debouncedEndDate) params.append('endDateUntil', debouncedEndDate);
 
@@ -183,12 +185,12 @@ const OngoingClasses: React.FC = () => {
   // Reset page immediately for non-debounced filters (dropdowns)
   useEffect(() => {
     setCurrentPage(0);
-  }, [selectedTrainer]);
+  }, [selectedTrainer, selectedClassType]);
 
   // Fetch data when debounced filters or pagination change
   useEffect(() => {
     fetchOngoingClasses();
-  }, [currentPage, debouncedSearch, debouncedCourseTitle, debouncedCourseCode, debouncedCourseRunId, selectedTrainer, debouncedStartDate, debouncedEndDate]);
+  }, [currentPage, debouncedSearch, debouncedCourseTitle, debouncedCourseCode, debouncedCourseRunId, selectedTrainer, selectedClassType, debouncedStartDate, debouncedEndDate]);
 
   // Date formatting function
   const formatDateInput = (value: string) => {
@@ -218,6 +220,7 @@ const OngoingClasses: React.FC = () => {
     setCourseCode('');
     setCourseRunId('');
     setSelectedTrainer('');
+    setSelectedClassType('all');
     setStartDateFrom('');
     setEndDateUntil('');
     setCurrentPage(0);
@@ -374,6 +377,20 @@ const OngoingClasses: React.FC = () => {
                         {trainer.trainer_name}
                       </option>
                     ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Class Type</label>
+                  <select
+                    value={selectedClassType}
+                    onChange={(e) => setSelectedClassType(e.target.value as 'all' | 'Physical' | 'Virtual' | 'Hybrid')}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                  >
+                    <option value="all">All</option>
+                    <option value="Physical">Physical</option>
+                    <option value="Virtual">Virtual</option>
+                    <option value="Hybrid">Hybrid</option>
                   </select>
                 </div>
 

@@ -377,6 +377,18 @@ const ManagementCourseList: React.FC = () => {
                         {(course.courseRunCode || course.courseRunId) && (
                             <LearnerCardDetailRow label="Course Run" value={course.courseRunCode || course.courseRunId} />
                         )}
+                        <LearnerCardDetailRow
+                            label="Class Type"
+                            value={
+                                <span className={`px-2 py-0.5 rounded text-xs font-semibold ${
+                                    course.classType === 'Virtual' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300'
+                                    : course.classType === 'Hybrid' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300'
+                                    : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
+                                }`}>
+                                    {course.classType || 'Physical'}
+                                </span>
+                            }
+                        />
                         {course.startDate && (
                             <LearnerCardDetailRow label="Start Date" value={new Date(course.startDate).toLocaleDateString('en-SG', { year: 'numeric', month: 'short', day: 'numeric' })} />
                         )}
@@ -1069,6 +1081,18 @@ const LearnerCourseCard: React.FC<{ course: any }> = ({ course }) => {
                             value={course.courseRunCode || course.courseRunId}
                         />
                     )}
+                    <LearnerCardDetailRow
+                        label="Class Type"
+                        value={
+                            <span className={`px-2 py-0.5 rounded text-xs font-semibold ${
+                                course.classType === 'Virtual' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300'
+                                : course.classType === 'Hybrid' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300'
+                                : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
+                            }`}>
+                                {course.classType || 'Physical'}
+                            </span>
+                        }
+                    />
                     {course.startDate && (
                         <LearnerCardDetailRow
                             label="Start Date"

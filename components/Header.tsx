@@ -149,7 +149,7 @@ const Header: React.FC = () => {
     };
   }, [isProfileOpen, isRoleSwitcherOpen]);
 
-  const classManagementPages = [AdminPage.ViewCourses, AdminPage.ViewTrainers, AdminPage.FundingValidity, AdminPage.UpcomingClasses, AdminPage.OngoingClasses, AdminPage.CompletedClasses, AdminPage.CreateNewClass, AdminPage.EditClass, AdminPage.EnrollLearners, AdminPage.AssignTrainer];
+  const classManagementPages = [AdminPage.ViewCourses, AdminPage.ViewTrainers, AdminPage.FundingValidity, AdminPage.OngoingClasses, AdminPage.UpcomingClasses, AdminPage.CompletedClasses, AdminPage.CreateNewClass, AdminPage.EditClass, AdminPage.EnrollLearners, AdminPage.AssignTrainer];
   const tpgManagementPages = [
     AdminPage.TpgDirectApplication,
     AdminPage.TpgCourseRun,

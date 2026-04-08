@@ -145,8 +145,8 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate }) => {
 
             <NavSection title="Class Management" isOpen={openSections.classManagement} onToggle={() => toggleSection('classManagement')}>
                 <NavItem page={AdminPage.ViewLearners} label="View Learners" isSubItem />
-                <NavItem page={AdminPage.UpcomingClasses} label="Upcoming Classes" isSubItem />
                 <NavItem page={AdminPage.OngoingClasses} label="Ongoing Classes" isSubItem />
+                <NavItem page={AdminPage.UpcomingClasses} label="Upcoming Classes" isSubItem />
                 <NavItem page={AdminPage.CompletedClasses} label="Completed Classes" isSubItem />
                 <NavItem page={AdminPage.AssignTrainer} label="Assign Trainer" isSubItem />
                 <NavItem page={AdminPage.AssignStudent} label="Assign Learners" isSubItem />

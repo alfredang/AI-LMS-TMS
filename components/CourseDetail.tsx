@@ -1686,6 +1686,15 @@ const CourseInfoPanel: React.FC<{ course: Course; userRole: UserRole }> = ({ cou
                         <DetailRow label="Digital Attendance ID" value={course.daId || 'N/A'} />
                         <DetailRow label="Start Date" value={course.startDate ? new Date(course.startDate).toLocaleDateString('en-SG', { year: 'numeric', month: 'short', day: 'numeric' }) : 'N/A'} />
                         <DetailRow label="End Date" value={course.endDate ? new Date(course.endDate).toLocaleDateString('en-SG', { year: 'numeric', month: 'short', day: 'numeric' }) : 'N/A'} />
+                        <DetailRow label="Class Type" value={
+                            <span className={`px-2 py-0.5 rounded text-xs font-semibold ${
+                                course.classType === 'Virtual' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300'
+                                : course.classType === 'Hybrid' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300'
+                                : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
+                            }`}>
+                                {course.classType || 'Physical'}
+                            </span>
+                        } />
                     </>
                 )}
 
@@ -2178,6 +2187,8 @@ export const CourseDetail: React.FC = () => {
         assessmentSummaryRecordUrl: effectiveDetail?.assessmentSummaryRecordUrl,
         writtenAssessmentLink: effectiveDetail?.writtenAssessmentLink,
         practicalPerformanceAssessmentLink: effectiveDetail?.practicalPerformanceAssessmentLink,
+        classType: (effectiveDetail as any)?.classType || selectedCourse.classType || 'Physical',
+        virtualMeetingLink: (effectiveDetail as any)?.virtualMeetingLink || selectedCourse.virtualMeetingLink || null,
         fundingValidity: (effectiveDetail as any)?.fundingValidity || selectedCourse.fundingValidity || undefined,
         assessmentMethods: effectiveDetail?.assessmentMethods || undefined,
         publishedAssessmentMethods: effectiveDetail?.publishedAssessmentMethods || {},
@@ -2465,6 +2476,37 @@ export const CourseDetail: React.FC = () => {
                                     </ContentSection>
                                 </div>
                             )}
+
+                            {/* Google Meet */}
+                            <div id={toId("Google Meet")}>
+                                <ContentSection title="Google Meet">
+                                    {(convertedCourse.classType === 'Virtual' || convertedCourse.classType === 'Hybrid') && convertedCourse.virtualMeetingLink ? (
+                                        <a
+                                            href={convertedCourse.virtualMeetingLink}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="flex items-center gap-3 p-3 w-full bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+                                        >
+                                            <Icon name={IconName.Video} className="w-6 h-6 text-green-600 flex-shrink-0" />
+                                            <div className="flex-1 min-w-0">
+                                                <p className="font-semibold text-gray-900 dark:text-white">Join Google Meet</p>
+                                                <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                                                    {convertedCourse.virtualMeetingLink}
+                                                </p>
+                                            </div>
+                                            <Icon name={IconName.ExternalLink} className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                                        </a>
+                                    ) : (
+                                        <div className="flex items-center gap-3 p-3 w-full bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600">
+                                            <Icon name={IconName.Video} className="w-6 h-6 text-gray-400 flex-shrink-0" />
+                                            <div className="flex-1 min-w-0">
+                                                <p className="font-semibold text-gray-500 dark:text-gray-400">N/A</p>
+                                                <p className="text-xs text-gray-400 dark:text-gray-500">No virtual meeting link for this class</p>
+                                            </div>
+                                        </div>
+                                    )}
+                                </ContentSection>
+                            </div>
 
                             {/* Courseware - grouped container for Trainer/Developer/Admin/TrainingProvider */}
                             {(userRole === UserRole.Trainer || userRole === UserRole.Developer || userRole === UserRole.Admin || userRole === UserRole.TrainingProvider) && (

@@ -144,6 +144,13 @@ export default async function handler(
       paramCounter++;
     }
 
+    const classType = req.query.classType;
+    if (classType === 'Physical' || classType === 'Virtual' || classType === 'Hybrid') {
+      whereConditions.push(`COALESCE(cr.class_type, 'Physical') = $${paramCounter}`);
+      queryParams.push(classType);
+      paramCounter++;
+    }
+
     const whereClause = whereConditions.join(' AND ');
 
     // First, get the statistics for ongoing classes with filters applied

@@ -91,6 +91,7 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
     const [courseRunId, setCourseRunId] = useState('');
     const [selectedTrainer, setSelectedTrainer] = useState('');
     const [selectedClassStatus, setSelectedClassStatus] = useState<'all' | 'Confirmed' | 'Pending'>('all');
+    const [selectedClassType, setSelectedClassType] = useState<'all' | 'Physical' | 'Virtual' | 'Hybrid'>('all');
     const [startDateFrom, setStartDateFrom] = useState('');
     const [endDateUntil, setEndDateUntil] = useState('');
 
@@ -179,6 +180,7 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
             if (debouncedCourseRunId) params.append('courseRunId', debouncedCourseRunId);
             if (selectedTrainer) params.append('trainer', selectedTrainer);
             if (selectedClassStatus !== 'all') params.append('classStatus', selectedClassStatus);
+            if (selectedClassType !== 'all') params.append('classType', selectedClassType);
             if (debouncedStartDate) params.append('startDateFrom', debouncedStartDate);
             if (debouncedEndDate) params.append('endDateUntil', debouncedEndDate);
 
@@ -235,12 +237,12 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
     // Reset page immediately for non-debounced filters (dropdowns)
     useEffect(() => {
         setCurrentPage(0);
-    }, [selectedTrainer, selectedClassStatus]);
+    }, [selectedTrainer, selectedClassStatus, selectedClassType]);
 
     // Fetch data when debounced filters or pagination change
     useEffect(() => {
         fetchUpcomingClasses();
-    }, [currentPage, debouncedSearch, debouncedCourseTitle, debouncedCourseCode, debouncedCourseRunId, selectedTrainer, selectedClassStatus, debouncedStartDate, debouncedEndDate]);
+    }, [currentPage, debouncedSearch, debouncedCourseTitle, debouncedCourseCode, debouncedCourseRunId, selectedTrainer, selectedClassStatus, selectedClassType, debouncedStartDate, debouncedEndDate]);
 
     // Date formatting function
     const formatDateInput = (value: string) => {
@@ -271,6 +273,7 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
         setCourseRunId('');
         setSelectedTrainer('');
         setSelectedClassStatus('all');
+        setSelectedClassType('all');
         setStartDateFrom('');
         setEndDateUntil('');
         setCurrentPage(0);
@@ -545,6 +548,21 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                             </select>
                                         </div>
 
+                                        {/* Class Type */}
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Class Type</label>
+                                            <select
+                                                value={selectedClassType}
+                                                onChange={(e) => setSelectedClassType(e.target.value as 'all' | 'Physical' | 'Virtual' | 'Hybrid')}
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                            >
+                                                <option value="all">All</option>
+                                                <option value="Physical">Physical</option>
+                                                <option value="Virtual">Virtual</option>
+                                                <option value="Hybrid">Hybrid</option>
+                                            </select>
+                                        </div>
+
                                         {/* Start Date From */}
                                         <div>
                                             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Start Date (From)</label>
@@ -593,7 +611,7 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                         <Icon name={IconName.BookOpen} className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                         <p className="text-gray-500 text-lg">No upcoming classes found</p>
                         <p className="text-gray-400 text-sm mt-2">
-                            {searchQuery || courseTitle || courseCode || courseRunId || selectedTrainer || selectedClassStatus !== 'all' || startDateFrom || endDateUntil
+                            {searchQuery || courseTitle || courseCode || courseRunId || selectedTrainer || selectedClassStatus !== 'all' || selectedClassType !== 'all' || startDateFrom || endDateUntil
                                 ? 'Try adjusting your search filters'
                                 : 'No classes are scheduled for the future'}
                         </p>

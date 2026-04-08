@@ -214,6 +214,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       paramIndex++;
     }
 
+    const classType = req.query.classType;
+    if (classType === 'Physical' || classType === 'Virtual' || classType === 'Hybrid') {
+      filters.push(`COALESCE(cr.class_type, 'Physical') = $${paramIndex}`);
+      params.push(classType);
+      paramIndex++;
+    }
+
     if (isValidDate(startDateFrom)) {
       filters.push(`cr.start_date >= $${paramIndex}`);
       params.push(parseDDMMYYYY(startDateFrom as string));
