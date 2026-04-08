@@ -59,15 +59,14 @@ const DEFAULT_TRAINER_AVATAR = `data:image/svg+xml;utf8,${encodeURIComponent(
 )}`;
 
 const getTrainerThumbnailSrc = (trainer: Trainer): string => {
-  if (trainer.linkedin_url) {
-    const params = new URLSearchParams({ name: trainer.trainer_name });
-    if (trainer.profile_picture) {
-      params.set('profilePictureUrl', trainer.profile_picture);
-    }
-    return `/api/admin/trainer-image?${params.toString()}`;
+  // If trainer has an explicit profile picture URL, use it directly
+  if (trainer.profile_picture) {
+    return ensureAbsoluteImageUrl(trainer.profile_picture) || DEFAULT_TRAINER_AVATAR;
   }
 
-  return ensureAbsoluteImageUrl(trainer.profile_picture) || DEFAULT_TRAINER_AVATAR;
+  // Otherwise, auto-search Google Drive folder by trainer name
+  const params = new URLSearchParams({ name: trainer.trainer_name });
+  return `/api/admin/trainer-image?${params.toString()}`;
 };
 
 const ViewTrainers: React.FC = () => {
@@ -196,12 +195,12 @@ const ViewTrainers: React.FC = () => {
     }
   };
 
-  // Bulk sync all trainers with LinkedIn but no image
+  // Bulk sync: scan Google Drive folder and match images to trainers by name
   const handleSyncAllImages = async () => {
     setSyncingAllImages(true);
     setSyncMessage(null);
     try {
-      const res = await fetch('/api/admin/sync-trainer-images', {
+      const res = await fetch('/api/admin/sync-trainer-images-from-drive', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({}),
@@ -210,14 +209,14 @@ const ViewTrainers: React.FC = () => {
       if (data.success) {
         setSyncMessage({
           type: 'success',
-          text: `Synced ${data.summary.updated} images (${data.summary.skipped} skipped, ${data.summary.failed} failed).`,
+          text: `Scanned ${data.summary.totalFiles} Drive images. Updated ${data.summary.updated} trainers (${data.summary.skipped} already set or no match).`,
         });
         if (data.summary.updated > 0) fetchTrainers();
       } else {
         setSyncMessage({ type: 'error', text: data.error || 'Sync failed.' });
       }
     } catch {
-      setSyncMessage({ type: 'error', text: 'Failed to sync images.' });
+      setSyncMessage({ type: 'error', text: 'Failed to sync images from Drive.' });
     } finally {
       setSyncingAllImages(false);
       setTimeout(() => setSyncMessage(null), 8000);
@@ -398,6 +397,19 @@ const ViewTrainers: React.FC = () => {
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white">View Trainers</h1>
         <div className="flex gap-2">
+          <Button
+            variant="ghost"
+            onClick={handleSyncAllImages}
+            disabled={syncingAllImages}
+            className="border border-purple-500 text-purple-600 hover:bg-purple-50 dark:border-purple-400 dark:text-purple-400 dark:hover:bg-purple-900/20"
+          >
+            {syncingAllImages ? (
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-purple-600 mr-2" />
+            ) : (
+              <Icon name={IconName.User} className="w-4 h-4 mr-2" />
+            )}
+            {syncingAllImages ? 'Syncing...' : 'Sync Images from Drive'}
+          </Button>
           <Button variant="ghost" onClick={() => setShowBulkUpload(true)} className="border border-blue-500 text-blue-600 hover:bg-blue-50 dark:border-blue-400 dark:text-blue-400 dark:hover:bg-blue-900/20">
             <Icon name={IconName.Upload} className="w-4 h-4 mr-2" />
             Bulk Upload Trainers
