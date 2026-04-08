@@ -1033,112 +1033,81 @@ const CircularProgress: React.FC<{ percent: number; size?: number }> = ({ percen
     );
 };
 
-const formatLearnerDate = (dateStr: string | undefined): string => {
-    if (!dateStr) return 'TBD';
-    const d = new Date(dateStr);
-    if (isNaN(d.getTime())) return 'TBD';
-    return d.toLocaleDateString('en-SG', { day: '2-digit', month: 'short', year: 'numeric' });
-};
-
 const LearnerCourseCard: React.FC<{ course: any }> = ({ course }) => {
     const { loadCourseData } = useLms();
     const totalHours = Number(course.trainingHours) + Number(course.assessmentHours);
-    const progress = Math.round(course.progressPercent || 0);
 
     const handleClick = async () => {
         try { await loadCourseData(course); } catch (e) { console.error(e); }
     };
 
     return (
-        <div
-            onClick={handleClick}
-            className="group relative flex flex-col rounded-2xl overflow-hidden cursor-pointer bg-surface border border-white/[0.06] transition-all duration-300 hover:scale-[1.02] hover:shadow-2xl hover:shadow-primary/10 hover:border-primary/30"
-        >
-            {/* Image with gradient overlay */}
-            <div className="relative h-40 overflow-hidden">
+        <Card className="flex flex-col group cursor-pointer dark:bg-gray-800 dark:border-gray-700" onClick={handleClick}>
+            <div className="relative">
                 <img
                     src={getCourseImageUrl(course.imageUrl, course.id)}
                     alt={course.title}
-                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
-                    onError={(e) => { (e.target as HTMLImageElement).src = `https://picsum.photos/seed/${course.id || 'default'}/400/200`; }}
+                    className="w-full h-auto object-cover rounded-t-xl"
+                    onError={(e) => { (e.target as HTMLImageElement).src = `https://picsum.photos/seed/${course.id}/400/200`; }}
                 />
-                <div className="absolute inset-0 bg-gradient-to-t from-gray-900/90 via-gray-900/40 to-transparent" />
-
-                {/* Title overlay on image */}
-                <div className="absolute bottom-3 left-4 right-4">
-                    <h3 className="font-bold text-white text-sm leading-tight line-clamp-2 drop-shadow-lg">
-                        {course.title}
-                    </h3>
-                </div>
             </div>
-
-            {/* Content */}
             <div className="p-4 flex flex-col flex-grow">
-                {/* Date */}
-                <div className="flex items-center gap-2 text-xs text-on-surface-secondary mb-3">
-                    <Icon name={IconName.Calendar} className="w-3.5 h-3.5 text-primary flex-shrink-0" />
-                    <span>{formatLearnerDate(course.startDate)} &mdash; {formatLearnerDate(course.endDate)}</span>
-                </div>
+                <h3 className="font-bold text-on-surface mb-3 group-hover:text-primary transition-colors mt-3 dark:text-white">{course.title}</h3>
 
-                {/* Details — compact grid */}
-                <div className="space-y-1.5 text-xs flex-grow">
-                    <div className="flex justify-between">
-                        <span className="text-on-surface-secondary">TGS Ref</span>
-                        <span className="font-mono text-on-surface font-medium">{course.courseCode || '—'}</span>
-                    </div>
-                    <div className="flex justify-between">
-                        <span className="text-on-surface-secondary">Duration</span>
-                        <span className="text-on-surface">{totalHours}h <span className="text-on-surface-secondary">({course.trainingHours}T + {course.assessmentHours}A)</span></span>
-                    </div>
-                    {(course.courseRunCode || course.courseRunId) && (
-                        <div className="flex justify-between">
-                            <span className="text-on-surface-secondary">Run ID</span>
-                            <span className="font-mono text-on-surface font-medium">{course.courseRunCode || course.courseRunId}</span>
+                <div className="flex items-center my-auto py-3">
+                    <div className="text-xs space-y-2 flex-grow">
+                        <div className="flex justify-between items-center">
+                            <span className="font-semibold text-gray-500 dark:text-gray-400">Course Code</span>
+                            <span className="font-mono text-gray-800 dark:text-gray-200">{course.courseCode || '—'}</span>
                         </div>
-                    )}
-                    <div className="flex justify-between items-center">
-                        <span className="text-on-surface-secondary">Class Type</span>
-                        <span className={`px-2 py-0.5 inline-flex text-[10px] leading-4 font-semibold rounded-full ${
-                            course.classType === 'Virtual' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300'
-                            : course.classType === 'Hybrid' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300'
-                            : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
-                        }`}>{course.classType || 'Physical'}</span>
-                    </div>
-                </div>
-
-                {/* Badges */}
-                <div className="flex flex-wrap gap-1.5 mt-3">
-                    {course.courseType && (
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${getTypeColor(course.courseType)}`}>
-                            {course.courseType}
-                        </span>
-                    )}
-                    {course.modeOfLearning?.map((mode: string) => (
-                        <span key={mode} className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-medium uppercase tracking-wider ${getModeColor(mode)}`}>
-                            {mode}
-                        </span>
-                    ))}
-                </div>
-
-                {/* Footer */}
-                <div className="border-t border-white/[0.06] mt-4 pt-3 flex justify-between items-center">
-                    <div className="flex items-center gap-2">
-                        <span className="text-xs font-semibold text-on-surface-secondary group-hover:text-primary transition-colors">View Course</span>
-                        {progress > 0 && (
-                            <div className="relative flex items-center justify-center flex-shrink-0" title={`${progress}% complete`}>
-                                <CircularProgress percent={progress} size={28} />
-                                <span className="absolute text-[8px] font-bold text-on-surface">{progress}%</span>
+                        <div className="flex justify-between items-center">
+                            <span className="font-semibold text-gray-500 dark:text-gray-400">Course Duration</span>
+                            <span className="font-medium text-gray-800 dark:text-gray-200 text-right">{totalHours} Hours ({course.trainingHours}T + {course.assessmentHours}A)</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                            <span className="font-semibold text-gray-500 dark:text-gray-400">Course Type</span>
+                            <span className={`font-semibold px-2 py-0.5 rounded ${getTypeColor(course.courseType)}`}>{course.courseType}</span>
+                        </div>
+                        {(course.courseRunCode || course.courseRunId) && (
+                            <div className="flex justify-between items-center">
+                                <span className="font-semibold text-gray-500 dark:text-gray-400">Course Run</span>
+                                <span className="font-mono text-gray-800 dark:text-gray-200">{course.courseRunCode || course.courseRunId}</span>
+                            </div>
+                        )}
+                        <div className="flex justify-between items-center">
+                            <span className="font-semibold text-gray-500 dark:text-gray-400">Class Type</span>
+                            <span className={`font-semibold px-2 py-0.5 rounded ${
+                                course.classType === 'Virtual' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300'
+                                : course.classType === 'Hybrid' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300'
+                                : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
+                            }`}>{course.classType || 'Physical'}</span>
+                        </div>
+                        {course.startDate && (
+                            <div className="flex justify-between items-center">
+                                <span className="font-semibold text-gray-500 dark:text-gray-400">Start Date</span>
+                                <span className="font-medium text-gray-800 dark:text-gray-200">{new Date(course.startDate).toLocaleDateString('en-SG', { year: 'numeric', month: 'short', day: 'numeric' })}</span>
+                            </div>
+                        )}
+                        {course.endDate && (
+                            <div className="flex justify-between items-center">
+                                <span className="font-semibold text-gray-500 dark:text-gray-400">End Date</span>
+                                <span className="font-medium text-gray-800 dark:text-gray-200">{new Date(course.endDate).toLocaleDateString('en-SG', { year: 'numeric', month: 'short', day: 'numeric' })}</span>
                             </div>
                         )}
                     </div>
-                    <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center group-hover:bg-primary group-hover:text-white transition-all duration-300">
-                        <svg className="w-4 h-4 transition-transform duration-300 group-hover:translate-x-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                </div>
+
+                {/* Footer */}
+                <div className="border-t border-gray-200 dark:border-gray-700 mt-auto pt-3 flex justify-between items-center">
+                    <span className="font-semibold text-on-surface text-sm dark:text-gray-200">View Course</span>
+                    <div className="w-8 h-8 rounded-full bg-primary text-white flex items-center justify-center transition-colors">
+                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
                         </svg>
                     </div>
                 </div>
             </div>
-        </div>
+        </Card>
     );
 };
 
