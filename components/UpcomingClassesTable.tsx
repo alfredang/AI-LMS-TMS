@@ -284,6 +284,7 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
 
     const handleEditClass = (classItem: UpcomingClass) => {
         setEditingCourseRun(classItem);
+        setClassListReturnTo(AdminPage.UpcomingClasses);
         setAdminPage(AdminPage.EditClass);
     };
 

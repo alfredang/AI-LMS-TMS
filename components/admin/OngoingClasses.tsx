@@ -241,6 +241,7 @@ const OngoingClasses: React.FC = () => {
   };
 
   const handleEditClass = (classItem: OngoingClass) => {
+    setClassListReturnTo(AdminPage.OngoingClasses);
     setAdminPage(AdminPage.EditClass);
   };
 
