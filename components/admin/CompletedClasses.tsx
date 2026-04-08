@@ -75,6 +75,7 @@ const CompletedClasses: React.FC = () => {
   const [syncResults, setSyncResults] = useState<SyncResult[] | null>(null);
   const [syncSummary, setSyncSummary] = useState<any>(null);
   const [syncError, setSyncError] = useState('');
+  const [syncProgress, setSyncProgress] = useState({ completed: 0, total: 0, currentId: '' });
 
   // Search and filter states
   const [searchQuery, setSearchQuery] = useState('');
@@ -253,28 +254,49 @@ const CompletedClasses: React.FC = () => {
     setSyncError('');
     setSyncResults(null);
     setSyncSummary(null);
+    setSyncProgress({ completed: 0, total: ids.length, currentId: '' });
+
+    const BATCH_SIZE = 5;
+    const allResults: SyncResult[] = [];
+    const authToken = authService.getAuthToken();
 
     try {
-      const authToken = authService.getAuthToken();
-      const response = await fetch(getApiUrl('/api/admin/sync-completed-classes?app=app1'), {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(authToken && { 'Authorization': `Bearer ${authToken}` }),
-        },
-        body: JSON.stringify({ courseRunIds: ids }),
+      for (let i = 0; i < ids.length; i += BATCH_SIZE) {
+        const batch = ids.slice(i, i + BATCH_SIZE);
+        setSyncProgress({ completed: i, total: ids.length, currentId: batch[0] });
+
+        const response = await fetch(getApiUrl('/api/admin/sync-completed-classes?app=app1'), {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(authToken && { 'Authorization': `Bearer ${authToken}` }),
+          },
+          body: JSON.stringify({ courseRunIds: batch }),
+        });
+
+        const data = await response.json();
+
+        if (data.success && data.results) {
+          allResults.push(...data.results);
+          // Show partial results as they come in
+          setSyncResults([...allResults]);
+        } else {
+          setSyncError(data.error || `Batch failed at ID ${batch[0]}`);
+          break;
+        }
+      }
+
+      setSyncProgress({ completed: ids.length, total: ids.length, currentId: '' });
+
+      // Build combined summary
+      setSyncSummary({
+        totalCourseRuns: allResults.length,
+        totalEnrolmentsFetched: allResults.reduce((s, r) => s + r.ssgEnrolmentsFetched, 0),
+        totalEnrolmentsInserted: allResults.reduce((s, r) => s + r.ssgEnrolmentsInserted, 0),
       });
 
-      const data = await response.json();
-
-      if (data.success) {
-        setSyncResults(data.results);
-        setSyncSummary(data.summary);
-        // Refresh the table
-        fetchCompletedClasses();
-      } else {
-        setSyncError(data.error || 'Sync failed. Please try again.');
-      }
+      // Refresh the table
+      fetchCompletedClasses();
     } catch (err) {
       setSyncError(err instanceof Error ? err.message : 'Network error. Please try again.');
     } finally {
@@ -288,6 +310,7 @@ const CompletedClasses: React.FC = () => {
     setSyncResults(null);
     setSyncSummary(null);
     setSyncError('');
+    setSyncProgress({ completed: 0, total: 0, currentId: '' });
   };
 
   const handleViewDetails = (classItem: any) => {
@@ -359,18 +382,30 @@ const CompletedClasses: React.FC = () => {
                 </div>
               )}
 
-              {!syncResults && (
+              {/* Progress bar during sync */}
+              {syncing && syncProgress.total > 0 && (
+                <div className="mb-4">
+                  <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mb-1">
+                    <span>Syncing: {syncProgress.completed} / {syncProgress.total} course runs</span>
+                    <span>{Math.round((syncProgress.completed / syncProgress.total) * 100)}%</span>
+                  </div>
+                  <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3 overflow-hidden">
+                    <div
+                      className="bg-blue-600 h-3 rounded-full transition-all duration-500 ease-out"
+                      style={{ width: `${Math.max(2, (syncProgress.completed / syncProgress.total) * 100)}%` }}
+                    />
+                  </div>
+                  <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                    ~{Math.ceil(((syncProgress.total - syncProgress.completed) / 5) * 30)}s remaining (est.)
+                  </p>
+                </div>
+              )}
+
+              {!syncResults && !syncing && (
                 <div className="flex justify-end gap-2">
-                  <Button variant="ghost" size="sm" onClick={closeSyncModal} disabled={syncing}>Cancel</Button>
-                  <Button variant="primary" size="sm" onClick={handleSyncFromSSG} disabled={syncing || parseCourseRunIds(syncInput).length === 0}>
-                    {syncing ? (
-                      <span className="flex items-center gap-2">
-                        <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></span>
-                        Syncing from SSG...
-                      </span>
-                    ) : (
-                      `Sync ${parseCourseRunIds(syncInput).length} Course Runs`
-                    )}
+                  <Button variant="ghost" size="sm" onClick={closeSyncModal}>Cancel</Button>
+                  <Button variant="primary" size="sm" onClick={handleSyncFromSSG} disabled={parseCourseRunIds(syncInput).length === 0}>
+                    Sync {parseCourseRunIds(syncInput).length} Course Runs
                   </Button>
                 </div>
               )}
@@ -650,22 +685,58 @@ const CompletedClasses: React.FC = () => {
                 <p className="text-sm text-gray-500 dark:text-gray-400">
                   Showing {currentPage * ITEMS_PER_PAGE + 1} to {Math.min((currentPage + 1) * ITEMS_PER_PAGE, total)} of {total} classes
                 </p>
-                <div className="flex gap-2">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setCurrentPage(Math.max(0, currentPage - 1))}
-                    disabled={currentPage === 0}
-                  >
-                    Previous
+                <div className="flex items-center gap-1">
+                  {/* First */}
+                  <Button variant="ghost" size="sm" onClick={() => setCurrentPage(0)} disabled={currentPage === 0}>
+                    First
                   </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setCurrentPage(Math.min(totalPages - 1, currentPage + 1))}
-                    disabled={currentPage >= totalPages - 1}
-                  >
+                  {/* Previous */}
+                  <Button variant="ghost" size="sm" onClick={() => setCurrentPage(currentPage - 1)} disabled={currentPage === 0}>
+                    Prev
+                  </Button>
+
+                  {/* Page numbers */}
+                  {(() => {
+                    const pages: number[] = [];
+                    const maxVisible = 5;
+                    let start = Math.max(0, currentPage - Math.floor(maxVisible / 2));
+                    let end = Math.min(totalPages - 1, start + maxVisible - 1);
+                    if (end - start < maxVisible - 1) start = Math.max(0, end - maxVisible + 1);
+
+                    if (start > 0) pages.push(0);
+                    if (start > 1) pages.push(-1); // ellipsis
+
+                    for (let i = start; i <= end; i++) pages.push(i);
+
+                    if (end < totalPages - 2) pages.push(-2); // ellipsis
+                    if (end < totalPages - 1) pages.push(totalPages - 1);
+
+                    return pages.map((p, idx) =>
+                      p < 0 ? (
+                        <span key={`ellipsis-${idx}`} className="px-1 text-gray-400 dark:text-gray-500">...</span>
+                      ) : (
+                        <button
+                          key={p}
+                          onClick={() => setCurrentPage(p)}
+                          className={`px-3 py-1 text-sm rounded-md ${
+                            p === currentPage
+                              ? 'bg-blue-600 text-white font-semibold'
+                              : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                          }`}
+                        >
+                          {p + 1}
+                        </button>
+                      )
+                    );
+                  })()}
+
+                  {/* Next */}
+                  <Button variant="ghost" size="sm" onClick={() => setCurrentPage(currentPage + 1)} disabled={currentPage >= totalPages - 1}>
                     Next
+                  </Button>
+                  {/* Last */}
+                  <Button variant="ghost" size="sm" onClick={() => setCurrentPage(totalPages - 1)} disabled={currentPage >= totalPages - 1}>
+                    Last
                   </Button>
                 </div>
               </div>
