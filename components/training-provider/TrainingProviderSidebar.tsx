@@ -89,6 +89,8 @@ const TrainingProviderSidebar: React.FC<TrainingProviderSidebarProps> = ({ onNav
                             { id: 'trainer-invitation', label: 'Trainer Invitation', icon: '📨' },
                             { id: 'certification', label: 'Certification', icon: '🎓' },
                             { id: 'proforma-invoice', label: 'Proforma Invoice', icon: '🧾' },
+                            { id: 'invoice', label: 'Invoice', icon: '📄' },
+                            { id: 'receipt', label: 'Receipt', icon: '🧾' },
                             { id: 'lesson-delivery', label: 'Lesson Delivery', icon: '📚' },
                             { id: 'assessment', label: 'Assessment', icon: '📝' },
                         ].map(item => (
