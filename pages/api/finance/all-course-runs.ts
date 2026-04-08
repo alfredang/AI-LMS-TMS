@@ -27,6 +27,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         OR se.enrolment_id ILIKE $${paramIndex}
         OR se.course_title ILIKE $${paramIndex}
         OR se.course_reference ILIKE $${paramIndex}
+        OR se.course_run_id ILIKE $${paramIndex}
+        OR se.raw_data->'course'->'run'->>'id' ILIKE $${paramIndex}
         OR se.trainee_nric ILIKE $${paramIndex}
       )`);
       params.push(`%${search}%`);
