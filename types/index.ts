@@ -130,6 +130,7 @@ export enum TrainerPage {
   SustainabilityTools = 'sustainabilityTools',
   VirtualTools = 'virtualTools',
   AgenticAITools = 'agenticAITools',
+  TrainingHours = 'trainingHours',
   LessonDeliveryGuide = 'lessonDeliveryGuide',
   AssessmentGuide = 'assessmentGuide',
 }

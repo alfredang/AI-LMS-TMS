@@ -27,6 +27,7 @@ import LessonDeliveryGuidePage from '../components/trainer/LessonDeliveryGuidePa
 import VirtualToolsPage from '../components/trainer/VirtualToolsPage';
 import AgenticAIToolsPage from '../components/trainer/AgenticAIToolsPage';
 import AssessmentGuidePage from '../components/trainer/AssessmentGuidePage';
+import TrainingHoursPage from '../components/trainer/TrainingHoursPage';
 
 const PAGE_LABELS: Record<TrainerPage, string> = {
   [TrainerPage.EAttendance]: 'E-Attendance',
@@ -67,6 +68,8 @@ const TrainerLayout: React.FC = () => {
         return <AssessmentGrading />;
       case TrainerPage.MyClasses:
         return <CourseList />;
+      case TrainerPage.TrainingHours:
+        return <TrainingHoursPage />;
       case TrainerPage.PastAttendance:
         return <PastAttendance />;
       case TrainerPage.PastAssessment:
