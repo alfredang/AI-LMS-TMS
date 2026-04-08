@@ -80,24 +80,29 @@ export async function runSyncTrainerToTpg() {
   const ssgBaseUrl = process.env.SSG_API_URL || 'https://api.ssg-wsg.sg';
   const courseApi = createSSGCourseAPI(ssgBaseUrl, credentials);
 
-  // ── Find runs: has local trainer, no TPG trainer, upcoming within threshold ─
+  // ── Find runs: has assigned local trainer, no TPG trainer, upcoming within threshold ─
   const runsResult = await pool.query<{
     id: string;
     course_run_id: string;
     course_ref_number: string;
     course_code: string;
+    assigned_trainer_name: string;
+    assigned_trainer_email: string | null;
+    assigned_trainer_id: string | null;
   }>(
     `SELECT cr.id, cr.course_run_id, c.course_code,
-            c.course_code AS course_ref_number
+            c.course_code AS course_ref_number,
+            cr.assigned_trainer_name,
+            cr.assigned_trainer_email,
+            cr.assigned_trainer_id
      FROM course_run cr
      JOIN course c ON c.id = cr.course_id
-     WHERE cr.class_status IN ('Confirmed', 'Pending')
-       AND cr.start_date >= CURRENT_DATE
-       AND cr.start_date <= CURRENT_DATE + ($1 * INTERVAL '1 day')
+     WHERE cr.class_status = 'Confirmed'
+       AND cr.start_date >= (NOW() AT TIME ZONE 'Asia/Singapore')::date
+       AND cr.start_date <= (NOW() AT TIME ZONE 'Asia/Singapore')::date + ($1 * INTERVAL '1 day')
        AND (cr.tpg_assigned_trainer_name IS NULL OR cr.tpg_assigned_trainer_name = '')
-       AND EXISTS (
-         SELECT 1 FROM course_run_trainer crt WHERE crt.course_run_id = cr.id
-       )
+       AND cr.assigned_trainer_name IS NOT NULL
+       AND cr.assigned_trainer_name <> ''
      ORDER BY cr.start_date ASC`,
     [thresholdDays]
   );
@@ -110,89 +115,102 @@ export async function runSyncTrainerToTpg() {
     try {
       await sleep(RATE_LIMIT_MS);
 
-      // ── Get local trainers from junction table (in assignment order) ─────────
-      const trainersResult = await pool.query<{
-        trainer_name: string;
-        trainer_email: string;
-        trainer_id: string | null;
-      }>(
-        `SELECT trainer_name, trainer_email, trainer_id
-         FROM course_run_trainer
-         WHERE course_run_id = $1
-         ORDER BY assigned_at ASC`,
-        [run.id]
+      // ── Resolve NRIC for the assigned trainer ────────────────────────────────
+      // Priority: assigned_trainer_id (UUID) → email → full_name partial match
+      const trainerName = run.assigned_trainer_name;
+      const trainerEmail = run.assigned_trainer_email || '';
+      let nric: string | null = null;
+      let resolvedEmail = trainerEmail;
+
+      // 1. Best: look up directly by assigned_trainer_id (avoids name/email mismatch)
+      if (run.assigned_trainer_id) {
+        const idResult = await pool.query<{ nric: string | null; email: string }>(
+          `SELECT tp.nric, au.email
+           FROM trainer_profile tp
+           JOIN app_user au ON au.id = tp.user_id
+           WHERE au.id = $1
+           LIMIT 1`,
+          [run.assigned_trainer_id]
+        );
+        if (idResult.rows.length > 0) {
+          nric = idResult.rows[0].nric || null;
+          resolvedEmail = idResult.rows[0].email || trainerEmail;
+        }
+      }
+
+      // 2. Fallback: by email
+      if (!nric && trainerEmail) {
+        const emailResult = await pool.query<{ nric: string | null; email: string }>(
+          `SELECT tp.nric, au.email
+           FROM trainer_profile tp
+           JOIN app_user au ON au.id = tp.user_id
+           WHERE LOWER(au.email) = LOWER($1)
+              OR LOWER(au.secondary_email) = LOWER($1)
+           LIMIT 1`,
+          [trainerEmail]
+        );
+        if (emailResult.rows.length > 0) {
+          nric = emailResult.rows[0].nric || null;
+          resolvedEmail = emailResult.rows[0].email || trainerEmail;
+        }
+      }
+
+      // 3. Last resort: partial name match (full_name contains the assigned name or vice versa)
+      if (!nric && trainerName) {
+        const nameResult = await pool.query<{ nric: string | null; email: string }>(
+          `SELECT tp.nric, au.email
+           FROM trainer_profile tp
+           JOIN app_user au ON au.id = tp.user_id
+           WHERE LOWER(au.full_name) LIKE '%' || LOWER($1) || '%'
+              OR LOWER($1) LIKE '%' || LOWER(au.full_name) || '%'
+           LIMIT 1`,
+          [trainerName]
+        );
+        if (nameResult.rows.length > 0) {
+          nric = nameResult.rows[0].nric || null;
+          resolvedEmail = nameResult.rows[0].email || resolvedEmail;
+        }
+      }
+
+      const hasNric = !!(nric && nric.trim() && nric.trim().toUpperCase() !== 'NA');
+
+      console.log(
+        `  👤 ${run.course_run_id} | trainer: ${trainerName} | email: ${resolvedEmail} | ` +
+        `NRIC: ${hasNric ? maskNric(nric!) : 'NOT IN DATABASE'}`
       );
 
-      if (trainersResult.rows.length === 0) {
-        console.log(`  ⏭️  ${run.course_run_id} | no local trainers found — skipping`);
+      // Log to DB
+      await pool.query(
+        `INSERT INTO sync_trainer_tpg_log
+           (run_id, course_run_id, course_run_uuid, course_code, course_ref_number,
+            trainer_name, trainer_email, nric_present, nric_masked,
+            status, error_message)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'pending',NULL)`,
+        [
+          runId, run.course_run_id, run.id, run.course_code, run.course_ref_number,
+          trainerName, resolvedEmail,
+          hasNric, hasNric ? maskNric(nric!) : null,
+        ]
+      );
+
+      if (!hasNric) {
+        console.log(`  ⏭️  ${run.course_run_id} | assigned trainer has no valid NRIC — skipping SSG sync`);
+        await pool.query(
+          `UPDATE sync_trainer_tpg_log SET status = 'skipped', error_message = 'No valid NRIC on file'
+           WHERE run_id = $1 AND course_run_id = $2`,
+          [runId, run.course_run_id]
+        );
         skipped++;
         continue;
       }
 
-      // ── Resolve NRIC for each trainer via app_user email → trainer_profile ───
-      const trainerPayloads: RunTrainerEditInfo[] = [];
+      const trainerPayloads: RunTrainerEditInfo[] = [{
+        trainerTypeCode: TrainerType.EXISTING,
+        trainerTypeDescription: 'Existing',
+        trainerIdNumber: nric!.trim(),
+      }];
 
-      for (const t of trainersResult.rows) {
-        let nric: string | null = null;
-        let resolvedEmail = t.trainer_email || '';
-
-        if (resolvedEmail) {
-          // Look up by primary email first, then secondary email
-          const nricResult = await pool.query<{ nric: string | null; email: string }>(
-            `SELECT tp.nric, au.email
-             FROM trainer_profile tp
-             JOIN app_user au ON au.id = tp.user_id
-             WHERE LOWER(au.email) = LOWER($1)
-                OR LOWER(au.secondary_email) = LOWER($1)
-             LIMIT 1`,
-            [resolvedEmail]
-          );
-
-          if (nricResult.rows.length > 0) {
-            nric = nricResult.rows[0].nric || null;
-            resolvedEmail = nricResult.rows[0].email || resolvedEmail;
-          }
-        }
-
-        const hasNric = !!(nric && nric.trim() && nric.trim().toUpperCase() !== 'NA');
-
-        // Log NRIC presence per trainer
-        console.log(
-          `  👤 ${run.course_run_id} | trainer: ${t.trainer_name} | email: ${resolvedEmail} | ` +
-          `NRIC: ${hasNric ? maskNric(nric!) : 'NOT ON FILE'}`
-        );
-
-        // Build SSG trainer payload
-        // For EXISTING trainer type: only send trainerType + idNumber.
-        // SSG fetches name/email from TP Profile using the ID number.
-        const trainerEntry: RunTrainerEditInfo = {
-          trainerTypeCode: TrainerType.EXISTING,
-          trainerTypeDescription: 'Existing',
-          ...(hasNric && {
-            trainerIdNumber: nric!.trim(),
-          }),
-        };
-
-        trainerPayloads.push(trainerEntry);
-
-        // Log to DB per trainer
-        await pool.query(
-          `INSERT INTO sync_trainer_tpg_log
-             (run_id, course_run_id, course_run_uuid, course_code, course_ref_number,
-              trainer_name, trainer_email, nric_present, nric_masked,
-              status, error_message)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'pending',NULL)`,
-          [
-            runId, run.course_run_id, run.id, run.course_code, run.course_ref_number,
-            t.trainer_name, resolvedEmail,
-            hasNric, hasNric ? maskNric(nric!) : null,
-          ]
-        );
-      }
-
-      // ── Call SSG Edit Course Run with trainer-only payload ───────────────────
-      // Uses editCourseRunTrainerOnly to send a minimal payload with only
-      // linkCourseRunTrainer — avoids accidentally overwriting dates/venue/etc.
+      // ── View course run from SSG first, then submit full edit with trainer ───
       const editRes = await courseApi.editCourseRunTrainerOnly(
         run.course_run_id,
         {
@@ -202,11 +220,13 @@ export async function runSyncTrainerToTpg() {
       );
 
       const ssgStatus = editRes.status ?? 0;
-      const ssgResponseText = editRes.error
+      // SSG returns "error": {} on success — only treat as error if it has code/message
+      const hasEditError = editRes.error && (editRes.error.code || editRes.error.message);
+      const ssgResponseText = hasEditError
         ? JSON.stringify(editRes.error)
         : JSON.stringify(editRes.data ?? {});
 
-      if (editRes.error || (ssgStatus !== 200 && ssgStatus !== 201)) {
+      if (hasEditError || (ssgStatus !== 200 && ssgStatus !== 201)) {
         console.error(
           `  ❌ ${run.course_run_id} | SSG edit failed (${ssgStatus}): ${editRes.error?.message || ssgResponseText}`
         );
@@ -216,22 +236,21 @@ export async function runSyncTrainerToTpg() {
           `UPDATE sync_trainer_tpg_log
            SET status = 'error', ssg_status = $1, ssg_response = $2, error_message = $3
            WHERE run_id = $4 AND course_run_id = $5`,
-          [ssgStatus, ssgResponseText, editRes.error?.message || 'SSG edit failed', runId, run.course_run_id]
+          [ssgStatus, ssgResponseText, (hasEditError && editRes.error?.message) || 'SSG edit failed', runId, run.course_run_id]
         );
 
         errors++;
         continue;
       }
 
-      // ── On success: write tpg_assigned_trainer_name/email from first trainer ─
-      const primary = trainersResult.rows[0];
+      // ── On success: write tpg_assigned_trainer_name/email from assigned trainer ─
       await pool.query(
         `UPDATE course_run
          SET tpg_assigned_trainer_name  = $2,
              tpg_assigned_trainer_email = $3,
              updated_at = NOW()
          WHERE id = $1`,
-        [run.id, primary.trainer_name, primary.trainer_email || null]
+        [run.id, trainerName, resolvedEmail || null]
       );
 
       // Update all log rows for this run to 'success'
@@ -242,10 +261,7 @@ export async function runSyncTrainerToTpg() {
         [ssgStatus, ssgResponseText, runId, run.course_run_id]
       );
 
-      console.log(
-        `  ✅ ${run.course_run_id} | synced ${trainerPayloads.length} trainer(s) to SSG: ` +
-        trainerPayloads.map(t => t.trainerName).join(', ')
-      );
+      console.log(`  ✅ ${run.course_run_id} | synced trainer to SSG: ${trainerName} (${resolvedEmail})`);
       successCount++;
 
     } catch (err: any) {

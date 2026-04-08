@@ -216,21 +216,11 @@ export default async function handler(
         cr.digital_attendance_id as "digitalAttendanceId",
         cr.start_date as "startDate",
         cr.end_date as "endDate",
-        COALESCE(
-          NULLIF((SELECT STRING_AGG(trainer_name, ', ') FROM course_run_trainer WHERE course_run_id = cr.id), ''),
-          cr.assigned_trainer_name,
-          'Unassigned'
-        ) as "trainerName",
+        COALESCE(cr.assigned_trainer_name, 'Unassigned') as "trainerName",
         cr.tpg_assigned_trainer_name as "assignedTrainerTpg",
         cr.tpg_assigned_trainer_email as "assignedTrainerTpgEmail",
-        COALESCE(
-          NULLIF((SELECT STRING_AGG(crt.trainer_name, ', ') FROM course_run_trainer crt WHERE crt.course_run_id = cr.id), ''),
-          ''
-        ) as "assignedTrainerLocal",
-        COALESCE(
-          NULLIF((SELECT STRING_AGG(crt.trainer_email, ', ') FROM course_run_trainer crt WHERE crt.course_run_id = cr.id), ''),
-          ''
-        ) as "assignedTrainerLocalEmail",
+        COALESCE(cr.assigned_trainer_name, '') as "assignedTrainerLocal",
+        COALESCE(cr.assigned_trainer_email, '') as "assignedTrainerLocalEmail",
         COALESCE(trainee_count.count, 0) as "numOfTrainee"
       FROM course_run cr
       JOIN course c ON cr.course_id = c.id
