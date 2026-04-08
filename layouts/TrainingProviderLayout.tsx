@@ -194,7 +194,6 @@ const TrainingProviderLayout: React.FC = () => {
           <aside className="hidden md:flex w-64 flex-shrink-0 bg-white dark:bg-slate-800 border-r border-gray-200 dark:border-slate-700">
             <div className="w-full flex flex-col h-full">
               <div className="flex-1"><TrainingProviderSidebar /></div>
-              <p className="px-3 pb-2 text-[10px] text-gray-400 dark:text-gray-300 font-mono">version {appVersion}</p>
             </div>
           </aside>
         )}
