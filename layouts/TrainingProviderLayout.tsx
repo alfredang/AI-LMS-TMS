@@ -4,7 +4,7 @@ import Footer from '../components/Footer';
 import AiChatbot from '../components/AiChatbot';
 import { useAppVersion } from '@hooks/useAppVersion';
 import { useLms } from '../contexts/LmsContext';
-import { View } from '@app-types';
+import { View, AdminPage } from '@app-types';
 import TrainingProviderDashboard from '../components/TrainingProviderDashboard';
 import CourseList from '../components/CourseList';
 import ProfileView from '../components/ProfileView';
@@ -27,12 +27,13 @@ import CourseConfirmationEmailTemplateView from '../components/training-provider
 import FinanceManagementView from '../components/training-provider/FinanceManagementView';
 import TrainingProviderSidebar from '../components/training-provider/TrainingProviderSidebar';
 import SchedulerView from '../components/admin/SchedulerView';
+import { AutomationLogsView, TrainerFolderLogsView, CourseRunDateSyncLogsView, UpcomingCourseRunsLogView, CourseConfirmationEmailLogsView } from '../components/admin/ClassManagementViews';
 import WebhooksView from '../components/training-provider/WebhooksView';
 import SsgApiSummaryView from '../components/training-provider/SsgApiSummaryView';
 import { Card } from '../components/ui/Card';
 
 const TrainingProviderLayout: React.FC = () => {
-  const { currentView, selectedCourse } = useLms();
+  const { currentView, selectedCourse, adminPage, setAdminPage } = useLms();
   const appVersion = useAppVersion();
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isDesktopSidebarCollapsed, setIsDesktopSidebarCollapsed] = useState(false);
@@ -49,6 +50,17 @@ const TrainingProviderLayout: React.FC = () => {
     // If a course is selected, show course detail
     if (selectedCourse) {
       return <CourseDetail />;
+    }
+
+    // Handle scheduler log pages (shared with admin layout)
+    if (currentView === View.Scheduler) {
+      switch (adminPage) {
+        case AdminPage.AutomationLogs: return <AutomationLogsView />;
+        case AdminPage.TrainerFolderLogs: return <TrainerFolderLogsView />;
+        case AdminPage.CourseRunDateSyncLogs: return <CourseRunDateSyncLogsView />;
+        case AdminPage.UpcomingCourseRunsLog: return <UpcomingCourseRunsLogView />;
+        case AdminPage.CourseConfirmationEmailLogs: return <CourseConfirmationEmailLogsView />;
+      }
     }
 
     switch (currentView) {
