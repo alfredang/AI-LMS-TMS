@@ -42,6 +42,8 @@ const AdminManagementView: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [filterRole, setFilterRole] = useState<string>('All');
+  const [filterStatus, setFilterStatus] = useState<string>('All');
 
   // Edit modal state
   const [editingAdmin, setEditingAdmin] = useState<AdminAccount | null>(null);
@@ -81,12 +83,12 @@ const AdminManagementView: React.FC = () => {
   }, []);
 
   const filteredAdmins = admins.filter(admin => {
-    if (!searchQuery) return true;
-    const q = searchQuery.toLowerCase();
-    return (
-      admin.fullName?.toLowerCase().includes(q) ||
-      admin.email?.toLowerCase().includes(q)
-    );
+    const matchesSearch = !searchQuery ||
+      admin.fullName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      admin.email?.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesRole = filterRole === 'All' || admin.roles.includes(filterRole);
+    const matchesStatus = filterStatus === 'All' || admin.accountStatus === filterStatus;
+    return matchesSearch && matchesRole && matchesStatus;
   });
 
   const formatDate = (dateStr: string) => {
@@ -223,8 +225,8 @@ const AdminManagementView: React.FC = () => {
       </div>
 
       <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
-        {/* Search */}
-        <div className="mb-6">
+        {/* Search & Filters */}
+        <div className="mb-6 space-y-4">
           <div className="flex flex-col sm:flex-row gap-4">
             <div className="flex-1 relative">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -240,6 +242,33 @@ const AdminManagementView: React.FC = () => {
                 className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400"
               />
             </div>
+            <select
+              value={filterRole}
+              onChange={(e) => setFilterRole(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+            >
+              <option value="All">All Roles</option>
+              {ALL_ROLES.map(role => (
+                <option key={role} value={role}>{role}</option>
+              ))}
+            </select>
+            <select
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+            >
+              <option value="All">All Status</option>
+              <option value="active">Active</option>
+              <option value="disabled">Disabled</option>
+            </select>
+            {(searchQuery || filterRole !== 'All' || filterStatus !== 'All') && (
+              <button
+                onClick={() => { setSearchQuery(''); setFilterRole('All'); setFilterStatus('All'); }}
+                className="px-3 py-2 text-sm text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+              >
+                Clear
+              </button>
+            )}
           </div>
         </div>
 
@@ -258,7 +287,7 @@ const AdminManagementView: React.FC = () => {
             <Icon name={IconName.MyAccount} className="w-12 h-12 text-gray-400 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">No admin accounts found</h3>
             <p className="text-gray-500 dark:text-gray-400">
-              {searchQuery ? 'No admins match your search.' : 'No admin accounts exist.'}
+              {(searchQuery || filterRole !== 'All' || filterStatus !== 'All') ? 'No admins match your filters. Try adjusting the search or filters.' : 'No admin accounts exist.'}
             </p>
           </div>
         ) : (
