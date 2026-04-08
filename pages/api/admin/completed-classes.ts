@@ -139,6 +139,13 @@ export default async function handler(
       paramCounter++;
     }
 
+    const courseType = req.query.courseType;
+    if (courseType === 'WSQ' || courseType === 'IBF' || courseType === 'Non-WSQ') {
+      whereConditions.push(`c.course_type = $${paramCounter}`);
+      queryParams.push(courseType);
+      paramCounter++;
+    }
+
     const whereClause = whereConditions.join(' AND ');
 
     // Statistics queries (filtered)

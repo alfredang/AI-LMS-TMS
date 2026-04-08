@@ -221,6 +221,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       paramIndex++;
     }
 
+    const courseType = req.query.courseType;
+    if (courseType === 'WSQ' || courseType === 'IBF' || courseType === 'Non-WSQ') {
+      filters.push(`c.course_type = $${paramIndex}`);
+      params.push(courseType);
+      paramIndex++;
+    }
+
     if (isValidDate(startDateFrom)) {
       filters.push(`cr.start_date >= $${paramIndex}`);
       params.push(parseDDMMYYYY(startDateFrom as string));
@@ -249,6 +256,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           cr.course_run_id,
           c.title AS course_title,
           c.course_code,
+          c.course_type,
           c.trainers_list,
           cr.class_status,
           cr.digital_attendance_id,
@@ -265,6 +273,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           cr.course_run_id,
           c.title,
           c.course_code,
+          c.course_type,
           c.trainers_list,
           cr.class_status,
           cr.digital_attendance_id,
@@ -508,6 +517,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         latestInvitationTrainer,
         numOfTrainee: parseInt(row.num_of_trainee || '0', 10),
         trainersList: row.trainers_list || '',
+        courseType: row.course_type || '',
         classType: row.class_type || 'Physical',
         virtualMeetingLink: row.virtual_meeting_link || '',
         modeOfTraining: '',

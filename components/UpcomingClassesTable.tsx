@@ -92,6 +92,7 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
     const [selectedTrainer, setSelectedTrainer] = useState('');
     const [selectedClassStatus, setSelectedClassStatus] = useState<'all' | 'Confirmed' | 'Pending'>('all');
     const [selectedClassType, setSelectedClassType] = useState<'all' | 'Physical' | 'Virtual' | 'Hybrid'>('all');
+    const [selectedCourseType, setSelectedCourseType] = useState<'all' | 'WSQ' | 'IBF' | 'Non-WSQ'>('all');
     const [startDateFrom, setStartDateFrom] = useState('');
     const [endDateUntil, setEndDateUntil] = useState('');
 
@@ -181,6 +182,7 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
             if (selectedTrainer) params.append('trainer', selectedTrainer);
             if (selectedClassStatus !== 'all') params.append('classStatus', selectedClassStatus);
             if (selectedClassType !== 'all') params.append('classType', selectedClassType);
+            if (selectedCourseType !== 'all') params.append('courseType', selectedCourseType);
             if (debouncedStartDate) params.append('startDateFrom', debouncedStartDate);
             if (debouncedEndDate) params.append('endDateUntil', debouncedEndDate);
 
@@ -237,12 +239,12 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
     // Reset page immediately for non-debounced filters (dropdowns)
     useEffect(() => {
         setCurrentPage(0);
-    }, [selectedTrainer, selectedClassStatus, selectedClassType]);
+    }, [selectedTrainer, selectedClassStatus, selectedClassType, selectedCourseType]);
 
     // Fetch data when debounced filters or pagination change
     useEffect(() => {
         fetchUpcomingClasses();
-    }, [currentPage, debouncedSearch, debouncedCourseTitle, debouncedCourseCode, debouncedCourseRunId, selectedTrainer, selectedClassStatus, selectedClassType, debouncedStartDate, debouncedEndDate]);
+    }, [currentPage, debouncedSearch, debouncedCourseTitle, debouncedCourseCode, debouncedCourseRunId, selectedTrainer, selectedClassStatus, selectedClassType, selectedCourseType, debouncedStartDate, debouncedEndDate]);
 
     // Date formatting function
     const formatDateInput = (value: string) => {
@@ -274,6 +276,7 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
         setSelectedTrainer('');
         setSelectedClassStatus('all');
         setSelectedClassType('all');
+        setSelectedCourseType('all');
         setStartDateFrom('');
         setEndDateUntil('');
         setCurrentPage(0);
@@ -563,6 +566,21 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                             </select>
                                         </div>
 
+                                        {/* Course Type */}
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Course Type</label>
+                                            <select
+                                                value={selectedCourseType}
+                                                onChange={(e) => setSelectedCourseType(e.target.value as 'all' | 'WSQ' | 'IBF' | 'Non-WSQ')}
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                            >
+                                                <option value="all">All</option>
+                                                <option value="WSQ">WSQ</option>
+                                                <option value="IBF">IBF</option>
+                                                <option value="Non-WSQ">Non-WSQ</option>
+                                            </select>
+                                        </div>
+
                                         {/* Start Date From */}
                                         <div>
                                             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Start Date (From)</label>
@@ -611,7 +629,7 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                         <Icon name={IconName.BookOpen} className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                         <p className="text-gray-500 text-lg">No upcoming classes found</p>
                         <p className="text-gray-400 text-sm mt-2">
-                            {searchQuery || courseTitle || courseCode || courseRunId || selectedTrainer || selectedClassStatus !== 'all' || selectedClassType !== 'all' || startDateFrom || endDateUntil
+                            {searchQuery || courseTitle || courseCode || courseRunId || selectedTrainer || selectedClassStatus !== 'all' || selectedClassType !== 'all' || selectedCourseType !== 'all' || startDateFrom || endDateUntil
                                 ? 'Try adjusting your search filters'
                                 : 'No classes are scheduled for the future'}
                         </p>
