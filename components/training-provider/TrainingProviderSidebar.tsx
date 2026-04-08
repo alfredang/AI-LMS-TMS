@@ -17,13 +17,16 @@ const TrainingProviderSidebar: React.FC<TrainingProviderSidebarProps> = ({ onNav
     const [workflowsOpen, setWorkflowsOpen] = useState(currentView === View.WorkflowGuides);
     const [usefulLinksOpen, setUsefulLinksOpen] = useState(false);
 
-    const navItems = [
+    const navItemsTop = [
         { view: View.Dashboard, label: 'Training Dashboard', icon: IconName.Dashboard },
         { view: View.Courses, label: 'Course Management', icon: IconName.Courses },
         { view: View.UserManagement, label: 'User Management', icon: IconName.Users },
         { view: View.AdminManagement, label: 'Role Management', icon: IconName.Admin },
         { view: View.FinanceManagement, label: 'Finance Management', icon: IconName.DollarSign },
         { view: View.Profile, label: 'Company Setting', icon: IconName.MyAccount },
+    ];
+
+    const navItemsBottom = [
         { view: View.SsgApiSummary, label: 'SSG API Summary', icon: IconName.ClipboardCheck },
         { view: View.ApiEndpoints, label: 'API Endpoints', icon: IconName.Link },
         { view: View.Scheduler, label: 'Task Scheduler', icon: IconName.Calendar },
@@ -61,22 +64,14 @@ const TrainingProviderSidebar: React.FC<TrainingProviderSidebarProps> = ({ onNav
 
     return (
         <nav className="space-y-2 p-4 bg-white dark:bg-slate-800 text-gray-900 dark:text-white h-full">
-            {navItems.map((item) => (
-                <a
-                    key={item.view}
-                    href="#"
-                    onClick={(e) => {
-                        e.preventDefault();
-                        handleClick(item.view);
-                    }}
-                    className={linkClass(item.view)}
-                >
+            {navItemsTop.map((item) => (
+                <a key={item.view} href="#" onClick={(e) => { e.preventDefault(); handleClick(item.view); }} className={linkClass(item.view)}>
                     <Icon name={item.icon} className="w-5 h-5" />
                     <span>{item.label}</span>
                 </a>
             ))}
 
-            {/* Workflow Guides - Collapsible */}
+            {/* Workflow Guides - Collapsible (after Company Setting) */}
             <div>
                 <button
                     onClick={() => { setWorkflowsOpen(!workflowsOpen); handleClick(View.WorkflowGuides); }}
@@ -110,6 +105,13 @@ const TrainingProviderSidebar: React.FC<TrainingProviderSidebarProps> = ({ onNav
                     </div>
                 )}
             </div>
+
+            {navItemsBottom.map((item) => (
+                <a key={item.view} href="#" onClick={(e) => { e.preventDefault(); handleClick(item.view); }} className={linkClass(item.view)}>
+                    <Icon name={item.icon} className="w-5 h-5" />
+                    <span>{item.label}</span>
+                </a>
+            ))}
 
             {/* Templates Section - Collapsible */}
             <div>
