@@ -41,14 +41,14 @@ const TrainingHoursPage: React.FC = () => {
     }, [currentUser?.id]);
 
     const completedCourses = useMemo(() => {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
+        const todayStr = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+        const cutoffStr = '2026-01-01';
         return courses
             .filter(c => {
                 if (!c.endDate) return false;
-                const end = new Date(c.endDate);
-                end.setHours(0, 0, 0, 0);
-                return end < today;
+                const endStr = new Date(c.endDate).toISOString().slice(0, 10);
+                const startStr = c.startDate ? new Date(c.startDate).toISOString().slice(0, 10) : endStr;
+                return endStr <= todayStr && startStr >= cutoffStr;
             })
             .sort((a, b) => new Date(b.endDate).getTime() - new Date(a.endDate).getTime());
     }, [courses]);
