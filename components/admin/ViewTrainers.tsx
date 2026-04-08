@@ -159,34 +159,43 @@ const ViewTrainers: React.FC = () => {
     }
   };
 
-  // Sync single trainer image from LinkedIn via Playwright
+  // Sync single trainer image: prompt for LinkedIn image URL, download, upload to Drive
   const handleSyncLinkedInImage = async (trainer: Trainer) => {
-    if (!trainer.linkedin_url) {
-      alert('This trainer has no LinkedIn profile URL.');
-      return;
+    // Open LinkedIn profile so admin can copy the image URL
+    if (trainer.linkedin_url) {
+      window.open(trainer.linkedin_url.startsWith('http') ? trainer.linkedin_url : `https://${trainer.linkedin_url}`, '_blank');
     }
+
+    const imageUrl = prompt(
+      `Paste the LinkedIn profile image URL for ${trainer.trainer_name}:\n\n` +
+      `1. Right-click the profile photo on LinkedIn\n` +
+      `2. Select "Copy image address"\n` +
+      `3. Paste below:`
+    );
+
+    if (!imageUrl || !imageUrl.trim()) return;
+
     setUploadingImageFor(trainer.user_id);
     setSyncMessage(null);
     try {
-      const res = await fetch('/api/admin/sync-trainer-images', {
+      // Download the image via our proxy API
+      const res = await fetch('/api/admin/download-linkedin-image', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ trainerIds: [trainer.user_id] }),
+        body: JSON.stringify({
+          userId: trainer.user_id,
+          trainerName: trainer.trainer_name,
+          imageUrl: imageUrl.trim(),
+        }),
       });
       const data = await res.json();
-      if (data.success && data.summary.updated > 0) {
-        const updatedUrl = data.results.find((r: any) => r.status === 'updated')?.imageUrl;
-        if (updatedUrl) {
-          setTrainers(prev => prev.map(t =>
-            t.user_id === trainer.user_id ? { ...t, profile_picture: updatedUrl } : t
-          ));
-        }
-        setSyncMessage({ type: 'success', text: `Profile image synced for ${trainer.trainer_name}` });
+      if (data.success) {
+        setTrainers(prev => prev.map(t =>
+          t.user_id === trainer.user_id ? { ...t, profile_picture: data.data.fileUrl } : t
+        ));
+        setSyncMessage({ type: 'success', text: `Profile image saved to Google Drive for ${trainer.trainer_name}` });
       } else {
-        const reason = data.results?.[0]?.status === 'no_image_found'
-          ? 'No profile image found on LinkedIn page.'
-          : (data.results?.[0]?.error || 'No image found.');
-        setSyncMessage({ type: 'error', text: `${trainer.trainer_name}: ${reason}` });
+        setSyncMessage({ type: 'error', text: data.error || 'Failed to download image.' });
       }
     } catch {
       setSyncMessage({ type: 'error', text: 'Failed to sync image.' });
