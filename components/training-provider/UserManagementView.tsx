@@ -393,8 +393,8 @@ const UserManagementView: React.FC = () => {
     // Handle Add User
     const handleAddUser = async () => {
         // Basic validation
-        if (!newUser.full_name.trim() || !newUser.email.trim() || !newUser.telephone.trim()) {
-            alert('Please fill in all required fields (Name, Email, Telephone).');
+        if (!newUser.full_name.trim() || !newUser.email.trim()) {
+            alert('Please fill in all required fields (Name, Email).');
             return;
         }
         if (newUser.roles.length === 0) {
@@ -1140,7 +1140,7 @@ const UserManagementView: React.FC = () => {
                             {/* Telephone */}
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                    Telephone Number <span className="text-red-500">*</span>
+                                    Telephone Number
                                 </label>
                                 <input
                                     type="tel"

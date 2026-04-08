@@ -208,6 +208,7 @@ export default async function handler(
     // Get the actual ongoing classes data
     const dataQuery = `
       SELECT
+        cr.id as "id",
         cr.course_run_id as "courseRunId",
         c.title as "courseTitle",
         c.course_code as "courseCode",
