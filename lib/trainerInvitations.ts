@@ -21,6 +21,45 @@ Please review this invitation and choose one of the options below:
 Warm regards
 {COMPANY_SHORT_NAME}`;
 
+export const DEFAULT_TRAINER_ACCEPT_SUBJECT = 'Thank You for Accepting - {COURSE_TITLE} ({COURSE_RUN_ID})';
+
+export const DEFAULT_TRAINER_ACCEPT_BODY = `Hi {TRAINER_NAME},
+
+Thank you for confirming your availability for the upcoming training session. We appreciate your commitment and support.
+
+Course Schedule Confirmation
+Course Title: {COURSE_TITLE}
+Course Code: {COURSE_CODE}
+Course Run ID: {COURSE_RUN_ID}
+Start Date: {START_DATE}
+End Date: {END_DATE}
+
+We will send you a Google Calendar invite with the confirmed training details shortly. Please kindly ensure you accept the RSVP on Google Calendar to officially confirm your participation.
+
+A reminder will be sent closer to the course date to keep you updated.
+
+Thank you once again for partnering with us. We look forward to working with you to make this class a success!
+
+Best regards,
+Support Team
+{COMPANY_SHORT_NAME}
+Tel: 61000613 | Email: support@tertiaryinfotech.com | WhatsApp: https://wa.me/6561000613`;
+
+export const DEFAULT_TRAINER_DECLINE_SUBJECT = 'Thank You for Your Response - {COURSE_TITLE} ({COURSE_RUN_ID})';
+
+export const DEFAULT_TRAINER_DECLINE_BODY = `Hi {TRAINER_NAME},
+
+Thank you for letting us know. We completely understand and truly appreciate your response.
+
+While we're sorry to miss you for this session, we sincerely look forward to working with you on future training opportunities.
+
+Thank you once again for your support and collaboration. We value your partnership and hope to connect again soon.
+
+Best regards,
+Support Team
+{COMPANY_SHORT_NAME}
+Tel: 61000613 | Email: support@tertiaryinfotech.com | WhatsApp: https://wa.me/6561000613`;
+
 export function normalizeTrainerName(name: string | null | undefined) {
   return String(name || '')
     .replace(/\[[^\]]+\]/g, '')
@@ -56,6 +95,10 @@ export async function ensureTpgTrainerColumns(query: (sql: string, params?: any[
 export async function ensureTrainerInvitationTemplateColumns(query: (sql: string, params?: any[]) => Promise<any>) {
   await query(`ALTER TABLE training_provider ADD COLUMN IF NOT EXISTS trainer_invitation_email_subject TEXT`);
   await query(`ALTER TABLE training_provider ADD COLUMN IF NOT EXISTS trainer_invitation_email_body TEXT`);
+  await query(`ALTER TABLE training_provider ADD COLUMN IF NOT EXISTS trainer_accept_email_subject TEXT`);
+  await query(`ALTER TABLE training_provider ADD COLUMN IF NOT EXISTS trainer_accept_email_body TEXT`);
+  await query(`ALTER TABLE training_provider ADD COLUMN IF NOT EXISTS trainer_decline_email_subject TEXT`);
+  await query(`ALTER TABLE training_provider ADD COLUMN IF NOT EXISTS trainer_decline_email_body TEXT`);
 }
 
 export async function ensureTrainerInvitationTable(query: (sql: string, params?: any[]) => Promise<any>) {
