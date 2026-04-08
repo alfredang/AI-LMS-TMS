@@ -14,6 +14,7 @@ const TrainingProviderSidebar: React.FC<TrainingProviderSidebarProps> = ({ onNav
 
     const templateViews = [View.OtpEmailTemplate, View.CertificateEmailTemplate, View.FeedbackEmailTemplate, View.PasswordResetEmailTemplate, View.TrainerInvitationEmailTemplate, View.TrainerResponseEmailTemplates, View.FinalCourseConfirmationEmailTemplate, View.CourseConfirmationEmailTemplate, View.PrivacyPolicy, View.AcceptableUsePolicy];
     const [templatesOpen, setTemplatesOpen] = useState(templateViews.includes(currentView));
+    const [workflowsOpen, setWorkflowsOpen] = useState(currentView === View.WorkflowGuides);
     const [usefulLinksOpen, setUsefulLinksOpen] = useState(false);
 
     const navItems = [
@@ -28,7 +29,6 @@ const TrainingProviderSidebar: React.FC<TrainingProviderSidebarProps> = ({ onNav
         { view: View.Documents, label: 'Documents', icon: IconName.FileText },
         { view: View.Scheduler, label: 'Task Scheduler', icon: IconName.Calendar },
         { view: View.Webhooks, label: 'Webhooks', icon: IconName.Link },
-        { view: View.WorkflowGuides, label: 'Workflow Guides', icon: IconName.BookOpen },
     ];
 
     const templateItems = [
@@ -76,6 +76,41 @@ const TrainingProviderSidebar: React.FC<TrainingProviderSidebarProps> = ({ onNav
                     <span>{item.label}</span>
                 </a>
             ))}
+
+            {/* Workflow Guides - Collapsible */}
+            <div>
+                <button
+                    onClick={() => { setWorkflowsOpen(!workflowsOpen); handleClick(View.WorkflowGuides); }}
+                    className={`flex items-center justify-between w-full rounded-md px-3 py-2.5 text-sm font-medium transition-colors ${activeView === View.WorkflowGuides ? 'bg-blue-50 text-blue-600 dark:bg-blue-600/20 dark:text-blue-400' : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-slate-700 dark:hover:text-white'}`}
+                >
+                    <div className="flex items-center gap-3">
+                        <Icon name={IconName.BookOpen} className="w-5 h-5" />
+                        <span>Workflow Guides</span>
+                    </div>
+                    <Icon name={IconName.ChevronDown} className={`w-4 h-4 transition-transform ${workflowsOpen ? 'rotate-180' : ''}`} />
+                </button>
+                {workflowsOpen && (
+                    <div className="ml-4 mt-1 space-y-1">
+                        {[
+                            { id: 'trainer-invitation', label: 'Trainer Invitation', icon: '📨' },
+                            { id: 'certification', label: 'Certification', icon: '🎓' },
+                            { id: 'proforma-invoice', label: 'Proforma Invoice', icon: '🧾' },
+                            { id: 'lesson-delivery', label: 'Lesson Delivery', icon: '📚' },
+                            { id: 'assessment', label: 'Assessment', icon: '📝' },
+                        ].map(item => (
+                            <a
+                                key={item.id}
+                                href="#"
+                                onClick={(e) => { e.preventDefault(); handleClick(View.WorkflowGuides); }}
+                                className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-slate-700 dark:hover:text-white transition-colors"
+                            >
+                                <span className="text-sm">{item.icon}</span>
+                                <span>{item.label}</span>
+                            </a>
+                        ))}
+                    </div>
+                )}
+            </div>
 
             {/* Templates Section - Collapsible */}
             <div>
