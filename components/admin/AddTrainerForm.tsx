@@ -39,6 +39,8 @@ const AddTrainerForm: React.FC<AddTrainerFormProps> = ({ onCancel, onSuccess }) 
   // Email validation states
   const [isCheckingEmail, setIsCheckingEmail] = useState(false);
   const [emailExists, setEmailExists] = useState(false);
+  const [isAlreadyTrainer, setIsAlreadyTrainer] = useState(false);
+  const [existingUserInfo, setExistingUserInfo] = useState<{ fullName: string; roles: string[] } | null>(null);
   const [emailError, setEmailError] = useState<string | null>(null);
   
   const defaultPassword = 'Tertiary888';
@@ -52,6 +54,8 @@ const AddTrainerForm: React.FC<AddTrainerFormProps> = ({ onCancel, onSuccess }) 
     if (name === 'email') {
       setEmailError(null);
       setEmailExists(false);
+      setIsAlreadyTrainer(false);
+      setExistingUserInfo(null);
     }
   };
 
@@ -75,9 +79,22 @@ const AddTrainerForm: React.FC<AddTrainerFormProps> = ({ onCancel, onSuccess }) 
       if (response.ok && result.success) {
         if (result.data.exists) {
           setEmailExists(true);
-          setEmailError('This email address is already registered in the system');
+          if (result.data.isTrainer) {
+            setIsAlreadyTrainer(true);
+            setEmailError('This user is already registered as a trainer');
+          } else {
+            // User exists but is NOT a trainer — allow promotion
+            setIsAlreadyTrainer(false);
+            setExistingUserInfo({
+              fullName: result.data.fullName || '',
+              roles: result.data.roles || []
+            });
+            setEmailError(null);
+          }
         } else {
           setEmailExists(false);
+          setIsAlreadyTrainer(false);
+          setExistingUserInfo(null);
           setEmailError(null);
         }
       } else {
@@ -171,9 +188,9 @@ const AddTrainerForm: React.FC<AddTrainerFormProps> = ({ onCancel, onSuccess }) 
       return false;
     }
 
-    // Check if email exists
-    if (emailExists) {
-      alert('This email address is already registered in the system. Please use a different email.');
+    // Only block if user is already a trainer
+    if (isAlreadyTrainer) {
+      alert('This user is already registered as a trainer.');
       return false;
     }
 
@@ -316,7 +333,7 @@ const AddTrainerForm: React.FC<AddTrainerFormProps> = ({ onCancel, onSuccess }) 
                   value={formData.email}
                   onChange={handleChange}
                   onBlur={handleEmailBlur}
-                  className={`${inputClasses} ${emailError ? 'border-red-500 focus:ring-red-500' : emailExists === false && formData.email ? 'border-green-500 focus:ring-green-500' : ''}`}
+                  className={`${inputClasses} ${emailError ? 'border-red-500 focus:ring-red-500' : (emailExists && !isAlreadyTrainer && formData.email) ? 'border-blue-500 focus:ring-blue-500' : (!emailExists && formData.email && !isCheckingEmail) ? 'border-green-500 focus:ring-green-500' : ''}`}
                   required
                 />
                 {isCheckingEmail && (
@@ -324,9 +341,14 @@ const AddTrainerForm: React.FC<AddTrainerFormProps> = ({ onCancel, onSuccess }) 
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
                   </div>
                 )}
-                {!isCheckingEmail && emailExists === false && formData.email && (
+                {!isCheckingEmail && !emailExists && formData.email && (
                   <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
                     <Icon name={IconName.Check} className="w-4 h-4 text-green-500" />
+                  </div>
+                )}
+                {!isCheckingEmail && emailExists && !isAlreadyTrainer && formData.email && (
+                  <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
+                    <Icon name={IconName.Check} className="w-4 h-4 text-blue-500" />
                   </div>
                 )}
                 {emailError && (
@@ -338,7 +360,12 @@ const AddTrainerForm: React.FC<AddTrainerFormProps> = ({ onCancel, onSuccess }) 
               {emailError && (
                 <p className="mt-1 text-sm text-red-600">{emailError}</p>
               )}
-              {!emailError && emailExists === false && formData.email && (
+              {!emailError && emailExists && !isAlreadyTrainer && existingUserInfo && (
+                <p className="mt-1 text-sm text-blue-600">
+                  ℹ️ Account found for <strong>{existingUserInfo.fullName}</strong> (current role: {existingUserInfo.roles.join(', ')}). The Trainer role will be added to this account.
+                </p>
+              )}
+              {!emailError && !emailExists && formData.email && !isCheckingEmail && (
                 <p className="mt-1 text-sm text-green-600">✓ Email is available</p>
               )}
             </div>
@@ -467,7 +494,7 @@ const AddTrainerForm: React.FC<AddTrainerFormProps> = ({ onCancel, onSuccess }) 
             <Button 
               variant="primary" 
               onClick={handleSubmit}
-              disabled={isSubmitting || emailExists || isCheckingEmail}
+              disabled={isSubmitting || isAlreadyTrainer || isCheckingEmail}
             >
               {isSubmitting ? (
                 <>

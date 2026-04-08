@@ -108,7 +108,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // ── Check which IDs already exist in the DB (with enrollments) ──
       const existingResult = await pool.query(
         `SELECT cr.course_run_id AS ssg_run_id, c.title AS course_title,
-                (SELECT COUNT(*) FROM enrollment e WHERE e.course_run_id = cr.id) AS enrol_count
+                (SELECT COUNT(*) FROM enrollment e WHERE e.course_run_id = cr.id AND e.enrolment_status IS DISTINCT FROM 'Admin Removed') AS enrol_count
          FROM course_run cr
          JOIN course c ON c.id = cr.course_id
          WHERE cr.course_run_id = ANY($1)`,

@@ -49,8 +49,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         [userId, courseRunUuid]
       );
       if (existing.rows.length > 0) {
-        if (existing.rows[0].enrolment_status === 'Admin Removed') {
-          // Re-activate the soft-deleted enrollment
+        const existingStatus = existing.rows[0].enrolment_status;
+        if (existingStatus === 'Admin Removed' || !existingStatus) {
+          // Re-activate the soft-deleted or ghost (NULL status) enrollment
           await client.query(
             `UPDATE enrollment SET enrolment_status = 'Confirmed', updated_at = NOW() WHERE id = $1`,
             [existing.rows[0].id]
@@ -93,8 +94,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             [resolvedUserId, courseRunUuid]
           );
           if (existingEnroll.rows.length > 0) {
-            if (existingEnroll.rows[0].enrolment_status === 'Admin Removed') {
-              // Re-activate the soft-deleted enrollment
+            const existingStatus = existingEnroll.rows[0].enrolment_status;
+            if (existingStatus === 'Admin Removed' || !existingStatus) {
+              // Re-activate the soft-deleted or ghost (NULL status) enrollment
               await client.query(
                 `UPDATE enrollment SET enrolment_status = 'Confirmed', updated_at = NOW() WHERE id = $1`,
                 [existingEnroll.rows[0].id]
@@ -150,8 +152,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Create enrollment (skip if we just restored an Admin Removed row)
     if (!enrollmentRestored) {
       await client.query(
-        `INSERT INTO enrollment (id, user_id, course_id, course_run_id, progress_percent, payment_status, assessment_status, enrolment_date, email, nric, created_at, updated_at)
-         VALUES (gen_random_uuid(), $1, $2, $3, 0, 'Unpaid', 'Pending', CURRENT_DATE, $4, $5, NOW(), NOW())`,
+        `INSERT INTO enrollment (id, user_id, course_id, course_run_id, progress_percent, payment_status, assessment_status, enrolment_status, enrolment_date, email, nric, created_at, updated_at)
+         VALUES (gen_random_uuid(), $1, $2, $3, 0, 'Unpaid', 'Pending', 'Confirmed', CURRENT_DATE, $4, $5, NOW(), NOW())`,
         [resolvedUserId, courseId, courseRunUuid, userEmail || null, userNric || null]
       );
     }

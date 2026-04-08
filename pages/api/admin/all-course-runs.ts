@@ -50,6 +50,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       LEFT JOIN (
         SELECT course_run_id, COUNT(*) AS enrollment_count
         FROM enrollment
+        WHERE enrolment_status IS DISTINCT FROM 'Admin Removed'
         GROUP BY course_run_id
       ) ec ON ec.course_run_id = cr.id
       LEFT JOIN (
