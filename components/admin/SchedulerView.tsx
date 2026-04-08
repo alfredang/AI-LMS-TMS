@@ -24,7 +24,7 @@ interface SchedulerTask {
 const EMAIL_TEMPLATE_TASKS = ['auto_send_course_confirmation', 'auto_send_class_confirmation', 'auto_create_certificates'];
 
 // Tasks that support days-in-advance setting
-const DAYS_IN_ADVANCE_TASKS = ['auto_send_course_confirmation', 'auto_send_class_confirmation'];
+const DAYS_IN_ADVANCE_TASKS = ['auto_send_course_confirmation', 'auto_send_class_confirmation', 'sync_google_calendar'];
 
 const EMAIL_TEMPLATES: { value: string; label: string }[] = [
     { value: 'final_course_confirmation', label: 'Final Class Confirm Email' },
@@ -351,7 +351,7 @@ export const SchedulerView: React.FC = () => {
 
     return (
         <div>
-            <h2 className="text-3xl font-bold mb-2 dark:text-white">Scheduler</h2>
+            <h2 className="text-3xl font-bold mb-2 dark:text-white">Task Scheduler</h2>
             <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
                 Manage automated tasks and their schedules. All times are in Singapore Time (SGT).
             </p>
@@ -487,10 +487,14 @@ export const SchedulerView: React.FC = () => {
                                         }
                                     };
 
+                                    const isCalendarSync = task.id === 'sync_google_calendar';
+                                    const defaultDays = isCalendarSync ? 21 : 3;
+                                    const maxDays = isCalendarSync ? 90 : 30;
+
                                     const handleDaysChange = async (delta: number) => {
-                                        const current = task.days_in_advance ?? 3;
+                                        const current = task.days_in_advance ?? defaultDays;
                                         const newVal = current + delta;
-                                        if (newVal < 1 || newVal > 30) return;
+                                        if (newVal < 1 || newVal > maxDays) return;
                                         try {
                                             const res = await fetch('/api/admin/scheduler', {
                                                 method: 'PUT',
@@ -557,10 +561,10 @@ export const SchedulerView: React.FC = () => {
                                                     <div className="flex items-center gap-2">
                                                         <div className="flex items-center bg-gray-100 dark:bg-gray-700 rounded-lg p-1 gap-1">
                                                             <button onClick={() => handleDaysChange(-1)} className="w-7 h-7 flex items-center justify-center rounded-md bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 font-bold transition-colors">−</button>
-                                                            <span className="w-8 text-center text-sm font-bold text-gray-900 dark:text-white">{task.days_in_advance ?? 3}</span>
+                                                            <span className="w-8 text-center text-sm font-bold text-gray-900 dark:text-white">{task.days_in_advance ?? defaultDays}</span>
                                                             <button onClick={() => handleDaysChange(1)} className="w-7 h-7 flex items-center justify-center rounded-md bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 font-bold transition-colors">+</button>
                                                         </div>
-                                                        <span className="text-xs text-gray-500 dark:text-gray-400">day{(task.days_in_advance ?? 3) !== 1 ? 's' : ''} before class</span>
+                                                        <span className="text-xs text-gray-500 dark:text-gray-400">day{(task.days_in_advance ?? defaultDays) !== 1 ? 's' : ''} {isCalendarSync ? 'ahead' : 'before class'}</span>
                                                     </div>
                                                 </div>
                                             )}

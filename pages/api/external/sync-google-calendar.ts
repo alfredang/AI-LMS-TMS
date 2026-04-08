@@ -6,9 +6,9 @@ import { getGoogleCredentials } from '@lib/google-auth/googleAuth';
 /**
  * POST /api/external/sync-google-calendar
  *
- * Reads events from the training provider's Google Calendar for the next 21 days.
- * For events with [VIRTUAL] in the title:
- *   - Sets class_type = 'Virtual' on the matching course_run
+ * Reads events from the training provider's Google Calendar (configurable days ahead, default 21).
+ * For events with [VIRTUAL] or [HYBRID] in the title:
+ *   - Sets class_type to Virtual or Hybrid on the matching course_run
  *   - Extracts and stores the Google Meet link
  *
  * Matching: event summary is matched to course_run by finding the course title
@@ -17,7 +17,7 @@ import { getGoogleCredentials } from '@lib/google-auth/googleAuth';
  * Runs daily at 1:00 AM SGT via scheduler.
  */
 
-const LOOK_AHEAD_DAYS = 21;
+const DEFAULT_LOOK_AHEAD_DAYS = 21;
 
 // Ensure the virtual_meeting_link column exists
 async function ensureColumns() {
@@ -26,6 +26,17 @@ async function ensureColumns() {
 
 export async function runSyncGoogleCalendar(options?: { startDate?: string; endDate?: string }) {
   await ensureColumns();
+
+  // Read configurable look-ahead days from scheduler_config
+  let lookAheadDays = DEFAULT_LOOK_AHEAD_DAYS;
+  try {
+    const configRes = await pool.query(
+      `SELECT days_in_advance FROM scheduler_config WHERE id = 'sync_google_calendar' LIMIT 1`
+    );
+    if (configRes.rows[0]?.days_in_advance != null) {
+      lookAheadDays = configRes.rows[0].days_in_advance;
+    }
+  } catch { /* table or column may not exist yet */ }
 
   const credentials = await getGoogleCredentials(pool);
 
@@ -70,7 +81,7 @@ export async function runSyncGoogleCalendar(options?: { startDate?: string; endD
   // Fetch events for the date range
   const now = new Date();
   const startDate = options?.startDate ? new Date(options.startDate) : now;
-  const futureDate = options?.endDate ? new Date(options.endDate + 'T23:59:59') : new Date(startDate.getTime() + LOOK_AHEAD_DAYS * 24 * 60 * 60 * 1000);
+  const futureDate = options?.endDate ? new Date(options.endDate + 'T23:59:59') : new Date(startDate.getTime() + lookAheadDays * 24 * 60 * 60 * 1000);
 
   const eventsResponse = await calendar.events.list({
     calendarId,
@@ -82,7 +93,7 @@ export async function runSyncGoogleCalendar(options?: { startDate?: string; endD
   });
 
   const events = eventsResponse.data.items || [];
-  console.log(`📅 [Calendar Sync] Found ${events.length} events in the next ${LOOK_AHEAD_DAYS} days`);
+  console.log(`📅 [Calendar Sync] Found ${events.length} events in the next ${lookAheadDays} days`);
 
   // Get all course runs in the date range for matching
   const courseRuns = await pool.query(
@@ -115,8 +126,9 @@ export async function runSyncGoogleCalendar(options?: { startDate?: string; endD
     const summary = event.summary || '';
     const description = event.description || '';
     const isVirtual = /\[VIRTUAL\]/i.test(summary);
+    const isHybrid = /\[HYBRID\]/i.test(summary);
 
-    if (!isVirtual) continue;
+    if (!isVirtual && !isHybrid) continue;
 
     // Extract Google Meet link from event
     const meetLink = event.hangoutLink
@@ -130,8 +142,10 @@ export async function runSyncGoogleCalendar(options?: { startDate?: string; endD
 
     const finalMeetLink = meetLink || meetFromDesc;
 
-    // Remove [VIRTUAL] tag to get the course title for matching
-    const cleanTitle = summary.replace(/\[VIRTUAL\]\s*/i, '').trim().toLowerCase();
+    const classType = isVirtual ? 'Virtual' : 'Hybrid';
+
+    // Remove [VIRTUAL]/[HYBRID] tag to get the course title for matching
+    const cleanTitle = summary.replace(/\[(VIRTUAL|HYBRID)\]\s*/i, '').trim().toLowerCase();
 
     // Try to match to a course run:
     // 1. Check if course_run_id appears in description
@@ -169,30 +183,30 @@ export async function runSyncGoogleCalendar(options?: { startDate?: string; endD
 
     // Update the course run
     const changes: string[] = [];
-    if (matched.class_type !== 'Virtual') changes.push('class_type → Virtual');
+    if (matched.class_type !== classType) changes.push(`class_type → ${classType}`);
     if (finalMeetLink && matched.virtual_meeting_link !== finalMeetLink) changes.push(`meet_link → ${finalMeetLink}`);
 
     if (changes.length > 0) {
       await pool.query(
         `UPDATE course_run SET
-           class_type = 'Virtual',
-           virtual_meeting_link = COALESCE($1, virtual_meeting_link),
+           class_type = $1,
+           virtual_meeting_link = COALESCE($2, virtual_meeting_link),
            updated_at = NOW()
-         WHERE id = $2`,
-        [finalMeetLink || null, matched.id]
+         WHERE id = $3`,
+        [classType, finalMeetLink || null, matched.id]
       );
       updated++;
       console.log(`  ✅ Updated ${matched.course_run_id} (${matched.course_title}): ${changes.join(', ')}`);
       results.push({ courseRunId: matched.course_run_id, courseTitle: matched.course_title, changes, meetLink: finalMeetLink });
     } else {
       skipped++;
-      results.push({ courseRunId: matched.course_run_id, status: 'already_virtual' });
+      results.push({ courseRunId: matched.course_run_id, status: 'no_changes' });
     }
   }
 
   const summary = {
     totalEvents: events.length,
-    virtualEvents: events.filter(e => /\[VIRTUAL\]/i.test(e.summary || '')).length,
+    virtualEvents: events.filter(e => /\[(VIRTUAL|HYBRID)\]/i.test(e.summary || '')).length,
     updated,
     skipped,
     calendarId,
