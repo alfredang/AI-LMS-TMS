@@ -184,14 +184,14 @@ const TrainingHoursPage: React.FC = () => {
                         <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                             <thead className="bg-gray-50 dark:bg-gray-700/50">
                                 <tr>
-                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">#</th>
-                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Start Date</th>
-                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">End Date</th>
-                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Course Title</th>
-                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Course Ref Code</th>
-                                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Training Hrs</th>
-                                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Assessment Hrs</th>
-                                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Total Hrs</th>
+                                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-10">#</th>
+                                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Start Date</th>
+                                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">End Date</th>
+                                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Course Title</th>
+                                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Ref Code</th>
+                                    <th className="px-3 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap w-20">Train Hrs</th>
+                                    <th className="px-3 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap w-20">Assess Hrs</th>
+                                    <th className="px-3 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap w-20">Total</th>
                                 </tr>
                             </thead>
                             <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
@@ -199,14 +199,14 @@ const TrainingHoursPage: React.FC = () => {
                                     const total = course.trainingHours + course.assessmentHours;
                                     return (
                                         <tr key={`${course.id}-${idx}`} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                                            <td className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">{idx + 1}</td>
-                                            <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100 whitespace-nowrap">{formatDate(course.startDate)}</td>
-                                            <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100 whitespace-nowrap">{formatDate(course.endDate)}</td>
-                                            <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">{course.title}</td>
-                                            <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100 font-mono">{course.courseCode || '—'}</td>
-                                            <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100 text-right">{course.trainingHours}</td>
-                                            <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100 text-right">{course.assessmentHours}</td>
-                                            <td className="px-4 py-3 text-sm font-semibold text-gray-900 dark:text-gray-100 text-right">{total}</td>
+                                            <td className="px-3 py-2.5 text-sm text-gray-500 dark:text-gray-400">{idx + 1}</td>
+                                            <td className="px-3 py-2.5 text-sm text-gray-900 dark:text-gray-100 whitespace-nowrap">{formatDate(course.startDate)}</td>
+                                            <td className="px-3 py-2.5 text-sm text-gray-900 dark:text-gray-100 whitespace-nowrap">{formatDate(course.endDate)}</td>
+                                            <td className="px-3 py-2.5 text-sm text-gray-900 dark:text-gray-100 whitespace-nowrap">{course.title}</td>
+                                            <td className="px-3 py-2.5 text-sm text-gray-900 dark:text-gray-100 font-mono whitespace-nowrap">{course.courseCode || '—'}</td>
+                                            <td className="px-3 py-2.5 text-sm text-gray-900 dark:text-gray-100 text-right">{course.trainingHours}</td>
+                                            <td className="px-3 py-2.5 text-sm text-gray-900 dark:text-gray-100 text-right">{course.assessmentHours}</td>
+                                            <td className="px-3 py-2.5 text-sm font-semibold text-gray-900 dark:text-gray-100 text-right">{total}</td>
                                         </tr>
                                     );
                                 })}
