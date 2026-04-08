@@ -333,6 +333,7 @@ export async function runAutomation(targetDate?: string) {
                     )
                     WHERE e.course_run_id = $1
                       AND LOWER(e.enrolment_status) = 'confirmed'
+                      AND (e.certificate IS NULL OR e.certificate = '')
                     GROUP BY e.id, e.nric, au.full_name, au.email, e.email
                 `, [run.db_uuid]);
 
