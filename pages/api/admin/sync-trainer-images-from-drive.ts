@@ -99,7 +99,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             sum + (fileTokens.some((ft: string) => ft.includes(token) || token.includes(ft)) ? 1 : 0), 0);
           return { file, score };
         })
-        .filter(m => m.score >= Math.min(2, tokens.length)) // Must match at least 2 name parts (or all if name has 1 part)
+        .filter(m => m.score >= tokens.length) // Must match ALL name parts to avoid wrong matches
         .sort((a, b) => b.score - a.score)[0];
 
       if (!bestMatch) {

@@ -59,14 +59,10 @@ const DEFAULT_TRAINER_AVATAR = `data:image/svg+xml;utf8,${encodeURIComponent(
 )}`;
 
 const getTrainerThumbnailSrc = (trainer: Trainer): string => {
-  // If trainer has an explicit profile picture URL, use it directly
   if (trainer.profile_picture) {
     return ensureAbsoluteImageUrl(trainer.profile_picture) || DEFAULT_TRAINER_AVATAR;
   }
-
-  // Otherwise, auto-search Google Drive folder by trainer name
-  const params = new URLSearchParams({ name: trainer.trainer_name });
-  return `/api/admin/trainer-image?${params.toString()}`;
+  return DEFAULT_TRAINER_AVATAR;
 };
 
 const ViewTrainers: React.FC = () => {
