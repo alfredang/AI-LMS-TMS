@@ -229,7 +229,11 @@ const ManagementCourseList: React.FC = () => {
 
             const matchesType = filterCourseType === 'All' ||
                 (filterCourseType === 'WSQ+IBF' ? (course.courseType === 'WSQ' || course.courseType === 'IBF') : course.courseType === filterCourseType);
-            const matchesMode = filterMode === 'All' || (course.modeOfLearning && course.modeOfLearning.includes(filterMode));
+            const matchesMode = filterMode === 'All' || (
+                role === UserRole.Trainer
+                    ? (course.classType || 'Physical') === filterMode
+                    : (course.modeOfLearning && course.modeOfLearning.includes(filterMode))
+            );
 
             // Trainer: apply date tab logic
             if (role === UserRole.Trainer) {
@@ -868,12 +872,12 @@ const ManagementCourseList: React.FC = () => {
                             </select>
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-on-surface-secondary">Mode of Training</label>
+                            <label className="block text-sm font-medium text-on-surface-secondary">{role === UserRole.Trainer ? 'Class Type' : 'Mode of Training'}</label>
                             <select value={filterMode} onChange={e => setFilterMode(e.target.value)} className={`${inputClasses} mt-1`}>
-                                <option value="All">All Modes</option>
-                                <option value="Hybrid">Hybrid</option>
-                                <option value="Virtual">Virtual</option>
+                                <option value="All">{role === UserRole.Trainer ? 'All Types' : 'All Modes'}</option>
                                 <option value="Physical">Physical</option>
+                                <option value="Virtual">Virtual</option>
+                                <option value="Hybrid">Hybrid</option>
                             </select>
                         </div>
                         {role === UserRole.Trainer && (
