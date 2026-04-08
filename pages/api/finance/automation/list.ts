@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { FINANCE_AUTOMATION_ACTIONS } from '../../../../lib/config/financeAutomationActions';
+import { resolveFinanceN8nWebhookUrl } from '../../../../lib/config/n8nFinanceWebhookUrl';
 
 /**
  * Lists registered finance automation actions and whether n8n webhooks are configured (env set).
@@ -16,9 +17,10 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
     menuLabel: a.menuLabel,
     kind: a.kind,
     description: a.description,
+    webhookEnvKey: a.kind === 'n8n_webhook' ? a.webhookEnvKey : undefined,
     configured:
       a.kind === 'n8n_webhook'
-        ? Boolean(a.webhookEnvKey && process.env[a.webhookEnvKey])
+        ? Boolean(a.webhookEnvKey && resolveFinanceN8nWebhookUrl(a.webhookEnvKey))
         : true,
   }));
 

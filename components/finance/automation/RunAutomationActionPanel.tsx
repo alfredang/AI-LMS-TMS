@@ -8,6 +8,8 @@ type ActionMeta = {
   kind: string;
   description: string;
   configured: boolean;
+  /** Server-side env var name (or key inside N8N_FINANCE_WEBHOOKS_JSON). */
+  webhookEnvKey?: string;
 };
 
 export default function RunAutomationActionPanel({
@@ -239,8 +241,23 @@ export default function RunAutomationActionPanel({
       </div>
 
       {!configured && !loadingMeta && (
-        <div className="rounded-lg border border-amber-900/40 bg-amber-900/15 px-4 py-3 text-sm text-amber-200">
-          This workflow is disabled because its webhook URL env var is not set on the server.
+        <div className="rounded-lg border border-amber-900/40 bg-amber-900/15 px-4 py-3 text-sm text-amber-200 space-y-2">
+          <p>
+            Production has no webhook URL for this action. Add the variable below to your hosting
+            environment (e.g. Vercel → Project → Settings → Environment Variables → Production), then
+            redeploy.
+          </p>
+          {meta?.webhookEnvKey && (
+            <p className="font-mono text-xs bg-black/20 rounded px-2 py-1.5 break-all text-amber-100">
+              {meta.webhookEnvKey}
+            </p>
+          )}
+          <p className="text-xs text-amber-200/90">
+            Alternative: set a single JSON secret{' '}
+            <span className="font-mono">N8N_FINANCE_WEBHOOKS_JSON</span> whose keys match those names
+            (values = full webhook URLs). Copy names from{' '}
+            <span className="font-mono">config/finance-automation-n8n.env.template</span> in the repo.
+          </p>
         </div>
       )}
 
