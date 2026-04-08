@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
-
+import { useAppVersion } from '@hooks/useAppVersion';
 import AiChatbot from '../components/AiChatbot';
 import SsgAppSelector from '../components/finance/SsgAppSelector';
 import GrantCalculatorView from '../components/finance/GrantCalculatorView';
@@ -75,8 +75,8 @@ const ManagementDashboard: React.FC<ManagementDashboardProps> = ({ type }) => {
     { title: "View Trainers", description: "View details and assignments for all trainers.", icon: IconName.User, onClick: () => setAdminPage(AdminPage.ViewTrainers) },
     { title: "Funding Validity", description: "Track WSQ course validity dates and renewal planning.", icon: IconName.Calendar, onClick: () => setAdminPage(AdminPage.FundingValidity) },
     { title: "View Learners", description: "View learner profiles, status, and contact details.", icon: IconName.MyAccount, onClick: () => setAdminPage(AdminPage.ViewLearners) },
-    { title: "Upcoming Classes", description: "See all scheduled upcoming classes.", icon: IconName.Calendar, onClick: () => setAdminPage(AdminPage.UpcomingClasses) },
     { title: "Ongoing Classes", description: "Monitor classes that are currently in session.", icon: IconName.Clock, onClick: () => setAdminPage(AdminPage.OngoingClasses) },
+    { title: "Upcoming Classes", description: "See all scheduled upcoming classes.", icon: IconName.Calendar, onClick: () => setAdminPage(AdminPage.UpcomingClasses) },
     { title: "Completed Classes", description: "Review past classes and their records.", icon: IconName.ClipboardCheck, onClick: () => setAdminPage(AdminPage.CompletedClasses) },
     { title: "Create New Class", description: "Schedule a new class run from a course template.", icon: IconName.Add, onClick: () => setAdminPage(AdminPage.CreateNewClass) },
     { title: "Enroll Learners", description: "Add or remove learners from a specific class.", icon: IconName.MyAccount, onClick: () => setAdminPage(AdminPage.EnrollLearners) },
@@ -192,6 +192,7 @@ const PAGE_LABELS: Partial<Record<AdminPage, string>> = {
 
 const AdminLayout: React.FC = () => {
   const { currentView, adminPage, selectedCourse, editingCourse, courseEditMode, selectedCourseRunId, editingCourseRun, setAdminPage } = useLms();
+  const appVersion = useAppVersion();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isDesktopSidebarOpen, setIsDesktopSidebarOpen] = useState(true);
 
@@ -472,8 +473,9 @@ const AdminLayout: React.FC = () => {
       <div className="flex flex-1">
         {/* Desktop Sidebar - toggled by hamburger button */}
         <aside className={`${isDesktopSidebarOpen ? 'hidden md:flex' : 'hidden'} w-64 flex-shrink-0 bg-white dark:bg-slate-800 border-r border-gray-200 dark:border-slate-700`}>
-          <div className="w-full">
-            <AdminSidebar />
+          <div className="w-full flex flex-col h-full">
+            <div className="flex-1"><AdminSidebar /></div>
+            <p className="px-3 pb-2 text-[10px] text-gray-400 dark:text-gray-300 font-mono">version {appVersion}</p>
           </div>
         </aside>
 

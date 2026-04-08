@@ -127,7 +127,7 @@ async function sendConfirmationEmail(opts: {
     const subject = replacePlaceholders(emailSubject || 'Final Course Confirmation — {COURSE_NAME}');
     const bodyText = replacePlaceholders(emailBody || `Dear {STUDENT_NAME},\n\nThis is to confirm your enrolment in {COURSE_NAME} starting on {COURSE_START_DATE}.\n\nPlease ensure you arrive on time.\n\nBest regards,\n{COMPANY_SHORT_NAME}`);
 
-    const htmlBody = `<div style="font-family: Arial, sans-serif; color: #333;">${bodyText.split('\n').map(line => line.trim() ? `<p>${line}</p>` : '<br/>').join('\n')}</div>`;
+    const htmlBody = `<div style="font-family: Arial, sans-serif; color: #333;">${bodyText.split('\n').map(line => line.trim() ? `<p style="margin:0 0 8px 0;">${line}</p>` : '').join('\n')}</div>`;
 
     const senderName = tpRow.contact_person_name || '';
     const emailUser = tpRow.email_user;

@@ -170,7 +170,7 @@ Tel: 61000613 | Email: support@tertiaryinfotech.com | WhatsApp: https://wa.me/65
 
     const htmlBody = `
       <div style="font-family: Arial, sans-serif; color: #333;">
-        ${bodyText.split('\n').map(line => line.trim() ? `<p>${line}</p>` : '<br/>').join('\n        ')}
+        ${bodyText.split('\n').map(line => line.trim() ? `<p style="margin:0 0 8px 0;">${line}</p>` : '').join('\n        ')}
       </div>
     `;
 

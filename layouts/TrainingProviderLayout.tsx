@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
 import AiChatbot from '../components/AiChatbot';
+import { useAppVersion } from '@hooks/useAppVersion';
 import { useLms } from '../contexts/LmsContext';
 import { View } from '@app-types';
 import TrainingProviderDashboard from '../components/TrainingProviderDashboard';
@@ -32,6 +33,7 @@ import { Card } from '../components/ui/Card';
 
 const TrainingProviderLayout: React.FC = () => {
   const { currentView, selectedCourse } = useLms();
+  const appVersion = useAppVersion();
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isDesktopSidebarCollapsed, setIsDesktopSidebarCollapsed] = useState(false);
 
@@ -170,8 +172,9 @@ const TrainingProviderLayout: React.FC = () => {
         {/* Desktop Sidebar - collapsible */}
         {!isDesktopSidebarCollapsed && (
           <aside className="hidden md:flex w-64 flex-shrink-0 bg-white dark:bg-slate-800 border-r border-gray-200 dark:border-slate-700">
-            <div className="w-full">
-              <TrainingProviderSidebar />
+            <div className="w-full flex flex-col h-full">
+              <div className="flex-1"><TrainingProviderSidebar /></div>
+              <p className="px-3 pb-2 text-[10px] text-gray-400 dark:text-gray-300 font-mono">version {appVersion}</p>
             </div>
           </aside>
         )}

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
 import { Icon, IconName } from '../components/ui/Icon';
+import { useAppVersion } from '@hooks/useAppVersion';
 import { useLms } from '../contexts/LmsContext';
 import { View } from '@app-types';
 import CourseList from '../components/CourseList';
@@ -32,6 +33,7 @@ const sidebarItems: NavItem[] = [
 
 const LearnerLayout: React.FC = () => {
   const { currentView, selectedCourse, handleNavigation } = useLms();
+  const appVersion = useAppVersion();
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isDesktopSidebarCollapsed, setIsDesktopSidebarCollapsed] = useState(false);
 
@@ -147,8 +149,9 @@ const LearnerLayout: React.FC = () => {
         {/* Desktop Sidebar */}
         {!isDesktopSidebarCollapsed && (
           <aside className="hidden md:flex w-64 flex-shrink-0 bg-white dark:bg-slate-800 border-r border-gray-200 dark:border-slate-700">
-            <div className="w-full">
-              {sidebarContent}
+            <div className="w-full flex flex-col h-full">
+              <div className="flex-1">{sidebarContent}</div>
+              <p className="px-3 pb-2 text-[10px] text-gray-400 dark:text-gray-300 font-mono">version {appVersion}</p>
             </div>
           </aside>
         )}
