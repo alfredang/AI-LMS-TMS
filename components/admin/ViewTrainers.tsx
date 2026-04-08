@@ -398,19 +398,6 @@ const ViewTrainers: React.FC = () => {
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white">View Trainers</h1>
         <div className="flex gap-2">
-          <Button
-            variant="ghost"
-            onClick={handleSyncAllImages}
-            disabled={syncingAllImages}
-            className="border border-purple-500 text-purple-600 hover:bg-purple-50 dark:border-purple-400 dark:text-purple-400 dark:hover:bg-purple-900/20"
-          >
-            {syncingAllImages ? (
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-purple-600 mr-2" />
-            ) : (
-              <Icon name={IconName.User} className="w-4 h-4 mr-2" />
-            )}
-            {syncingAllImages ? 'Syncing...' : 'Sync LinkedIn Images'}
-          </Button>
           <Button variant="ghost" onClick={() => setShowBulkUpload(true)} className="border border-blue-500 text-blue-600 hover:bg-blue-50 dark:border-blue-400 dark:text-blue-400 dark:hover:bg-blue-900/20">
             <Icon name={IconName.Upload} className="w-4 h-4 mr-2" />
             Bulk Upload Trainers
@@ -757,36 +744,20 @@ const ViewTrainers: React.FC = () => {
                       )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                      <div className="flex flex-col gap-1">
-                        {trainer.linkedin_url ? (
-                          <Button
-                            variant="ghost"
-                            onClick={() => handleSyncLinkedInImage(trainer)}
-                            disabled={uploadingImageFor === trainer.user_id}
-                            className="text-purple-600 hover:text-purple-800 hover:bg-purple-50 dark:hover:bg-purple-900/20"
-                          >
-                            {uploadingImageFor === trainer.user_id ? (
-                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-purple-600 mr-1" />
-                            ) : (
-                              <Icon name={IconName.User} className="w-4 h-4 mr-1" />
-                            )}
-                            {uploadingImageFor === trainer.user_id ? 'Syncing...' : 'Sync Image'}
-                          </Button>
-                        ) : (
-                          <Button
-                            variant="ghost"
-                            onClick={() => handleImageUploadClick(trainer.user_id)}
-                            disabled={uploadingImageFor === trainer.user_id}
-                            className="text-blue-600 hover:text-blue-800 hover:bg-blue-50 dark:hover:bg-blue-900/20"
-                          >
-                            {uploadingImageFor === trainer.user_id ? (
-                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-1" />
-                            ) : (
-                              <Icon name={IconName.Upload} className="w-4 h-4 mr-1" />
-                            )}
-                            {uploadingImageFor === trainer.user_id ? 'Uploading...' : 'Upload Photo'}
-                          </Button>
-                        )}
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="ghost"
+                          onClick={() => handleImageUploadClick(trainer.user_id)}
+                          disabled={uploadingImageFor === trainer.user_id}
+                          className="text-blue-600 hover:text-blue-800 hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                        >
+                          {uploadingImageFor === trainer.user_id ? (
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-1" />
+                          ) : (
+                            <Icon name={IconName.Upload} className="w-4 h-4 mr-1" />
+                          )}
+                          {uploadingImageFor === trainer.user_id ? 'Uploading...' : 'Upload Photo'}
+                        </Button>
                         {trainer.status === 'Active' ? (
                           <Button
                             variant="ghost"
