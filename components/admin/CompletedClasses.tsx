@@ -85,6 +85,7 @@ const CompletedClasses: React.FC = () => {
   const [courseCode, setCourseCode] = useState('');
   const [courseRunId, setCourseRunId] = useState('');
   const [selectedTrainer, setSelectedTrainer] = useState('');
+  const [selectedClassStatus, setSelectedClassStatus] = useState<'all' | 'Confirmed' | 'Pending'>('all');
   const [selectedClassType, setSelectedClassType] = useState<'all' | 'Physical' | 'Virtual' | 'Hybrid'>('all');
   const [selectedCourseType, setSelectedCourseType] = useState<'all' | 'WSQ' | 'IBF' | 'Non-WSQ'>('all');
   const [startDateFrom, setStartDateFrom] = useState('');
@@ -141,6 +142,7 @@ const CompletedClasses: React.FC = () => {
       if (debouncedCourseCode) params.append('courseCode', debouncedCourseCode);
       if (debouncedCourseRunId) params.append('courseRunId', debouncedCourseRunId);
       if (selectedTrainer) params.append('trainer', selectedTrainer);
+      if (selectedClassStatus !== 'all') params.append('classStatus', selectedClassStatus);
       if (selectedClassType !== 'all') params.append('classType', selectedClassType);
       if (selectedCourseType !== 'all') params.append('courseType', selectedCourseType);
       if (debouncedStartDate) params.append('startDateFrom', debouncedStartDate);
@@ -202,12 +204,12 @@ const CompletedClasses: React.FC = () => {
   // Reset page immediately for non-debounced filters (dropdowns)
   useEffect(() => {
     setCurrentPage(0);
-  }, [selectedTrainer, selectedClassType, selectedCourseType]);
+  }, [selectedTrainer, selectedClassStatus, selectedClassType, selectedCourseType]);
 
   // Fetch data when debounced filters or pagination change
   useEffect(() => {
     fetchCompletedClasses();
-  }, [currentPage, debouncedSearch, debouncedCourseTitle, debouncedCourseCode, debouncedCourseRunId, selectedTrainer, selectedClassType, selectedCourseType, debouncedStartDate, debouncedEndDate]);
+  }, [currentPage, debouncedSearch, debouncedCourseTitle, debouncedCourseCode, debouncedCourseRunId, selectedTrainer, selectedClassStatus, selectedClassType, selectedCourseType, debouncedStartDate, debouncedEndDate]);
 
   // Date formatting function
   const formatDateInput = (value: string) => {
@@ -612,6 +614,19 @@ const CompletedClasses: React.FC = () => {
                         {trainer.trainer_name}
                       </option>
                     ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Class Status</label>
+                  <select
+                    value={selectedClassStatus}
+                    onChange={(e) => setSelectedClassStatus(e.target.value as 'all' | 'Confirmed' | 'Pending')}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                  >
+                    <option value="all">All</option>
+                    <option value="Confirmed">Confirmed</option>
+                    <option value="Pending">Pending</option>
                   </select>
                 </div>
 
