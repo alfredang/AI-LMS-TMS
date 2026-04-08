@@ -28,17 +28,27 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
         // Check if email exists in database
         const result = await pool.query(
-            'SELECT id, email FROM app_user WHERE email = $1',
-            [email.toLowerCase().trim()]
+            `SELECT u.id, u.email, u.full_name,
+                    EXISTS(SELECT 1 FROM trainer_profile tp WHERE tp.user_id = u.id) AS is_trainer,
+                    ARRAY(SELECT role FROM user_role_map WHERE user_id = u.id) AS roles
+             FROM app_user u
+             WHERE LOWER(u.email) = LOWER($1)`,
+            [email.trim()]
         );
 
         const exists = result.rows.length > 0;
+        const isTrainer = exists ? result.rows[0].is_trainer : false;
+        const roles: string[] = exists ? result.rows[0].roles : [];
+        const fullName: string | null = exists ? result.rows[0].full_name : null;
 
         return res.status(200).json({
             success: true,
             data: {
                 email: email,
-                exists: exists
+                exists: exists,
+                isTrainer: isTrainer,
+                roles: roles,
+                fullName: fullName
             }
         });
 

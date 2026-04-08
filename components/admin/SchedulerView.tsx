@@ -160,6 +160,8 @@ export const SchedulerView: React.FC = () => {
     const [actionMessage, setActionMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
     const [templateDropdownOpen, setTemplateDropdownOpen] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
+    const [currentPage, setCurrentPage] = useState(0);
+    const ITEMS_PER_PAGE = 10;
     const templateDropdownRef = useRef<HTMLDivElement>(null);
 
     // Fetch tasks
@@ -363,7 +365,7 @@ export const SchedulerView: React.FC = () => {
                     type="text"
                     placeholder="Search tasks..."
                     value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(0); }}
                     className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400"
                 />
             </div>
@@ -406,15 +408,20 @@ export const SchedulerView: React.FC = () => {
             )}
 
             {/* Task Cards */}
-            {!loading && !error && (
+            {!loading && !error && (() => {
+                const filteredTasks = tasks.filter(task => {
+                    if (!searchQuery.trim()) return true;
+                    const q = searchQuery.toLowerCase();
+                    return task.name.toLowerCase().includes(q)
+                        || task.description.toLowerCase().includes(q)
+                        || task.api_endpoint.toLowerCase().includes(q);
+                });
+                const totalPages = Math.ceil(filteredTasks.length / ITEMS_PER_PAGE);
+                const paginatedTasks = filteredTasks.slice(currentPage * ITEMS_PER_PAGE, (currentPage + 1) * ITEMS_PER_PAGE);
+
+                return (
                 <div className="space-y-4">
-                    {tasks.filter(task => {
-                        if (!searchQuery.trim()) return true;
-                        const q = searchQuery.toLowerCase();
-                        return task.name.toLowerCase().includes(q)
-                            || task.description.toLowerCase().includes(q)
-                            || task.api_endpoint.toLowerCase().includes(q);
-                    }).map(task => (
+                    {paginatedTasks.map(task => (
                         <Card key={task.id} className="p-0 overflow-visible">
                             {/* Card Header */}
                             <div className={`px-6 py-4 flex items-center justify-between border-b rounded-t-lg ${
@@ -738,16 +745,80 @@ export const SchedulerView: React.FC = () => {
                         </Card>
                     ))}
 
-                    {tasks.length === 0 && (
+                    {filteredTasks.length === 0 && (
                         <Card className="p-10">
                             <div className="text-center text-gray-500 dark:text-gray-400">
-                                <p className="text-lg font-medium">No scheduled tasks found</p>
-                                <p className="text-sm mt-1">Tasks will appear here once the scheduler is initialised.</p>
+                                <p className="text-lg font-medium">{searchQuery ? 'No matching tasks found' : 'No scheduled tasks found'}</p>
+                                <p className="text-sm mt-1">{searchQuery ? 'Try adjusting your search query' : 'Tasks will appear here once the scheduler is initialised.'}</p>
                             </div>
                         </Card>
                     )}
+
+                    {/* Pagination */}
+                    {totalPages > 1 && (
+                        <div className="flex items-center justify-between pt-4">
+                            <p className="text-sm text-gray-500 dark:text-gray-400">
+                                Showing {currentPage * ITEMS_PER_PAGE + 1}–{Math.min((currentPage + 1) * ITEMS_PER_PAGE, filteredTasks.length)} of {filteredTasks.length} tasks
+                            </p>
+                            <div className="flex items-center gap-1">
+                                <button
+                                    onClick={() => setCurrentPage(0)}
+                                    disabled={currentPage === 0}
+                                    className="px-3 py-1.5 text-xs font-medium rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                                >
+                                    First
+                                </button>
+                                <button
+                                    onClick={() => setCurrentPage(p => Math.max(0, p - 1))}
+                                    disabled={currentPage === 0}
+                                    className="px-3 py-1.5 text-xs font-medium rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                                >
+                                    Prev
+                                </button>
+                                {Array.from({ length: totalPages }, (_, i) => i)
+                                    .filter(i => i === 0 || i === totalPages - 1 || Math.abs(i - currentPage) <= 1)
+                                    .reduce<(number | 'ellipsis')[]>((acc, i, idx, arr) => {
+                                        if (idx > 0 && i - (arr[idx - 1] as number) > 1) acc.push('ellipsis');
+                                        acc.push(i);
+                                        return acc;
+                                    }, [])
+                                    .map((item, idx) =>
+                                        item === 'ellipsis' ? (
+                                            <span key={`e${idx}`} className="px-2 text-gray-400">...</span>
+                                        ) : (
+                                            <button
+                                                key={item}
+                                                onClick={() => setCurrentPage(item)}
+                                                className={`px-3 py-1.5 text-xs font-medium rounded-md border transition-colors ${
+                                                    currentPage === item
+                                                        ? 'bg-blue-600 text-white border-blue-600'
+                                                        : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+                                                }`}
+                                            >
+                                                {item + 1}
+                                            </button>
+                                        )
+                                    )}
+                                <button
+                                    onClick={() => setCurrentPage(p => Math.min(totalPages - 1, p + 1))}
+                                    disabled={currentPage === totalPages - 1}
+                                    className="px-3 py-1.5 text-xs font-medium rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                                >
+                                    Next
+                                </button>
+                                <button
+                                    onClick={() => setCurrentPage(totalPages - 1)}
+                                    disabled={currentPage === totalPages - 1}
+                                    className="px-3 py-1.5 text-xs font-medium rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                                >
+                                    Last
+                                </button>
+                            </div>
+                        </div>
+                    )}
                 </div>
-            )}
+                );
+            })()}
         </div>
     );
 };

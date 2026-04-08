@@ -80,7 +80,7 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
     showFilters = true,
     includeOngoing = false,
 }) => {
-    const { setAdminPage, setSelectedCourseRunId, setEditingCourseRun } = useLms();
+    const { setAdminPage, setSelectedCourseRunId, setEditingCourseRun, setClassListReturnTo } = useLms();
     const [currentPage, setCurrentPage] = useState(0);
     const [searchQuery, setSearchQuery] = useState('');
     const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
@@ -90,7 +90,7 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
     const [courseCode, setCourseCode] = useState('');
     const [courseRunId, setCourseRunId] = useState('');
     const [selectedTrainer, setSelectedTrainer] = useState('');
-    const [selectedClassStatus, setSelectedClassStatus] = useState<'all' | 'Confirmed' | 'Pending'>('all');
+    const [selectedClassStatus, setSelectedClassStatus] = useState<'all' | 'Confirmed' | 'Pending' | 'Cancelled'>('all');
     const [selectedClassType, setSelectedClassType] = useState<'all' | 'Physical' | 'Virtual' | 'Hybrid'>('all');
     const [selectedCourseType, setSelectedCourseType] = useState<'all' | 'WSQ' | 'IBF' | 'Non-WSQ'>('all');
     const [startDateFrom, setStartDateFrom] = useState('');
@@ -284,12 +284,14 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
 
     const handleEditClass = (classItem: UpcomingClass) => {
         setEditingCourseRun(classItem);
+        setClassListReturnTo(AdminPage.UpcomingClasses);
         setAdminPage(AdminPage.EditClass);
     };
 
     const handleViewDetails = (classItem: UpcomingClass) => {
         setEditingCourseRun(classItem);
         setSelectedCourseRunId(classItem.courseRunId);
+        setClassListReturnTo(AdminPage.UpcomingClasses);
         setAdminPage(AdminPage.ClassDetail);
     };
 
@@ -542,12 +544,13 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Class Status</label>
                                             <select
                                                 value={selectedClassStatus}
-                                                onChange={(e) => setSelectedClassStatus(e.target.value as 'all' | 'Confirmed' | 'Pending')}
+                                                onChange={(e) => setSelectedClassStatus(e.target.value as 'all' | 'Confirmed' | 'Pending' | 'Cancelled')}
                                                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                                             >
                                                 <option value="all">All</option>
                                                 <option value="Confirmed">Confirmed</option>
                                                 <option value="Pending">Pending</option>
+                                                <option value="Cancelled">Cancelled</option>
                                             </select>
                                         </div>
 

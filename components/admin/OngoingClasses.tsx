@@ -8,6 +8,7 @@ import { authService } from '@lib/services/authService';
 import { AdminPage } from '@app-types';
 
 interface OngoingClass {
+  id: string;
   courseRunId: string;
   courseTitle: string;
   courseCode: string;
@@ -50,7 +51,7 @@ interface Trainer {
 }
 
 const OngoingClasses: React.FC = () => {
-  const { setAdminPage, setSelectedCourseRunId, setEditingCourseRun } = useLms();
+  const { setAdminPage, setSelectedCourseRunId, setEditingCourseRun, setClassListReturnTo } = useLms();
   const [ongoingClasses, setOngoingClasses] = useState<OngoingClass[]>([]);
   const [statistics, setStatistics] = useState<Statistics>({
     ongoingClassesFound: 0,
@@ -68,7 +69,7 @@ const OngoingClasses: React.FC = () => {
   const [courseCode, setCourseCode] = useState('');
   const [courseRunId, setCourseRunId] = useState('');
   const [selectedTrainer, setSelectedTrainer] = useState('');
-  const [selectedClassStatus, setSelectedClassStatus] = useState<'all' | 'Confirmed' | 'Pending'>('all');
+  const [selectedClassStatus, setSelectedClassStatus] = useState<'all' | 'Confirmed' | 'Pending' | 'Cancelled'>('all');
   const [selectedClassType, setSelectedClassType] = useState<'all' | 'Physical' | 'Virtual' | 'Hybrid'>('all');
   const [selectedCourseType, setSelectedCourseType] = useState<'all' | 'WSQ' | 'IBF' | 'Non-WSQ'>('all');
   const [startDateFrom, setStartDateFrom] = useState('');
@@ -235,10 +236,12 @@ const OngoingClasses: React.FC = () => {
   const handleViewDetails = (classItem: any) => {
     setEditingCourseRun(classItem);
     setSelectedCourseRunId(classItem.courseRunId);
+    setClassListReturnTo(AdminPage.OngoingClasses);
     setAdminPage(AdminPage.ClassDetail);
   };
 
   const handleEditClass = (classItem: OngoingClass) => {
+    setClassListReturnTo(AdminPage.OngoingClasses);
     setAdminPage(AdminPage.EditClass);
   };
 
@@ -390,12 +393,13 @@ const OngoingClasses: React.FC = () => {
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Class Status</label>
                   <select
                     value={selectedClassStatus}
-                    onChange={(e) => setSelectedClassStatus(e.target.value as 'all' | 'Confirmed' | 'Pending')}
+                    onChange={(e) => setSelectedClassStatus(e.target.value as 'all' | 'Confirmed' | 'Pending' | 'Cancelled')}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                   >
                     <option value="all">All</option>
                     <option value="Confirmed">Confirmed</option>
                     <option value="Pending">Pending</option>
+                    <option value="Cancelled">Cancelled</option>
                   </select>
                 </div>
 
@@ -508,7 +512,25 @@ const OngoingClasses: React.FC = () => {
                       <td className="px-4 py-2 text-sm font-medium overflow-hidden text-ellipsis"><button type="button" onClick={() => handleViewDetails(classItem)} className="text-left text-blue-600 dark:text-blue-400 hover:underline">{classItem.courseTitle}</button></td>
                       <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.courseCode}</td>
                       <td className="px-4 py-2 whitespace-nowrap text-sm">
-                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(classItem.classStatus)}`}>{classItem.classStatus}</span>
+                        <select
+                          value={classItem.classStatus}
+                          onChange={async (e) => {
+                            const newStatus = e.target.value;
+                            try {
+                              await fetch(getApiUrl('/api/admin/ongoing-classes'), {
+                                method: 'PUT',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ id: classItem.id, class_status: newStatus }),
+                              });
+                              setOngoingClasses(prev => prev.map(c => c.id === classItem.id ? { ...c, classStatus: newStatus } : c));
+                            } catch { /* silent */ }
+                          }}
+                          className={`text-xs font-semibold rounded-full px-2 py-1 border-0 cursor-pointer focus:ring-2 focus:ring-blue-500 ${getStatusColor(classItem.classStatus)}`}
+                        >
+                          <option value="Confirmed">Confirmed</option>
+                          <option value="Pending">Pending</option>
+                          <option value="Cancelled">Cancelled</option>
+                        </select>
                       </td>
                       <td className="px-4 py-2 whitespace-nowrap text-sm">
                         <span className={`px-2 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full ${(classItem.classType || 'Physical') === 'Virtual' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300' : (classItem.classType || 'Physical') === 'Hybrid' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300' : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'}`}>{classItem.classType || 'Physical'}</span>

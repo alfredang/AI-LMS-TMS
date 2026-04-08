@@ -90,20 +90,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         try {
             // Check if email already exists
             const existingUser = await client.query(
-                'SELECT id FROM app_user WHERE email = $1',
+                'SELECT id, full_name FROM app_user WHERE LOWER(email) = LOWER($1)',
                 [email]
             );
-
-            if (existingUser.rows.length > 0) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'A user with this email already exists'
-                });
-            }
-
-            // Hash the password with bcrypt
-            const saltRounds = 10;
-            const hashedPassword = await bcrypt.hash(password, saltRounds);
 
             // Handle profile picture storage
             let storedProfilePictureUrl = finalProfilePictureUrl;
@@ -133,20 +122,53 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             // Begin transaction
             await client.query('BEGIN');
 
-            // Insert into app_user table (using both password fields for compatibility)
-            const userResult = await client.query(
-                `INSERT INTO app_user (email, password, password_hash, full_name, profile_picture_url, created_at, updated_at)
-                 VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-                 RETURNING id`,
-                [email, password, hashedPassword, fullName, storedProfilePictureUrl]
-            );
+            let userId: string;
+            let isExistingUser = false;
 
-            const userId = userResult.rows[0].id;
+            if (existingUser.rows.length > 0) {
+                // User already exists — check if they already have a trainer profile
+                userId = existingUser.rows[0].id;
+                const existingTrainer = await client.query(
+                    'SELECT user_id FROM trainer_profile WHERE user_id = $1',
+                    [userId]
+                );
 
-            // Insert role mapping into user_role_map table
+                if (existingTrainer.rows.length > 0) {
+                    return res.status(400).json({
+                        success: false,
+                        message: 'This user is already registered as a trainer'
+                    });
+                }
+
+                isExistingUser = true;
+
+                // Update profile picture if provided and user doesn't have one
+                if (storedProfilePictureUrl) {
+                    await client.query(
+                        `UPDATE app_user SET profile_picture_url = COALESCE(profile_picture_url, $1), updated_at = NOW() WHERE id = $2`,
+                        [storedProfilePictureUrl, userId]
+                    );
+                }
+            } else {
+                // Brand-new user — create app_user row
+                const saltRounds = 10;
+                const hashedPassword = await bcrypt.hash(password, saltRounds);
+
+                const userResult = await client.query(
+                    `INSERT INTO app_user (email, password, password_hash, full_name, profile_picture_url, created_at, updated_at)
+                     VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                     RETURNING id`,
+                    [email, password, hashedPassword, fullName, storedProfilePictureUrl]
+                );
+
+                userId = userResult.rows[0].id;
+            }
+
+            // Add Trainer role (ON CONFLICT DO NOTHING handles the case where it already exists)
             await client.query(
                 `INSERT INTO user_role_map (user_id, role)
-                 VALUES ($1, 'Trainer')`,
+                 VALUES ($1, 'Trainer')
+                 ON CONFLICT DO NOTHING`,
                 [userId]
             );
 
@@ -160,24 +182,26 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             // Commit transaction
             await client.query('COMMIT');
 
-            console.log('✅ New trainer added successfully:', {
+            const actionLabel = isExistingUser ? 'Trainer role added to existing account' : 'Trainer added successfully';
+            console.log(`✅ ${actionLabel}:`, {
                 userId,
                 email,
-                fullName,
+                fullName: isExistingUser ? existingUser.rows[0].full_name : fullName,
                 trainerType,
                 status
             });
 
             res.status(201).json({
                 success: true,
-                message: 'Trainer added successfully',
+                message: actionLabel,
                 data: {
                     userId,
                     email,
-                    fullName,
+                    fullName: isExistingUser ? existingUser.rows[0].full_name : fullName,
                     trainerType,
                     status,
-                    profilePictureUrl: storedProfilePictureUrl
+                    profilePictureUrl: storedProfilePictureUrl,
+                    existingAccount: isExistingUser
                 }
             });
 

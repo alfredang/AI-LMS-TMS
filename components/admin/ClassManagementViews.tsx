@@ -142,7 +142,12 @@ const FormSection: React.FC<{ title: string; children: React.ReactNode }> = ({ t
 );
 
 export const ClassManagerView: React.FC<ClassManagerViewProps> = ({ courseToEdit, viewOnly = false }) => {
-    const { setAdminPage, setEditingCourseRun, currentUser } = useLms();
+    const { setAdminPage, setEditingCourseRun, currentUser, classListReturnTo, setClassListReturnTo } = useLms();
+    const goBackToList = () => {
+        const target = classListReturnTo || AdminPage.Dashboard;
+        setClassListReturnTo(null);
+        setAdminPage(target);
+    };
     const isEditMode = !!courseToEdit;
     const title = viewOnly ? 'Class Details' : (isEditMode ? 'Edit Class' : 'Create New Class');
 
@@ -2074,7 +2079,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
             <div className="flex justify-between items-center mb-6">
                 <h2 className="text-3xl font-bold">{title}</h2>
                 <div>
-                    <Button variant="ghost" onClick={() => setAdminPage(AdminPage.Dashboard)} className="mr-2">{viewOnly ? 'Back to List' : 'Cancel'}</Button>
+                    <Button variant="ghost" onClick={goBackToList} className="mr-2">{viewOnly ? 'Back to List' : 'Cancel'}</Button>
                     {viewOnly && isEditMode && (
                         <Button
                             onClick={() => {
