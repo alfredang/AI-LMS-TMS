@@ -68,7 +68,7 @@ export default async function handler(
     const offset = pageNum * limitNum;
 
     // Build WHERE conditions for filtering completed classes
-    let whereConditions = ['cr.end_date < CURRENT_DATE'];
+    let whereConditions = ['cr.end_date <= CURRENT_DATE'];
     let paramCounter = 1;
     const queryParams: any[] = [];
 
@@ -228,7 +228,7 @@ export default async function handler(
         GROUP BY course_run_id
       ) trainee_count ON cr.id = trainee_count.course_run_id
       WHERE ${whereClause}
-      ORDER BY cr.course_run_id DESC
+      ORDER BY cr.course_run_id::bigint DESC
       LIMIT $${paramCounter} OFFSET $${paramCounter + 1}
     `;
 
