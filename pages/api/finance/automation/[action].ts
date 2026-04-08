@@ -1,6 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { getFinanceAutomationAction } from '../../../../lib/config/financeAutomationActions';
-import { resolveFinanceN8nWebhookUrl } from '../../../../lib/config/n8nFinanceWebhookUrl';
+import { resolveFinanceAutomationWebhookUrlFromDb } from '../../../../lib/services/financeAutomationWebhookConfig';
 import { refreshGrantsForEnrolments } from '../../../../lib/services/billingSync';
 import { triggerN8nWebhook } from '../../../../lib/services/n8nWebhookService';
 
@@ -57,10 +57,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (!envKey) {
         return res.status(500).json({ error: 'Action missing webhookEnvKey' });
       }
-      const url = resolveFinanceN8nWebhookUrl(envKey);
+      const url = await resolveFinanceAutomationWebhookUrlFromDb(envKey);
       if (!url) {
         return res.status(503).json({
-          error: `Webhook not configured: set ${envKey} or N8N_FINANCE_WEBHOOKS_JSON (see config/finance-automation-n8n.env.template)`,
+          error: `Webhook not configured. Set it in the automation page (Webhook URL → Save).`,
           action: def.id,
         });
       }

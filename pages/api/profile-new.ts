@@ -554,7 +554,10 @@ async function getTrainingProviderProfile(userId: string) {
   } catch (e) { /* columns don't exist */ }
   // n8n
   try {
-    const r = await pool.query(`SELECT n8n_host1_url, n8n_host2_url FROM training_provider WHERE id = $1`, [profileData.provider_id]);
+    const r = await pool.query(
+      `SELECT n8n_host1_url, n8n_host2_url, n8n_finance_webhooks_json FROM training_provider WHERE id = $1`,
+      [profileData.provider_id]
+    );
     if (r.rows.length > 0) refLinks = { ...refLinks, ...r.rows[0] };
   } catch (e) { /* columns don't exist */ }
   // Magento
@@ -648,6 +651,7 @@ async function getTrainingProviderProfile(userId: string) {
       tertiaryTpmsUrl: refLinks.tertiary_tpms_url || '',
       n8nHost1Url: refLinks.n8n_host1_url || '',
       n8nHost2Url: refLinks.n8n_host2_url || '',
+      n8nFinanceWebhooksJson: refLinks.n8n_finance_webhooks_json || '',
       magentoBackendUrl: refLinks.magento_backend_url || '',
       openClawMode: refLinks.openclaw_mode || 'live',
       openClawGatewayUrl: refLinks.openclaw_gateway_url || '',

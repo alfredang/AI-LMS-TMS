@@ -701,6 +701,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       await autoCreateAndUpdate([
         { name: 'n8n_host1_url', value: profileData.integrations?.n8nHost1Url || null },
         { name: 'n8n_host2_url', value: profileData.integrations?.n8nHost2Url || null },
+        // Finance automation webhooks (JSON map). Keys match FINANCE_AUTOMATION_ACTIONS webhookEnvKey values.
+        { name: 'n8n_finance_webhooks_json', value: profileData.integrations?.n8nFinanceWebhooksJson || null },
       ]);
       // Magento
       await autoCreateAndUpdate([
