@@ -54,6 +54,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     }
 
+    // Clean up tables that may not have CASCADE constraints
+    const cleanupQueries = [
+      `DELETE FROM public.work_experience WHERE developer_id = $1`,
+      `DELETE FROM public.education_history WHERE developer_id = $1`,
+      `DELETE FROM public.user_subtopic_bookmark WHERE user_id = $1`,
+      `DELETE FROM public.learner_subtopic_completion WHERE user_id = $1`,
+      `DELETE FROM public.submission WHERE user_id = $1`,
+    ];
+    for (const sql of cleanupQueries) {
+      await client.query('SAVEPOINT cleanup_sp');
+      try {
+        await client.query(sql, [userId]);
+        await client.query('RELEASE SAVEPOINT cleanup_sp');
+      } catch {
+        await client.query('ROLLBACK TO SAVEPOINT cleanup_sp');
+      }
+    }
+
     // Hard delete from app_user — cascades to:
     // user_role_map, learner_profile, trainer_profile, developer_profile, admin_profile,
     // enrollment, chat_conversation, provider_admin_user, etc.
