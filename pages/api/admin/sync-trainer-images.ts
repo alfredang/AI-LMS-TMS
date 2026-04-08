@@ -1,51 +1,90 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
-import { uploadProfileImageBufferToDrive, buildGoogleDriveImageUrl, extractGoogleDriveFileId } from '../../../lib/google-drive/profile-image-helpers';
+import { uploadProfileImageBufferToDrive, extractGoogleDriveFileId } from '../../../lib/google-drive/profile-image-helpers';
 
 /**
  * POST /api/admin/sync-trainer-images
  *
- * For trainers with a LinkedIn URL but no profile image (or stale image),
- * fetches the LinkedIn public profile page, extracts the og:image,
- * downloads it, uploads to Google Drive, and saves the URL.
+ * For trainers with a LinkedIn URL, uses Playwright (headless browser) to:
+ *   1. Visit the LinkedIn profile page
+ *   2. Extract the profile image URL from the rendered page
+ *   3. Download the image
+ *   4. Upload to Google Drive trainer image folder
+ *   5. Save the URL to app_user.profile_picture_url
  *
  * Body: { trainerIds?: string[] } — optional list of specific trainer user_ids.
- *       If omitted, processes all trainers with linkedin_url but no profile_picture_url.
+ *       If omitted, processes all trainers with linkedin_url but no profile image.
  */
 
-async function fetchLinkedInImage(linkedinUrl: string): Promise<{ buffer: Buffer; mimeType: string } | null> {
+async function extractLinkedInImageWithPlaywright(linkedinUrl: string, trainerName: string): Promise<{ buffer: Buffer; mimeType: string } | null> {
+  let browser;
   try {
-    // Fetch the LinkedIn public profile page
-    const res = await fetch(linkedinUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
-        'Accept': 'text/html',
-      },
-      redirect: 'follow',
+    const { chromium } = await import('playwright');
+    browser = await chromium.launch({ headless: true });
+    const context = await browser.newContext({
+      userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    });
+    const page = await context.newPage();
+
+    await page.goto(linkedinUrl, { waitUntil: 'domcontentloaded', timeout: 15000 });
+    // Wait a moment for images to load
+    await page.waitForTimeout(2000);
+
+    // Try multiple selectors for LinkedIn profile image
+    let imageUrl: string | null = null;
+
+    // Method 1: og:image meta tag (works on public profiles)
+    imageUrl = await page.evaluate(() => {
+      const meta = document.querySelector('meta[property="og:image"]');
+      return meta?.getAttribute('content') || null;
     });
 
-    if (!res.ok) return null;
+    // Method 2: Profile photo img element
+    if (!imageUrl || imageUrl.includes('static.licdn.com/sc/h/') || imageUrl.includes('ghost-person')) {
+      imageUrl = await page.evaluate(() => {
+        // Try the main profile photo
+        const selectors = [
+          'img.pv-top-card-profile-picture__image',
+          'img.profile-photo-edit__preview',
+          'img[data-ghost-url]',
+          '.pv-top-card__photo-wrapper img',
+          'img.evi-image',
+          'section.pv-top-card img[src*="media.licdn.com"]',
+          'img[src*="profile-displayphoto"]',
+          'img[alt*="photo"][src*="media.licdn.com"]',
+        ];
+        for (const sel of selectors) {
+          const img = document.querySelector(sel) as HTMLImageElement;
+          if (img?.src && img.src.includes('media.licdn.com') && !img.src.includes('ghost-person')) {
+            return img.src;
+          }
+        }
+        // Fallback: find any large LinkedIn CDN image
+        const allImgs = Array.from(document.querySelectorAll('img[src*="media.licdn.com"]'));
+        for (const img of allImgs) {
+          const src = (img as HTMLImageElement).src;
+          if (src.includes('profile') && !src.includes('ghost-person') && !src.includes('company-logo')) {
+            return src;
+          }
+        }
+        return null;
+      });
+    }
 
-    const html = await res.text();
+    await browser.close();
+    browser = undefined;
 
-    // Extract og:image from meta tags
-    const ogImageMatch = html.match(/<meta[^>]*property=["']og:image["'][^>]*content=["']([^"']+)["']/i)
-      || html.match(/<meta[^>]*content=["']([^"']+)["'][^>]*property=["']og:image["']/i);
-
-    if (!ogImageMatch?.[1]) return null;
-
-    let imageUrl = ogImageMatch[1];
-
-    // Skip default LinkedIn placeholder images
-    if (imageUrl.includes('static.licdn.com/sc/h/') || imageUrl.includes('ghost-person')) {
+    if (!imageUrl || imageUrl.includes('ghost-person') || imageUrl.includes('static.licdn.com/sc/h/')) {
+      console.log(`  ⚠️ ${trainerName}: No profile image found on LinkedIn`);
       return null;
     }
 
+    console.log(`  📸 ${trainerName}: Found image URL: ${imageUrl.substring(0, 80)}...`);
+
     // Download the image
     const imgRes = await fetch(imageUrl, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1)' },
+      headers: { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36' },
     });
-
     if (!imgRes.ok) return null;
 
     const contentType = imgRes.headers.get('content-type') || 'image/jpeg';
@@ -59,8 +98,12 @@ async function fetchLinkedInImage(linkedinUrl: string): Promise<{ buffer: Buffer
 
     return { buffer, mimeType: contentType };
   } catch (e) {
-    console.error(`Failed to fetch LinkedIn image from ${linkedinUrl}:`, e);
+    console.error(`  ❌ ${trainerName}: Playwright error:`, e);
     return null;
+  } finally {
+    if (browser) {
+      try { await browser.close(); } catch {}
+    }
   }
 }
 
@@ -110,10 +153,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           continue;
         }
 
-        const imageData = await fetchLinkedInImage(trainer.linkedin_url);
+        console.log(`  🔍 Processing: ${trainer.full_name} (${trainer.linkedin_url})`);
+
+        const imageData = await extractLinkedInImageWithPlaywright(trainer.linkedin_url, trainer.full_name);
         if (!imageData) {
           skipped++;
-          results.push({ name: trainer.full_name, status: 'no_linkedin_image', linkedinUrl: trainer.linkedin_url });
+          results.push({ name: trainer.full_name, status: 'no_image_found', linkedinUrl: trainer.linkedin_url });
           continue;
         }
 
@@ -121,7 +166,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const uploadResult = await uploadProfileImageBufferToDrive({
           buffer: imageData.buffer,
           mimeType: imageData.mimeType,
-          originalName: `${trainer.full_name.replace(/[^a-zA-Z0-9]/g, '_')}_linkedin.jpg`,
+          originalName: `${trainer.full_name.replace(/[^a-zA-Z0-9 ]/g, '_')}_linkedin.jpg`,
           role: 'trainer',
           userId: trainer.user_id,
         });
@@ -137,10 +182,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           name: trainer.full_name,
           status: 'updated',
           imageUrl: uploadResult.fileUrl,
-          driveFileId: uploadResult.fileId,
         });
 
-        console.log(`  ✅ ${trainer.full_name}: uploaded LinkedIn image`);
+        console.log(`  ✅ ${trainer.full_name}: uploaded to Google Drive`);
       } catch (e) {
         failed++;
         results.push({

@@ -159,13 +159,14 @@ const ViewTrainers: React.FC = () => {
     }
   };
 
-  // Sync single trainer image from LinkedIn
+  // Sync single trainer image from LinkedIn via Playwright
   const handleSyncLinkedInImage = async (trainer: Trainer) => {
     if (!trainer.linkedin_url) {
       alert('This trainer has no LinkedIn profile URL.');
       return;
     }
     setUploadingImageFor(trainer.user_id);
+    setSyncMessage(null);
     try {
       const res = await fetch('/api/admin/sync-trainer-images', {
         method: 'POST',
@@ -180,10 +181,10 @@ const ViewTrainers: React.FC = () => {
             t.user_id === trainer.user_id ? { ...t, profile_picture: updatedUrl } : t
           ));
         }
-        setSyncMessage({ type: 'success', text: `Profile image updated for ${trainer.trainer_name}` });
+        setSyncMessage({ type: 'success', text: `Profile image synced for ${trainer.trainer_name}` });
       } else {
-        const reason = data.results?.[0]?.status === 'no_linkedin_image'
-          ? 'Could not extract image from LinkedIn profile.'
+        const reason = data.results?.[0]?.status === 'no_image_found'
+          ? 'No profile image found on LinkedIn page.'
           : (data.results?.[0]?.error || 'No image found.');
         setSyncMessage({ type: 'error', text: `${trainer.trainer_name}: ${reason}` });
       }
@@ -191,16 +192,17 @@ const ViewTrainers: React.FC = () => {
       setSyncMessage({ type: 'error', text: 'Failed to sync image.' });
     } finally {
       setUploadingImageFor(null);
-      setTimeout(() => setSyncMessage(null), 5000);
+      setTimeout(() => setSyncMessage(null), 8000);
     }
   };
 
-  // Bulk sync: scan Google Drive folder and match images to trainers by name
+  // Bulk sync: fetch LinkedIn images via Playwright, upload to Drive for all trainers missing images
   const handleSyncAllImages = async () => {
+    if (!confirm('This will fetch LinkedIn profile images for all trainers without a photo. This may take a few minutes. Continue?')) return;
     setSyncingAllImages(true);
     setSyncMessage(null);
     try {
-      const res = await fetch('/api/admin/sync-trainer-images-from-drive', {
+      const res = await fetch('/api/admin/sync-trainer-images', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({}),
@@ -209,17 +211,17 @@ const ViewTrainers: React.FC = () => {
       if (data.success) {
         setSyncMessage({
           type: 'success',
-          text: `Scanned ${data.summary.totalFiles} Drive images. Updated ${data.summary.updated} trainers (${data.summary.skipped} already set or no match).`,
+          text: `Synced ${data.summary.updated} images from LinkedIn to Google Drive (${data.summary.skipped} skipped, ${data.summary.failed} failed).`,
         });
         if (data.summary.updated > 0) fetchTrainers();
       } else {
         setSyncMessage({ type: 'error', text: data.error || 'Sync failed.' });
       }
     } catch {
-      setSyncMessage({ type: 'error', text: 'Failed to sync images from Drive.' });
+      setSyncMessage({ type: 'error', text: 'Failed to sync images.' });
     } finally {
       setSyncingAllImages(false);
-      setTimeout(() => setSyncMessage(null), 8000);
+      setTimeout(() => setSyncMessage(null), 10000);
     }
   };
 
@@ -408,7 +410,7 @@ const ViewTrainers: React.FC = () => {
             ) : (
               <Icon name={IconName.User} className="w-4 h-4 mr-2" />
             )}
-            {syncingAllImages ? 'Syncing...' : 'Sync Images from Drive'}
+            {syncingAllImages ? 'Syncing...' : 'Sync LinkedIn Images'}
           </Button>
           <Button variant="ghost" onClick={() => setShowBulkUpload(true)} className="border border-blue-500 text-blue-600 hover:bg-blue-50 dark:border-blue-400 dark:text-blue-400 dark:hover:bg-blue-900/20">
             <Icon name={IconName.Upload} className="w-4 h-4 mr-2" />
@@ -757,19 +759,35 @@ const ViewTrainers: React.FC = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                       <div className="flex items-center gap-2">
-                        <Button
-                          variant="ghost"
-                          onClick={() => handleImageUploadClick(trainer.user_id)}
-                          disabled={uploadingImageFor === trainer.user_id}
-                          className="text-blue-600 hover:text-blue-800 hover:bg-blue-50 dark:hover:bg-blue-900/20"
-                        >
-                          {uploadingImageFor === trainer.user_id ? (
-                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-1" />
-                          ) : (
-                            <Icon name={IconName.Upload} className="w-4 h-4 mr-1" />
-                          )}
-                          {uploadingImageFor === trainer.user_id ? 'Uploading...' : 'Upload Photo'}
-                        </Button>
+                        {trainer.linkedin_url ? (
+                          <Button
+                            variant="ghost"
+                            onClick={() => handleSyncLinkedInImage(trainer)}
+                            disabled={uploadingImageFor === trainer.user_id}
+                            className="text-purple-600 hover:text-purple-800 hover:bg-purple-50 dark:hover:bg-purple-900/20"
+                          >
+                            {uploadingImageFor === trainer.user_id ? (
+                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-purple-600 mr-1" />
+                            ) : (
+                              <Icon name={IconName.User} className="w-4 h-4 mr-1" />
+                            )}
+                            {uploadingImageFor === trainer.user_id ? 'Syncing...' : 'Sync Image'}
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="ghost"
+                            onClick={() => handleImageUploadClick(trainer.user_id)}
+                            disabled={uploadingImageFor === trainer.user_id}
+                            className="text-blue-600 hover:text-blue-800 hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                          >
+                            {uploadingImageFor === trainer.user_id ? (
+                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-1" />
+                            ) : (
+                              <Icon name={IconName.Upload} className="w-4 h-4 mr-1" />
+                            )}
+                            {uploadingImageFor === trainer.user_id ? 'Uploading...' : 'Upload Photo'}
+                          </Button>
+                        )}
                         {trainer.status === 'Active' ? (
                           <Button
                             variant="ghost"
