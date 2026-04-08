@@ -135,6 +135,27 @@ const WORKFLOWS: Workflow[] = [
     ],
   },
   {
+    id: 'billing-history',
+    title: 'Billing History Workflow',
+    icon: '💰',
+    color: 'border-orange-500 bg-orange-50 dark:bg-orange-900/10',
+    description: 'End-to-end billing journey from course enquiry to class-ready, covering proforma, enrollment, SkillsFuture, invoice, and receipt.',
+    steps: [
+      { title: '1. Learner Enquires About Course Fee', detail: 'Learner contacts the training provider to enquire about a course. Admin provides the course fee details: course fee (excl. GST), GST, total fee, applicable funding (SkillsFuture, MCES), and estimated net fee payable after subsidies.', type: 'action' },
+      { title: '2. Create Proforma Invoice', detail: 'Admin generates a proforma invoice from Finance Management. The proforma shows the full fee breakdown and estimated net fee. This document is sent to the learner for SkillsFuture Credit claim submission or employer sponsorship approval. The proforma is uploaded to Google Drive and recorded in Billing History.', type: 'logic' },
+      { title: '3. Enrollment', detail: 'Once the learner confirms participation, admin creates the enrollment in the system. The enrollment record links the learner to the specific course run with their enrolment details, NRIC, and payment status.', type: 'action' },
+      { title: '4. Apply SkillsFuture Credit', detail: 'The learner submits their SkillsFuture Credit claim on the MySkillsFuture portal using the proforma invoice details. SSG processes the claim and approves the funding amount. The claim amount is deducted from the total course fee.', type: 'logic' },
+      { title: '5. Create Invoice for Net Fee', detail: 'After SkillsFuture Credit is approved, admin generates a tax invoice for the net fee payable: Total Fee - SkillsFuture Credit - Funding = Net Fee. The invoice is uploaded to Google Drive and recorded in Billing History. Admin sends the invoice to the learner with payment instructions.', type: 'action' },
+      { title: '6. Net Fee Paid', detail: 'The learner pays the net fee via bank transfer, PayNow, or other payment method. Admin verifies the payment and updates the invoice status to "Paid" in Billing History. The enrollment payment status is also updated.', type: 'success' },
+      { title: '7. Generate Receipt', detail: 'Admin generates a receipt for the payment received. The receipt references the original invoice and confirms the payment amount, method, and date. The receipt is uploaded to Google Drive and recorded in Billing History. A copy is sent to the learner as proof of payment.', type: 'storage' },
+      { title: '8. Ready to Take the Class', detail: 'With payment complete, the learner is fully enrolled and ready to attend the class. They can access the course details, Google Meet link (for virtual classes), and learning materials through the TMS portal. The billing cycle is complete: Enquiry → Proforma → Enrollment → SkillsFuture → Invoice → Payment → Receipt → Class Ready.', type: 'success' },
+    ],
+    dbTables: [
+      { name: 'billing_history', description: 'Tracks all billing documents: proforma invoices, invoices, and receipts with type, status, amounts, and Drive URLs' },
+      { name: 'enrollment', description: 'Learner enrollment record with payment_status tracking (pending/paid)' },
+    ],
+  },
+  {
     id: 'lesson-delivery',
     title: 'Lesson Delivery Workflow',
     icon: '📚',
