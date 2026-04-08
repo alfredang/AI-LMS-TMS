@@ -153,7 +153,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       includeOngoing
         ? '(cr.start_date > CURRENT_DATE OR (cr.start_date <= CURRENT_DATE AND cr.end_date >= CURRENT_DATE))'
         : 'cr.start_date > CURRENT_DATE',
-      `cr.class_status IN ('Confirmed', 'Pending')`,
       `cr.start_date <= CURRENT_DATE + ($${paramIndex} * INTERVAL '1 day')`
     ];
     params.push(includeOngoing ? 365 : thresholdDays);
@@ -208,7 +207,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       paramIndex++;
     }
 
-    if (classStatus === 'Confirmed' || classStatus === 'Pending') {
+    if (classStatus === 'Confirmed' || classStatus === 'Pending' || classStatus === 'Cancelled') {
       filters.push(`cr.class_status = $${paramIndex}`);
       params.push(classStatus);
       paramIndex++;
@@ -489,11 +488,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         break;
       }
 
-      // Derive class status: Confirmed if local trainer assigned, Pending otherwise
+      // Derive class status: Confirmed if local trainer assigned, Pending otherwise.
+      // Exception: if the row is already 'Cancelled', leave it alone — manual cancellation is sticky.
       const hasLocalTrainer = !!(allLocalPairs[0]?.name);
-      const derivedStatus = hasLocalTrainer ? 'Confirmed' : 'Pending';
+      const derivedStatus = row.class_status === 'Cancelled'
+        ? 'Cancelled'
+        : (hasLocalTrainer ? 'Confirmed' : 'Pending');
 
-      // Persist to DB if status changed
+      // Persist to DB if status changed (skipped automatically when already Cancelled)
       if (row.class_status !== derivedStatus) {
         pool.query(`UPDATE course_run SET class_status = $1, updated_at = NOW() WHERE id = $2`, [derivedStatus, row.id]).catch(() => {});
       }

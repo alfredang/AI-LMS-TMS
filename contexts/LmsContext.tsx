@@ -244,6 +244,8 @@ interface LmsContextType {
   setCourseEditMode: (mode: 'create' | 'edit' | 'view' | null) => void;
   editingCourseRun: any | null;
   setEditingCourseRun: (courseRun: any | null) => void;
+  classListReturnTo: AdminPage | null;
+  setClassListReturnTo: (page: AdminPage | null) => void;
   ssgApp: string;
   setSsgApp: (app: string) => void;
   financePage: string;
@@ -312,6 +314,15 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [editingCourse, setEditingCourse] = useState<Course | null>(null);
   const [courseEditMode, setCourseEditMode] = useState<'create' | 'edit' | 'view' | null>(null);
   const [editingCourseRun, setEditingCourseRun] = useState<any | null>(null);
+  const [classListReturnTo, setClassListReturnTo] = useState<AdminPage | null>(null);
+
+  // Auto-clear classListReturnTo when navigating anywhere that isn't the class detail/edit flow.
+  // This prevents stale return targets from leaking between unrelated navigations (sidebar clicks, dashboard jumps, etc.).
+  useEffect(() => {
+    if (adminPage !== AdminPage.ClassDetail && adminPage !== AdminPage.EditClass) {
+      setClassListReturnTo(null);
+    }
+  }, [adminPage]);
   const [ssgApp, setSsgApp] = useState<string>('app1');  // default, overridden by DB setting
   const [ssgAppLoaded, setSsgAppLoaded] = useState(false);
   const [financePage, setFinancePage] = useState<string>('dashboard');
@@ -906,6 +917,7 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const resetAdminView = useCallback(() => {
     console.log('🔄 LmsContext: Resetting admin view');
     setAdminPage(AdminPage.Dashboard);
+    setClassListReturnTo(null);
   }, []);
 
   // Function to refresh current user profile
@@ -1616,6 +1628,8 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setCourseEditMode,
     editingCourseRun,
     setEditingCourseRun,
+    classListReturnTo,
+    setClassListReturnTo,
     ssgApp,
     setSsgApp,
     financePage,
