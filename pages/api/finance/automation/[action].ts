@@ -34,7 +34,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         });
       }
 
-      const results = await refreshGrantsForEnrolments(enrolmentIds);
+      const ssgApp = (req.headers['x-ssg-app'] as string | undefined)?.trim() || undefined;
+      const results = await refreshGrantsForEnrolments(enrolmentIds, ssgApp);
       const okCount = results.filter((r) => r.success).length;
       const failCount = results.length - okCount;
 

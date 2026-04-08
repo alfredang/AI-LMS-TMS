@@ -4,6 +4,29 @@ import { HttpClient, HTTPRequestBuilder, HttpMethod } from '../../../lib/ssg/uti
 import crypto from 'crypto';
 import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdentifiers';
 
+function summarizeSsgHttpError(status: number, data: unknown): string {
+  let base = `SSG error ${status}`;
+  if (data == null || data === '') return `${base} (no response body — often a transient SSG gateway issue; retry in a minute)`;
+  if (typeof data === 'string') {
+    const t = data.trim();
+    return t ? `${base}: ${t.slice(0, 800)}` : base;
+  }
+  try {
+    const o = data as Record<string, unknown>;
+    if (typeof o.message === 'string' && o.message.trim()) return `${base}: ${o.message}`;
+    const err = o.error;
+    if (err && typeof err === 'object') {
+      const e = err as Record<string, unknown>;
+      if (typeof e.message === 'string' && e.message.trim()) return `${base}: ${e.message}`;
+      if (typeof e.code === 'string' && e.code.trim()) return `${base}: ${e.code}`;
+    }
+    const s = JSON.stringify(data);
+    return s.length > 2 ? `${base}: ${s.slice(0, 800)}` : base;
+  } catch {
+    return base;
+  }
+}
+
 /**
  * POST /api/grants/search
  * Search grants by course run ID via SSG TPG API.
@@ -71,9 +94,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     if (httpResponse.status !== 200) {
       console.error(`❌ SSG search grants error [${httpResponse.status}]:`, JSON.stringify(httpResponse.data));
+      const friendly = summarizeSsgHttpError(httpResponse.status, httpResponse.data);
       return res.status(httpResponse.status).json({
         success: false,
-        error: `SSG error ${httpResponse.status}`,
+        error: friendly,
         details: httpResponse.data,
       });
     }

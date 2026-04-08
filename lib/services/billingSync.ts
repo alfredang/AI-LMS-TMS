@@ -202,12 +202,17 @@ export interface GrantRefreshRowResult {
 /**
  * Fetches grants from SSG for each enrolment reference and upserts into ssg_grants.
  * Uses the same encrypted /tpg/grants/search path as billing sync (not the legacy Cloud Run JSON API).
+ *
+ * @param ssgApp - Same values as `x-ssg-app` (e.g. `app2`). Must match the app used for grant search so encryption keys align with the mTLS cert.
  */
-export async function refreshGrantsForEnrolments(enrolmentIds: string[]): Promise<GrantRefreshRowResult[]> {
+export async function refreshGrantsForEnrolments(
+  enrolmentIds: string[],
+  ssgApp?: string
+): Promise<GrantRefreshRowResult[]> {
   const unique = Array.from(new Set(enrolmentIds.map((id) => id.trim()).filter(Boolean)));
   if (unique.length === 0) return [];
 
-  const credentials = await getSSGCredentialsService().getSSGCredentials();
+  const credentials = await getSSGCredentialsService().getSSGCredentials(undefined, ssgApp);
   if (!credentials) {
     return unique.map((enrolmentId) => ({
       enrolmentId,

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { ssgFetch } from '@lib/ssgAppState';
 import AutomationPageShell from './AutomationPageShell';
 import { Card } from '../../ui/Card';
 import { Button } from '../../ui/Button';
@@ -42,7 +43,20 @@ type GrantsSearchResponse = {
   data?: any[];
   meta?: any;
   error?: string;
+  details?: unknown;
 };
+
+function formatGrantSearchFailure(json: GrantsSearchResponse, httpStatus: number): string {
+  const base = json.error?.trim() || `SSG error ${httpStatus}`;
+  const d = json.details;
+  if (d == null) return base;
+  if (typeof d === 'string' && d.trim()) return `${base} — ${d.slice(0, 400)}`;
+  try {
+    const s = JSON.stringify(d);
+    if (s && s !== '{}' && s !== 'null') return `${base} — ${s.slice(0, 400)}`;
+  } catch { /* ignore */ }
+  return base;
+}
 
 export default function ProcessGrantsView() {
   const [courseRunId, setCourseRunId] = useState('');
@@ -127,7 +141,7 @@ export default function ProcessGrantsView() {
     setProcessing(true);
     setLastResult(null);
     try {
-      const res = await fetch('/api/finance/automation/process-grants', {
+      const res = await ssgFetch('/api/finance/automation/process-grants', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ enrolmentIds }),
@@ -173,14 +187,14 @@ export default function ProcessGrantsView() {
     setLastResult(null);
 
     try {
-      const response = await fetch('/api/grants/search', {
+      const response = await ssgFetch('/api/grants/search', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ courseRunId: trimmed }),
       });
       const json = (await response.json()) as GrantsSearchResponse;
       if (!json.success) {
-        setSearchError(json.error || `SSG error ${response.status}`);
+        setSearchError(formatGrantSearchFailure(json, response.status));
         return;
       }
       setGrantsData({ data: json.data ?? [], meta: json.meta ?? {} });

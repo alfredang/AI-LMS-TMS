@@ -805,7 +805,10 @@ const FinanceLayout: React.FC = () => {
         {/* Main Content Area */}
         <main className="flex-1 overflow-x-hidden">
           <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
-            {page.startsWith('tpg') && <SsgAppSelector />}
+            {(page.startsWith('tpg') ||
+              page === 'autoProcessGrants' ||
+              page === 'searchGrant' ||
+              page === 'viewGrant') && <SsgAppSelector />}
             {renderContent()}
           </div>
         </main>
