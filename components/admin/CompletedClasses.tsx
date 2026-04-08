@@ -258,6 +258,7 @@ const CompletedClasses: React.FC = () => {
 
     const BATCH_SIZE = 5;
     const allResults: SyncResult[] = [];
+    const allSkippedExisting: { courseRunId: string; courseTitle: string }[] = [];
     const authToken = authService.getAuthToken();
 
     try {
@@ -276,9 +277,9 @@ const CompletedClasses: React.FC = () => {
 
         const data = await response.json();
 
-        if (data.success && data.results) {
-          allResults.push(...data.results);
-          // Show partial results as they come in
+        if (data.success) {
+          if (data.results) allResults.push(...data.results);
+          if (data.skippedExisting) allSkippedExisting.push(...data.skippedExisting);
           setSyncResults([...allResults]);
         } else {
           setSyncError(data.error || `Batch failed at ID ${batch[0]}`);
@@ -290,9 +291,12 @@ const CompletedClasses: React.FC = () => {
 
       // Build combined summary
       setSyncSummary({
+        alreadyInDb: allSkippedExisting.length,
+        pulledFromSsg: allResults.length,
         totalCourseRuns: allResults.length,
         totalEnrolmentsFetched: allResults.reduce((s, r) => s + r.ssgEnrolmentsFetched, 0),
         totalEnrolmentsInserted: allResults.reduce((s, r) => s + r.ssgEnrolmentsInserted, 0),
+        skippedExisting: allSkippedExisting,
       });
 
       // Refresh the table
@@ -413,10 +417,14 @@ const CompletedClasses: React.FC = () => {
               {/* Sync Results */}
               {syncSummary && syncResults && (
                 <div className="mt-4">
-                  <div className="grid grid-cols-3 gap-3 mb-4">
+                  <div className="grid grid-cols-4 gap-3 mb-4">
+                    <div className="bg-gray-50 dark:bg-gray-700/30 rounded-lg p-3 text-center">
+                      <p className="text-lg font-bold text-gray-500">{syncSummary.alreadyInDb || 0}</p>
+                      <p className="text-xs text-gray-600 dark:text-gray-400">Already in DB</p>
+                    </div>
                     <div className="bg-blue-50 dark:bg-blue-900/30 rounded-lg p-3 text-center">
-                      <p className="text-lg font-bold text-blue-600">{syncSummary.totalCourseRuns}</p>
-                      <p className="text-xs text-gray-600 dark:text-gray-400">Course Runs</p>
+                      <p className="text-lg font-bold text-blue-600">{syncSummary.pulledFromSsg || syncSummary.totalCourseRuns}</p>
+                      <p className="text-xs text-gray-600 dark:text-gray-400">Pulled from SSG</p>
                     </div>
                     <div className="bg-green-50 dark:bg-green-900/30 rounded-lg p-3 text-center">
                       <p className="text-lg font-bold text-green-600">{syncSummary.totalEnrolmentsFetched}</p>
@@ -439,6 +447,16 @@ const CompletedClasses: React.FC = () => {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                        {syncSummary.skippedExisting?.map((s: any) => (
+                          <tr key={`existing-${s.courseRunId}`} className="bg-gray-50/50 dark:bg-gray-700/10">
+                            <td className="px-3 py-1.5 text-gray-400 dark:text-gray-500 font-mono">{s.courseRunId}</td>
+                            <td className="px-3 py-1.5 text-gray-400 dark:text-gray-500 truncate max-w-[200px]">{s.courseTitle}</td>
+                            <td className="px-3 py-1.5 text-center text-gray-400 dark:text-gray-500">—</td>
+                            <td className="px-3 py-1.5 text-center">
+                              <span className="text-gray-400 dark:text-gray-500 text-xs">In DB</span>
+                            </td>
+                          </tr>
+                        ))}
                         {syncResults.map((r) => (
                           <tr key={r.courseRunId} className="hover:bg-gray-50 dark:hover:bg-gray-700/30">
                             <td className="px-3 py-1.5 text-gray-700 dark:text-gray-300 font-mono">{r.courseRunId}</td>

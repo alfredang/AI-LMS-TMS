@@ -98,9 +98,39 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const debugErrors: any[] = [];
 
+  const skippedExisting: { courseRunId: string; courseTitle: string }[] = [];
+
   if (isSpecificMode) {
-    // ── Specific IDs mode: fetch each course run from SSG, ensure it exists locally ──
-    for (const ssgRunId of specificIds) {
+    // ── Check which IDs already exist in the DB (with enrollments) ──
+    const existingResult = await pool.query(
+      `SELECT cr.course_run_id AS ssg_run_id, c.title AS course_title,
+              (SELECT COUNT(*) FROM enrollment e WHERE e.course_run_id = cr.id) AS enrol_count
+       FROM course_run cr
+       JOIN course c ON c.id = cr.course_id
+       WHERE cr.course_run_id = ANY($1)`,
+      [specificIds]
+    );
+    const existingMap = new Map<string, { title: string; enrolCount: number }>();
+    for (const row of existingResult.rows) {
+      existingMap.set(row.ssg_run_id, { title: row.course_title, enrolCount: Number(row.enrol_count) });
+    }
+
+    // Filter: only call SSG for IDs not already in DB with enrollments
+    const idsToFetch: string[] = [];
+    for (const id of specificIds) {
+      const existing = existingMap.get(id);
+      if (existing && existing.enrolCount > 0) {
+        skippedExisting.push({ courseRunId: id, courseTitle: existing.title });
+        console.log(`  ⏩ ${id} already in DB with ${existing.enrolCount} enrollments — skipping SSG fetch`);
+      } else {
+        idsToFetch.push(id);
+      }
+    }
+
+    console.log(`📊 ${skippedExisting.length} already in DB, ${idsToFetch.length} to fetch from SSG`);
+
+    // ── Fetch only new IDs from SSG ──
+    for (const ssgRunId of idsToFetch) {
       console.log(`\n🔍 Fetching course run ${ssgRunId} from SSG...`);
 
       try {
@@ -280,10 +310,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(200).json({
       success: true,
       message: isSpecificMode
-        ? 'No valid course runs found from the provided IDs.'
+        ? (skippedExisting.length > 0
+          ? `All ${skippedExisting.length} course runs already exist in the database.`
+          : 'No valid course runs found from the provided IDs.')
         : `No completed classes with enrollments found for ${year}-${String(month).padStart(2, '0')}.`,
+      summary: {
+        alreadyInDb: skippedExisting.length,
+        pulledFromSsg: 0,
+        totalCourseRuns: 0,
+        totalEnrolmentsFetched: 0,
+        totalEnrolmentsInserted: 0,
+      },
       total: 0,
       results: [],
+      skippedExisting,
       ...(debugErrors.length > 0 && { debugErrors }),
     });
   }
@@ -538,6 +578,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const summary = {
     mode: isSpecificMode ? 'specific-ids' : 'date-range',
     ...(isSpecificMode ? { requestedIds: specificIds.length } : { month: `${year}-${String(month).padStart(2, '0')}` }),
+    alreadyInDb: skippedExisting.length,
+    pulledFromSsg: courseRuns.length,
     totalCourseRuns: courseRuns.length,
     totalEnrolmentsFetched: results.reduce((s, r) => s + r.ssgEnrolmentsFetched, 0),
     totalEnrolmentsInserted: results.reduce((s, r) => s + r.ssgEnrolmentsInserted, 0),
@@ -554,9 +596,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   return res.status(200).json({
     success: true,
     message: isSpecificMode
-      ? `Synced ${summary.totalCourseRuns} course runs (${summary.skippedNoEnrolments} skipped — no enrollments)`
+      ? `Synced ${summary.pulledFromSsg} from SSG, ${summary.alreadyInDb} already in DB`
       : `Synced ${summary.totalCourseRuns} completed classes for ${summary.month}`,
     summary,
     results,
+    skippedExisting,
   });
 }
