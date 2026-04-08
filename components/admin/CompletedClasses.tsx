@@ -76,6 +76,7 @@ const CompletedClasses: React.FC = () => {
   const [syncSummary, setSyncSummary] = useState<any>(null);
   const [syncError, setSyncError] = useState('');
   const [syncProgress, setSyncProgress] = useState({ completed: 0, total: 0, currentId: '' });
+  const [skipExisting, setSkipExisting] = useState(true);
 
   // Search and filter states
   const [searchQuery, setSearchQuery] = useState('');
@@ -266,7 +267,7 @@ const CompletedClasses: React.FC = () => {
         const batch = ids.slice(i, i + BATCH_SIZE);
         setSyncProgress({ completed: i, total: ids.length, currentId: batch[0] });
 
-        const response = await fetch(getApiUrl('/api/admin/sync-completed-classes?app=app1'), {
+        const response = await fetch(getApiUrl(`/api/admin/sync-completed-classes?app=app1&skipExisting=${skipExisting ? '1' : '0'}`), {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -315,6 +316,7 @@ const CompletedClasses: React.FC = () => {
     setSyncSummary(null);
     setSyncError('');
     setSyncProgress({ completed: 0, total: 0, currentId: '' });
+    setSkipExisting(true);
   };
 
   const handleViewDetails = (classItem: any) => {
@@ -378,6 +380,23 @@ const CompletedClasses: React.FC = () => {
                 <span className="text-xs text-gray-500 dark:text-gray-400">
                   {parseCourseRunIds(syncInput).length} unique IDs detected
                 </span>
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <span className="text-xs text-gray-600 dark:text-gray-400">Skip existing</span>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={skipExisting}
+                    onClick={() => setSkipExisting(!skipExisting)}
+                    disabled={syncing}
+                    className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                      skipExisting ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'
+                    } disabled:opacity-50`}
+                  >
+                    <span className={`inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform ${
+                      skipExisting ? 'translate-x-[18px]' : 'translate-x-[3px]'
+                    }`} />
+                  </button>
+                </label>
               </div>
 
               {syncError && (

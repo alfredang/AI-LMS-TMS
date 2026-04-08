@@ -98,36 +98,41 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const debugErrors: any[] = [];
 
+  const skipExisting = req.query.skipExisting !== '0'; // default: skip
   const skippedExisting: { courseRunId: string; courseTitle: string }[] = [];
 
   if (isSpecificMode) {
-    // ── Check which IDs already exist in the DB (with enrollments) ──
-    const existingResult = await pool.query(
-      `SELECT cr.course_run_id AS ssg_run_id, c.title AS course_title,
-              (SELECT COUNT(*) FROM enrollment e WHERE e.course_run_id = cr.id) AS enrol_count
-       FROM course_run cr
-       JOIN course c ON c.id = cr.course_id
-       WHERE cr.course_run_id = ANY($1)`,
-      [specificIds]
-    );
-    const existingMap = new Map<string, { title: string; enrolCount: number }>();
-    for (const row of existingResult.rows) {
-      existingMap.set(row.ssg_run_id, { title: row.course_title, enrolCount: Number(row.enrol_count) });
-    }
+    let idsToFetch: string[] = specificIds;
 
-    // Filter: only call SSG for IDs not already in DB with enrollments
-    const idsToFetch: string[] = [];
-    for (const id of specificIds) {
-      const existing = existingMap.get(id);
-      if (existing && existing.enrolCount > 0) {
-        skippedExisting.push({ courseRunId: id, courseTitle: existing.title });
-        console.log(`  ⏩ ${id} already in DB with ${existing.enrolCount} enrollments — skipping SSG fetch`);
-      } else {
-        idsToFetch.push(id);
+    if (skipExisting) {
+      // ── Check which IDs already exist in the DB (with enrollments) ──
+      const existingResult = await pool.query(
+        `SELECT cr.course_run_id AS ssg_run_id, c.title AS course_title,
+                (SELECT COUNT(*) FROM enrollment e WHERE e.course_run_id = cr.id) AS enrol_count
+         FROM course_run cr
+         JOIN course c ON c.id = cr.course_id
+         WHERE cr.course_run_id = ANY($1)`,
+        [specificIds]
+      );
+      const existingMap = new Map<string, { title: string; enrolCount: number }>();
+      for (const row of existingResult.rows) {
+        existingMap.set(row.ssg_run_id, { title: row.course_title, enrolCount: Number(row.enrol_count) });
+      }
+
+      // Filter: only call SSG for IDs not already in DB with enrollments
+      idsToFetch = [];
+      for (const id of specificIds) {
+        const existing = existingMap.get(id);
+        if (existing && existing.enrolCount > 0) {
+          skippedExisting.push({ courseRunId: id, courseTitle: existing.title });
+          console.log(`  ⏩ ${id} already in DB with ${existing.enrolCount} enrollments — skipping SSG fetch`);
+        } else {
+          idsToFetch.push(id);
+        }
       }
     }
 
-    console.log(`📊 ${skippedExisting.length} already in DB, ${idsToFetch.length} to fetch from SSG`);
+    console.log(`📊 skipExisting=${skipExisting} | ${skippedExisting.length} already in DB, ${idsToFetch.length} to fetch from SSG`);
 
     // ── Fetch only new IDs from SSG ──
     for (const ssgRunId of idsToFetch) {
