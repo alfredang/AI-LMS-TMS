@@ -49,6 +49,14 @@ const StatCard: React.FC<{ title: string; value: string | number }> = ({ title, 
   </Card>
 );
 
+interface SyncResult {
+  courseRunId: string;
+  courseTitle: string;
+  ssgEnrolmentsFetched: number;
+  ssgEnrolmentsInserted: number;
+  errors: string[];
+}
+
 const CompletedClasses: React.FC = () => {
   const { setAdminPage, setSelectedCourseRunId, setEditingCourseRun } = useLms();
   const [completedClasses, setCompletedClasses] = useState<CompletedClass[]>([]);
@@ -59,6 +67,14 @@ const CompletedClasses: React.FC = () => {
   });
   const [trainers, setTrainers] = useState<Trainer[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Sync from SSG modal state
+  const [showSyncModal, setShowSyncModal] = useState(false);
+  const [syncInput, setSyncInput] = useState('');
+  const [syncing, setSyncing] = useState(false);
+  const [syncResults, setSyncResults] = useState<SyncResult[] | null>(null);
+  const [syncSummary, setSyncSummary] = useState<any>(null);
+  const [syncError, setSyncError] = useState('');
 
   // Search and filter states
   const [searchQuery, setSearchQuery] = useState('');
@@ -220,6 +236,60 @@ const CompletedClasses: React.FC = () => {
     setCurrentPage(0);
   };
 
+  const parseCourseRunIds = (input: string): string[] => {
+    // Extract numeric IDs from any format: comma-separated, newline-separated, spaces, etc.
+    const ids = input.match(/\d{6,}/g) || [];
+    return [...new Set(ids)]; // deduplicate
+  };
+
+  const handleSyncFromSSG = async () => {
+    const ids = parseCourseRunIds(syncInput);
+    if (ids.length === 0) {
+      setSyncError('No valid course run IDs found. Enter numeric IDs (6+ digits).');
+      return;
+    }
+
+    setSyncing(true);
+    setSyncError('');
+    setSyncResults(null);
+    setSyncSummary(null);
+
+    try {
+      const authToken = authService.getAuthToken();
+      const response = await fetch(getApiUrl('/api/admin/sync-completed-classes?app=app1'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(authToken && { 'Authorization': `Bearer ${authToken}` }),
+        },
+        body: JSON.stringify({ courseRunIds: ids }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setSyncResults(data.results);
+        setSyncSummary(data.summary);
+        // Refresh the table
+        fetchCompletedClasses();
+      } else {
+        setSyncError(data.error || 'Sync failed. Please try again.');
+      }
+    } catch (err) {
+      setSyncError(err instanceof Error ? err.message : 'Network error. Please try again.');
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  const closeSyncModal = () => {
+    setShowSyncModal(false);
+    setSyncInput('');
+    setSyncResults(null);
+    setSyncSummary(null);
+    setSyncError('');
+  };
+
   const handleViewDetails = (classItem: any) => {
     setEditingCourseRun(classItem);
     setSelectedCourseRunId(classItem.courseRunId);
@@ -245,7 +315,122 @@ const CompletedClasses: React.FC = () => {
 
   return (
     <div>
-      <h2 className="text-3xl font-bold mb-6 dark:text-white">Completed Classes</h2>
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-3xl font-bold dark:text-white">Completed Classes</h2>
+        <Button variant="primary" size="sm" onClick={() => setShowSyncModal(true)}>
+          Sync from SSG
+        </Button>
+      </div>
+
+      {/* Sync from SSG Modal */}
+      {showSyncModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={(e) => { if (e.target === e.currentTarget) closeSyncModal(); }}>
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-xl font-bold dark:text-white">Sync Course Runs from SSG</h3>
+                <button onClick={closeSyncModal} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-2xl leading-none">&times;</button>
+              </div>
+
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                Enter course run IDs below (comma-separated, one per line, or any format).
+                Data will be pulled from SSG API including enrollments, sessions, attendance, and trainer info.
+                Only course runs with at least 1 enrollment will be added.
+              </p>
+
+              <textarea
+                value={syncInput}
+                onChange={(e) => setSyncInput(e.target.value)}
+                placeholder={"Enter course run IDs, e.g.:\n1322309\n1325270\n1077452"}
+                rows={8}
+                disabled={syncing}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-mono dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400 disabled:opacity-50"
+              />
+
+              <div className="flex justify-between items-center mt-2 mb-4">
+                <span className="text-xs text-gray-500 dark:text-gray-400">
+                  {parseCourseRunIds(syncInput).length} unique IDs detected
+                </span>
+              </div>
+
+              {syncError && (
+                <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 px-4 py-3 rounded-md mb-4 text-sm">
+                  {syncError}
+                </div>
+              )}
+
+              {!syncResults && (
+                <div className="flex justify-end gap-2">
+                  <Button variant="ghost" size="sm" onClick={closeSyncModal} disabled={syncing}>Cancel</Button>
+                  <Button variant="primary" size="sm" onClick={handleSyncFromSSG} disabled={syncing || parseCourseRunIds(syncInput).length === 0}>
+                    {syncing ? (
+                      <span className="flex items-center gap-2">
+                        <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></span>
+                        Syncing from SSG...
+                      </span>
+                    ) : (
+                      `Sync ${parseCourseRunIds(syncInput).length} Course Runs`
+                    )}
+                  </Button>
+                </div>
+              )}
+
+              {/* Sync Results */}
+              {syncSummary && syncResults && (
+                <div className="mt-4">
+                  <div className="grid grid-cols-3 gap-3 mb-4">
+                    <div className="bg-blue-50 dark:bg-blue-900/30 rounded-lg p-3 text-center">
+                      <p className="text-lg font-bold text-blue-600">{syncSummary.totalCourseRuns}</p>
+                      <p className="text-xs text-gray-600 dark:text-gray-400">Course Runs</p>
+                    </div>
+                    <div className="bg-green-50 dark:bg-green-900/30 rounded-lg p-3 text-center">
+                      <p className="text-lg font-bold text-green-600">{syncSummary.totalEnrolmentsFetched}</p>
+                      <p className="text-xs text-gray-600 dark:text-gray-400">Enrollments Found</p>
+                    </div>
+                    <div className="bg-purple-50 dark:bg-purple-900/30 rounded-lg p-3 text-center">
+                      <p className="text-lg font-bold text-purple-600">{syncSummary.totalEnrolmentsInserted}</p>
+                      <p className="text-xs text-gray-600 dark:text-gray-400">New Enrollments</p>
+                    </div>
+                  </div>
+
+                  <div className="max-h-60 overflow-y-auto border dark:border-gray-700 rounded-md">
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-50 dark:bg-gray-700/50 sticky top-0">
+                        <tr>
+                          <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Run ID</th>
+                          <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Course Title</th>
+                          <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-400">Enrol</th>
+                          <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-400">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                        {syncResults.map((r) => (
+                          <tr key={r.courseRunId} className="hover:bg-gray-50 dark:hover:bg-gray-700/30">
+                            <td className="px-3 py-1.5 text-gray-700 dark:text-gray-300 font-mono">{r.courseRunId}</td>
+                            <td className="px-3 py-1.5 text-gray-700 dark:text-gray-300 truncate max-w-[200px]">{r.courseTitle}</td>
+                            <td className="px-3 py-1.5 text-center text-gray-700 dark:text-gray-300">{r.ssgEnrolmentsFetched}</td>
+                            <td className="px-3 py-1.5 text-center">
+                              {r.errors.length === 0 ? (
+                                <span className="text-green-600 text-xs font-medium">OK</span>
+                              ) : (
+                                <span className="text-red-500 text-xs" title={r.errors.join(', ')}>Error</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div className="flex justify-end mt-4">
+                    <Button variant="primary" size="sm" onClick={closeSyncModal}>Done</Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Statistics Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
