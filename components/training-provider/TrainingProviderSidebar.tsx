@@ -16,6 +16,9 @@ const TrainingProviderSidebar: React.FC<TrainingProviderSidebarProps> = ({ onNav
     const templateViews = [View.OtpEmailTemplate, View.CertificateEmailTemplate, View.FeedbackEmailTemplate, View.PasswordResetEmailTemplate, View.TrainerInvitationEmailTemplate, View.TrainerResponseEmailTemplates, View.FinalCourseConfirmationEmailTemplate, View.CourseConfirmationEmailTemplate, View.PrivacyPolicy, View.AcceptableUsePolicy];
     const [templatesOpen, setTemplatesOpen] = useState(templateViews.includes(currentView));
     const [workflowsOpen, setWorkflowsOpen] = useState(currentView === View.WorkflowGuides);
+    const [wfTrainingOpen, setWfTrainingOpen] = useState(false);
+    const [wfAdminOpen, setWfAdminOpen] = useState(false);
+    const [wfFinanceOpen, setWfFinanceOpen] = useState(false);
     const [usefulLinksOpen, setUsefulLinksOpen] = useState(false);
 
     const navItemsTop = [
@@ -75,7 +78,7 @@ const TrainingProviderSidebar: React.FC<TrainingProviderSidebarProps> = ({ onNav
             {/* Workflow Guides - Collapsible (after Company Setting) */}
             <div>
                 <button
-                    onClick={() => { setWorkflowsOpen(!workflowsOpen); handleClick(View.WorkflowGuides); }}
+                    onClick={() => { setWorkflowsOpen(!workflowsOpen); handleClick(View.WorkflowGuides); onSelectWorkflow?.(''); }}
                     className={`flex items-center justify-between w-full rounded-md px-3 py-2.5 text-sm font-medium transition-colors ${activeView === View.WorkflowGuides ? 'bg-blue-50 text-blue-600 dark:bg-blue-600/20 dark:text-blue-400' : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-slate-700 dark:hover:text-white'}`}
                 >
                     <div className="flex items-center gap-3">
@@ -86,23 +89,47 @@ const TrainingProviderSidebar: React.FC<TrainingProviderSidebarProps> = ({ onNav
                 </button>
                 {workflowsOpen && (
                     <div className="ml-4 mt-1 space-y-1">
-                        {[
-                            { id: 'trainer-invitation', label: 'Trainer Invitation', icon: '📨' },
+                        {/* Training */}
+                        <button onClick={() => setWfTrainingOpen(!wfTrainingOpen)} className="w-full flex items-center justify-between px-3 py-1.5 group cursor-pointer hover:bg-gray-100 dark:hover:bg-slate-700 rounded-md">
+                            <span className="text-xs font-semibold uppercase text-gray-400 dark:text-gray-500 tracking-wider">Training</span>
+                            <Icon name={IconName.ChevronDown} className={`w-3 h-3 text-gray-400 transition-transform ${wfTrainingOpen ? 'rotate-180' : ''}`} />
+                        </button>
+                        {wfTrainingOpen && [
+                            { id: 'lesson-delivery', label: 'Lesson Delivery', icon: '📚' },
+                            { id: 'assessment', label: 'Assessment', icon: '📝' },
+                        ].map(item => (
+                            <a key={item.id} href="#" onClick={(e) => { e.preventDefault(); handleClick(View.WorkflowGuides); onSelectWorkflow?.(item.id); }} className="flex items-center gap-2 rounded-md px-3 py-2 ml-4 text-sm text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-slate-700 dark:hover:text-white transition-colors">
+                                <span className="text-sm">{item.icon}</span>
+                                <span>{item.label}</span>
+                            </a>
+                        ))}
+                        {/* Admin */}
+                        <button onClick={() => setWfAdminOpen(!wfAdminOpen)} className="w-full flex items-center justify-between px-3 py-1.5 group cursor-pointer hover:bg-gray-100 dark:hover:bg-slate-700 rounded-md">
+                            <span className="text-xs font-semibold uppercase text-gray-400 dark:text-gray-500 tracking-wider">Admin</span>
+                            <Icon name={IconName.ChevronDown} className={`w-3 h-3 text-gray-400 transition-transform ${wfAdminOpen ? 'rotate-180' : ''}`} />
+                        </button>
+                        {wfAdminOpen && [
+                            { id: 'ssg-process-steps', label: 'SSG Process Steps', icon: '🏛️' },
                             { id: 'certificate', label: 'Certificate', icon: '🎓' },
+                            { id: 'trainer-invitation', label: 'Trainer Invitation', icon: '📨' },
+                        ].map(item => (
+                            <a key={item.id} href="#" onClick={(e) => { e.preventDefault(); handleClick(View.WorkflowGuides); onSelectWorkflow?.(item.id); }} className="flex items-center gap-2 rounded-md px-3 py-2 ml-4 text-sm text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-slate-700 dark:hover:text-white transition-colors">
+                                <span className="text-sm">{item.icon}</span>
+                                <span>{item.label}</span>
+                            </a>
+                        ))}
+                        {/* Finance */}
+                        <button onClick={() => setWfFinanceOpen(!wfFinanceOpen)} className="w-full flex items-center justify-between px-3 py-1.5 group cursor-pointer hover:bg-gray-100 dark:hover:bg-slate-700 rounded-md">
+                            <span className="text-xs font-semibold uppercase text-gray-400 dark:text-gray-500 tracking-wider">Finance</span>
+                            <Icon name={IconName.ChevronDown} className={`w-3 h-3 text-gray-400 transition-transform ${wfFinanceOpen ? 'rotate-180' : ''}`} />
+                        </button>
+                        {wfFinanceOpen && [
+                            { id: 'billing-history', label: 'Billing History', icon: '💰' },
                             { id: 'proforma-invoice', label: 'Proforma Invoice', icon: '🧾' },
                             { id: 'invoice', label: 'Invoice', icon: '📄' },
                             { id: 'receipt', label: 'Receipt', icon: '🧾' },
-                            { id: 'billing-history', label: 'Billing History', icon: '💰' },
-                            { id: 'lesson-delivery', label: 'Lesson Delivery', icon: '📚' },
-                            { id: 'assessment', label: 'Assessment', icon: '📝' },
-                            { id: 'ssg-process-steps', label: 'SSG Process Steps', icon: '🏛️' },
                         ].map(item => (
-                            <a
-                                key={item.id}
-                                href="#"
-                                onClick={(e) => { e.preventDefault(); handleClick(View.WorkflowGuides); onSelectWorkflow?.(item.id); }}
-                                className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-slate-700 dark:hover:text-white transition-colors"
-                            >
+                            <a key={item.id} href="#" onClick={(e) => { e.preventDefault(); handleClick(View.WorkflowGuides); onSelectWorkflow?.(item.id); }} className="flex items-center gap-2 rounded-md px-3 py-2 ml-4 text-sm text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-slate-700 dark:hover:text-white transition-colors">
                                 <span className="text-sm">{item.icon}</span>
                                 <span>{item.label}</span>
                             </a>

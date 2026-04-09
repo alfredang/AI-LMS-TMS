@@ -712,7 +712,9 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Wrapped setTrainerPage to sync with URL
   const navigateTrainerPage = useCallback((page: TrainerPage) => {
     setTrainerPage(page);
+    setSelectedCourse(null);
     const newQuery: any = { ...router.query, trainerPage: page };
+    delete newQuery.courseId;
     // Clear stale view param so profile view doesn't persist
     delete newQuery.view;
     router.push({ pathname: router.pathname, query: newQuery }, undefined, { shallow: true });
