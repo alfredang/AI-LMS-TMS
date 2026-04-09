@@ -181,20 +181,9 @@ async function sendNextTrainerInvitation(courseRunUuid: string, tp: any) {
       tp.trainer_invitation_email_body || DEFAULT_TRAINER_INVITATION_BODY,
       replacements
     );
-<<<<<<< Updated upstream
-    const htmlBody = renderInvitationHtmlEmail({
-      trainerName: trainer.full_name || nextTrainerName,
-      courseTitle: cr.course_title || '',
-      courseCode: cr.course_code || '',
-      courseRunId: cr.course_run_id || '',
-      startDate: formatDateLabel(cr.start_date),
-      endDate: formatDateLabel(cr.end_date),
-      tpgTrainer: cr.tpg_assigned_trainer_name || 'N/A',
-=======
     const htmlBody = renderInvitationHtmlEmail(
       tp.trainer_invitation_email_body || DEFAULT_TRAINER_INVITATION_BODY,
       replacements,
->>>>>>> Stashed changes
       acceptUrl,
       declineUrl
     );
