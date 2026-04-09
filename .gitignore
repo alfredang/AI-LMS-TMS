@@ -19,6 +19,9 @@ build/
 config/local-settings.json
 service-account.json
 
+# Nemo AI memory (runtime-generated)
+data/nemo-memory.md
+
 # IDE and editor files
 .vscode/
 .idea/

@@ -49,16 +49,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
   }
 
-  // Action: update-tpg-trainer — manually set TPG trainer info on a course run
+  // Action: update-tpg-trainer — manually set TPG trainer info on a course run (null values clear the columns)
   if (action === 'update-tpg-trainer') {
     const { courseRunId, trainerName, trainerEmail } = req.body;
-    if (!courseRunId || !trainerName) {
-      return res.status(400).json({ success: false, error: 'courseRunId and trainerName are required' });
+    if (!courseRunId) {
+      return res.status(400).json({ success: false, error: 'courseRunId is required' });
     }
     try {
       const result = await pool.query(
         `UPDATE course_run SET tpg_assigned_trainer_name = $1, tpg_assigned_trainer_email = $2 WHERE course_run_id = $3 RETURNING id`,
-        [trainerName, trainerEmail || null, courseRunId]
+        [trainerName ?? null, trainerEmail ?? null, courseRunId]
       );
       return res.status(200).json({ success: true, rowCount: result.rowCount });
     } catch (error) {

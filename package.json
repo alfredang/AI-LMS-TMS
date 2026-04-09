@@ -12,6 +12,7 @@
     "db:seed": "node scripts/seed.js"
   },
   "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.2.97",
     "@anthropic-ai/sdk": "^0.72.1",
     "@google/generative-ai": "^0.24.1",
     "@types/ws": "^8.18.1",

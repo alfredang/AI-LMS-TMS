@@ -70,9 +70,12 @@ const AiChatbot: React.FC = () => {
                 content: m.text
             }));
 
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 120000);
             const response = await fetch(getApiUrl('/api/ai/nemo'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
+                signal: controller.signal,
                 body: JSON.stringify({
                     messages: conversationMessages,
                     systemPrompt: NEMO_SYSTEM_PROMPT,
@@ -84,6 +87,7 @@ const AiChatbot: React.FC = () => {
                     } : null,
                 }),
             });
+            clearTimeout(timeout);
 
             const rawBody = await response.text();
             let data: any = null;

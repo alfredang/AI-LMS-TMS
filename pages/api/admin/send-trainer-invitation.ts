@@ -140,18 +140,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const subject = renderInvitationTemplate(tp.trainer_invitation_email_subject || DEFAULT_TRAINER_INVITATION_SUBJECT, replacements);
     const body = renderInvitationTemplate(tp.trainer_invitation_email_body || DEFAULT_TRAINER_INVITATION_BODY, replacements);
-    const htmlBody = buildInvitationHtmlEmail({
-      trainerName: trainer.full_name || nextTrainerName,
-      courseTitle: classRow.course_title || '',
-      courseCode: classRow.course_code || '',
-      courseRunId: classRow.course_run_id || '',
-      startDate: formatDateLabel(classRow.start_date),
-      endDate: formatDateLabel(classRow.end_date),
-      tpgTrainer: classRow.tpg_assigned_trainer_name || 'N/A',
+
+    const htmlBody = renderInvitationHtmlEmail(
+      tp.trainer_invitation_email_body || DEFAULT_TRAINER_INVITATION_BODY,
+      replacements,
       acceptUrl,
-      declineUrl,
-      companyName: tp.company_shortname || tp.company_name || 'Training Provider',
-    });
+      declineUrl
+    );
 
     const oauth2Client = new google.auth.OAuth2(
       google_client_id,

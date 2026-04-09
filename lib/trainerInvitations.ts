@@ -11,12 +11,16 @@ Course Reference Code: {COURSE_CODE}
 Course Run ID: {COURSE_RUN_ID}
 Start Date: {START_DATE}
 End Date: {END_DATE}
-Assigned Trainer (TPG0): {TPG_TRAINER}
+Assigned Trainer (TPG): {TPG_TRAINER}
 
 Please review this invitation and choose one of the options below:
 
-{ACCEPT_URL}
-{DECLINE_URL}
+{ACCEPT_BUTTON}
+
+{DECLINE_BUTTON}
+
+Once accepted, please check the TMS portal to view your upcoming class:
+https://ai-lms-tms.tertiaryinfo.tech
 
 Warm regards
 {COMPANY_SHORT_NAME}`;
@@ -128,53 +132,42 @@ export function renderInvitationTemplate(template: string, replacements: Record<
   }, template);
 }
 
-export function buildInvitationHtmlEmail(params: {
-  trainerName: string;
-  courseTitle: string;
-  courseCode: string;
-  courseRunId: string;
-  startDate: string;
-  endDate: string;
-  tpgTrainer: string;
-  acceptUrl: string;
-  declineUrl: string;
-  companyName: string;
-}) {
-  const { trainerName, courseTitle, courseCode, courseRunId, startDate, endDate, tpgTrainer, acceptUrl, declineUrl, companyName } = params;
-  return `
-<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#1e293b;">
-  <p style="margin:0 0 16px;">Hi ${trainerName},</p>
-  <p style="margin:0 0 16px;">You are invited to facilitate the following class:</p>
+export function renderInvitationHtmlEmail(template: string, replacements: Record<string, string>, acceptUrl: string, declineUrl: string) {
+  // First do regular text replacements
+  let textWithVars = renderInvitationTemplate(template, replacements);
+  
+  // Convert standard text to HTML
+  let htmlBody = convertPlainTextToHtml(textWithVars);
 
-  <table style="width:100%;border-collapse:collapse;margin:0 0 20px;">
-    <tr><td style="padding:6px 12px;font-weight:600;color:#475569;width:180px;">Course</td><td style="padding:6px 12px;font-weight:700;color:#0f172a;">${courseTitle}</td></tr>
-    <tr style="background:#f8fafc;"><td style="padding:6px 12px;font-weight:600;color:#475569;">Course Reference Code</td><td style="padding:6px 12px;">${courseCode}</td></tr>
-    <tr><td style="padding:6px 12px;font-weight:600;color:#475569;">Course Run ID</td><td style="padding:6px 12px;">${courseRunId}</td></tr>
-    <tr style="background:#f8fafc;"><td style="padding:6px 12px;font-weight:600;color:#475569;">Start Date</td><td style="padding:6px 12px;">${startDate}</td></tr>
-    <tr><td style="padding:6px 12px;font-weight:600;color:#475569;">End Date</td><td style="padding:6px 12px;">${endDate}</td></tr>
-    <tr style="background:#f8fafc;"><td style="padding:6px 12px;font-weight:600;color:#475569;">Assigned Trainer (TPG)</td><td style="padding:6px 12px;">${tpgTrainer}</td></tr>
-  </table>
-
-  <p style="margin:0 0 20px;">Please review this invitation and choose one of the options below:</p>
-
-  <table cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
+  // Inject HTML buttons right where the placeholders are over raw links
+  const acceptButtonHtml = `
+  <table cellpadding="0" cellspacing="0" style="margin:16px 0;">
     <tr>
-      <td style="padding-right:16px;">
-        <a href="${acceptUrl}" style="display:inline-block;background:#16a34a;color:#ffffff;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:700;font-size:15px;">✓ Accept Invitation</a>
-      </td>
       <td>
-        <a href="${declineUrl}" style="display:inline-block;background:#dc2626;color:#ffffff;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:700;font-size:15px;">✗ Decline Invitation</a>
+        <a href="${acceptUrl}" style="display:inline-block;background:#16a34a;color:#ffffff;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:700;font-size:15px;text-align:center;">✓ Accept Invitation</a>
       </td>
     </tr>
-  </table>
+  </table>`;
 
-  <p style="margin:0 0 8px;">Once accepted, please check the TMS portal to view your upcoming class:</p>
-  <p style="margin:0 0 20px;"><a href="https://ai-lms-tms.tertiaryinfo.tech" style="color:#2563eb;text-decoration:none;font-weight:600;">ai-lms-tms.tertiaryinfo.tech</a></p>
+  const declineButtonHtml = `
+  <table cellpadding="0" cellspacing="0" style="margin:16px 0;">
+    <tr>
+      <td>
+        <a href="${declineUrl}" style="display:inline-block;background:#dc2626;color:#ffffff;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:700;font-size:15px;text-align:center;">✗ Decline Invitation</a>
+      </td>
+    </tr>
+  </table>`;
 
-  <p style="margin:0 0 8px;">Warm regards,</p>
-  <p style="margin:0 0 24px;font-weight:600;">${companyName}</p>
+  htmlBody = htmlBody.replace(/\{ACCEPT_BUTTON\}/g, acceptButtonHtml);
+  htmlBody = htmlBody.replace(/\{DECLINE_BUTTON\}/g, declineButtonHtml);
+  // Backwards compatibility
+  htmlBody = htmlBody.replace(/\{ACCEPT_URL\}/g, acceptButtonHtml);
+  htmlBody = htmlBody.replace(/\{DECLINE_URL\}/g, declineButtonHtml);
 
-  <div style="border-top:1px solid #e2e8f0;padding-top:12px;">
+  return `
+<div style="font-family:Arial,sans-serif;font-size:14px;color:#334155;line-height:1.6;max-width:600px;margin:0 auto;padding:20px;">
+  ${htmlBody}
+  <div style="border-top:1px solid #e2e8f0;padding-top:16px;margin-top:32px;">
     <p style="margin:0;font-size:12px;color:#94a3b8;font-style:italic;">This is an automated email. Please do not reply directly to this message.</p>
   </div>
 </div>`;

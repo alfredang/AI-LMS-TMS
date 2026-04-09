@@ -393,6 +393,23 @@ const ManagementCourseList: React.FC = () => {
                                 </span>
                             }
                         />
+                        <LearnerCardDetailRow
+                            label="Class Status"
+                            value={(() => {
+                                const status = (course.classStatus || '').toLowerCase();
+                                const styleMap: Record<string, string> = {
+                                    cancelled: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300',
+                                    pending:   'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300',
+                                    confirmed: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300',
+                                };
+                                const style = styleMap[status] || 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300';
+                                return (
+                                    <span className={`px-2 py-0.5 rounded text-xs font-semibold ${style}`}>
+                                        {course.classStatus || 'N/A'}
+                                    </span>
+                                );
+                            })()}
+                        />
                         {course.startDate && (
                             <LearnerCardDetailRow label="Start Date" value={new Date(course.startDate).toLocaleDateString('en-SG', { year: 'numeric', month: 'short', day: 'numeric' })} />
                         )}
@@ -1081,6 +1098,23 @@ const LearnerCourseCard: React.FC<{ course: any }> = ({ course }) => {
                                 : course.classType === 'Hybrid' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300'
                                 : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
                             }`}>{course.classType || 'Physical'}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                            <span className="font-semibold text-gray-500 dark:text-gray-400">Class Status</span>
+                            {(() => {
+                                const status = (course.classStatus || '').toLowerCase();
+                                const styleMap: Record<string, string> = {
+                                    cancelled: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300',
+                                    pending:   'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300',
+                                    confirmed: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300',
+                                };
+                                const style = styleMap[status] || 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300';
+                                return (
+                                    <span className={`font-semibold px-2 py-0.5 rounded ${style}`}>
+                                        {course.classStatus || 'N/A'}
+                                    </span>
+                                );
+                            })()}
                         </div>
                         {course.startDate && (
                             <div className="flex justify-between items-center">
