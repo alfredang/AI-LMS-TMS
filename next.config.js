@@ -1,8 +1,29 @@
 const { execSync } = require('child_process');
 const COMMIT_HASH = (() => {
-  // Vercel provides VERCEL_GIT_COMMIT_SHA during builds
-  if (process.env.VERCEL_GIT_COMMIT_SHA) return process.env.VERCEL_GIT_COMMIT_SHA.substring(0, 7);
-  try { return execSync('git rev-parse --short HEAD').toString().trim(); } catch { return 'dev'; }
+  if (process.env.VERCEL_GIT_COMMIT_SHA) {
+    const hash = process.env.VERCEL_GIT_COMMIT_SHA.substring(0, 7);
+    try {
+      const isoDate = execSync('git log -1 --format=%ci').toString().trim();
+      const d = new Date(isoDate);
+      const dd = String(d.getDate()).padStart(2, '0');
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const yyyy = d.getFullYear();
+      const hh = String(d.getHours()).padStart(2, '0');
+      const min = String(d.getMinutes()).padStart(2, '0');
+      return `${hash} ${dd}-${mm}-${yyyy} ${hh}:${min}`;
+    } catch { return hash; }
+  }
+  try {
+    const hash = execSync('git rev-parse --short HEAD').toString().trim();
+    const isoDate = execSync('git log -1 --format=%ci').toString().trim();
+    const d = new Date(isoDate);
+    const dd = String(d.getDate()).padStart(2, '0');
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const yyyy = d.getFullYear();
+    const hh = String(d.getHours()).padStart(2, '0');
+    const min = String(d.getMinutes()).padStart(2, '0');
+    return `${hash} ${dd}-${mm}-${yyyy} ${hh}:${min}`;
+  } catch { return 'dev'; }
 })();
 
 /** @type {import('next').NextConfig} */
