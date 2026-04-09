@@ -2303,3 +2303,44 @@ CREATE TABLE IF NOT EXISTS public.api_subscription (
 --
 -- PostgreSQL database dump complete
 --
+
+-- ============================================================
+-- Support Ticketing System
+-- ============================================================
+
+-- Auto-increment sequence for ticket numbers
+CREATE SEQUENCE IF NOT EXISTS public.support_ticket_number_seq START WITH 1 INCREMENT BY 1;
+
+-- Support tickets raised by learners
+CREATE TABLE IF NOT EXISTS public.support_ticket (
+    id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+    ticket_number TEXT NOT NULL UNIQUE,
+    user_id uuid NOT NULL REFERENCES public.app_user(id),
+    subject TEXT NOT NULL,
+    description TEXT NOT NULL,
+    category TEXT NOT NULL DEFAULT 'General',
+    status TEXT NOT NULL DEFAULT 'Open',
+    created_at TIMESTAMPTZ DEFAULT now() NOT NULL,
+    updated_at TIMESTAMPTZ DEFAULT now() NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_support_ticket_user_id ON public.support_ticket(user_id);
+CREATE INDEX IF NOT EXISTS idx_support_ticket_status ON public.support_ticket(status);
+
+-- Replies on a support ticket (from admin or learner)
+CREATE TABLE IF NOT EXISTS public.support_ticket_reply (
+    id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+    ticket_id uuid NOT NULL REFERENCES public.support_ticket(id) ON DELETE CASCADE,
+    user_id uuid NOT NULL REFERENCES public.app_user(id),
+    user_role TEXT NOT NULL,
+    message TEXT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT now() NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_support_ticket_reply_ticket_id ON public.support_ticket_reply(ticket_id);
+
+-- Trigger to auto-update updated_at on support_ticket
+CREATE TRIGGER support_ticket_updated_at
+    BEFORE UPDATE ON public.support_ticket
+    FOR EACH ROW
+    EXECUTE FUNCTION public.touch_updated_at();

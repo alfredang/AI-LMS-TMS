@@ -62,6 +62,8 @@ import SchedulerView from '../components/admin/SchedulerView';
 import WorkflowGuidesView from '../components/training-provider/WorkflowGuidesView';
 import AddSessionsView from '../components/admin/AddSessionsView';
 import CourseSessionTimingView from '../components/admin/CourseSessionTimingView';
+import SupportTicketsView from '../components/admin/SupportTicketsView';
+import SupportTicketDetailView from '../components/admin/SupportTicketDetailView';
 
 // Management Dashboard Component
 interface ManagementDashboardProps {
@@ -190,6 +192,8 @@ const PAGE_LABELS: Partial<Record<AdminPage, string>> = {
   [AdminPage.Scheduler]: 'Task Scheduler',
   [AdminPage.AddSessions]: 'Add Sessions',
   [AdminPage.CourseSessionTiming]: 'Course Session Timing',
+  [AdminPage.SupportTickets]: 'Support Tickets',
+  [AdminPage.SupportTicketDetail]: 'Ticket Detail',
 };
 
 const AdminLayout: React.FC = () => {
@@ -414,6 +418,10 @@ const AdminLayout: React.FC = () => {
         return <SchedulerView />;
       case AdminPage.WorkflowGuides:
         return <WorkflowGuidesView initialWorkflowId={selectedWorkflowId || undefined} />;
+      case AdminPage.SupportTickets:
+        return <SupportTicketsView />;
+      case AdminPage.SupportTicketDetail:
+        return <SupportTicketDetailView />;
       default:
         return <AdminDashboard />;
     }

@@ -90,6 +90,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate, onSelectWorkflo
         tpgGrant: false,
         logging: false,
         certificate: false,
+        supportTickets: false,
         workflowGuides: false,
         wfTraining: false,
         wfAdmin: false,
@@ -175,7 +176,11 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate, onSelectWorkflo
                 </SubSection>
             </NavSection>
 
-            <NavSection title="Calendar" isOpen={openSections.calendar} onToggle={() => toggleSection('calendar')}>
+            <NavSection title="Support Tickets" isOpen={openSections.supportTickets} onToggle={() => toggleSection('supportTickets')}>
+                <NavItem page={AdminPage.SupportTickets} label="View All Tickets" isSubItem />
+            </NavSection>
+
+            <NavSection title="Calendar & Scheduler" isOpen={openSections.calendar} onToggle={() => toggleSection('calendar')}>
                 <NavItem page={AdminPage.Calendar} label="View Calendar" isSubItem />
             </NavSection>
 

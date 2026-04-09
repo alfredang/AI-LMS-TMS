@@ -114,6 +114,8 @@ export enum AdminPage {
   Calendar = 'calendar',
   Scheduler = 'scheduler',
   WorkflowGuides = 'workflowGuides',
+  SupportTickets = 'supportTickets',
+  SupportTicketDetail = 'supportTicketDetail',
 }
 
 export enum TrainerPage {
