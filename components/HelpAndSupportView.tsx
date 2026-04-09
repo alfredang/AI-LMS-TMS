@@ -22,8 +22,8 @@ const HelpAndSupportView: React.FC = () => {
                         <div className="space-y-4">
                             <InfoItem label="Company Address" value="12 Woodland Square #07-85/86/87 Woods Square Tower 1, Singapore 737715" />
                             <InfoItem label="Opening Hours" value="Mon - Fri, 9:00 AM - 6:00 PM" />
-                            <InfoItem label="Hotline Tel" value="61234567" />
-                            <InfoItem label="Support Email" value="support@tertiary-lms.com" />
+                            <InfoItem label="Hotline Tel" value="+65 6100 0613" />
+                            <InfoItem label="Support Email" value="enquiry@tertiaryinfotech.com" />
                         </div>
                     </Card>
                 </div>

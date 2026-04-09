@@ -302,7 +302,14 @@ const WorkflowGuidesView: React.FC<WorkflowGuidesViewProps> = ({ initialWorkflow
       <div className="flex items-center gap-3">
         <span className="text-3xl">{workflow.icon}</span>
         <div>
-          <h2 className="text-2xl font-bold dark:text-white">{workflow.title}</h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-2xl font-bold dark:text-white">{workflow.title}</h2>
+            {workflow.externalUrl && (
+              <a href={workflow.externalUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 text-sm font-medium">
+                ↗
+              </a>
+            )}
+          </div>
           <p className="text-sm text-gray-500 dark:text-gray-400">{workflow.description}</p>
         </div>
       </div>
