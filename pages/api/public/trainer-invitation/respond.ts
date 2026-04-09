@@ -181,6 +181,7 @@ async function sendNextTrainerInvitation(courseRunUuid: string, tp: any) {
       tp.trainer_invitation_email_body || DEFAULT_TRAINER_INVITATION_BODY,
       replacements
     );
+<<<<<<< Updated upstream
     const htmlBody = renderInvitationHtmlEmail({
       trainerName: trainer.full_name || nextTrainerName,
       courseTitle: cr.course_title || '',
@@ -189,10 +190,14 @@ async function sendNextTrainerInvitation(courseRunUuid: string, tp: any) {
       startDate: formatDateLabel(cr.start_date),
       endDate: formatDateLabel(cr.end_date),
       tpgTrainer: cr.tpg_assigned_trainer_name || 'N/A',
+=======
+    const htmlBody = renderInvitationHtmlEmail(
+      tp.trainer_invitation_email_body || DEFAULT_TRAINER_INVITATION_BODY,
+      replacements,
+>>>>>>> Stashed changes
       acceptUrl,
-      declineUrl,
-      companyName: tp.company_shortname || tp.company_name || 'Training Provider',
-    });
+      declineUrl
+    );
 
     await sendFollowUpEmail(trainer.email, subject, htmlBody, tp);
 
