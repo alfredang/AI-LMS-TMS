@@ -8,6 +8,7 @@ import {
   DEFAULT_TRAINER_INVITATION_BODY,
   DEFAULT_TRAINER_INVITATION_SUBJECT,
   renderInvitationTemplate,
+  renderInvitationHtmlEmail
 } from '@/lib/trainerInvitations';
 
 const TrainerInvitationEmailTemplateView: React.FC = () => {
@@ -86,8 +87,8 @@ const TrainerInvitationEmailTemplateView: React.FC = () => {
     '{END_DATE}',
     '{TPG_TRAINER}',
     '{COMPANY_SHORT_NAME}',
-    '{ACCEPT_URL}',
-    '{DECLINE_URL}',
+    '{ACCEPT_BUTTON}',
+    '{DECLINE_BUTTON}',
   ];
 
   const previewSubject = renderInvitationTemplate(subject || DEFAULT_TRAINER_INVITATION_SUBJECT, {
@@ -99,8 +100,6 @@ const TrainerInvitationEmailTemplateView: React.FC = () => {
     START_DATE: '06/04/2026',
     END_DATE: '09/04/2026',
     TPG_TRAINER: 'Dr Alvin Ang Wei Hern',
-    ACCEPT_URL: 'https://ai-lms-tms.tertiaryinfo.tech/api/public/trainer-invitation/respond?token=sample&action=accept',
-    DECLINE_URL: 'https://ai-lms-tms.tertiaryinfo.tech/api/public/trainer-invitation/respond?token=sample&action=decline',
   });
 
   const previewBody = renderInvitationTemplate(body || DEFAULT_TRAINER_INVITATION_BODY, {
@@ -112,9 +111,23 @@ const TrainerInvitationEmailTemplateView: React.FC = () => {
     START_DATE: '06/04/2026',
     END_DATE: '09/04/2026',
     TPG_TRAINER: 'Dr Alvin Ang Wei Hern',
-    ACCEPT_URL: 'Accept button URL',
-    DECLINE_URL: 'Decline button URL',
   });
+
+  const previewHtmlBody = renderInvitationHtmlEmail(
+    body || DEFAULT_TRAINER_INVITATION_BODY,
+    {
+      COMPANY_SHORT_NAME: trainingProviderProfile?.companyShortname || 'Training Provider',
+      TRAINER_NAME: 'Tan Woei Ming',
+      COURSE_TITLE: 'Generative AI for Business',
+      COURSE_CODE: 'TGS-2023036653',
+      COURSE_RUN_ID: '1131876',
+      START_DATE: '06/04/2026',
+      END_DATE: '09/04/2026',
+      TPG_TRAINER: 'Dr Alvin Ang Wei Hern',
+    },
+    '#',
+    '#'
+  );
 
   const handleSendTestEmail = async () => {
     if (!testEmail.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(testEmail.trim())) { setTestMessage({ type: 'error', text: 'Please enter a valid email address.' }); return; }
@@ -222,7 +235,7 @@ const TrainerInvitationEmailTemplateView: React.FC = () => {
             <div className="px-6 py-3 bg-gray-50 dark:bg-slate-800 border-b border-gray-200 dark:border-gray-700">
               <div className="flex items-center gap-2 text-sm"><span className="font-medium text-gray-500 dark:text-gray-400">Subject:</span><span className="text-gray-900 dark:text-white font-medium">{previewSubject}</span></div>
             </div>
-            <div className="px-6 py-5 text-sm text-gray-700 dark:text-gray-300 max-h-96 overflow-y-auto [&_p]:mb-3 [&_p:last-child]:mb-0 [&_a]:text-blue-600 [&_a]:underline" dangerouslySetInnerHTML={{ __html: /<[a-z][\s\S]*>/i.test(previewBody) ? previewBody : previewBody.split('\n').map(l => l.trim() ? `<p>${l}</p>` : '<br/>').join('') }} />
+            <div className="px-6 py-5 text-sm max-h-96 overflow-y-auto" dangerouslySetInnerHTML={{ __html: previewHtmlBody }} />
           </div>
         </div>
       </Card>
