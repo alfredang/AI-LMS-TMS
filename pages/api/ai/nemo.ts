@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import Anthropic from '@anthropic-ai/sdk';
+import { query } from '@anthropic-ai/claude-agent-sdk';
 import { getToolsForRole, executeTool } from '../../../lib/nemo-tools';
 import { getMemoryForSystemPrompt } from '../../../lib/nemo-memory';
 import pool from '../../../lib/db';
@@ -33,37 +33,34 @@ function getRolePermissions(role: string): string {
   }
 }
 
-function buildSystemPrompt(user: ChatUserContext, memory: string, customPrompt?: string): string {
+function buildPrompt(user: ChatUserContext, memory: string, conversationHistory: string, customPrompt?: string): string {
   const role = user.role || 'Learner';
   const permissions = getRolePermissions(role);
 
+  const toolList = getToolsForRole(role).map(t => `- ${t.name}: ${t.description}`).join('\n');
+
   return `You are Nemo, the AI operations assistant for the Tertiary Infotech LMS/TMS platform.
 
-You have DIRECT ACCESS to the platform database and APIs through your tools. Use them to answer questions accurately and perform actions when asked.
+Current user: ${user.name || 'Unknown'} (${user.email || 'no email'})
+Role: ${role}
+${permissions}
+
+You have access to these tools to query the platform database and perform actions:
+${toolList}
 
 Key guidelines:
 - Format data in clean, readable tables or bullet points. Be concise and actionable.
 - If the data shows issues (e.g. classes without trainers, outstanding claims), proactively highlight them.
 - For write operations (assign trainer, enroll learner, etc.), confirm what you'll do before executing.
 - After performing actions, briefly summarize what was done.
-- Use the update_memory tool to save important context for future sessions (sparingly).
+${memory}${customPrompt ? '\n\n' + customPrompt : ''}
 
-Current user: ${user.name || 'Unknown'} (${user.email || 'no email'})
-Role: ${role}
-${permissions}
-${memory}${customPrompt ? '\n\n' + customPrompt : ''}`;
+--- CONVERSATION ---
+${conversationHistory}`;
 }
 
-function coerceMessages(messages: IncomingMessage[]): Anthropic.MessageParam[] {
-  return messages
-    .map(m => ({
-      role: (m.role === 'model' ? 'assistant' : m.role) as 'user' | 'assistant',
-      content: (m.content || m.text || '').trim(),
-    }))
-    .filter(m => m.content.length > 0);
-}
-
-async function getAnthropicApiKey(): Promise<string | null> {
+async function getApiKey(): Promise<string | null> {
+  // Try DB first
   try {
     const result = await pool.query(
       `SELECT key_value FROM training_provider_api
@@ -74,14 +71,12 @@ async function getAnthropicApiKey(): Promise<string | null> {
       return result.rows[0].key_value;
     }
   } catch (e) {
-    console.error('Failed to fetch Anthropic API key from DB:', e);
+    console.error('Failed to fetch API key from DB:', e);
   }
   return process.env.ANTHROPIC_API_KEY || null;
 }
 
 // ─── Handler ────────────────────────────────────────────────────────────────
-
-const MAX_TOOL_ITERATIONS = 10;
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -97,92 +92,62 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).json({ error: 'currentUser.id required' });
   }
 
-  // Get API key
-  const apiKey = await getAnthropicApiKey();
+  // Get API key (OAuth token or API key)
+  const apiKey = await getApiKey();
   if (!apiKey) {
-    return res.status(500).json({ text: 'Anthropic API key not configured. Please set it in Company Settings > LLM Credentials.' });
+    return res.status(200).json({ text: 'API key not configured. Please set it in Company Settings > LLM Credentials.' });
   }
 
-  // Build system prompt with memory
+  // Build conversation history string
+  const conversationHistory = rawMessages
+    .slice(-10)
+    .map((m: IncomingMessage) => {
+      const role = m.role === 'model' ? 'Assistant' : m.role === 'user' ? 'User' : 'Assistant';
+      const content = (m.content || m.text || '').trim();
+      return content ? `${role}: ${content}` : '';
+    })
+    .filter(Boolean)
+    .join('\n\n');
+
+  // Build memory and prompt
   const memory = getMemoryForSystemPrompt();
-  const systemPrompt = buildSystemPrompt(currentUser, memory, customSystemPrompt);
-
-  // Get tools for user's role
-  const tools = getToolsForRole(currentUser.role || 'Learner');
-
-  // Normalize messages (keep last 10)
-  const normalizedMessages = coerceMessages(rawMessages).slice(-10);
-
-  // Ensure messages start with 'user' role (Anthropic requirement)
-  if (normalizedMessages.length === 0 || normalizedMessages[0].role !== 'user') {
-    normalizedMessages.unshift({ role: 'user', content: 'Hello' });
-  }
+  const prompt = buildPrompt(currentUser, memory, conversationHistory, customSystemPrompt);
 
   try {
-    const client = new Anthropic({ apiKey });
+    let resultText = '';
 
-    let messages: Anthropic.MessageParam[] = normalizedMessages;
-    let iterations = 0;
-
-    while (iterations < MAX_TOOL_ITERATIONS) {
-      const response = await client.messages.create({
-        model: 'claude-sonnet-4-6-20250527',
-        max_tokens: 4096,
-        system: systemPrompt,
-        tools: tools as any,
-        messages,
-      });
-
-      // Check for tool_use blocks
-      const toolUseBlocks = response.content.filter(
-        (b): b is Anthropic.ContentBlock & { type: 'tool_use'; id: string; name: string; input: any } =>
-          b.type === 'tool_use'
-      );
-
-      if (toolUseBlocks.length === 0) {
-        // No tool calls — extract text and return
-        const text = response.content
-          .filter((b): b is Anthropic.TextBlock => b.type === 'text')
-          .map(b => b.text)
-          .join('');
-        return res.status(200).json({ text: text || 'I processed your request but have no additional information to share.' });
+    for await (const message of query({
+      prompt,
+      options: {
+        apiKey,
+        allowedTools: [],
+        maxTurns: 1,
+      },
+    })) {
+      // Collect text from assistant messages
+      if (message.type === 'assistant' && message.message?.content) {
+        for (const block of message.message.content) {
+          if (block.type === 'text') {
+            resultText += block.text;
+          }
+        }
       }
-
-      // Execute tools in parallel
-      const toolResults: Anthropic.ToolResultBlockParam[] = await Promise.all(
-        toolUseBlocks.map(async (block) => {
-          console.log(`🔧 Nemo executing tool: ${block.name}(${JSON.stringify(block.input)})`);
-          const result = await executeTool(block.name, block.input as Record<string, any>);
-          return {
-            type: 'tool_result' as const,
-            tool_use_id: block.id,
-            content: result,
-          };
-        })
-      );
-
-      // Append assistant response and tool results to conversation
-      messages = [
-        ...messages,
-        { role: 'assistant' as const, content: response.content },
-        { role: 'user' as const, content: toolResults },
-      ];
-
-      iterations++;
+      // Also check for result type
+      if (message.type === 'result') {
+        if (message.text) resultText = message.text;
+      }
     }
 
-    // Max iterations reached
-    return res.status(200).json({ text: 'I reached the maximum number of tool calls. Please try a more specific request.' });
+    if (!resultText) {
+      return res.status(200).json({ text: 'I processed your request but have no response. Please try again.' });
+    }
 
+    return res.status(200).json({ text: resultText });
   } catch (error: any) {
     console.error('Nemo error:', error);
 
-    // Provide user-friendly error messages
-    if (error.status === 401) {
-      return res.status(200).json({ text: 'Authentication error. Please check the Anthropic API key in Company Settings > LLM Credentials.' });
-    }
-    if (error.status === 429) {
-      return res.status(200).json({ text: 'Rate limit reached. Please wait a moment and try again.' });
+    if (error.message?.includes('auth') || error.message?.includes('401') || error.message?.includes('key')) {
+      return res.status(200).json({ text: 'Authentication error. Please check the API key in Company Settings > LLM Credentials.' });
     }
 
     return res.status(200).json({ text: `Sorry, I encountered an error: ${error.message || 'Unknown error'}. Please try again.` });

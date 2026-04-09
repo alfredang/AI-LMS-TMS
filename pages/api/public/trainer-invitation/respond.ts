@@ -6,7 +6,7 @@ import {
   ensureTrainerInvitationTemplateColumns,
   renderInvitationTemplate,
   convertPlainTextToHtml,
-  buildInvitationHtmlEmail,
+  renderInvitationHtmlEmail,
   formatDateLabel,
   createInvitationToken,
   normalizeTrainerName,
@@ -181,7 +181,7 @@ async function sendNextTrainerInvitation(courseRunUuid: string, tp: any) {
       tp.trainer_invitation_email_body || DEFAULT_TRAINER_INVITATION_BODY,
       replacements
     );
-    const htmlBody = buildInvitationHtmlEmail({
+    const htmlBody = renderInvitationHtmlEmail({
       trainerName: trainer.full_name || nextTrainerName,
       courseTitle: cr.course_title || '',
       courseCode: cr.course_code || '',
