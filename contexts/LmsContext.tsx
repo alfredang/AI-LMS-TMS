@@ -246,6 +246,8 @@ interface LmsContextType {
   setEditingCourseRun: (courseRun: any | null) => void;
   classListReturnTo: AdminPage | null;
   setClassListReturnTo: (page: AdminPage | null) => void;
+  classListCurrentPage: number;
+  setClassListCurrentPage: (page: number) => void;
   ssgApp: string;
   setSsgApp: (app: string) => void;
   financePage: string;
@@ -315,12 +317,15 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [courseEditMode, setCourseEditMode] = useState<'create' | 'edit' | 'view' | null>(null);
   const [editingCourseRun, setEditingCourseRun] = useState<any | null>(null);
   const [classListReturnTo, setClassListReturnTo] = useState<AdminPage | null>(null);
+  const [classListCurrentPage, setClassListCurrentPage] = useState(0);
 
-  // Auto-clear classListReturnTo when navigating anywhere that isn't the class detail/edit flow.
+  // Auto-clear classListReturnTo and classListCurrentPage when navigating anywhere that isn't the class detail/edit flow.
   // This prevents stale return targets from leaking between unrelated navigations (sidebar clicks, dashboard jumps, etc.).
   useEffect(() => {
     if (adminPage !== AdminPage.ClassDetail && adminPage !== AdminPage.EditClass) {
       setClassListReturnTo(null);
+      // Don't clear classListCurrentPage here — we clear it only when returning TO a list page.
+      // The list components themselves will consume the value on mount and then clear it.
     }
   }, [adminPage]);
   const [ssgApp, setSsgApp] = useState<string>('app1');  // default, overridden by DB setting
@@ -1630,6 +1635,8 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setEditingCourseRun,
     classListReturnTo,
     setClassListReturnTo,
+    classListCurrentPage,
+    setClassListCurrentPage,
     ssgApp,
     setSsgApp,
     financePage,
