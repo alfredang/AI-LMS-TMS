@@ -465,12 +465,12 @@ export const EditCourseRunView: React.FC = () => {
                     <FormSection title="Registration Dates">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Opening Registration Date</label>
-                                <input type="text" value={openingRegistrationDate} readOnly disabled className={readonlyClasses} />
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">* Opening Registration Date</label>
+                                <input type="date" value={openingRegistrationDate} onChange={e => setOpeningRegistrationDate(e.target.value)} className={inputClasses} />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Closing Registration Date</label>
-                                <input type="text" value={closingRegistrationDate} readOnly disabled className={readonlyClasses} />
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">* Closing Registration Date</label>
+                                <input type="date" value={closingRegistrationDate} onChange={e => setClosingRegistrationDate(e.target.value)} className={inputClasses} />
                             </div>
                         </div>
                     </FormSection>

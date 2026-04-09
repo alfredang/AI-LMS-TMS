@@ -122,6 +122,8 @@ public/uploads/slides/*
 public/uploads/guides/*
 public/uploads/training_provider/private_key/*
 public/uploads/training_provider/self_signing_cert/*
+public/uploads/training_provider/ssg_app1_cert/*
+public/uploads/training_provider/ssg_app1_private_key/*
 # Claims import uploads (and any other runtime uploads)
 public/uploads/claims/*
 public/uploads/**/*.pdf

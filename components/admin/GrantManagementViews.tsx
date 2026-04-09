@@ -3531,6 +3531,11 @@ export const ViewCourseRunView: React.FC = () => {
     const [webhookResponse, setWebhookResponse] = useState<any>(null);
     const [parsedData, setParsedData] = useState<any>(null);
     const [searchError, setSearchError] = useState<string | null>(null);
+    // Local DB snapshot for the same course_run_id — fetched in parallel with the SSG call.
+    // Independent error/loading state so one failing doesn't block the other.
+    const [localDetails, setLocalDetails] = useState<any>(null);
+    const [localLoading, setLocalLoading] = useState(false);
+    const [localError, setLocalError] = useState<string | null>(null);
 
 
     const inputClasses = "block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-500";
@@ -3596,8 +3601,25 @@ export const ViewCourseRunView: React.FC = () => {
         setWebhookResponse(null);
         setParsedData(null);
 
+        // Fire local fetch in parallel — completely independent error path.
+        const trimmedRunId = courseRunId.trim();
+        setLocalLoading(true);
+        setLocalError(null);
+        setLocalDetails(null);
+        fetch(`/api/admin/course-runs/local-by-run-id?courseRunId=${encodeURIComponent(trimmedRunId)}`)
+            .then((r) => r.json())
+            .then((j) => {
+                if (j.success) {
+                    setLocalDetails(j.data);
+                } else {
+                    setLocalError(j.error || 'Failed to load local details');
+                }
+            })
+            .catch((e) => setLocalError(e instanceof Error ? e.message : String(e)))
+            .finally(() => setLocalLoading(false));
+
         try {
-            const response = await fetch(`/api/course-runs/view?courseRunId=${encodeURIComponent(courseRunId.trim())}`);
+            const response = await fetch(`/api/course-runs/view?courseRunId=${encodeURIComponent(trimmedRunId)}`);
             const json = await response.json();
 
             if (!json.success) {
@@ -3625,6 +3647,98 @@ export const ViewCourseRunView: React.FC = () => {
         } finally {
             setIsSearching(false);
         }
+    };
+
+    // Helper to render the Local Details card — lives OUTSIDE the SSG render path
+    // so it's visible even when the SSG lookup fails (the whole point of this section).
+    const renderLocalDetails = () => {
+        // Don't render at all until a search has been initiated
+        if (!localLoading && !localError && localDetails === null && !webhookResponse && !searchError) {
+            return null;
+        }
+        return (
+            <Card className="p-0 overflow-hidden mt-6 mb-6">
+                <div className="overflow-x-auto">
+                    <table className="w-full border-collapse">
+                        <thead className="bg-gray-50 dark:bg-gray-800">
+                            <tr>
+                                <th colSpan={2} className="px-6 py-3 text-left border-b dark:border-gray-700">
+                                    <div className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Local Details</div>
+                                    <div className="text-[11px] font-normal normal-case text-gray-500 dark:text-gray-400 mt-0.5">
+                                        From local <code className="px-1 bg-gray-200 dark:bg-gray-700 rounded">course_run</code> — may differ from SSG if sync is stale.
+                                    </div>
+                                </th>
+                            </tr>
+                        </thead>
+                {localLoading ? (
+                    <tbody className="bg-white dark:bg-gray-900"><tr><td colSpan={2} className="p-6 text-sm text-gray-500 dark:text-gray-400">Loading local details…</td></tr></tbody>
+                ) : localError ? (
+                    <tbody className="bg-white dark:bg-gray-900"><tr><td colSpan={2} className="p-6 text-sm text-red-600 dark:text-red-400">Failed to load local details: {localError}</td></tr></tbody>
+                ) : !localDetails ? (
+                    <tbody className="bg-white dark:bg-gray-900"><tr><td colSpan={2} className="p-6 text-sm text-gray-500 dark:text-gray-400 italic">No local record found for this Course Run ID.</td></tr></tbody>
+                ) : (
+                        <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
+                            <tr className="hover:bg-gray-50 dark:hover:bg-gray-800">
+                                <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-700 dark:text-gray-300 w-1/3">Class Status</td>
+                                <td className="px-6 py-4 text-sm">
+                                    {(() => {
+                                        const status = localDetails.classStatus;
+                                        if (!status) {
+                                            return <span className="inline-flex px-2 py-0.5 text-xs font-semibold rounded-full bg-gray-100 text-gray-600 border border-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-700">N/A</span>;
+                                        }
+                                        const lower = String(status).toLowerCase();
+                                        let cls = 'bg-gray-100 text-gray-700 border-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700';
+                                        if (lower === 'cancelled') cls = 'bg-red-100 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-300 dark:border-red-700';
+                                        else if (lower === 'pending') cls = 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-700';
+                                        else if (lower === 'confirmed') cls = 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-700';
+                                        return <span className={`inline-flex px-2 py-0.5 text-xs font-semibold rounded-full border ${cls}`}>{status}</span>;
+                                    })()}
+                                </td>
+                            </tr>
+                            <tr className="hover:bg-gray-50 dark:hover:bg-gray-800">
+                                <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-700 dark:text-gray-300">Local Trainer</td>
+                                <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
+                                    {localDetails.assignedTrainerName ? (
+                                        <>
+                                            <span className="font-medium">{localDetails.assignedTrainerName}</span>
+                                            {localDetails.assignedTrainerEmail && (
+                                                <span className="text-gray-500 dark:text-gray-400 ml-2">({localDetails.assignedTrainerEmail})</span>
+                                            )}
+                                        </>
+                                    ) : (
+                                        <span className="text-gray-400 italic">None assigned</span>
+                                    )}
+                                </td>
+                            </tr>
+                            <tr className="hover:bg-gray-50 dark:hover:bg-gray-800">
+                                <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-700 dark:text-gray-300">TPG Trainer (Local)</td>
+                                <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
+                                    {localDetails.tpgAssignedTrainerName ? (
+                                        <>
+                                            <span className="font-medium">{localDetails.tpgAssignedTrainerName}</span>
+                                            {localDetails.tpgAssignedTrainerEmail && (
+                                                <span className="text-gray-500 dark:text-gray-400 ml-2">({localDetails.tpgAssignedTrainerEmail})</span>
+                                            )}
+                                        </>
+                                    ) : (
+                                        <span className="text-gray-400 italic">None assigned</span>
+                                    )}
+                                </td>
+                            </tr>
+                            <tr className="hover:bg-gray-50 dark:hover:bg-gray-800">
+                                <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-700 dark:text-gray-300">Digital Attendance ID</td>
+                                <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
+                                    {localDetails.digitalAttendanceId
+                                        ? <code className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-800 rounded text-xs">{localDetails.digitalAttendanceId}</code>
+                                        : <span className="text-gray-400 italic">Not set</span>}
+                                </td>
+                            </tr>
+                        </tbody>
+                )}
+                    </table>
+                </div>
+            </Card>
+        );
     };
 
     // Helper to render course run details
@@ -3969,6 +4083,8 @@ export const ViewCourseRunView: React.FC = () => {
                                             setWebhookResponse(null);
                                             setParsedData(null);
                                             setCourseRunId('');
+                                            setLocalDetails(null);
+                                            setLocalError(null);
                                         }}
                                     >
                                         Clear Results
@@ -3996,6 +4112,9 @@ export const ViewCourseRunView: React.FC = () => {
                     </div>
                 </Card>
             )}
+
+            {/* Local Details — renders below Course Run Details. Independent of SSG state, visible even on SSG failure. */}
+            {renderLocalDetails()}
 
             {/* Empty State */}
             {!webhookResponse && !isSearching && (

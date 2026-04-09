@@ -3454,7 +3454,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                     showSuccessPopup('TPG trainer removed.');
                                                 } else {
                                                     const errData = await response.json().catch(() => ({}));
-                                                    const detail = errData.details?.[0]?.message || errData.message || 'Unknown error';
+                                                    const detail = errData.details?.[0]?.message || errData.message || errData.error || 'Unknown error';
                                                     showErrorPopup(`SSG rejected the removal: ${detail}`);
                                                 }
                                             } catch {

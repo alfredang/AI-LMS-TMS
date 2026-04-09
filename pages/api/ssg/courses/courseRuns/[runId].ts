@@ -429,14 +429,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
 
       const linkCourseRunTrainer = requestData.course.run.linkCourseRunTrainer;
-      
-      if (!Array.isArray(linkCourseRunTrainer) || linkCourseRunTrainer.length === 0) {
-        return res.status(400).json({ 
-          error: 'linkCourseRunTrainer must be a non-empty array' 
+
+      if (!Array.isArray(linkCourseRunTrainer)) {
+        return res.status(400).json({
+          error: 'linkCourseRunTrainer must be an array'
         });
       }
 
-      // Validate trainer data
+      // Empty array is valid — used by the Remove TPG Trainer flow to clear all trainers on a course run.
+      // Non-empty arrays must validate each trainer entry.
       for (const trainerLink of linkCourseRunTrainer) {
         if (!trainerLink.trainer?.idNumber) {
           return res.status(400).json({ 
@@ -596,10 +597,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }))
       };
 
-      // Use the standard edit course run API method
-      const result = await apiClient.editCourseRun(runId, editRunInfo, includeExpired);
+      // For empty trainer arrays (Remove TPG Trainer flow), use editCourseRunTrainerOnly —
+      // it always serializes linkCourseRunTrainer even when empty, while the regular editCourseRun
+      // path (via toPayload) drops the field if the array is empty (edit-delete-course-run.ts:455),
+      // making removal impossible. editCourseRunTrainerOnly also re-fetches existing SSG data so
+      // it doesn't zero out other fields.
+      const result = trainersArray.length === 0
+        ? await apiClient.editCourseRunTrainerOnly(runId, editRunInfo, includeExpired)
+        : await apiClient.editCourseRun(runId, editRunInfo, includeExpired);
 
-      if (result.error) {
+      if (result.error && (result.error.code || result.error.message)) {
         console.log('❌ SSG API error during trainer assignment:', result.error);
         return res.status(result.status || 500).json(result.error);
       }
