@@ -401,7 +401,7 @@ const AllCourseRunsView: React.FC = () => {
     <div className="space-y-6 relative">
       {/* Header */}
       <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between">
-        <h2 className="text-2xl font-bold text-on-surface">All Course Runs</h2>
+        <h2 className="text-2xl font-bold text-on-surface">Consolidated Finance Data</h2>
         {!includeFutureCourseRuns && (
           <p className="text-xs text-on-surface-secondary">
             Showing enrolments through today (Singapore time). Tick “Include future course runs” for all dates.
