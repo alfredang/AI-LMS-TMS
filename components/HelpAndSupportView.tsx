@@ -31,7 +31,6 @@ const HelpAndSupportView: React.FC = () => {
                 {/* Right Column: Ticketing */}
                 <div className="lg:col-span-2">
                     <Card className="p-6">
-                        <h3 className="text-xl font-bold mb-4">All Tickets</h3>
                         <div className="text-center py-12 px-6 bg-gray-50 rounded-lg">
                             <Icon name={IconName.Chat} className="w-24 h-24 mx-auto mb-6 text-primary" />
                             <h4 className="text-xl font-bold text-on-surface">Need assistance?</h4>
