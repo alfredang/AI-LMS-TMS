@@ -5,6 +5,8 @@ import fs from 'fs';
 import os from 'os';
 import { execSync } from 'child_process';
 import PizZip from 'pizzip';
+import { getDriveClient } from '../../../lib/google-drive/drive-helpers';
+import pool from '../../../lib/db';
 
 interface Grant {
   funding_scheme: string;
@@ -14,6 +16,7 @@ interface Grant {
 }
 
 interface ProFormaRequest {
+  enrollment_id: string | null;
   enrolment_id: string | null;
   full_name: string;
   course_title: string;
@@ -26,13 +29,17 @@ interface ProFormaRequest {
 }
 
 const TEMPLATE_ID = '1KbvgGpNsirzmCvLZOuMv7SY5IWxX0XfTSbnNF_pjZYY';
+const DRIVE_FOLDER_ID = '1cqA3G1c4Nez-9XKpUO2h31rBhkZhAfw3';
 const SOFFICE_PATH = 'C:\\Program Files\\LibreOffice\\program\\soffice.exe';
 
 function getAuth() {
   const keyFile = path.join(process.cwd(), 'service-account.json');
   return new google.auth.GoogleAuth({
     keyFile,
-    scopes: ['https://www.googleapis.com/auth/drive.readonly'],
+    scopes: [
+      'https://www.googleapis.com/auth/drive.readonly',
+      'https://www.googleapis.com/auth/drive.file',  // needed to upload
+    ],
   });
 }
 
@@ -41,7 +48,47 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const data: ProFormaRequest = req.body;
+  let data: ProFormaRequest = req.body;
+
+  // If only enrollment_id is provided (e.g. regenerate flow), look up data from DB
+  if ((!data.full_name || !data.course_title) && data.enrollment_id) {
+    try {
+      const dbRes = await pool.query(
+        `SELECT
+          e.id AS enrollment_id,
+          e.enrolment_id,
+          u.full_name,
+          c.title AS course_title,
+          c.course_code,
+          c.course_fees_exclude_gst,
+          cr.start_date::text
+        FROM enrollment e
+        JOIN app_user u ON u.id = e.user_id
+        JOIN course_run cr ON cr.id = e.course_run_id
+        JOIN course c ON c.id = e.course_id
+        WHERE e.id = $1
+        LIMIT 1`,
+        [data.enrollment_id]
+      );
+      if (dbRes.rows.length === 0) {
+        return res.status(404).json({ error: 'Enrollment not found' });
+      }
+      const row = dbRes.rows[0];
+      data = {
+        ...data,
+        full_name: row.full_name,
+        course_title: row.course_title,
+        course_code: row.course_code,
+        course_fees_exclude_gst: row.course_fees_exclude_gst,
+        start_date: row.start_date,
+        enrolment_id: row.enrolment_id,
+        grants: data.grants ?? [],
+      };
+    } catch (dbErr) {
+      console.error('[proforma] DB lookup error:', dbErr);
+      return res.status(500).json({ error: 'Failed to look up enrollment data' });
+    }
+  }
 
   if (!data.full_name || !data.course_title) {
     return res.status(400).json({ error: 'Missing required fields' });
@@ -97,7 +144,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     ? new Date(data.start_date).toLocaleDateString('en-SG', { day: '2-digit', month: 'short', year: 'numeric' })
     : '-';
 
-  // Replacements — keys match {{key}} placeholders in the Google Doc template
   const replacements: Record<string, string> = {
     '{{order}}': order,
     '{{date}}': fmtDate(today),
@@ -122,10 +168,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const pdfFile = path.join(tmpDir, `invoice_${timestamp}.pdf`);
 
   try {
-    // 1. Download template as docx from Google Drive (read-only, no storage used)
     const auth = getAuth();
     const drive = google.drive({ version: 'v3', auth });
 
+    // 1. Download template as docx
     const exportRes = await drive.files.export(
       { fileId: TEMPLATE_ID, mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' },
       { responseType: 'arraybuffer' }
@@ -133,8 +179,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const docxBuffer = Buffer.from(exportRes.data as ArrayBuffer);
 
-    // 2. Use PizZip to open the docx and do raw XML find-replace
-    //    This avoids docxtemplater parsing issues with {{}} syntax
+    // 2. Fill in placeholders via PizZip
     const zip = new PizZip(docxBuffer);
 
     const xmlFiles = [
@@ -149,7 +194,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (zip.files[xmlFile]) {
         let xml = zip.files[xmlFile].asText();
         for (const [placeholder, value] of Object.entries(replacements)) {
-          // Escape special regex chars in placeholder
           const escaped = placeholder.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
           xml = xml.replace(new RegExp(escaped, 'g'), value);
         }
@@ -159,23 +203,55 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const filledDocx = zip.generate({ type: 'nodebuffer', compression: 'DEFLATE' });
 
-    // 3. Save filled docx to temp folder
+    // 3. Save filled docx and convert to PDF via LibreOffice
     fs.writeFileSync(docxPath, filledDocx);
-
-    // 4. Convert to PDF using LibreOffice
     execSync(`"${SOFFICE_PATH}" --headless --convert-to pdf --outdir "${tmpDir}" "${docxPath}"`, {
       timeout: 30000,
     });
 
-    // 5. Read the PDF
     const orderNum = order || data.course_code || 'invoice';
     const pdfBuffer = fs.readFileSync(pdfFile);
 
-    // 6. Clean up temp files
+    // 4. Cleanup temp files
     try { fs.unlinkSync(docxPath); } catch (_) {}
     try { fs.unlinkSync(pdfFile); } catch (_) {}
 
-    // 7. Return PDF to browser
+    // 5. Upload PDF to Google Drive as backup
+    try {
+      const { Readable } = await import('stream');
+      const uploadDrive = await getDriveClient();
+      const pdfStream = Readable.from(pdfBuffer);
+
+      const uploadRes = await uploadDrive.files.create({
+        requestBody: {
+          name: `ProFormaInvoice_${orderNum}.pdf`,
+          parents: [DRIVE_FOLDER_ID],
+          mimeType: 'application/pdf',
+        },
+        media: {
+          mimeType: 'application/pdf',
+          body: pdfStream,
+        },
+        fields: 'id, webViewLink',
+      });
+
+      const driveUrl = uploadRes.data.webViewLink ?? null;
+      console.log(`[proforma] Uploaded to Drive: ${driveUrl}`);
+
+      // Save Drive URL to the enrollment record
+      if (driveUrl) {
+        if (data.enrolment_id) {
+          const rawId = data.enrolment_id.replace('#', '');
+          await pool.query('UPDATE enrollment SET pro_forma_url = $1 WHERE enrolment_id = $2', [driveUrl, rawId]);
+        } else if (data.enrollment_id) {
+          await pool.query('UPDATE enrollment SET pro_forma_url = $1 WHERE id = $2', [driveUrl, data.enrollment_id]);
+        }
+      }
+    } catch (uploadErr) {
+      console.error(`[proforma] Drive upload failed (PDF still returned): ${uploadErr}`);
+    }
+
+    // 7. Return PDF to browser as usual
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="ProFormaInvoice_${orderNum}.pdf"`);
     res.setHeader('Content-Length', pdfBuffer.length);

@@ -37,10 +37,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         c.after_mces_funding,
         c.is_wsq_funded,
         c.is_mces_eligible,
-        lp.pro_forma_url
+        e.pro_forma_url
       FROM enrollment e
       JOIN app_user u ON u.id = e.user_id
-      LEFT JOIN learner_profile lp ON lp.user_id = e.user_id
       JOIN course_run cr ON cr.id = e.course_run_id
       JOIN course c ON c.id = e.course_id
       WHERE e.user_id = $1
