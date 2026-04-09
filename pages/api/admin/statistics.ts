@@ -8,6 +8,7 @@ interface AdminStatistics {
   classesNext7Days: number;
   classesNext30Days: number;
   completedClasses: number;
+  cancelledClasses: number;
 }
 
 export default async function handler(
@@ -39,28 +40,37 @@ export default async function handler(
           (SELECT COUNT(DISTINCT tp.user_id)
            FROM trainer_profile tp) AS "totalTrainers",
 
-          -- Ongoing classes
-          (SELECT COUNT(*) 
+          -- Ongoing classes (excludes Cancelled)
+          (SELECT COUNT(*)
            FROM course_run cr
            WHERE cr.start_date <= CURRENT_DATE
-             AND cr.end_date >= CURRENT_DATE) AS "ongoingClasses",
+             AND cr.end_date >= CURRENT_DATE
+             AND cr.class_status IS DISTINCT FROM 'Cancelled') AS "ongoingClasses",
 
-          -- Classes starting within next 7 days
-          (SELECT COUNT(*) 
+          -- Classes starting within next 7 days (excludes Cancelled)
+          (SELECT COUNT(*)
            FROM course_run cr
            WHERE cr.start_date > CURRENT_DATE
-             AND cr.start_date <= CURRENT_DATE + INTERVAL '7 days') AS "classesNext7Days",
+             AND cr.start_date <= CURRENT_DATE + INTERVAL '7 days'
+             AND cr.class_status IS DISTINCT FROM 'Cancelled') AS "classesNext7Days",
 
-          -- Classes starting within next 30 days
-          (SELECT COUNT(*) 
+          -- Classes starting within next 30 days (excludes Cancelled)
+          (SELECT COUNT(*)
            FROM course_run cr
            WHERE cr.start_date > CURRENT_DATE
-             AND cr.start_date <= CURRENT_DATE + INTERVAL '30 days') AS "classesNext30Days",
+             AND cr.start_date <= CURRENT_DATE + INTERVAL '30 days'
+             AND cr.class_status IS DISTINCT FROM 'Cancelled') AS "classesNext30Days",
 
-          -- Completed classes
-          (SELECT COUNT(*) 
+          -- Completed classes (excludes Cancelled)
+          (SELECT COUNT(*)
            FROM course_run cr
-           WHERE cr.end_date < CURRENT_DATE) AS "completedClasses"
+           WHERE cr.end_date < CURRENT_DATE
+             AND cr.class_status IS DISTINCT FROM 'Cancelled') AS "completedClasses",
+
+          -- Cancelled classes (all time, any date window)
+          (SELECT COUNT(*)
+           FROM course_run cr
+           WHERE cr.class_status = 'Cancelled') AS "cancelledClasses"
     `;
 
     const result = await pool.query(statisticsQuery);
@@ -76,6 +86,7 @@ export default async function handler(
       classesNext7Days: parseInt(result.rows[0].classesNext7Days) || 0,
       classesNext30Days: parseInt(result.rows[0].classesNext30Days) || 0,
       completedClasses: parseInt(result.rows[0].completedClasses) || 0,
+      cancelledClasses: parseInt(result.rows[0].cancelledClasses) || 0,
     };
 
     res.status(200).json({

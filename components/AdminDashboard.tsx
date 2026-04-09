@@ -17,6 +17,7 @@ interface AdminStatistics {
     classesNext7Days: number;
     classesNext30Days: number;
     completedClasses: number;
+    cancelledClasses: number;
 }
 
 export const AdminDashboard: React.FC = () => {
@@ -27,6 +28,7 @@ export const AdminDashboard: React.FC = () => {
         classesNext7Days: 0,
         classesNext30Days: 0,
         completedClasses: 0,
+        cancelledClasses: 0,
     });
 
     const pageTitle = 'Admin Dashboard';
@@ -59,6 +61,7 @@ export const AdminDashboard: React.FC = () => {
                     <StatCard title="Classes (Next 7 Days)" value={statistics.classesNext7Days} />
                     <StatCard title="Classes (Next 30 Days)" value={statistics.classesNext30Days} />
                     <StatCard title="Completed Classes" value={statistics.completedClasses} />
+                    <StatCard title="Cancelled Classes" value={statistics.cancelledClasses} />
                 </div>
 
                 <Card className="p-4 overflow-hidden">
