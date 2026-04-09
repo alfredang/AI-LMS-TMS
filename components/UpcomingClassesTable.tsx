@@ -660,7 +660,10 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                 </thead>
                                 <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                                     {upcomingClasses.map((classItem, index) => {
-                                        const status = classItem.assignedTrainerLocal ? 'Confirmed' : 'Pending';
+                                        // Respect Cancelled stickiness from API; otherwise derive from local trainer.
+                                        const status = classItem.classStatus === 'Cancelled'
+                                            ? 'Cancelled'
+                                            : (classItem.assignedTrainerLocal ? 'Confirmed' : 'Pending');
                                         const classType = classItem.classType || 'Physical';
                                         return (
                                             <tr key={index} className="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50">
