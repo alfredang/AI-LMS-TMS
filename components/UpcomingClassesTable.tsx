@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useLms } from '@contexts/LmsContext';
 import { Card } from './ui/Card';
 import { Button } from './ui/Button';
@@ -80,8 +80,22 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
     showFilters = true,
     includeOngoing = false,
 }) => {
-    const { setAdminPage, setSelectedCourseRunId, setEditingCourseRun, setClassListReturnTo } = useLms();
-    const [currentPage, setCurrentPage] = useState(0);
+    const { setAdminPage, setSelectedCourseRunId, setEditingCourseRun, setClassListReturnTo, classListCurrentPage, setClassListCurrentPage } = useLms();
+    const [currentPage, setCurrentPage] = useState(() => {
+        // Restore page from context if returning from ClassDetail/EditClass
+        const restored = classListCurrentPage;
+        return restored;
+    });
+
+    // Track initial mount to prevent filter-reset effects from overriding the restored page
+    const isInitialMount = useRef(true);
+
+    // Clear the persisted page after restoring it (one-time consume)
+    useEffect(() => {
+        if (classListCurrentPage !== 0) {
+            setClassListCurrentPage(0);
+        }
+    }, []);
     const [searchQuery, setSearchQuery] = useState('');
     const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
 
@@ -224,6 +238,9 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
 
     // Debounce text filter inputs (300ms) and reset page
     useEffect(() => {
+        if (isInitialMount.current) {
+            return; // Skip first run — debounced values already default to '' and page is restored from context
+        }
         const timer = setTimeout(() => {
             setDebouncedSearch(searchQuery);
             setDebouncedCourseTitle(courseTitle);
@@ -238,8 +255,17 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
 
     // Reset page immediately for non-debounced filters (dropdowns)
     useEffect(() => {
+        if (isInitialMount.current) {
+            return;
+        }
         setCurrentPage(0);
     }, [selectedTrainer, selectedClassStatus, selectedClassType, selectedCourseType]);
+
+    // Mark initial mount as done AFTER all other mount effects have executed
+    useEffect(() => {
+        isInitialMount.current = false;
+        return () => { isInitialMount.current = true; }; // Reset for React StrictMode remount
+    }, []);
 
     // Fetch data when debounced filters or pagination change
     useEffect(() => {
@@ -284,6 +310,7 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
 
     const handleEditClass = (classItem: UpcomingClass) => {
         setEditingCourseRun(classItem);
+        setClassListCurrentPage(currentPage);
         setClassListReturnTo(AdminPage.UpcomingClasses);
         setAdminPage(AdminPage.EditClass);
     };
@@ -291,6 +318,7 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
     const handleViewDetails = (classItem: UpcomingClass) => {
         setEditingCourseRun(classItem);
         setSelectedCourseRunId(classItem.courseRunId);
+        setClassListCurrentPage(currentPage);
         setClassListReturnTo(AdminPage.UpcomingClasses);
         setAdminPage(AdminPage.ClassDetail);
     };
@@ -660,7 +688,10 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                 </thead>
                                 <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                                     {upcomingClasses.map((classItem, index) => {
-                                        const status = classItem.assignedTrainerLocal ? 'Confirmed' : 'Pending';
+                                        // Respect Cancelled stickiness from API; otherwise derive from local trainer.
+                                        const status = classItem.classStatus === 'Cancelled'
+                                            ? 'Cancelled'
+                                            : (classItem.assignedTrainerLocal ? 'Confirmed' : 'Pending');
                                         const classType = classItem.classType || 'Physical';
                                         return (
                                             <tr key={index} className="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50">

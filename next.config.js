@@ -1,8 +1,27 @@
 const { execSync } = require('child_process');
+const fs = require('fs');
+const path = require('path');
 const COMMIT_HASH = (() => {
-  // Vercel provides VERCEL_GIT_COMMIT_SHA during builds
-  if (process.env.VERCEL_GIT_COMMIT_SHA) return process.env.VERCEL_GIT_COMMIT_SHA.substring(0, 7);
-  try { return execSync('git rev-parse --short HEAD').toString().trim(); } catch { return 'dev'; }
+  const formatDate = (d) => {
+    const dd = String(d.getDate()).padStart(2, '0');
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const yyyy = d.getFullYear();
+    const hh = String(d.getHours()).padStart(2, '0');
+    const min = String(d.getMinutes()).padStart(2, '0');
+    return `${dd}-${mm}-${yyyy} ${hh}:${min}`;
+  };
+  // Try reading pre-generated .version file (used in Docker builds)
+  try {
+    const v = fs.readFileSync(path.join(__dirname, '.version'), 'utf8').trim();
+    if (v) return v;
+  } catch {}
+  // Get commit timestamp, fall back to build time
+  try {
+    const isoDate = execSync('git log -1 --format=%ci').toString().trim();
+    return formatDate(new Date(isoDate));
+  } catch {
+    return formatDate(new Date());
+  }
 })();
 
 /** @type {import('next').NextConfig} */

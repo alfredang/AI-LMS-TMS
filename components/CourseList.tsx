@@ -1214,7 +1214,7 @@ const LearnerCourseList: React.FC = () => {
     return (
         <div className="space-y-4">
             {/* Page Header */}
-            <h2 className="text-2xl font-bold text-on-surface">My Courses</h2>
+            <h2 className="text-3xl font-bold dark:text-white">My Courses</h2>
 
             {/* KPI Stat Cards */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

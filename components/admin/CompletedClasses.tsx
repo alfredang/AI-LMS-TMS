@@ -1,5 +1,5 @@
 import { getApiUrl, getFileUrl } from '@/lib/urlHelpers';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Icon, IconName } from '../ui/Icon';
@@ -59,7 +59,7 @@ interface SyncResult {
 }
 
 const CompletedClasses: React.FC = () => {
-  const { setAdminPage, setSelectedCourseRunId, setEditingCourseRun, setClassListReturnTo } = useLms();
+  const { setAdminPage, setSelectedCourseRunId, setEditingCourseRun, setClassListReturnTo, classListCurrentPage, setClassListCurrentPage } = useLms();
   const [completedClasses, setCompletedClasses] = useState<CompletedClass[]>([]);
   const [statistics, setStatistics] = useState<Statistics>({
     completedClassesFound: 0,
@@ -100,10 +100,19 @@ const CompletedClasses: React.FC = () => {
   const [debouncedStartDate, setDebouncedStartDate] = useState('');
   const [debouncedEndDate, setDebouncedEndDate] = useState('');
 
-  const [currentPage, setCurrentPage] = useState(0);
+  const [currentPage, setCurrentPage] = useState(() => classListCurrentPage);
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
 
+  // Track initial mount to prevent filter-reset effects from overriding the restored page
+  const isInitialMount = useRef(true);
+
+  // Clear the persisted page after restoring it (one-time consume)
+  useEffect(() => {
+    if (classListCurrentPage !== 0) {
+      setClassListCurrentPage(0);
+    }
+  }, []);
   const ITEMS_PER_PAGE = 20;
 
   // Fetch trainers from API
@@ -190,6 +199,9 @@ const CompletedClasses: React.FC = () => {
 
   // Debounce text filter inputs (300ms) and reset page
   useEffect(() => {
+    if (isInitialMount.current) {
+      return; // Skip first run — debounced values already default to '' and page is restored from context
+    }
     const timer = setTimeout(() => {
       setDebouncedSearch(searchQuery);
       setDebouncedCourseTitle(courseTitle);
@@ -204,8 +216,17 @@ const CompletedClasses: React.FC = () => {
 
   // Reset page immediately for non-debounced filters (dropdowns)
   useEffect(() => {
+    if (isInitialMount.current) {
+      return;
+    }
     setCurrentPage(0);
   }, [selectedTrainer, selectedClassStatus, selectedClassType, selectedCourseType]);
+
+  // Mark initial mount as done AFTER all other mount effects have executed
+  useEffect(() => {
+    isInitialMount.current = false;
+    return () => { isInitialMount.current = true; }; // Reset for React StrictMode remount
+  }, []);
 
   // Fetch data when debounced filters or pagination change
   useEffect(() => {
@@ -330,6 +351,7 @@ const CompletedClasses: React.FC = () => {
   const handleViewDetails = (classItem: any) => {
     setEditingCourseRun(classItem);
     setSelectedCourseRunId(classItem.courseRunId);
+    setClassListCurrentPage(currentPage);
     setClassListReturnTo(AdminPage.CompletedClasses);
     setAdminPage(AdminPage.ClassDetail);
   };
