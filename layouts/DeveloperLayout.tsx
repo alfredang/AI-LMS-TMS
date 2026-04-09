@@ -4,7 +4,7 @@ import Footer from '../components/Footer';
 import { useLms } from '../contexts/LmsContext';
 import { View } from '@app-types';
 import CourseList from '../components/CourseList';
-import CreateView from '../components/CreateView';
+import SeoGeneratorView from '../components/developer/SeoGeneratorView';
 import CourseEditor from '../components/CourseEditor';
 import { CourseDetail } from '../components/CourseDetail';
 import ProfileView from '../components/ProfileView';
@@ -32,7 +32,7 @@ const DeveloperLayout: React.FC = () => {
       case View.Courses:
         return <CourseList />;
       case View.Create:
-        return <CreateView />;
+        return <SeoGeneratorView />;
       default:
         return <CourseList />;
     }

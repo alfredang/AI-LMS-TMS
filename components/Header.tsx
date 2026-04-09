@@ -210,7 +210,7 @@ const Header: React.FC = () => {
     ],
     [UserRole.Developer]: [
       { view: View.Courses, label: 'Courses', icon: IconName.Courses },
-      { view: View.Create, label: 'Developer GenAI Authoring', icon: IconName.Create },
+      { view: View.Create, label: 'SEO Metadata Generator', icon: IconName.Create },
     ],
     [UserRole.Admin]: [
       { view: View.Admin, label: 'Admin Dashboard', icon: IconName.Admin, page: AdminPage.Dashboard },
