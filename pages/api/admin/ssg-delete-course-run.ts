@@ -81,15 +81,48 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(result.status || 400).json({ error: errMsg });
     }
 
-    // Success or record not found — mark as deleted in local DB
+    // Success or record not found — hard-delete from local DB
     try {
-      await pool.query(`ALTER TABLE public.course_run ADD COLUMN IF NOT EXISTS is_deleted boolean DEFAULT false`);
-      await pool.query(
-        `UPDATE course_run SET is_deleted = true, updated_at = NOW() WHERE course_run_id = $1`,
-        [runId]
-      );
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+
+        // Delete from course_run (cascades to: course_run_assessment, enrollment,
+        // course_session, link_assessment_submission, user_subtopic_bookmark)
+        await client.query(
+          `DELETE FROM course_run WHERE course_run_id = $1`,
+          [runId]
+        );
+
+        // Clean up ssg_enrolments if the table exists (no FK, must be done manually)
+        const ssgTableCheck = await client.query(
+          `SELECT EXISTS (
+            SELECT FROM information_schema.tables
+            WHERE table_schema = 'public' AND table_name = 'ssg_enrolments'
+          ) AS exists`
+        );
+        if (ssgTableCheck.rows[0].exists) {
+          await client.query(
+            `DELETE FROM ssg_enrolments WHERE raw_data->'course'->'run'->>'id' = $1`,
+            [runId]
+          );
+        }
+
+        // Clean up upcoming_course_runs_log (no FK, must be done manually)
+        await client.query(
+          `DELETE FROM upcoming_course_runs_log WHERE course_run_id = $1`,
+          [runId]
+        );
+
+        await client.query('COMMIT');
+      } catch (dbErr) {
+        await client.query('ROLLBACK');
+        console.error('DB delete failed after SSG delete:', dbErr);
+      } finally {
+        client.release();
+      }
     } catch (dbErr) {
-      console.error('DB update failed after SSG delete:', dbErr);
+      console.error('DB connection failed after SSG delete:', dbErr);
     }
 
     return res.status(200).json({ success: true, isRecordNotFound });

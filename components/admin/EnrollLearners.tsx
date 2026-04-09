@@ -203,6 +203,46 @@ const EnrollLearners: React.FC = () => {
     }
   };
 
+  // Date conversion helpers
+  const toDisplayDate = (isoDate: string): string => {
+    if (!isoDate) return '';
+    // YYYY-MM-DD → DD/MM/YYYY
+    const match = isoDate.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (match) return `${match[3]}/${match[2]}/${match[1]}`;
+    return isoDate;
+  };
+
+  const toApiDate = (displayDate: string): string => {
+    if (!displayDate) return '';
+    // DD/MM/YYYY → YYYY-MM-DD
+    const match = displayDate.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    if (match) return `${match[3]}-${match[2]}-${match[1]}`;
+    // Already YYYY-MM-DD
+    if (/^\d{4}-\d{2}-\d{2}$/.test(displayDate)) return displayDate;
+    return displayDate;
+  };
+
+  // Fetch UEN from training provider table on mount
+  useEffect(() => {
+    const fetchUen = async () => {
+      try {
+        const res = await fetch('/api/training-provider/uen');
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.uen) {
+          setFormData(prev => ({
+            ...prev,
+            trainingPartnerUen: data.uen,
+            trainingPartnerCode: `${data.uen}-01`
+          }));
+        }
+      } catch {
+        // Silently fail — user can fill manually
+      }
+    };
+    fetchUen();
+  }, []);
+
   // Fetch available courses on component mount
   const fetchAvailableCourses = async () => {
     setLoadingCourses(true);
@@ -371,15 +411,28 @@ const EnrollLearners: React.FC = () => {
       console.log('Learner profile response:', result);
       if (res.ok && result.success && result.data) {
         const profile = result.data;
-        const dobFormatted = profile.dob || '';
-        console.log('Populating form with:', { nric: profile.nric, tel: profile.tel, dob: dobFormatted });
+        // Prefer SSG raw_data fields over learner_profile fields (more accurate)
+        const dobRaw = profile.ssg_dob || profile.dob || '';
+        const dobFormatted = dobRaw ? toDisplayDate(dobRaw) : '';
+        const nric = profile.ssg_nric || profile.nric || '';
+        const phone = profile.ssg_phone || profile.tel || '';
+        const countryCode = profile.ssg_country_code || '+65';
+        const areaCode = profile.ssg_area_code || '';
+        const idType = profile.ssg_id_type as IdTypeSummary || IdTypeSummary.NRIC;
+        const tpUen = profile.ssg_tp_uen || '';
+        const tpCode = profile.ssg_tp_code || (tpUen ? `${tpUen}-01` : '');
+        console.log('Populating form with:', { nric, phone, dob: dobFormatted, tpUen });
         setFormData(prev => ({
           ...prev,
           traineeFullName: profile.full_name || learner.name,
           traineeEmailAddress: profile.email || learner.email,
-          traineeId: profile.nric || '',
+          traineeId: nric,
+          traineeIdType: idType,
           traineeDateOfBirth: dobFormatted,
-          traineeContactNumberPhoneNumber: profile.tel || '',
+          traineeContactNumberCountryCode: countryCode,
+          traineeContactNumberAreaCode: areaCode,
+          traineeContactNumberPhoneNumber: phone,
+          ...(tpUen ? { trainingPartnerUen: tpUen, trainingPartnerCode: tpCode } : {}),
         }));
       }
     } catch (err) {
@@ -648,14 +701,14 @@ const EnrollLearners: React.FC = () => {
       id: formData.traineeId,
       idType: { type: formData.traineeIdType },
       fullName: formData.traineeFullName,
-      dateOfBirth: formData.traineeDateOfBirth,
+      dateOfBirth: toApiDate(formData.traineeDateOfBirth),
       emailAddress: formData.traineeEmailAddress,
       contactNumber: {
         countryCode: formData.traineeContactNumberCountryCode,
         phoneNumber: formData.traineeContactNumberPhoneNumber,
         ...(formData.traineeContactNumberAreaCode ? { areaCode: formData.traineeContactNumberAreaCode } : {})
       },
-      enrolmentDate: formData.traineeEnrolmentDate || new Date().toISOString().split('T')[0],
+      enrolmentDate: formData.traineeEnrolmentDate ? toApiDate(formData.traineeEnrolmentDate) : new Date().toISOString().split('T')[0],
       sponsorshipType: formData.traineeSponsorshipType,
       fees: {
         discountAmount: formData.traineeFeesDiscountAmount ?? 0,
@@ -1306,10 +1359,11 @@ const EnrollLearners: React.FC = () => {
                     Trainee Date of Birth <span className="text-red-500">*</span>
                   </label>
                   <input
-                    type="date"
+                    type="text"
                     value={formData.traineeDateOfBirth}
                     onChange={(e) => handleInputChange('traineeDateOfBirth', e.target.value)}
-                    min="1900-01-01"
+                    placeholder="DD/MM/YYYY"
+                    maxLength={10}
                     className={inputClasses}
                   />
                 </div>
@@ -1381,10 +1435,11 @@ const EnrollLearners: React.FC = () => {
                 {showOptionalFields.enrolmentDate && (
                   <div className="mt-2">
                     <input
-                      type="date"
+                      type="text"
                       value={formData.traineeEnrolmentDate || ''}
                       onChange={(e) => handleInputChange('traineeEnrolmentDate', e.target.value)}
-                      min="1900-01-01"
+                      placeholder="DD/MM/YYYY"
+                      maxLength={10}
                       className={inputClasses}
                     />
                   </div>
