@@ -508,7 +508,7 @@ const FinanceLayout: React.FC = () => {
 
   const getPageTitle = () => {
     switch (page) {
-      case 'allCourseRuns': return 'All Course Runs';
+      case 'allCourseRuns': return 'Consolidated Finance Data';
       case 'autoProcessEnrolments': return 'Process Enrolments';
       case 'autoManualEnrolment': return 'Manual Enrolment';
       case 'autoCreateEnrolmentsErrorStatus': return 'Create Enrolments For Error Status';
@@ -638,6 +638,7 @@ const FinanceLayout: React.FC = () => {
   const sidebarContent = (
     <nav className="space-y-6 p-4 bg-white dark:bg-slate-800 text-gray-900 dark:text-white h-full">
       <NavItem target="dashboard" label="Financial Dashboard" />
+      <NavItem target="allCourseRuns" label="Consolidated Finance Data" />
 
       <NavSection title="Workflow Guides" sectionKey="workflowGuides">
         <SubSection title="Training" sectionKey="wfTraining">
@@ -679,7 +680,6 @@ const FinanceLayout: React.FC = () => {
       </NavSection>
 
       <NavSection title="FMS (n8n)" sectionKey="courseRunAutomations">
-        <NavItem target="allCourseRuns" label="View All Course Runs" isSubItem />
         <NavItem target="autoProcessEnrolments" label="Process Enrolments" isSubItem />
         <NavItem target="autoManualEnrolment" label="Manual Enrolment" isSubItem />
         <NavItem target="autoCreateEnrolmentsErrorStatus" label="Create Enrolments For Error Status" isSubItem />
