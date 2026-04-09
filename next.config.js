@@ -1,4 +1,6 @@
 const { execSync } = require('child_process');
+const fs = require('fs');
+const path = require('path');
 const COMMIT_HASH = (() => {
   const formatDate = (d) => {
     const dd = String(d.getDate()).padStart(2, '0');
@@ -8,6 +10,11 @@ const COMMIT_HASH = (() => {
     const min = String(d.getMinutes()).padStart(2, '0');
     return `${dd}-${mm}-${yyyy} ${hh}:${min}`;
   };
+  // Try reading pre-generated .version file (used in Docker builds)
+  try {
+    const v = fs.readFileSync(path.join(__dirname, '.version'), 'utf8').trim();
+    if (v) return v;
+  } catch {}
   // Get commit hash
   let hash = 'dev';
   if (process.env.VERCEL_GIT_COMMIT_SHA) {
