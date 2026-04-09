@@ -43,6 +43,13 @@ const statusBadge = (status: string | null) => {
 
 const PAGE_SIZE = 20;
 
+// FIX: use inline style instead of Tailwind backdrop-blur class so blur covers
+// the full viewport including fixed navbars in any stacking context
+const BACKDROP_STYLE: React.CSSProperties = {
+  backdropFilter: 'blur(8px)',
+  WebkitBackdropFilter: 'blur(8px)',
+};
+
 const ProFormaInvoiceView: React.FC = () => {
   const [records, setRecords] = useState<ProFormaRecord[]>([]);
   const [loading, setLoading] = useState(false);
@@ -105,7 +112,13 @@ const ProFormaInvoiceView: React.FC = () => {
     return () => { if (toastTimerRef.current) clearTimeout(toastTimerRef.current); };
   }, [syncResult]);
 
-  const fetchData = useCallback(async (page = 1, overrideFilters?: { courseTitle?: string; startDate?: string; endDate?: string }) => {
+  // FIX: accept optional `search` override so callers can pass the fresh input value
+  // directly, bypassing the stale searchQuery state captured in the useCallback closure.
+  // This fixes both the clear button and backspace-to-empty not resetting the table.
+  const fetchData = useCallback(async (
+    page = 1,
+    overrideFilters?: { courseTitle?: string; startDate?: string; endDate?: string; search?: string }
+  ) => {
     setLoading(true);
     try {
       const params = new URLSearchParams();
@@ -114,10 +127,11 @@ const ProFormaInvoiceView: React.FC = () => {
       const ct = overrideFilters?.courseTitle ?? courseTitle;
       const sd = overrideFilters?.startDate ?? startDate;
       const ed = overrideFilters?.endDate ?? endDate;
+      const sq = overrideFilters?.search !== undefined ? overrideFilters.search : searchQuery;
       if (ct.trim()) params.set('courseTitle', ct.trim());
       if (sd) params.set('startDate', sd);
       if (ed) params.set('endDate', ed);
-      if (searchQuery.trim()) params.set('search', searchQuery.trim());
+      if (sq.trim()) params.set('search', sq.trim());
 
       const res = await fetch(`/api/finance/invoice/invoice-list?${params.toString()}`);
       const json = await res.json();
@@ -159,14 +173,11 @@ const ProFormaInvoiceView: React.FC = () => {
       if (json.valid) {
         window.open(url, '_blank');
       } else {
-        // File is gone — show regenerate popup
         setPopupRecord(record);
-        // Update local state to reflect cleared URL
         setRecords(prev => prev.map(r => r.id === record.id ? { ...r, pro_forma_url: null } : r));
       }
     } catch (err) {
       console.error('[ProFormaInvoiceView] Verify error:', err);
-      // On network error, just try to open
       window.open(url, '_blank');
     } finally {
       setVerifyingId(null);
@@ -244,7 +255,6 @@ const ProFormaInvoiceView: React.FC = () => {
         if (json.success) {
           setPreviewRecords(json.data);
           setPreviewCount(json.total);
-          // Auto-select all results
           setSelectedIds(new Set(json.data.map((r: ProFormaRecord) => r.id)));
         }
       } catch (err) {
@@ -345,7 +355,6 @@ const ProFormaInvoiceView: React.FC = () => {
   };
 
   const cell = 'px-4 py-3 text-xs whitespace-nowrap';
-  // Financial Dashboard table header style (matches screenshot)
   const headerCell = 'px-4 py-3 font-bold text-[#f4f6fa] bg-[#434c5e] text-[13px] uppercase tracking-wide whitespace-nowrap border-b border-[#232c3b] font-sans';
 
   return (
@@ -369,8 +378,10 @@ const ProFormaInvoiceView: React.FC = () => {
           onChange={(e) => {
             const val = e.target.value;
             setSearchQuery(val);
+            // FIX: pass `val` directly so the debounced fetch never reads stale
+            // searchQuery state — handles typing, backspace, and clearing to empty
             if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
-            searchDebounceRef.current = setTimeout(() => fetchData(1), 400);
+            searchDebounceRef.current = setTimeout(() => fetchData(1, { search: val }), 400);
           }}
           className="w-full pl-9 pr-9 py-2.5 text-sm rounded-lg border border-default bg-surface text-on-surface placeholder:text-on-surface-secondary/50 focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-colors"
         />
@@ -378,7 +389,10 @@ const ProFormaInvoiceView: React.FC = () => {
           <button
             onClick={() => {
               setSearchQuery('');
-              fetchData(1, { courseTitle: '', startDate: '', endDate: '' });
+              // FIX: cancel any pending debounce then immediately fetch with
+              // search: '' so the table resets to all rows without delay
+              if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+              fetchData(1, { courseTitle: '', startDate: '', endDate: '', search: '' });
             }}
             className="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-secondary hover:text-on-surface"
           >
@@ -389,7 +403,7 @@ const ProFormaInvoiceView: React.FC = () => {
 
       {/* Toast notification */}
       {syncResult && (
-        <div className={`fixed top-5 right-5 z-[90] max-w-sm w-full transition-all duration-300 ${
+        <div className={`fixed top-5 right-5 z-[9999] max-w-sm w-full transition-all duration-300 ${
           toastVisible ? 'translate-x-0 opacity-100' : 'translate-x-4 opacity-0'
         }`}>
           <div className={`flex items-start gap-3 px-4 py-3.5 rounded-xl shadow-lg border backdrop-blur-sm ${
@@ -437,13 +451,16 @@ const ProFormaInvoiceView: React.FC = () => {
         const isComplete = progressTotal > 0 && progressCurrent >= progressTotal;
 
         return (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div
+            className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60"
+            style={BACKDROP_STYLE}
+          >
             <div className="w-full max-w-md mx-4 rounded-2xl bg-surface-elevated shadow-2xl overflow-hidden border border-default/20">
 
-              {/* ── Top accent bar ── */}
+              {/* Top accent bar */}
               <div className={`h-1 ${isComplete ? 'bg-emerald-500' : 'bg-primary'}`} />
 
-              {/* ── Icon + Title ── */}
+              {/* Icon + Title */}
               <div className="flex flex-col items-center pt-7 pb-2 px-6">
                 <div className={`w-14 h-14 rounded-full flex items-center justify-center mb-4 ${isComplete ? 'bg-emerald-500/10' : 'bg-primary/10'}`}>
                   {isComplete ? (
@@ -470,7 +487,7 @@ const ProFormaInvoiceView: React.FC = () => {
                 </p>
               </div>
 
-              {/* ── Progress bar ── */}
+              {/* Progress bar */}
               <div className="px-6 pt-4 pb-2">
                 <div className="flex items-center justify-between mb-1.5">
                   <span className="text-[11px] font-medium text-on-surface-secondary">Progress</span>
@@ -493,7 +510,7 @@ const ProFormaInvoiceView: React.FC = () => {
                 </div>
               </div>
 
-              {/* ── Stats row ── */}
+              {/* Stats row */}
               {progressTotal > 0 && (
                 <div className="px-6 pt-3 pb-1">
                   <div className="flex rounded-lg border border-default/15 divide-x divide-default/15 overflow-hidden">
@@ -515,7 +532,7 @@ const ProFormaInvoiceView: React.FC = () => {
                 </div>
               )}
 
-              {/* ── Current learner ── */}
+              {/* Current learner */}
               {progressName && !isComplete && (
                 <div className="px-6 pt-3">
                   <div className="flex items-center gap-2 text-xs text-on-surface-secondary">
@@ -527,7 +544,7 @@ const ProFormaInvoiceView: React.FC = () => {
                 </div>
               )}
 
-              {/* ── Footer ── */}
+              {/* Footer */}
               <div className="px-6 pt-4 pb-5">
                 {isComplete ? (
                   <button
@@ -661,7 +678,10 @@ const ProFormaInvoiceView: React.FC = () => {
 
       {/* Generate popup */}
       {showGeneratePopup && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-md">
+        <div
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70"
+          style={BACKDROP_STYLE}
+        >
           <div className="bg-surface rounded-2xl shadow-2xl max-w-5xl w-full border border-default overflow-hidden mx-4">
             {/* Header */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-default bg-surface-elevated">
@@ -831,7 +851,6 @@ const ProFormaInvoiceView: React.FC = () => {
                       </table>
                     )}
                   </div>
-                  {/* Removed bottom grey bar under preview table */}
                 </div>
               </div>
             </div>
@@ -864,7 +883,10 @@ const ProFormaInvoiceView: React.FC = () => {
 
       {/* Confirm generate all popup */}
       {showConfirmAll && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/60 backdrop-blur-sm">
+        <div
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60"
+          style={BACKDROP_STYLE}
+        >
           <div className="bg-surface rounded-xl shadow-2xl max-w-md w-full mx-4 p-6 border border-default">
             <div className="flex items-center gap-3 mb-4">
               <div className="flex-shrink-0 w-10 h-10 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
@@ -899,7 +921,10 @@ const ProFormaInvoiceView: React.FC = () => {
 
       {/* Regenerate popup */}
       {popupRecord && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+        <div
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50"
+          style={BACKDROP_STYLE}
+        >
           <div className="bg-surface rounded-xl shadow-xl max-w-md w-full mx-4 p-6 border border-default">
             <div className="flex items-center gap-3 mb-4">
               <div className="flex-shrink-0 w-10 h-10 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
