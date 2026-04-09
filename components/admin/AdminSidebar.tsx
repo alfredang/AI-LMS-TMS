@@ -152,6 +152,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate, onSelectWorkflo
                 <SubSection title="Admin" isOpen={openSections.wfAdmin} onToggle={() => toggleSection('wfAdmin')}>
                     {[
                         { id: 'ssg-process-steps', label: 'SSG Process Steps', icon: '🏛️' },
+                        { id: 'support-ticketing', label: 'Support Ticketing', icon: '🎫' },
                         { id: 'certificate', label: 'Certificate', icon: '🎓' },
                         { id: 'trainer-invitation', label: 'Trainer Invitation', icon: '📨' },
                     ].map(item => (

@@ -195,6 +195,32 @@ const WORKFLOWS: Workflow[] = [
     ],
   },
   {
+    id: 'support-ticketing',
+    title: 'Support Ticketing Workflow',
+    icon: '🎫',
+    color: 'border-pink-500 bg-pink-50 dark:bg-pink-900/10',
+    description: 'Provide learners with a channel to report queries and administrators a centralized way to resolve them efficiently.',
+    steps: [
+      { title: '1. Learner Raises Ticket', detail: 'From the Help & Support page, a learner clicks "Raise a New Ticket". The learner fills out a form containing the subject, category (General, Course, Payment, Technical, LMS, TMS, Courseware, Certificate, Claim, Other), and details of their query.', type: 'action' },
+      { title: '2. System Processes Ticket', detail: 'A unique ticket number (e.g. TKT-000001) is automatically generated. The ticket is immediately saved to the database with a default status of "Open".', type: 'logic' },
+      { title: '3. Notifications Sent', detail: 'An email is dispatched to both the admin (enquiry@tertiaryinfotech.com) to notify them of the new ticket, and an acknowledgement email is sent to the learner directly.', type: 'email' },
+      { title: '4. Admin Reviews and Responds', detail: 'From the Support Tickets admin sidebar, the admin views the central list of tickets. Clicking the ticket opens the detail view where the admin can type a response to the learner.', type: 'action' },
+      { title: '5. Ticket Status Updates', detail: 'Upon an admin submitting a reply, the ticket status automatically transitions from "Open" to "In Progress". The admin can manually change the status to "Resolved" or "Closed" via the dropdown menu.', type: 'logic' },
+      { title: '6. Learner Receives Support', detail: 'The learner gets the response directly within the same Help & Support interface. A threaded conversation is built allowing continuous communication until the ticket is marked Closed.', type: 'success' },
+    ],
+    endpoints: [
+      { method: 'POST', url: '/api/tickets/create', description: 'Learner raises a new ticket and sends initial emails' },
+      { method: 'GET', url: '/api/tickets/list', description: 'Fetch all tickets (admins see all, learners see their own)' },
+      { method: 'GET', url: '/api/tickets/detail', description: 'Retrieve ticket info and conversation thread' },
+      { method: 'POST', url: '/api/tickets/reply', description: 'Post responses and auto-updates status' },
+      { method: 'PUT', url: '/api/tickets/update-status', description: 'Manually change ticket status' }
+    ],
+    dbTables: [
+      { name: 'support_ticket', description: 'Main ticket entry with generated ticket_number and status' },
+      { name: 'support_ticket_reply', description: 'Threaded conversation logs attached to a ticket.' },
+    ],
+  },
+  {
     id: 'ssg-process-steps',
     title: 'SSG Process Steps',
     icon: '🏛️',
