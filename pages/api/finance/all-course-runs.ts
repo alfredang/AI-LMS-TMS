@@ -1,6 +1,23 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 
+/** Normalized course run start date as YYYY-MM-DD text (matches sync-all-course-runs-from-ssg). */
+const RUN_START_NORM_SQL = `(
+  CASE
+    WHEN (se.raw_data->'course'->'run'->>'startDate') ~ '^[0-9]{8}$' THEN
+      substr((se.raw_data->'course'->'run'->>'startDate'), 1, 4) || '-' ||
+      substr((se.raw_data->'course'->'run'->>'startDate'), 5, 2) || '-' ||
+      substr((se.raw_data->'course'->'run'->>'startDate'), 7, 2)
+    WHEN (se.raw_data->'course'->'run'->>'startDate') ~ '^[0-9]{2}/[0-9]{2}/[0-9]{4}$' THEN
+      substr((se.raw_data->'course'->'run'->>'startDate'), 7, 4) || '-' ||
+      substr((se.raw_data->'course'->'run'->>'startDate'), 4, 2) || '-' ||
+      substr((se.raw_data->'course'->'run'->>'startDate'), 1, 2)
+    ELSE NULLIF(trim(se.raw_data->'course'->'run'->>'startDate'), '')
+  END
+)`;
+
+const TODAY_SG_SQL = `to_char((CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Singapore')::date, 'YYYY-MM-DD')`;
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {
     res.setHeader('Allow', ['GET']);
@@ -15,6 +32,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const status = (req.query.status as string || '').trim();
     const sort = req.query.sort === 'oldest' ? 'ASC' : 'DESC';
     const offset = page * limit;
+    const includeFuture =
+      req.query.includeFuture === '1' ||
+      req.query.includeFuture === 'true';
+    const rawStartFrom = (req.query.startFrom as string | undefined)?.trim() || '';
+    const rawStartTo = (req.query.startTo as string | undefined)?.trim() || '';
+    const startFrom = rawStartFrom && rawStartTo ? (rawStartFrom <= rawStartTo ? rawStartFrom : rawStartTo) : rawStartFrom;
+    const startTo = rawStartFrom && rawStartTo ? (rawStartFrom <= rawStartTo ? rawStartTo : rawStartFrom) : rawStartTo;
+
+    // Course runs starting after "today" (Singapore) are hidden unless includeFuture
+    const throughTodayClause = includeFuture
+      ? ''
+      : ` AND (${RUN_START_NORM_SQL} IS NULL OR ${RUN_START_NORM_SQL} <= ${TODAY_SG_SQL})`;
 
     // Build WHERE conditions — always exclude incomplete rows
     const conditions: string[] = ['se.enrolment_id IS NOT NULL'];
@@ -50,7 +79,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       paramIndex++;
     }
 
-    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+    // Optional view filter by course run start date (normalized to YYYY-MM-DD).
+    // When filtering by a range, exclude rows without a parseable start date.
+    if (startFrom || startTo) {
+      conditions.push(`${RUN_START_NORM_SQL} IS NOT NULL`);
+      if (startFrom) {
+        conditions.push(`${RUN_START_NORM_SQL} >= $${paramIndex}`);
+        params.push(startFrom);
+        paramIndex++;
+      }
+      if (startTo) {
+        conditions.push(`${RUN_START_NORM_SQL} <= $${paramIndex}`);
+        params.push(startTo);
+        paramIndex++;
+      }
+    }
+
+    let whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+    whereClause += throughTodayClause;
 
     // Main query: enrolments with lateral-joined grants and claims
     const dataQuery = `
@@ -125,20 +171,64 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       ${whereClause}
     `;
 
-    // Stats query (unfiltered for KPI cards)
-    const statsQuery = `
+    const enrolThroughTodaySql = `(${RUN_START_NORM_SQL} IS NULL OR ${RUN_START_NORM_SQL} <= ${TODAY_SG_SQL})`;
+    const enrolStartRangeSqlParts: string[] = [];
+    if (startFrom) enrolStartRangeSqlParts.push(`${RUN_START_NORM_SQL} >= '${startFrom.replace(/'/g, "''")}'`);
+    if (startTo) enrolStartRangeSqlParts.push(`${RUN_START_NORM_SQL} <= '${startTo.replace(/'/g, "''")}'`);
+    const enrolStartRangeSql = enrolStartRangeSqlParts.length > 0
+      ? ` AND ${RUN_START_NORM_SQL} IS NOT NULL AND (${enrolStartRangeSqlParts.join(' AND ')})`
+      : '';
+
+    // Stats query — same “through today” scope as the table when includeFuture is off
+    const statsQuery = includeFuture
+      ? `
       SELECT
         (SELECT COUNT(*) FROM ssg_enrolments WHERE enrolment_id IS NOT NULL) AS total_enrolments,
         COALESCE((SELECT SUM(estimated_grant_amount) FROM ssg_grants WHERE funding_scheme_code = 'Baseline'), 0) AS total_bl,
         COALESCE((SELECT SUM(estimated_grant_amount) FROM ssg_grants WHERE funding_scheme_code != 'Baseline'), 0) AS total_nbl,
         COALESCE((SELECT SUM(claim_amount) FROM ssg_claims), 0) AS total_sfc
+    `
+      : `
+      SELECT
+        (SELECT COUNT(*) FROM ssg_enrolments se WHERE se.enrolment_id IS NOT NULL AND ${enrolThroughTodaySql}${enrolStartRangeSql}) AS total_enrolments,
+        COALESCE((
+          SELECT SUM(g.estimated_grant_amount) FROM ssg_grants g
+          WHERE g.funding_scheme_code = 'Baseline'
+            AND EXISTS (
+              SELECT 1 FROM ssg_enrolments se
+              WHERE se.enrolment_id = g.enrollment_id AND se.enrolment_id IS NOT NULL AND ${enrolThroughTodaySql}${enrolStartRangeSql}
+            )
+        ), 0) AS total_bl,
+        COALESCE((
+          SELECT SUM(g.estimated_grant_amount) FROM ssg_grants g
+          WHERE g.funding_scheme_code != 'Baseline'
+            AND EXISTS (
+              SELECT 1 FROM ssg_enrolments se
+              WHERE se.enrolment_id = g.enrollment_id AND se.enrolment_id IS NOT NULL AND ${enrolThroughTodaySql}${enrolStartRangeSql}
+            )
+        ), 0) AS total_nbl,
+        COALESCE((
+          SELECT SUM(c.claim_amount) FROM ssg_claims c
+          WHERE EXISTS (
+            SELECT 1 FROM ssg_enrolments se
+            WHERE se.enrolment_id = c.enrollment_id AND se.enrolment_id IS NOT NULL AND ${enrolThroughTodaySql}${enrolStartRangeSql}
+          )
+        ), 0) AS total_sfc
     `;
 
-    const statusBreakdownQuery = `
+    const statusBreakdownQuery = includeFuture
+      ? `
       SELECT enrolment_status AS status, COUNT(*) AS count
       FROM ssg_enrolments
       WHERE enrolment_id IS NOT NULL
       GROUP BY enrolment_status
+      ORDER BY count DESC
+    `
+      : `
+      SELECT se.enrolment_status AS status, COUNT(*) AS count
+      FROM ssg_enrolments se
+      WHERE se.enrolment_id IS NOT NULL AND ${enrolThroughTodaySql}${enrolStartRangeSql}
+      GROUP BY se.enrolment_status
       ORDER BY count DESC
     `;
 

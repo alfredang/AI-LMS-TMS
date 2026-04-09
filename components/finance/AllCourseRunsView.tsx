@@ -299,6 +299,10 @@ const AllCourseRunsView: React.FC = () => {
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  /** When false (default), list + KPIs only include course runs with start date on or before today (Singapore). */
+  const [includeFutureCourseRuns, setIncludeFutureCourseRuns] = useState(false);
+  const [viewFrom, setViewFrom] = useState(''); // start date (course run)
+  const [viewTo, setViewTo] = useState(''); // start date (course run)
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
   const [page, setPage] = useState(0);
   const [rows, setRows] = useState<CourseRunRow[]>([]);
@@ -306,8 +310,6 @@ const AllCourseRunsView: React.FC = () => {
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [syncFrom, setSyncFrom] = useState(() => new Date(Date.now() - 30 * 86400_000).toISOString().slice(0, 10));
-  const [syncTo, setSyncTo] = useState(() => new Date().toISOString().slice(0, 10));
   const [syncing, setSyncing] = useState(false);
   const [syncToast, setSyncToast] = useState<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
@@ -330,6 +332,9 @@ const AllCourseRunsView: React.FC = () => {
       const params = new URLSearchParams({ page: String(page), limit: String(PAGE_SIZE), sort: sortOrder });
       if (debouncedSearch) params.set('search', debouncedSearch);
       if (statusFilter) params.set('status', statusFilter);
+      if (includeFutureCourseRuns) params.set('includeFuture', '1');
+      if (viewFrom) params.set('startFrom', viewFrom);
+      if (viewTo) params.set('startTo', viewTo);
       const res = await fetch(`/api/finance/all-course-runs?${params}`);
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Failed to fetch data');
@@ -341,7 +346,7 @@ const AllCourseRunsView: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [page, debouncedSearch, statusFilter, sortOrder]);
+  }, [page, debouncedSearch, statusFilter, sortOrder, includeFutureCourseRuns, viewFrom, viewTo]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -355,11 +360,17 @@ const AllCourseRunsView: React.FC = () => {
     setSyncing(true);
     setSyncToast(null);
     try {
-      const from = syncFrom <= syncTo ? syncFrom : syncTo;
-      const to = syncFrom <= syncTo ? syncTo : syncFrom;
-      if (from !== syncFrom) {
-        setSyncFrom(from);
-        setSyncTo(to);
+      const todayIso = new Date().toISOString().slice(0, 10);
+      const defaultFromIso = new Date(Date.now() - 30 * 86400_000).toISOString().slice(0, 10);
+
+      const rawFrom = viewFrom || defaultFromIso;
+      const rawTo = viewTo || todayIso;
+      const from = rawFrom <= rawTo ? rawFrom : rawTo;
+      const to = rawFrom <= rawTo ? rawTo : rawFrom;
+
+      if (viewFrom && viewTo && (from !== viewFrom || to !== viewTo)) {
+        setViewFrom(from);
+        setViewTo(to);
       }
       const res = await ssgFetch('/api/finance/sync-all-course-runs-from-ssg', {
         method: 'POST',
@@ -389,8 +400,13 @@ const AllCourseRunsView: React.FC = () => {
   return (
     <div className="space-y-6 relative">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between">
         <h2 className="text-2xl font-bold text-on-surface">All Course Runs</h2>
+        {!includeFutureCourseRuns && (
+          <p className="text-xs text-on-surface-secondary">
+            Showing enrolments through today (Singapore time). Tick “Include future course runs” for all dates.
+          </p>
+        )}
       </div>
 
       {/* KPI Cards */}
@@ -447,41 +463,63 @@ const AllCourseRunsView: React.FC = () => {
             <option value="newest">Newest First</option>
             <option value="oldest">Oldest First</option>
           </select>
+          <label className="flex items-center gap-2 px-1 py-2 text-sm text-on-surface whitespace-nowrap cursor-pointer">
+            <input
+              type="checkbox"
+              checked={includeFutureCourseRuns}
+              onChange={(e) => { setIncludeFutureCourseRuns(e.target.checked); setPage(0); }}
+              className="rounded border-default"
+            />
+            Include future course runs
+          </label>
           </div>
 
           <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-end">
             <div className="flex gap-3 flex-wrap items-end">
               <div>
-                <label className="block text-xs font-semibold text-on-surface-secondary mb-1">Sync from (course run start date)</label>
+                <label className="block text-xs font-semibold text-on-surface-secondary mb-1">View start from</label>
                 <input
                   type="date"
-                  value={syncFrom}
-                  onChange={(e) => setSyncFrom(e.target.value)}
+                  value={viewFrom}
+                  onChange={(e) => { setViewFrom(e.target.value); setPage(0); }}
                   className="px-3 py-2 text-sm bg-surface border border-default rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-on-surface"
-                  disabled={syncing}
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-on-surface-secondary mb-1">Sync to</label>
+                <label className="block text-xs font-semibold text-on-surface-secondary mb-1">View start to</label>
                 <input
                   type="date"
-                  value={syncTo}
-                  onChange={(e) => setSyncTo(e.target.value)}
+                  value={viewTo}
+                  onChange={(e) => { setViewTo(e.target.value); setPage(0); }}
                   className="px-3 py-2 text-sm bg-surface border border-default rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-on-surface"
-                  disabled={syncing}
                 />
               </div>
             </div>
             <div className="flex gap-2 sm:ml-auto">
               <Button
                 variant="outline"
-                onClick={() => { setSyncFrom(new Date(Date.now() - 30 * 86400_000).toISOString().slice(0, 10)); setSyncTo(new Date().toISOString().slice(0, 10)); }}
-                disabled={syncing}
+                onClick={() => {
+                  setViewFrom(new Date(Date.now() - 30 * 86400_000).toISOString().slice(0, 10));
+                  setViewTo(new Date().toISOString().slice(0, 10));
+                  setPage(0);
+                }}
+                disabled={syncing || loading}
               >
                 Last 30 days
               </Button>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setViewFrom('');
+                  setViewTo('');
+                  setPage(0);
+                }}
+                disabled={syncing || loading}
+              >
+                Clear
+              </Button>
               <Button onClick={() => void runSync()} disabled={syncing}>
-                {syncing ? 'Syncing…' : 'Sync latest from SSG'}
+                {syncing ? 'Refreshing…' : 'Refresh from SSG'}
               </Button>
             </div>
           </div>
