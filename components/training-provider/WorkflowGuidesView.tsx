@@ -8,6 +8,7 @@ interface WorkflowStep {
   title: string;
   detail: string;
   type: StepType;
+  url?: string;
 }
 
 interface Workflow {
@@ -201,19 +202,19 @@ const WORKFLOWS: Workflow[] = [
     description: 'Complete SSG WSQ process from Course Dashboards to Certificates — all 13 stages of the WSQ workflow.',
     externalUrl: 'https://alfredang.github.io/ssgwsqprocess/index.html',
     steps: [
-      { title: '1. Course Dashboards', detail: 'Overview of course management dashboards and key metrics. Access the SSG portal to view course listings, approval statuses, and training provider performance indicators.', type: 'action' },
-      { title: '2. Course Applications', detail: 'Managing and processing course applications. Submit new course applications to SSG for approval, track application status, and manage required documentation.', type: 'action' },
-      { title: '3. Course Runs', detail: 'Setting up and administering course runs. Create course runs on the TPGateway portal with session dates, venues, trainers, and vacancy information.', type: 'action' },
-      { title: '4. Grant Calculator', detail: 'Calculating eligible training grants. Use the SSG grant calculator to determine funding amounts for different learner categories (SC, PR, MCES-eligible).', type: 'logic' },
-      { title: '5. Trainee Enrolment', detail: 'Enrolling trainees into approved courses. Process enrolment through the SSG portal, verify learner eligibility, and submit enrolment records.', type: 'action' },
-      { title: '6. Attendance', detail: 'Recording and managing trainee attendance. Submit digital attendance records to SSG, track attendance rates, and manage makeup sessions.', type: 'action' },
-      { title: '7. Assessments', detail: 'Conducting assessments and recording results. Manage WSQ assessments, record competency outcomes (C/NYC), and submit results to SSG.', type: 'action' },
-      { title: '8. Grants', detail: 'Applying for and managing training grants. Submit grant applications to SSG, track approval status, and manage grant disbursement.', type: 'logic' },
-      { title: '9. Claims', detail: 'Submitting and tracking grant claims. File claims for approved grants, upload supporting documents, and monitor claim processing status.', type: 'action' },
-      { title: '10. Outcome Submission', detail: 'Submitting training outcomes and competency results. Submit final training outcomes to SSG including assessment results and completion status.', type: 'success' },
-      { title: '11. Financial Transactions', detail: 'Viewing and managing financial transactions. Track grant disbursements, reconcile payments, and monitor financial records on the SSG portal.', type: 'logic' },
-      { title: '12. Refunds', detail: 'Processing refund requests and adjustments. Handle grant refunds, process overpayment returns, and manage financial adjustments with SSG.', type: 'warning' },
-      { title: '13. Certificates', detail: 'Generating and issuing training certificates. Issue WSQ certificates to competent learners, manage certificate records, and handle re-issuance requests.', type: 'success' },
+      { title: '1. Course Dashboards', detail: 'Overview of course management dashboards and key metrics. Access the SSG portal to view course listings, approval statuses, and training provider performance indicators.', type: 'action', url: 'https://alfredang.github.io/ssgwsqprocess/steps.html#course-dashboards' },
+      { title: '2. Course Applications', detail: 'Managing and processing course applications. Submit new course applications to SSG for approval, track application status, and manage required documentation.', type: 'action', url: 'https://alfredang.github.io/ssgwsqprocess/steps.html#course-applications' },
+      { title: '3. Course Runs', detail: 'Setting up and administering course runs. Create course runs on the TPGateway portal with session dates, venues, trainers, and vacancy information.', type: 'action', url: 'https://alfredang.github.io/ssgwsqprocess/steps.html#course-runs' },
+      { title: '4. Grant Calculator', detail: 'Calculating eligible training grants. Use the SSG grant calculator to determine funding amounts for different learner categories (SC, PR, MCES-eligible).', type: 'logic', url: 'https://alfredang.github.io/ssgwsqprocess/steps.html#grant-calculator' },
+      { title: '5. Trainee Enrolment', detail: 'Enrolling trainees into approved courses. Process enrolment through the SSG portal, verify learner eligibility, and submit enrolment records.', type: 'action', url: 'https://alfredang.github.io/ssgwsqprocess/steps.html#trainee-enrolment' },
+      { title: '6. Attendance', detail: 'Recording and managing trainee attendance. Submit digital attendance records to SSG, track attendance rates, and manage makeup sessions.', type: 'action', url: 'https://alfredang.github.io/ssgwsqprocess/steps.html#attendance' },
+      { title: '7. Assessments', detail: 'Conducting assessments and recording results. Manage WSQ assessments, record competency outcomes (C/NYC), and submit results to SSG.', type: 'action', url: 'https://alfredang.github.io/ssgwsqprocess/steps.html#assessments' },
+      { title: '8. Grants', detail: 'Applying for and managing training grants. Submit grant applications to SSG, track approval status, and manage grant disbursement.', type: 'logic', url: 'https://alfredang.github.io/ssgwsqprocess/steps.html#grants' },
+      { title: '9. Claims', detail: 'Submitting and tracking grant claims. File claims for approved grants, upload supporting documents, and monitor claim processing status.', type: 'action', url: 'https://alfredang.github.io/ssgwsqprocess/steps.html#claims' },
+      { title: '10. Outcome Submission', detail: 'Submitting training outcomes and competency results. Submit final training outcomes to SSG including assessment results and completion status.', type: 'success', url: 'https://alfredang.github.io/ssgwsqprocess/steps.html#outcome-submission' },
+      { title: '11. Financial Transactions', detail: 'Viewing and managing financial transactions. Track grant disbursements, reconcile payments, and monitor financial records on the SSG portal.', type: 'logic', url: 'https://alfredang.github.io/ssgwsqprocess/steps.html#financial-transactions' },
+      { title: '12. Refunds', detail: 'Processing refund requests and adjustments. Handle grant refunds, process overpayment returns, and manage financial adjustments with SSG.', type: 'warning', url: 'https://alfredang.github.io/ssgwsqprocess/steps.html#refunds' },
+      { title: '13. Certificates', detail: 'Generating and issuing training certificates. Issue WSQ certificates to competent learners, manage certificate records, and handle re-issuance requests.', type: 'success', url: 'https://alfredang.github.io/ssgwsqprocess/steps.html#certificates' },
     ],
   },
 ];
@@ -312,19 +313,22 @@ const WorkflowGuidesView: React.FC<WorkflowGuidesViewProps> = ({ initialWorkflow
         <div className="space-y-3">
           {workflow.steps.map((step, i) => {
             const color = stepColors[step.type];
+            const Wrapper = step.url ? 'a' : 'div';
+            const wrapperProps = step.url ? { href: step.url, target: '_blank', rel: 'noopener noreferrer' } : {};
             return (
-              <div key={i} className={`${color.bg} border ${color.border} rounded-lg p-4`}>
+              <Wrapper key={i} {...wrapperProps} className={`${color.bg} border ${color.border} rounded-lg p-4 block ${step.url ? 'hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 cursor-pointer' : ''}`}>
                 <div className="flex items-start gap-3">
                   <span className="text-lg flex-shrink-0 mt-0.5">{color.icon}</span>
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
                       <h5 className="font-bold text-gray-900 dark:text-white text-sm">{step.title}</h5>
                       <span className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-white/60 dark:bg-black/20 text-gray-600 dark:text-gray-400">{color.label}</span>
+                      {step.url && <span className="text-xs text-blue-600 dark:text-blue-400 ml-auto">↗</span>}
                     </div>
                     <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-line leading-relaxed">{step.detail}</p>
                   </div>
                 </div>
-              </div>
+              </Wrapper>
             );
           })}
         </div>
