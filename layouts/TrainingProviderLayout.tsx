@@ -28,6 +28,8 @@ import FinanceManagementView from '../components/training-provider/FinanceManage
 import TrainingProviderSidebar from '../components/training-provider/TrainingProviderSidebar';
 import SchedulerView from '../components/admin/SchedulerView';
 import { AutomationLogsView, TrainerFolderLogsView, CourseRunDateSyncLogsView, UpcomingCourseRunsLogView, CourseConfirmationEmailLogsView } from '../components/admin/ClassManagementViews';
+import TrainerResponseEmailTemplatesView from '../components/training-provider/TrainerResponseEmailTemplatesView';
+import WorkflowGuidesView from '../components/training-provider/WorkflowGuidesView';
 import WebhooksView from '../components/training-provider/WebhooksView';
 import SsgApiSummaryView from '../components/training-provider/SsgApiSummaryView';
 import { Card } from '../components/ui/Card';
@@ -37,6 +39,7 @@ const TrainingProviderLayout: React.FC = () => {
   const appVersion = useAppVersion();
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isDesktopSidebarCollapsed, setIsDesktopSidebarCollapsed] = useState(false);
+  const [selectedWorkflowId, setSelectedWorkflowId] = useState<string | null>(null);
 
   const handleToggleSidebar = () => {
     if (typeof window !== 'undefined' && window.innerWidth >= 768) {
@@ -94,6 +97,10 @@ const TrainingProviderLayout: React.FC = () => {
         return <PasswordResetEmailTemplateView />;
       case View.TrainerInvitationEmailTemplate:
         return <TrainerInvitationEmailTemplateView />;
+      case View.TrainerResponseEmailTemplates:
+        return <TrainerResponseEmailTemplatesView />;
+      case View.WorkflowGuides:
+        return <WorkflowGuidesView initialWorkflowId={selectedWorkflowId || undefined} />;
       case View.FinalCourseConfirmationEmailTemplate:
         return <FinalCourseConfirmationEmailTemplateView />;
       case View.CourseConfirmationEmailTemplate:
@@ -130,6 +137,8 @@ const TrainingProviderLayout: React.FC = () => {
       case View.FeedbackEmailTemplate: return 'Feedback Email Template';
       case View.PasswordResetEmailTemplate: return 'Password Reset Email Template';
       case View.TrainerInvitationEmailTemplate: return 'Trainer Invitation Email Template';
+      case View.TrainerResponseEmailTemplates: return 'Trainer Accept/Decline Email Templates';
+      case View.WorkflowGuides: return 'Workflow Guides';
       case View.FinalCourseConfirmationEmailTemplate: return 'Final Course Confirmation Email Template';
       case View.CourseConfirmationEmailTemplate: return 'Course Confirmation Email Template';
       case View.FinanceManagement: return 'Finance Management';
@@ -173,7 +182,7 @@ const TrainingProviderLayout: React.FC = () => {
               </button>
             </div>
             <div className="flex-1 overflow-y-auto">
-              <TrainingProviderSidebar onNavigate={() => setIsMobileSidebarOpen(false)} />
+              <TrainingProviderSidebar onNavigate={() => setIsMobileSidebarOpen(false)} onSelectWorkflow={setSelectedWorkflowId} />
             </div>
           </div>
         </div>
@@ -185,8 +194,7 @@ const TrainingProviderLayout: React.FC = () => {
         {!isDesktopSidebarCollapsed && (
           <aside className="hidden md:flex w-64 flex-shrink-0 bg-white dark:bg-slate-800 border-r border-gray-200 dark:border-slate-700">
             <div className="w-full flex flex-col h-full">
-              <div className="flex-1"><TrainingProviderSidebar /></div>
-              <p className="px-3 pb-2 text-[10px] text-gray-400 dark:text-gray-300 font-mono">version {appVersion}</p>
+              <div className="flex-1"><TrainingProviderSidebar onSelectWorkflow={setSelectedWorkflowId} /></div>
             </div>
           </aside>
         )}

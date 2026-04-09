@@ -22,12 +22,14 @@ export enum View {
   FeedbackEmailTemplate = 'feedbackEmailTemplate',
   PasswordResetEmailTemplate = 'passwordResetEmailTemplate',
   TrainerInvitationEmailTemplate = 'trainerInvitationEmailTemplate',
+  TrainerResponseEmailTemplates = 'trainerResponseEmailTemplates',
   FinalCourseConfirmationEmailTemplate = 'finalCourseConfirmationEmailTemplate',
   CourseConfirmationEmailTemplate = 'courseConfirmationEmailTemplate',
   FinanceManagement = 'financeManagement',
   BillingHistory = 'billingHistory',
   CertificateHistory = 'certificateHistory',
-  SsgApiSummary = 'ssgApiSummary'
+  SsgApiSummary = 'ssgApiSummary',
+  WorkflowGuides = 'workflowGuides'
 }
 
 export enum UserRole {
@@ -111,6 +113,7 @@ export enum AdminPage {
   SendCertificateGH = 'sendCertificateGH',
   Calendar = 'calendar',
   Scheduler = 'scheduler',
+  WorkflowGuides = 'workflowGuides',
 }
 
 export enum TrainerPage {

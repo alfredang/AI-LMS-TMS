@@ -6,26 +6,30 @@ import { Icon, IconName } from '../ui/Icon';
 
 interface TrainingProviderSidebarProps {
     onNavigate?: () => void;
+    onSelectWorkflow?: (workflowId: string) => void;
 }
 
-const TrainingProviderSidebar: React.FC<TrainingProviderSidebarProps> = ({ onNavigate }) => {
+const TrainingProviderSidebar: React.FC<TrainingProviderSidebarProps> = ({ onNavigate, onSelectWorkflow }) => {
     const { currentView, handleNavigation, selectedCourse } = useLms();
     const appVersion = useAppVersion();
 
-    const templateViews = [View.OtpEmailTemplate, View.CertificateEmailTemplate, View.FeedbackEmailTemplate, View.PasswordResetEmailTemplate, View.TrainerInvitationEmailTemplate, View.FinalCourseConfirmationEmailTemplate, View.CourseConfirmationEmailTemplate, View.PrivacyPolicy, View.AcceptableUsePolicy];
+    const templateViews = [View.OtpEmailTemplate, View.CertificateEmailTemplate, View.FeedbackEmailTemplate, View.PasswordResetEmailTemplate, View.TrainerInvitationEmailTemplate, View.TrainerResponseEmailTemplates, View.FinalCourseConfirmationEmailTemplate, View.CourseConfirmationEmailTemplate, View.PrivacyPolicy, View.AcceptableUsePolicy];
     const [templatesOpen, setTemplatesOpen] = useState(templateViews.includes(currentView));
+    const [workflowsOpen, setWorkflowsOpen] = useState(currentView === View.WorkflowGuides);
     const [usefulLinksOpen, setUsefulLinksOpen] = useState(false);
 
-    const navItems = [
+    const navItemsTop = [
         { view: View.Dashboard, label: 'Training Dashboard', icon: IconName.Dashboard },
-        { view: View.Courses, label: 'Courses', icon: IconName.Courses },
+        { view: View.Courses, label: 'Course Management', icon: IconName.Courses },
         { view: View.UserManagement, label: 'User Management', icon: IconName.Users },
         { view: View.AdminManagement, label: 'Role Management', icon: IconName.Admin },
         { view: View.FinanceManagement, label: 'Finance Management', icon: IconName.DollarSign },
         { view: View.Profile, label: 'Company Setting', icon: IconName.MyAccount },
+    ];
+
+    const navItemsBottom = [
         { view: View.SsgApiSummary, label: 'SSG API Summary', icon: IconName.ClipboardCheck },
         { view: View.ApiEndpoints, label: 'API Endpoints', icon: IconName.Link },
-        { view: View.Documents, label: 'Documents', icon: IconName.FileText },
         { view: View.Scheduler, label: 'Task Scheduler', icon: IconName.Calendar },
         { view: View.Webhooks, label: 'Webhooks', icon: IconName.Link },
     ];
@@ -36,6 +40,7 @@ const TrainingProviderSidebar: React.FC<TrainingProviderSidebarProps> = ({ onNav
         { view: View.FeedbackEmailTemplate, label: 'Feedback Email', icon: IconName.Chat },
         { view: View.PasswordResetEmailTemplate, label: 'Password Reset Email', icon: IconName.Shield },
         { view: View.TrainerInvitationEmailTemplate, label: 'Trainer Invitation Email', icon: IconName.Send },
+        { view: View.TrainerResponseEmailTemplates, label: 'Trainer Accept/Decline Email', icon: IconName.Mail },
         { view: View.FinalCourseConfirmationEmailTemplate, label: 'Final Class Confirm Email', icon: IconName.Send },
         { view: View.CourseConfirmationEmailTemplate, label: 'Class Confirm Email', icon: IconName.Send },
         { view: View.PrivacyPolicy, label: 'Privacy Policy', icon: IconName.Shield },
@@ -60,16 +65,54 @@ const TrainingProviderSidebar: React.FC<TrainingProviderSidebarProps> = ({ onNav
 
     return (
         <nav className="space-y-2 p-4 bg-white dark:bg-slate-800 text-gray-900 dark:text-white h-full">
-            {navItems.map((item) => (
-                <a
-                    key={item.view}
-                    href="#"
-                    onClick={(e) => {
-                        e.preventDefault();
-                        handleClick(item.view);
-                    }}
-                    className={linkClass(item.view)}
+            {navItemsTop.map((item) => (
+                <a key={item.view} href="#" onClick={(e) => { e.preventDefault(); handleClick(item.view); }} className={linkClass(item.view)}>
+                    <Icon name={item.icon} className="w-5 h-5" />
+                    <span>{item.label}</span>
+                </a>
+            ))}
+
+            {/* Workflow Guides - Collapsible (after Company Setting) */}
+            <div>
+                <button
+                    onClick={() => { setWorkflowsOpen(!workflowsOpen); handleClick(View.WorkflowGuides); }}
+                    className={`flex items-center justify-between w-full rounded-md px-3 py-2.5 text-sm font-medium transition-colors ${activeView === View.WorkflowGuides ? 'bg-blue-50 text-blue-600 dark:bg-blue-600/20 dark:text-blue-400' : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-slate-700 dark:hover:text-white'}`}
                 >
+                    <div className="flex items-center gap-3">
+                        <Icon name={IconName.BookOpen} className="w-5 h-5" />
+                        <span>Workflow Guides</span>
+                    </div>
+                    <Icon name={IconName.ChevronDown} className={`w-4 h-4 transition-transform ${workflowsOpen ? 'rotate-180' : ''}`} />
+                </button>
+                {workflowsOpen && (
+                    <div className="ml-4 mt-1 space-y-1">
+                        {[
+                            { id: 'trainer-invitation', label: 'Trainer Invitation', icon: '📨' },
+                            { id: 'certificate', label: 'Certificate', icon: '🎓' },
+                            { id: 'proforma-invoice', label: 'Proforma Invoice', icon: '🧾' },
+                            { id: 'invoice', label: 'Invoice', icon: '📄' },
+                            { id: 'receipt', label: 'Receipt', icon: '🧾' },
+                            { id: 'billing-history', label: 'Billing History', icon: '💰' },
+                            { id: 'lesson-delivery', label: 'Lesson Delivery', icon: '📚' },
+                            { id: 'assessment', label: 'Assessment', icon: '📝' },
+                            { id: 'ssg-process-steps', label: 'SSG Process Steps', icon: '🏛️' },
+                        ].map(item => (
+                            <a
+                                key={item.id}
+                                href="#"
+                                onClick={(e) => { e.preventDefault(); handleClick(View.WorkflowGuides); onSelectWorkflow?.(item.id); }}
+                                className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-slate-700 dark:hover:text-white transition-colors"
+                            >
+                                <span className="text-sm">{item.icon}</span>
+                                <span>{item.label}</span>
+                            </a>
+                        ))}
+                    </div>
+                )}
+            </div>
+
+            {navItemsBottom.map((item) => (
+                <a key={item.view} href="#" onClick={(e) => { e.preventDefault(); handleClick(item.view); }} className={linkClass(item.view)}>
                     <Icon name={item.icon} className="w-5 h-5" />
                     <span>{item.label}</span>
                 </a>

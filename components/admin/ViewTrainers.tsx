@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Icon, IconName } from '../ui/Icon';
@@ -59,15 +59,10 @@ const DEFAULT_TRAINER_AVATAR = `data:image/svg+xml;utf8,${encodeURIComponent(
 )}`;
 
 const getTrainerThumbnailSrc = (trainer: Trainer): string => {
-  if (trainer.linkedin_url) {
-    const params = new URLSearchParams({ name: trainer.trainer_name });
-    if (trainer.profile_picture) {
-      params.set('profilePictureUrl', trainer.profile_picture);
-    }
-    return `/api/admin/trainer-image?${params.toString()}`;
+  if (trainer.profile_picture) {
+    return ensureAbsoluteImageUrl(trainer.profile_picture) || DEFAULT_TRAINER_AVATAR;
   }
-
-  return ensureAbsoluteImageUrl(trainer.profile_picture) || DEFAULT_TRAINER_AVATAR;
+  return DEFAULT_TRAINER_AVATAR;
 };
 
 const ViewTrainers: React.FC = () => {
@@ -102,6 +97,122 @@ const ViewTrainers: React.FC = () => {
   const [nricEditValue, setNricEditValue] = useState('');
   const [savingNric, setSavingNric] = useState(false);
   const [nricMessage, setNricMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // Profile image upload
+  const [uploadingImageFor, setUploadingImageFor] = useState<string | null>(null);
+  const [syncingAllImages, setSyncingAllImages] = useState(false);
+  const [syncMessage, setSyncMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const uploadTargetRef = useRef<string | null>(null);
+
+  const handleImageUploadClick = (userId: string) => {
+    uploadTargetRef.current = userId;
+    fileInputRef.current?.click();
+  };
+
+  const handleImageFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    const userId = uploadTargetRef.current;
+    if (!file || !userId) return;
+    e.target.value = '';
+
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Image must be under 5MB');
+      return;
+    }
+
+    setUploadingImageFor(userId);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const uploadRes = await fetch(`/api/upload/profile-picture-drive?role=trainer&userId=${userId}`, {
+        method: 'POST',
+        body: formData,
+      });
+      const uploadData = await uploadRes.json();
+
+      if (uploadData.success) {
+        await fetch('/api/profile/update-trainer', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId,
+            profileData: { profilePictureUrl: uploadData.data.fileUrl },
+          }),
+        });
+
+        setTrainers(prev => prev.map(t =>
+          t.user_id === userId ? { ...t, profile_picture: uploadData.data.fileUrl } : t
+        ));
+      } else {
+        alert('Upload failed: ' + (uploadData.error || 'Unknown error'));
+      }
+    } catch (err) {
+      alert('Upload failed');
+    } finally {
+      setUploadingImageFor(null);
+    }
+  };
+
+  // Sync single trainer image: auto-match from Google Drive folder by name
+  const handleSyncImage = async (trainer: Trainer) => {
+    setUploadingImageFor(trainer.user_id);
+    setSyncMessage(null);
+    try {
+      const res = await fetch('/api/admin/sync-trainer-images-from-drive', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ trainerIds: [trainer.user_id] }),
+      });
+      const data = await res.json();
+      if (data.success && data.summary.updated > 0) {
+        const updatedUrl = data.results.find((r: any) => r.status === 'updated')?.imageUrl;
+        if (updatedUrl) {
+          setTrainers(prev => prev.map(t =>
+            t.user_id === trainer.user_id ? { ...t, profile_picture: updatedUrl } : t
+          ));
+        }
+        setSyncMessage({ type: 'success', text: `Profile image synced from Google Drive for ${trainer.trainer_name}` });
+      } else {
+        setSyncMessage({ type: 'error', text: `No matching image found in Google Drive for ${trainer.trainer_name}. Upload the image to the trainer image folder first.` });
+      }
+    } catch {
+      setSyncMessage({ type: 'error', text: 'Failed to sync image.' });
+    } finally {
+      setUploadingImageFor(null);
+      setTimeout(() => setSyncMessage(null), 8000);
+    }
+  };
+
+  // Bulk sync: fetch LinkedIn images via Playwright, upload to Drive for all trainers missing images
+  const handleSyncAllImages = async () => {
+    if (!confirm('This will fetch LinkedIn profile images for all trainers without a photo. This may take a few minutes. Continue?')) return;
+    setSyncingAllImages(true);
+    setSyncMessage(null);
+    try {
+      const res = await fetch('/api/admin/sync-trainer-images', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setSyncMessage({
+          type: 'success',
+          text: `Synced ${data.summary.updated} images from LinkedIn to Google Drive (${data.summary.skipped} skipped, ${data.summary.failed} failed).`,
+        });
+        if (data.summary.updated > 0) fetchTrainers();
+      } else {
+        setSyncMessage({ type: 'error', text: data.error || 'Sync failed.' });
+      }
+    } catch {
+      setSyncMessage({ type: 'error', text: 'Failed to sync images.' });
+    } finally {
+      setSyncingAllImages(false);
+      setTimeout(() => setSyncMessage(null), 10000);
+    }
+  };
 
   const itemsPerPage = 10;
   const inputClasses = "w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400";
@@ -265,10 +376,31 @@ const ViewTrainers: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      {/* Hidden file input for profile image upload */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/gif,image/webp"
+        className="hidden"
+        onChange={handleImageFileChange}
+      />
       {/* Header */}
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white">View Trainers</h1>
         <div className="flex gap-2">
+          <Button
+            variant="ghost"
+            onClick={handleSyncAllImages}
+            disabled={syncingAllImages}
+            className="border border-purple-500 text-purple-600 hover:bg-purple-50 dark:border-purple-400 dark:text-purple-400 dark:hover:bg-purple-900/20"
+          >
+            {syncingAllImages ? (
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-purple-600 mr-2" />
+            ) : (
+              <Icon name={IconName.User} className="w-4 h-4 mr-2" />
+            )}
+            {syncingAllImages ? 'Syncing...' : 'Sync LinkedIn Images'}
+          </Button>
           <Button variant="ghost" onClick={() => setShowBulkUpload(true)} className="border border-blue-500 text-blue-600 hover:bg-blue-50 dark:border-blue-400 dark:text-blue-400 dark:hover:bg-blue-900/20">
             <Icon name={IconName.Upload} className="w-4 h-4 mr-2" />
             Bulk Upload Trainers
@@ -280,10 +412,15 @@ const ViewTrainers: React.FC = () => {
         </div>
       </div>
 
-      {/* NRIC save feedback */}
+      {/* Feedback messages */}
       {nricMessage && (
         <div className={`px-4 py-2 rounded-md text-sm ${nricMessage.type === 'success' ? 'bg-green-50 border border-green-200 text-green-800 dark:bg-green-900/20 dark:border-green-700 dark:text-green-300' : 'bg-red-50 border border-red-200 text-red-800 dark:bg-red-900/20 dark:border-red-700 dark:text-red-300'}`}>
           {nricMessage.text}
+        </div>
+      )}
+      {syncMessage && (
+        <div className={`px-4 py-2 rounded-md text-sm ${syncMessage.type === 'success' ? 'bg-green-50 border border-green-200 text-green-800 dark:bg-green-900/20 dark:border-green-700 dark:text-green-300' : 'bg-red-50 border border-red-200 text-red-800 dark:bg-red-900/20 dark:border-red-700 dark:text-red-300'}`}>
+          {syncMessage.text}
         </div>
       )}
 
@@ -423,7 +560,11 @@ const ViewTrainers: React.FC = () => {
                   <tr key={`${trainer.trainer_name}-${index}`} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center">
-                        <div className="flex-shrink-0 h-10 w-10">
+                        <div
+                          className="flex-shrink-0 h-10 w-10 relative group cursor-pointer"
+                          onClick={() => handleImageUploadClick(trainer.user_id)}
+                          title="Click to upload profile image"
+                        >
                           <img
                             className="h-10 w-10 rounded-full object-cover"
                             src={getTrainerThumbnailSrc(trainer)}
@@ -432,6 +573,15 @@ const ViewTrainers: React.FC = () => {
                               e.currentTarget.src = DEFAULT_TRAINER_AVATAR;
                             }}
                           />
+                          {uploadingImageFor === trainer.user_id ? (
+                            <div className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-full">
+                              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white" />
+                            </div>
+                          ) : (
+                            <div className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
+                              <Icon name={IconName.Upload} className="w-4 h-4 text-white" />
+                            </div>
+                          )}
                         </div>
                         <div className="ml-4">
                           <div className="text-sm font-medium text-gray-900 dark:text-white">{trainer.trainer_name}</div>
@@ -597,41 +747,104 @@ const ViewTrainers: React.FC = () => {
                       )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                      {trainer.status === 'Active' ? (
+                      <div className="flex items-center gap-2">
                         <Button
                           variant="ghost"
-                          onClick={() => handleStatusChange(trainer, 'Inactive')}
-                          className="text-red-600 hover:text-red-800 hover:bg-red-50 dark:hover:bg-red-900/20"
+                          onClick={() => handleSyncImage(trainer)}
+                          disabled={uploadingImageFor === trainer.user_id}
+                          className="text-purple-600 hover:text-purple-800 hover:bg-purple-50 dark:hover:bg-purple-900/20"
                         >
-                          <Icon name={IconName.Close} className="w-4 h-4 mr-1" />
-                          Deactivate
+                          {uploadingImageFor === trainer.user_id ? (
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-purple-600 mr-1" />
+                          ) : (
+                            <Icon name={IconName.User} className="w-4 h-4 mr-1" />
+                          )}
+                          {uploadingImageFor === trainer.user_id ? 'Syncing...' : 'Sync Image'}
                         </Button>
-                      ) : (
-                        <Button
-                          variant="ghost"
-                          onClick={() => handleStatusChange(trainer, 'Active')}
-                          className="text-green-600 hover:text-green-800 hover:bg-green-50 dark:hover:bg-green-900/20"
-                        >
-                          <Icon name={IconName.Check} className="w-4 h-4 mr-1" />
-                          Activate
-                        </Button>
-                      )}
+                        {trainer.status === 'Active' ? (
+                          <Button
+                            variant="ghost"
+                            onClick={() => handleStatusChange(trainer, 'Inactive')}
+                            className="text-red-600 hover:text-red-800 hover:bg-red-50 dark:hover:bg-red-900/20"
+                          >
+                            <Icon name={IconName.Close} className="w-4 h-4 mr-1" />
+                            Deactivate
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="ghost"
+                            onClick={() => handleStatusChange(trainer, 'Active')}
+                            className="text-green-600 hover:text-green-800 hover:bg-green-50 dark:hover:bg-green-900/20"
+                          >
+                            <Icon name={IconName.Check} className="w-4 h-4 mr-1" />
+                            Activate
+                          </Button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
             {totalPages > 1 && (
-              <div className="p-4 flex justify-between items-center border-t dark:border-gray-700">
-                <Button variant="ghost" onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))} disabled={currentPage === 1}>
-                  Previous
-                </Button>
-                <span className="text-sm text-gray-500 dark:text-gray-400">
-                  Page {currentPage} of {totalPages}
-                </span>
-                <Button variant="ghost" onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))} disabled={currentPage === totalPages}>
-                  Next
-                </Button>
+              <div className="p-4 flex items-center justify-between border-t dark:border-gray-700">
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  Showing {(currentPage - 1) * itemsPerPage + 1}–{Math.min(currentPage * itemsPerPage, filteredTrainers.length)} of {filteredTrainers.length} trainers
+                </p>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => setCurrentPage(1)}
+                    disabled={currentPage === 1}
+                    className="px-3 py-1.5 text-xs font-medium rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    First
+                  </button>
+                  <button
+                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                    disabled={currentPage === 1}
+                    className="px-3 py-1.5 text-xs font-medium rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    Prev
+                  </button>
+                  {Array.from({ length: totalPages }, (_, i) => i + 1)
+                    .filter(i => i === 1 || i === totalPages || Math.abs(i - currentPage) <= 1)
+                    .reduce<(number | 'ellipsis')[]>((acc, i, idx, arr) => {
+                      if (idx > 0 && i - (arr[idx - 1] as number) > 1) acc.push('ellipsis');
+                      acc.push(i);
+                      return acc;
+                    }, [])
+                    .map((item, idx) =>
+                      item === 'ellipsis' ? (
+                        <span key={`e${idx}`} className="px-2 text-gray-400">...</span>
+                      ) : (
+                        <button
+                          key={item}
+                          onClick={() => setCurrentPage(item)}
+                          className={`px-3 py-1.5 text-xs font-medium rounded-md border transition-colors ${
+                            currentPage === item
+                              ? 'bg-blue-600 text-white border-blue-600'
+                              : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+                          }`}
+                        >
+                          {item}
+                        </button>
+                      )
+                    )}
+                  <button
+                    onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                    disabled={currentPage === totalPages}
+                    className="px-3 py-1.5 text-xs font-medium rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    Next
+                  </button>
+                  <button
+                    onClick={() => setCurrentPage(totalPages)}
+                    disabled={currentPage === totalPages}
+                    className="px-3 py-1.5 text-xs font-medium rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    Last
+                  </button>
+                </div>
               </div>
             )}
           </>

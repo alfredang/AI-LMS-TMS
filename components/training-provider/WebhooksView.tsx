@@ -280,6 +280,54 @@ export default function WebhooksView() {
         </button>
       </div>
 
+      {/* Built-in Webhooks */}
+      <div className="space-y-3">
+        <h2 className="text-lg font-semibold text-on-surface">Built-in Webhooks</h2>
+        <p className="text-sm text-on-surface-secondary">System webhooks for trainer invitation accept/decline. These are automatically triggered when trainers click the links in invitation emails.</p>
+        <div className="space-y-3">
+          {[
+            {
+              name: 'Trainer Invitation — Accept',
+              method: 'GET',
+              description: 'When a trainer clicks "Accept" in the invitation email, this webhook assigns the trainer to the class and sends a confirmation email.',
+              url: `${baseUrl}/api/public/trainer-invitation/respond?token={TOKEN}&action=accept`,
+            },
+            {
+              name: 'Trainer Invitation — Decline',
+              method: 'GET',
+              description: 'When a trainer clicks "Decline", this webhook sends a decline acknowledgement email and auto-sends an invitation to the next available trainer.',
+              url: `${baseUrl}/api/public/trainer-invitation/respond?token={TOKEN}&action=decline`,
+            },
+          ].map((w, i) => (
+            <div key={i} className="border border-green-200 dark:border-green-800 rounded-lg p-4 bg-green-50/50 dark:bg-green-900/10">
+              <div className="flex items-center gap-2 mb-1">
+                <h3 className="font-semibold text-on-surface">{w.name}</h3>
+                <span className="px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">{w.method}</span>
+                <span className="px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">Active</span>
+                <span className="px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">Built-in</span>
+              </div>
+              <p className="text-sm text-on-surface-secondary mb-2">{w.description}</p>
+              <div className="flex items-center gap-2">
+                <code className="flex-1 text-xs font-mono text-on-surface-secondary bg-white dark:bg-slate-800 px-3 py-1.5 rounded truncate border border-gray-200 dark:border-gray-700">
+                  {w.url}
+                </code>
+                <button
+                  onClick={() => copyToClipboard(w.url, `builtin-${i}`)}
+                  className="px-2.5 py-1.5 rounded text-xs font-medium bg-gray-200 dark:bg-slate-600 hover:bg-gray-300 dark:hover:bg-slate-500 transition-colors whitespace-nowrap"
+                >
+                  {copied === `builtin-${i}` ? 'Copied!' : 'Copy URL'}
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <hr className="border-gray-200 dark:border-gray-700" />
+
+      {/* Custom Webhooks */}
+      <h2 className="text-lg font-semibold text-on-surface">Custom Webhooks</h2>
+
       {loading ? (
         <div className="flex items-center justify-center py-12">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
