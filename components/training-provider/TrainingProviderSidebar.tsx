@@ -68,14 +68,13 @@ const TrainingProviderSidebar: React.FC<TrainingProviderSidebarProps> = ({ onNav
 
     return (
         <nav className="space-y-2 p-4 bg-white dark:bg-slate-800 text-gray-900 dark:text-white h-full">
-            {navItemsTop.map((item) => (
-                <a key={item.view} href="#" onClick={(e) => { e.preventDefault(); handleClick(item.view); }} className={linkClass(item.view)}>
-                    <Icon name={item.icon} className="w-5 h-5" />
-                    <span>{item.label}</span>
-                </a>
-            ))}
+            {/* Dashboard */}
+            <a href="#" onClick={(e) => { e.preventDefault(); handleClick(View.Dashboard); }} className={linkClass(View.Dashboard)}>
+                <Icon name={IconName.Dashboard} className="w-5 h-5" />
+                <span>Training Dashboard</span>
+            </a>
 
-            {/* Workflow Guides - Collapsible (after Company Setting) */}
+            {/* Workflow Guides - Collapsible (after Dashboard) */}
             <div>
                 <button
                     onClick={() => { setWorkflowsOpen(!workflowsOpen); handleClick(View.WorkflowGuides); onSelectWorkflow?.(''); }}
@@ -137,6 +136,14 @@ const TrainingProviderSidebar: React.FC<TrainingProviderSidebarProps> = ({ onNav
                     </div>
                 )}
             </div>
+
+            {/* Remaining nav items */}
+            {navItemsTop.filter(item => item.view !== View.Dashboard).map((item) => (
+                <a key={item.view} href="#" onClick={(e) => { e.preventDefault(); handleClick(item.view); }} className={linkClass(item.view)}>
+                    <Icon name={item.icon} className="w-5 h-5" />
+                    <span>{item.label}</span>
+                </a>
+            ))}
 
             {navItemsBottom.map((item) => (
                 <a key={item.view} href="#" onClick={(e) => { e.preventDefault(); handleClick(item.view); }} className={linkClass(item.view)}>

@@ -637,6 +637,46 @@ const FinanceLayout: React.FC = () => {
   const sidebarContent = (
     <nav className="space-y-6 p-4 bg-white dark:bg-slate-800 text-gray-900 dark:text-white h-full">
       <NavItem target="dashboard" label="Financial Dashboard" />
+
+      <NavSection title="Workflow Guides" sectionKey="workflowGuides">
+        <SubSection title="Training" sectionKey="wfTraining">
+          {[
+            { id: 'lesson-delivery', label: 'Lesson Delivery', icon: '📚' },
+            { id: 'assessment', label: 'Assessment', icon: '📝' },
+          ].map(item => (
+            <a key={item.id} href="#" onClick={(e) => { e.preventDefault(); navigateTo('workflowGuides'); setSelectedWorkflowId(item.id); }} className="flex items-center gap-2 rounded-md px-3 py-2 ml-4 text-sm text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-slate-700 dark:hover:text-white transition-colors">
+              <span className="text-sm">{item.icon}</span>
+              <span>{item.label}</span>
+            </a>
+          ))}
+        </SubSection>
+        <SubSection title="Admin" sectionKey="wfAdmin">
+          {[
+            { id: 'ssg-process-steps', label: 'SSG Process Steps', icon: '🏛️' },
+            { id: 'certificate', label: 'Certificate', icon: '🎓' },
+            { id: 'trainer-invitation', label: 'Trainer Invitation', icon: '📨' },
+          ].map(item => (
+            <a key={item.id} href="#" onClick={(e) => { e.preventDefault(); navigateTo('workflowGuides'); setSelectedWorkflowId(item.id); }} className="flex items-center gap-2 rounded-md px-3 py-2 ml-4 text-sm text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-slate-700 dark:hover:text-white transition-colors">
+              <span className="text-sm">{item.icon}</span>
+              <span>{item.label}</span>
+            </a>
+          ))}
+        </SubSection>
+        <SubSection title="Finance" sectionKey="wfFinance">
+          {[
+            { id: 'billing-history', label: 'Billing History', icon: '💰' },
+            { id: 'proforma-invoice', label: 'Proforma Invoice', icon: '🧾' },
+            { id: 'invoice', label: 'Invoice', icon: '📄' },
+            { id: 'receipt', label: 'Receipt', icon: '🧾' },
+          ].map(item => (
+            <a key={item.id} href="#" onClick={(e) => { e.preventDefault(); navigateTo('workflowGuides'); setSelectedWorkflowId(item.id); }} className="flex items-center gap-2 rounded-md px-3 py-2 ml-4 text-sm text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-slate-700 dark:hover:text-white transition-colors">
+              <span className="text-sm">{item.icon}</span>
+              <span>{item.label}</span>
+            </a>
+          ))}
+        </SubSection>
+      </NavSection>
+
       <NavSection title="FMS (n8n)" sectionKey="courseRunAutomations">
         <NavItem target="allCourseRuns" label="View All Course Runs" isSubItem />
         <NavItem target="autoProcessEnrolments" label="Process Enrolments" isSubItem />
@@ -722,45 +762,6 @@ const FinanceLayout: React.FC = () => {
         <NavItem target="bizfileSsic" label="Entity SSIC" isSubItem />
         <NavItem target="bizfileCapital" label="Company Capital" isSubItem />
         <NavItem target="bizfileShareholders" label="Company Shareholders" isSubItem />
-      </NavSection>
-
-      <NavSection title="Workflow Guides" sectionKey="workflowGuides">
-        <SubSection title="Training" sectionKey="wfTraining">
-          {[
-            { id: 'lesson-delivery', label: 'Lesson Delivery', icon: '📚' },
-            { id: 'assessment', label: 'Assessment', icon: '📝' },
-          ].map(item => (
-            <a key={item.id} href="#" onClick={(e) => { e.preventDefault(); navigateTo('workflowGuides'); setSelectedWorkflowId(item.id); }} className="flex items-center gap-2 rounded-md px-3 py-2 ml-4 text-sm text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-slate-700 dark:hover:text-white transition-colors">
-              <span className="text-sm">{item.icon}</span>
-              <span>{item.label}</span>
-            </a>
-          ))}
-        </SubSection>
-        <SubSection title="Admin" sectionKey="wfAdmin">
-          {[
-            { id: 'ssg-process-steps', label: 'SSG Process Steps', icon: '🏛️' },
-            { id: 'certificate', label: 'Certificate', icon: '🎓' },
-            { id: 'trainer-invitation', label: 'Trainer Invitation', icon: '📨' },
-          ].map(item => (
-            <a key={item.id} href="#" onClick={(e) => { e.preventDefault(); navigateTo('workflowGuides'); setSelectedWorkflowId(item.id); }} className="flex items-center gap-2 rounded-md px-3 py-2 ml-4 text-sm text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-slate-700 dark:hover:text-white transition-colors">
-              <span className="text-sm">{item.icon}</span>
-              <span>{item.label}</span>
-            </a>
-          ))}
-        </SubSection>
-        <SubSection title="Finance" sectionKey="wfFinance">
-          {[
-            { id: 'billing-history', label: 'Billing History', icon: '💰' },
-            { id: 'proforma-invoice', label: 'Proforma Invoice', icon: '🧾' },
-            { id: 'invoice', label: 'Invoice', icon: '📄' },
-            { id: 'receipt', label: 'Receipt', icon: '🧾' },
-          ].map(item => (
-            <a key={item.id} href="#" onClick={(e) => { e.preventDefault(); navigateTo('workflowGuides'); setSelectedWorkflowId(item.id); }} className="flex items-center gap-2 rounded-md px-3 py-2 ml-4 text-sm text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-slate-700 dark:hover:text-white transition-colors">
-              <span className="text-sm">{item.icon}</span>
-              <span>{item.label}</span>
-            </a>
-          ))}
-        </SubSection>
       </NavSection>
 
       <NavSection title="Useful Links" sectionKey="usefulLinks">
