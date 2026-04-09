@@ -109,8 +109,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         maxTurns: 3,
         allowedTools: [],
         disallowedTools: ['Bash', 'Read', 'Write', 'Edit', 'Glob', 'Grep', 'WebSearch', 'WebFetch'],
-        settingSources: ['project'],
         cwd: process.cwd(),
+        env: { ANTHROPIC_API_KEY: apiKey },
       },
     })) {
       // Get result from the result message
