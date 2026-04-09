@@ -7,6 +7,7 @@ import { Icon, IconName } from '../components/ui/Icon';
 import { Card } from '../components/ui/Card';
 import FinanceManagementView from '../components/training-provider/FinanceManagementView';
 import WorkflowGuidesView from '../components/training-provider/WorkflowGuidesView';
+import HelpAndSupportView from '../components/HelpAndSupportView';
 import AllCourseRunsView from '../components/finance/AllCourseRunsView';
 import {
   SearchGrantView,
@@ -793,14 +794,14 @@ const FinanceLayout: React.FC = () => {
     </nav>
   );
 
-  // Profile view — full width, no sidebar
-  if (currentView === View.Profile) {
+  // Profile / Help & Support view — full width, no sidebar
+  if (currentView === View.Profile || currentView === View.HelpAndSupport) {
     return (
       <div className="min-h-screen flex flex-col bg-background font-sans text-on-surface">
         <Header />
         <main className="flex-1">
           <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
-            <ProfilePage />
+            {currentView === View.Profile ? <ProfilePage /> : <HelpAndSupportView />}
           </div>
         </main>
         <Footer />
