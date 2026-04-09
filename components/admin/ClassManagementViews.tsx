@@ -142,7 +142,12 @@ const FormSection: React.FC<{ title: string; children: React.ReactNode }> = ({ t
 );
 
 export const ClassManagerView: React.FC<ClassManagerViewProps> = ({ courseToEdit, viewOnly = false }) => {
-    const { setAdminPage, setEditingCourseRun, currentUser } = useLms();
+    const { setAdminPage, setEditingCourseRun, currentUser, classListReturnTo, setClassListReturnTo } = useLms();
+    const goBackToList = () => {
+        const target = classListReturnTo || AdminPage.Dashboard;
+        setClassListReturnTo(null);
+        setAdminPage(target);
+    };
     const isEditMode = !!courseToEdit;
     const title = viewOnly ? 'Class Details' : (isEditMode ? 'Edit Class' : 'Create New Class');
 
@@ -228,11 +233,15 @@ export const ClassManagerView: React.FC<ClassManagerViewProps> = ({ courseToEdit
     // Class Status and Type
     const [classStatus, setClassStatus] = useState(courseToEdit?.classStatus || 'Pending');
     const [classType, setClassType] = useState(() => {
+        // Use DB class_type first, then fallback to modeOfTraining
+        if (courseToEdit?.classType && courseToEdit.classType !== 'Physical') return courseToEdit.classType;
+        if (courseToEdit?.classType) return courseToEdit.classType;
         const mode = (courseToEdit?.modeOfTraining || '').toLowerCase();
         if (mode.includes('virtual') || mode.includes('online')) return 'Virtual';
         if (mode.includes('blended') || mode.includes('hybrid')) return 'Hybrid';
         return 'Physical';
     });
+    const [virtualMeetingLink, setVirtualMeetingLink] = useState(courseToEdit?.virtualMeetingLink || '');
 
     // ViewCourseRun state management
     const [includeExpired, setIncludeExpired] = useState(false);
@@ -2070,7 +2079,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
             <div className="flex justify-between items-center mb-6">
                 <h2 className="text-3xl font-bold">{title}</h2>
                 <div>
-                    <Button variant="ghost" onClick={() => setAdminPage(AdminPage.Dashboard)} className="mr-2">{viewOnly ? 'Back to List' : 'Cancel'}</Button>
+                    <Button variant="ghost" onClick={goBackToList} className="mr-2">{viewOnly ? 'Back to List' : 'Cancel'}</Button>
                     {viewOnly && isEditMode && (
                         <Button
                             onClick={() => {
@@ -2261,6 +2270,47 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                             <option value="Hybrid">Hybrid</option>
                                         </select>
                                     </div>
+                                </div>
+                            </FormSection>
+                        )}
+
+                        {/* Google Meet Link */}
+                        {isEditMode && (
+                            <FormSection title="Google Meet Link">
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Virtual Meeting Link</label>
+                                    <div className="flex gap-3">
+                                        <input
+                                            type="url"
+                                            value={virtualMeetingLink}
+                                            onChange={(e) => setVirtualMeetingLink(e.target.value)}
+                                            placeholder="https://meet.google.com/xxx-xxxx-xxx"
+                                            className={inputClasses}
+                                        />
+                                        <Button
+                                            variant="primary"
+                                            size="sm"
+                                            onClick={async () => {
+                                                if (courseToEdit?.id) {
+                                                    try {
+                                                        await fetch(getApiUrl('/api/admin/upcoming-classes'), {
+                                                            method: 'PUT',
+                                                            headers: { 'Content-Type': 'application/json' },
+                                                            body: JSON.stringify({ id: courseToEdit.id, virtual_meeting_link: virtualMeetingLink }),
+                                                        });
+                                                    } catch { /* silent */ }
+                                                }
+                                            }}
+                                        >
+                                            Save
+                                        </Button>
+                                    </div>
+                                    {virtualMeetingLink && (
+                                        <a href={virtualMeetingLink} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 mt-2 text-sm text-blue-600 hover:underline">
+                                            Open Google Meet
+                                        </a>
+                                    )}
+                                    <p className="mt-1 text-xs text-gray-400">Synced from Google Calendar for [VIRTUAL] classes, or enter manually.</p>
                                 </div>
                             </FormSection>
                         )}
@@ -6954,6 +7004,198 @@ export const CourseConfirmationEmailLogsView: React.FC = () => {
                         <td className="px-3 py-2 text-gray-900 dark:text-white">{entry.course_title || '—'}</td>
                         <td className="px-3 py-2 text-gray-500 dark:text-gray-400 font-mono text-xs">{entry.course_run_id || '—'}</td>
                         <td className="px-3 py-2 text-red-600 dark:text-red-400 text-xs max-w-xs truncate" title={entry.error_message || ''}>{entry.error_message || '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
+// ── Sync Trainer to TPG Log ───────────────────────────────────────────────────
+
+interface SyncTrainerTpgLogRow {
+  id: number;
+  run_id: string;
+  created_at: string;
+  course_run_id: string | null;
+  course_code: string | null;
+  course_ref_number: string | null;
+  trainer_name: string | null;
+  trainer_email: string | null;
+  nric_present: boolean;
+  nric_masked: string | null;
+  ssg_status: number | null;
+  status: string;
+  error_message: string | null;
+}
+
+export const SyncTrainerTpgLogsView: React.FC = () => {
+  const { setAdminPage } = useLms();
+  const [logs, setLogs] = useState<SyncTrainerTpgLogRow[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [running, setRunning] = useState(false);
+  const [runResult, setRunResult] = useState<{ total: number; successCount: number; skipped: number; errors: number; thresholdDays: number } | null>(null);
+  const [runError, setRunError] = useState<string | null>(null);
+  const [expandedBatches, setExpandedBatches] = useState<Set<string>>(new Set());
+
+  const fetchLogs = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/admin/sync-trainer-tpg-logs?limit=500');
+      const json = await res.json();
+      if (json.success) setLogs(json.data);
+    } catch { /* silent */ } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { fetchLogs(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleRunNow = async () => {
+    setRunning(true);
+    setRunResult(null);
+    setRunError(null);
+    try {
+      const res = await fetch('/api/admin/run-sync-trainer-tpg', { method: 'POST' });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error || 'Run failed');
+      setRunResult({ total: json.total, successCount: json.successCount, skipped: json.skipped, errors: json.errors, thresholdDays: json.thresholdDays });
+      await fetchLogs();
+    } catch (err) {
+      setRunError(err instanceof Error ? err.message : 'Failed to run');
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  const batches = useMemo(() => {
+    const map = new Map<string, SyncTrainerTpgLogRow[]>();
+    for (const log of logs) {
+      if (!map.has(log.run_id)) map.set(log.run_id, []);
+      map.get(log.run_id)!.push(log);
+    }
+    return Array.from(map.entries());
+  }, [logs]);
+
+  useEffect(() => {
+    if (batches.length > 0) setExpandedBatches(new Set([batches[0][0]]));
+  }, [batches.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const toggleBatch = (runId: string) => {
+    setExpandedBatches(prev => {
+      const next = new Set(prev);
+      next.has(runId) ? next.delete(runId) : next.add(runId);
+      return next;
+    });
+  };
+
+  const statusBadge = (status: string) => {
+    const map: Record<string, string> = {
+      success: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
+      error:   'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
+      skipped: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300',
+      pending: 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300',
+    };
+    return (
+      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${map[status] ?? 'bg-gray-100 text-gray-600'}`}>
+        {status}
+      </span>
+    );
+  };
+
+  return (
+    <div>
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+        <h2 className="text-3xl font-bold">Sync Trainer to TPG Log</h2>
+        <div className="flex items-center gap-2">
+          <Button onClick={handleRunNow} disabled={running || loading}>
+            {running ? 'Running…' : 'Run Now'}
+          </Button>
+          <Button variant="ghost" onClick={fetchLogs} disabled={loading || running}>
+            {loading ? 'Refreshing…' : 'Refresh'}
+          </Button>
+          <Button variant="ghost" onClick={() => setAdminPage(AdminPage.Dashboard)}>
+            Back
+          </Button>
+        </div>
+      </div>
+
+      <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+        Daily automation: for each upcoming confirmed course run with an assigned trainer (no TPG trainer yet), resolves the trainer's NRIC and syncs to SSG. Use <strong>Run Now</strong> to trigger manually.
+      </p>
+
+      {runResult && (
+        <div className="mb-4 p-3 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-sm text-green-800 dark:text-green-300">
+          ✅ Done — {runResult.total} run(s) within {runResult.thresholdDays}-day window: {runResult.successCount} synced, {runResult.skipped} skipped, {runResult.errors} error(s).
+        </div>
+      )}
+      {runError && (
+        <div className="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-800 dark:text-red-300">
+          ❌ {runError}
+        </div>
+      )}
+
+      {loading && <p className="text-sm text-gray-500 py-6 text-center">Loading…</p>}
+
+      {!loading && batches.length === 0 && (
+        <p className="text-sm text-gray-500 py-6 text-center">No logs yet. Click <strong>Run Now</strong> to sync trainers to TPG.</p>
+      )}
+
+      {batches.map(([runId, rows]) => {
+        const isOpen = expandedBatches.has(runId);
+        const ts = new Date(rows[0].created_at).toLocaleString('en-SG', {
+          timeZone: 'Asia/Singapore', day: '2-digit', month: 'short', year: 'numeric',
+          hour: '2-digit', minute: '2-digit', hour12: false,
+        });
+        const successCount = rows.filter(r => r.status === 'success').length;
+        const errorCount   = rows.filter(r => r.status === 'error').length;
+        const skippedCount = rows.filter(r => r.status === 'skipped').length;
+
+        return (
+          <div key={runId} className="mb-3 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden">
+            <button
+              onClick={() => toggleBatch(runId)}
+              className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-slate-700/50 hover:bg-gray-100 dark:hover:bg-slate-700 text-left"
+            >
+              <div className="flex items-center gap-3">
+                <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">{ts} SGT</span>
+                <span className="text-xs text-gray-500">{rows.length} run(s)</span>
+                {successCount > 0 && <span className="text-xs text-green-600 dark:text-green-400">{successCount} synced</span>}
+                {skippedCount > 0 && <span className="text-xs text-yellow-600 dark:text-yellow-400">{skippedCount} skipped</span>}
+                {errorCount   > 0 && <span className="text-xs text-red-600 dark:text-red-400">{errorCount} error</span>}
+              </div>
+              <span className="text-gray-400 text-xs">{isOpen ? '▲' : '▼'}</span>
+            </button>
+
+            {isOpen && (
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-xs">
+                  <thead className="bg-gray-50 dark:bg-slate-700/30">
+                    <tr>
+                      {['Course Run ID', 'Course Code', 'Trainer Name', 'Trainer Email', 'NRIC', 'SSG Status', 'Status', 'Error'].map(h => (
+                        <th key={h} className="px-3 py-2 text-left font-semibold text-gray-600 dark:text-gray-300 whitespace-nowrap">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                    {rows.map(row => (
+                      <tr key={row.id} className="hover:bg-gray-50 dark:hover:bg-slate-700/30">
+                        <td className="px-3 py-2 font-mono text-gray-700 dark:text-gray-300 whitespace-nowrap">{row.course_run_id ?? '—'}</td>
+                        <td className="px-3 py-2 whitespace-nowrap">{row.course_code ?? '—'}</td>
+                        <td className="px-3 py-2 whitespace-nowrap">{row.trainer_name ?? '—'}</td>
+                        <td className="px-3 py-2 whitespace-nowrap">{row.trainer_email ?? '—'}</td>
+                        <td className="px-3 py-2 whitespace-nowrap font-mono">
+                          {row.nric_present ? (row.nric_masked ?? '✓') : <span className="text-red-500">Not in database</span>}
+                        </td>
+                        <td className="px-3 py-2 whitespace-nowrap">{row.ssg_status ?? '—'}</td>
+                        <td className="px-3 py-2">{statusBadge(row.status)}</td>
+                        <td className="px-3 py-2 text-red-600 dark:text-red-400 max-w-[200px] truncate">{row.error_message ?? ''}</td>
                       </tr>
                     ))}
                   </tbody>

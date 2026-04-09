@@ -312,8 +312,16 @@ const ClassDetailView: React.FC<ClassDetailViewProps> = ({ courseRunId }) => {
           </div>
           <div>
             <p className="text-sm text-subtle">Class Type</p>
-            <p className="font-semibold">{classDetail.operationalSummary.classType || 'Physical'}</p>
+            <p className="font-semibold">
+              <span className={`px-2 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full ${(classDetail.operationalSummary.classType || 'Physical') === 'Virtual' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300' : (classDetail.operationalSummary.classType || 'Physical') === 'Hybrid' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300' : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'}`}>{classDetail.operationalSummary.classType || 'Physical'}</span>
+            </p>
           </div>
+          {classDetail.operationalSummary.virtualMeetingLink && (
+            <div>
+              <p className="text-sm text-subtle">Google Meet</p>
+              <a href={classDetail.operationalSummary.virtualMeetingLink} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline text-sm font-medium">{classDetail.operationalSummary.virtualMeetingLink}</a>
+            </div>
+          )}
           <div>
             <p className="text-sm text-subtle">Mode of Learning</p>
             <p className="font-semibold">{classDetail.operationalSummary.mode || 'Not specified'}</p>

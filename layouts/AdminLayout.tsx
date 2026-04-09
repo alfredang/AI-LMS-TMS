@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
-
+import { useAppVersion } from '@hooks/useAppVersion';
 import AiChatbot from '../components/AiChatbot';
 import SsgAppSelector from '../components/finance/SsgAppSelector';
 import GrantCalculatorView from '../components/finance/GrantCalculatorView';
@@ -25,7 +25,7 @@ import OngoingClasses from '../components/admin/OngoingClasses';
 import CompletedClasses from '../components/admin/CompletedClasses';
 import ClassDetailView from '../components/admin/ClassDetailView';
 import { UpcomingClassesTable } from '../components/UpcomingClassesTable';
-import { ClassManagerView, AssignTrainerView, AssignStudentView, AddCourseView, AddCourseRunView, AutomationLogsView, AssignTrainerLogsView, TrainerFolderLogsView, AutoCreateCertificatesLogView, BackfillEnrollmentsView, FetchUpcomingEnrolmentsView, CourseRunDateSyncLogsView, UpcomingCourseRunsLogView, CourseConfirmationEmailLogsView } from '../components/admin/ClassManagementViews';
+import { ClassManagerView, AssignTrainerView, AssignStudentView, AddCourseView, AddCourseRunView, AutomationLogsView, AssignTrainerLogsView, TrainerFolderLogsView, AutoCreateCertificatesLogView, BackfillEnrollmentsView, FetchUpcomingEnrolmentsView, CourseRunDateSyncLogsView, UpcomingCourseRunsLogView, CourseConfirmationEmailLogsView, SyncTrainerTpgLogsView } from '../components/admin/ClassManagementViews';
 import { CreateCertificateView, DeleteCertificateView } from '../components/admin/CertificateManagement';
 import { SendCertificateSGView } from '../components/admin/SendCertificateSG';
 import { SendCertificateGHView } from '../components/admin/SendCertificateGH';
@@ -59,6 +59,7 @@ import { BulkUploadEnrolmentView } from '../components/admin/BulkEnrolmentViews'
 import TrainerAttendanceDashboard from '../components/trainer/TrainerAttendanceDashboard';
 import AdminCalendarView from '../components/admin/AdminCalendarView';
 import SchedulerView from '../components/admin/SchedulerView';
+import WorkflowGuidesView from '../components/training-provider/WorkflowGuidesView';
 import AddSessionsView from '../components/admin/AddSessionsView';
 import CourseSessionTimingView from '../components/admin/CourseSessionTimingView';
 
@@ -75,8 +76,8 @@ const ManagementDashboard: React.FC<ManagementDashboardProps> = ({ type }) => {
     { title: "View Trainers", description: "View details and assignments for all trainers.", icon: IconName.User, onClick: () => setAdminPage(AdminPage.ViewTrainers) },
     { title: "Funding Validity", description: "Track WSQ course validity dates and renewal planning.", icon: IconName.Calendar, onClick: () => setAdminPage(AdminPage.FundingValidity) },
     { title: "View Learners", description: "View learner profiles, status, and contact details.", icon: IconName.MyAccount, onClick: () => setAdminPage(AdminPage.ViewLearners) },
-    { title: "Upcoming Classes", description: "See all scheduled upcoming classes.", icon: IconName.Calendar, onClick: () => setAdminPage(AdminPage.UpcomingClasses) },
     { title: "Ongoing Classes", description: "Monitor classes that are currently in session.", icon: IconName.Clock, onClick: () => setAdminPage(AdminPage.OngoingClasses) },
+    { title: "Upcoming Classes", description: "See all scheduled upcoming classes.", icon: IconName.Calendar, onClick: () => setAdminPage(AdminPage.UpcomingClasses) },
     { title: "Completed Classes", description: "Review past classes and their records.", icon: IconName.ClipboardCheck, onClick: () => setAdminPage(AdminPage.CompletedClasses) },
     { title: "Create New Class", description: "Schedule a new class run from a course template.", icon: IconName.Add, onClick: () => setAdminPage(AdminPage.CreateNewClass) },
     { title: "Enroll Learners", description: "Add or remove learners from a specific class.", icon: IconName.MyAccount, onClick: () => setAdminPage(AdminPage.EnrollLearners) },
@@ -177,6 +178,7 @@ const PAGE_LABELS: Partial<Record<AdminPage, string>> = {
   [AdminPage.TrainerFolderLogs]: 'Auto Create Assessment Records Log',
   [AdminPage.CourseRunDateSyncLogs]: 'Course Run Date Sync Log',
   [AdminPage.UpcomingCourseRunsLog]: 'TGS Enrolments & Assign Trainers Log',
+  [AdminPage.SyncTrainerTpgLogs]: 'Sync Trainer to TPG Log',
   [AdminPage.CourseConfirmationEmailLogs]: 'Course Confirmation Email Logs',
   [AdminPage.BackfillEnrollments]: 'Backfill Enrollments',
   [AdminPage.FetchUpcomingEnrolments]: 'Fetch Upcoming Classes Enrolment',
@@ -192,8 +194,10 @@ const PAGE_LABELS: Partial<Record<AdminPage, string>> = {
 
 const AdminLayout: React.FC = () => {
   const { currentView, adminPage, selectedCourse, editingCourse, courseEditMode, selectedCourseRunId, editingCourseRun, setAdminPage } = useLms();
+  const appVersion = useAppVersion();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isDesktopSidebarOpen, setIsDesktopSidebarOpen] = useState(true);
+  const [selectedWorkflowId, setSelectedWorkflowId] = useState<string | null>(null);
 
   const tpgSubDashboards: Partial<Record<AdminPage, NavBoxProps[]>> = {
     [AdminPage.TpgDirectApplication]: [
@@ -388,6 +392,8 @@ const AdminLayout: React.FC = () => {
         return <CourseRunDateSyncLogsView />;
       case AdminPage.UpcomingCourseRunsLog:
         return <UpcomingCourseRunsLogView />;
+      case AdminPage.SyncTrainerTpgLogs:
+        return <SyncTrainerTpgLogsView />;
       case AdminPage.CourseConfirmationEmailLogs:
         return <CourseConfirmationEmailLogsView />;
       case AdminPage.BackfillEnrollments:
@@ -406,6 +412,8 @@ const AdminLayout: React.FC = () => {
         return <AdminCalendarView />;
       case AdminPage.Scheduler:
         return <SchedulerView />;
+      case AdminPage.WorkflowGuides:
+        return <WorkflowGuidesView initialWorkflowId={selectedWorkflowId || undefined} />;
       default:
         return <AdminDashboard />;
     }
@@ -462,7 +470,7 @@ const AdminLayout: React.FC = () => {
               </button>
             </div>
             <div className="flex-1 overflow-y-auto">
-              <AdminSidebar onNavigate={() => setIsSidebarOpen(false)} />
+              <AdminSidebar onNavigate={() => setIsSidebarOpen(false)} onSelectWorkflow={setSelectedWorkflowId} />
             </div>
           </div>
         </div>
@@ -472,8 +480,9 @@ const AdminLayout: React.FC = () => {
       <div className="flex flex-1">
         {/* Desktop Sidebar - toggled by hamburger button */}
         <aside className={`${isDesktopSidebarOpen ? 'hidden md:flex' : 'hidden'} w-64 flex-shrink-0 bg-white dark:bg-slate-800 border-r border-gray-200 dark:border-slate-700`}>
-          <div className="w-full">
-            <AdminSidebar />
+          <div className="w-full flex flex-col h-full">
+            <div className="flex-1"><AdminSidebar onSelectWorkflow={setSelectedWorkflowId} /></div>
+            <p className="px-3 pb-2 text-[10px] text-gray-400 dark:text-gray-300 font-mono">version {appVersion}</p>
           </div>
         </aside>
 

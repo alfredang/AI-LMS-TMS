@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { useLms } from '@contexts/LmsContext';
 import { AdminPage } from '@app-types';
-import { useAppVersion } from '@hooks/useAppVersion';
 
 interface NavSectionProps {
     title: string;
@@ -54,6 +53,7 @@ const SubSection: React.FC<{ title: string; isOpen: boolean; onToggle: () => voi
 
 interface AdminSidebarProps {
     onNavigate?: () => void;
+    onSelectWorkflow?: (workflowId: string) => void;
 }
 
 const REFERENCE_LINKS = [
@@ -73,9 +73,8 @@ const USEFUL_LINKS = [
     { key: 'magentoBackendUrl', label: 'Magento Backend' },
 ];
 
-const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate }) => {
+const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate, onSelectWorkflow }) => {
     const { adminPage, setAdminPage, setEditingCourseRun, setEditingCourse, setSelectedCourse, setCourseEditMode, trainingProviderProfile } = useLms();
-    const appVersion = useAppVersion();
 
     const [openSections, setOpenSections] = useState<Record<string, boolean>>({
         calendar: false,
@@ -91,6 +90,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate }) => {
         tpgGrant: false,
         logging: false,
         certificate: false,
+        workflowGuides: false,
         referenceLinks: false,
         n8nLinks: false,
         usefulLinks: false,
@@ -145,8 +145,8 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate }) => {
 
             <NavSection title="Class Management" isOpen={openSections.classManagement} onToggle={() => toggleSection('classManagement')}>
                 <NavItem page={AdminPage.ViewLearners} label="View Learners" isSubItem />
-                <NavItem page={AdminPage.UpcomingClasses} label="Upcoming Classes" isSubItem />
                 <NavItem page={AdminPage.OngoingClasses} label="Ongoing Classes" isSubItem />
+                <NavItem page={AdminPage.UpcomingClasses} label="Upcoming Classes" isSubItem />
                 <NavItem page={AdminPage.CompletedClasses} label="Completed Classes" isSubItem />
                 <NavItem page={AdminPage.AssignTrainer} label="Assign Trainer" isSubItem />
                 <NavItem page={AdminPage.AssignStudent} label="Assign Learners" isSubItem />
@@ -207,6 +207,30 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate }) => {
                 <NavItem page={AdminPage.DeleteCertificate} label="Delete Certificate" isSubItem />
                 <NavItem page={AdminPage.SendCertificateSG} label="Send Certificate (SG)" isSubItem />
                 <NavItem page={AdminPage.SendCertificateGH} label="Send Certificate (GH)" isSubItem />
+            </NavSection>
+
+            <NavSection title="Workflow Guides" isOpen={openSections.workflowGuides} onToggle={() => toggleSection('workflowGuides')}>
+                {[
+                    { id: 'trainer-invitation', label: 'Trainer Invitation', icon: '📨' },
+                    { id: 'certificate', label: 'Certificate', icon: '🎓' },
+                    { id: 'proforma-invoice', label: 'Proforma Invoice', icon: '🧾' },
+                    { id: 'invoice', label: 'Invoice', icon: '📄' },
+                    { id: 'receipt', label: 'Receipt', icon: '🧾' },
+                    { id: 'billing-history', label: 'Billing History', icon: '💰' },
+                    { id: 'lesson-delivery', label: 'Lesson Delivery', icon: '📚' },
+                    { id: 'assessment', label: 'Assessment', icon: '📝' },
+                    { id: 'ssg-process-steps', label: 'SSG Process Steps', icon: '🏛️' },
+                ].map(item => (
+                    <a
+                        key={item.id}
+                        href="#"
+                        onClick={(e) => { e.preventDefault(); setAdminPage(AdminPage.WorkflowGuides); onSelectWorkflow?.(item.id); if (onNavigate) onNavigate(); }}
+                        className="flex items-center gap-2 rounded-md px-3 py-2 ml-4 text-sm text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-slate-700 dark:hover:text-white transition-colors"
+                    >
+                        <span className="text-sm">{item.icon}</span>
+                        <span>{item.label}</span>
+                    </a>
+                ))}
             </NavSection>
 
             <NavSection title="Reference Links" isOpen={openSections.referenceLinks} onToggle={() => toggleSection('referenceLinks')}>
@@ -304,11 +328,9 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate }) => {
                 <NavItem page={AdminPage.AutoCreateCertificatesLog} label="Auto Create Certificates Log" isSubItem />
                 <NavItem page={AdminPage.CourseRunDateSyncLogs} label="Course Run Date Sync Log" isSubItem />
                 <NavItem page={AdminPage.UpcomingCourseRunsLog} label="TGS Enrolments & Assign Trainers Log" isSubItem />
+                <NavItem page={AdminPage.SyncTrainerTpgLogs} label="Sync Trainer to TPG Log" isSubItem />
             </NavSection>
 
-            <div className="pt-6 mt-6 border-t border-gray-200 dark:border-gray-700">
-                <p className="px-3 text-[10px] text-gray-400 dark:text-gray-300 font-mono">version {appVersion}</p>
-            </div>
         </nav>
     );
 };

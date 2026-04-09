@@ -48,7 +48,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   // PUT — Update class status and/or class type
   if (req.method === 'PUT') {
     try {
-      const { id, class_status, class_type } = req.body;
+      const { id, class_status, class_type, virtual_meeting_link } = req.body;
       if (!id) {
         return res.status(400).json({ success: false, error: 'id is required' });
       }
@@ -75,6 +75,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         await pool.query('ALTER TABLE course_run ADD COLUMN IF NOT EXISTS class_type TEXT DEFAULT \'Physical\'');
         setClauses.push(`class_type = $${paramIdx++}`);
         values.push(class_type);
+      }
+
+      if (virtual_meeting_link !== undefined) {
+        await pool.query('ALTER TABLE course_run ADD COLUMN IF NOT EXISTS virtual_meeting_link TEXT');
+        setClauses.push(`virtual_meeting_link = $${paramIdx++}`);
+        values.push(virtual_meeting_link);
       }
 
       if (setClauses.length === 0) {
@@ -147,7 +153,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       includeOngoing
         ? '(cr.start_date > CURRENT_DATE OR (cr.start_date <= CURRENT_DATE AND cr.end_date >= CURRENT_DATE))'
         : 'cr.start_date > CURRENT_DATE',
-      `cr.class_status IN ('Confirmed', 'Pending')`,
       `cr.start_date <= CURRENT_DATE + ($${paramIndex} * INTERVAL '1 day')`
     ];
     params.push(includeOngoing ? 365 : thresholdDays);
@@ -202,9 +207,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       paramIndex++;
     }
 
-    if (classStatus === 'Confirmed' || classStatus === 'Pending') {
+    if (classStatus === 'Confirmed' || classStatus === 'Pending' || classStatus === 'Cancelled') {
       filters.push(`cr.class_status = $${paramIndex}`);
       params.push(classStatus);
+      paramIndex++;
+    }
+
+    const classType = req.query.classType;
+    if (classType === 'Physical' || classType === 'Virtual' || classType === 'Hybrid') {
+      filters.push(`COALESCE(cr.class_type, 'Physical') = $${paramIndex}`);
+      params.push(classType);
+      paramIndex++;
+    }
+
+    const courseType = req.query.courseType;
+    if (courseType === 'WSQ' || courseType === 'IBF' || courseType === 'Non-WSQ') {
+      filters.push(`c.course_type = $${paramIndex}`);
+      params.push(courseType);
       paramIndex++;
     }
 
@@ -236,12 +255,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           cr.course_run_id,
           c.title AS course_title,
           c.course_code,
+          c.course_type,
           c.trainers_list,
           cr.class_status,
           cr.digital_attendance_id,
           cr.start_date,
           cr.end_date,
           cr.class_type,
+          cr.virtual_meeting_link,
           ${tpgNameExpr} AS assigned_trainer_tpg,
           ${tpgEmailExpr} AS assigned_trainer_tpg_email,
           COUNT(e.id) AS num_of_trainee
@@ -251,12 +272,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           cr.course_run_id,
           c.title,
           c.course_code,
+          c.course_type,
           c.trainers_list,
           cr.class_status,
           cr.digital_attendance_id,
           cr.start_date,
           cr.end_date,
           cr.class_type,
+          cr.virtual_meeting_link,
           ${tpgNameExpr},
           ${tpgEmailExpr}
         ORDER BY cr.start_date ASC NULLS LAST
@@ -465,12 +488,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         break;
       }
 
+      // Derive class status: Confirmed if local trainer assigned, Pending otherwise.
+      // Exception: if the row is already 'Cancelled', leave it alone — manual cancellation is sticky.
+      const hasLocalTrainer = !!(allLocalPairs[0]?.name);
+      const derivedStatus = row.class_status === 'Cancelled'
+        ? 'Cancelled'
+        : (hasLocalTrainer ? 'Confirmed' : 'Pending');
+
+      // Persist to DB if status changed (skipped automatically when already Cancelled)
+      if (row.class_status !== derivedStatus) {
+        pool.query(`UPDATE course_run SET class_status = $1, updated_at = NOW() WHERE id = $2`, [derivedStatus, row.id]).catch(() => {});
+      }
+
       return {
         id: row.id,
         courseRunId: row.course_run_id,
         courseTitle: row.course_title,
         courseCode: row.course_code,
-        classStatus: row.class_status,
+        classStatus: derivedStatus,
         digitalAttendanceId: row.digital_attendance_id || '',
         startDate: row.start_date,
         endDate: row.end_date,
@@ -484,7 +519,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         latestInvitationTrainer,
         numOfTrainee: parseInt(row.num_of_trainee || '0', 10),
         trainersList: row.trainers_list || '',
+        courseType: row.course_type || '',
         classType: row.class_type || 'Physical',
+        virtualMeetingLink: row.virtual_meeting_link || '',
         modeOfTraining: '',
         attendanceScore: null as number | null,
       };

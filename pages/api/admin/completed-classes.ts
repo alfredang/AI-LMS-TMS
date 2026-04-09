@@ -44,6 +44,28 @@ export default async function handler(
     return;
   }
 
+  // PUT — Update class status for a completed class row
+  if (req.method === 'PUT') {
+    try {
+      const { id, class_status } = req.body;
+      if (!id) {
+        return res.status(400).json({ success: false, error: 'id is required' });
+      }
+      const validStatuses = ['Confirmed', 'Pending', 'Cancelled'];
+      if (!class_status || !validStatuses.includes(class_status)) {
+        return res.status(400).json({ success: false, error: `Invalid status. Must be one of: ${validStatuses.join(', ')}` });
+      }
+      await pool.query(
+        `UPDATE course_run SET class_status = $1, updated_at = NOW() WHERE id = $2`,
+        [class_status, id]
+      );
+      return res.status(200).json({ success: true });
+    } catch (err) {
+      console.error('Error updating completed class status:', err);
+      return res.status(500).json({ success: false, error: 'Failed to update' });
+    }
+  }
+
   if (req.method !== 'GET') {
     return res.status(405).json({ success: false, message: 'Method not allowed' });
   }
@@ -112,6 +134,13 @@ export default async function handler(
       paramCounter++;
     }
 
+    const classStatus = req.query.classStatus;
+    if (classStatus === 'Confirmed' || classStatus === 'Pending' || classStatus === 'Cancelled') {
+      whereConditions.push(`cr.class_status = $${paramCounter}`);
+      queryParams.push(classStatus);
+      paramCounter++;
+    }
+
     const parseDDMMYYYY = (d: string) => { const p = d.split(/[\/\-]/); return `${p[2]}-${p[1]}-${p[0]}`; };
     const isValidDate = (d: any) => {
       if (typeof d !== 'string' || !/^\d{2}[\/\-]\d{2}[\/\-]\d{4}$/.test(d)) return false;
@@ -129,6 +158,20 @@ export default async function handler(
     if (isValidDate(endDateUntil)) {
       whereConditions.push(`cr.end_date <= $${paramCounter}`);
       queryParams.push(parseDDMMYYYY(endDateUntil as string));
+      paramCounter++;
+    }
+
+    const classType = req.query.classType;
+    if (classType === 'Physical' || classType === 'Virtual' || classType === 'Hybrid') {
+      whereConditions.push(`COALESCE(cr.class_type, 'Physical') = $${paramCounter}`);
+      queryParams.push(classType);
+      paramCounter++;
+    }
+
+    const courseType = req.query.courseType;
+    if (courseType === 'WSQ' || courseType === 'IBF' || courseType === 'Non-WSQ') {
+      whereConditions.push(`c.course_type = $${paramCounter}`);
+      queryParams.push(courseType);
       paramCounter++;
     }
 
@@ -192,7 +235,8 @@ export default async function handler(
 
     // Get paginated data
     const dataQuery = `
-      SELECT 
+      SELECT
+        cr.id as "id",
         cr.course_run_id as "courseRunId",
         c.title as "courseTitle", 
         c.course_code as "courseCode",

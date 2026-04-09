@@ -8,6 +8,17 @@ type ActionMeta = {
   kind: string;
   description: string;
   configured: boolean;
+  /** DB key name (matches FINANCE_AUTOMATION_ACTIONS webhookEnvKey). */
+  webhookEnvKey?: string;
+  source?: 'db' | 'env' | 'missing' | 'built-in';
+};
+
+type WebhookUrlMeta = {
+  actionId: string;
+  kind: string;
+  webhookEnvKey: string | null;
+  url: string | null;
+  source: 'db' | 'env' | 'missing' | 'not-applicable';
 };
 
 export default function RunAutomationActionPanel({
@@ -23,6 +34,11 @@ export default function RunAutomationActionPanel({
   const [loadingMeta, setLoadingMeta] = useState(true);
   const [running, setRunning] = useState(false);
   const [toast, setToast] = useState<{ message: string; variant: 'success' | 'error' } | null>(null);
+  const [webhookMeta, setWebhookMeta] = useState<WebhookUrlMeta | null>(null);
+  const [loadingWebhook, setLoadingWebhook] = useState(false);
+  const [savingWebhook, setSavingWebhook] = useState(false);
+  const [webhookDraft, setWebhookDraft] = useState('');
+  const [showWebhook, setShowWebhook] = useState(false);
   const [runStatus, setRunStatus] = useState<
     | { state: 'idle' }
     | { state: 'running'; startedAt: number }
@@ -87,6 +103,62 @@ export default function RunAutomationActionPanel({
   const kind = meta?.kind || 'n8n_webhook';
 
   const canRun = configured && kind === 'n8n_webhook';
+
+  const fetchWebhook = async () => {
+    if (kind !== 'n8n_webhook') return;
+    setLoadingWebhook(true);
+    try {
+      const res = await fetch(`/api/finance/automation/webhook-url?actionId=${encodeURIComponent(actionId)}`);
+      const json = (await res.json()) as WebhookUrlMeta & { error?: string };
+      if (!res.ok) throw new Error(json.error || 'Failed to load webhook URL');
+      setWebhookMeta(json);
+      setWebhookDraft(json.url || '');
+    } catch (e) {
+      setWebhookMeta(null);
+      setWebhookDraft('');
+      setToast({ variant: 'error', message: e instanceof Error ? e.message : 'Failed to load webhook URL' });
+    } finally {
+      setLoadingWebhook(false);
+    }
+  };
+
+  useEffect(() => {
+    void fetchWebhook();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [actionId, kind]);
+
+  const saveWebhook = async () => {
+    if (kind !== 'n8n_webhook') return;
+    const url = webhookDraft.trim();
+    if (!url) {
+      setToast({ variant: 'error', message: 'Webhook URL is required.' });
+      return;
+    }
+    setSavingWebhook(true);
+    try {
+      const res = await fetch('/api/finance/automation/webhook-url', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ actionId, url }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Failed to save webhook URL');
+      setToast({ variant: 'success', message: 'Webhook URL saved.' });
+      await fetchWebhook();
+      // also refresh meta list so configured badge matches
+      try {
+        const metaRes = await fetch('/api/finance/automation/list');
+        const metaJson = await metaRes.json();
+        if (metaRes.ok && Array.isArray(metaJson.actions)) setActions(metaJson.actions);
+      } catch {
+        // ignore
+      }
+    } catch (e) {
+      setToast({ variant: 'error', message: e instanceof Error ? e.message : 'Failed to save webhook URL' });
+    } finally {
+      setSavingWebhook(false);
+    }
+  };
 
   const run = async () => {
     if (!canRun) {
@@ -173,6 +245,75 @@ export default function RunAutomationActionPanel({
         </div>
       )}
 
+      {kind === 'n8n_webhook' && (
+        <div className="rounded-lg border border-default bg-surface-elevated px-4 py-3 space-y-2">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="text-sm font-semibold text-on-surface">Webhook URL</span>
+              <span className="text-xs text-on-surface-secondary">
+                {loadingWebhook ? 'Loading…' : webhookMeta?.source ? `Source: ${webhookMeta.source}` : ''}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                onClick={() => void fetchWebhook()}
+                disabled={loadingWebhook || savingWebhook}
+              >
+                Refresh
+              </Button>
+              <Button onClick={() => void saveWebhook()} disabled={savingWebhook || loadingWebhook}>
+                {savingWebhook ? 'Saving…' : 'Save'}
+              </Button>
+            </div>
+          </div>
+
+          {webhookMeta?.webhookEnvKey && (
+            <div className="text-xs text-on-surface-secondary">
+              Key: <span className="font-mono text-on-surface">{webhookMeta.webhookEnvKey}</span>
+            </div>
+          )}
+
+          <div className="flex items-center gap-2">
+            <input
+              type={showWebhook ? 'text' : 'password'}
+              value={webhookDraft}
+              onChange={(e) => setWebhookDraft(e.target.value)}
+              className="block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-500"
+              placeholder="https://n8n.../webhook/..."
+              disabled={savingWebhook}
+            />
+            <button
+              type="button"
+              onClick={() => setShowWebhook((v) => !v)}
+              className="p-2 rounded-md border border-gray-300 dark:border-gray-600 text-on-surface-secondary hover:text-on-surface"
+              title={showWebhook ? 'Hide' : 'Show'}
+            >
+              <Icon name={showWebhook ? IconName.EyeOff : IconName.Eye} className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(webhookDraft.trim());
+                  setToast({ variant: 'success', message: 'Copied.' });
+                } catch {
+                  setToast({ variant: 'error', message: 'Copy failed.' });
+                }
+              }}
+              className="p-2 rounded-md border border-gray-300 dark:border-gray-600 text-on-surface-secondary hover:text-on-surface"
+              title="Copy"
+            >
+              <Icon name={IconName.FileText} className="w-4 h-4" />
+            </button>
+          </div>
+
+          <div className="text-xs text-on-surface-secondary">
+            Updating this saves to the Training Provider database and affects the live site immediately (no redeploy).
+          </div>
+        </div>
+      )}
+
       <div className="flex items-start gap-3">
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/15 text-primary" aria-hidden>
           <Icon name={IconName.Cloud} className="w-5 h-5 opacity-90" />
@@ -224,9 +365,6 @@ export default function RunAutomationActionPanel({
               <span className="text-sm text-on-surface-secondary">Idle</span>
             )}
           </div>
-          <div className="text-xs text-on-surface-secondary shrink-0">
-            Note: “Done” reflects the server response. With n8n Option A (respond at workflow end), this duration matches the workflow runtime.
-          </div>
         </div>
         {runStatus.state === 'done' && !runStatus.ok && runStatus.error && (
           <div className="mt-2 text-xs text-red-300 break-words">{runStatus.error}</div>
@@ -239,8 +377,20 @@ export default function RunAutomationActionPanel({
       </div>
 
       {!configured && !loadingMeta && (
-        <div className="rounded-lg border border-amber-900/40 bg-amber-900/15 px-4 py-3 text-sm text-amber-200">
-          This workflow is disabled because its webhook URL env var is not set on the server.
+        <div className="rounded-lg border border-amber-900/40 bg-amber-900/15 px-4 py-3 text-sm text-amber-200 space-y-2">
+          <p>
+            Production has no webhook URL for this action. Add the variable below to your hosting
+            environment (e.g. Vercel → Project → Settings → Environment Variables → Production), then
+            redeploy.
+          </p>
+          {meta?.webhookEnvKey && (
+            <p className="font-mono text-xs bg-black/20 rounded px-2 py-1.5 break-all text-amber-100">
+              {meta.webhookEnvKey}
+            </p>
+          )}
+          <p className="text-xs text-amber-200/90">
+            Set the webhook URL above and click <span className="font-semibold">Save</span>.
+          </p>
         </div>
       )}
 

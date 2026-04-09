@@ -98,9 +98,44 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const debugErrors: any[] = [];
 
+  const skipExisting = req.query.skipExisting !== '0'; // default: skip
+  const skippedExisting: { courseRunId: string; courseTitle: string }[] = [];
+
   if (isSpecificMode) {
-    // ── Specific IDs mode: fetch each course run from SSG, ensure it exists locally ──
-    for (const ssgRunId of specificIds) {
+    let idsToFetch: string[] = specificIds;
+
+    if (skipExisting) {
+      // ── Check which IDs already exist in the DB (with enrollments) ──
+      const existingResult = await pool.query(
+        `SELECT cr.course_run_id AS ssg_run_id, c.title AS course_title,
+                (SELECT COUNT(*) FROM enrollment e WHERE e.course_run_id = cr.id AND e.enrolment_status IS DISTINCT FROM 'Admin Removed') AS enrol_count
+         FROM course_run cr
+         JOIN course c ON c.id = cr.course_id
+         WHERE cr.course_run_id = ANY($1)`,
+        [specificIds]
+      );
+      const existingMap = new Map<string, { title: string; enrolCount: number }>();
+      for (const row of existingResult.rows) {
+        existingMap.set(row.ssg_run_id, { title: row.course_title, enrolCount: Number(row.enrol_count) });
+      }
+
+      // Filter: only call SSG for IDs not already in DB with enrollments
+      idsToFetch = [];
+      for (const id of specificIds) {
+        const existing = existingMap.get(id);
+        if (existing && existing.enrolCount > 0) {
+          skippedExisting.push({ courseRunId: id, courseTitle: existing.title });
+          console.log(`  ⏩ ${id} already in DB with ${existing.enrolCount} enrollments — skipping SSG fetch`);
+        } else {
+          idsToFetch.push(id);
+        }
+      }
+    }
+
+    console.log(`📊 skipExisting=${skipExisting} | ${skippedExisting.length} already in DB, ${idsToFetch.length} to fetch from SSG`);
+
+    // ── Fetch only new IDs from SSG ──
+    for (const ssgRunId of idsToFetch) {
       console.log(`\n🔍 Fetching course run ${ssgRunId} from SSG...`);
 
       try {
@@ -137,7 +172,34 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           continue;
         }
 
-        // Ensure course exists in DB
+        // ── Check enrollments FIRST — only create DB records if enrollments exist ──
+        await sleep(RATE_LIMIT_MS);
+        let enrolments: any[] = [];
+        try {
+          const enrolResult = await enrolmentAPI.searchEnrolment({
+            parameters: { page: 0, pageSize: 100 },
+            enrolment: {
+              course: { run: { id: ssgRunId } },
+              trainingPartner: { uen: tp.uen, code: tp.code }
+            }
+          } as any);
+
+          if (!enrolResult.error) {
+            enrolments = Array.isArray(enrolResult.data) ? enrolResult.data : [];
+          }
+        } catch (err) {
+          console.log(`  ⚠️ Enrolment check failed for ${ssgRunId}: ${err instanceof Error ? err.message : 'unknown'}`);
+        }
+
+        if (enrolments.length === 0) {
+          console.log(`  ⏭️ Skipping ${ssgRunId} — no enrollments, will not create in DB`);
+          debugErrors.push({ runId: ssgRunId, error: 'No enrollments — skipped', status: 0 });
+          continue;
+        }
+
+        console.log(`  ✅ ${ssgRunId} has ${enrolments.length} enrollments — creating/updating DB records`);
+
+        // Ensure course + course_run exist in DB
         const client = await pool.connect();
         try {
           await client.query('BEGIN');
@@ -172,8 +234,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           let crUuid: string;
           if (crRow.rows.length === 0) {
             const ins = await client.query(
-              `INSERT INTO course_run (course_id, course_run_id, start_date, end_date)
-               VALUES ($1, $2, $3::date, $4::date) RETURNING id`,
+              `INSERT INTO course_run (course_id, course_run_id, start_date, end_date, class_status)
+               VALUES ($1, $2, $3::date, $4::date, 'Confirmed') RETURNING id`,
               [courseUuid, ssgRunId, runStartDate, runEndDate]
             );
             crUuid = ins.rows[0].id;
@@ -202,8 +264,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             start_date: runStartDate,
             end_date: runEndDate,
             class_status: null,
-            enrolment_count: 0, // will be populated during enrollment sync
-          });
+            enrolment_count: enrolments.length,
+            _prefetchedEnrolments: enrolments, // pass to avoid re-fetching
+          } as any);
         } catch (dbErr) {
           await client.query('ROLLBACK');
           console.error(`  ❌ DB error for run ${ssgRunId}:`, dbErr);
@@ -252,10 +315,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(200).json({
       success: true,
       message: isSpecificMode
-        ? 'No valid course runs found from the provided IDs.'
+        ? (skippedExisting.length > 0
+          ? `All ${skippedExisting.length} course runs already exist in the database.`
+          : 'No valid course runs found from the provided IDs.')
         : `No completed classes with enrollments found for ${year}-${String(month).padStart(2, '0')}.`,
+      summary: {
+        alreadyInDb: skippedExisting.length,
+        pulledFromSsg: 0,
+        totalCourseRuns: 0,
+        totalEnrolmentsFetched: 0,
+        totalEnrolmentsInserted: 0,
+      },
       total: 0,
       results: [],
+      skippedExisting,
       ...(debugErrors.length > 0 && { debugErrors }),
     });
   }
@@ -282,29 +355,36 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       errors: [] as string[],
     };
 
-    // ── 3a. Fetch SSG enrollments ────────────────────────────────────────
+    // ── 3a. Fetch SSG enrollments (or use pre-fetched from specific mode) ──
+    const prefetched = (cr as any)._prefetchedEnrolments;
     try {
-      const enrolResult = await enrolmentAPI.searchEnrolment({
-        parameters: { page: 0, pageSize: 100 },
-        enrolment: {
-          course: { run: { id: ssgRunId } },
-          trainingPartner: { uen: tp.uen, code: tp.code }
+      let enrolments: any[] = [];
+
+      // In specific mode, enrollments were already fetched during the pre-check
+      if (prefetched) {
+        enrolments = prefetched;
+      } else {
+        const enrolResult = await enrolmentAPI.searchEnrolment({
+          parameters: { page: 0, pageSize: 100 },
+          enrolment: {
+            course: { run: { id: ssgRunId } },
+            trainingPartner: { uen: tp.uen, code: tp.code }
+          }
+        } as any);
+
+        if (!enrolResult.error) {
+          enrolments = Array.isArray(enrolResult.data) ? enrolResult.data : [];
+        } else {
+          const code = String(enrolResult.status);
+          if (code !== '404') {
+            result.errors.push(`SSG enrolment error ${code}: ${enrolResult.error?.message ?? ''}`);
+          }
         }
-      } as any);
+      }
 
-      if (!enrolResult.error) {
-        const enrolments = Array.isArray(enrolResult.data) ? enrolResult.data : [];
-        result.ssgEnrolmentsFetched = enrolments.length;
+      result.ssgEnrolmentsFetched = enrolments.length;
 
-        // In specific mode, skip course runs with zero enrollments
-        if (isSpecificMode && enrolments.length === 0) {
-          console.log(`  ⏭️ Skipping ${ssgRunId} — no enrollments from SSG`);
-          result.errors.push('Skipped: no enrollments found from SSG');
-          results.push(result);
-          await sleep(RATE_LIMIT_MS);
-          continue;
-        }
-
+      if (enrolments.length > 0) {
         // Upsert enrollments
         const client = await pool.connect();
         try {
@@ -368,27 +448,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         } finally {
           client.release();
         }
-      } else {
-        const code = String(enrolResult.status);
-        if (isSpecificMode) {
-          console.log(`  ⏭️ Skipping ${ssgRunId} — SSG enrolment error ${code}`);
-          if (code === '404') {
-            result.errors.push('Skipped: no enrollments found (404)');
-          } else {
-            result.errors.push(`SSG enrolment error ${code}: ${enrolResult.error?.message ?? ''}`);
-          }
-          results.push(result);
-          await sleep(RATE_LIMIT_MS);
-          continue;
-        }
-        if (code !== '404') {
-          result.errors.push(`SSG enrolment error ${code}: ${enrolResult.error?.message ?? ''}`);
-        }
       }
     } catch (err) {
       result.errors.push(`Enrolment fetch error: ${err instanceof Error ? err.message : 'unknown'}`);
     }
-    await sleep(RATE_LIMIT_MS);
+    if (!prefetched) await sleep(RATE_LIMIT_MS);
 
     // ── 3b. Fetch SSG sessions and attendance ────────────────────────────
     try {
@@ -519,6 +583,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const summary = {
     mode: isSpecificMode ? 'specific-ids' : 'date-range',
     ...(isSpecificMode ? { requestedIds: specificIds.length } : { month: `${year}-${String(month).padStart(2, '0')}` }),
+    alreadyInDb: skippedExisting.length,
+    pulledFromSsg: courseRuns.length,
     totalCourseRuns: courseRuns.length,
     totalEnrolmentsFetched: results.reduce((s, r) => s + r.ssgEnrolmentsFetched, 0),
     totalEnrolmentsInserted: results.reduce((s, r) => s + r.ssgEnrolmentsInserted, 0),
@@ -535,9 +601,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   return res.status(200).json({
     success: true,
     message: isSpecificMode
-      ? `Synced ${summary.totalCourseRuns} course runs (${summary.skippedNoEnrolments} skipped — no enrollments)`
+      ? `Synced ${summary.pulledFromSsg} from SSG, ${summary.alreadyInDb} already in DB`
       : `Synced ${summary.totalCourseRuns} completed classes for ${summary.month}`,
     summary,
     results,
+    skippedExisting,
   });
 }

@@ -102,6 +102,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           if (r.rows.length > 0) refLinks = { ...refLinks, ...r.rows[0] };
         } catch (e) { /* columns don't exist */ }
         try {
+          const r = await pool.query(`SELECT n8n_finance_webhooks_json FROM training_provider WHERE id = $1`, [trainingProvider.id]);
+          if (r.rows.length > 0) refLinks = { ...refLinks, ...r.rows[0] };
+        } catch (e) { /* columns don't exist */ }
+        try {
           const r = await pool.query(`SELECT magento_backend_url FROM training_provider WHERE id = $1`, [trainingProvider.id]);
           if (r.rows.length > 0) refLinks = { ...refLinks, ...r.rows[0] };
         } catch (e) { /* columns don't exist */ }
@@ -138,6 +142,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             tertiaryTpmsUrl: refLinks.tertiary_tpms_url || '',
             n8nHost1Url: refLinks.n8n_host1_url || '',
             n8nHost2Url: refLinks.n8n_host2_url || '',
+            n8nFinanceWebhooksJson: refLinks.n8n_finance_webhooks_json || '',
             magentoBackendUrl: refLinks.magento_backend_url || '',
           },
         };

@@ -80,7 +80,7 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
     showFilters = true,
     includeOngoing = false,
 }) => {
-    const { setAdminPage, setSelectedCourseRunId, setEditingCourseRun } = useLms();
+    const { setAdminPage, setSelectedCourseRunId, setEditingCourseRun, setClassListReturnTo } = useLms();
     const [currentPage, setCurrentPage] = useState(0);
     const [searchQuery, setSearchQuery] = useState('');
     const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
@@ -90,7 +90,9 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
     const [courseCode, setCourseCode] = useState('');
     const [courseRunId, setCourseRunId] = useState('');
     const [selectedTrainer, setSelectedTrainer] = useState('');
-    const [selectedClassStatus, setSelectedClassStatus] = useState<'all' | 'Confirmed' | 'Pending'>('all');
+    const [selectedClassStatus, setSelectedClassStatus] = useState<'all' | 'Confirmed' | 'Pending' | 'Cancelled'>('all');
+    const [selectedClassType, setSelectedClassType] = useState<'all' | 'Physical' | 'Virtual' | 'Hybrid'>('all');
+    const [selectedCourseType, setSelectedCourseType] = useState<'all' | 'WSQ' | 'IBF' | 'Non-WSQ'>('all');
     const [startDateFrom, setStartDateFrom] = useState('');
     const [endDateUntil, setEndDateUntil] = useState('');
 
@@ -121,6 +123,15 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
     const [importRunId, setImportRunId] = useState('');
     const [importLoading, setImportLoading] = useState(false);
     const [importResult, setImportResult] = useState<{ success: boolean; message: string; detail?: string } | null>(null);
+
+    // Calendar sync state
+    const [showCalendarModal, setShowCalendarModal] = useState(false);
+    const [calSyncStartDate, setCalSyncStartDate] = useState(() => new Date().toISOString().slice(0, 10));
+    const [calSyncEndDate, setCalSyncEndDate] = useState(() => {
+        const d = new Date(); d.setMonth(d.getMonth() + 1); return d.toISOString().slice(0, 10);
+    });
+    const [calSyncing, setCalSyncing] = useState(false);
+    const [calSyncResult, setCalSyncResult] = useState<any>(null);
     const [sendingInvitationFor, setSendingInvitationFor] = useState<string | null>(null);
     const [actionMessage, setActionMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
     // Per-row next trainer overrides (courseRun UUID → selected trainer name)
@@ -170,6 +181,8 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
             if (debouncedCourseRunId) params.append('courseRunId', debouncedCourseRunId);
             if (selectedTrainer) params.append('trainer', selectedTrainer);
             if (selectedClassStatus !== 'all') params.append('classStatus', selectedClassStatus);
+            if (selectedClassType !== 'all') params.append('classType', selectedClassType);
+            if (selectedCourseType !== 'all') params.append('courseType', selectedCourseType);
             if (debouncedStartDate) params.append('startDateFrom', debouncedStartDate);
             if (debouncedEndDate) params.append('endDateUntil', debouncedEndDate);
 
@@ -226,12 +239,12 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
     // Reset page immediately for non-debounced filters (dropdowns)
     useEffect(() => {
         setCurrentPage(0);
-    }, [selectedTrainer, selectedClassStatus]);
+    }, [selectedTrainer, selectedClassStatus, selectedClassType, selectedCourseType]);
 
     // Fetch data when debounced filters or pagination change
     useEffect(() => {
         fetchUpcomingClasses();
-    }, [currentPage, debouncedSearch, debouncedCourseTitle, debouncedCourseCode, debouncedCourseRunId, selectedTrainer, selectedClassStatus, debouncedStartDate, debouncedEndDate]);
+    }, [currentPage, debouncedSearch, debouncedCourseTitle, debouncedCourseCode, debouncedCourseRunId, selectedTrainer, selectedClassStatus, selectedClassType, selectedCourseType, debouncedStartDate, debouncedEndDate]);
 
     // Date formatting function
     const formatDateInput = (value: string) => {
@@ -262,6 +275,8 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
         setCourseRunId('');
         setSelectedTrainer('');
         setSelectedClassStatus('all');
+        setSelectedClassType('all');
+        setSelectedCourseType('all');
         setStartDateFrom('');
         setEndDateUntil('');
         setCurrentPage(0);
@@ -269,12 +284,14 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
 
     const handleEditClass = (classItem: UpcomingClass) => {
         setEditingCourseRun(classItem);
+        setClassListReturnTo(AdminPage.UpcomingClasses);
         setAdminPage(AdminPage.EditClass);
     };
 
     const handleViewDetails = (classItem: UpcomingClass) => {
         setEditingCourseRun(classItem);
         setSelectedCourseRunId(classItem.courseRunId);
+        setClassListReturnTo(AdminPage.UpcomingClasses);
         setAdminPage(AdminPage.ClassDetail);
     };
 
@@ -318,6 +335,25 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
         }
     };
 
+    const handleCalendarSync = async () => {
+        setCalSyncing(true);
+        setCalSyncResult(null);
+        try {
+            const response = await fetch(getApiUrl('/api/external/sync-google-calendar'), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ startDate: calSyncStartDate, endDate: calSyncEndDate }),
+            });
+            const data = await response.json();
+            setCalSyncResult(data);
+            if (data.success) fetchUpcomingClasses();
+        } catch {
+            setCalSyncResult({ success: false, error: 'Network error. Please try again.' });
+        } finally {
+            setCalSyncing(false);
+        }
+    };
+
     const renderTrainerCell = (name: string, email?: string) => {
         if (!name) {
             return <span className="text-gray-400 dark:text-gray-500 text-xs">N/A</span>;
@@ -356,14 +392,23 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
             {showTitle && (
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
                     <h3 className="text-3xl font-bold dark:text-white">Upcoming Classes</h3>
-                    <Button
-                        variant="primary"
-                        size="sm"
-                        onClick={() => { setShowImportModal(true); setImportResult(null); setImportRunId(''); }}
-                    >
-                        <Icon name={IconName.Add} className="w-4 h-4 mr-2" />
-                        Import Course Run
-                    </Button>
+                    <div className="flex gap-2">
+                        <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => { setShowCalendarModal(true); setCalSyncResult(null); }}
+                        >
+                            Sync Google Calendar
+                        </Button>
+                        <Button
+                            variant="primary"
+                            size="sm"
+                            onClick={() => { setShowImportModal(true); setImportResult(null); setImportRunId(''); }}
+                        >
+                            <Icon name={IconName.Add} className="w-4 h-4 mr-2" />
+                            Import Course Run
+                        </Button>
+                    </div>
                 </div>
             )}
 
@@ -499,12 +544,43 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Class Status</label>
                                             <select
                                                 value={selectedClassStatus}
-                                                onChange={(e) => setSelectedClassStatus(e.target.value as 'all' | 'Confirmed' | 'Pending')}
+                                                onChange={(e) => setSelectedClassStatus(e.target.value as 'all' | 'Confirmed' | 'Pending' | 'Cancelled')}
                                                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                                             >
                                                 <option value="all">All</option>
                                                 <option value="Confirmed">Confirmed</option>
                                                 <option value="Pending">Pending</option>
+                                                <option value="Cancelled">Cancelled</option>
+                                            </select>
+                                        </div>
+
+                                        {/* Class Type */}
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Class Type</label>
+                                            <select
+                                                value={selectedClassType}
+                                                onChange={(e) => setSelectedClassType(e.target.value as 'all' | 'Physical' | 'Virtual' | 'Hybrid')}
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                            >
+                                                <option value="all">All</option>
+                                                <option value="Physical">Physical</option>
+                                                <option value="Virtual">Virtual</option>
+                                                <option value="Hybrid">Hybrid</option>
+                                            </select>
+                                        </div>
+
+                                        {/* Course Type */}
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Course Type</label>
+                                            <select
+                                                value={selectedCourseType}
+                                                onChange={(e) => setSelectedCourseType(e.target.value as 'all' | 'WSQ' | 'IBF' | 'Non-WSQ')}
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                            >
+                                                <option value="all">All</option>
+                                                <option value="WSQ">WSQ</option>
+                                                <option value="IBF">IBF</option>
+                                                <option value="Non-WSQ">Non-WSQ</option>
                                             </select>
                                         </div>
 
@@ -556,7 +632,7 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                         <Icon name={IconName.BookOpen} className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                         <p className="text-gray-500 text-lg">No upcoming classes found</p>
                         <p className="text-gray-400 text-sm mt-2">
-                            {searchQuery || courseTitle || courseCode || courseRunId || selectedTrainer || selectedClassStatus !== 'all' || startDateFrom || endDateUntil
+                            {searchQuery || courseTitle || courseCode || courseRunId || selectedTrainer || selectedClassStatus !== 'all' || selectedClassType !== 'all' || selectedCourseType !== 'all' || startDateFrom || endDateUntil
                                 ? 'Try adjusting your search filters'
                                 : 'No classes are scheduled for the future'}
                         </p>
@@ -591,7 +667,9 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                                 <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.courseRunId}</td>
                                                 <td className="px-4 py-2 text-sm font-medium min-w-[350px]"><button type="button" onClick={() => handleViewDetails(classItem)} className="text-left text-blue-600 dark:text-blue-400 hover:underline">{classItem.courseTitle}</button></td>
                                                 <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.courseCode}</td>
-                                                <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classType}</td>
+                                                <td className="px-4 py-2 whitespace-nowrap text-sm">
+                                                    <span className={`px-2 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full ${classType === 'Virtual' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300' : classType === 'Hybrid' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300' : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'}`}>{classType}</span>
+                                                </td>
                                                 <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{formatDate(classItem.startDate)}</td>
                                                 <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{formatDate(classItem.endDate)}</td>
                                                 <td className="px-4 py-2 whitespace-nowrap text-sm">
@@ -687,7 +765,9 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                                     <option value="Cancelled">Cancelled</option>
                                                 </select>
                                             </td>
-                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classType}</td>
+                                            <td className="px-4 py-2 whitespace-nowrap text-sm">
+                                                <span className={`px-2 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full ${classType === 'Virtual' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300' : classType === 'Hybrid' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300' : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'}`}>{classType}</span>
+                                            </td>
                                             <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{formatDate(classItem.startDate)}</td>
                                             <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{formatDate(classItem.endDate)}</td>
                                             <td className="px-4 py-2 whitespace-nowrap text-sm text-center text-gray-700 dark:text-gray-200">{classItem.numOfTrainee}</td>
@@ -762,26 +842,33 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                         {/* Pagination */}
                         {totalPages > 1 && (
                             <div className="flex justify-between items-center mt-6">
-                                <p className="text-sm text-gray-500">
+                                <p className="text-sm text-gray-500 dark:text-gray-400">
                                     Showing {currentPage * ITEMS_PER_PAGE + 1} to {Math.min((currentPage + 1) * ITEMS_PER_PAGE, totalCount)} of {totalCount} classes
                                 </p>
-                                <div className="flex gap-2">
-                                    <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => setCurrentPage(Math.max(0, currentPage - 1))}
-                                        disabled={currentPage === 0}
-                                    >
-                                        Previous
-                                    </Button>
-                                    <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => setCurrentPage(Math.min(totalPages - 1, currentPage + 1))}
-                                        disabled={currentPage >= totalPages - 1}
-                                    >
-                                        Next
-                                    </Button>
+                                <div className="flex items-center gap-1">
+                                    <Button variant="ghost" size="sm" onClick={() => setCurrentPage(0)} disabled={currentPage === 0}>First</Button>
+                                    <Button variant="ghost" size="sm" onClick={() => setCurrentPage(currentPage - 1)} disabled={currentPage === 0}>Prev</Button>
+                                    {(() => {
+                                        const pages: number[] = [];
+                                        const maxVisible = 5;
+                                        let start = Math.max(0, currentPage - Math.floor(maxVisible / 2));
+                                        let end = Math.min(totalPages - 1, start + maxVisible - 1);
+                                        if (end - start < maxVisible - 1) start = Math.max(0, end - maxVisible + 1);
+                                        if (start > 0) pages.push(0);
+                                        if (start > 1) pages.push(-1);
+                                        for (let i = start; i <= end; i++) pages.push(i);
+                                        if (end < totalPages - 2) pages.push(-2);
+                                        if (end < totalPages - 1) pages.push(totalPages - 1);
+                                        return pages.map((p, idx) =>
+                                            p < 0 ? (
+                                                <span key={`ellipsis-${idx}`} className="px-1 text-gray-400 dark:text-gray-500">...</span>
+                                            ) : (
+                                                <button key={p} onClick={() => setCurrentPage(p)} className={`px-3 py-1 text-sm rounded-md ${p === currentPage ? 'bg-blue-600 text-white font-semibold' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'}`}>{p + 1}</button>
+                                            )
+                                        );
+                                    })()}
+                                    <Button variant="ghost" size="sm" onClick={() => setCurrentPage(currentPage + 1)} disabled={currentPage >= totalPages - 1}>Next</Button>
+                                    <Button variant="ghost" size="sm" onClick={() => setCurrentPage(totalPages - 1)} disabled={currentPage >= totalPages - 1}>Last</Button>
                                 </div>
                             </div>
                         )}
@@ -839,6 +926,128 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                     </>
                                 ) : 'Import'}
                             </Button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        )}
+
+        {/* Calendar Sync Modal */}
+        {showCalendarModal && (
+            <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={(e) => { if (e.target === e.currentTarget && !calSyncing) setShowCalendarModal(false); }}>
+                <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-lg">
+                    <div className="p-6">
+                        <div className="flex justify-between items-center mb-4">
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Sync with Google Calendar</h3>
+                            <button onClick={() => !calSyncing && setShowCalendarModal(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-2xl leading-none">&times;</button>
+                        </div>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                            Check Google Calendar events in the date range. Events with <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded text-xs">[VIRTUAL]</code> in the title will have their class type set to Virtual and Google Meet link saved.
+                        </p>
+
+                        <div className="grid grid-cols-2 gap-4 mb-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Start Date</label>
+                                <input
+                                    type="date"
+                                    value={calSyncStartDate}
+                                    onChange={e => setCalSyncStartDate(e.target.value)}
+                                    disabled={calSyncing}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white text-sm disabled:opacity-50"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">End Date</label>
+                                <input
+                                    type="date"
+                                    value={calSyncEndDate}
+                                    onChange={e => setCalSyncEndDate(e.target.value)}
+                                    disabled={calSyncing}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white text-sm disabled:opacity-50"
+                                />
+                            </div>
+                        </div>
+
+                        {/* Sync progress */}
+                        {calSyncing && (
+                            <div className="flex items-center gap-3 mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-md">
+                                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
+                                <span className="text-sm text-blue-700 dark:text-blue-300">Syncing calendar events...</span>
+                            </div>
+                        )}
+
+                        {/* Results */}
+                        {calSyncResult && (
+                            <div className="mb-4">
+                                {calSyncResult.success ? (
+                                    <>
+                                        <div className="grid grid-cols-3 gap-3 mb-3">
+                                            <div className="bg-blue-50 dark:bg-blue-900/30 rounded-lg p-2 text-center">
+                                                <p className="text-lg font-bold text-blue-600">{calSyncResult.summary?.totalEvents || 0}</p>
+                                                <p className="text-[10px] text-gray-500 dark:text-gray-400">Total Events</p>
+                                            </div>
+                                            <div className="bg-purple-50 dark:bg-purple-900/30 rounded-lg p-2 text-center">
+                                                <p className="text-lg font-bold text-purple-600">{calSyncResult.summary?.virtualEvents || 0}</p>
+                                                <p className="text-[10px] text-gray-500 dark:text-gray-400">Virtual Events</p>
+                                            </div>
+                                            <div className="bg-green-50 dark:bg-green-900/30 rounded-lg p-2 text-center">
+                                                <p className="text-lg font-bold text-green-600">{calSyncResult.summary?.updated || 0}</p>
+                                                <p className="text-[10px] text-gray-500 dark:text-gray-400">Classes Updated</p>
+                                            </div>
+                                        </div>
+
+                                        {calSyncResult.results?.length > 0 && (
+                                            <div className="max-h-48 overflow-y-auto border dark:border-gray-700 rounded-md">
+                                                <table className="w-full text-xs">
+                                                    <thead className="bg-gray-50 dark:bg-gray-700/50 sticky top-0">
+                                                        <tr>
+                                                            <th className="px-2 py-1.5 text-left text-gray-500 dark:text-gray-400">Run ID</th>
+                                                            <th className="px-2 py-1.5 text-left text-gray-500 dark:text-gray-400">Course</th>
+                                                            <th className="px-2 py-1.5 text-center text-gray-500 dark:text-gray-400">Status</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                                                        {calSyncResult.results.map((r: any, i: number) => (
+                                                            <tr key={i}>
+                                                                <td className="px-2 py-1 text-gray-700 dark:text-gray-300 font-mono">{r.courseRunId || '—'}</td>
+                                                                <td className="px-2 py-1 text-gray-700 dark:text-gray-300 truncate max-w-[200px]">{r.courseTitle || r.event || '—'}</td>
+                                                                <td className="px-2 py-1 text-center">
+                                                                    {r.changes ? (
+                                                                        <span className="text-green-600 font-medium">Updated</span>
+                                                                    ) : r.status === 'no_match' ? (
+                                                                        <span className="text-yellow-500">No match</span>
+                                                                    ) : (
+                                                                        <span className="text-gray-400">Already virtual</span>
+                                                                    )}
+                                                                </td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        )}
+
+                                        {calSyncResult.summary?.virtualEvents === 0 && (
+                                            <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-2">No [VIRTUAL] events found in the date range.</p>
+                                        )}
+                                    </>
+                                ) : (
+                                    <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-md p-3 text-sm text-red-700 dark:text-red-300">
+                                        {calSyncResult.error || calSyncResult.message || 'Sync failed.'}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        <div className="flex gap-3 justify-end">
+                            <Button variant="ghost" onClick={() => setShowCalendarModal(false)} disabled={calSyncing}>
+                                {calSyncResult?.success ? 'Done' : 'Cancel'}
+                            </Button>
+                            {!calSyncResult && (
+                                <Button variant="primary" onClick={handleCalendarSync} disabled={calSyncing}>
+                                    {calSyncing ? 'Syncing...' : 'Sync Now'}
+                                </Button>
+                            )}
                         </div>
                     </div>
                 </div>

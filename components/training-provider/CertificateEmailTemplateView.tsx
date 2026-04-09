@@ -7,28 +7,28 @@ import { useLms } from '@contexts/LmsContext';
 
 const DEFAULT_SUBJECT = 'Certificate for Completing {COURSE_NAME}';
 
-const DEFAULT_BODY = `Hello {STUDENT_NAME},
+const DEFAULT_BODY = `<p>Hello {STUDENT_NAME},</p>
 
-Congratulations on successfully completing the course {COURSE_NAME}! We are truly proud of your perseverance, dedication, and motivation throughout the program.
+<p>Congratulations on successfully completing the course <i>{COURSE_NAME}</i>! We are truly proud of your perseverance, dedication, and motivation throughout the program.</p>
 
-Please find attached your Certificate of Achievement in recognition of your accomplishment.
+<p>Please find attached your Certificate of Achievement in recognition of your accomplishment.</p>
 
-You can also download your certificate here: {CERTIFICATE_URL}
+<p>You can also download your certificate here: <a href="{CERTIFICATE_URL}">{CERTIFICATE_URL}</a></p>
 
-You may also view and download your certificate anytime from your Profile in the LMS portal.
+<p>You may also view and download your certificate anytime from your Profile in the LMS portal.</p>
 
-Your commitment to learning and professional growth is commendable, and we wish you continued success in applying your new skills.
+<p>Your commitment to learning and professional growth is commendable, and we wish you continued success in applying your new skills.</p>
 
-For learners who have achieved at least 75% attendance and passed their assessment for WSQ courses, they can view and download their WSQ SOA (Statement of Attainment) through http://www.MySkillsFuture.gov.sg.
+<p>For learners who have achieved at least 75% attendance and passed their assessment for WSQ courses, they can view and download their WSQ SOA (Statement of Attainment) through <a href="http://www.MySkillsFuture.gov.sg">http://www.MySkillsFuture.gov.sg</a>.</p>
 
-Please note that SkillsFuture Singapore uses OpenCerts certificates to issue the WSQ Statements of Attainment (SOA). The OpenCerts will be ready for viewing/downloading 4-5 weeks upon completion of WSQ courses.
+<p>Please note that SkillsFuture Singapore uses OpenCerts certificates to issue the WSQ Statements of Attainment (SOA). The OpenCerts will be ready for viewing/downloading 4-5 weeks upon completion of WSQ courses.</p>
 
-Feel free to let me know if you need anything else. Thank you.
+<p>Feel free to let me know if you need anything else. Thank you.</p>
 
-Best regards,
-Support Team
-{COMPANY_SHORT_NAME}
-Tel: 61000613 | Email: support@tertiaryinfotech.com | WhatsApp: https://wa.me/6561000613`;
+<p>Best regards,<br/>
+<strong>Support Team</strong><br/>
+<strong>{COMPANY_SHORT_NAME}</strong><br/>
+Tel: 61000613 | Email: <a href="mailto:support@tertiaryinfotech.com">support@tertiaryinfotech.com</a> | WhatsApp: <a href="https://wa.me/6561000613">https://wa.me/6561000613</a></p>`;
 
 const DEFAULT_CC = '';
 
@@ -43,6 +43,11 @@ const CertificateEmailTemplateView: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // Test email state
+  const [testEmail, setTestEmail] = useState('');
+  const [isSendingTest, setIsSendingTest] = useState(false);
+  const [testMessage, setTestMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   useEffect(() => {
     fetchTemplate();
@@ -119,6 +124,39 @@ const CertificateEmailTemplateView: React.FC = () => {
     setSubject(DEFAULT_SUBJECT);
     setBody(DEFAULT_BODY);
     setCc(DEFAULT_CC);
+  };
+
+  const handleSendTestEmail = async () => {
+    if (!testEmail.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(testEmail.trim())) {
+      setTestMessage({ type: 'error', text: 'Please enter a valid email address.' });
+      return;
+    }
+
+    setIsSendingTest(true);
+    setTestMessage(null);
+    try {
+      const response = await fetch(getApiUrl('/api/training-provider/send-test-email'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          testEmail: testEmail.trim(),
+          subject,
+          body,
+          templateType: 'certificate',
+        }),
+      });
+      const data = await response.json();
+      if (data.success) {
+        setTestMessage({ type: 'success', text: `Test email sent to ${testEmail.trim()}` });
+      } else {
+        setTestMessage({ type: 'error', text: data.error || 'Failed to send test email.' });
+      }
+    } catch (error) {
+      setTestMessage({ type: 'error', text: 'Failed to send test email.' });
+    } finally {
+      setIsSendingTest(false);
+      setTimeout(() => setTestMessage(null), 5000);
+    }
   };
 
   const hasChanges = subject !== originalSubject || body !== originalBody || cc !== originalCc;
@@ -248,6 +286,39 @@ const CertificateEmailTemplateView: React.FC = () => {
         </div>
       </Card>
 
+      {/* Send Test Email */}
+      <Card>
+        <div className="p-6">
+          <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Send Test Email</h4>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+            Send a test email using the current template with sample data to verify formatting.
+          </p>
+          <div className="flex gap-3 items-start">
+            <div className="flex-1">
+              <input
+                type="email"
+                value={testEmail}
+                onChange={(e) => setTestEmail(e.target.value)}
+                placeholder="Enter test email address..."
+                className="block w-full px-4 py-2.5 text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-slate-900 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+            <Button
+              variant="secondary"
+              onClick={handleSendTestEmail}
+              disabled={isSendingTest || !testEmail.trim()}
+            >
+              {isSendingTest ? 'Sending...' : 'Send Test'}
+            </Button>
+          </div>
+          {testMessage && (
+            <div className={`mt-3 p-2 rounded-md text-xs ${testMessage.type === 'success' ? 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-400'}`}>
+              {testMessage.text}
+            </div>
+          )}
+        </div>
+      </Card>
+
       {/* Preview */}
       <Card>
         <div className="p-6">
@@ -267,12 +338,10 @@ const CertificateEmailTemplateView: React.FC = () => {
               )}
             </div>
             {/* Email body */}
-            <div className="px-6 py-5 text-sm text-gray-700 dark:text-gray-300 max-h-72 overflow-y-auto">
-              {previewBody.split('\n').map((line, i) => {
-                if (!line.trim()) return <br key={i} />;
-                return <p key={i} className="mb-1">{line}</p>;
-              })}
-            </div>
+            <div
+              className="px-6 py-5 text-sm text-gray-700 dark:text-gray-300 max-h-96 overflow-y-auto [&_p]:mb-3 [&_p:last-child]:mb-0 [&_a]:text-blue-600 [&_a]:underline"
+              dangerouslySetInnerHTML={{ __html: previewBody }}
+            />
           </div>
         </div>
       </Card>

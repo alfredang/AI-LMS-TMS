@@ -50,6 +50,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       LEFT JOIN (
         SELECT course_run_id, COUNT(*) AS enrollment_count
         FROM enrollment
+        WHERE enrolment_status IS DISTINCT FROM 'Admin Removed'
         GROUP BY course_run_id
       ) ec ON ec.course_run_id = cr.id
       LEFT JOIN (
@@ -102,9 +103,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         endDate: row.end_date,
         classStatus: row.class_status,
         assignedTrainerId: row.assigned_trainer_id,
-        assignedTrainerName: row.all_trainer_names || row.assigned_trainer_name,
+        assignedTrainerName: row.assigned_trainer_name,
         primaryAssignedTrainerName: row.assigned_trainer_name,
-        assignedTrainerEmail: row.all_trainer_emails || row.assigned_trainer_email,
+        assignedTrainerEmail: row.assigned_trainer_email,
         enrollmentCount: parseInt(row.enrollment_count, 10),
       })),
     });

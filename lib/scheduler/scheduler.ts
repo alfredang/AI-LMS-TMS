@@ -161,6 +161,13 @@ async function seedDefaults() {
             cron_expression: '0 3 * * *', // 3:00 AM SGT daily
             api_endpoint: '/api/external/sync-trainer-to-tpg',
         },
+        {
+            id: 'sync_google_calendar',
+            name: 'Sync Google Calendar (Virtual Classes)',
+            description: 'Checks Google Calendar for events in the next 21 days. Events with [VIRTUAL] in the title are matched to course runs — sets class_type to Virtual and stores the Google Meet link. Runs daily at 1:00 AM SGT.',
+            cron_expression: '0 1 * * *', // 1:00 AM SGT daily
+            api_endpoint: '/api/external/sync-google-calendar',
+        },
     ];
 
     const ids = defaults.map(t => t.id);
@@ -226,6 +233,10 @@ function getDirectHandler(taskId: string): TaskHandler | undefined {
         directHandlers.set('sync_trainer_to_tpg', async () => {
             const { runSyncTrainerToTpg } = await import('../../pages/api/external/sync-trainer-to-tpg');
             return runSyncTrainerToTpg();
+        });
+        directHandlers.set('sync_google_calendar', async () => {
+            const { runSyncGoogleCalendar } = await import('../../pages/api/external/sync-google-calendar');
+            return runSyncGoogleCalendar();
         });
     }
     return directHandlers.get(taskId);

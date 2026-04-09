@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
-
+import { useAppVersion } from '@hooks/useAppVersion';
 import { useLms } from '../contexts/LmsContext';
 import { View, TrainerPage } from '@app-types';
 import CalendarView from '../components/CalendarView';
@@ -27,6 +27,7 @@ import LessonDeliveryGuidePage from '../components/trainer/LessonDeliveryGuidePa
 import VirtualToolsPage from '../components/trainer/VirtualToolsPage';
 import AgenticAIToolsPage from '../components/trainer/AgenticAIToolsPage';
 import AssessmentGuidePage from '../components/trainer/AssessmentGuidePage';
+import TrainingHoursPage from '../components/trainer/TrainingHoursPage';
 
 const PAGE_LABELS: Record<TrainerPage, string> = {
   [TrainerPage.EAttendance]: 'E-Attendance',
@@ -51,6 +52,7 @@ const PAGE_LABELS: Record<TrainerPage, string> = {
 
 const TrainerLayout: React.FC = () => {
   const { currentView, trainerPage, selectedCourse } = useLms();
+  const appVersion = useAppVersion();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isDesktopSidebarOpen, setIsDesktopSidebarOpen] = useState(true);
 
@@ -66,6 +68,8 @@ const TrainerLayout: React.FC = () => {
         return <AssessmentGrading />;
       case TrainerPage.MyClasses:
         return <CourseList />;
+      case TrainerPage.TrainingHours:
+        return <TrainingHoursPage />;
       case TrainerPage.PastAttendance:
         return <PastAttendance />;
       case TrainerPage.PastAssessment:
@@ -151,8 +155,9 @@ const TrainerLayout: React.FC = () => {
       <div className="flex flex-1">
         {/* Desktop Sidebar */}
         <aside className={`${isDesktopSidebarOpen ? 'hidden md:flex' : 'hidden'} w-64 flex-shrink-0 border-r border-gray-200 dark:border-slate-700 transition-all`}>
-          <div className="w-full">
-            <TrainerSidebar />
+          <div className="w-full flex flex-col h-full">
+            <div className="flex-1"><TrainerSidebar /></div>
+            <p className="px-3 pb-2 text-[10px] text-gray-400 dark:text-gray-300 font-mono">version {appVersion}</p>
           </div>
         </aside>
 

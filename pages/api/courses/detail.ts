@@ -76,7 +76,9 @@ export default async function handler(
           cr.end_date,
           e.certificate,
           c.resource_links,
-          c.funding_validity
+          c.funding_validity,
+          COALESCE(cr.class_type, 'Physical') AS class_type,
+          cr.virtual_meeting_link
         FROM enrollment e
         JOIN course_run cr
           ON e.course_run_id = cr.id
@@ -110,7 +112,9 @@ export default async function handler(
           cr.end_date,
           e.certificate,
           c.resource_links,
-          c.funding_validity
+          c.funding_validity,
+          COALESCE(cr.class_type, 'Physical') AS class_type,
+          cr.virtual_meeting_link
         FROM enrollment e
         JOIN course_run cr
           ON e.course_run_id = cr.id
@@ -197,7 +201,9 @@ export default async function handler(
         endDate: (courseDetail as any).end_date || null,
         certificate: courseDetail.certificate,
         resourceLinks: (courseDetail as any).resource_links ? (typeof (courseDetail as any).resource_links === 'string' ? JSON.parse((courseDetail as any).resource_links) : (courseDetail as any).resource_links) : [],
-        fundingValidity: (courseDetail as any).funding_validity || null
+        fundingValidity: (courseDetail as any).funding_validity || null,
+        classType: (courseDetail as any).class_type || 'Physical',
+        virtualMeetingLink: (courseDetail as any).virtual_meeting_link || null
       }
     });
 

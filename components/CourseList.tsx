@@ -229,7 +229,11 @@ const ManagementCourseList: React.FC = () => {
 
             const matchesType = filterCourseType === 'All' ||
                 (filterCourseType === 'WSQ+IBF' ? (course.courseType === 'WSQ' || course.courseType === 'IBF') : course.courseType === filterCourseType);
-            const matchesMode = filterMode === 'All' || (course.modeOfLearning && course.modeOfLearning.includes(filterMode));
+            const matchesMode = filterMode === 'All' || (
+                role === UserRole.Trainer
+                    ? (course.classType || 'Physical') === filterMode
+                    : (course.modeOfLearning && course.modeOfLearning.includes(filterMode))
+            );
 
             // Trainer: apply date tab logic
             if (role === UserRole.Trainer) {
@@ -377,6 +381,18 @@ const ManagementCourseList: React.FC = () => {
                         {(course.courseRunCode || course.courseRunId) && (
                             <LearnerCardDetailRow label="Course Run" value={course.courseRunCode || course.courseRunId} />
                         )}
+                        <LearnerCardDetailRow
+                            label="Class Type"
+                            value={
+                                <span className={`px-2 py-0.5 rounded text-xs font-semibold ${
+                                    course.classType === 'Virtual' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300'
+                                    : course.classType === 'Hybrid' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300'
+                                    : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
+                                }`}>
+                                    {course.classType || 'Physical'}
+                                </span>
+                            }
+                        />
                         {course.startDate && (
                             <LearnerCardDetailRow label="Start Date" value={new Date(course.startDate).toLocaleDateString('en-SG', { year: 'numeric', month: 'short', day: 'numeric' })} />
                         )}
@@ -856,12 +872,12 @@ const ManagementCourseList: React.FC = () => {
                             </select>
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-on-surface-secondary">Mode of Training</label>
+                            <label className="block text-sm font-medium text-on-surface-secondary">{role === UserRole.Trainer ? 'Class Type' : 'Mode of Training'}</label>
                             <select value={filterMode} onChange={e => setFilterMode(e.target.value)} className={`${inputClasses} mt-1`}>
-                                <option value="All">All Modes</option>
-                                <option value="Hybrid">Hybrid</option>
-                                <option value="Virtual">Virtual</option>
+                                <option value="All">{role === UserRole.Trainer ? 'All Types' : 'All Modes'}</option>
                                 <option value="Physical">Physical</option>
+                                <option value="Virtual">Virtual</option>
+                                <option value="Hybrid">Hybrid</option>
                             </select>
                         </div>
                         {role === UserRole.Trainer && (
@@ -1020,79 +1036,78 @@ const CircularProgress: React.FC<{ percent: number; size?: number }> = ({ percen
 const LearnerCourseCard: React.FC<{ course: any }> = ({ course }) => {
     const { loadCourseData } = useLms();
     const totalHours = Number(course.trainingHours) + Number(course.assessmentHours);
-    const progress = Math.round(course.progressPercent || 0);
 
     const handleClick = async () => {
         try { await loadCourseData(course); } catch (e) { console.error(e); }
     };
 
     return (
-        <div
-            onClick={handleClick}
-            className="group bg-surface border border-default rounded-2xl overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-200 cursor-pointer flex flex-col"
-        >
-            {/* Course Image */}
-            <div className="relative overflow-hidden bg-surface-elevated" style={{ height: '170px' }}>
+        <Card className="flex flex-col group cursor-pointer dark:bg-gray-800 dark:border-gray-700" onClick={handleClick}>
+            <div className="relative">
                 <img
                     src={getCourseImageUrl(course.imageUrl, course.id)}
                     alt={course.title}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    className="w-full h-auto object-cover rounded-t-xl"
                     onError={(e) => { (e.target as HTMLImageElement).src = `https://picsum.photos/seed/${course.id}/400/200`; }}
                 />
             </div>
-
-            {/* Card Body */}
             <div className="p-4 flex flex-col flex-grow">
-                {/* Title */}
-                <h3 className="font-bold text-sm text-on-surface line-clamp-2 mb-3 leading-snug group-hover:text-primary transition-colors">
-                    {course.title}
-                </h3>
+                <h3 className="font-bold text-on-surface mb-3 group-hover:text-primary transition-colors mt-3 dark:text-white">{course.title}</h3>
 
-                {/* Detail Rows */}
-                <div className="flex-grow space-y-0">
-                    <LearnerCardDetailRow label="Course Code" value={course.courseCode || '—'} />
-                    <LearnerCardDetailRow
-                        label="Course Duration"
-                        value={`${totalHours} Hours (${course.trainingHours}T + ${course.assessmentHours}A)`}
-                    />
-                    <LearnerCardDetailRow
-                        label="Course Type"
-                        value={
-                            <span className={`px-2 py-0.5 rounded text-xs font-semibold ${getTypeColor(course.courseType)}`}>
-                                {course.courseType}
-                            </span>
-                        }
-                    />
-                    {(course.courseRunCode || course.courseRunId) && (
-                        <LearnerCardDetailRow
-                            label="Course Run"
-                            value={course.courseRunCode || course.courseRunId}
-                        />
-                    )}
-                    {course.startDate && (
-                        <LearnerCardDetailRow
-                            label="Start Date"
-                            value={new Date(course.startDate).toLocaleDateString('en-SG', { year: 'numeric', month: 'short', day: 'numeric' })}
-                        />
-                    )}
-                    {course.endDate && (
-                        <LearnerCardDetailRow
-                            label="End Date"
-                            value={new Date(course.endDate).toLocaleDateString('en-SG', { year: 'numeric', month: 'short', day: 'numeric' })}
-                        />
-                    )}
+                <div className="flex items-center my-auto py-3">
+                    <div className="text-xs space-y-2 flex-grow">
+                        <div className="flex justify-between items-center">
+                            <span className="font-semibold text-gray-500 dark:text-gray-400">Course Code</span>
+                            <span className="font-mono text-gray-800 dark:text-gray-200">{course.courseCode || '—'}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                            <span className="font-semibold text-gray-500 dark:text-gray-400">Course Duration</span>
+                            <span className="font-medium text-gray-800 dark:text-gray-200 text-right">{totalHours} Hours ({course.trainingHours}T + {course.assessmentHours}A)</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                            <span className="font-semibold text-gray-500 dark:text-gray-400">Course Type</span>
+                            <span className={`font-semibold px-2 py-0.5 rounded ${getTypeColor(course.courseType)}`}>{course.courseType}</span>
+                        </div>
+                        {(course.courseRunCode || course.courseRunId) && (
+                            <div className="flex justify-between items-center">
+                                <span className="font-semibold text-gray-500 dark:text-gray-400">Course Run</span>
+                                <span className="font-mono text-gray-800 dark:text-gray-200">{course.courseRunCode || course.courseRunId}</span>
+                            </div>
+                        )}
+                        <div className="flex justify-between items-center">
+                            <span className="font-semibold text-gray-500 dark:text-gray-400">Class Type</span>
+                            <span className={`font-semibold px-2 py-0.5 rounded ${
+                                course.classType === 'Virtual' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300'
+                                : course.classType === 'Hybrid' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300'
+                                : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
+                            }`}>{course.classType || 'Physical'}</span>
+                        </div>
+                        {course.startDate && (
+                            <div className="flex justify-between items-center">
+                                <span className="font-semibold text-gray-500 dark:text-gray-400">Start Date</span>
+                                <span className="font-medium text-gray-800 dark:text-gray-200">{new Date(course.startDate).toLocaleDateString('en-SG', { year: 'numeric', month: 'short', day: 'numeric' })}</span>
+                            </div>
+                        )}
+                        {course.endDate && (
+                            <div className="flex justify-between items-center">
+                                <span className="font-semibold text-gray-500 dark:text-gray-400">End Date</span>
+                                <span className="font-medium text-gray-800 dark:text-gray-200">{new Date(course.endDate).toLocaleDateString('en-SG', { year: 'numeric', month: 'short', day: 'numeric' })}</span>
+                            </div>
+                        )}
+                    </div>
                 </div>
 
                 {/* Footer */}
-                <div className="flex items-center justify-between mt-4 pt-3 border-t border-default">
-                    <Button size="sm">View Course</Button>
-                    <div className="relative flex items-center justify-center flex-shrink-0" title={`${progress}% complete`}>
-                        <CircularProgress percent={progress} size={40} />
-                        <span className="absolute text-[10px] font-bold text-on-surface">{progress}%</span>
+                <div className="border-t border-gray-200 dark:border-gray-700 mt-auto pt-3 flex justify-between items-center">
+                    <span className="font-semibold text-on-surface text-sm dark:text-gray-200">View Course</span>
+                    <div className="w-8 h-8 rounded-full bg-primary text-white flex items-center justify-center transition-colors">
+                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
+                        </svg>
                     </div>
                 </div>
             </div>
-        </div>
+        </Card>
     );
 };
 

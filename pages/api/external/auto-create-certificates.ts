@@ -148,7 +148,8 @@ async function sendCertificateEmail(opts: {
         const defaultBody = `Hello {STUDENT_NAME},\n\nCongratulations on successfully completing the course {COURSE_NAME}! We are truly proud of your perseverance, dedication, and motivation throughout the program.\n\nPlease find attached your Certificate of Achievement in recognition of your accomplishment.\n\nYou can also download your certificate here: {CERTIFICATE_URL}\n\nYou may also view and download your certificate anytime from your Profile in the LMS portal.\n\nYour commitment to learning and professional growth is commendable, and we wish you continued success in applying your new skills.\n\nFor learners who have achieved at least 75% attendance and passed their assessment for WSQ courses, they can view and download their WSQ SOA (Statement of Attainment) through http://www.MySkillsFuture.gov.sg.\n\nPlease note that SkillsFuture Singapore uses OpenCerts certificates to issue the WSQ Statements of Attainment (SOA). The OpenCerts will be ready for viewing/downloading 4-5 weeks upon completion of WSQ courses.\n\nFeel free to let me know if you need anything else. Thank you.\n\nBest regards,\nSupport Team\n{COMPANY_SHORT_NAME}\nTel: 61000613 | Email: support@tertiaryinfotech.com | WhatsApp: https://wa.me/6561000613`;
         const bodyText = replacePlaceholders(tpRow.certificate_email_body || defaultBody);
 
-        const htmlBody = `<div style="font-family: Arial, sans-serif; color: #333;">${bodyText.split('\n').map(line => line.trim() ? `<p>${line}</p>` : '<br/>').join('\n')}</div>`;
+        const isHtml = /<[a-z][\s\S]*>/i.test(bodyText);
+        const htmlBody = `<div style="font-family: Arial, sans-serif; color: #333;">${isHtml ? bodyText : bodyText.split('\n').map(line => line.trim() ? `<p style="margin:0 0 2px 0;">${line}</p>` : '<br/>').join('\n')}</div>`;
 
         const rawEmail = [
             `From: ${senderName ? `${senderName} <${emailUser}>` : emailUser}`,
@@ -333,6 +334,7 @@ export async function runAutomation(targetDate?: string) {
                     )
                     WHERE e.course_run_id = $1
                       AND LOWER(e.enrolment_status) = 'confirmed'
+                      AND (e.certificate IS NULL OR e.certificate = '')
                     GROUP BY e.id, e.nric, au.full_name, au.email, e.email
                 `, [run.db_uuid]);
 

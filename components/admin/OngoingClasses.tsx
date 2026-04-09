@@ -8,6 +8,7 @@ import { authService } from '@lib/services/authService';
 import { AdminPage } from '@app-types';
 
 interface OngoingClass {
+  id: string;
   courseRunId: string;
   courseTitle: string;
   courseCode: string;
@@ -50,7 +51,7 @@ interface Trainer {
 }
 
 const OngoingClasses: React.FC = () => {
-  const { setAdminPage, setSelectedCourseRunId, setEditingCourseRun } = useLms();
+  const { setAdminPage, setSelectedCourseRunId, setEditingCourseRun, setClassListReturnTo } = useLms();
   const [ongoingClasses, setOngoingClasses] = useState<OngoingClass[]>([]);
   const [statistics, setStatistics] = useState<Statistics>({
     ongoingClassesFound: 0,
@@ -68,6 +69,9 @@ const OngoingClasses: React.FC = () => {
   const [courseCode, setCourseCode] = useState('');
   const [courseRunId, setCourseRunId] = useState('');
   const [selectedTrainer, setSelectedTrainer] = useState('');
+  const [selectedClassStatus, setSelectedClassStatus] = useState<'all' | 'Confirmed' | 'Pending' | 'Cancelled'>('all');
+  const [selectedClassType, setSelectedClassType] = useState<'all' | 'Physical' | 'Virtual' | 'Hybrid'>('all');
+  const [selectedCourseType, setSelectedCourseType] = useState<'all' | 'WSQ' | 'IBF' | 'Non-WSQ'>('all');
   const [startDateFrom, setStartDateFrom] = useState('');
   const [endDateUntil, setEndDateUntil] = useState('');
 
@@ -122,6 +126,9 @@ const OngoingClasses: React.FC = () => {
       if (debouncedCourseCode) params.append('courseCode', debouncedCourseCode);
       if (debouncedCourseRunId) params.append('courseRunId', debouncedCourseRunId);
       if (selectedTrainer) params.append('trainer', selectedTrainer);
+      if (selectedClassStatus !== 'all') params.append('classStatus', selectedClassStatus);
+      if (selectedClassType !== 'all') params.append('classType', selectedClassType);
+      if (selectedCourseType !== 'all') params.append('courseType', selectedCourseType);
       if (debouncedStartDate) params.append('startDateFrom', debouncedStartDate);
       if (debouncedEndDate) params.append('endDateUntil', debouncedEndDate);
 
@@ -183,12 +190,12 @@ const OngoingClasses: React.FC = () => {
   // Reset page immediately for non-debounced filters (dropdowns)
   useEffect(() => {
     setCurrentPage(0);
-  }, [selectedTrainer]);
+  }, [selectedTrainer, selectedClassStatus, selectedClassType, selectedCourseType]);
 
   // Fetch data when debounced filters or pagination change
   useEffect(() => {
     fetchOngoingClasses();
-  }, [currentPage, debouncedSearch, debouncedCourseTitle, debouncedCourseCode, debouncedCourseRunId, selectedTrainer, debouncedStartDate, debouncedEndDate]);
+  }, [currentPage, debouncedSearch, debouncedCourseTitle, debouncedCourseCode, debouncedCourseRunId, selectedTrainer, selectedClassStatus, selectedClassType, selectedCourseType, debouncedStartDate, debouncedEndDate]);
 
   // Date formatting function
   const formatDateInput = (value: string) => {
@@ -218,6 +225,9 @@ const OngoingClasses: React.FC = () => {
     setCourseCode('');
     setCourseRunId('');
     setSelectedTrainer('');
+    setSelectedClassStatus('all');
+    setSelectedClassType('all');
+    setSelectedCourseType('all');
     setStartDateFrom('');
     setEndDateUntil('');
     setCurrentPage(0);
@@ -226,10 +236,12 @@ const OngoingClasses: React.FC = () => {
   const handleViewDetails = (classItem: any) => {
     setEditingCourseRun(classItem);
     setSelectedCourseRunId(classItem.courseRunId);
+    setClassListReturnTo(AdminPage.OngoingClasses);
     setAdminPage(AdminPage.ClassDetail);
   };
 
   const handleEditClass = (classItem: OngoingClass) => {
+    setClassListReturnTo(AdminPage.OngoingClasses);
     setAdminPage(AdminPage.EditClass);
   };
 
@@ -378,6 +390,48 @@ const OngoingClasses: React.FC = () => {
                 </div>
 
                 <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Class Status</label>
+                  <select
+                    value={selectedClassStatus}
+                    onChange={(e) => setSelectedClassStatus(e.target.value as 'all' | 'Confirmed' | 'Pending' | 'Cancelled')}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                  >
+                    <option value="all">All</option>
+                    <option value="Confirmed">Confirmed</option>
+                    <option value="Pending">Pending</option>
+                    <option value="Cancelled">Cancelled</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Class Type</label>
+                  <select
+                    value={selectedClassType}
+                    onChange={(e) => setSelectedClassType(e.target.value as 'all' | 'Physical' | 'Virtual' | 'Hybrid')}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                  >
+                    <option value="all">All</option>
+                    <option value="Physical">Physical</option>
+                    <option value="Virtual">Virtual</option>
+                    <option value="Hybrid">Hybrid</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Course Type</label>
+                  <select
+                    value={selectedCourseType}
+                    onChange={(e) => setSelectedCourseType(e.target.value as 'all' | 'WSQ' | 'IBF' | 'Non-WSQ')}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                  >
+                    <option value="all">All</option>
+                    <option value="WSQ">WSQ</option>
+                    <option value="IBF">IBF</option>
+                    <option value="Non-WSQ">Non-WSQ</option>
+                  </select>
+                </div>
+
+                <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Start Date (From)</label>
                   <input
                     type="text"
@@ -458,9 +512,29 @@ const OngoingClasses: React.FC = () => {
                       <td className="px-4 py-2 text-sm font-medium overflow-hidden text-ellipsis"><button type="button" onClick={() => handleViewDetails(classItem)} className="text-left text-blue-600 dark:text-blue-400 hover:underline">{classItem.courseTitle}</button></td>
                       <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.courseCode}</td>
                       <td className="px-4 py-2 whitespace-nowrap text-sm">
-                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(classItem.classStatus)}`}>{classItem.classStatus}</span>
+                        <select
+                          value={classItem.classStatus}
+                          onChange={async (e) => {
+                            const newStatus = e.target.value;
+                            try {
+                              await fetch(getApiUrl('/api/admin/ongoing-classes'), {
+                                method: 'PUT',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ id: classItem.id, class_status: newStatus }),
+                              });
+                              setOngoingClasses(prev => prev.map(c => c.id === classItem.id ? { ...c, classStatus: newStatus } : c));
+                            } catch { /* silent */ }
+                          }}
+                          className={`text-xs font-semibold rounded-full px-2 py-1 border-0 cursor-pointer focus:ring-2 focus:ring-blue-500 ${getStatusColor(classItem.classStatus)}`}
+                        >
+                          <option value="Confirmed">Confirmed</option>
+                          <option value="Pending">Pending</option>
+                          <option value="Cancelled">Cancelled</option>
+                        </select>
                       </td>
-                      <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.classType || 'Physical'}</td>
+                      <td className="px-4 py-2 whitespace-nowrap text-sm">
+                        <span className={`px-2 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full ${(classItem.classType || 'Physical') === 'Virtual' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300' : (classItem.classType || 'Physical') === 'Hybrid' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300' : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'}`}>{classItem.classType || 'Physical'}</span>
+                      </td>
                       <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{formatDate(classItem.startDate)}</td>
                       <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{formatDate(classItem.endDate)}</td>
                       <td className="px-4 py-2 whitespace-nowrap text-sm text-center text-gray-700 dark:text-gray-200">{classItem.numOfTrainee}</td>
@@ -472,8 +546,8 @@ const OngoingClasses: React.FC = () => {
                           size="sm"
                           onClick={() => handleViewDetails(classItem)}
                         >
-                          <Icon name={IconName.Edit} className="w-4 h-4 mr-1" />
-                          Details
+                          <Icon name={IconName.Eye} className="w-4 h-4 mr-1" />
+                          View
                         </Button>
                       </td>
                     </tr>
@@ -488,23 +562,30 @@ const OngoingClasses: React.FC = () => {
                 <p className="text-sm text-gray-500 dark:text-gray-400">
                   Showing {currentPage * ITEMS_PER_PAGE + 1} to {Math.min((currentPage + 1) * ITEMS_PER_PAGE, total)} of {total} classes
                 </p>
-                <div className="flex gap-2">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setCurrentPage(Math.max(0, currentPage - 1))}
-                    disabled={currentPage === 0}
-                  >
-                    Previous
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setCurrentPage(Math.min(totalPages - 1, currentPage + 1))}
-                    disabled={currentPage >= totalPages - 1}
-                  >
-                    Next
-                  </Button>
+                <div className="flex items-center gap-1">
+                  <Button variant="ghost" size="sm" onClick={() => setCurrentPage(0)} disabled={currentPage === 0}>First</Button>
+                  <Button variant="ghost" size="sm" onClick={() => setCurrentPage(currentPage - 1)} disabled={currentPage === 0}>Prev</Button>
+                  {(() => {
+                    const pages: number[] = [];
+                    const maxVisible = 5;
+                    let start = Math.max(0, currentPage - Math.floor(maxVisible / 2));
+                    let end = Math.min(totalPages - 1, start + maxVisible - 1);
+                    if (end - start < maxVisible - 1) start = Math.max(0, end - maxVisible + 1);
+                    if (start > 0) pages.push(0);
+                    if (start > 1) pages.push(-1);
+                    for (let i = start; i <= end; i++) pages.push(i);
+                    if (end < totalPages - 2) pages.push(-2);
+                    if (end < totalPages - 1) pages.push(totalPages - 1);
+                    return pages.map((p, idx) =>
+                      p < 0 ? (
+                        <span key={`ellipsis-${idx}`} className="px-1 text-gray-400 dark:text-gray-500">...</span>
+                      ) : (
+                        <button key={p} onClick={() => setCurrentPage(p)} className={`px-3 py-1 text-sm rounded-md ${p === currentPage ? 'bg-blue-600 text-white font-semibold' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'}`}>{p + 1}</button>
+                      )
+                    );
+                  })()}
+                  <Button variant="ghost" size="sm" onClick={() => setCurrentPage(currentPage + 1)} disabled={currentPage >= totalPages - 1}>Next</Button>
+                  <Button variant="ghost" size="sm" onClick={() => setCurrentPage(totalPages - 1)} disabled={currentPage >= totalPages - 1}>Last</Button>
                 </div>
               </div>
             )}

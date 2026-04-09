@@ -10,10 +10,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const { email, full_name, telephone, roles, password } = req.body;
 
     // Basic validation
-    if (!email || !full_name || !telephone || !roles || roles.length === 0 || !password) {
+    if (!email || !full_name || !roles || roles.length === 0 || !password) {
         return res.status(400).json({
             success: false,
-            message: 'Missing required fields: email, full_name, telephone, roles, password'
+            message: 'Missing required fields: email, full_name, roles, password'
         });
     }
 

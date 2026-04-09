@@ -30,7 +30,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
        JOIN app_user au ON au.id = e.user_id
        LEFT JOIN learner_profile lp ON lp.user_id = au.id
        WHERE e.course_run_id = $1
-         AND e.enrolment_status != 'Admin Removed'
+         AND e.enrolment_status IS DISTINCT FROM 'Admin Removed'
        ORDER BY au.full_name ASC`,
       [courseRunId]
     );

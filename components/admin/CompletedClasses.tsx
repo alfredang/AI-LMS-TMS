@@ -8,6 +8,7 @@ import { authService } from '@lib/services/authService';
 import { AdminPage } from '@app-types';
 
 interface CompletedClass {
+  id: string;
   courseRunId: string;
   courseTitle: string;
   courseCode: string;
@@ -58,7 +59,7 @@ interface SyncResult {
 }
 
 const CompletedClasses: React.FC = () => {
-  const { setAdminPage, setSelectedCourseRunId, setEditingCourseRun } = useLms();
+  const { setAdminPage, setSelectedCourseRunId, setEditingCourseRun, setClassListReturnTo } = useLms();
   const [completedClasses, setCompletedClasses] = useState<CompletedClass[]>([]);
   const [statistics, setStatistics] = useState<Statistics>({
     completedClassesFound: 0,
@@ -75,6 +76,8 @@ const CompletedClasses: React.FC = () => {
   const [syncResults, setSyncResults] = useState<SyncResult[] | null>(null);
   const [syncSummary, setSyncSummary] = useState<any>(null);
   const [syncError, setSyncError] = useState('');
+  const [syncProgress, setSyncProgress] = useState({ completed: 0, total: 0, currentId: '' });
+  const [skipExisting, setSkipExisting] = useState(true);
 
   // Search and filter states
   const [searchQuery, setSearchQuery] = useState('');
@@ -83,6 +86,9 @@ const CompletedClasses: React.FC = () => {
   const [courseCode, setCourseCode] = useState('');
   const [courseRunId, setCourseRunId] = useState('');
   const [selectedTrainer, setSelectedTrainer] = useState('');
+  const [selectedClassStatus, setSelectedClassStatus] = useState<'all' | 'Confirmed' | 'Pending' | 'Cancelled'>('all');
+  const [selectedClassType, setSelectedClassType] = useState<'all' | 'Physical' | 'Virtual' | 'Hybrid'>('all');
+  const [selectedCourseType, setSelectedCourseType] = useState<'all' | 'WSQ' | 'IBF' | 'Non-WSQ'>('all');
   const [startDateFrom, setStartDateFrom] = useState('');
   const [endDateUntil, setEndDateUntil] = useState('');
 
@@ -137,6 +143,9 @@ const CompletedClasses: React.FC = () => {
       if (debouncedCourseCode) params.append('courseCode', debouncedCourseCode);
       if (debouncedCourseRunId) params.append('courseRunId', debouncedCourseRunId);
       if (selectedTrainer) params.append('trainer', selectedTrainer);
+      if (selectedClassStatus !== 'all') params.append('classStatus', selectedClassStatus);
+      if (selectedClassType !== 'all') params.append('classType', selectedClassType);
+      if (selectedCourseType !== 'all') params.append('courseType', selectedCourseType);
       if (debouncedStartDate) params.append('startDateFrom', debouncedStartDate);
       if (debouncedEndDate) params.append('endDateUntil', debouncedEndDate);
 
@@ -196,12 +205,12 @@ const CompletedClasses: React.FC = () => {
   // Reset page immediately for non-debounced filters (dropdowns)
   useEffect(() => {
     setCurrentPage(0);
-  }, [selectedTrainer]);
+  }, [selectedTrainer, selectedClassStatus, selectedClassType, selectedCourseType]);
 
   // Fetch data when debounced filters or pagination change
   useEffect(() => {
     fetchCompletedClasses();
-  }, [currentPage, debouncedSearch, debouncedCourseTitle, debouncedCourseCode, debouncedCourseRunId, selectedTrainer, debouncedStartDate, debouncedEndDate]);
+  }, [currentPage, debouncedSearch, debouncedCourseTitle, debouncedCourseCode, debouncedCourseRunId, selectedTrainer, selectedClassStatus, selectedClassType, selectedCourseType, debouncedStartDate, debouncedEndDate]);
 
   // Date formatting function
   const formatDateInput = (value: string) => {
@@ -231,6 +240,7 @@ const CompletedClasses: React.FC = () => {
     setCourseCode('');
     setCourseRunId('');
     setSelectedTrainer('');
+    setSelectedClassType('all');
     setStartDateFrom('');
     setEndDateUntil('');
     setCurrentPage(0);
@@ -253,28 +263,53 @@ const CompletedClasses: React.FC = () => {
     setSyncError('');
     setSyncResults(null);
     setSyncSummary(null);
+    setSyncProgress({ completed: 0, total: ids.length, currentId: '' });
+
+    const BATCH_SIZE = 5;
+    const allResults: SyncResult[] = [];
+    const allSkippedExisting: { courseRunId: string; courseTitle: string }[] = [];
+    const authToken = authService.getAuthToken();
 
     try {
-      const authToken = authService.getAuthToken();
-      const response = await fetch(getApiUrl('/api/admin/sync-completed-classes?app=app1'), {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(authToken && { 'Authorization': `Bearer ${authToken}` }),
-        },
-        body: JSON.stringify({ courseRunIds: ids }),
+      for (let i = 0; i < ids.length; i += BATCH_SIZE) {
+        const batch = ids.slice(i, i + BATCH_SIZE);
+        setSyncProgress({ completed: i, total: ids.length, currentId: batch[0] });
+
+        const response = await fetch(getApiUrl(`/api/admin/sync-completed-classes?app=app1&skipExisting=${skipExisting ? '1' : '0'}`), {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(authToken && { 'Authorization': `Bearer ${authToken}` }),
+          },
+          body: JSON.stringify({ courseRunIds: batch }),
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          if (data.results) allResults.push(...data.results);
+          if (data.skippedExisting) allSkippedExisting.push(...data.skippedExisting);
+          setSyncResults([...allResults]);
+        } else {
+          setSyncError(data.error || `Batch failed at ID ${batch[0]}`);
+          break;
+        }
+      }
+
+      setSyncProgress({ completed: ids.length, total: ids.length, currentId: '' });
+
+      // Build combined summary
+      setSyncSummary({
+        alreadyInDb: allSkippedExisting.length,
+        pulledFromSsg: allResults.length,
+        totalCourseRuns: allResults.length,
+        totalEnrolmentsFetched: allResults.reduce((s, r) => s + r.ssgEnrolmentsFetched, 0),
+        totalEnrolmentsInserted: allResults.reduce((s, r) => s + r.ssgEnrolmentsInserted, 0),
+        skippedExisting: allSkippedExisting,
       });
 
-      const data = await response.json();
-
-      if (data.success) {
-        setSyncResults(data.results);
-        setSyncSummary(data.summary);
-        // Refresh the table
-        fetchCompletedClasses();
-      } else {
-        setSyncError(data.error || 'Sync failed. Please try again.');
-      }
+      // Refresh the table
+      fetchCompletedClasses();
     } catch (err) {
       setSyncError(err instanceof Error ? err.message : 'Network error. Please try again.');
     } finally {
@@ -288,11 +323,14 @@ const CompletedClasses: React.FC = () => {
     setSyncResults(null);
     setSyncSummary(null);
     setSyncError('');
+    setSyncProgress({ completed: 0, total: 0, currentId: '' });
+    setSkipExisting(true);
   };
 
   const handleViewDetails = (classItem: any) => {
     setEditingCourseRun(classItem);
     setSelectedCourseRunId(classItem.courseRunId);
+    setClassListReturnTo(AdminPage.CompletedClasses);
     setAdminPage(AdminPage.ClassDetail);
   };
 
@@ -351,6 +389,23 @@ const CompletedClasses: React.FC = () => {
                 <span className="text-xs text-gray-500 dark:text-gray-400">
                   {parseCourseRunIds(syncInput).length} unique IDs detected
                 </span>
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <span className="text-xs text-gray-600 dark:text-gray-400">Skip existing</span>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={skipExisting}
+                    onClick={() => setSkipExisting(!skipExisting)}
+                    disabled={syncing}
+                    className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                      skipExisting ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'
+                    } disabled:opacity-50`}
+                  >
+                    <span className={`inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform ${
+                      skipExisting ? 'translate-x-[18px]' : 'translate-x-[3px]'
+                    }`} />
+                  </button>
+                </label>
               </div>
 
               {syncError && (
@@ -359,18 +414,30 @@ const CompletedClasses: React.FC = () => {
                 </div>
               )}
 
-              {!syncResults && (
+              {/* Progress bar during sync */}
+              {syncing && syncProgress.total > 0 && (
+                <div className="mb-4">
+                  <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mb-1">
+                    <span>Syncing: {syncProgress.completed} / {syncProgress.total} course runs</span>
+                    <span>{Math.round((syncProgress.completed / syncProgress.total) * 100)}%</span>
+                  </div>
+                  <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3 overflow-hidden">
+                    <div
+                      className="bg-blue-600 h-3 rounded-full transition-all duration-500 ease-out"
+                      style={{ width: `${Math.max(2, (syncProgress.completed / syncProgress.total) * 100)}%` }}
+                    />
+                  </div>
+                  <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                    ~{Math.ceil(((syncProgress.total - syncProgress.completed) / 5) * 30)}s remaining (est.)
+                  </p>
+                </div>
+              )}
+
+              {!syncResults && !syncing && (
                 <div className="flex justify-end gap-2">
-                  <Button variant="ghost" size="sm" onClick={closeSyncModal} disabled={syncing}>Cancel</Button>
-                  <Button variant="primary" size="sm" onClick={handleSyncFromSSG} disabled={syncing || parseCourseRunIds(syncInput).length === 0}>
-                    {syncing ? (
-                      <span className="flex items-center gap-2">
-                        <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></span>
-                        Syncing from SSG...
-                      </span>
-                    ) : (
-                      `Sync ${parseCourseRunIds(syncInput).length} Course Runs`
-                    )}
+                  <Button variant="ghost" size="sm" onClick={closeSyncModal}>Cancel</Button>
+                  <Button variant="primary" size="sm" onClick={handleSyncFromSSG} disabled={parseCourseRunIds(syncInput).length === 0}>
+                    Sync {parseCourseRunIds(syncInput).length} Course Runs
                   </Button>
                 </div>
               )}
@@ -378,10 +445,14 @@ const CompletedClasses: React.FC = () => {
               {/* Sync Results */}
               {syncSummary && syncResults && (
                 <div className="mt-4">
-                  <div className="grid grid-cols-3 gap-3 mb-4">
+                  <div className="grid grid-cols-4 gap-3 mb-4">
+                    <div className="bg-gray-50 dark:bg-gray-700/30 rounded-lg p-3 text-center">
+                      <p className="text-lg font-bold text-gray-500">{syncSummary.alreadyInDb || 0}</p>
+                      <p className="text-xs text-gray-600 dark:text-gray-400">Already in DB</p>
+                    </div>
                     <div className="bg-blue-50 dark:bg-blue-900/30 rounded-lg p-3 text-center">
-                      <p className="text-lg font-bold text-blue-600">{syncSummary.totalCourseRuns}</p>
-                      <p className="text-xs text-gray-600 dark:text-gray-400">Course Runs</p>
+                      <p className="text-lg font-bold text-blue-600">{syncSummary.pulledFromSsg || syncSummary.totalCourseRuns}</p>
+                      <p className="text-xs text-gray-600 dark:text-gray-400">Pulled from SSG</p>
                     </div>
                     <div className="bg-green-50 dark:bg-green-900/30 rounded-lg p-3 text-center">
                       <p className="text-lg font-bold text-green-600">{syncSummary.totalEnrolmentsFetched}</p>
@@ -404,6 +475,16 @@ const CompletedClasses: React.FC = () => {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                        {syncSummary.skippedExisting?.map((s: any) => (
+                          <tr key={`existing-${s.courseRunId}`} className="bg-gray-50/50 dark:bg-gray-700/10">
+                            <td className="px-3 py-1.5 text-gray-400 dark:text-gray-500 font-mono">{s.courseRunId}</td>
+                            <td className="px-3 py-1.5 text-gray-400 dark:text-gray-500 truncate max-w-[200px]">{s.courseTitle}</td>
+                            <td className="px-3 py-1.5 text-center text-gray-400 dark:text-gray-500">—</td>
+                            <td className="px-3 py-1.5 text-center">
+                              <span className="text-gray-400 dark:text-gray-500 text-xs">In DB</span>
+                            </td>
+                          </tr>
+                        ))}
                         {syncResults.map((r) => (
                           <tr key={r.courseRunId} className="hover:bg-gray-50 dark:hover:bg-gray-700/30">
                             <td className="px-3 py-1.5 text-gray-700 dark:text-gray-300 font-mono">{r.courseRunId}</td>
@@ -539,6 +620,48 @@ const CompletedClasses: React.FC = () => {
                 </div>
 
                 <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Class Status</label>
+                  <select
+                    value={selectedClassStatus}
+                    onChange={(e) => setSelectedClassStatus(e.target.value as 'all' | 'Confirmed' | 'Pending' | 'Cancelled')}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                  >
+                    <option value="all">All</option>
+                    <option value="Confirmed">Confirmed</option>
+                    <option value="Pending">Pending</option>
+                    <option value="Cancelled">Cancelled</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Class Type</label>
+                  <select
+                    value={selectedClassType}
+                    onChange={(e) => setSelectedClassType(e.target.value as 'all' | 'Physical' | 'Virtual' | 'Hybrid')}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                  >
+                    <option value="all">All</option>
+                    <option value="Physical">Physical</option>
+                    <option value="Virtual">Virtual</option>
+                    <option value="Hybrid">Hybrid</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Course Type</label>
+                  <select
+                    value={selectedCourseType}
+                    onChange={(e) => setSelectedCourseType(e.target.value as 'all' | 'WSQ' | 'IBF' | 'Non-WSQ')}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                  >
+                    <option value="all">All</option>
+                    <option value="WSQ">WSQ</option>
+                    <option value="IBF">IBF</option>
+                    <option value="Non-WSQ">Non-WSQ</option>
+                  </select>
+                </div>
+
+                <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Start Date (From)</label>
                   <input
                     type="text"
@@ -575,7 +698,7 @@ const CompletedClasses: React.FC = () => {
             <Icon name={IconName.CheckCircle} className="w-12 h-12 text-gray-400 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-gray-900 mb-2 dark:text-white">No completed classes found</h3>
             <p className="text-gray-500 mb-6 dark:text-gray-400">
-              {searchQuery || courseTitle || courseCode || courseRunId || selectedTrainer || startDateFrom || endDateUntil
+              {searchQuery || courseTitle || courseCode || courseRunId || selectedTrainer || selectedClassType !== 'all' || selectedCourseType !== 'all' || startDateFrom || endDateUntil
                 ? "No classes match your current search criteria."
                 : "There are no completed classes in the system yet."}
             </p>
@@ -619,14 +742,34 @@ const CompletedClasses: React.FC = () => {
                       <td className="px-4 py-2 text-sm font-medium overflow-hidden text-ellipsis"><button type="button" onClick={() => handleViewDetails(classItem)} className="text-left text-blue-600 dark:text-blue-400 hover:underline">{classItem.courseTitle}</button></td>
                       <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.courseCode}</td>
                       <td className="px-4 py-2 whitespace-nowrap text-sm">
-                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                          classItem.classStatus === 'Confirmed' ? 'bg-green-100 text-green-800' :
-                          classItem.classStatus === 'Pending' ? 'bg-yellow-100 text-yellow-800' :
-                          classItem.classStatus === 'Cancelled' ? 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-200' :
-                          'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
-                        }`}>{classItem.classStatus}</span>
+                        <select
+                          value={classItem.classStatus}
+                          onChange={async (e) => {
+                            const newStatus = e.target.value;
+                            try {
+                              await fetch(getApiUrl('/api/admin/completed-classes'), {
+                                method: 'PUT',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ id: classItem.id, class_status: newStatus }),
+                              });
+                              setCompletedClasses(prev => prev.map(c => c.id === classItem.id ? { ...c, classStatus: newStatus } : c));
+                            } catch { /* silent */ }
+                          }}
+                          className={`text-xs font-semibold rounded-full px-2 py-1 border-0 cursor-pointer focus:ring-2 focus:ring-blue-500 ${
+                            classItem.classStatus === 'Confirmed' ? 'bg-green-100 text-green-800' :
+                            classItem.classStatus === 'Pending' ? 'bg-yellow-100 text-yellow-800' :
+                            classItem.classStatus === 'Cancelled' ? 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-200' :
+                            'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+                          }`}
+                        >
+                          <option value="Confirmed">Confirmed</option>
+                          <option value="Pending">Pending</option>
+                          <option value="Cancelled">Cancelled</option>
+                        </select>
                       </td>
-                      <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.classType || 'Physical'}</td>
+                      <td className="px-4 py-2 whitespace-nowrap text-sm">
+                        <span className={`px-2 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full ${(classItem.classType || 'Physical') === 'Virtual' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300' : (classItem.classType || 'Physical') === 'Hybrid' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300' : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'}`}>{classItem.classType || 'Physical'}</span>
+                      </td>
                       <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{formatDate(classItem.startDate)}</td>
                       <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{formatDate(classItem.endDate)}</td>
                       <td className="px-4 py-2 whitespace-nowrap text-sm text-center text-gray-700 dark:text-gray-200">{classItem.numOfTrainee}</td>
@@ -650,22 +793,58 @@ const CompletedClasses: React.FC = () => {
                 <p className="text-sm text-gray-500 dark:text-gray-400">
                   Showing {currentPage * ITEMS_PER_PAGE + 1} to {Math.min((currentPage + 1) * ITEMS_PER_PAGE, total)} of {total} classes
                 </p>
-                <div className="flex gap-2">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setCurrentPage(Math.max(0, currentPage - 1))}
-                    disabled={currentPage === 0}
-                  >
-                    Previous
+                <div className="flex items-center gap-1">
+                  {/* First */}
+                  <Button variant="ghost" size="sm" onClick={() => setCurrentPage(0)} disabled={currentPage === 0}>
+                    First
                   </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setCurrentPage(Math.min(totalPages - 1, currentPage + 1))}
-                    disabled={currentPage >= totalPages - 1}
-                  >
+                  {/* Previous */}
+                  <Button variant="ghost" size="sm" onClick={() => setCurrentPage(currentPage - 1)} disabled={currentPage === 0}>
+                    Prev
+                  </Button>
+
+                  {/* Page numbers */}
+                  {(() => {
+                    const pages: number[] = [];
+                    const maxVisible = 5;
+                    let start = Math.max(0, currentPage - Math.floor(maxVisible / 2));
+                    let end = Math.min(totalPages - 1, start + maxVisible - 1);
+                    if (end - start < maxVisible - 1) start = Math.max(0, end - maxVisible + 1);
+
+                    if (start > 0) pages.push(0);
+                    if (start > 1) pages.push(-1); // ellipsis
+
+                    for (let i = start; i <= end; i++) pages.push(i);
+
+                    if (end < totalPages - 2) pages.push(-2); // ellipsis
+                    if (end < totalPages - 1) pages.push(totalPages - 1);
+
+                    return pages.map((p, idx) =>
+                      p < 0 ? (
+                        <span key={`ellipsis-${idx}`} className="px-1 text-gray-400 dark:text-gray-500">...</span>
+                      ) : (
+                        <button
+                          key={p}
+                          onClick={() => setCurrentPage(p)}
+                          className={`px-3 py-1 text-sm rounded-md ${
+                            p === currentPage
+                              ? 'bg-blue-600 text-white font-semibold'
+                              : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                          }`}
+                        >
+                          {p + 1}
+                        </button>
+                      )
+                    );
+                  })()}
+
+                  {/* Next */}
+                  <Button variant="ghost" size="sm" onClick={() => setCurrentPage(currentPage + 1)} disabled={currentPage >= totalPages - 1}>
                     Next
+                  </Button>
+                  {/* Last */}
+                  <Button variant="ghost" size="sm" onClick={() => setCurrentPage(totalPages - 1)} disabled={currentPage >= totalPages - 1}>
+                    Last
                   </Button>
                 </div>
               </div>

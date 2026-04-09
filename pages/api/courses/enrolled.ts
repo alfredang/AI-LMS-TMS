@@ -78,7 +78,8 @@ export default async function handler(
         e.certificate,
         cr.start_date,
         cr.end_date,
-        cr.class_status
+        cr.class_status,
+        COALESCE(cr.class_type, 'Physical') AS class_type
       FROM app_user u
       JOIN enrollment e ON u.id = e.user_id
       JOIN course c ON e.course_id = c.id
@@ -91,7 +92,7 @@ export default async function handler(
         GROUP BY course_id
       ) assessment_count ON c.id = assessment_count.course_id
       WHERE u.id = $1
-        AND e.enrolment_status != 'Admin Removed'
+        AND e.enrolment_status IS DISTINCT FROM 'Admin Removed'
       ORDER BY cr.start_date DESC
     `;
 
@@ -118,6 +119,7 @@ export default async function handler(
       startDate: row.start_date,
       endDate: row.end_date,
       classStatus: row.class_status,
+      classType: (row as any).class_type || 'Physical',
       enrolmentId: row.enrolment_id || null,
       enrolmentStatus: row.enrolment_status || null,
       nric: row.nric || null,

@@ -6,6 +6,7 @@ import AiChatbot from '../components/AiChatbot';
 import { Icon, IconName } from '../components/ui/Icon';
 import { Card } from '../components/ui/Card';
 import FinanceManagementView from '../components/training-provider/FinanceManagementView';
+import WorkflowGuidesView from '../components/training-provider/WorkflowGuidesView';
 import AllCourseRunsView from '../components/finance/AllCourseRunsView';
 import {
   SearchGrantView,
@@ -81,7 +82,8 @@ type FinancePage =
   | 'tpgEnrollLearners' | 'tpgUploadEnrolments' | 'tpgSearchEnrolment' | 'tpgViewEnrolment' | 'tpgUpdateEnrolment' | 'tpgCancelEnrolment' | 'tpgUpdateEnrolmentFees'
   | 'tpgSessionAttendance' | 'tpgCheckAttendance'
   | 'tpgSubmitAssessment' | 'tpgUpdateAssessment' | 'tpgSearchAssessments' | 'tpgViewAssessment'
-  | 'tpgSearchGrant' | 'tpgViewGrantStatus';
+  | 'tpgSearchGrant' | 'tpgViewGrantStatus'
+  | 'workflowGuides';
 
 const FinanceLayout: React.FC = () => {
   const { currentView, financePage: ctxFinancePage, setFinancePage: ctxSetFinancePage } = useLms();
@@ -90,6 +92,7 @@ const FinanceLayout: React.FC = () => {
   const setPage = (p: FinancePage) => ctxSetFinancePage(p);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isDesktopSidebarCollapsed, setIsDesktopSidebarCollapsed] = useState(false);
+  const [selectedWorkflowId, setSelectedWorkflowId] = useState<string | null>(null);
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
     courseRunAutomations: true,
     claimManagement: true,
@@ -104,6 +107,7 @@ const FinanceLayout: React.FC = () => {
     tpgGrant: false,
     bizfile: false,
     quickbooks: false,
+    workflowGuides: false,
     usefulLinks: true,
   });
 
@@ -116,7 +120,7 @@ const FinanceLayout: React.FC = () => {
     if (page.startsWith('tpg')) {
       setOpenSections(prev => ({ ...prev, tpgManagement: true }));
     }
-    if (page.startsWith('auto')) {
+    if (page.startsWith('auto') || page === 'allCourseRuns') {
       setOpenSections(prev => ({ ...prev, courseRunAutomations: true }));
     }
     if (['claimCheck', 'viewClaim', 'cancelClaim', 'uploadDocument'].includes(page)) {
@@ -542,6 +546,7 @@ const FinanceLayout: React.FC = () => {
       // TPG Management — Grant
       case 'tpgSearchGrant': return <SearchGrantView />;
       case 'tpgViewGrantStatus': return <ViewGrantStatusView />;
+      case 'workflowGuides': return <WorkflowGuidesView visibleWorkflows={['billing-history', 'proforma-invoice', 'invoice', 'receipt', 'ssg-process-steps']} initialWorkflowId={selectedWorkflowId || undefined} />;
       default:
         return <FinanceManagementView />;
     }
@@ -617,6 +622,7 @@ const FinanceLayout: React.FC = () => {
       case 'tpgViewAssessment': return 'View Assessment';
       case 'tpgSearchGrant': return 'Search Grant';
       case 'tpgViewGrantStatus': return 'View Grant Status';
+      case 'workflowGuides': return 'Workflow Guides';
       default: return 'Financial Dashboard';
     }
   };
@@ -681,9 +687,8 @@ const FinanceLayout: React.FC = () => {
   const sidebarContent = (
     <nav className="space-y-6 p-4 bg-white dark:bg-slate-800 text-gray-900 dark:text-white h-full">
       <NavItem target="dashboard" label="Financial Dashboard" />
-      <NavItem target="allCourseRuns" label="All Course Runs" />
-
-      <NavSection title="Course Run Automations" sectionKey="courseRunAutomations">
+      <NavSection title="FMS (n8n)" sectionKey="courseRunAutomations">
+        <NavItem target="allCourseRuns" label="View All Course Runs" isSubItem />
         <NavItem target="autoProcessEnrolments" label="Process Enrolments" isSubItem />
         <NavItem target="autoManualEnrolment" label="Manual Enrolment" isSubItem />
         <NavItem target="autoCreateEnrolmentsErrorStatus" label="Create Enrolments For Error Status" isSubItem />
@@ -774,6 +779,26 @@ const FinanceLayout: React.FC = () => {
         <NavItem target="bizfileSsic" label="Entity SSIC" isSubItem />
         <NavItem target="bizfileCapital" label="Company Capital" isSubItem />
         <NavItem target="bizfileShareholders" label="Company Shareholders" isSubItem />
+      </NavSection>
+
+      <NavSection title="Workflow Guides" sectionKey="workflowGuides">
+        {[
+          { id: 'billing-history', label: 'Billing History', icon: '💰' },
+          { id: 'proforma-invoice', label: 'Proforma Invoice', icon: '🧾' },
+          { id: 'invoice', label: 'Invoice', icon: '📄' },
+          { id: 'receipt', label: 'Receipt', icon: '🧾' },
+          { id: 'ssg-process-steps', label: 'SSG Process Steps', icon: '🏛️' },
+        ].map(item => (
+          <a
+            key={item.id}
+            href="#"
+            onClick={(e) => { e.preventDefault(); navigateTo('workflowGuides'); setSelectedWorkflowId(item.id); }}
+            className={`flex items-center gap-2 rounded-md px-3 py-2 ml-4 text-sm text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-slate-700 dark:hover:text-white transition-colors`}
+          >
+            <span className="text-sm">{item.icon}</span>
+            <span>{item.label}</span>
+          </a>
+        ))}
       </NavSection>
 
       <NavSection title="Useful Links" sectionKey="usefulLinks">

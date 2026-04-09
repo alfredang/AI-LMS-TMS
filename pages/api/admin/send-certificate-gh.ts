@@ -167,9 +167,10 @@ Tel: 61000613 | Email: support@tertiaryinfotech.com | WhatsApp: https://wa.me/65
       .replace(/\{COMPANY_WEBSITE\}/g, tp.companyWebsite || '')
       .replace(/\{CERTIFICATE_URL\}/g, '');
 
+    const isHtml = /<[a-z][\s\S]*>/i.test(bodyText);
     const htmlBody = `
       <div style="font-family: Arial, sans-serif; color: #333;">
-        ${bodyText.split('\n').map(line => line.trim() ? `<p>${line}</p>` : '<br/>').join('\n        ')}
+        ${isHtml ? bodyText : bodyText.split('\n').map(line => line.trim() ? `<p style="margin:0 0 2px 0;">${line}</p>` : '<br/>').join('\n        ')}
       </div>
     `;
 
