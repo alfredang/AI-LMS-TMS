@@ -15,22 +15,13 @@ const COMMIT_HASH = (() => {
     const v = fs.readFileSync(path.join(__dirname, '.version'), 'utf8').trim();
     if (v) return v;
   } catch {}
-  // Get commit hash
-  let hash = 'dev';
-  if (process.env.VERCEL_GIT_COMMIT_SHA) {
-    hash = process.env.VERCEL_GIT_COMMIT_SHA.substring(0, 7);
-  } else {
-    try { hash = execSync('git rev-parse --short HEAD').toString().trim(); } catch {}
-  }
   // Get commit timestamp, fall back to build time
-  let timestamp;
   try {
     const isoDate = execSync('git log -1 --format=%ci').toString().trim();
-    timestamp = formatDate(new Date(isoDate));
+    return formatDate(new Date(isoDate));
   } catch {
-    timestamp = formatDate(new Date());
+    return formatDate(new Date());
   }
-  return `${hash} ${timestamp}`;
 })();
 
 /** @type {import('next').NextConfig} */
