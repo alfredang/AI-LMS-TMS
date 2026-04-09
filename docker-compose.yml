@@ -18,6 +18,8 @@ services:
     volumes:
       # Persist uploaded files across container restarts and redeployments
       - uploads_data:/app/public/uploads
+      # Persist Nemo AI memory across restarts
+      - nemo_data:/app/data
     restart: unless-stopped
     depends_on:
       db:
@@ -65,3 +67,4 @@ services:
 volumes:
   postgres_data:
   uploads_data:
+  nemo_data:
