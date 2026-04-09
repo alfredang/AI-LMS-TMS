@@ -296,7 +296,7 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [userRoles, setUserRoles] = useState<UserRole[]>([]); // All roles the user has
   const [currentView, setCurrentView] = useState<View>(View.Dashboard);
   const [adminPage, setAdminPage] = useState<AdminPage>(AdminPage.Dashboard);
-  const [trainerPage, setTrainerPage] = useState<TrainerPage>(TrainerPage.EAttendance);
+  const [trainerPage, setTrainerPage] = useState<TrainerPage>(TrainerPage.MyClasses);
   const [selectedCourseRunId, setSelectedCourseRunId] = useState<string | null>(null);
   const [pendingAttendanceCourseRunId, setPendingAttendanceCourseRunId] = useState<string | null>(null);
   const [pendingGradingCourseRunId, setPendingGradingCourseRunId] = useState<string | null>(null);
@@ -648,10 +648,10 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           if (matchedTrainerPage) {
             setTrainerPage(matchedTrainerPage);
           } else {
-            setTrainerPage(TrainerPage.EAttendance);
+            setTrainerPage(TrainerPage.MyClasses);
           }
         } else {
-          setTrainerPage(TrainerPage.EAttendance);
+          setTrainerPage(TrainerPage.MyClasses);
         }
 
         // Sync the selected course state
