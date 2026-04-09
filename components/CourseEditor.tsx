@@ -405,7 +405,7 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
     }, [courseEditMode, isNewCourse, course.id, hasRealId]);
 
     useEffect(() => {
-        if (role !== UserRole.Admin) return;
+        if (role !== UserRole.Admin && role !== UserRole.Developer) return;
         let cancelled = false;
         const loadTrainers = async () => {
             try {
@@ -1842,7 +1842,7 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                     </Card>
                     )}
 
-                    {role === UserRole.Admin ? (
+                    {(role === UserRole.Admin || role === UserRole.Developer) && (
                         <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
                             <h3 className="text-xl font-bold mb-4 dark:text-white">Approved Trainers</h3>
                             <div className="space-y-4">
@@ -1921,7 +1921,9 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                 </div>
                             </div>
                         </Card>
-                    ) : (
+                    )}
+
+                    {role === UserRole.Developer && (
                         <div className="space-y-4">
                             <h3 className="text-xl font-bold px-1">Lesson</h3>
                             {course.topics.map(topic => (
