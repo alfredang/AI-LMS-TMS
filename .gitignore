@@ -140,4 +140,7 @@ GOOGLE_KEY_B64.txt
 CLAUDE.md
 .mcp.json
 .claude/
+!.claude/CLAUDE.md
+!.claude/skills/
+!.claude/skills/**
 .project/
