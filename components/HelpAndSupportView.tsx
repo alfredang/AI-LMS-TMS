@@ -22,8 +22,8 @@ const HelpAndSupportView: React.FC = () => {
                         <div className="space-y-4">
                             <InfoItem label="Company Address" value="12 Woodland Square #07-85/86/87 Woods Square Tower 1, Singapore 737715" />
                             <InfoItem label="Opening Hours" value="Mon - Fri, 9:00 AM - 6:00 PM" />
-                            <InfoItem label="Hotline Tel" value="61234567" />
-                            <InfoItem label="Support Email" value="support@tertiary-lms.com" />
+                            <InfoItem label="Hotline Tel" value="+65 6100 0613" />
+                            <InfoItem label="Support Email" value="enquiry@tertiaryinfotech.com" />
                         </div>
                     </Card>
                 </div>
@@ -31,7 +31,6 @@ const HelpAndSupportView: React.FC = () => {
                 {/* Right Column: Ticketing */}
                 <div className="lg:col-span-2">
                     <Card className="p-6">
-                        <h3 className="text-xl font-bold mb-4">All Tickets</h3>
                         <div className="text-center py-12 px-6 bg-gray-50 rounded-lg">
                             <Icon name={IconName.Chat} className="w-24 h-24 mx-auto mb-6 text-primary" />
                             <h4 className="text-xl font-bold text-on-surface">Need assistance?</h4>

@@ -2,6 +2,9 @@
 FROM node:20-alpine AS builder
 WORKDIR /app
 
+ARG COMMIT_HASH=dev
+ENV NEXT_PUBLIC_COMMIT_HASH=$COMMIT_HASH
+
 COPY package*.json ./
 RUN npm ci
 

@@ -91,6 +91,9 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate, onSelectWorkflo
         logging: false,
         certificate: false,
         workflowGuides: false,
+        wfTraining: false,
+        wfAdmin: false,
+        wfFinance: false,
         referenceLinks: false,
         n8nLinks: false,
         usefulLinks: false,
@@ -132,6 +135,45 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate, onSelectWorkflo
     return (
         <nav className="space-y-6 p-4 bg-white dark:bg-slate-800 text-gray-900 dark:text-white h-full">
             <NavItem page={AdminPage.Dashboard} label="Admin Dashboard" />
+
+            <NavSection title="Workflow Guides" isOpen={openSections.workflowGuides} onToggle={() => toggleSection('workflowGuides')}>
+                <SubSection title="Training" isOpen={openSections.wfTraining} onToggle={() => toggleSection('wfTraining')}>
+                    {[
+                        { id: 'lesson-delivery', label: 'Lesson Delivery', icon: '📚' },
+                        { id: 'assessment', label: 'Assessment', icon: '📝' },
+                    ].map(item => (
+                        <a key={item.id} href="#" onClick={(e) => { e.preventDefault(); setAdminPage(AdminPage.WorkflowGuides); onSelectWorkflow?.(item.id); if (onNavigate) onNavigate(); }} className="flex items-center gap-2 rounded-md px-3 py-2 ml-4 text-sm text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-slate-700 dark:hover:text-white transition-colors">
+                            <span className="text-sm">{item.icon}</span>
+                            <span>{item.label}</span>
+                        </a>
+                    ))}
+                </SubSection>
+                <SubSection title="Admin" isOpen={openSections.wfAdmin} onToggle={() => toggleSection('wfAdmin')}>
+                    {[
+                        { id: 'ssg-process-steps', label: 'SSG Process Steps', icon: '🏛️' },
+                        { id: 'certificate', label: 'Certificate', icon: '🎓' },
+                        { id: 'trainer-invitation', label: 'Trainer Invitation', icon: '📨' },
+                    ].map(item => (
+                        <a key={item.id} href="#" onClick={(e) => { e.preventDefault(); setAdminPage(AdminPage.WorkflowGuides); onSelectWorkflow?.(item.id); if (onNavigate) onNavigate(); }} className="flex items-center gap-2 rounded-md px-3 py-2 ml-4 text-sm text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-slate-700 dark:hover:text-white transition-colors">
+                            <span className="text-sm">{item.icon}</span>
+                            <span>{item.label}</span>
+                        </a>
+                    ))}
+                </SubSection>
+                <SubSection title="Finance" isOpen={openSections.wfFinance} onToggle={() => toggleSection('wfFinance')}>
+                    {[
+                        { id: 'billing-history', label: 'Billing History', icon: '💰' },
+                        { id: 'proforma-invoice', label: 'Proforma Invoice', icon: '🧾' },
+                        { id: 'invoice', label: 'Invoice', icon: '📄' },
+                        { id: 'receipt', label: 'Receipt', icon: '🧾' },
+                    ].map(item => (
+                        <a key={item.id} href="#" onClick={(e) => { e.preventDefault(); setAdminPage(AdminPage.WorkflowGuides); onSelectWorkflow?.(item.id); if (onNavigate) onNavigate(); }} className="flex items-center gap-2 rounded-md px-3 py-2 ml-4 text-sm text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-slate-700 dark:hover:text-white transition-colors">
+                            <span className="text-sm">{item.icon}</span>
+                            <span>{item.label}</span>
+                        </a>
+                    ))}
+                </SubSection>
+            </NavSection>
 
             <NavSection title="Calendar" isOpen={openSections.calendar} onToggle={() => toggleSection('calendar')}>
                 <NavItem page={AdminPage.Calendar} label="View Calendar" isSubItem />
@@ -207,30 +249,6 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate, onSelectWorkflo
                 <NavItem page={AdminPage.DeleteCertificate} label="Delete Certificate" isSubItem />
                 <NavItem page={AdminPage.SendCertificateSG} label="Send Certificate (SG)" isSubItem />
                 <NavItem page={AdminPage.SendCertificateGH} label="Send Certificate (GH)" isSubItem />
-            </NavSection>
-
-            <NavSection title="Workflow Guides" isOpen={openSections.workflowGuides} onToggle={() => toggleSection('workflowGuides')}>
-                {[
-                    { id: 'trainer-invitation', label: 'Trainer Invitation', icon: '📨' },
-                    { id: 'certificate', label: 'Certificate', icon: '🎓' },
-                    { id: 'proforma-invoice', label: 'Proforma Invoice', icon: '🧾' },
-                    { id: 'invoice', label: 'Invoice', icon: '📄' },
-                    { id: 'receipt', label: 'Receipt', icon: '🧾' },
-                    { id: 'billing-history', label: 'Billing History', icon: '💰' },
-                    { id: 'lesson-delivery', label: 'Lesson Delivery', icon: '📚' },
-                    { id: 'assessment', label: 'Assessment', icon: '📝' },
-                    { id: 'ssg-process-steps', label: 'SSG Process Steps', icon: '🏛️' },
-                ].map(item => (
-                    <a
-                        key={item.id}
-                        href="#"
-                        onClick={(e) => { e.preventDefault(); setAdminPage(AdminPage.WorkflowGuides); onSelectWorkflow?.(item.id); if (onNavigate) onNavigate(); }}
-                        className="flex items-center gap-2 rounded-md px-3 py-2 ml-4 text-sm text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-slate-700 dark:hover:text-white transition-colors"
-                    >
-                        <span className="text-sm">{item.icon}</span>
-                        <span>{item.label}</span>
-                    </a>
-                ))}
             </NavSection>
 
             <NavSection title="Reference Links" isOpen={openSections.referenceLinks} onToggle={() => toggleSection('referenceLinks')}>
