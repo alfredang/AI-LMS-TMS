@@ -121,7 +121,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       options: {
         apiKey,
         allowedTools: [],
-        maxTurns: 1,
+        maxTurns: 10,
       },
     })) {
       // Collect text from assistant messages
