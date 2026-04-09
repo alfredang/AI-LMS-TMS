@@ -484,6 +484,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         if (invitation?.status) {
           latestInvitationStatus = invitation.status;
           latestInvitationTrainer = invitation.trainer_name || trainerName;
+        } else {
+          latestInvitationStatus = '';
+          latestInvitationTrainer = '';
         }
         break;
       }

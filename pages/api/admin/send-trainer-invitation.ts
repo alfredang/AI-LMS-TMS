@@ -2,7 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { google } from 'googleapis';
 import pool from '@lib/db';
 import {
-  buildInvitationHtmlEmail,
+  renderInvitationHtmlEmail,
   convertPlainTextToHtml,
   createInvitationToken,
   DEFAULT_TRAINER_INVITATION_BODY,

@@ -103,9 +103,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         endDate: row.end_date,
         classStatus: row.class_status,
         assignedTrainerId: row.assigned_trainer_id,
-        assignedTrainerName: row.assigned_trainer_name,
-        primaryAssignedTrainerName: row.assigned_trainer_name,
-        assignedTrainerEmail: row.assigned_trainer_email,
+        assignedTrainerName: row.all_trainer_names,
+        primaryAssignedTrainerName: row.all_trainer_names,
+        assignedTrainerEmail: row.all_trainer_emails,
         enrollmentCount: parseInt(row.enrollment_count, 10),
       })),
     });

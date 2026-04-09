@@ -734,7 +734,7 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                 </tbody>
                             </table>
                           ) : (
-                            <table className="divide-y divide-gray-200 dark:divide-gray-700" style={{ tableLayout: 'fixed', width: '2230px' }}>
+                            <table className="divide-y divide-gray-200 dark:divide-gray-700" style={{ tableLayout: 'fixed', width: '2340px' }}>
                                 <colgroup>
                                     <col style={{ width: '90px' }} />
                                     <col style={{ width: '420px' }} />
@@ -747,8 +747,8 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                     <col style={{ width: '200px' }} />
                                     <col style={{ width: '200px' }} />
                                     <col style={{ width: '180px' }} />
-                                    <col style={{ width: '120px' }} />
-                                    <col style={{ width: '80px' }} />
+                                    <col style={{ width: '220px' }} />
+                                    <col style={{ width: '90px' }} />
                                 </colgroup>
                                 <thead className="bg-gray-50 dark:bg-gray-700/50">
                                     <tr className="border-b dark:border-gray-700">

@@ -133,8 +133,15 @@ export function renderInvitationTemplate(template: string, replacements: Record<
 }
 
 export function renderInvitationHtmlEmail(template: string, replacements: Record<string, string>, acceptUrl: string, declineUrl: string) {
-  // First do regular text replacements
-  let textWithVars = renderInvitationTemplate(template, replacements);
+  // Protect buttons from being prematurely evaluated as raw links, which convertPlainTextToHtml would wrap in <a> tags
+  const safeReplacements = { ...replacements };
+  safeReplacements['ACCEPT_URL'] = '{PRESERVED_ACCEPT}';
+  safeReplacements['DECLINE_URL'] = '{PRESERVED_DECLINE}';
+  safeReplacements['ACCEPT_BUTTON'] = '{PRESERVED_ACCEPT}';
+  safeReplacements['DECLINE_BUTTON'] = '{PRESERVED_DECLINE}';
+
+  // First do regular text replacements using the safe mapping
+  let textWithVars = renderInvitationTemplate(template, safeReplacements);
   
   // Convert standard text to HTML
   let htmlBody = convertPlainTextToHtml(textWithVars);
@@ -158,9 +165,10 @@ export function renderInvitationHtmlEmail(template: string, replacements: Record
     </tr>
   </table>`;
 
+  htmlBody = htmlBody.replace(/\{PRESERVED_ACCEPT\}/g, acceptButtonHtml);
+  htmlBody = htmlBody.replace(/\{PRESERVED_DECLINE\}/g, declineButtonHtml);
   htmlBody = htmlBody.replace(/\{ACCEPT_BUTTON\}/g, acceptButtonHtml);
   htmlBody = htmlBody.replace(/\{DECLINE_BUTTON\}/g, declineButtonHtml);
-  // Backwards compatibility
   htmlBody = htmlBody.replace(/\{ACCEPT_URL\}/g, acceptButtonHtml);
   htmlBody = htmlBody.replace(/\{DECLINE_URL\}/g, declineButtonHtml);
 
