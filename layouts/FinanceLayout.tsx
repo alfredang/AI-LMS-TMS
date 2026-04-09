@@ -93,8 +93,8 @@ const FinanceLayout: React.FC = () => {
   const [isDesktopSidebarCollapsed, setIsDesktopSidebarCollapsed] = useState(false);
   const [selectedWorkflowId, setSelectedWorkflowId] = useState<string | null>(null);
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
-    courseRunAutomations: true,
-    claimManagement: true,
+    courseRunAutomations: false,
+    claimManagement: false,
     tpgManagement: false,
     tpgCourseRun: false,
     tpgSession: false,
@@ -108,7 +108,7 @@ const FinanceLayout: React.FC = () => {
     wfTraining: false,
     wfAdmin: false,
     wfFinance: false,
-    usefulLinks: true,
+    usefulLinks: false,
   });
 
   const toggleSection = (key: string) => {

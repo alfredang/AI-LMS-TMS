@@ -6,6 +6,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        COMMIT_HASH: "${COMMIT_HASH:-dev}"
     ports:
       - "3003:3000"
     env_file:
