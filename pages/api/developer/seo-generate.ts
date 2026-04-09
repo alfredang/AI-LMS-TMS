@@ -1,5 +1,4 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import Anthropic from '@anthropic-ai/sdk';
 import pool from '../../../lib/db';
 
 const SEO_WSQ_TEMPLATE = `As a digital marketing consultant, your primary role is to assist small business owners in optimizing their websites for SEO and improving their digital marketing strategies to enhance lead generation. You should provide clear, actionable advice tailored to the challenges and opportunities typical for small businesses. Focus on offering strategies that are feasible and effective for smaller budgets and resources. Stay abreast of the latest SEO and digital marketing trends, ensuring your advice is current and practical. Personalize your responses to reflect an understanding of the unique dynamics and constraints small businesses face in digital marketing.
@@ -61,18 +60,24 @@ Your output format is as follows:
 7. **20 Job Roles** in bullet points related to the course`;
 
 async function getAnthropicConfig() {
-  const client = await pool.connect();
+  // Try DB first
   try {
-    const result = await client.query(
+    const result = await pool.query(
       `SELECT key_value, selected_model FROM training_provider_api
        WHERE training_provider_id = (SELECT id FROM training_provider ORDER BY created_at DESC LIMIT 1)
        AND key_name = 'ANTHROPIC_API_KEY'`
     );
-    if (result.rows.length === 0) return null;
-    return { apiKey: result.rows[0].key_value, model: result.rows[0].selected_model || 'claude-sonnet-4-6-20250527' };
-  } finally {
-    client.release();
+    if (result.rows.length > 0 && result.rows[0].key_value) {
+      return { apiKey: result.rows[0].key_value, model: result.rows[0].selected_model || 'claude-sonnet-4-6-20250527' };
+    }
+  } catch (e) {
+    console.error('Failed to fetch API key from DB:', e);
   }
+  // Fallback to env var
+  if (process.env.ANTHROPIC_API_KEY) {
+    return { apiKey: process.env.ANTHROPIC_API_KEY, model: 'claude-sonnet-4-6-20250527' };
+  }
+  return null;
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -105,15 +110,29 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const client = new Anthropic({ apiKey: config.apiKey });
-    const message = await client.messages.create({
-      model: config.model,
-      max_tokens: 4096,
-      system: 'You are a helpful content generation assistant for Tertiary Infotech Academy. Always output well-structured Markdown.',
-      messages: [{ role: 'user', content: prompt }],
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': config.apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: config.model,
+        max_tokens: 4096,
+        system: 'You are a helpful content generation assistant for Tertiary Infotech Academy. Always output well-structured Markdown.',
+        messages: [{ role: 'user', content: prompt }],
+      }),
     });
 
-    const text = message.content[0]?.type === 'text' ? message.content[0].text : '';
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error(`Anthropic API error (${response.status}):`, errText);
+      return res.status(500).json({ error: `Anthropic API error (${response.status}). Please check your API key in Company Settings > LLM Credentials.` });
+    }
+
+    const data = await response.json();
+    const text = data.content?.[0]?.text || '';
     return res.status(200).json({ success: true, result: text });
   } catch (error: any) {
     console.error('SEO generation error:', error);
