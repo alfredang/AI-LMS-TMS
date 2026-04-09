@@ -8,10 +8,6 @@ const COMMIT_HASH = (() => {
     const min = String(d.getMinutes()).padStart(2, '0');
     return `${dd}-${mm}-${yyyy} ${hh}:${min}`;
   };
-  // If already set via Docker build arg or env, use it directly
-  if (process.env.NEXT_PUBLIC_COMMIT_HASH && process.env.NEXT_PUBLIC_COMMIT_HASH !== 'dev') {
-    return process.env.NEXT_PUBLIC_COMMIT_HASH;
-  }
   // Get commit hash
   let hash = 'dev';
   if (process.env.VERCEL_GIT_COMMIT_SHA) {
