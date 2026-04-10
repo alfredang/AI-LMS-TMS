@@ -908,7 +908,18 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                     ? course.assessmentMethods.practicalExam.link
                     : (practicalPerformanceInputType === 'link' ? (course.practicalPerformanceAssessmentLink || null) : null),
                 assessmentMethods: course.assessmentMethods || null,
-                resourceLinks: resourceLinks.filter(rl => rl.url.trim() !== ''),
+                // Drop rows that have no payload at all. Activity-type rows
+                // are allowed to use instructions INSTEAD of a URL, so they
+                // survive the filter as long as one of the two fields is
+                // non-empty. Other resource types still require a URL.
+                resourceLinks: resourceLinks.filter(rl => {
+                    const hasUrl = rl.url.trim() !== '';
+                    const hasInstructions =
+                        rl.type === 'activity' &&
+                        typeof rl.instructions === 'string' &&
+                        rl.instructions.trim() !== '';
+                    return hasUrl || hasInstructions;
+                }),
                 // Convert topics to learning units with position
                 learningUnits: course.topics.map((topic, index) => ({
                     id: topic.id,
@@ -1988,7 +1999,24 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
 
                     {role === UserRole.Developer && (
                         <div className="space-y-4">
-                            <h3 className="text-xl font-bold px-1">Lesson</h3>
+                            {/* Lesson header row — the save buttons are mirrored here
+                                so developers can save without scrolling back up to
+                                the top of the page after editing topics/resources. */}
+                            <div className="flex flex-wrap items-center justify-between gap-3 px-1">
+                                <h3 className="text-xl font-bold">Lesson</h3>
+                                {!isReadOnly && (
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        {!isNewCourse && (
+                                            <Button variant="outline" size="sm" onClick={() => handleSaveCourse(true)} disabled={isSaving}>
+                                                {isSaving ? <Spinner size="sm" /> : 'Save & Continue Editing'}
+                                            </Button>
+                                        )}
+                                        <Button variant="primary" size="sm" onClick={() => handleSaveCourse(false)} disabled={isSaving}>
+                                            {isSaving ? <Spinner size="sm" /> : (isNewCourse ? 'Create Course' : 'Save Changes')}
+                                        </Button>
+                                    </div>
+                                )}
+                            </div>
                             {course.topics.map(topic => (
                                 <div
                                     key={topic.id}
