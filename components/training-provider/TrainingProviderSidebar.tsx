@@ -13,7 +13,7 @@ const TrainingProviderSidebar: React.FC<TrainingProviderSidebarProps> = ({ onNav
     const { currentView, handleNavigation, selectedCourse } = useLms();
     const appVersion = useAppVersion();
 
-    const templateViews = [View.OtpEmailTemplate, View.CertificateEmailTemplate, View.FeedbackEmailTemplate, View.PasswordResetEmailTemplate, View.TrainerInvitationEmailTemplate, View.TrainerResponseEmailTemplates, View.FinalCourseConfirmationEmailTemplate, View.CourseConfirmationEmailTemplate, View.PrivacyPolicy, View.AcceptableUsePolicy];
+    const templateViews = [View.OtpEmailTemplate, View.CertificateEmailTemplate, View.FeedbackEmailTemplate, View.PasswordResetEmailTemplate, View.TrainerInvitationEmailTemplate, View.TrainerResponseEmailTemplates, View.FinalCourseConfirmationEmailTemplate, View.CourseConfirmationEmailTemplate, View.CoursewareAttendanceEmailTemplate, View.PrivacyPolicy, View.AcceptableUsePolicy];
     const [templatesOpen, setTemplatesOpen] = useState(templateViews.includes(currentView));
     const [workflowsOpen, setWorkflowsOpen] = useState(currentView === View.WorkflowGuides);
     const [wfTrainingOpen, setWfTrainingOpen] = useState(false);
@@ -46,6 +46,7 @@ const TrainingProviderSidebar: React.FC<TrainingProviderSidebarProps> = ({ onNav
         { view: View.TrainerResponseEmailTemplates, label: 'Trainer Accept/Decline Email', icon: IconName.Mail },
         { view: View.FinalCourseConfirmationEmailTemplate, label: 'Final Class Confirm Email', icon: IconName.Send },
         { view: View.CourseConfirmationEmailTemplate, label: 'Class Confirm Email', icon: IconName.Send },
+        { view: View.CoursewareAttendanceEmailTemplate, label: 'Courseware and Attendance Taking', icon: IconName.Send },
         { view: View.PrivacyPolicy, label: 'Privacy Policy', icon: IconName.Shield },
         { view: View.AcceptableUsePolicy, label: 'Acceptable Use Policy', icon: IconName.ClipboardCheck },
     ];

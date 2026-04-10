@@ -10,7 +10,7 @@ import { getTrainingPartnerIdentifiers } from '@lib/trainingPartnerIdentifiers';
  * Body: { testEmail, subject, body, templateType }
  *
  * templateType: 'certificate' | 'course-confirmation' | 'final-course-confirmation' |
- *               'otp' | 'feedback' | 'password-reset' | 'trainer-invitation'
+ *               'otp' | 'feedback' | 'password-reset' | 'trainer-invitation' | 'courseware-attendance'
  */
 
 // Sample data per template type for variable replacement
@@ -49,6 +49,10 @@ const SAMPLE_DATA: Record<string, Record<string, string>> = {
     '{COURSE_NAME}': 'WSQ Advanced Certificate in AI',
     '{LOGIN_URL}': 'https://example.com/trainer/login',
     '{TEMP_PASSWORD}': 'TempPass123!',
+  },
+  'courseware-attendance': {
+    '{COURSE_NAME}': 'WSQ - Tax Computations for Individuals and Organizations',
+    '{DIGITAL_ATTENDANCE_ID}': 'RA572084',
   },
 };
 
