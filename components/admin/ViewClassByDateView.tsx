@@ -193,6 +193,9 @@ interface EventRowProps {
   onInviteNext: () => void;
   onChangeNextTrainer: (trainerName: string) => void;
   onChangeClassStatus: (newStatus: 'Confirmed' | 'Pending' | 'Cancelled') => void;
+  onChangeClassType: (newType: 'Physical' | 'Virtual' | 'Hybrid') => void;
+  onViewAttendance: () => void;
+  onViewEnrolment: () => void;
 }
 
 const DetailCell: React.FC<{ label: string; value: React.ReactNode }> = ({ label, value }) => (
@@ -238,7 +241,7 @@ const TRAINER_STATE_STYLES: Record<TrainerMatchState, { dot: string; label: stri
 };
 
 const EventRow: React.FC<EventRowProps> = ({
-  event, expanded, inviting, nextTrainerOverride, onToggle, onOpenEditor, onInviteNext, onChangeNextTrainer, onChangeClassStatus
+  event, expanded, inviting, nextTrainerOverride, onToggle, onOpenEditor, onInviteNext, onChangeNextTrainer, onChangeClassStatus, onChangeClassType, onViewAttendance, onViewEnrolment
 }) => {
   // Admin can override the server-computed next trainer via the dropdown.
   // Fall back to server-computed when no override set yet.
@@ -266,14 +269,23 @@ const EventRow: React.FC<EventRowProps> = ({
         <div className="text-xs font-mono text-gray-600 dark:text-gray-400 w-28 flex-shrink-0 tabular-nums">
           {event.startTime} – {event.endTime}
         </div>
-        <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); onOpenEditor(); }}
-          className="group/title flex-1 text-left text-sm text-gray-900 dark:text-gray-100 truncate rounded px-1 -mx-1 hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
-          title="Open in Editor"
-        >
-          Day {event.dayNumber} - {event.courseTitle}
-        </button>
+        <div className="flex-1 min-w-0">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (e.ctrlKey || e.metaKey) {
+                window.open(`/?adminPage=editClass&courseRunId=${event.courseRunId}`, '_blank');
+                return;
+              }
+              onOpenEditor();
+            }}
+            className="text-left text-sm text-gray-900 dark:text-gray-100 truncate rounded px-1 hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:text-blue-700 dark:hover:text-blue-300 transition-colors max-w-full"
+            title="Open in Editor (Ctrl+click for new tab)"
+          >
+            Day {event.dayNumber} - {event.courseTitle}
+          </button>
+        </div>
         {sessionLabel && (
           <span
             className="hidden sm:inline-flex flex-shrink-0 items-center px-2 py-0.5 text-[11px] font-mono font-medium rounded bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
@@ -342,7 +354,21 @@ const EventRow: React.FC<EventRowProps> = ({
                 </select>
               }
             />
-            <DetailCell label="Class Type" value={event.classType} />
+            <DetailCell
+              label="Class Type"
+              value={
+                <select
+                  value={event.classType || 'Physical'}
+                  onClick={(e) => e.stopPropagation()}
+                  onChange={(e) => onChangeClassType(e.target.value as 'Physical' | 'Virtual' | 'Hybrid')}
+                  className="text-[11px] font-semibold rounded-full px-2 py-0.5 border-0 cursor-pointer focus:ring-2 focus:ring-blue-500 bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300"
+                >
+                  <option value="Physical" className="bg-white text-gray-900 dark:bg-gray-800 dark:text-white">Physical</option>
+                  <option value="Virtual" className="bg-white text-gray-900 dark:bg-gray-800 dark:text-white">Virtual</option>
+                  <option value="Hybrid" className="bg-white text-gray-900 dark:bg-gray-800 dark:text-white">Hybrid</option>
+                </select>
+              }
+            />
             <DetailCell
               label="Date"
               value={
@@ -406,10 +432,40 @@ const EventRow: React.FC<EventRowProps> = ({
 
           <div className="mt-4 flex flex-wrap items-center gap-2">
             <button
-              onClick={onOpenEditor}
+              onClick={(e) => {
+                if (e.ctrlKey || e.metaKey) {
+                  window.open(`/?adminPage=editClass&courseRunId=${event.courseRunId}`, '_blank');
+                  return;
+                }
+                onOpenEditor();
+              }}
               className="px-3 py-1.5 text-xs font-medium rounded bg-blue-600 text-white hover:bg-blue-700"
             >
               Open in Editor
+            </button>
+            <button
+              onClick={(e) => {
+                if (e.ctrlKey || e.metaKey) {
+                  window.open(`/?adminPage=checkAttendance&courseRunId=${event.courseRunId}`, '_blank');
+                  return;
+                }
+                onViewAttendance();
+              }}
+              className="px-3 py-1.5 text-xs font-medium rounded border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+            >
+              View Attendance
+            </button>
+            <button
+              onClick={(e) => {
+                if (e.ctrlKey || e.metaKey) {
+                  window.open(`/?adminPage=searchEnrolment&courseRunId=${event.courseRunId}`, '_blank');
+                  return;
+                }
+                onViewEnrolment();
+              }}
+              className="px-3 py-1.5 text-xs font-medium rounded border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+            >
+              View Enrolment
             </button>
             {event.latestInvitationStatus && (
               <span className="text-[11px] text-gray-500 dark:text-gray-400">
@@ -638,6 +694,31 @@ const ViewClassByDateView: React.FC = () => {
     }
   }, []);
 
+  const handleChangeClassType = useCallback(async (courseRunUuid: string, newType: 'Physical' | 'Virtual' | 'Hybrid') => {
+    setEvents((prev) => prev.map((e) =>
+      e.courseRunUuid === courseRunUuid ? { ...e, classType: newType } : e
+    ));
+    try {
+      await fetch(getApiUrl('/api/admin/upcoming-classes'), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: courseRunUuid, class_type: newType }),
+      });
+    } catch (err) {
+      console.error('[ViewClassByDateView] Failed to update class type:', err);
+      setToast('Failed to update class type');
+      setTimeout(() => setToast(null), 3500);
+    }
+  }, []);
+
+  const handleViewAttendance = useCallback(() => {
+    setAdminPage(AdminPage.CheckAttendance);
+  }, [setAdminPage]);
+
+  const handleViewEnrolment = useCallback(() => {
+    setAdminPage(AdminPage.SearchEnrolment);
+  }, [setAdminPage]);
+
   const toggleExpanded = useCallback((key: string) => {
     setExpanded((prev) => ({ ...prev, [key]: !prev[key] }));
   }, []);
@@ -772,6 +853,9 @@ const ViewClassByDateView: React.FC = () => {
                         onOpenEditor={() => handleOpenEditor(event)}
                         onChangeNextTrainer={(name) => handleSetNextTrainerOverride(event.courseRunUuid, name)}
                         onChangeClassStatus={(newStatus) => handleChangeClassStatus(event.courseRunUuid, newStatus)}
+                        onChangeClassType={(newType) => handleChangeClassType(event.courseRunUuid, newType)}
+                        onViewAttendance={() => handleViewAttendance()}
+                        onViewEnrolment={() => handleViewEnrolment()}
                         onInviteNext={() => handleInviteNext(event)}
                       />
                     );
