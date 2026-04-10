@@ -102,6 +102,19 @@ const ManagementCourseList: React.FC = () => {
     const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
     const [viewMode, setViewMode] = useState<'block' | 'table'>(role === UserRole.Admin ? 'table' : 'block');
     const [selectedCourse, setSelectedCourse] = useState<any>(null);
+
+    // Persist view mode when it changes
+    useEffect(() => {
+        const savedViewMode = localStorage.getItem(`managementCourseListViewMode_${role}`);
+        if (savedViewMode === 'block' || savedViewMode === 'table') {
+            setViewMode(savedViewMode);
+        }
+    }, [role]);
+
+    const handleViewModeChange = (mode: 'block' | 'table') => {
+        setViewMode(mode);
+        localStorage.setItem(`managementCourseListViewMode_${role}`, mode);
+    };
     const [trainerClassView, setTrainerClassView] = useState<'all' | 'current' | 'upcoming' | 'past'>('all');
 
     // Pagination state - stored in LmsContext so it persists across mount/unmount
@@ -840,7 +853,7 @@ const ManagementCourseList: React.FC = () => {
                             <label className="text-sm font-medium text-on-surface-secondary hidden sm:block">View:</label>
                             <div className="flex items-center rounded-md bg-surface-elevated p-0.5 border border-default">
                                 <button
-                                    onClick={() => setViewMode('block')}
+                                    onClick={() => handleViewModeChange('block')}
                                     className={`p-1.5 rounded-md transition-colors ${viewMode === 'block' ? 'bg-white shadow text-primary dark:bg-gray-600 dark:text-blue-400' : 'text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200'}`}
                                     aria-label="Block view"
                                     aria-pressed={viewMode === 'block'}
@@ -848,7 +861,7 @@ const ManagementCourseList: React.FC = () => {
                                     <Icon name={IconName.Eye} className="w-5 h-5" />
                                 </button>
                                 <button
-                                    onClick={() => setViewMode('table')}
+                                    onClick={() => handleViewModeChange('table')}
                                     className={`p-1.5 rounded-md transition-colors ${viewMode === 'table' ? 'bg-white shadow text-primary dark:bg-gray-600 dark:text-blue-400' : 'text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200'}`}
                                     aria-label="Table view"
                                     aria-pressed={viewMode === 'table'}
@@ -1153,6 +1166,19 @@ const LearnerCourseList: React.FC = () => {
     const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
     const [classTab, setClassTab] = useState<'all' | 'current' | 'upcoming' | 'past'>('all');
 
+    // Persist view mode when it changes
+    useEffect(() => {
+        const savedViewMode = localStorage.getItem('learnerCourseListViewMode');
+        if (savedViewMode === 'grid' || savedViewMode === 'list') {
+            setViewMode(savedViewMode);
+        }
+    }, []);
+
+    const handleViewModeChange = (mode: 'grid' | 'list') => {
+        setViewMode(mode);
+        localStorage.setItem('learnerCourseListViewMode', mode);
+    };
+
     // Poll every 30s — refetch if admin changed this learner's enrollments
     const loadedAtRef = useRef(new Date().toISOString());
     useEffect(() => {
@@ -1310,7 +1336,7 @@ const LearnerCourseList: React.FC = () => {
                 {/* View toggle */}
                 <div className="flex items-center rounded-xl bg-surface border border-default p-0.5 shadow-sm flex-shrink-0">
                     <button
-                        onClick={() => setViewMode('grid')}
+                        onClick={() => handleViewModeChange('grid')}
                         title="Card view"
                         className={`p-2 rounded-lg transition-colors ${viewMode === 'grid' ? 'bg-primary text-white shadow' : 'text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}
                     >
@@ -1320,7 +1346,7 @@ const LearnerCourseList: React.FC = () => {
                         </svg>
                     </button>
                     <button
-                        onClick={() => setViewMode('list')}
+                        onClick={() => handleViewModeChange('list')}
                         title="List view"
                         className={`p-2 rounded-lg transition-colors ${viewMode === 'list' ? 'bg-primary text-white shadow' : 'text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}
                     >
