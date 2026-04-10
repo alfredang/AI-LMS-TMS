@@ -5955,6 +5955,148 @@ export const FetchUpcomingEnrolmentsView: React.FC = () => {
     );
 };
 
+// ── Upcoming Enrolment View (with Calendar Matching) ─────────────────────────
+
+export const UpcomingEnrolmentView: React.FC = () => {
+    const { setAdminPage } = useLms();
+    const [data, setData] = useState<any[]>([]);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    
+    // Date states
+    const [startDate, setStartDate] = useState(new Date().toISOString().slice(0, 10));
+    const [endDate, setEndDate] = useState(new Date(new Date().getTime() + 21 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10));
+
+    const fetchData = async () => {
+        setLoading(true);
+        setError(null);
+        try {
+            const res = await fetch(`/api/admin/upcoming-enrolment?startDate=${startDate}&endDate=${endDate}`);
+            const json = await res.json();
+            if (json.success) {
+                setData(json.data);
+            } else {
+                setError(json.error || 'Failed to fetch enrolment data');
+            }
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Network error');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchData();
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+    const fmt = (d: string) => d ? new Date(d).toLocaleDateString('en-SG', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+
+    return (
+        <div className="space-y-6">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+                <h2 className="text-3xl font-bold">Upcoming Enrolment</h2>
+                <Button variant="ghost" onClick={() => setAdminPage(AdminPage.Dashboard)}>Back</Button>
+            </div>
+
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+                Displays confirmed enrolments starting within the next 21 days (default) and checks if they match a calendar event.
+                Matches are based on attendee email, start date, and TGS course code in the event description.
+            </p>
+
+            <Card className="p-5">
+                <div className="flex flex-wrap items-end gap-4">
+                    <div className="space-y-1">
+                        <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500">Start Date</label>
+                        <input
+                            type="date"
+                            value={startDate}
+                            onChange={(e) => setStartDate(e.target.value)}
+                            className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                        />
+                    </div>
+                    <div className="space-y-1">
+                        <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500">End Date</label>
+                        <input
+                            type="date"
+                            value={endDate}
+                            onChange={(e) => setEndDate(e.target.value)}
+                            className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                        />
+                    </div>
+                    <Button onClick={fetchData} disabled={loading}>
+                        {loading ? 'Refreshing...' : 'Refresh'}
+                    </Button>
+                </div>
+            </Card>
+
+            {error && (
+                <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-700 dark:text-red-300">
+                    ❌ {error}
+                </div>
+            )}
+
+            <Card className="overflow-hidden">
+                <div className="overflow-x-auto">
+                    <table className="w-full text-sm text-left">
+                        <thead className="bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+                            <tr>
+                                <th className="px-4 py-3 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Email</th>
+                                <th className="px-4 py-3 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Course Title</th>
+                                <th className="px-4 py-3 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Course Code</th>
+                                <th className="px-4 py-3 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Start Date</th>
+                                <th className="px-4 py-3 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Class Status</th>
+                                <th className="px-4 py-3 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 text-center">Calendar Match</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                            {data.length === 0 && !loading ? (
+                                <tr>
+                                    <td colSpan={6} className="px-4 py-8 text-center text-gray-500 italic">No enrolments found for this period.</td>
+                                </tr>
+                            ) : (
+                                data.map((row, idx) => (
+                                    <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                                        <td className="px-4 py-3 font-medium text-gray-900 dark:text-gray-200">{row.email}</td>
+                                        <td className="px-4 py-3 text-gray-700 dark:text-gray-300 max-w-xs truncate" title={row.title}>{row.title}</td>
+                                        <td className="px-4 py-3 font-mono text-xs text-gray-500 dark:text-gray-400">{row.course_code || '—'}</td>
+                                        <td className="px-4 py-3 text-gray-500 dark:text-gray-400 whitespace-nowrap">{fmt(row.start_date)}</td>
+                                        <td className="px-4 py-3">
+                                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                                                row.class_status === 'Confirmed' ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300' :
+                                                row.class_status === 'Cancelled' ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300' :
+                                                'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'
+                                            }`}>
+                                                {row.class_status || 'Pending'}
+                                            </span>
+                                        </td>
+                                        <td className="px-4 py-3 text-center">
+                                            {row.match ? (
+                                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 text-xs font-semibold" title={row.matchDetail}>
+                                                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                                    </svg>
+                                                    Match
+                                                </span>
+                                            ) : (
+                                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-400 text-xs font-semibold">
+                                                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                                    </svg>
+                                                    Not Matched
+                                                </span>
+                                            )}
+                                        </td>
+                                    </tr>
+                                ))
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            </Card>
+        </div>
+    );
+};
+
 // ── Course Run Date Sync Log ──────────────────────────────────────────────────
 
 interface DateSyncLogRow {

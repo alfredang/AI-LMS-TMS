@@ -111,6 +111,7 @@ export enum AdminPage {
   CourseConfirmationEmailLogs = 'courseConfirmationEmailLogs',
   BackfillEnrollments = 'backfillEnrollments',
   FetchUpcomingEnrolments = 'fetchUpcomingEnrolments',
+  UpcomingEnrolment = 'upcomingEnrolment',
   CreateCertificate = 'createCertificate',
   DeleteCertificate = 'deleteCertificate',
   SendCertificateSG = 'sendCertificateSG',

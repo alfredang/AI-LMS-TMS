@@ -25,7 +25,7 @@ import OngoingClasses from '../components/admin/OngoingClasses';
 import CompletedClasses from '../components/admin/CompletedClasses';
 import ClassDetailView from '../components/admin/ClassDetailView';
 import { UpcomingClassesTable } from '../components/UpcomingClassesTable';
-import { ClassManagerView, AssignTrainerView, AssignStudentView, AddCourseView, AddCourseRunView, AutomationLogsView, TrainerFolderLogsView, AutoCreateCertificatesLogView, BackfillEnrollmentsView, FetchUpcomingEnrolmentsView, CourseRunDateSyncLogsView, UpcomingCourseRunsLogView, CourseConfirmationEmailLogsView, SyncTrainerTpgLogsView, AutoSendTrainerInvitationLogView, AutoSanitiseDataLogView } from '../components/admin/ClassManagementViews';
+import { ClassManagerView, AssignTrainerView, AssignStudentView, AddCourseView, AddCourseRunView, AutomationLogsView, TrainerFolderLogsView, AutoCreateCertificatesLogView, BackfillEnrollmentsView, FetchUpcomingEnrolmentsView, UpcomingEnrolmentView, CourseRunDateSyncLogsView, UpcomingCourseRunsLogView, CourseConfirmationEmailLogsView, SyncTrainerTpgLogsView, AutoSendTrainerInvitationLogView, AutoSanitiseDataLogView } from '../components/admin/ClassManagementViews';
 import { CreateCertificateView, DeleteCertificateView } from '../components/admin/CertificateManagement';
 import { SendCertificateSGView } from '../components/admin/SendCertificateSG';
 import { SendCertificateGHView } from '../components/admin/SendCertificateGH';
@@ -86,6 +86,7 @@ const ManagementDashboard: React.FC<ManagementDashboardProps> = ({ type }) => {
     { title: "Create New Class", description: "Schedule a new class run from a course template.", icon: IconName.Add, onClick: () => setAdminPage(AdminPage.CreateNewClass) },
     { title: "Enroll Learners", description: "Add or remove learners from a specific class.", icon: IconName.MyAccount, onClick: () => setAdminPage(AdminPage.EnrollLearners) },
     { title: "Assign Trainer", description: "Assign or change the trainer for a class.", icon: IconName.SwitchProfile, onClick: () => setAdminPage(AdminPage.AssignTrainer) },
+    { title: "Upcoming Enrolment", description: "View confirmed enrolments and match with calendar events.", icon: IconName.ClipboardCheck, onClick: () => setAdminPage(AdminPage.UpcomingEnrolment) },
   ];
 
   const tpgManagementLinks: NavBoxProps[] = [
@@ -188,6 +189,7 @@ const PAGE_LABELS: Partial<Record<AdminPage, string>> = {
   [AdminPage.CourseConfirmationEmailLogs]: 'Course Confirmation Email Logs',
   [AdminPage.BackfillEnrollments]: 'Backfill Enrollments',
   [AdminPage.FetchUpcomingEnrolments]: 'Fetch Upcoming Classes Enrolment',
+  [AdminPage.UpcomingEnrolment]: 'Upcoming Enrolment',
   [AdminPage.CreateCertificate]: 'Create Certificate',
   [AdminPage.DeleteCertificate]: 'Delete Certificate',
   [AdminPage.SendCertificateSG]: 'Send Certificate (SG)',
@@ -414,6 +416,8 @@ const AdminLayout: React.FC = () => {
         return <BackfillEnrollmentsView />;
       case AdminPage.FetchUpcomingEnrolments:
         return <FetchUpcomingEnrolmentsView />;
+      case AdminPage.UpcomingEnrolment:
+        return <UpcomingEnrolmentView />;
       case AdminPage.CreateCertificate:
         return <CreateCertificateView />;
       case AdminPage.DeleteCertificate:
