@@ -1,4 +1,5 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { useRouter } from 'next/router';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Icon, IconName } from '../ui/Icon';
@@ -2540,6 +2541,7 @@ export const SearchGrantView: React.FC = () => {
 };
 
 export const SearchEnrolmentView: React.FC = () => {
+    const router = useRouter();
     const [courseRunId, setCourseRunId] = useState<string>('');
     const [isSearching, setIsSearching] = useState(false);
     const [webhookResponse, setWebhookResponse] = useState<any>(null);
@@ -2604,6 +2606,42 @@ export const SearchEnrolmentView: React.FC = () => {
             setIsSearching(false);
         }
     };
+
+    // Auto-populate from URL query param (e.g. ctrl+click from calendar)
+    const urlHandled = useRef(false);
+    useEffect(() => {
+        if (urlHandled.current) return;
+        const urlCourseRunId = router.query.courseRunId;
+        if (urlCourseRunId && typeof urlCourseRunId === 'string') {
+            urlHandled.current = true;
+            setCourseRunId(urlCourseRunId);
+            // Auto-trigger search
+            setTimeout(async () => {
+                setIsSearching(true);
+                setSearchError(null);
+                setWebhookResponse(null);
+                setParsedData(null);
+                try {
+                    const response = await fetch(SEARCH_ENROLMENT_API, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ courseRunId: urlCourseRunId.trim() })
+                    });
+                    const json = await response.json();
+                    if (!response.ok || !json.success) {
+                        const errMsg = typeof json.error === 'string' ? json.error : (json.error?.message ?? JSON.stringify(json.error) ?? `SSG API error (${response.status})`);
+                        throw new Error(errMsg);
+                    }
+                    setWebhookResponse(json);
+                    setParsedData(json.data ?? null);
+                } catch (error) {
+                    setSearchError(error instanceof Error ? error.message : 'Failed to fetch enrolment data');
+                } finally {
+                    setIsSearching(false);
+                }
+            }, 0);
+        }
+    }, [router.query.courseRunId]); // eslint-disable-line react-hooks/exhaustive-deps
 
     return (
         <div>

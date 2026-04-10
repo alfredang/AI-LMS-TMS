@@ -531,7 +531,7 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return;
     }
 
-    const { view, courseId, adminPage, trainerPage } = router.query;
+    const { view, courseId, adminPage, trainerPage, courseRunId: courseRunIdParam } = router.query;
 
     // Restore current view - View enum values are lowercase, URL values are lowercase
     if (view && typeof view === 'string') {
@@ -547,6 +547,32 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const matchedAdminPage = Object.values(AdminPage).find(v => v.toLowerCase() === adminPage.toLowerCase());
       if (matchedAdminPage) {
         console.log(`📍 LmsContext: Restored adminPage from URL: ${matchedAdminPage}`);
+
+        // Hydrate editingCourseRun BEFORE setting adminPage so the data is
+        // ready when the page renders (avoids flash of "Create New Class").
+        if (courseRunIdParam && typeof courseRunIdParam === 'string') {
+          try {
+            const crRes = await fetch(`/api/admin/lookup-course-run?courseRunCode=${encodeURIComponent(courseRunIdParam)}`);
+            if (crRes.ok) {
+              const crJson = await crRes.json();
+              if (crJson.success && crJson.data) {
+                const cr = crJson.data;
+                setEditingCourseRun({
+                  id: cr.courseRunId,        // UUID (cr.id in DB)
+                  courseRunId: cr.courseRunCode, // SSG run ID (e.g. "1077462")
+                  courseTitle: cr.title,
+                  courseCode: cr.courseCode,
+                  startDate: cr.startDate,
+                  endDate: cr.endDate,
+                });
+                console.log(`📍 LmsContext: Restored editingCourseRun from URL: ${courseRunIdParam}`);
+              }
+            }
+          } catch (err) {
+            console.error('❌ LmsContext: Failed to restore courseRun from URL:', err);
+          }
+        }
+
         setAdminPage(matchedAdminPage);
       }
     }
