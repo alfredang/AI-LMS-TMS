@@ -216,7 +216,7 @@ export async function runAutomation(targetDate?: string) {
                  AND EXISTS (
                      SELECT 1 FROM enrollment e
                      WHERE e.course_run_id = cr.id
-                       AND LOWER(e.enrolment_status) = 'confirmed'
+                       AND LOWER(COALESCE(e.enrolment_status, '')) NOT IN ('admin removed', 'cancelled', 'withdrawn')
                        AND (e.certificate IS NULL OR e.certificate = '')
                  )`
             : `SELECT cr.id as db_uuid, cr.course_run_id, c.course_code, c.title as course_title,
@@ -229,7 +229,7 @@ export async function runAutomation(targetDate?: string) {
                  AND EXISTS (
                      SELECT 1 FROM enrollment e
                      WHERE e.course_run_id = cr.id
-                       AND LOWER(e.enrolment_status) = 'confirmed'
+                       AND LOWER(COALESCE(e.enrolment_status, '')) NOT IN ('admin removed', 'cancelled', 'withdrawn')
                        AND (e.certificate IS NULL OR e.certificate = '')
                  )`;
         
@@ -329,7 +329,7 @@ export async function runAutomation(targetDate?: string) {
                             SELECT id FROM course_session WHERE course_run_id = $1 AND deleted = false
                         )
                         WHERE e.course_run_id = $1
-                          AND LOWER(e.enrolment_status) = 'confirmed'
+                          AND LOWER(COALESCE(e.enrolment_status, '')) NOT IN ('admin removed', 'cancelled', 'withdrawn')
                           AND (e.certificate IS NULL OR e.certificate = '')
                         GROUP BY e.id, e.nric, au.full_name, au.email, e.email
                     `, [run.db_uuid]);
