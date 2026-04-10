@@ -81,50 +81,41 @@ const TrainerInvitationEmailTemplateView: React.FC = () => {
   const variables = [
     '{TRAINER_NAME}',
     '{COURSE_TITLE}',
+    '{COURSE_TYPE}',
     '{COURSE_CODE}',
     '{COURSE_RUN_ID}',
     '{START_DATE}',
     '{END_DATE}',
+    '{DURATION}',
+    '{COURSE_HOURS}',
+    '{CONFIRM_BY}',
     '{TPG_TRAINER}',
     '{COMPANY_SHORT_NAME}',
+    '{ACTION_BUTTONS}',
     '{ACCEPT_BUTTON}',
     '{DECLINE_BUTTON}',
   ];
 
-  const previewSubject = renderInvitationTemplate(subject || DEFAULT_TRAINER_INVITATION_SUBJECT, {
+  const sampleReplacements: Record<string, string> = {
     COMPANY_SHORT_NAME: trainingProviderProfile?.companyShortname || 'Training Provider',
     TRAINER_NAME: 'Tan Woei Ming',
     COURSE_TITLE: 'Generative AI for Business',
+    COURSE_TYPE: 'Physical',
     COURSE_CODE: 'TGS-2023036653',
     COURSE_RUN_ID: '1131876',
     START_DATE: '06/04/2026',
     END_DATE: '09/04/2026',
+    DURATION: '4 days',
+    COURSE_HOURS: '32h',
+    CONFIRM_BY: '04/04/2026, 23:59 PM',
     TPG_TRAINER: 'Dr Alvin Ang Wei Hern',
-  });
+  };
 
-  const previewBody = renderInvitationTemplate(body || DEFAULT_TRAINER_INVITATION_BODY, {
-    COMPANY_SHORT_NAME: trainingProviderProfile?.companyShortname || 'Training Provider',
-    TRAINER_NAME: 'Tan Woei Ming',
-    COURSE_TITLE: 'Generative AI for Business',
-    COURSE_CODE: 'TGS-2023036653',
-    COURSE_RUN_ID: '1131876',
-    START_DATE: '06/04/2026',
-    END_DATE: '09/04/2026',
-    TPG_TRAINER: 'Dr Alvin Ang Wei Hern',
-  });
-
+  const previewSubject = renderInvitationTemplate(subject || DEFAULT_TRAINER_INVITATION_SUBJECT, sampleReplacements);
+  const previewBody = renderInvitationTemplate(body || DEFAULT_TRAINER_INVITATION_BODY, sampleReplacements);
   const previewHtmlBody = renderInvitationHtmlEmail(
     body || DEFAULT_TRAINER_INVITATION_BODY,
-    {
-      COMPANY_SHORT_NAME: trainingProviderProfile?.companyShortname || 'Training Provider',
-      TRAINER_NAME: 'Tan Woei Ming',
-      COURSE_TITLE: 'Generative AI for Business',
-      COURSE_CODE: 'TGS-2023036653',
-      COURSE_RUN_ID: '1131876',
-      START_DATE: '06/04/2026',
-      END_DATE: '09/04/2026',
-      TPG_TRAINER: 'Dr Alvin Ang Wei Hern',
-    },
+    sampleReplacements,
     '#',
     '#'
   );

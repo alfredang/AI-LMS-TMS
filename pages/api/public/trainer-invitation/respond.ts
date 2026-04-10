@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { google } from 'googleapis';
 import pool from '@lib/db';
 import {
+  buildInvitationReplacements,
   ensureTrainerInvitationTable,
   ensureTrainerInvitationTemplateColumns,
   renderInvitationTemplate,
@@ -87,11 +88,20 @@ async function sendFollowUpEmail(
 
 async function sendNextTrainerInvitation(courseRunUuid: string, tp: any) {
   try {
-    // Get course run details
+    // Get course run details — include mode_of_learning and training_hours so
+    // the auto-escalated invitation populates the same fields as the initial
+    // manual send (Course Type, Course Hours, Duration).
     const crResult = await pool.query(
-      `SELECT cr.id, cr.course_run_id, c.title AS course_title, c.course_code,
-              cr.start_date, cr.end_date, c.trainers_list,
-              cr.tpg_assigned_trainer_name
+      `SELECT cr.id,
+              cr.course_run_id,
+              cr.start_date,
+              cr.end_date,
+              cr.mode_of_learning AS course_mode,
+              cr.tpg_assigned_trainer_name,
+              c.title AS course_title,
+              c.course_code,
+              c.training_hours,
+              c.trainers_list
        FROM course_run cr
        JOIN course c ON c.id = cr.course_id
        WHERE cr.id = $1`,
@@ -160,18 +170,13 @@ async function sendNextTrainerInvitation(courseRunUuid: string, tp: any) {
     const acceptUrl = `${siteUrl}/api/public/trainer-invitation/respond?token=${token}&action=accept`;
     const declineUrl = `${siteUrl}/api/public/trainer-invitation/respond?token=${token}&action=decline`;
 
-    const replacements: Record<string, string> = {
-      COMPANY_SHORT_NAME: tp.company_shortname || tp.company_name || 'Training Provider',
-      TRAINER_NAME: trainer.full_name || nextTrainerName,
-      COURSE_TITLE: cr.course_title || '',
-      COURSE_CODE: cr.course_code || '',
-      COURSE_RUN_ID: cr.course_run_id || '',
-      START_DATE: formatDateLabel(cr.start_date),
-      END_DATE: formatDateLabel(cr.end_date),
-      TPG_TRAINER: cr.tpg_assigned_trainer_name || 'N/A',
-      ACCEPT_URL: acceptUrl,
-      DECLINE_URL: declineUrl,
-    };
+    const replacements = buildInvitationReplacements({
+      classRow: cr,
+      trainerName: trainer.full_name || nextTrainerName,
+      companyShortName: tp.company_shortname || tp.company_name || 'Training Provider',
+      acceptUrl,
+      declineUrl,
+    });
 
     const subject = renderInvitationTemplate(
       tp.trainer_invitation_email_subject || DEFAULT_TRAINER_INVITATION_SUBJECT,

@@ -2,15 +2,14 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { google } from 'googleapis';
 import pool from '@lib/db';
 import {
+  buildInvitationReplacements,
   renderInvitationHtmlEmail,
-  convertPlainTextToHtml,
   createInvitationToken,
   DEFAULT_TRAINER_INVITATION_BODY,
   DEFAULT_TRAINER_INVITATION_SUBJECT,
   ensureTrainerInvitationTable,
   ensureTrainerInvitationTemplateColumns,
   ensureTpgTrainerColumns,
-  formatDateLabel,
   normalizeTrainerName,
   renderInvitationTemplate,
   splitTrainerList,
@@ -37,8 +36,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         cr.course_run_id,
         cr.start_date,
         cr.end_date,
+        cr.mode_of_learning AS course_mode,
         c.title AS course_title,
         c.course_code,
+        c.training_hours,
         c.trainers_list,
         COALESCE(cr.tpg_assigned_trainer_name, cr.assigned_trainer_name) AS tpg_assigned_trainer_name,
         (
@@ -125,18 +126,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const siteUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://ai-lms-tms.tertiaryinfo.tech';
     const acceptUrl = `${siteUrl}/api/public/trainer-invitation/respond?token=${token}&action=accept`;
     const declineUrl = `${siteUrl}/api/public/trainer-invitation/respond?token=${token}&action=decline`;
-    const replacements = {
-      COMPANY_SHORT_NAME: tp.company_shortname || tp.company_name || 'Training Provider',
-      TRAINER_NAME: trainer.full_name || nextTrainerName,
-      COURSE_TITLE: classRow.course_title || '',
-      COURSE_CODE: classRow.course_code || '',
-      COURSE_RUN_ID: classRow.course_run_id || '',
-      START_DATE: formatDateLabel(classRow.start_date),
-      END_DATE: formatDateLabel(classRow.end_date),
-      TPG_TRAINER: classRow.tpg_assigned_trainer_name || 'N/A',
-      ACCEPT_URL: acceptUrl,
-      DECLINE_URL: declineUrl,
-    };
+
+    const replacements = buildInvitationReplacements({
+      classRow,
+      trainerName: trainer.full_name || nextTrainerName,
+      companyShortName: tp.company_shortname || tp.company_name || 'Training Provider',
+      acceptUrl,
+      declineUrl,
+    });
 
     const subject = renderInvitationTemplate(tp.trainer_invitation_email_subject || DEFAULT_TRAINER_INVITATION_SUBJECT, replacements);
     const body = renderInvitationTemplate(tp.trainer_invitation_email_body || DEFAULT_TRAINER_INVITATION_BODY, replacements);
