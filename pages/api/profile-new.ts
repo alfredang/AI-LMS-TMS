@@ -667,6 +667,8 @@ async function getTrainingProviderProfile(userId: string) {
       autoSendReceiptOnPayment: profileData.auto_send_receipt || false,
       autoSendCertificateOnCompletion: profileData.auto_send_certificate || false,
       autoSendThankYouEmail: profileData.auto_send_thankyou_email || false,
+      autoEnrolDirectApplications: profileData.auto_enrol_direct_applications || false,
+      autoGenerateQbInvoice: profileData.auto_generate_qb_invoice || false,
       upcomingClassesThresholdDays
     },
     securitySettings: {
