@@ -86,7 +86,7 @@ interface CourseData {
     status?: string;
     action?: 'create' | 'update' | 'delete';
   }[];
-  resourceLinks?: Array<{ id: string; topicId: string; type: string; title: string; url: string }>;
+  resourceLinks?: Array<{ id: string; topicId: string; type: string; title: string; url: string; instructions?: string }>;
 }
 
 // Ensure upload directories exist

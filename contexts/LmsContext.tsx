@@ -255,7 +255,7 @@ interface LmsContextType {
   courseListPage: number;
   setCourseListPage: (page: number) => void;
   courseDetail: CourseDetail | null;
-  resourceLinks: { id: string; topicId: string; type: string; title: string; url: string }[];
+  resourceLinks: { id: string; topicId: string; type: string; title: string; url: string; instructions?: string }[];
   learningUnits: LearningUnit[];
   courseAssessments: CourseAssessment[];
   bookmarkedSubtopics: string[];
@@ -333,7 +333,7 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [financePage, setFinancePage] = useState<string>('dashboard');
   const [courseListPage, setCourseListPage] = useState(1);
   const [courseDetail, setCourseDetail] = useState<CourseDetail | null>(null);
-  const [resourceLinks, setResourceLinks] = useState<{ id: string; topicId: string; type: string; title: string; url: string }[]>([]);
+  const [resourceLinks, setResourceLinks] = useState<{ id: string; topicId: string; type: string; title: string; url: string; instructions?: string }[]>([]);
   const [learningUnits, setLearningUnits] = useState<LearningUnit[]>([]);
   const [courseAssessments, setCourseAssessments] = useState<CourseAssessment[]>([]);
   const [bookmarkedSubtopics, setBookmarkedSubtopics] = useState<string[]>([]);

@@ -94,10 +94,14 @@ const EditableTopicAccordion: React.FC<{
     // Drag-and-drop props for the topic itself
     onSelfDragStart: (e: React.DragEvent) => void;
     onSelfDragEnd: (e: React.DragEvent) => void;
-    // Resource links props
-    resourceLinks: { id: string; topicId: string; type: 'file' | 'document' | 'youtube' | 'activity' | 'quiz'; title: string; url: string }[];
+    // Resource links props. `instructions` is an optional free-text field
+    // used by Activity-type resources as an alternative to a URL — the
+    // developer chooses between a clickable link and an in-app instruction
+    // block. Stored in the `resource_links` JSONB column on the course row,
+    // so older rows without the field simply render as URL activities.
+    resourceLinks: { id: string; topicId: string; type: 'file' | 'document' | 'youtube' | 'activity' | 'quiz'; title: string; url: string; instructions?: string }[];
     onAddResourceLink: (topicId: string, type: 'file' | 'document' | 'youtube' | 'activity' | 'quiz') => void;
-    onUpdateResourceLink: (id: string, field: 'title' | 'url', value: string) => void;
+    onUpdateResourceLink: (id: string, field: 'title' | 'url' | 'instructions', value: string) => void;
     onDeleteResourceLink: (id: string) => void;
     onReorderResourceLink: (draggedId: string, targetId: string, parentId: string) => void;
     onMoveResourceLink: (draggedId: string, targetParentId: string) => void;
@@ -259,16 +263,75 @@ const EditableTopicAccordion: React.FC<{
                                                     onChange={e => onUpdateResourceLink(rl.id, 'title', e.target.value)}
                                                     className="flex-1 min-w-0 px-1.5 py-0.5 text-xs border-0 border-b border-transparent hover:border-gray-300 dark:hover:border-gray-600 bg-transparent dark:text-white focus:outline-none focus:border-blue-500"
                                                 />
-                                                <input
-                                                    type="url"
-                                                    placeholder="URL"
-                                                    value={rl.url}
-                                                    draggable={false}
-                                                    onClick={(e) => e.stopPropagation()}
-                                                    onMouseDown={(e) => e.stopPropagation()}
-                                                    onChange={e => onUpdateResourceLink(rl.id, 'url', e.target.value)}
-                                                    className="flex-1 min-w-0 px-1.5 py-0.5 text-xs border-0 border-b border-transparent hover:border-gray-300 dark:hover:border-gray-600 bg-transparent dark:text-white focus:outline-none focus:border-blue-500"
-                                                />
+                                                {rl.type === 'activity' ? (
+                                                    // Activity rows let the developer choose between a URL (external
+                                                    // link) and an inline instructions block (free text). Mode is
+                                                    // implicit from the data: non-empty instructions = instructions
+                                                    // mode, otherwise url mode. The pill button toggles which field
+                                                    // is shown; switching modes clears the *other* field so the row
+                                                    // has exactly one payload.
+                                                    (() => {
+                                                        const isInstructionsMode = !!(rl.instructions && rl.instructions.length > 0);
+                                                        return (
+                                                            <>
+                                                                <button
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        if (isInstructionsMode) {
+                                                                            // Switch to URL mode — clear instructions
+                                                                            onUpdateResourceLink(rl.id, 'instructions', '');
+                                                                        } else {
+                                                                            // Switch to instructions mode — seed with
+                                                                            // a single space so the predicate flips
+                                                                            // (the textarea will be focusable and the
+                                                                            // developer can type their real content).
+                                                                            onUpdateResourceLink(rl.id, 'url', '');
+                                                                            onUpdateResourceLink(rl.id, 'instructions', ' ');
+                                                                        }
+                                                                    }}
+                                                                    className="text-[9px] font-semibold px-1.5 py-0.5 rounded flex-shrink-0 bg-purple-200/60 hover:bg-purple-300/80 dark:bg-purple-900/40 dark:hover:bg-purple-900/60 text-purple-800 dark:text-purple-300 transition-colors"
+                                                                    title={isInstructionsMode ? 'Switch to URL link' : 'Switch to instructions text'}
+                                                                >
+                                                                    {isInstructionsMode ? '📝 Text' : '🔗 URL'}
+                                                                </button>
+                                                                {isInstructionsMode ? (
+                                                                    <textarea
+                                                                        placeholder="Instructions (e.g. steps the learner should follow)"
+                                                                        value={rl.instructions || ''}
+                                                                        draggable={false}
+                                                                        onClick={(e) => e.stopPropagation()}
+                                                                        onMouseDown={(e) => e.stopPropagation()}
+                                                                        onChange={e => onUpdateResourceLink(rl.id, 'instructions', e.target.value)}
+                                                                        rows={2}
+                                                                        className="flex-[2] min-w-0 px-1.5 py-0.5 text-xs border border-purple-200 dark:border-purple-900/50 hover:border-purple-400 dark:hover:border-purple-700 rounded bg-purple-50/30 dark:bg-purple-900/10 dark:text-white focus:outline-none focus:border-purple-500 resize-y leading-snug"
+                                                                    />
+                                                                ) : (
+                                                                    <input
+                                                                        type="url"
+                                                                        placeholder="URL"
+                                                                        value={rl.url}
+                                                                        draggable={false}
+                                                                        onClick={(e) => e.stopPropagation()}
+                                                                        onMouseDown={(e) => e.stopPropagation()}
+                                                                        onChange={e => onUpdateResourceLink(rl.id, 'url', e.target.value)}
+                                                                        className="flex-1 min-w-0 px-1.5 py-0.5 text-xs border-0 border-b border-transparent hover:border-gray-300 dark:hover:border-gray-600 bg-transparent dark:text-white focus:outline-none focus:border-blue-500"
+                                                                    />
+                                                                )}
+                                                            </>
+                                                        );
+                                                    })()
+                                                ) : (
+                                                    <input
+                                                        type="url"
+                                                        placeholder="URL"
+                                                        value={rl.url}
+                                                        draggable={false}
+                                                        onClick={(e) => e.stopPropagation()}
+                                                        onMouseDown={(e) => e.stopPropagation()}
+                                                        onChange={e => onUpdateResourceLink(rl.id, 'url', e.target.value)}
+                                                        className="flex-1 min-w-0 px-1.5 py-0.5 text-xs border-0 border-b border-transparent hover:border-gray-300 dark:hover:border-gray-600 bg-transparent dark:text-white focus:outline-none focus:border-blue-500"
+                                                    />
+                                                )}
                                                 <button onClick={() => onDeleteResourceLink(rl.id)} className="p-0.5 text-gray-400 hover:text-red-500 rounded opacity-0 group-hover/rl:opacity-100 transition-opacity flex-shrink-0">
                                                     <Icon name={IconName.Delete} className="w-3 h-3" />
                                                 </button>
@@ -361,7 +424,7 @@ const CourseEditor: React.FC = () => {
     });
 
     // Resource links state (file links, YouTube links, quiz links) — each link belongs to a topic
-    const [resourceLinks, setResourceLinks] = useState<{ id: string; topicId: string; type: 'file' | 'document' | 'youtube' | 'activity' | 'quiz'; title: string; url: string }[]>(
+    const [resourceLinks, setResourceLinks] = useState<{ id: string; topicId: string; type: 'file' | 'document' | 'youtube' | 'activity' | 'quiz'; title: string; url: string; instructions?: string }[]>(
         (course as any).resourceLinks || []
     );
 
@@ -1100,7 +1163,7 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
         setResourceLinks(prev => [...prev, { id: `rl_${Date.now()}`, topicId, type, title: '', url: '' }]);
     };
 
-    const updateResourceLink = (id: string, field: 'title' | 'url', value: string) => {
+    const updateResourceLink = (id: string, field: 'title' | 'url' | 'instructions', value: string) => {
         setResourceLinks(prev => prev.map(rl => rl.id === id ? { ...rl, [field]: value } : rl));
     };
 

@@ -1864,7 +1864,7 @@ interface TopicAccordionProps {
     onToggleCompletion: (subtopicId: string) => void;
     completedTopics: Set<string>;
     onToggleTopicCompletion: (topicId: string) => void;
-    resourceLinks?: { id: string; topicId: string; type: string; title: string; url: string }[];
+    resourceLinks?: { id: string; topicId: string; type: string; title: string; url: string; instructions?: string }[];
 }
 
 const TopicAccordion: React.FC<TopicAccordionProps> = ({ topic, progress, bookmarkedSubtopics, onToggleBookmark, userRole, completedSubtopics, onToggleCompletion, completedTopics, onToggleTopicCompletion, resourceLinks = [] }) => {
@@ -1976,21 +1976,53 @@ const TopicAccordion: React.FC<TopicAccordionProps> = ({ topic, progress, bookma
                                         </div>
                                         {subtopicLinks.length > 0 && (
                                             <div className="ml-11 mt-2 space-y-1.5">
-                                                {subtopicLinks.map(rl => (
-                                                    <a
-                                                        key={rl.id}
-                                                        href={rl.url}
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                        className="flex items-center gap-2 text-sm text-blue-500 hover:text-blue-400 hover:underline"
-                                                    >
-                                                        <Icon
-                                                            name={rl.type === 'youtube' ? IconName.Video : rl.type === 'quiz' ? IconName.FileText : rl.type === 'document' ? IconName.FileText : rl.type === 'activity' ? IconName.Award : IconName.ExternalLink}
-                                                            className="w-3.5 h-3.5 flex-shrink-0"
-                                                        />
-                                                        <span className="truncate">{rl.title || rl.url}</span>
-                                                    </a>
-                                                ))}
+                                                {subtopicLinks.map(rl => {
+                                                    // Activity resources can carry free-text instructions
+                                                    // instead of a URL. If `instructions` is set and
+                                                    // non-empty, render a non-clickable block with the
+                                                    // title + text; otherwise fall through to the normal
+                                                    // anchor-tag rendering.
+                                                    const hasInstructions =
+                                                        rl.type === 'activity' &&
+                                                        typeof rl.instructions === 'string' &&
+                                                        rl.instructions.trim().length > 0;
+                                                    if (hasInstructions) {
+                                                        return (
+                                                            <div
+                                                                key={rl.id}
+                                                                className="p-2 rounded-md bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800/50"
+                                                            >
+                                                                <div className="flex items-center gap-2 mb-1">
+                                                                    <Icon
+                                                                        name={IconName.Award}
+                                                                        className="w-3.5 h-3.5 flex-shrink-0 text-purple-600 dark:text-purple-400"
+                                                                    />
+                                                                    <span className="text-sm font-semibold text-purple-700 dark:text-purple-300">
+                                                                        {rl.title || 'Activity'}
+                                                                    </span>
+                                                                </div>
+                                                                <p className="text-xs text-gray-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed">
+                                                                    {rl.instructions}
+                                                                </p>
+                                                            </div>
+                                                        );
+                                                    }
+                                                    return (
+                                                        <a
+                                                            key={rl.id}
+                                                            href={rl.url}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="flex items-center gap-2 text-sm text-blue-500 hover:text-blue-400 hover:underline"
+                                                        >
+                                                            <Icon
+                                                                name={rl.type === 'youtube' ? IconName.Video : rl.type === 'quiz' ? IconName.FileText : rl.type === 'document' ? IconName.FileText : rl.type === 'activity' ? IconName.Award : IconName.ExternalLink}
+                                                                className="w-3.5 h-3.5 flex-shrink-0"
+                                                            />
+                                                            <span className="truncate">{rl.title || rl.url}</span>
+                                                        </a>
+                                                    );
+                                                })}
                                             </div>
                                         )}
                                     </li>
