@@ -4689,6 +4689,7 @@ export const CourseSessionsView: React.FC = () => {
     const [sessions, setSessions] = useState<any[]>([]);
     const [runInfo, setRunInfo] = useState<any>(null);
     const [courseTitle, setCourseTitle] = useState<string>('');
+    const [syncResult, setSyncResult] = useState<{ inserted: number; updated: number; softDeleted: number } | null>(null);
 
     // Delete state
     const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null);
@@ -4754,6 +4755,7 @@ export const CourseSessionsView: React.FC = () => {
         setRunInfo(null);
         setCourseTitle('');
         setDeleteResults(null);
+        setSyncResult(null);
 
         try {
             // Step 1: SSG viewCourseRun → get course reference number + full run details
@@ -4779,6 +4781,7 @@ export const CourseSessionsView: React.FC = () => {
             const sessRes = await fetch(`/api/ssg/courses/runs/${encodeURIComponent(runId)}/sessions?${params}`);
             const sessData = await sessRes.json();
 
+            let fetchedSessions: any[] = [];
             if (!sessRes.ok) {
                 if (sessRes.status === 404) {
                     // No sessions registered yet — show empty state, not error
@@ -4787,8 +4790,31 @@ export const CourseSessionsView: React.FC = () => {
                     throw new Error(sessData.error || `Sessions fetch failed (${sessRes.status})`);
                 }
             } else {
-                const sessionList = sessData?.data?.result?.sessions ?? sessData?.data?.sessions ?? [];
-                setSessions(sessionList);
+                fetchedSessions = sessData?.data?.result?.sessions ?? sessData?.data?.sessions ?? [];
+                setSessions(fetchedSessions);
+            }
+
+            // Step 3: sync fetched sessions to local course_session table so the
+            // admin calendar and other local-DB consumers see them. Fire-and-log
+            // on failure — do not block the main fetch flow.
+            try {
+                const syncRes = await fetch('/api/admin/course-sessions/sync-from-ssg', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ courseRunId: runId, sessions: fetchedSessions }),
+                });
+                const syncJson = await syncRes.json();
+                if (syncRes.ok && syncJson.success) {
+                    setSyncResult({
+                        inserted: syncJson.data.inserted || 0,
+                        updated: syncJson.data.updated || 0,
+                        softDeleted: syncJson.data.softDeleted || 0,
+                    });
+                } else {
+                    console.warn('[CourseSessionsView] Local sync failed:', syncJson.error);
+                }
+            } catch (syncErr) {
+                console.warn('[CourseSessionsView] Local sync error:', syncErr);
             }
         } catch (err) {
             setSearchError(err instanceof Error ? err.message : 'Failed to fetch sessions.');
@@ -4903,6 +4929,13 @@ export const CourseSessionsView: React.FC = () => {
                     <div className="mt-3 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg text-sm text-green-800 dark:text-green-300">
                         ✓ <strong>{courseTitle}</strong> — {sessions.length} session{sessions.length !== 1 ? 's' : ''} found
                         {activeSessions.length < sessions.length && ` (${activeSessions.length} active)`}
+                    </div>
+                )}
+
+                {syncResult && !isSearching && (
+                    <div className="mt-2 p-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded text-xs text-blue-800 dark:text-blue-300">
+                        Synced to local DB: {syncResult.inserted} inserted, {syncResult.updated} updated
+                        {syncResult.softDeleted > 0 && `, ${syncResult.softDeleted} soft-deleted`}
                     </div>
                 )}
             </Card>

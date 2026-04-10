@@ -60,6 +60,7 @@ export enum AdminPage {
   ViewTrainers = 'viewTrainers',
   ViewLearners = 'viewLearners',
   UpcomingClasses = 'upcomingClasses',
+  ViewClassByDate = 'viewClassByDate',
   OngoingClasses = 'ongoingClasses',
   CompletedClasses = 'completedClasses',
   CreateNewClass = 'createNewClass',
