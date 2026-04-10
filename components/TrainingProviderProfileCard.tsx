@@ -320,6 +320,8 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
         autoSendReceiptOnPayment: "Auto Send Receipt Upon Payment Received",
         autoSendCertificateOnCompletion: "Auto Send Certificate On Achievement Upon Class Completed",
         autoSendThankYouEmail: "Auto Send Thank You Email Upon Class Completed",
+        autoEnrolDirectApplications: "Auto Submit Direct Applications to SSG",
+        autoGenerateQbInvoice: "Auto Generate QuickBooks Invoice for Direct Applications",
     };
 
     useEffect(() => {

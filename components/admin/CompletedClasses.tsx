@@ -763,9 +763,15 @@ const CompletedClasses: React.FC = () => {
                       <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.courseCode}</td>
                       <td className="px-4 py-2 whitespace-nowrap text-sm">
                         <select
-                          value={classItem.classStatus}
+                          value={classItem.classStatus === 'Cancelled' ? 'Cancelled' : 'auto'}
                           onChange={async (e) => {
-                            const newStatus = e.target.value;
+                            // Two-option dropdown: "Pending/Confirmed" (auto-derived from local trainer)
+                            // or "Cancelled" (manual sticky override).
+                            const selection = e.target.value;
+                            const hasLocalTrainer = !!(classItem.assignedTrainerLocal || '').trim();
+                            const newStatus = selection === 'Cancelled'
+                              ? 'Cancelled'
+                              : (hasLocalTrainer ? 'Confirmed' : 'Pending');
                             try {
                               await fetch(getApiUrl('/api/admin/completed-classes'), {
                                 method: 'PUT',
@@ -781,8 +787,7 @@ const CompletedClasses: React.FC = () => {
                                   'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
                             }`}
                         >
-                          <option value="Confirmed">Confirmed</option>
-                          <option value="Pending">Pending</option>
+                          <option value="auto">{(classItem.assignedTrainerLocal || '').trim() ? 'Confirmed' : 'Pending'}</option>
                           <option value="Cancelled">Cancelled</option>
                         </select>
                       </td>

@@ -58,6 +58,7 @@ import { UploadDirectApplicationView, ViewDirectApplicationView, UpdateDirectApp
 import { BulkUploadEnrolmentView } from '../components/admin/BulkEnrolmentViews';
 import TrainerAttendanceDashboard from '../components/trainer/TrainerAttendanceDashboard';
 import AdminCalendarView from '../components/admin/AdminCalendarView';
+import ViewClassByDateView from '../components/admin/ViewClassByDateView';
 import SchedulerView from '../components/admin/SchedulerView';
 import WorkflowGuidesView from '../components/training-provider/WorkflowGuidesView';
 import AddSessionsView from '../components/admin/AddSessionsView';
@@ -150,6 +151,7 @@ const PAGE_LABELS: Partial<Record<AdminPage, string>> = {
   [AdminPage.FundingValidity]: 'Funding Validity',
   [AdminPage.ViewLearners]: 'View Learners',
   [AdminPage.UpcomingClasses]: 'Upcoming Classes',
+  [AdminPage.ViewClassByDate]: 'View Class By Date',
   [AdminPage.OngoingClasses]: 'Ongoing Classes',
   [AdminPage.CompletedClasses]: 'Completed Classes',
   [AdminPage.CreateNewClass]: 'Create New Class',
@@ -208,6 +210,7 @@ const AdminLayout: React.FC = () => {
       { title: "View Direct Application", description: "Review and manage uploaded direct application records.", icon: IconName.Eye, onClick: () => setAdminPage(AdminPage.ViewDirectApplication) },
     ],
     [AdminPage.TpgCourseRun]: [
+      { title: "View Class By Date", description: "Browse classes grouped by day from the local database.", icon: IconName.Calendar, onClick: () => setAdminPage(AdminPage.ViewClassByDate) },
       { title: "Create New Class", description: "Create a new course run for TPG workflows.", icon: IconName.Add, onClick: () => setAdminPage(AdminPage.CreateNewClass) },
       { title: "Search Course Runs", description: "Search existing course runs by code, title, or schedule.", icon: IconName.Search, onClick: () => setAdminPage(AdminPage.SearchCourseRuns) },
       { title: "View Course Run", description: "Open the course run detail view.", icon: IconName.Eye, onClick: () => setAdminPage(AdminPage.ViewCourseRun) },
@@ -301,6 +304,8 @@ const AdminLayout: React.FC = () => {
         return <ViewLearners />;
       case AdminPage.UpcomingClasses:
         return <UpcomingClassesTable showTitle={true} showFilters={true} />;
+      case AdminPage.ViewClassByDate:
+        return <ViewClassByDateView />;
       case AdminPage.OngoingClasses:
         return <OngoingClasses />;
       case AdminPage.CompletedClasses:
@@ -494,7 +499,7 @@ const AdminLayout: React.FC = () => {
         {/* Main Content Area */}
         <main className="flex-1 min-w-0 overflow-x-hidden">
           <div className={`container mx-auto px-4 sm:px-6 lg:px-8 ${editingCourse ? 'pt-3 pb-8' : 'py-8'}`}>
-            {[AdminPage.CreateNewClass, AdminPage.SearchCourseRuns, AdminPage.ViewCourseRun, AdminPage.EditCourseRun, AdminPage.UploadCourseRuns, AdminPage.DeleteCourseRun, AdminPage.AddSessions, AdminPage.CourseSessionTiming, AdminPage.CourseSessions, AdminPage.EnrollLearners, AdminPage.UploadEnrolments, AdminPage.SearchEnrolment, AdminPage.ViewEnrolment, AdminPage.UpdateEnrolment, AdminPage.CancelEnrolment, AdminPage.UpdateEnrolmentFees, AdminPage.CourseSessionAttendance, AdminPage.CheckAttendance, AdminPage.SubmitAssessment, AdminPage.UpdateAssessment, AdminPage.SearchAssessments, AdminPage.ViewAssessment, AdminPage.SearchGrant, AdminPage.ViewGrantStatus].includes(adminPage) && <SsgAppSelector />}
+            {[AdminPage.CreateNewClass, AdminPage.EditClass, AdminPage.ClassDetail, AdminPage.ViewClassByDate, AdminPage.SearchCourseRuns, AdminPage.ViewCourseRun, AdminPage.EditCourseRun, AdminPage.UploadCourseRuns, AdminPage.DeleteCourseRun, AdminPage.AddSessions, AdminPage.CourseSessionTiming, AdminPage.CourseSessions, AdminPage.EnrollLearners, AdminPage.UploadEnrolments, AdminPage.SearchEnrolment, AdminPage.ViewEnrolment, AdminPage.UpdateEnrolment, AdminPage.CancelEnrolment, AdminPage.UpdateEnrolmentFees, AdminPage.CourseSessionAttendance, AdminPage.CheckAttendance, AdminPage.SubmitAssessment, AdminPage.UpdateAssessment, AdminPage.SearchAssessments, AdminPage.ViewAssessment, AdminPage.SearchGrant, AdminPage.ViewGrantStatus].includes(adminPage) && <SsgAppSelector />}
             {renderContent()}
           </div>
         </main>

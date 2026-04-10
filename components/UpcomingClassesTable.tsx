@@ -668,206 +668,212 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                 ) : (
                     <>
                         <div className="overflow-x-auto">
-                            {includeOngoing ? (
-                                <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                                    <thead className="bg-gray-50 dark:bg-gray-700/50">
-                                        <tr className="border-b dark:border-gray-700">
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Course Run ID</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider text-center">Course Title</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Course Ref Code</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Class Type</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Start Date</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">End Date</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Class Status</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Learners</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Trainer (TPG)</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Trainer (Local)</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Attendance</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"></th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                                        {upcomingClasses.map((classItem, index) => {
-                                            // Respect Cancelled stickiness from API; otherwise derive from local trainer.
-                                            const status = classItem.classStatus === 'Cancelled'
-                                                ? 'Cancelled'
-                                                : (classItem.assignedTrainerLocal ? 'Confirmed' : 'Pending');
-                                            const classType = classItem.classType || 'Physical';
-                                            return (
-                                                <tr key={index} className="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                                                    <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.courseRunId}</td>
-                                                    <td className="px-4 py-2 text-sm font-medium min-w-[350px]"><button type="button" onClick={() => handleViewDetails(classItem)} className="text-left text-blue-600 dark:text-blue-400 hover:underline">{classItem.courseTitle}</button></td>
-                                                    <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.courseCode}</td>
-                                                    <td className="px-4 py-2 whitespace-nowrap text-sm">
-                                                        <span className={`px-2 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full ${classType === 'Virtual' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300' : classType === 'Hybrid' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300' : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'}`}>{classType}</span>
-                                                    </td>
-                                                    <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{formatDate(classItem.startDate)}</td>
-                                                    <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{formatDate(classItem.endDate)}</td>
-                                                    <td className="px-4 py-2 whitespace-nowrap text-sm">
-                                                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(status)}`}>{status}</span>
-                                                    </td>
-                                                    <td className="px-4 py-2 whitespace-nowrap text-sm text-center text-gray-700 dark:text-gray-200">{classItem.numOfTrainee}</td>
-                                                    <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{renderTrainerCell(classItem.assignedTrainerTpg, classItem.assignedTrainerTpgEmail)}</td>
-                                                    <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{renderTrainerCell(classItem.assignedTrainerLocal, classItem.assignedTrainerLocalEmail)}</td>
-                                                    <td className="px-4 py-2 whitespace-nowrap text-sm text-center">
-                                                        {classItem.attendanceScore != null ? (
-                                                            <span className={`font-semibold ${classItem.attendanceScore >= 75 ? 'text-green-600' : classItem.attendanceScore >= 50 ? 'text-yellow-600' : 'text-red-600'}`}>
-                                                                {classItem.attendanceScore}%
-                                                            </span>
-                                                        ) : (
-                                                            <span className="text-gray-400">—</span>
-                                                        )}
-                                                    </td>
-                                                    <td className="px-4 py-2 whitespace-nowrap text-sm font-medium">
-                                                        <Button
-                                                            variant="primary"
-                                                            size="sm"
-                                                            onClick={() => handleEditClass(classItem)}
-                                                        >
-                                                            <Icon name={IconName.Edit} className="w-4 h-4 mr-1" />
-                                                            Edit
-                                                        </Button>
-                                                    </td>
-                                                </tr>
-                                            );
-                                        })}
-                                    </tbody>
-                                </table>
-                            ) : (
-                                <table className="divide-y divide-gray-200 dark:divide-gray-700" style={{ tableLayout: 'fixed', width: '2340px' }}>
-                                    <colgroup>
-                                        <col style={{ width: '90px' }} />
-                                        <col style={{ width: '420px' }} />
-                                        <col style={{ width: '160px' }} />
-                                        <col style={{ width: '110px' }} />
-                                        <col style={{ width: '100px' }} />
-                                        <col style={{ width: '110px' }} />
-                                        <col style={{ width: '90px' }} />
-                                        <col style={{ width: '80px' }} />
-                                        <col style={{ width: '200px' }} />
-                                        <col style={{ width: '200px' }} />
-                                        <col style={{ width: '180px' }} />
-                                        <col style={{ width: '220px' }} />
-                                        <col style={{ width: '90px' }} />
-                                    </colgroup>
-                                    <thead className="bg-gray-50 dark:bg-gray-700/50">
-                                        <tr className="border-b dark:border-gray-700">
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Course Run ID</th>
-                                            <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Course Title</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Course Ref Code</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Class Status</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Class Type</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Start Date</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">End Date</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Learners</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Trainer (TPG)</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Trainer (Local)</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Next Trainer</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Invite Next Trainer</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"></th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                                        {upcomingClasses.map((classItem, index) => {
-                                            const classType = classItem.classType || 'Physical';
-                                            return (
-                                                <tr key={index} className="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                                                    <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.courseRunId}</td>
-                                                    <td className="px-4 py-2 text-sm font-medium overflow-hidden text-ellipsis"><button type="button" onClick={() => handleViewDetails(classItem)} className="text-left text-blue-600 dark:text-blue-400 hover:underline">{classItem.courseTitle}</button></td>
-                                                    <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.courseCode}</td>
-                                                    <td className="px-4 py-2 whitespace-nowrap text-sm">
+                          {includeOngoing ? (
+                            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                                <thead className="bg-gray-50 dark:bg-gray-700/50">
+                                    <tr className="border-b dark:border-gray-700">
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Course Run ID</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider text-center">Course Title</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Course Ref Code</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Class Type</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Start Date</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">End Date</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Class Status</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Learners</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Trainer (TPG)</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Trainer (Local)</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Attendance</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"></th>
+                                    </tr>
+                                </thead>
+                                <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                                    {upcomingClasses.map((classItem, index) => {
+                                        // Respect Cancelled stickiness from API; otherwise derive from local trainer.
+                                        const status = classItem.classStatus === 'Cancelled'
+                                            ? 'Cancelled'
+                                            : (classItem.assignedTrainerLocal ? 'Confirmed' : 'Pending');
+                                        const classType = classItem.classType || 'Physical';
+                                        return (
+                                            <tr key={index} className="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                                                <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.courseRunId}</td>
+                                                <td className="px-4 py-2 text-sm font-medium min-w-[350px]"><button type="button" onClick={() => handleViewDetails(classItem)} className="text-left text-blue-600 dark:text-blue-400 hover:underline">{classItem.courseTitle}</button></td>
+                                                <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.courseCode}</td>
+                                                <td className="px-4 py-2 whitespace-nowrap text-sm">
+                                                    <span className={`px-2 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full ${classType === 'Virtual' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300' : classType === 'Hybrid' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300' : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'}`}>{classType}</span>
+                                                </td>
+                                                <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{formatDate(classItem.startDate)}</td>
+                                                <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{formatDate(classItem.endDate)}</td>
+                                                <td className="px-4 py-2 whitespace-nowrap text-sm">
+                                                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(status)}`}>{status}</span>
+                                                </td>
+                                                <td className="px-4 py-2 whitespace-nowrap text-sm text-center text-gray-700 dark:text-gray-200">{classItem.numOfTrainee}</td>
+                                                <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{renderTrainerCell(classItem.assignedTrainerTpg, classItem.assignedTrainerTpgEmail)}</td>
+                                                <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{renderTrainerCell(classItem.assignedTrainerLocal, classItem.assignedTrainerLocalEmail)}</td>
+                                                <td className="px-4 py-2 whitespace-nowrap text-sm text-center">
+                                                    {classItem.attendanceScore != null ? (
+                                                        <span className={`font-semibold ${classItem.attendanceScore >= 75 ? 'text-green-600' : classItem.attendanceScore >= 50 ? 'text-yellow-600' : 'text-red-600'}`}>
+                                                            {classItem.attendanceScore}%
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-gray-400">—</span>
+                                                    )}
+                                                </td>
+                                                <td className="px-4 py-2 whitespace-nowrap text-sm font-medium">
+                                                    <Button
+                                                        variant="primary"
+                                                        size="sm"
+                                                        onClick={() => handleEditClass(classItem)}
+                                                    >
+                                                        <Icon name={IconName.Edit} className="w-4 h-4 mr-1" />
+                                                        Edit
+                                                    </Button>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                          ) : (
+                            <table className="divide-y divide-gray-200 dark:divide-gray-700" style={{ tableLayout: 'fixed', width: '2340px' }}>
+                                <colgroup>
+                                    <col style={{ width: '90px' }} />
+                                    <col style={{ width: '420px' }} />
+                                    <col style={{ width: '160px' }} />
+                                    <col style={{ width: '110px' }} />
+                                    <col style={{ width: '100px' }} />
+                                    <col style={{ width: '110px' }} />
+                                    <col style={{ width: '90px' }} />
+                                    <col style={{ width: '80px' }} />
+                                    <col style={{ width: '200px' }} />
+                                    <col style={{ width: '200px' }} />
+                                    <col style={{ width: '180px' }} />
+                                    <col style={{ width: '220px' }} />
+                                    <col style={{ width: '90px' }} />
+                                </colgroup>
+                                <thead className="bg-gray-50 dark:bg-gray-700/50">
+                                    <tr className="border-b dark:border-gray-700">
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Course Run ID</th>
+                                        <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Course Title</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Course Ref Code</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Class Status</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Class Type</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Start Date</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">End Date</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Learners</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Trainer (TPG)</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Trainer (Local)</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Next Trainer</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Invite Next Trainer</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"></th>
+                                    </tr>
+                                </thead>
+                                <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                                    {upcomingClasses.map((classItem, index) => {
+                                        const classType = classItem.classType || 'Physical';
+                                        return (
+                                        <tr key={index} className="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.courseRunId}</td>
+                                            <td className="px-4 py-2 text-sm font-medium overflow-hidden text-ellipsis"><button type="button" onClick={() => handleViewDetails(classItem)} className="text-left text-blue-600 dark:text-blue-400 hover:underline">{classItem.courseTitle}</button></td>
+                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.courseCode}</td>
+                                            <td className="px-4 py-2 whitespace-nowrap text-sm">
+                                                <select
+                                                    value={classItem.classStatus === 'Cancelled' ? 'Cancelled' : 'auto'}
+                                                    onChange={async (e) => {
+                                                        // Two-option dropdown: "Pending/Confirmed" (auto-derived from local trainer)
+                                                        // or "Cancelled" (manual sticky override). When switching off Cancelled,
+                                                        // compute the auto-derived value client-side so the UI updates optimistically.
+                                                        const selection = e.target.value;
+                                                        const hasLocalTrainer = !!(classItem.assignedTrainerLocal || '').trim();
+                                                        const newStatus = selection === 'Cancelled'
+                                                            ? 'Cancelled'
+                                                            : (hasLocalTrainer ? 'Confirmed' : 'Pending');
+                                                        try {
+                                                            await fetch(getApiUrl('/api/admin/upcoming-classes'), {
+                                                                method: 'PUT',
+                                                                headers: { 'Content-Type': 'application/json' },
+                                                                body: JSON.stringify({ id: classItem.id, class_status: newStatus }),
+                                                            });
+                                                            setUpcomingClasses(prev => prev.map(c => c.id === classItem.id ? { ...c, classStatus: newStatus } : c));
+                                                        } catch { /* silent */ }
+                                                    }}
+                                                    className={`text-xs font-semibold rounded-full px-2 py-1 border-0 cursor-pointer focus:ring-2 focus:ring-blue-500 ${getStatusColor(classItem.classStatus)}`}
+                                                >
+                                                    <option value="auto">{(classItem.assignedTrainerLocal || '').trim() ? 'Confirmed' : 'Pending'}</option>
+                                                    <option value="Cancelled">Cancelled</option>
+                                                </select>
+                                            </td>
+                                            <td className="px-4 py-2 whitespace-nowrap text-sm">
+                                                <span className={`px-2 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full ${classType === 'Virtual' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300' : classType === 'Hybrid' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300' : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'}`}>{classType}</span>
+                                            </td>
+                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{formatDate(classItem.startDate)}</td>
+                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{formatDate(classItem.endDate)}</td>
+                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-center text-gray-700 dark:text-gray-200">{classItem.numOfTrainee}</td>
+                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{renderTrainerCell(classItem.assignedTrainerTpg, classItem.assignedTrainerTpgEmail)}</td>
+                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{renderTrainerCell(classItem.assignedTrainerLocal, classItem.assignedTrainerLocalEmail)}</td>
+                                            <td className="px-4 py-2 text-sm text-gray-700 dark:text-gray-200">
+                                                {classItem.nextAvailableTrainer ? (() => {
+                                                    const courseTrainers = splitTrainerList(classItem.trainersList);
+                                                    return (
                                                         <select
-                                                            value={classItem.classStatus}
-                                                            onChange={async (e) => {
-                                                                const newStatus = e.target.value;
-                                                                try {
-                                                                    await fetch(getApiUrl('/api/admin/upcoming-classes'), {
-                                                                        method: 'PUT',
-                                                                        headers: { 'Content-Type': 'application/json' },
-                                                                        body: JSON.stringify({ id: classItem.id, class_status: newStatus }),
-                                                                    });
-                                                                    setUpcomingClasses(prev => prev.map(c => c.id === classItem.id ? { ...c, classStatus: newStatus } : c));
-                                                                } catch { /* silent */ }
-                                                            }}
-                                                            className={`text-xs font-semibold rounded-full px-2 py-1 border-0 cursor-pointer focus:ring-2 focus:ring-blue-500 ${getStatusColor(classItem.classStatus)}`}
+                                                            value={nextTrainerOverrides[classItem.id] ?? classItem.nextAvailableTrainer}
+                                                            onChange={e => setNextTrainerOverrides(prev => ({ ...prev, [classItem.id]: e.target.value }))}
+                                                            className="w-full min-w-[160px] border border-gray-300 dark:border-gray-600 rounded-md px-2 py-1 text-xs bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                         >
-                                                            <option value="Confirmed">Confirmed</option>
-                                                            <option value="Pending">Pending</option>
-                                                            <option value="Cancelled">Cancelled</option>
+                                                            <option value="">-- Reassign Trainer --</option>
+                                                            {courseTrainers.map(name => (
+                                                                <option key={name} value={name}>{name}</option>
+                                                            ))}
                                                         </select>
-                                                    </td>
-                                                    <td className="px-4 py-2 whitespace-nowrap text-sm">
-                                                        <span className={`px-2 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full ${classType === 'Virtual' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300' : classType === 'Hybrid' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300' : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'}`}>{classType}</span>
-                                                    </td>
-                                                    <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{formatDate(classItem.startDate)}</td>
-                                                    <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{formatDate(classItem.endDate)}</td>
-                                                    <td className="px-4 py-2 whitespace-nowrap text-sm text-center text-gray-700 dark:text-gray-200">{classItem.numOfTrainee}</td>
-                                                    <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{renderTrainerCell(classItem.assignedTrainerTpg, classItem.assignedTrainerTpgEmail)}</td>
-                                                    <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{renderTrainerCell(classItem.assignedTrainerLocal, classItem.assignedTrainerLocalEmail)}</td>
-                                                    <td className="px-4 py-2 text-sm text-gray-700 dark:text-gray-200">
-                                                        {classItem.nextAvailableTrainer ? (() => {
-                                                            const courseTrainers = splitTrainerList(classItem.trainersList);
-                                                            return (
-                                                                <select
-                                                                    value={nextTrainerOverrides[classItem.id] ?? classItem.nextAvailableTrainer}
-                                                                    onChange={e => setNextTrainerOverrides(prev => ({ ...prev, [classItem.id]: e.target.value }))}
-                                                                    className="w-full min-w-[160px] border border-gray-300 dark:border-gray-600 rounded-md px-2 py-1 text-xs bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                                >
-                                                                    <option value="">-- Reassign Trainer --</option>
-                                                                    {courseTrainers.map(name => (
-                                                                        <option key={name} value={name}>{name}</option>
-                                                                    ))}
-                                                                </select>
-                                                            );
-                                                        })() : (
-                                                            <span className="text-gray-400 text-xs italic">—</span>
+                                                    );
+                                                })() : (
+                                                    <span className="text-gray-400 text-xs italic">—</span>
+                                                )}
+                                            </td>
+                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">
+                                                <div className="flex items-center gap-2">
+                                                    {classItem.latestInvitationStatus && (
+                                                        <span className={`inline-flex px-2 py-0.5 text-xs font-semibold rounded-full ${classItem.latestInvitationStatus === 'accepted'
+                                                            ? 'bg-green-100 text-green-700'
+                                                            : classItem.latestInvitationStatus === 'declined'
+                                                                ? 'bg-red-100 text-red-700'
+                                                                : 'bg-yellow-100 text-yellow-700'
+                                                            }`}>
+                                                            {classItem.latestInvitationStatus}
+                                                        </span>
+                                                    )}
+                                                    <Button
+                                                        variant="secondary"
+                                                        size="sm"
+                                                        onClick={() => handleSendTrainerInvitation(classItem)}
+                                                        disabled={!(nextTrainerOverrides[classItem.id] || classItem.nextAvailableTrainer) || sendingInvitationFor === classItem.id}
+                                                    >
+                                                        {sendingInvitationFor === classItem.id ? (
+                                                            <Icon name={IconName.Spinner} className="w-3.5 h-3.5 animate-spin" />
+                                                        ) : (
+                                                            <>
+                                                                <Icon name={IconName.Send} className="w-3.5 h-3.5 mr-1" />
+                                                                SEND INVITE
+                                                            </>
                                                         )}
-                                                    </td>
-                                                    <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">
-                                                        <div className="flex items-center gap-2">
-                                                            {classItem.latestInvitationStatus && (
-                                                                <span className={`inline-flex px-2 py-0.5 text-xs font-semibold rounded-full ${classItem.latestInvitationStatus === 'accepted'
-                                                                    ? 'bg-green-100 text-green-700'
-                                                                    : classItem.latestInvitationStatus === 'declined'
-                                                                        ? 'bg-red-100 text-red-700'
-                                                                        : 'bg-yellow-100 text-yellow-700'
-                                                                    }`}>
-                                                                    {classItem.latestInvitationStatus}
-                                                                </span>
-                                                            )}
-                                                            <Button
-                                                                variant="secondary"
-                                                                size="sm"
-                                                                onClick={() => handleSendTrainerInvitation(classItem)}
-                                                                disabled={!(nextTrainerOverrides[classItem.id] || classItem.nextAvailableTrainer) || sendingInvitationFor === classItem.id}
-                                                            >
-                                                                {sendingInvitationFor === classItem.id ? (
-                                                                    <Icon name={IconName.Spinner} className="w-3.5 h-3.5 animate-spin" />
-                                                                ) : (
-                                                                    <>
-                                                                        <Icon name={IconName.Send} className="w-3.5 h-3.5 mr-1" />
-                                                                        SEND INVITE
-                                                                    </>
-                                                                )}
-                                                            </Button>
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-4 py-2 whitespace-nowrap text-sm font-medium">
-                                                        <Button
-                                                            variant="primary"
-                                                            size="sm"
-                                                            onClick={() => handleEditClass(classItem)}
-                                                        >
-                                                            <Icon name={IconName.Edit} className="w-4 h-4 mr-1" />
-                                                            Edit
-                                                        </Button>
-                                                    </td>
-                                                </tr>
-                                            );
-                                        })}
-                                    </tbody>
-                                </table>
-                            )}
+                                                    </Button>
+                                                </div>
+                                            </td>
+                                            <td className="px-4 py-2 whitespace-nowrap text-sm font-medium">
+                                                <Button
+                                                    variant="primary"
+                                                    size="sm"
+                                                    onClick={() => handleEditClass(classItem)}
+                                                >
+                                                    <Icon name={IconName.Edit} className="w-4 h-4 mr-1" />
+                                                    Edit
+                                                </Button>
+                                            </td>
+                                        </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                          )}
                         </div>
 
                         {/* Pagination */}

@@ -209,6 +209,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate, onSelectWorkflo
 
             <NavSection title="TPG Management" isOpen={openSections.tpgManagement} onToggle={() => toggleSection('tpgManagement')}>
                 <SubSection title="Course Run" isOpen={openSections.tpgCourseRun} onToggle={() => toggleSection('tpgCourseRun')}>
+                    <NavItem page={AdminPage.ViewClassByDate} label="View Class By Date" isSubItem />
                     <NavItem page={AdminPage.CreateNewClass} label="Create New Class" isSubItem />
                     <NavItem page={AdminPage.SearchCourseRuns} label="Search Course Runs" isSubItem />
                     <NavItem page={AdminPage.ViewCourseRun} label="View Course Run" isSubItem />

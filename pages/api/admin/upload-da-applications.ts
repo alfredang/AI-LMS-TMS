@@ -3,6 +3,7 @@ import pool from '../../../lib/db';
 import { searchEnrolment } from '../../../lib/ssg/services/enrolment-service';
 import { inferIdType } from '../../../lib/utils/id-type';
 import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdentifiers';
+import { bulkProcessDirectApplications } from '../../../lib/autoEnrolDirectApplications';
 
 // Increase body size limit to 50MB (default is 1MB, which causes HTTP 413 for large Excel uploads)
 export const config = {
@@ -469,6 +470,31 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
         if (webhookQueue.length > 0) {
             webhookResult = await callSearchEnrolmentSSGBatch(webhookQueue, tp.uen, tp.code);
+        }
+
+        // Fire-and-forget auto-enrol pipeline for newly-inserted rows, if the
+        // master toggle is enabled on the training provider.
+        try {
+            const insertedIds = insertedRecords
+                .map(r => r?.id)
+                .filter((x: unknown): x is string => typeof x === 'string' && x.length > 0);
+
+            if (insertedIds.length > 0) {
+                const tpRow = await pool.query(
+                    `SELECT auto_enrol_direct_applications FROM training_provider LIMIT 1`
+                );
+                if (tpRow.rows[0]?.auto_enrol_direct_applications) {
+                    console.log(`🚀 auto-enrol: queuing ${insertedIds.length} new applications for background processing`);
+                    setImmediate(() => {
+                        bulkProcessDirectApplications(insertedIds).catch(err => {
+                            console.error('❌ Background auto-enrol failed:', err);
+                        });
+                    });
+                }
+            }
+        } catch (err) {
+            // Never fail the upload response because of auto-enrol setup errors.
+            console.error('⚠️  auto-enrol kickoff setup failed (non-fatal):', err);
         }
 
         return res.status(200).json({
