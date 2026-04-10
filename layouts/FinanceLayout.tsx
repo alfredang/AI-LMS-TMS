@@ -668,7 +668,8 @@ const FinanceLayout: React.FC = () => {
           {[
             { id: 'billing-history', label: 'Billing History', icon: '💰' },
             { id: 'proforma-invoice', label: 'Proforma Invoice', icon: '🧾' },
-            { id: 'invoice', label: 'Invoice', icon: '📄' },
+            { id: 'personal-invoice', label: 'Personal Invoice', icon: '📄' },
+            { id: 'company-invoice', label: 'Company Invoice', icon: '🏢' },
             { id: 'receipt', label: 'Receipt', icon: '🧾' },
           ].map(item => (
             <a key={item.id} href="#" onClick={(e) => { e.preventDefault(); navigateTo('workflowGuides'); setSelectedWorkflowId(item.id); }} className="flex items-center gap-2 rounded-md px-3 py-2 ml-4 text-sm text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-slate-700 dark:hover:text-white transition-colors">
