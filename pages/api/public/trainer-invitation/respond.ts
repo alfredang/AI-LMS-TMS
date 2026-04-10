@@ -138,36 +138,73 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       [action === 'accept' ? 'accepted' : 'declined', invitation.id]
     );
 
-    // If accepted, assign trainer to course run
+    // If accepted, assign trainer to course run. Isolated in its own
+    // try/catch so a failure here does NOT break the trainer-facing
+    // "Invitation Accepted" page — the invitation status has already been
+    // updated above, and the admin can resync via the Upcoming Classes
+    // Refresh button. Every branch logs loudly so prod failures are visible.
     if (action === 'accept') {
-      const trainerLookup = await pool.query(
-        `SELECT au.id FROM app_user au
-         JOIN trainer_profile tp ON tp.user_id = au.id
-         WHERE LOWER(au.email) = LOWER($1) OR LOWER(au.secondary_email) = LOWER($1)
-         LIMIT 1`,
-        [invitation.trainer_email]
-      );
-      const trainerId = trainerLookup.rows[0]?.id || null;
+      try {
+        const trainerLookup = await pool.query(
+          `SELECT au.id FROM app_user au
+           JOIN trainer_profile tp ON tp.user_id = au.id
+           WHERE LOWER(au.email) = LOWER($1) OR LOWER(au.secondary_email) = LOWER($1)
+           LIMIT 1`,
+          [invitation.trainer_email]
+        );
+        const trainerId = trainerLookup.rows[0]?.id || null;
 
-      await pool.query(`
-        CREATE TABLE IF NOT EXISTS course_run_trainer (
-          id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-          course_run_id UUID NOT NULL REFERENCES course_run(id) ON DELETE CASCADE,
-          trainer_id UUID, trainer_name TEXT NOT NULL, trainer_email TEXT,
-          assigned_at TIMESTAMPTZ DEFAULT NOW()
-        )
-      `);
-      await pool.query(`
-        CREATE UNIQUE INDEX IF NOT EXISTS uq_crt_run_trainer
-        ON course_run_trainer(course_run_id, COALESCE(trainer_id, '00000000-0000-0000-0000-000000000000'))
-      `);
-      await pool.query(
-        `INSERT INTO course_run_trainer (course_run_id, trainer_id, trainer_name, trainer_email)
-         VALUES ($1, $2, $3, $4)
-         ON CONFLICT (course_run_id, COALESCE(trainer_id, '00000000-0000-0000-0000-000000000000'))
-         DO UPDATE SET trainer_name = EXCLUDED.trainer_name, trainer_email = EXCLUDED.trainer_email`,
-        [invitation.course_run_id, trainerId, invitation.trainer_name, invitation.trainer_email]
-      );
+        console.log(
+          `🎯 [trainer-invitation/respond] Accept: course_run=${invitation.course_run_id} ` +
+          `trainer_name="${invitation.trainer_name}" trainer_email="${invitation.trainer_email}" ` +
+          `trainer_id=${trainerId ?? 'NULL (no trainer_profile)'}`
+        );
+
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS course_run_trainer (
+            id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+            course_run_id UUID NOT NULL REFERENCES course_run(id) ON DELETE CASCADE,
+            trainer_id UUID, trainer_name TEXT NOT NULL, trainer_email TEXT,
+            assigned_at TIMESTAMPTZ DEFAULT NOW()
+          )
+        `);
+        await pool.query(`
+          CREATE UNIQUE INDEX IF NOT EXISTS uq_crt_run_trainer
+          ON course_run_trainer(course_run_id, COALESCE(trainer_id, '00000000-0000-0000-0000-000000000000'::uuid))
+        `);
+
+        // Insert with explicit ::uuid cast on the COALESCE literal so the
+        // ON CONFLICT expression matches the unique index signature exactly.
+        // Without the cast, Postgres may refuse to match the expression
+        // index and throw "no unique or exclusion constraint matching the
+        // ON CONFLICT specification".
+        const ins = await pool.query(
+          `INSERT INTO course_run_trainer (course_run_id, trainer_id, trainer_name, trainer_email)
+           VALUES ($1, $2, $3, $4)
+           ON CONFLICT (course_run_id, COALESCE(trainer_id, '00000000-0000-0000-0000-000000000000'::uuid))
+           DO UPDATE SET
+             trainer_name = EXCLUDED.trainer_name,
+             trainer_email = EXCLUDED.trainer_email
+           RETURNING id, (xmax = 0) AS was_inserted`,
+          [invitation.course_run_id, trainerId, invitation.trainer_name, invitation.trainer_email]
+        );
+
+        const row = ins.rows[0];
+        console.log(
+          `✅ [trainer-invitation/respond] course_run_trainer ${row?.was_inserted ? 'INSERTED' : 'UPDATED'} ` +
+          `id=${row?.id} for course_run=${invitation.course_run_id}`
+        );
+      } catch (crtErr) {
+        // Log loudly but do NOT rethrow — the invitation is already marked
+        // accepted and the trainer should still see the thank-you page.
+        // The admin can backfill via the Refresh button / re-run the
+        // accepted invitation from the trainer_invitation table.
+        console.error(
+          `❌ [trainer-invitation/respond] FAILED to upsert course_run_trainer for ` +
+          `course_run=${invitation.course_run_id} trainer="${invitation.trainer_name}":`,
+          crtErr
+        );
+      }
     }
 
     // Get training provider config for sending follow-up emails

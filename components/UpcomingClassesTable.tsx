@@ -272,6 +272,21 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
         fetchUpcomingClasses();
     }, [currentPage, debouncedSearch, debouncedCourseTitle, debouncedCourseCode, debouncedCourseRunId, selectedTrainer, selectedClassStatus, selectedClassType, selectedCourseType, debouncedStartDate, debouncedEndDate]);
 
+    // Auto-refresh when the tab becomes visible again. Common flow: admin
+    // sends an invitation, switches to email to test, then comes back — this
+    // picks up any trainer accept/decline that happened while away.
+    useEffect(() => {
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'visible') {
+                console.log('👁️ Tab visible again — refetching upcoming classes');
+                fetchUpcomingClasses();
+            }
+        };
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
     // Date formatting function
     const formatDateInput = (value: string) => {
         const numeric = value.replace(/\D/g, '');
@@ -421,6 +436,25 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
                     <h3 className="text-3xl font-bold dark:text-white">Upcoming Classes</h3>
                     <div className="flex gap-2">
+                        <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => fetchUpcomingClasses()}
+                            disabled={loading}
+                            title="Pull the latest data (use this after a trainer accepts/declines an invitation)"
+                        >
+                            <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                strokeWidth={2}
+                                stroke="currentColor"
+                                className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`}
+                            >
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992V4.356m0 4.992-3.181-3.183a8.25 8.25 0 0 0-13.803 3.7M4.031 9.865a8.25 8.25 0 0 0 13.803 3.7l3.181-3.182m-4.991 0h4.991v-4.99" />
+                            </svg>
+                            Refresh
+                        </Button>
                         <Button
                             variant="secondary"
                             size="sm"
