@@ -99,7 +99,6 @@ export enum AdminPage {
   SearchPastLearners = 'searchPastLearners',
   CheckAttendance = 'checkAttendance',
   AutomationLogs = 'automationLogs',
-  AssignTrainerLogs = 'assignTrainerLogs',
   TrainerFolderLogs = 'trainerFolderLogs',
   AutoCreateCertificatesLog = 'autoCreateCertificatesLog',
   CourseRunDateSyncLogs = 'courseRunDateSyncLogs',

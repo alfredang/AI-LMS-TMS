@@ -143,18 +143,6 @@ export const NEMO_TOOLS = [
 
   // ── Write/Action Tools ──
   {
-    name: 'assign_trainer',
-    description: 'Assign a trainer to a course run. Requires the course run UUID and trainer user ID.',
-    input_schema: {
-      type: 'object' as const,
-      properties: {
-        course_run_uuid: { type: 'string', description: 'Course run UUID' },
-        trainer_user_id: { type: 'string', description: 'Trainer user UUID' },
-      },
-      required: ['course_run_uuid', 'trainer_user_id'],
-    },
-  },
-  {
     name: 'send_trainer_invitation',
     description: 'Send an email invitation to a trainer for a course run.',
     input_schema: {
@@ -253,7 +241,7 @@ export const NEMO_TOOLS = [
 
 // ── Write tool names (for role-based filtering) ──
 const WRITE_TOOLS = new Set([
-  'assign_trainer', 'send_trainer_invitation', 'add_course_run',
+  'send_trainer_invitation', 'add_course_run',
   'enroll_learner', 'generate_proforma_invoice', 'quickbooks_operation',
   'ssg_course_operation', 'update_memory',
 ]);
@@ -369,12 +357,6 @@ export async function executeTool(name: string, input: Record<string, any>): Pro
         );
 
       // ── Write tools ──
-      case 'assign_trainer':
-        return await callApi('POST', '/api/external/assign-trainer', {
-          courseRunUuid: input.course_run_uuid,
-          trainerUserId: input.trainer_user_id,
-        });
-
       case 'send_trainer_invitation':
         return await callApi('POST', '/api/admin/send-trainer-invitation', {
           courseRunUuid: input.course_run_uuid,
