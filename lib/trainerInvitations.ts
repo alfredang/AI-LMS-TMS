@@ -178,10 +178,45 @@ export async function ensureTpgTrainerColumns(query: (sql: string, params?: any[
 export async function ensureTrainerInvitationTemplateColumns(query: (sql: string, params?: any[]) => Promise<any>) {
   await query(`ALTER TABLE training_provider ADD COLUMN IF NOT EXISTS trainer_invitation_email_subject TEXT`);
   await query(`ALTER TABLE training_provider ADD COLUMN IF NOT EXISTS trainer_invitation_email_body TEXT`);
+  // Comma-separated list of addresses to CC on every trainer invitation
+  // (manual send, auto-escalation on decline, and the weekly sweep all
+  // honour this). NULL means "no CC".
+  await query(`ALTER TABLE training_provider ADD COLUMN IF NOT EXISTS trainer_invitation_email_cc TEXT`);
   await query(`ALTER TABLE training_provider ADD COLUMN IF NOT EXISTS trainer_accept_email_subject TEXT`);
   await query(`ALTER TABLE training_provider ADD COLUMN IF NOT EXISTS trainer_accept_email_body TEXT`);
+  // CC list for the accept confirmation email sent to the trainer after
+  // they click Accept. NULL means "no CC".
+  await query(`ALTER TABLE training_provider ADD COLUMN IF NOT EXISTS trainer_accept_email_cc TEXT`);
   await query(`ALTER TABLE training_provider ADD COLUMN IF NOT EXISTS trainer_decline_email_subject TEXT`);
   await query(`ALTER TABLE training_provider ADD COLUMN IF NOT EXISTS trainer_decline_email_body TEXT`);
+  // CC list for the decline acknowledgement email sent to the trainer
+  // after they click Decline. NULL means "no CC".
+  await query(`ALTER TABLE training_provider ADD COLUMN IF NOT EXISTS trainer_decline_email_cc TEXT`);
+}
+
+/**
+ * Parse and validate a comma/semicolon/newline-separated CC list into a
+ * deduplicated array of lowercase email addresses. Invalid tokens are
+ * silently dropped — that's fine here because the UI shows the raw text
+ * back to the admin, so they can correct typos themselves.
+ */
+export function parseCcList(raw: string | null | undefined): string[] {
+  if (!raw) return [];
+  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const tokens = raw
+    .split(/[,;\n\r]+/)
+    .map(s => s.trim())
+    .filter(Boolean);
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const t of tokens) {
+    const lower = t.toLowerCase();
+    if (!EMAIL_RE.test(lower)) continue;
+    if (seen.has(lower)) continue;
+    seen.add(lower);
+    out.push(lower);
+  }
+  return out;
 }
 
 export async function ensureTrainerInvitationTable(query: (sql: string, params?: any[]) => Promise<any>) {

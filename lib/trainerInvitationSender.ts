@@ -26,6 +26,7 @@ import {
   ensureTrainerInvitationTable,
   ensureTrainerInvitationTemplateColumns,
   normalizeTrainerName,
+  parseCcList,
   renderInvitationHtmlEmail,
   renderInvitationTemplate,
   splitTrainerList,
@@ -41,6 +42,7 @@ export interface TrainingProviderEmailConfig {
   google_refresh_token: string;
   trainer_invitation_email_subject?: string | null;
   trainer_invitation_email_body?: string | null;
+  trainer_invitation_email_cc?: string | null;
 }
 
 export type TrainerInvitationSendStatus =
@@ -70,7 +72,8 @@ export async function loadTrainingProviderEmailConfig(): Promise<TrainingProvide
   const res = await pool.query(
     `SELECT email_user, company_email, company_name, company_shortname,
             google_client_id, google_client_secret, google_refresh_token,
-            trainer_invitation_email_subject, trainer_invitation_email_body
+            trainer_invitation_email_subject, trainer_invitation_email_body,
+            trainer_invitation_email_cc
      FROM training_provider
      LIMIT 1`
   );
@@ -85,7 +88,8 @@ async function sendGmail(
   tp: TrainingProviderEmailConfig,
   to: string,
   subject: string,
-  htmlBody: string
+  htmlBody: string,
+  ccList?: string[]
 ): Promise<void> {
   const oauth2Client = new google.auth.OAuth2(
     tp.google_client_id,
@@ -95,16 +99,22 @@ async function sendGmail(
   oauth2Client.setCredentials({ refresh_token: tp.google_refresh_token });
   const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
 
-  const rawEmail = [
+  const headers = [
     `From: ${tp.company_shortname || tp.company_name || 'Training Provider'} <${tp.email_user}>`,
     `Reply-To: ${tp.company_email || tp.email_user}`,
     `To: ${to}`,
+  ];
+  if (ccList && ccList.length > 0) {
+    headers.push(`Cc: ${ccList.join(', ')}`);
+  }
+  headers.push(
     `Subject: ${subject}`,
     'MIME-Version: 1.0',
     'Content-Type: text/html; charset=utf-8',
     '',
-    htmlBody,
-  ].join('\r\n');
+    htmlBody
+  );
+  const rawEmail = headers.join('\r\n');
 
   const encodedMessage = Buffer.from(rawEmail)
     .toString('base64')
@@ -260,7 +270,36 @@ export async function sendNextTrainerInvitationForCourseRun(opts: {
     nextTrainerName = overrideTrainerName.trim();
     trainer = emailByNormalizedName.get(overrideNormalized) || null;
   } else {
-    for (const name of approvedTrainers) {
+    // Auto-escalation must walk the approved-trainers dropdown strictly
+    // forward from whoever was invited most recently. Previously the loop
+    // started at index 0 every call, so after e.g. "Tan Yong Huat" (mid
+    // list) declined, the next pick was always the first uninvited trainer
+    // at the top instead of the trainer immediately after him. Anchoring on
+    // the latest invitation row keeps decline -> next trainer sequential.
+    let startIndex = 0;
+    const latestInvitedResult = await pool.query(
+      `SELECT trainer_name FROM trainer_invitation
+       WHERE course_run_id = $1
+       ORDER BY COALESCE(responded_at, created_at) DESC, created_at DESC
+       LIMIT 1`,
+      [courseRunUuid]
+    );
+    const latestName = latestInvitedResult.rows[0]?.trainer_name;
+    if (latestName) {
+      const latestNormalized = normalizeTrainerName(latestName);
+      const idx = approvedTrainers.findIndex(
+        (n) => normalizeTrainerName(n) === latestNormalized
+      );
+      if (idx >= 0) {
+        startIndex = idx + 1;
+        console.log(
+          `➡️  [trainerInvitationSender] resuming after "${latestName}" at index ${idx} — starting search at ${startIndex}`
+        );
+      }
+    }
+
+    for (let i = startIndex; i < approvedTrainers.length; i++) {
+      const name = approvedTrainers[i];
       const normalized = normalizeTrainerName(name);
       if (!normalized) continue;
       if (localSet.has(normalized)) continue;
@@ -343,9 +382,10 @@ export async function sendNextTrainerInvitationForCourseRun(opts: {
     declineUrl
   );
 
-  // 7. Send + persist
+  // 7. Send + persist (with optional CC list from training_provider config)
+  const ccList = parseCcList(tp.trainer_invitation_email_cc);
   try {
-    await sendGmail(tp, trainer.email, subject, htmlBody);
+    await sendGmail(tp, trainer.email, subject, htmlBody, ccList);
   } catch (err) {
     return {
       ...baseResult,

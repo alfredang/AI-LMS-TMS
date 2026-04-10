@@ -2,7 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { google } from 'googleapis';
 import pool from '@lib/db';
 import { getTrainingPartnerIdentifiers } from '@lib/trainingPartnerIdentifiers';
-import { renderInvitationHtmlEmail, renderInvitationTemplate } from '@lib/trainerInvitations';
+import { renderInvitationHtmlEmail, renderInvitationTemplate, parseCcList } from '@lib/trainerInvitations';
 
 /**
  * POST /api/training-provider/send-test-email
@@ -69,7 +69,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).json({ success: false, error: 'Method not allowed' });
   }
 
-  const { testEmail, subject, body: emailBody, templateType = 'certificate' } = req.body;
+  const { testEmail, subject, body: emailBody, templateType = 'certificate', cc } = req.body;
 
   if (!testEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(testEmail)) {
     return res.status(400).json({ success: false, error: 'Valid test email address is required.' });
@@ -155,15 +155,25 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     oauth2Client.setCredentials({ refresh_token: google_refresh_token });
     const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
 
-    const rawEmail = [
+    // Optional CC list passed from the template editor — validates and
+    // dedupes via parseCcList so test sends mirror real production sends.
+    const ccList = parseCcList(typeof cc === 'string' ? cc : null);
+
+    const headers = [
       `From: ${senderName ? `${senderName} <${email_user}>` : email_user}`,
       `To: ${testEmail}`,
+    ];
+    if (ccList.length > 0) {
+      headers.push(`Cc: ${ccList.join(', ')}`);
+    }
+    headers.push(
       `Subject: [TEST] ${sampleSubject}`,
       'MIME-Version: 1.0',
       'Content-Type: text/html; charset=UTF-8',
       '',
-      htmlBody,
-    ].join('\r\n');
+      htmlBody
+    );
+    const rawEmail = headers.join('\r\n');
 
     const encodedMessage = Buffer.from(rawEmail)
       .toString('base64')

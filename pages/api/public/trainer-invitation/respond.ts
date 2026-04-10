@@ -7,6 +7,7 @@ import {
   renderInvitationTemplate,
   convertPlainTextToHtml,
   formatDateLabel,
+  parseCcList,
   DEFAULT_TRAINER_ACCEPT_SUBJECT,
   DEFAULT_TRAINER_ACCEPT_BODY,
   DEFAULT_TRAINER_DECLINE_SUBJECT,
@@ -41,7 +42,8 @@ async function sendFollowUpEmail(
   trainerEmail: string,
   subject: string,
   htmlBody: string,
-  tp: any
+  tp: any,
+  ccList?: string[]
 ) {
   try {
     const oauth2Client = new google.auth.OAuth2(
@@ -52,16 +54,22 @@ async function sendFollowUpEmail(
     oauth2Client.setCredentials({ refresh_token: tp.google_refresh_token });
     const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
 
-    const rawEmail = [
+    const headers = [
       `From: ${tp.company_shortname || tp.company_name || 'Training Provider'} <${tp.email_user}>`,
       `Reply-To: ${tp.company_email || tp.email_user}`,
       `To: ${trainerEmail}`,
+    ];
+    if (ccList && ccList.length > 0) {
+      headers.push(`Cc: ${ccList.join(', ')}`);
+    }
+    headers.push(
       `Subject: ${subject}`,
       'MIME-Version: 1.0',
       'Content-Type: text/html; charset=utf-8',
       '',
-      htmlBody,
-    ].join('\r\n');
+      htmlBody
+    );
+    const rawEmail = headers.join('\r\n');
 
     const encodedMessage = Buffer.from(rawEmail)
       .toString('base64')
@@ -217,9 +225,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const tpResult = await pool.query(
       `SELECT email_user, company_email, company_name, company_shortname,
               google_client_id, google_client_secret, google_refresh_token,
-              trainer_accept_email_subject, trainer_accept_email_body,
-              trainer_decline_email_subject, trainer_decline_email_body,
-              trainer_invitation_email_subject, trainer_invitation_email_body
+              trainer_accept_email_subject, trainer_accept_email_body, trainer_accept_email_cc,
+              trainer_decline_email_subject, trainer_decline_email_body, trainer_decline_email_cc,
+              trainer_invitation_email_subject, trainer_invitation_email_body, trainer_invitation_email_cc
        FROM training_provider LIMIT 1`
     );
     const tp = tpResult.rows[0];
@@ -248,7 +256,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           replacements
         );
         const htmlBody = `<div style="font-family:Arial,sans-serif;font-size:14px;color:#334155;line-height:1.6;">${convertPlainTextToHtml(body)}</div>`;
-        await sendFollowUpEmail(invitation.trainer_email, subject, htmlBody, tp);
+        const acceptCc = parseCcList(tp.trainer_accept_email_cc);
+        await sendFollowUpEmail(invitation.trainer_email, subject, htmlBody, tp, acceptCc);
       } else {
         // Send decline acknowledgement email
         const subject = renderInvitationTemplate(
@@ -260,7 +269,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           replacements
         );
         const htmlBody = `<div style="font-family:Arial,sans-serif;font-size:14px;color:#334155;line-height:1.6;">${convertPlainTextToHtml(body)}</div>`;
-        await sendFollowUpEmail(invitation.trainer_email, subject, htmlBody, tp);
+        const declineCc = parseCcList(tp.trainer_decline_email_cc);
+        await sendFollowUpEmail(invitation.trainer_email, subject, htmlBody, tp, declineCc);
       }
     }
 

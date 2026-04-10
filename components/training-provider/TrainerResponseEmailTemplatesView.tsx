@@ -35,8 +35,10 @@ const TrainerResponseEmailTemplatesView: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'accept' | 'decline'>('accept');
   const [acceptSubject, setAcceptSubject] = useState('');
   const [acceptBody, setAcceptBody] = useState('');
+  const [acceptCc, setAcceptCc] = useState('');
   const [declineSubject, setDeclineSubject] = useState('');
   const [declineBody, setDeclineBody] = useState('');
+  const [declineCc, setDeclineCc] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -53,8 +55,10 @@ const TrainerResponseEmailTemplatesView: React.FC = () => {
       if (data.success) {
         setAcceptSubject(data.data.acceptSubject);
         setAcceptBody(data.data.acceptBody);
+        setAcceptCc(data.data.acceptCc || '');
         setDeclineSubject(data.data.declineSubject);
         setDeclineBody(data.data.declineBody);
+        setDeclineCc(data.data.declineCc || '');
       }
     } catch { /* silent */ } finally {
       setIsLoading(false);
@@ -68,7 +72,14 @@ const TrainerResponseEmailTemplatesView: React.FC = () => {
       const res = await fetch(getApiUrl('/api/training-provider/trainer-response-email-templates'), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ acceptSubject, acceptBody, declineSubject, declineBody }),
+        body: JSON.stringify({
+          acceptSubject,
+          acceptBody,
+          acceptCc,
+          declineSubject,
+          declineBody,
+          declineCc,
+        }),
       });
       const data = await res.json();
       setSaveMessage(data.success
@@ -94,8 +105,10 @@ const TrainerResponseEmailTemplatesView: React.FC = () => {
 
   const currentSubject = activeTab === 'accept' ? acceptSubject : declineSubject;
   const currentBody = activeTab === 'accept' ? acceptBody : declineBody;
+  const currentCc = activeTab === 'accept' ? acceptCc : declineCc;
   const setCurrentSubject = activeTab === 'accept' ? setAcceptSubject : setDeclineSubject;
   const setCurrentBody = activeTab === 'accept' ? setAcceptBody : setDeclineBody;
+  const setCurrentCc = activeTab === 'accept' ? setAcceptCc : setDeclineCc;
 
   const previewSubject = renderInvitationTemplate(currentSubject, SAMPLE_DATA);
   const previewBody = renderInvitationTemplate(currentBody, SAMPLE_DATA);
@@ -192,6 +205,21 @@ const TrainerResponseEmailTemplatesView: React.FC = () => {
               rows={14}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white font-mono text-sm"
             />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              CC List <span className="text-gray-400 font-normal">(optional)</span>
+            </label>
+            <textarea
+              value={currentCc}
+              onChange={(e) => setCurrentCc(e.target.value)}
+              rows={2}
+              placeholder="ops@example.com, finance@example.com"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white font-mono text-sm"
+            />
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              Comma- or newline-separated. These addresses are CC'd whenever the {activeTab === 'accept' ? 'accept' : 'decline'} acknowledgement email is sent. Invalid entries are silently dropped.
+            </p>
           </div>
         </div>
       </Card>
