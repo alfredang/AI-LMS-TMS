@@ -28,6 +28,7 @@ import CoursewareAttendanceEmailTemplateView from '../components/training-provid
 import FinanceManagementView from '../components/training-provider/FinanceManagementView';
 import TrainingProviderSidebar from '../components/training-provider/TrainingProviderSidebar';
 import SchedulerView from '../components/admin/SchedulerView';
+import SchedulerSummaryView from '../components/admin/SchedulerSummaryView';
 import { AutomationLogsView, TrainerFolderLogsView, CourseRunDateSyncLogsView, UpcomingCourseRunsLogView, CourseConfirmationEmailLogsView } from '../components/admin/ClassManagementViews';
 import TrainerResponseEmailTemplatesView from '../components/training-provider/TrainerResponseEmailTemplatesView';
 import WorkflowGuidesView from '../components/training-provider/WorkflowGuidesView';
@@ -112,6 +113,8 @@ const TrainingProviderLayout: React.FC = () => {
         return <FinanceManagementView />;
       case View.Scheduler:
         return <SchedulerView />;
+      case View.SchedulerSummary:
+        return <SchedulerSummaryView />;
       case View.Webhooks:
         return <WebhooksView />;
       case View.SsgApiSummary:
@@ -147,6 +150,7 @@ const TrainingProviderLayout: React.FC = () => {
       case View.CoursewareAttendanceEmailTemplate: return 'Courseware and Attendance Taking Email Template';
       case View.FinanceManagement: return 'Finance Management';
       case View.Scheduler: return 'Task Scheduler';
+      case View.SchedulerSummary: return 'Schedule Summary';
       case View.Webhooks: return 'Webhooks';
       case View.SsgApiSummary: return 'SSG API Summary';
       default: return 'Dashboard';

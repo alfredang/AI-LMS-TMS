@@ -60,6 +60,7 @@ import TrainerAttendanceDashboard from '../components/trainer/TrainerAttendanceD
 import AdminCalendarView from '../components/admin/AdminCalendarView';
 import ViewClassByDateView from '../components/admin/ViewClassByDateView';
 import SchedulerView from '../components/admin/SchedulerView';
+import SchedulerSummaryView from '../components/admin/SchedulerSummaryView';
 import WorkflowGuidesView from '../components/training-provider/WorkflowGuidesView';
 import AddSessionsView from '../components/admin/AddSessionsView';
 import CourseSessionTimingView from '../components/admin/CourseSessionTimingView';
@@ -191,6 +192,7 @@ const PAGE_LABELS: Partial<Record<AdminPage, string>> = {
   [AdminPage.SendCertificateGH]: 'Send Certificate (GH)',
   [AdminPage.Calendar]: 'Calendar',
   [AdminPage.Scheduler]: 'Task Scheduler',
+  [AdminPage.SchedulerSummary]: 'Schedule Summary',
   [AdminPage.AddSessions]: 'Add Sessions',
   [AdminPage.CourseSessionTiming]: 'Course Session Timing',
   [AdminPage.SupportTickets]: 'Support Tickets',
@@ -418,6 +420,8 @@ const AdminLayout: React.FC = () => {
         return <AdminCalendarView />;
       case AdminPage.Scheduler:
         return <SchedulerView />;
+      case AdminPage.SchedulerSummary:
+        return <SchedulerSummaryView />;
       case AdminPage.WorkflowGuides:
         return <WorkflowGuidesView initialWorkflowId={selectedWorkflowId || undefined} />;
       case AdminPage.SupportTickets:

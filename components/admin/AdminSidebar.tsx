@@ -184,6 +184,8 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate, onSelectWorkflo
 
             <NavSection title="Calendar & Scheduler" isOpen={openSections.calendar} onToggle={() => toggleSection('calendar')}>
                 <NavItem page={AdminPage.Calendar} label="View Calendar" isSubItem />
+                <NavItem page={AdminPage.Scheduler} label="Task Scheduler" isSubItem />
+                <NavItem page={AdminPage.SchedulerSummary} label="Schedule Summary" isSubItem />
             </NavSection>
 
             <NavSection title="Course Management" isOpen={openSections.courseManagement} onToggle={() => toggleSection('courseManagement')}>

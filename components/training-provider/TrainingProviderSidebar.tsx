@@ -34,6 +34,7 @@ const TrainingProviderSidebar: React.FC<TrainingProviderSidebarProps> = ({ onNav
         { view: View.SsgApiSummary, label: 'SSG API Summary', icon: IconName.ClipboardCheck },
         { view: View.ApiEndpoints, label: 'API Endpoints', icon: IconName.Link },
         { view: View.Scheduler, label: 'Task Scheduler', icon: IconName.Calendar },
+        { view: View.SchedulerSummary, label: 'Schedule Summary', icon: IconName.ClipboardCheck },
         { view: View.Webhooks, label: 'Webhooks', icon: IconName.Link },
     ];
 
