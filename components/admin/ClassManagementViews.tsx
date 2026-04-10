@@ -7123,3 +7123,195 @@ export const SyncTrainerTpgLogsView: React.FC = () => {
     </div>
   );
 };
+
+// ── Auto Send Trainer Invitation Log ─────────────────────────────────────────
+
+interface AutoSendTrainerInvitationLogRow {
+  id: number;
+  run_id: string;
+  created_at: string;
+  course_run_uuid: string | null;
+  course_run_id: string | null;
+  course_title: string | null;
+  trainer_name: string | null;
+  trainer_email: string | null;
+  status: string;
+  message: string | null;
+}
+
+export const AutoSendTrainerInvitationLogView: React.FC = () => {
+  const { setAdminPage } = useLms();
+  const [logs, setLogs] = useState<AutoSendTrainerInvitationLogRow[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [running, setRunning] = useState(false);
+  const [runResult, setRunResult] = useState<{ totalEligible: number; sent: number; skipped: number; errors: number; windowDays: number } | null>(null);
+  const [runError, setRunError] = useState<string | null>(null);
+  const [expandedBatches, setExpandedBatches] = useState<Set<string>>(new Set());
+
+  const fetchLogs = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/admin/auto-send-trainer-invitation-logs?limit=500');
+      const json = await res.json();
+      if (json.success) setLogs(json.data);
+    } catch { /* silent */ } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { fetchLogs(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleRunNow = async () => {
+    setRunning(true);
+    setRunResult(null);
+    setRunError(null);
+    try {
+      const res = await fetch('/api/admin/run-auto-send-trainer-invitations', { method: 'POST' });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error || 'Run failed');
+      setRunResult({
+        totalEligible: json.totalEligible,
+        sent: json.sent,
+        skipped: json.skipped,
+        errors: json.errors,
+        windowDays: json.windowDays,
+      });
+      await fetchLogs();
+    } catch (err) {
+      setRunError(err instanceof Error ? err.message : 'Failed to run');
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  const batches = useMemo(() => {
+    const map = new Map<string, AutoSendTrainerInvitationLogRow[]>();
+    for (const log of logs) {
+      if (!map.has(log.run_id)) map.set(log.run_id, []);
+      map.get(log.run_id)!.push(log);
+    }
+    return Array.from(map.entries());
+  }, [logs]);
+
+  useEffect(() => {
+    if (batches.length > 0) setExpandedBatches(new Set([batches[0][0]]));
+  }, [batches.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const toggleBatch = (runId: string) => {
+    setExpandedBatches(prev => {
+      const next = new Set(prev);
+      next.has(runId) ? next.delete(runId) : next.add(runId);
+      return next;
+    });
+  };
+
+  // Success, error, and every skipped_* variant share consistent colors so the
+  // grouped header counts (sent / skipped / error) stay readable at a glance.
+  const statusBadge = (status: string) => {
+    let cls: string;
+    if (status === 'sent') cls = 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300';
+    else if (status === 'error') cls = 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300';
+    else if (status.startsWith('skipped')) cls = 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300';
+    else cls = 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300';
+    return (
+      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${cls}`}>
+        {status}
+      </span>
+    );
+  };
+
+  return (
+    <div>
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+        <h2 className="text-3xl font-bold">Auto Send Trainer Invitation Log</h2>
+        <div className="flex items-center gap-2">
+          <Button onClick={handleRunNow} disabled={running || loading}>
+            {running ? 'Running…' : 'Run Now'}
+          </Button>
+          <Button variant="ghost" onClick={fetchLogs} disabled={loading || running}>
+            {loading ? 'Refreshing…' : 'Refresh'}
+          </Button>
+          <Button variant="ghost" onClick={() => setAdminPage(AdminPage.Dashboard)}>
+            Back
+          </Button>
+        </div>
+      </div>
+
+      <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+        Scheduled sweep (default Mon &amp; Thu 10:00 AM SGT): scans upcoming course runs within the lookahead window and, for every class missing a locally-assigned trainer, invites the next approved trainer who hasn't already been invited, declined, or assigned. Use <strong>Run Now</strong> to trigger manually.
+      </p>
+
+      {runResult && (
+        <div className="mb-4 p-3 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-sm text-green-800 dark:text-green-300">
+          ✅ Done — {runResult.totalEligible} eligible run(s) within {runResult.windowDays}-day window: {runResult.sent} sent, {runResult.skipped} skipped, {runResult.errors} error(s).
+        </div>
+      )}
+      {runError && (
+        <div className="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-800 dark:text-red-300">
+          ❌ {runError}
+        </div>
+      )}
+
+      {loading && <p className="text-sm text-gray-500 py-6 text-center">Loading…</p>}
+
+      {!loading && batches.length === 0 && (
+        <p className="text-sm text-gray-500 py-6 text-center">No logs yet. Click <strong>Run Now</strong> to invite trainers for upcoming classes.</p>
+      )}
+
+      {batches.map(([runId, rows]) => {
+        const isOpen = expandedBatches.has(runId);
+        const ts = new Date(rows[0].created_at).toLocaleString('en-SG', {
+          timeZone: 'Asia/Singapore', day: '2-digit', month: 'short', year: 'numeric',
+          hour: '2-digit', minute: '2-digit', hour12: false,
+        });
+        const sentCount    = rows.filter(r => r.status === 'sent').length;
+        const skippedCount = rows.filter(r => r.status.startsWith('skipped')).length;
+        const errorCount   = rows.filter(r => r.status === 'error').length;
+
+        return (
+          <div key={runId} className="mb-3 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden">
+            <button
+              onClick={() => toggleBatch(runId)}
+              className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-slate-700/50 hover:bg-gray-100 dark:hover:bg-slate-700 text-left"
+            >
+              <div className="flex items-center gap-3">
+                <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">{ts} SGT</span>
+                <span className="text-xs text-gray-500">{rows.length} row(s)</span>
+                {sentCount    > 0 && <span className="text-xs text-green-600 dark:text-green-400">{sentCount} sent</span>}
+                {skippedCount > 0 && <span className="text-xs text-yellow-600 dark:text-yellow-400">{skippedCount} skipped</span>}
+                {errorCount   > 0 && <span className="text-xs text-red-600 dark:text-red-400">{errorCount} error</span>}
+              </div>
+              <span className="text-gray-400 text-xs">{isOpen ? '▲' : '▼'}</span>
+            </button>
+
+            {isOpen && (
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-xs">
+                  <thead className="bg-gray-50 dark:bg-slate-700/30">
+                    <tr>
+                      {['Course Run ID', 'Course Title', 'Trainer Name', 'Trainer Email', 'Status', 'Message'].map(h => (
+                        <th key={h} className="px-3 py-2 text-left font-semibold text-gray-600 dark:text-gray-300 whitespace-nowrap">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                    {rows.map(row => (
+                      <tr key={row.id} className="hover:bg-gray-50 dark:hover:bg-slate-700/30">
+                        <td className="px-3 py-2 font-mono text-gray-700 dark:text-gray-300 whitespace-nowrap">{row.course_run_id ?? '—'}</td>
+                        <td className="px-3 py-2 max-w-[220px] truncate">{row.course_title ?? '—'}</td>
+                        <td className="px-3 py-2 whitespace-nowrap">{row.trainer_name ?? '—'}</td>
+                        <td className="px-3 py-2 whitespace-nowrap">{row.trainer_email ?? '—'}</td>
+                        <td className="px-3 py-2">{statusBadge(row.status)}</td>
+                        <td className="px-3 py-2 max-w-[320px] truncate" title={row.message ?? ''}>{row.message ?? ''}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+};

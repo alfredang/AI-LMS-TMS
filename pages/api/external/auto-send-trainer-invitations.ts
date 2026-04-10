@@ -34,6 +34,7 @@ import {
 const DEFAULT_WINDOW_DAYS = 30;
 
 interface AutomationSummary {
+  runId: string;
   startedAt: string;
   windowDays: number;
   totalEligible: number;
@@ -41,6 +42,55 @@ interface AutomationSummary {
   skipped: number;
   errors: number;
   results: TrainerInvitationSendResult[];
+}
+
+// ── Per-row log table ────────────────────────────────────────────────────────
+// Mirrors the pattern used by upcoming_course_runs_log / trainer_folder_logs:
+// one row per course run processed in a single sweep, tagged by a shared
+// run_id so the view can group batches.
+async function ensureLogTable() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS auto_send_trainer_invitation_log (
+      id               SERIAL PRIMARY KEY,
+      run_id           TEXT NOT NULL,
+      created_at       TIMESTAMPTZ DEFAULT NOW(),
+      course_run_uuid  UUID,
+      course_run_id    TEXT,
+      course_title     TEXT,
+      trainer_name     TEXT,
+      trainer_email    TEXT,
+      status           TEXT NOT NULL,
+      message          TEXT
+    )
+  `);
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS idx_auto_send_trainer_invitation_log_run_id
+     ON auto_send_trainer_invitation_log(run_id, created_at DESC)`
+  );
+}
+
+async function insertLogRow(runId: string, result: TrainerInvitationSendResult) {
+  try {
+    await pool.query(
+      `INSERT INTO auto_send_trainer_invitation_log
+         (run_id, course_run_uuid, course_run_id, course_title,
+          trainer_name, trainer_email, status, message)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+      [
+        runId,
+        result.courseRunUuid || null,
+        result.courseRunId || null,
+        result.courseTitle || null,
+        result.trainerName || null,
+        result.trainerEmail || null,
+        result.status,
+        result.message || null,
+      ]
+    );
+  } catch (err) {
+    // Never let logging kill the sweep.
+    console.error('❌ [auto-send-trainer-invitations] insertLogRow failed:', err);
+  }
 }
 
 /**
@@ -61,10 +111,13 @@ async function getWindowDays(): Promise<number> {
 }
 
 export async function runAutomation(): Promise<AutomationSummary> {
+  await ensureLogTable();
+
+  const runId = `trainer_invite_${Date.now()}`;
   const startedAt = new Date().toISOString();
   const windowDays = await getWindowDays();
 
-  console.log(`📨 [auto-send-trainer-invitations] starting — window: next ${windowDays} days`);
+  console.log(`📨 [auto-send-trainer-invitations] starting ${runId} — window: next ${windowDays} days`);
 
   // Preload training provider config once so we don't refetch per row.
   const tp = await loadTrainingProviderEmailConfig();
@@ -92,6 +145,16 @@ export async function runAutomation(): Promise<AutomationSummary> {
   let skipped = 0;
   let errors = 0;
 
+  // If the eligibility query returned zero rows we still want a placeholder
+  // log row so admins can see the sweep fired but had nothing to do.
+  if (eligibleRes.rows.length === 0) {
+    await insertLogRow(runId, {
+      status: 'skipped_all_invited',
+      courseRunUuid: '',
+      message: 'No eligible upcoming course runs missing a local trainer in the window.',
+    });
+  }
+
   for (const row of eligibleRes.rows) {
     try {
       const result = await sendNextTrainerInvitationForCourseRun({
@@ -99,6 +162,7 @@ export async function runAutomation(): Promise<AutomationSummary> {
         tp,
       });
       results.push(result);
+      await insertLogRow(runId, result);
 
       if (result.status === 'sent') {
         sent++;
@@ -111,15 +175,18 @@ export async function runAutomation(): Promise<AutomationSummary> {
       errors++;
       const msg = err instanceof Error ? err.message : String(err);
       console.error(`❌ [auto-send-trainer-invitations] course_run ${row.id} failed:`, msg);
-      results.push({
+      const errResult: TrainerInvitationSendResult = {
         status: 'error',
         courseRunUuid: row.id,
         message: msg,
-      });
+      };
+      results.push(errResult);
+      await insertLogRow(runId, errResult);
     }
   }
 
   const summary: AutomationSummary = {
+    runId,
     startedAt,
     windowDays,
     totalEligible: eligibleRes.rows.length,
@@ -130,7 +197,7 @@ export async function runAutomation(): Promise<AutomationSummary> {
   };
 
   console.log(
-    `📨 [auto-send-trainer-invitations] done — eligible=${summary.totalEligible} sent=${sent} skipped=${skipped} errors=${errors}`
+    `📨 [auto-send-trainer-invitations] done ${runId} — eligible=${summary.totalEligible} sent=${sent} skipped=${skipped} errors=${errors}`
   );
 
   return summary;
