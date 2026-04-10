@@ -296,6 +296,7 @@ export interface TrainingProviderProfile extends BaseProfile {
   };
   securitySettings: {
     autoMaskSensitiveData: boolean;
+    sanitiseAfterMonths: number;
     autoDeleteAfter6Months: boolean;
     enableOtpLogin: boolean;
     enableDefaultOtp: boolean;

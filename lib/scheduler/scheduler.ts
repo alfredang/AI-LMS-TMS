@@ -184,6 +184,13 @@ async function seedDefaults() {
             api_endpoint: '/api/external/auto-send-trainer-invitations',
             days_in_advance: 30,
         },
+        {
+            id: 'auto_sanitise_data',
+            name: 'Auto Sanitise Old PII',
+            description: 'Weekly sweep that redacts NRIC and phone digits on rows older than the retention window configured in Company Settings → Security Setting → Auto Sanitise Data. Honours the master toggle (off → skipped). Default Sunday 02:00 SGT.',
+            cron_expression: '0 2 * * 0', // 2:00 AM SGT every Sunday
+            api_endpoint: '/api/external/auto-sanitise-data',
+        },
     ];
 
     const ids = defaults.map(t => t.id);
@@ -260,6 +267,10 @@ function getDirectHandler(taskId: string): TaskHandler | undefined {
         });
         directHandlers.set('auto_send_trainer_invitations', async () => {
             const { runAutomation } = await import('../../pages/api/external/auto-send-trainer-invitations');
+            return runAutomation();
+        });
+        directHandlers.set('auto_sanitise_data', async () => {
+            const { runAutomation } = await import('../../pages/api/external/auto-sanitise-data');
             return runAutomation();
         });
     }

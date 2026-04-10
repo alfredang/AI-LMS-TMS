@@ -29,7 +29,7 @@ import FinanceManagementView from '../components/training-provider/FinanceManage
 import TrainingProviderSidebar from '../components/training-provider/TrainingProviderSidebar';
 import SchedulerView from '../components/admin/SchedulerView';
 import SchedulerSummaryView from '../components/admin/SchedulerSummaryView';
-import { AutomationLogsView, TrainerFolderLogsView, CourseRunDateSyncLogsView, UpcomingCourseRunsLogView, CourseConfirmationEmailLogsView, AutoSendTrainerInvitationLogView } from '../components/admin/ClassManagementViews';
+import { AutomationLogsView, TrainerFolderLogsView, CourseRunDateSyncLogsView, UpcomingCourseRunsLogView, CourseConfirmationEmailLogsView, AutoSendTrainerInvitationLogView, AutoSanitiseDataLogView } from '../components/admin/ClassManagementViews';
 import TrainerResponseEmailTemplatesView from '../components/training-provider/TrainerResponseEmailTemplatesView';
 import WorkflowGuidesView from '../components/training-provider/WorkflowGuidesView';
 import WebhooksView from '../components/training-provider/WebhooksView';
@@ -66,6 +66,7 @@ const TrainingProviderLayout: React.FC = () => {
         case AdminPage.UpcomingCourseRunsLog: return <UpcomingCourseRunsLogView />;
         case AdminPage.CourseConfirmationEmailLogs: return <CourseConfirmationEmailLogsView />;
         case AdminPage.AutoSendTrainerInvitationLog: return <AutoSendTrainerInvitationLogView />;
+        case AdminPage.AutoSanitiseDataLog: return <AutoSanitiseDataLogView />;
       }
     }
 

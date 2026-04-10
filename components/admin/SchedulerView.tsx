@@ -160,6 +160,7 @@ const TASK_LOG_PAGE: Record<string, AdminPage> = {
     auto_send_course_confirmation:    AdminPage.CourseConfirmationEmailLogs,
     auto_send_class_confirmation:     AdminPage.CourseConfirmationEmailLogs,
     auto_send_trainer_invitations:    AdminPage.AutoSendTrainerInvitationLog,
+    auto_sanitise_data:               AdminPage.AutoSanitiseDataLog,
 };
 
 // ── Main Component ────────────────────────────────────────────────────────────
@@ -837,7 +838,7 @@ export const SchedulerView: React.FC = () => {
                                                 Running…
                                             </div>
                                         ) : (
-                                            '▶ Run Now'
+                                            '▶ Run Once'
                                         )}
                                     </Button>
                                 </div>

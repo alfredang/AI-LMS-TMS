@@ -7315,3 +7315,199 @@ export const AutoSendTrainerInvitationLogView: React.FC = () => {
     </div>
   );
 };
+
+// ── Auto Sanitise Data Log ───────────────────────────────────────────────────
+
+interface AutoSanitiseDataLogRow {
+  id: number;
+  run_id: string;
+  created_at: string;
+  table_name: string;
+  rows_scanned: number;
+  rows_updated: number;
+  cutoff_date: string | null;
+  status: string;
+  message: string | null;
+}
+
+export const AutoSanitiseDataLogView: React.FC = () => {
+  const { setAdminPage } = useLms();
+  const [logs, setLogs] = useState<AutoSanitiseDataLogRow[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [running, setRunning] = useState(false);
+  const [runResult, setRunResult] = useState<{ totalScanned: number; totalUpdated: number; retentionMonths: number; cutoffDate: string; enabled: boolean } | null>(null);
+  const [runError, setRunError] = useState<string | null>(null);
+  const [expandedBatches, setExpandedBatches] = useState<Set<string>>(new Set());
+
+  const fetchLogs = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/admin/auto-sanitise-data-logs?limit=500');
+      const json = await res.json();
+      if (json.success) setLogs(json.data);
+    } catch { /* silent */ } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { fetchLogs(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleRunNow = async () => {
+    setRunning(true);
+    setRunResult(null);
+    setRunError(null);
+    try {
+      const res = await fetch('/api/admin/run-auto-sanitise-data', { method: 'POST' });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error || 'Run failed');
+      setRunResult({
+        totalScanned: json.totalScanned,
+        totalUpdated: json.totalUpdated,
+        retentionMonths: json.retentionMonths,
+        cutoffDate: json.cutoffDate,
+        enabled: json.enabled,
+      });
+      await fetchLogs();
+    } catch (err) {
+      setRunError(err instanceof Error ? err.message : 'Failed to run');
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  const batches = useMemo(() => {
+    const map = new Map<string, AutoSanitiseDataLogRow[]>();
+    for (const log of logs) {
+      if (!map.has(log.run_id)) map.set(log.run_id, []);
+      map.get(log.run_id)!.push(log);
+    }
+    return Array.from(map.entries());
+  }, [logs]);
+
+  useEffect(() => {
+    if (batches.length > 0) setExpandedBatches(new Set([batches[0][0]]));
+  }, [batches.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const toggleBatch = (runId: string) => {
+    setExpandedBatches(prev => {
+      const next = new Set(prev);
+      next.has(runId) ? next.delete(runId) : next.add(runId);
+      return next;
+    });
+  };
+
+  const statusBadge = (status: string) => {
+    let cls: string;
+    if (status === 'success') cls = 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300';
+    else if (status === 'error') cls = 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300';
+    else if (status === 'skipped') cls = 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300';
+    else cls = 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300';
+    return (
+      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${cls}`}>
+        {status}
+      </span>
+    );
+  };
+
+  return (
+    <div>
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+        <h2 className="text-3xl font-bold">Auto Sanitise Data Log</h2>
+        <div className="flex items-center gap-2">
+          <Button onClick={handleRunNow} disabled={running || loading}>
+            {running ? 'Running…' : 'Run Once'}
+          </Button>
+          <Button variant="ghost" onClick={fetchLogs} disabled={loading || running}>
+            {loading ? 'Refreshing…' : 'Refresh'}
+          </Button>
+          <Button variant="ghost" onClick={() => setAdminPage(AdminPage.Dashboard)}>
+            Back
+          </Button>
+        </div>
+      </div>
+
+      <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+        Weekly sweep (default Sunday 02:00 SGT): redacts NRIC and phone digits on rows older than the retention window configured in <strong>Company Settings → Security Setting → Auto Sanitise Data</strong>. Honours the master toggle (off → skipped). Use <strong>Run Once</strong> to trigger manually.
+      </p>
+
+      {runResult && (
+        <div className={`mb-4 p-3 rounded-lg border text-sm ${runResult.enabled
+          ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 text-green-800 dark:text-green-300'
+          : 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800 text-yellow-800 dark:text-yellow-300'}`}>
+          {runResult.enabled
+            ? <>✅ Done — scanned <strong>{runResult.totalScanned}</strong>, sanitised <strong>{runResult.totalUpdated}</strong> row(s) older than {runResult.cutoffDate} (retention {runResult.retentionMonths} months).</>
+            : <>⚠️ Skipped — Auto Sanitise Data is currently <strong>disabled</strong>. Enable it in Company Settings → Security Setting.</>
+          }
+        </div>
+      )}
+      {runError && (
+        <div className="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-800 dark:text-red-300">
+          ❌ {runError}
+        </div>
+      )}
+
+      {loading && <p className="text-sm text-gray-500 py-6 text-center">Loading…</p>}
+
+      {!loading && batches.length === 0 && (
+        <p className="text-sm text-gray-500 py-6 text-center">No logs yet. Click <strong>Run Once</strong> to sanitise old PII now.</p>
+      )}
+
+      {batches.map(([runId, rows]) => {
+        const isOpen = expandedBatches.has(runId);
+        const ts = new Date(rows[0].created_at).toLocaleString('en-SG', {
+          timeZone: 'Asia/Singapore', day: '2-digit', month: 'short', year: 'numeric',
+          hour: '2-digit', minute: '2-digit', hour12: false,
+        });
+        const totalScanned = rows.reduce((sum, r) => sum + (r.rows_scanned || 0), 0);
+        const totalUpdated = rows.reduce((sum, r) => sum + (r.rows_updated || 0), 0);
+        const errorCount   = rows.filter(r => r.status === 'error').length;
+        const skippedCount = rows.filter(r => r.status === 'skipped').length;
+
+        return (
+          <div key={runId} className="mb-3 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden">
+            <button
+              onClick={() => toggleBatch(runId)}
+              className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-slate-700/50 hover:bg-gray-100 dark:hover:bg-slate-700 text-left"
+            >
+              <div className="flex items-center gap-3">
+                <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">{ts} SGT</span>
+                <span className="text-xs text-gray-500">{rows.length} table(s)</span>
+                {totalUpdated > 0 && <span className="text-xs text-green-600 dark:text-green-400">{totalUpdated} sanitised / {totalScanned} scanned</span>}
+                {totalUpdated === 0 && totalScanned > 0 && <span className="text-xs text-gray-500 dark:text-gray-400">{totalScanned} scanned</span>}
+                {skippedCount > 0 && <span className="text-xs text-yellow-600 dark:text-yellow-400">{skippedCount} skipped</span>}
+                {errorCount > 0 && <span className="text-xs text-red-600 dark:text-red-400">{errorCount} error</span>}
+              </div>
+              <span className="text-gray-400 text-xs">{isOpen ? '▲' : '▼'}</span>
+            </button>
+
+            {isOpen && (
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-xs">
+                  <thead className="bg-gray-50 dark:bg-slate-700/30">
+                    <tr>
+                      {['Table', 'Scanned', 'Updated', 'Cutoff Date', 'Status', 'Message'].map(h => (
+                        <th key={h} className="px-3 py-2 text-left font-semibold text-gray-600 dark:text-gray-300 whitespace-nowrap">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                    {rows.map(row => (
+                      <tr key={row.id} className="hover:bg-gray-50 dark:hover:bg-slate-700/30">
+                        <td className="px-3 py-2 font-mono text-gray-700 dark:text-gray-300 whitespace-nowrap">{row.table_name}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">{row.rows_scanned}</td>
+                        <td className="px-3 py-2 text-right tabular-nums font-semibold">{row.rows_updated}</td>
+                        <td className="px-3 py-2 whitespace-nowrap">{row.cutoff_date ?? '—'}</td>
+                        <td className="px-3 py-2">{statusBadge(row.status)}</td>
+                        <td className="px-3 py-2 max-w-[320px] truncate" title={row.message ?? ''}>{row.message ?? ''}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+};

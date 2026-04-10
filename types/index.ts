@@ -107,6 +107,7 @@ export enum AdminPage {
   UpcomingCourseRunsLog = 'upcomingCourseRunsLog',
   SyncTrainerTpgLogs = 'syncTrainerTpgLogs',
   AutoSendTrainerInvitationLog = 'autoSendTrainerInvitationLog',
+  AutoSanitiseDataLog = 'autoSanitiseDataLog',
   CourseConfirmationEmailLogs = 'courseConfirmationEmailLogs',
   BackfillEnrollments = 'backfillEnrollments',
   FetchUpcomingEnrolments = 'fetchUpcomingEnrolments',

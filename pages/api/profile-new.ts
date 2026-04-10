@@ -673,6 +673,7 @@ async function getTrainingProviderProfile(userId: string) {
     },
     securitySettings: {
       autoMaskSensitiveData: profileData.auto_mask_sensitive_data || false,
+      sanitiseAfterMonths: profileData.sanitise_after_months ?? 6,
       autoDeleteAfter6Months: profileData.auto_delete_after_six_months || false,
       enableOtpLogin: profileData.enable_otp_login || false,
       enableDefaultOtp: profileData.enable_default_otp || false,

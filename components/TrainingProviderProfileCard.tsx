@@ -1673,29 +1673,64 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                 <div className="border-t my-6"></div>
                 {renderSectionHeader('Security Setting', isSecurityOpen, () => setIsSecurityOpen(prev => !prev), 'text-xl font-bold')}
                 {isSecurityOpen && <div className="space-y-4 mt-4">
-                    {/* Auto Mask Sensitive Data */}
-                    <div className="flex justify-between items-center p-3 bg-surface-elevated rounded-md border border-default">
-                        <p className="font-semibold text-sm text-on-surface">Auto Mask Sensitive Data</p>
-                        {isEditing ? (
-                            <button
-                                type="button"
-                                onClick={() => handleToggleChange('securitySettings', 'autoMaskSensitiveData')}
-                                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${formData.securitySettings.autoMaskSensitiveData ? 'bg-primary' : 'bg-gray-200'
-                                    }`}
-                            >
-                                <span
-                                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${formData.securitySettings.autoMaskSensitiveData ? 'translate-x-6' : 'translate-x-1'
+                    {/* Auto Sanitise Data */}
+                    <div className="p-3 bg-surface-elevated rounded-md border border-default">
+                        <div className="flex justify-between items-center">
+                            <p className="font-semibold text-sm text-on-surface">Auto Sanitise Data</p>
+                            {isEditing ? (
+                                <button
+                                    type="button"
+                                    onClick={() => handleToggleChange('securitySettings', 'autoMaskSensitiveData')}
+                                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${formData.securitySettings.autoMaskSensitiveData ? 'bg-primary' : 'bg-gray-200'
                                         }`}
+                                >
+                                    <span
+                                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${formData.securitySettings.autoMaskSensitiveData ? 'translate-x-6' : 'translate-x-1'
+                                            }`}
+                                    />
+                                </button>
+                            ) : (
+                                <span
+                                    className={`text-sm font-medium ${formData.securitySettings.autoMaskSensitiveData ? 'text-green-600' : 'text-gray-400'
+                                        }`}
+                                >
+                                    {formData.securitySettings.autoMaskSensitiveData ? 'Enabled' : 'Disabled'}
+                                </span>
+                            )}
+                        </div>
+
+                        {/* Retention months input */}
+                        <div className="mt-3 flex items-center gap-3">
+                            <label className="text-xs font-medium text-on-surface-secondary whitespace-nowrap">
+                                Sanitise data older than
+                            </label>
+                            {isEditing ? (
+                                <input
+                                    type="number"
+                                    min={1}
+                                    max={60}
+                                    value={formData.securitySettings.sanitiseAfterMonths ?? 6}
+                                    onChange={(e) => {
+                                        const v = Math.max(1, Math.min(60, parseInt(e.target.value || '6', 10) || 6));
+                                        setFormData(prev => ({
+                                            ...prev,
+                                            securitySettings: { ...prev.securitySettings, sanitiseAfterMonths: v },
+                                        }));
+                                    }}
+                                    className="w-20 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-2 py-1 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 />
-                            </button>
-                        ) : (
-                            <span
-                                className={`text-sm font-medium ${formData.securitySettings.autoMaskSensitiveData ? 'text-green-600' : 'text-gray-400'
-                                    }`}
-                            >
-                                {formData.securitySettings.autoMaskSensitiveData ? 'Enabled' : 'Disabled'}
-                            </span>
-                        )}
+                            ) : (
+                                <span className="text-sm font-semibold text-on-surface tabular-nums">
+                                    {formData.securitySettings.sanitiseAfterMonths ?? 6}
+                                </span>
+                            )}
+                            <span className="text-xs font-medium text-on-surface-secondary">months</span>
+                        </div>
+                        <p className="mt-2 text-xs text-on-surface-secondary leading-snug">
+                            When enabled, NRIC and phone digits are redacted in place on rows older than this window
+                            (e.g. <code className="font-mono">S1808997A → Sxxxx997A</code>, <code className="font-mono">96983371 → 9xxxx371</code>).
+                            Runs every Sunday 02:00 SGT — adjust the schedule from Task Scheduler.
+                        </p>
                     </div>
 
 
