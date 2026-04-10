@@ -2,23 +2,17 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { google } from 'googleapis';
 import pool from '@lib/db';
 import {
-  buildInvitationReplacements,
   ensureTrainerInvitationTable,
   ensureTrainerInvitationTemplateColumns,
   renderInvitationTemplate,
   convertPlainTextToHtml,
-  renderInvitationHtmlEmail,
   formatDateLabel,
-  createInvitationToken,
-  normalizeTrainerName,
-  splitTrainerList,
   DEFAULT_TRAINER_ACCEPT_SUBJECT,
   DEFAULT_TRAINER_ACCEPT_BODY,
   DEFAULT_TRAINER_DECLINE_SUBJECT,
   DEFAULT_TRAINER_DECLINE_BODY,
-  DEFAULT_TRAINER_INVITATION_SUBJECT,
-  DEFAULT_TRAINER_INVITATION_BODY,
 } from '@/lib/trainerInvitations';
+import { sendNextTrainerInvitationForCourseRun } from '@/lib/trainerInvitationSender';
 
 function renderPage(title: string, description: string, tone: 'green' | 'red' | 'gray') {
   const colors = {
@@ -88,120 +82,10 @@ async function sendFollowUpEmail(
 
 async function sendNextTrainerInvitation(courseRunUuid: string, tp: any) {
   try {
-    // Get course run details — include mode_of_learning and training_hours so
-    // the auto-escalated invitation populates the same fields as the initial
-    // manual send (Course Type, Course Hours, Duration).
-    const crResult = await pool.query(
-      `SELECT cr.id,
-              cr.course_run_id,
-              cr.start_date,
-              cr.end_date,
-              cr.mode_of_learning AS course_mode,
-              cr.tpg_assigned_trainer_name,
-              c.title AS course_title,
-              c.course_code,
-              c.training_hours,
-              c.trainers_list
-       FROM course_run cr
-       JOIN course c ON c.id = cr.course_id
-       WHERE cr.id = $1`,
-      [courseRunUuid]
-    );
-    const cr = crResult.rows[0];
-    if (!cr) return;
-
-    // Get already assigned local trainers
-    const localResult = await pool.query(
-      `SELECT trainer_name FROM course_run_trainer WHERE course_run_id = $1`,
-      [courseRunUuid]
-    );
-    const localTrainerSet = new Set(localResult.rows.map((r: any) => normalizeTrainerName(r.trainer_name)));
-
-    // Get all declined invitations
-    const declinedResult = await pool.query(
-      `SELECT trainer_name FROM trainer_invitation WHERE course_run_id = $1 AND status = 'declined'`,
-      [courseRunUuid]
-    );
-    const declinedSet = new Set(declinedResult.rows.map((r: any) => normalizeTrainerName(r.trainer_name)));
-
-    // Get pending invitations
-    const pendingResult = await pool.query(
-      `SELECT trainer_name FROM trainer_invitation WHERE course_run_id = $1 AND status = 'pending'`,
-      [courseRunUuid]
-    );
-    const pendingSet = new Set(pendingResult.rows.map((r: any) => normalizeTrainerName(r.trainer_name)));
-
-    // Find next available trainer from the approved list
-    const approvedTrainers = splitTrainerList(cr.trainers_list);
-    let nextTrainerName: string | null = null;
-
-    for (const name of approvedTrainers) {
-      const normalized = normalizeTrainerName(name);
-      if (localTrainerSet.has(normalized)) continue;
-      if (declinedSet.has(normalized)) continue;
-      if (pendingSet.has(normalized)) continue;
-      nextTrainerName = name;
-      break;
+    const result = await sendNextTrainerInvitationForCourseRun({ courseRunUuid, tp });
+    if (result.status !== 'sent') {
+      console.log(`ℹ️ Auto-escalation for course run ${courseRunUuid}: ${result.status} — ${result.message}`);
     }
-
-    if (!nextTrainerName) {
-      console.log(`⚠️ No more available trainers for course run ${cr.course_run_id}`);
-      return;
-    }
-
-    // Look up trainer email
-    const trainerResult = await pool.query(
-      `SELECT au.id, au.full_name, au.email
-       FROM app_user au
-       JOIN user_role_map urm ON urm.user_id = au.id
-       WHERE LOWER(au.full_name) = LOWER($1) AND urm.role = 'Trainer'
-       LIMIT 1`,
-      [nextTrainerName]
-    );
-    const trainer = trainerResult.rows[0];
-    if (!trainer?.email) {
-      console.log(`⚠️ No email found for trainer ${nextTrainerName}`);
-      return;
-    }
-
-    // Create invitation
-    const token = createInvitationToken();
-    const siteUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://ai-lms-tms.tertiaryinfo.tech';
-    const acceptUrl = `${siteUrl}/api/public/trainer-invitation/respond?token=${token}&action=accept`;
-    const declineUrl = `${siteUrl}/api/public/trainer-invitation/respond?token=${token}&action=decline`;
-
-    const replacements = buildInvitationReplacements({
-      classRow: cr,
-      trainerName: trainer.full_name || nextTrainerName,
-      companyShortName: tp.company_shortname || tp.company_name || 'Training Provider',
-      acceptUrl,
-      declineUrl,
-    });
-
-    const subject = renderInvitationTemplate(
-      tp.trainer_invitation_email_subject || DEFAULT_TRAINER_INVITATION_SUBJECT,
-      replacements
-    );
-    const body = renderInvitationTemplate(
-      tp.trainer_invitation_email_body || DEFAULT_TRAINER_INVITATION_BODY,
-      replacements
-    );
-    const htmlBody = renderInvitationHtmlEmail(
-      tp.trainer_invitation_email_body || DEFAULT_TRAINER_INVITATION_BODY,
-      replacements,
-      acceptUrl,
-      declineUrl
-    );
-
-    await sendFollowUpEmail(trainer.email, subject, htmlBody, tp);
-
-    await pool.query(
-      `INSERT INTO trainer_invitation (course_run_id, trainer_name, trainer_email, token, status, email_subject, email_body)
-       VALUES ($1, $2, $3, $4, 'pending', $5, $6)`,
-      [courseRunUuid, nextTrainerName, trainer.email, token, subject, body]
-    );
-
-    console.log(`📨 Auto-sent invitation to next trainer: ${nextTrainerName} (${trainer.email})`);
   } catch (e) {
     console.error('❌ Failed to auto-send next trainer invitation:', e);
   }

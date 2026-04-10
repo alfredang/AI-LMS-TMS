@@ -176,6 +176,14 @@ async function seedDefaults() {
             api_endpoint: '/api/external/auto-send-courseware-attendance',
             email_template: 'courseware_attendance',
         },
+        {
+            id: 'auto_send_trainer_invitations',
+            name: 'Auto Send Trainer Invitations',
+            description: 'Scans all upcoming course runs within the lookahead window and, for any class that has no locally-assigned trainer, sends an invitation email to the next approved trainer who has not already been invited, declined, or assigned. Default schedule is Monday and Thursday at 10:00 AM SGT — adjust days and time from the Task Scheduler UI.',
+            cron_expression: '0 10 * * 1,4', // 10:00 AM SGT every Mon & Thu
+            api_endpoint: '/api/external/auto-send-trainer-invitations',
+            days_in_advance: 30,
+        },
     ];
 
     const ids = defaults.map(t => t.id);
@@ -248,6 +256,10 @@ function getDirectHandler(taskId: string): TaskHandler | undefined {
         });
         directHandlers.set('auto_send_courseware_attendance', async () => {
             const { runAutomation } = await import('../../pages/api/external/auto-send-courseware-attendance');
+            return runAutomation();
+        });
+        directHandlers.set('auto_send_trainer_invitations', async () => {
+            const { runAutomation } = await import('../../pages/api/external/auto-send-trainer-invitations');
             return runAutomation();
         });
     }

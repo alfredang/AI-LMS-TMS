@@ -831,12 +831,10 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                             </td>
                                             <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">
                                                 <div className="flex items-center gap-2">
-                                                    {classItem.latestInvitationStatus && (
+                                                    {(classItem.latestInvitationStatus === 'accepted' || classItem.latestInvitationStatus === 'declined') && (
                                                         <span className={`inline-flex px-2 py-0.5 text-xs font-semibold rounded-full ${classItem.latestInvitationStatus === 'accepted'
                                                             ? 'bg-green-100 text-green-700'
-                                                            : classItem.latestInvitationStatus === 'declined'
-                                                                ? 'bg-red-100 text-red-700'
-                                                                : 'bg-yellow-100 text-yellow-700'
+                                                            : 'bg-red-100 text-red-700'
                                                             }`}>
                                                             {classItem.latestInvitationStatus}
                                                         </span>
@@ -846,13 +844,14 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                                         size="sm"
                                                         onClick={() => handleSendTrainerInvitation(classItem)}
                                                         disabled={!(nextTrainerOverrides[classItem.id] || classItem.nextAvailableTrainer) || sendingInvitationFor === classItem.id}
+                                                        title={classItem.latestInvitationStatus === 'pending' ? 'Resend invitation (overwrites the previous pending one)' : 'Send trainer invitation'}
                                                     >
                                                         {sendingInvitationFor === classItem.id ? (
                                                             <Icon name={IconName.Spinner} className="w-3.5 h-3.5 animate-spin" />
                                                         ) : (
                                                             <>
                                                                 <Icon name={IconName.Send} className="w-3.5 h-3.5 mr-1" />
-                                                                SEND INVITE
+                                                                {classItem.latestInvitationStatus === 'pending' ? 'RESEND' : 'SEND INVITE'}
                                                             </>
                                                         )}
                                                     </Button>

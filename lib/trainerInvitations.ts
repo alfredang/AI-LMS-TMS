@@ -19,7 +19,7 @@ We hope this message finds you well. As one of our valued trainers, we are pleas
 
 To help us finalize the schedule, we kindly ask that you confirm your availability to teach this session by **{CONFIRM_BY}**.
 
-You can confirm simply by clicking on the Accept or Decline buttons below. If you have any questions regarding the course details, logistics, or terms, please do not hesitate to reach out to us.
+You can confirm simply by clicking the Accept or Decline button below. If you have any questions regarding the course details, logistics, or terms, please do not hesitate to reach out to us.
 
 {ACTION_BUTTONS}
 
@@ -138,10 +138,14 @@ export function buildInvitationReplacements(opts: {
     }
   }
 
-  // Confirmation deadline: 2 days from now at 23:59 SGT
+  // Confirmation deadline: 2 days from now at 23:59 SGT. Formatted as
+  // DD-MM-YYYY with hyphens to match the agreed copy.
   const confirmBy = new Date();
   confirmBy.setDate(confirmBy.getDate() + 2);
-  const confirmByLabel = `${confirmBy.toLocaleDateString('en-GB')}, 23:59 PM`;
+  const dd = String(confirmBy.getDate()).padStart(2, '0');
+  const mm = String(confirmBy.getMonth() + 1).padStart(2, '0');
+  const yyyy = confirmBy.getFullYear();
+  const confirmByLabel = `${dd}-${mm}-${yyyy}, 23:59 PM`;
 
   // Course hours: show as "Xh" when a positive numeric value is present
   const hoursVal = classRow.training_hours != null ? Number(classRow.training_hours) : NaN;
