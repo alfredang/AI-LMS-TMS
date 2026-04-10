@@ -83,11 +83,17 @@ async function sendFollowUpEmail(
 async function sendNextTrainerInvitation(courseRunUuid: string, tp: any) {
   try {
     const result = await sendNextTrainerInvitationForCourseRun({ courseRunUuid, tp });
-    if (result.status !== 'sent') {
-      console.log(`ℹ️ Auto-escalation for course run ${courseRunUuid}: ${result.status} — ${result.message}`);
+    if (result.status === 'sent') {
+      console.log(
+        `✅ [auto-escalation] course_run=${courseRunUuid} → invited "${result.trainerName}" (${result.trainerEmail})`
+      );
+    } else {
+      console.log(
+        `ℹ️  [auto-escalation] course_run=${courseRunUuid} → ${result.status}: ${result.message}`
+      );
     }
   } catch (e) {
-    console.error('❌ Failed to auto-send next trainer invitation:', e);
+    console.error('❌ [auto-escalation] Failed to auto-send next trainer invitation:', e);
   }
 }
 
@@ -218,6 +224,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     );
     const tp = tpResult.rows[0];
 
+    // Send the accept/decline acknowledgement email (best-effort; depends on
+    // Gmail OAuth being configured on the training provider).
     if (tp?.email_user && tp?.google_client_id && tp?.google_client_secret && tp?.google_refresh_token) {
       const replacements: Record<string, string> = {
         COMPANY_SHORT_NAME: tp.company_shortname || tp.company_name || 'Training Provider',
@@ -253,9 +261,26 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         );
         const htmlBody = `<div style="font-family:Arial,sans-serif;font-size:14px;color:#334155;line-height:1.6;">${convertPlainTextToHtml(body)}</div>`;
         await sendFollowUpEmail(invitation.trainer_email, subject, htmlBody, tp);
+      }
+    }
 
-        // Auto-send invitation to next available trainer
+    // Auto-escalate a decline to the next available trainer. This must run
+    // OUTSIDE the OAuth gate above — the sender loads its own TP config,
+    // and we want the escalation to fire even if the acknowledgement email
+    // failed or Gmail isn't configured. Isolated in its own try/catch so a
+    // failure here cannot break the trainer-facing thank-you page.
+    if (action === 'decline') {
+      try {
+        console.log(
+          `🔁 [trainer-invitation/respond] Auto-escalating decline for course_run=${invitation.course_run_id} ` +
+          `(declined by "${invitation.trainer_name}")`
+        );
         await sendNextTrainerInvitation(invitation.course_run_id, tp);
+      } catch (escErr) {
+        console.error(
+          `❌ [trainer-invitation/respond] Auto-escalation failed for course_run=${invitation.course_run_id}:`,
+          escErr
+        );
       }
     }
 

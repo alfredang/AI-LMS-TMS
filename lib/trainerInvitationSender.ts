@@ -206,7 +206,43 @@ export async function sendNextTrainerInvitationForCourseRun(opts: {
     };
   }
 
+  // 3a. Resolve emails for ALL approved trainers in one query so the
+  // eligibility loop can skip entries with no app_user / email on file
+  // instead of terminating on the first dead name. This is what makes
+  // auto-escalation walk past stale approved-list entries (names that
+  // were removed from the user table, trainers without a profile, etc.)
+  // and actually reach the next real trainer.
+  interface ResolvedTrainer {
+    id: string;
+    full_name: string;
+    email: string;
+  }
+  const emailByNormalizedName = new Map<string, ResolvedTrainer>();
+  if (approvedTrainers.length > 0) {
+    const approvedRes = await pool.query(
+      `SELECT DISTINCT ON (LOWER(au.full_name))
+              au.id, au.full_name,
+              COALESCE(NULLIF(au.email, ''), NULLIF(au.secondary_email, '')) AS email
+       FROM app_user au
+       JOIN user_role_map urm ON urm.user_id = au.id
+       WHERE urm.role = 'Trainer'
+         AND LOWER(au.full_name) = ANY ($1::text[])
+       ORDER BY LOWER(au.full_name), au.created_at ASC`,
+      [approvedTrainers.map(n => n.toLowerCase())]
+    );
+    for (const row of approvedRes.rows) {
+      if (row.email) {
+        emailByNormalizedName.set(normalizeTrainerName(row.full_name), {
+          id: row.id,
+          full_name: row.full_name,
+          email: row.email,
+        });
+      }
+    }
+  }
+
   let nextTrainerName: string | null = null;
+  let trainer: ResolvedTrainer | null = null;
   if (overrideTrainerName?.trim()) {
     const overrideNormalized = normalizeTrainerName(overrideTrainerName);
     // Respect the "already pending" guard only when the caller did NOT opt
@@ -222,6 +258,7 @@ export async function sendNextTrainerInvitationForCourseRun(opts: {
       };
     }
     nextTrainerName = overrideTrainerName.trim();
+    trainer = emailByNormalizedName.get(overrideNormalized) || null;
   } else {
     for (const name of approvedTrainers) {
       const normalized = normalizeTrainerName(name);
@@ -231,7 +268,16 @@ export async function sendNextTrainerInvitationForCourseRun(opts: {
       // With allowResend, pending trainers are still eligible (we'll
       // invalidate their old invitation row below before inserting a new one).
       if (!allowResend && pendingSet.has(normalized)) continue;
+      // Skip approved-list entries that don't resolve to a real trainer
+      // account — auto-escalation must walk past dead names rather than
+      // get stuck on one.
+      const resolved = emailByNormalizedName.get(normalized);
+      if (!resolved) {
+        console.log(`ℹ️ [trainerInvitationSender] skipping "${name}" — no app_user/email on file`);
+        continue;
+      }
       nextTrainerName = name;
+      trainer = resolved;
       break;
     }
   }
@@ -241,21 +287,10 @@ export async function sendNextTrainerInvitationForCourseRun(opts: {
       ...baseResult,
       status: 'skipped_all_invited',
       courseRunUuid,
-      message: 'All approved trainers already invited, declined, or assigned',
+      message: 'All approved trainers already invited, declined, assigned, or missing from user table',
     };
   }
 
-  // 4. Look up trainer's email (case-insensitive match on full_name)
-  const trainerResult = await pool.query(
-    `SELECT au.id, au.full_name,
-            COALESCE(NULLIF(au.email, ''), NULLIF(au.secondary_email, '')) AS email
-     FROM app_user au
-     JOIN user_role_map urm ON urm.user_id = au.id
-     WHERE LOWER(au.full_name) = LOWER($1) AND urm.role = 'Trainer'
-     LIMIT 1`,
-    [nextTrainerName]
-  );
-  const trainer = trainerResult.rows[0];
   if (!trainer?.email) {
     return {
       ...baseResult,
