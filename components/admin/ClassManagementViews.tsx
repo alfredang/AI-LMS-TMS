@@ -4969,7 +4969,7 @@ export const AddCourseView: React.FC = () => {
         <div>
             <div className="flex justify-between items-center mb-6">
                 <h2 className="text-3xl font-bold dark:text-white">Add Course</h2>
-                <Button variant="ghost" onClick={() => setAdminPage(AdminPage.Dashboard)}>Back to Dashboard</Button>
+                <Button variant="ghost" onClick={() => setAdminPage(AdminPage.ViewCourses)}>Back to Courses</Button>
             </div>
             {message && (
                 <div className={`mb-4 p-3 rounded-md text-sm ${message.type === 'success' ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 text-green-800 dark:text-green-300' : 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 text-red-800 dark:text-red-300'}`}>
@@ -5099,7 +5099,7 @@ export const AddCourseRunView: React.FC = () => {
         <div>
             <div className="flex justify-between items-center mb-6">
                 <h2 className="text-3xl font-bold dark:text-white">Add Course Run</h2>
-                <Button variant="ghost" onClick={() => setAdminPage(AdminPage.Dashboard)}>Back to Dashboard</Button>
+                <Button variant="ghost" onClick={() => setAdminPage(AdminPage.ViewCourses)}>Back to Courses</Button>
             </div>
             {message && (
                 <div className={`mb-4 p-3 rounded-md text-sm ${message.type === 'success' ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 text-green-800 dark:text-green-300' : 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 text-red-800 dark:text-red-300'}`}>

@@ -668,206 +668,206 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                 ) : (
                     <>
                         <div className="overflow-x-auto">
-                          {includeOngoing ? (
-                            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                                <thead className="bg-gray-50 dark:bg-gray-700/50">
-                                    <tr className="border-b dark:border-gray-700">
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Course Run ID</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider text-center">Course Title</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Course Ref Code</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Class Type</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Start Date</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">End Date</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Class Status</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Learners</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Trainer (TPG)</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Trainer (Local)</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Attendance</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"></th>
-                                    </tr>
-                                </thead>
-                                <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                                    {upcomingClasses.map((classItem, index) => {
-                                        // Respect Cancelled stickiness from API; otherwise derive from local trainer.
-                                        const status = classItem.classStatus === 'Cancelled'
-                                            ? 'Cancelled'
-                                            : (classItem.assignedTrainerLocal ? 'Confirmed' : 'Pending');
-                                        const classType = classItem.classType || 'Physical';
-                                        return (
-                                            <tr key={index} className="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                                                <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.courseRunId}</td>
-                                                <td className="px-4 py-2 text-sm font-medium min-w-[350px]"><button type="button" onClick={() => handleViewDetails(classItem)} className="text-left text-blue-600 dark:text-blue-400 hover:underline">{classItem.courseTitle}</button></td>
-                                                <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.courseCode}</td>
-                                                <td className="px-4 py-2 whitespace-nowrap text-sm">
-                                                    <span className={`px-2 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full ${classType === 'Virtual' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300' : classType === 'Hybrid' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300' : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'}`}>{classType}</span>
-                                                </td>
-                                                <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{formatDate(classItem.startDate)}</td>
-                                                <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{formatDate(classItem.endDate)}</td>
-                                                <td className="px-4 py-2 whitespace-nowrap text-sm">
-                                                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(status)}`}>{status}</span>
-                                                </td>
-                                                <td className="px-4 py-2 whitespace-nowrap text-sm text-center text-gray-700 dark:text-gray-200">{classItem.numOfTrainee}</td>
-                                                <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{renderTrainerCell(classItem.assignedTrainerTpg, classItem.assignedTrainerTpgEmail)}</td>
-                                                <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{renderTrainerCell(classItem.assignedTrainerLocal, classItem.assignedTrainerLocalEmail)}</td>
-                                                <td className="px-4 py-2 whitespace-nowrap text-sm text-center">
-                                                    {classItem.attendanceScore != null ? (
-                                                        <span className={`font-semibold ${classItem.attendanceScore >= 75 ? 'text-green-600' : classItem.attendanceScore >= 50 ? 'text-yellow-600' : 'text-red-600'}`}>
-                                                            {classItem.attendanceScore}%
-                                                        </span>
-                                                    ) : (
-                                                        <span className="text-gray-400">—</span>
-                                                    )}
-                                                </td>
-                                                <td className="px-4 py-2 whitespace-nowrap text-sm font-medium">
-                                                    <Button
-                                                        variant="primary"
-                                                        size="sm"
-                                                        onClick={() => handleEditClass(classItem)}
-                                                    >
-                                                        <Icon name={IconName.Edit} className="w-4 h-4 mr-1" />
-                                                        Edit
-                                                    </Button>
-                                                </td>
-                                            </tr>
-                                        );
-                                    })}
-                                </tbody>
-                            </table>
-                          ) : (
-                            <table className="divide-y divide-gray-200 dark:divide-gray-700" style={{ tableLayout: 'fixed', width: '2340px' }}>
-                                <colgroup>
-                                    <col style={{ width: '90px' }} />
-                                    <col style={{ width: '420px' }} />
-                                    <col style={{ width: '160px' }} />
-                                    <col style={{ width: '110px' }} />
-                                    <col style={{ width: '100px' }} />
-                                    <col style={{ width: '110px' }} />
-                                    <col style={{ width: '90px' }} />
-                                    <col style={{ width: '80px' }} />
-                                    <col style={{ width: '200px' }} />
-                                    <col style={{ width: '200px' }} />
-                                    <col style={{ width: '180px' }} />
-                                    <col style={{ width: '220px' }} />
-                                    <col style={{ width: '90px' }} />
-                                </colgroup>
-                                <thead className="bg-gray-50 dark:bg-gray-700/50">
-                                    <tr className="border-b dark:border-gray-700">
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Course Run ID</th>
-                                        <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Course Title</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Course Ref Code</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Class Status</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Class Type</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Start Date</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">End Date</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Learners</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Trainer (TPG)</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Trainer (Local)</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Next Trainer</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Invite Next Trainer</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"></th>
-                                    </tr>
-                                </thead>
-                                <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                                    {upcomingClasses.map((classItem, index) => {
-                                        const classType = classItem.classType || 'Physical';
-                                        return (
-                                        <tr key={index} className="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.courseRunId}</td>
-                                            <td className="px-4 py-2 text-sm font-medium overflow-hidden text-ellipsis"><button type="button" onClick={() => handleViewDetails(classItem)} className="text-left text-blue-600 dark:text-blue-400 hover:underline">{classItem.courseTitle}</button></td>
-                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.courseCode}</td>
-                                            <td className="px-4 py-2 whitespace-nowrap text-sm">
-                                                <select
-                                                    value={classItem.classStatus}
-                                                    onChange={async (e) => {
-                                                        const newStatus = e.target.value;
-                                                        try {
-                                                            await fetch(getApiUrl('/api/admin/upcoming-classes'), {
-                                                                method: 'PUT',
-                                                                headers: { 'Content-Type': 'application/json' },
-                                                                body: JSON.stringify({ id: classItem.id, class_status: newStatus }),
-                                                            });
-                                                            setUpcomingClasses(prev => prev.map(c => c.id === classItem.id ? { ...c, classStatus: newStatus } : c));
-                                                        } catch { /* silent */ }
-                                                    }}
-                                                    className={`text-xs font-semibold rounded-full px-2 py-1 border-0 cursor-pointer focus:ring-2 focus:ring-blue-500 ${getStatusColor(classItem.classStatus)}`}
-                                                >
-                                                    <option value="Confirmed">Confirmed</option>
-                                                    <option value="Pending">Pending</option>
-                                                    <option value="Cancelled">Cancelled</option>
-                                                </select>
-                                            </td>
-                                            <td className="px-4 py-2 whitespace-nowrap text-sm">
-                                                <span className={`px-2 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full ${classType === 'Virtual' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300' : classType === 'Hybrid' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300' : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'}`}>{classType}</span>
-                                            </td>
-                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{formatDate(classItem.startDate)}</td>
-                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{formatDate(classItem.endDate)}</td>
-                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-center text-gray-700 dark:text-gray-200">{classItem.numOfTrainee}</td>
-                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{renderTrainerCell(classItem.assignedTrainerTpg, classItem.assignedTrainerTpgEmail)}</td>
-                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{renderTrainerCell(classItem.assignedTrainerLocal, classItem.assignedTrainerLocalEmail)}</td>
-                                            <td className="px-4 py-2 text-sm text-gray-700 dark:text-gray-200">
-                                                {classItem.nextAvailableTrainer ? (() => {
-                                                    const courseTrainers = splitTrainerList(classItem.trainersList);
-                                                    return (
-                                                        <select
-                                                            value={nextTrainerOverrides[classItem.id] ?? classItem.nextAvailableTrainer}
-                                                            onChange={e => setNextTrainerOverrides(prev => ({ ...prev, [classItem.id]: e.target.value }))}
-                                                            className="w-full min-w-[160px] border border-gray-300 dark:border-gray-600 rounded-md px-2 py-1 text-xs bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                        >
-                                                            <option value="">-- Reassign Trainer --</option>
-                                                            {courseTrainers.map(name => (
-                                                                <option key={name} value={name}>{name}</option>
-                                                            ))}
-                                                        </select>
-                                                    );
-                                                })() : (
-                                                    <span className="text-gray-400 text-xs italic">—</span>
-                                                )}
-                                            </td>
-                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">
-                                                <div className="flex items-center gap-2">
-                                                    {classItem.latestInvitationStatus && (
-                                                        <span className={`inline-flex px-2 py-0.5 text-xs font-semibold rounded-full ${classItem.latestInvitationStatus === 'accepted'
-                                                            ? 'bg-green-100 text-green-700'
-                                                            : classItem.latestInvitationStatus === 'declined'
-                                                                ? 'bg-red-100 text-red-700'
-                                                                : 'bg-yellow-100 text-yellow-700'
-                                                            }`}>
-                                                            {classItem.latestInvitationStatus}
-                                                        </span>
-                                                    )}
-                                                    <Button
-                                                        variant="secondary"
-                                                        size="sm"
-                                                        onClick={() => handleSendTrainerInvitation(classItem)}
-                                                        disabled={!(nextTrainerOverrides[classItem.id] || classItem.nextAvailableTrainer) || sendingInvitationFor === classItem.id}
-                                                    >
-                                                        {sendingInvitationFor === classItem.id ? (
-                                                            <Icon name={IconName.Spinner} className="w-3.5 h-3.5 animate-spin" />
-                                                        ) : (
-                                                            <>
-                                                                <Icon name={IconName.Send} className="w-3.5 h-3.5 mr-1" />
-                                                                SEND INVITE
-                                                            </>
-                                                        )}
-                                                    </Button>
-                                                </div>
-                                            </td>
-                                            <td className="px-4 py-2 whitespace-nowrap text-sm font-medium">
-                                                <Button
-                                                    variant="primary"
-                                                    size="sm"
-                                                    onClick={() => handleEditClass(classItem)}
-                                                >
-                                                    <Icon name={IconName.Edit} className="w-4 h-4 mr-1" />
-                                                    Edit
-                                                </Button>
-                                            </td>
+                            {includeOngoing ? (
+                                <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                                    <thead className="bg-gray-50 dark:bg-gray-700/50">
+                                        <tr className="border-b dark:border-gray-700">
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Course Run ID</th>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider text-center">Course Title</th>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Course Ref Code</th>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Class Type</th>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Start Date</th>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">End Date</th>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Class Status</th>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Learners</th>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Trainer (TPG)</th>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Trainer (Local)</th>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Attendance</th>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"></th>
                                         </tr>
-                                        );
-                                    })}
-                                </tbody>
-                            </table>
-                          )}
+                                    </thead>
+                                    <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                                        {upcomingClasses.map((classItem, index) => {
+                                            // Respect Cancelled stickiness from API; otherwise derive from local trainer.
+                                            const status = classItem.classStatus === 'Cancelled'
+                                                ? 'Cancelled'
+                                                : (classItem.assignedTrainerLocal ? 'Confirmed' : 'Pending');
+                                            const classType = classItem.classType || 'Physical';
+                                            return (
+                                                <tr key={index} className="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                                                    <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.courseRunId}</td>
+                                                    <td className="px-4 py-2 text-sm font-medium min-w-[350px]"><button type="button" onClick={() => handleViewDetails(classItem)} className="text-left text-blue-600 dark:text-blue-400 hover:underline">{classItem.courseTitle}</button></td>
+                                                    <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.courseCode}</td>
+                                                    <td className="px-4 py-2 whitespace-nowrap text-sm">
+                                                        <span className={`px-2 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full ${classType === 'Virtual' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300' : classType === 'Hybrid' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300' : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'}`}>{classType}</span>
+                                                    </td>
+                                                    <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{formatDate(classItem.startDate)}</td>
+                                                    <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{formatDate(classItem.endDate)}</td>
+                                                    <td className="px-4 py-2 whitespace-nowrap text-sm">
+                                                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(status)}`}>{status}</span>
+                                                    </td>
+                                                    <td className="px-4 py-2 whitespace-nowrap text-sm text-center text-gray-700 dark:text-gray-200">{classItem.numOfTrainee}</td>
+                                                    <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{renderTrainerCell(classItem.assignedTrainerTpg, classItem.assignedTrainerTpgEmail)}</td>
+                                                    <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{renderTrainerCell(classItem.assignedTrainerLocal, classItem.assignedTrainerLocalEmail)}</td>
+                                                    <td className="px-4 py-2 whitespace-nowrap text-sm text-center">
+                                                        {classItem.attendanceScore != null ? (
+                                                            <span className={`font-semibold ${classItem.attendanceScore >= 75 ? 'text-green-600' : classItem.attendanceScore >= 50 ? 'text-yellow-600' : 'text-red-600'}`}>
+                                                                {classItem.attendanceScore}%
+                                                            </span>
+                                                        ) : (
+                                                            <span className="text-gray-400">—</span>
+                                                        )}
+                                                    </td>
+                                                    <td className="px-4 py-2 whitespace-nowrap text-sm font-medium">
+                                                        <Button
+                                                            variant="primary"
+                                                            size="sm"
+                                                            onClick={() => handleEditClass(classItem)}
+                                                        >
+                                                            <Icon name={IconName.Edit} className="w-4 h-4 mr-1" />
+                                                            Edit
+                                                        </Button>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            ) : (
+                                <table className="divide-y divide-gray-200 dark:divide-gray-700" style={{ tableLayout: 'fixed', width: '2340px' }}>
+                                    <colgroup>
+                                        <col style={{ width: '90px' }} />
+                                        <col style={{ width: '420px' }} />
+                                        <col style={{ width: '160px' }} />
+                                        <col style={{ width: '110px' }} />
+                                        <col style={{ width: '100px' }} />
+                                        <col style={{ width: '110px' }} />
+                                        <col style={{ width: '90px' }} />
+                                        <col style={{ width: '80px' }} />
+                                        <col style={{ width: '200px' }} />
+                                        <col style={{ width: '200px' }} />
+                                        <col style={{ width: '180px' }} />
+                                        <col style={{ width: '220px' }} />
+                                        <col style={{ width: '90px' }} />
+                                    </colgroup>
+                                    <thead className="bg-gray-50 dark:bg-gray-700/50">
+                                        <tr className="border-b dark:border-gray-700">
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Course Run ID</th>
+                                            <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Course Title</th>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Course Ref Code</th>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Class Status</th>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Class Type</th>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Start Date</th>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">End Date</th>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Learners</th>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Trainer (TPG)</th>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Trainer (Local)</th>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Next Trainer</th>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Invite Next Trainer</th>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                                        {upcomingClasses.map((classItem, index) => {
+                                            const classType = classItem.classType || 'Physical';
+                                            return (
+                                                <tr key={index} className="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                                                    <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.courseRunId}</td>
+                                                    <td className="px-4 py-2 text-sm font-medium overflow-hidden text-ellipsis"><button type="button" onClick={() => handleViewDetails(classItem)} className="text-left text-blue-600 dark:text-blue-400 hover:underline">{classItem.courseTitle}</button></td>
+                                                    <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.courseCode}</td>
+                                                    <td className="px-4 py-2 whitespace-nowrap text-sm">
+                                                        <select
+                                                            value={classItem.classStatus}
+                                                            onChange={async (e) => {
+                                                                const newStatus = e.target.value;
+                                                                try {
+                                                                    await fetch(getApiUrl('/api/admin/upcoming-classes'), {
+                                                                        method: 'PUT',
+                                                                        headers: { 'Content-Type': 'application/json' },
+                                                                        body: JSON.stringify({ id: classItem.id, class_status: newStatus }),
+                                                                    });
+                                                                    setUpcomingClasses(prev => prev.map(c => c.id === classItem.id ? { ...c, classStatus: newStatus } : c));
+                                                                } catch { /* silent */ }
+                                                            }}
+                                                            className={`text-xs font-semibold rounded-full px-2 py-1 border-0 cursor-pointer focus:ring-2 focus:ring-blue-500 ${getStatusColor(classItem.classStatus)}`}
+                                                        >
+                                                            <option value="Confirmed">Confirmed</option>
+                                                            <option value="Pending">Pending</option>
+                                                            <option value="Cancelled">Cancelled</option>
+                                                        </select>
+                                                    </td>
+                                                    <td className="px-4 py-2 whitespace-nowrap text-sm">
+                                                        <span className={`px-2 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full ${classType === 'Virtual' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300' : classType === 'Hybrid' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300' : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'}`}>{classType}</span>
+                                                    </td>
+                                                    <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{formatDate(classItem.startDate)}</td>
+                                                    <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{formatDate(classItem.endDate)}</td>
+                                                    <td className="px-4 py-2 whitespace-nowrap text-sm text-center text-gray-700 dark:text-gray-200">{classItem.numOfTrainee}</td>
+                                                    <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{renderTrainerCell(classItem.assignedTrainerTpg, classItem.assignedTrainerTpgEmail)}</td>
+                                                    <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{renderTrainerCell(classItem.assignedTrainerLocal, classItem.assignedTrainerLocalEmail)}</td>
+                                                    <td className="px-4 py-2 text-sm text-gray-700 dark:text-gray-200">
+                                                        {classItem.nextAvailableTrainer ? (() => {
+                                                            const courseTrainers = splitTrainerList(classItem.trainersList);
+                                                            return (
+                                                                <select
+                                                                    value={nextTrainerOverrides[classItem.id] ?? classItem.nextAvailableTrainer}
+                                                                    onChange={e => setNextTrainerOverrides(prev => ({ ...prev, [classItem.id]: e.target.value }))}
+                                                                    className="w-full min-w-[160px] border border-gray-300 dark:border-gray-600 rounded-md px-2 py-1 text-xs bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                                >
+                                                                    <option value="">-- Reassign Trainer --</option>
+                                                                    {courseTrainers.map(name => (
+                                                                        <option key={name} value={name}>{name}</option>
+                                                                    ))}
+                                                                </select>
+                                                            );
+                                                        })() : (
+                                                            <span className="text-gray-400 text-xs italic">—</span>
+                                                        )}
+                                                    </td>
+                                                    <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">
+                                                        <div className="flex items-center gap-2">
+                                                            {classItem.latestInvitationStatus && (
+                                                                <span className={`inline-flex px-2 py-0.5 text-xs font-semibold rounded-full ${classItem.latestInvitationStatus === 'accepted'
+                                                                    ? 'bg-green-100 text-green-700'
+                                                                    : classItem.latestInvitationStatus === 'declined'
+                                                                        ? 'bg-red-100 text-red-700'
+                                                                        : 'bg-yellow-100 text-yellow-700'
+                                                                    }`}>
+                                                                    {classItem.latestInvitationStatus}
+                                                                </span>
+                                                            )}
+                                                            <Button
+                                                                variant="secondary"
+                                                                size="sm"
+                                                                onClick={() => handleSendTrainerInvitation(classItem)}
+                                                                disabled={!(nextTrainerOverrides[classItem.id] || classItem.nextAvailableTrainer) || sendingInvitationFor === classItem.id}
+                                                            >
+                                                                {sendingInvitationFor === classItem.id ? (
+                                                                    <Icon name={IconName.Spinner} className="w-3.5 h-3.5 animate-spin" />
+                                                                ) : (
+                                                                    <>
+                                                                        <Icon name={IconName.Send} className="w-3.5 h-3.5 mr-1" />
+                                                                        SEND INVITE
+                                                                    </>
+                                                                )}
+                                                            </Button>
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-4 py-2 whitespace-nowrap text-sm font-medium">
+                                                        <Button
+                                                            variant="primary"
+                                                            size="sm"
+                                                            onClick={() => handleEditClass(classItem)}
+                                                        >
+                                                            <Icon name={IconName.Edit} className="w-4 h-4 mr-1" />
+                                                            Edit
+                                                        </Button>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            )}
                         </div>
 
                         {/* Pagination */}
@@ -906,184 +906,184 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                     </>
                 )}
             </Card>
-        {/* Import Run Modal */}
-        {showImportModal && (
-            <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-                <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md">
-                    <div className="p-6">
-                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">Import Course Run</h3>
-                        <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-                            Enter a Course Run ID to fetch its details from SSG and save it to the database.
-                        </p>
+            {/* Import Run Modal */}
+            {showImportModal && (
+                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md">
+                        <div className="p-6">
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">Import Course Run</h3>
+                            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                                Enter a Course Run ID to fetch its details from SSG and save it to the database.
+                            </p>
 
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                            Course Run ID
-                        </label>
-                        <input
-                            type="text"
-                            value={importRunId}
-                            onChange={e => { setImportRunId(e.target.value); setImportResult(null); }}
-                            onKeyDown={e => e.key === 'Enter' && !importLoading && handleImportRun()}
-                            placeholder="e.g. 1067907"
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400 mb-4"
-                            autoFocus
-                        />
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                Course Run ID
+                            </label>
+                            <input
+                                type="text"
+                                value={importRunId}
+                                onChange={e => { setImportRunId(e.target.value); setImportResult(null); }}
+                                onKeyDown={e => e.key === 'Enter' && !importLoading && handleImportRun()}
+                                placeholder="e.g. 1067907"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400 mb-4"
+                                autoFocus
+                            />
 
-                        {/* Result banner */}
-                        {importResult && (
-                            <div className={`rounded-md p-3 mb-4 text-sm ${importResult.success ? 'bg-green-50 border border-green-200 text-green-800 dark:bg-green-900/20 dark:border-green-700 dark:text-green-300' : 'bg-red-50 border border-red-200 text-red-800 dark:bg-red-900/20 dark:border-red-700 dark:text-red-300'}`}>
-                                <p className="font-medium">{importResult.message}</p>
-                                {importResult.detail && <p className="mt-1 text-xs opacity-80">{importResult.detail}</p>}
+                            {/* Result banner */}
+                            {importResult && (
+                                <div className={`rounded-md p-3 mb-4 text-sm ${importResult.success ? 'bg-green-50 border border-green-200 text-green-800 dark:bg-green-900/20 dark:border-green-700 dark:text-green-300' : 'bg-red-50 border border-red-200 text-red-800 dark:bg-red-900/20 dark:border-red-700 dark:text-red-300'}`}>
+                                    <p className="font-medium">{importResult.message}</p>
+                                    {importResult.detail && <p className="mt-1 text-xs opacity-80">{importResult.detail}</p>}
+                                </div>
+                            )}
+
+                            <div className="flex gap-3 justify-end">
+                                <Button
+                                    variant="ghost"
+                                    onClick={() => { setShowImportModal(false); setImportRunId(''); setImportResult(null); }}
+                                    disabled={importLoading}
+                                >
+                                    {importResult?.success ? 'Close' : 'Cancel'}
+                                </Button>
+                                <Button
+                                    variant="primary"
+                                    onClick={handleImportRun}
+                                    disabled={importLoading || !importRunId.trim()}
+                                >
+                                    {importLoading ? (
+                                        <>
+                                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
+                                            Fetching...
+                                        </>
+                                    ) : 'Import'}
+                                </Button>
                             </div>
-                        )}
-
-                        <div className="flex gap-3 justify-end">
-                            <Button
-                                variant="ghost"
-                                onClick={() => { setShowImportModal(false); setImportRunId(''); setImportResult(null); }}
-                                disabled={importLoading}
-                            >
-                                {importResult?.success ? 'Close' : 'Cancel'}
-                            </Button>
-                            <Button
-                                variant="primary"
-                                onClick={handleImportRun}
-                                disabled={importLoading || !importRunId.trim()}
-                            >
-                                {importLoading ? (
-                                    <>
-                                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
-                                        Fetching...
-                                    </>
-                                ) : 'Import'}
-                            </Button>
                         </div>
                     </div>
                 </div>
-            </div>
-        )}
+            )}
 
-        {/* Calendar Sync Modal */}
-        {showCalendarModal && (
-            <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={(e) => { if (e.target === e.currentTarget && !calSyncing) setShowCalendarModal(false); }}>
-                <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-lg">
-                    <div className="p-6">
-                        <div className="flex justify-between items-center mb-4">
-                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Sync with Google Calendar</h3>
-                            <button onClick={() => !calSyncing && setShowCalendarModal(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-2xl leading-none">&times;</button>
-                        </div>
-                        <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-                            Check Google Calendar events in the date range. Events with <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded text-xs">[VIRTUAL]</code> in the title will have their class type set to Virtual and Google Meet link saved.
-                        </p>
-
-                        <div className="grid grid-cols-2 gap-4 mb-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Start Date</label>
-                                <input
-                                    type="date"
-                                    value={calSyncStartDate}
-                                    onChange={e => setCalSyncStartDate(e.target.value)}
-                                    disabled={calSyncing}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white text-sm disabled:opacity-50"
-                                />
+            {/* Calendar Sync Modal */}
+            {showCalendarModal && (
+                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={(e) => { if (e.target === e.currentTarget && !calSyncing) setShowCalendarModal(false); }}>
+                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-lg">
+                        <div className="p-6">
+                            <div className="flex justify-between items-center mb-4">
+                                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Sync with Google Calendar</h3>
+                                <button onClick={() => !calSyncing && setShowCalendarModal(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-2xl leading-none">&times;</button>
                             </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">End Date</label>
-                                <input
-                                    type="date"
-                                    value={calSyncEndDate}
-                                    onChange={e => setCalSyncEndDate(e.target.value)}
-                                    disabled={calSyncing}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white text-sm disabled:opacity-50"
-                                />
+                            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                                Check Google Calendar events in the date range. Events with <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded text-xs">[VIRTUAL]</code> in the title will have their class type set to Virtual and Google Meet link saved.
+                            </p>
+
+                            <div className="grid grid-cols-2 gap-4 mb-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Start Date</label>
+                                    <input
+                                        type="date"
+                                        value={calSyncStartDate}
+                                        onChange={e => setCalSyncStartDate(e.target.value)}
+                                        disabled={calSyncing}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white text-sm disabled:opacity-50"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">End Date</label>
+                                    <input
+                                        type="date"
+                                        value={calSyncEndDate}
+                                        onChange={e => setCalSyncEndDate(e.target.value)}
+                                        disabled={calSyncing}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white text-sm disabled:opacity-50"
+                                    />
+                                </div>
                             </div>
-                        </div>
 
-                        {/* Sync progress */}
-                        {calSyncing && (
-                            <div className="flex items-center gap-3 mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-md">
-                                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
-                                <span className="text-sm text-blue-700 dark:text-blue-300">Syncing calendar events...</span>
-                            </div>
-                        )}
+                            {/* Sync progress */}
+                            {calSyncing && (
+                                <div className="flex items-center gap-3 mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-md">
+                                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
+                                    <span className="text-sm text-blue-700 dark:text-blue-300">Syncing calendar events...</span>
+                                </div>
+                            )}
 
-                        {/* Results */}
-                        {calSyncResult && (
-                            <div className="mb-4">
-                                {calSyncResult.success ? (
-                                    <>
-                                        <div className="grid grid-cols-3 gap-3 mb-3">
-                                            <div className="bg-blue-50 dark:bg-blue-900/30 rounded-lg p-2 text-center">
-                                                <p className="text-lg font-bold text-blue-600">{calSyncResult.summary?.totalEvents || 0}</p>
-                                                <p className="text-[10px] text-gray-500 dark:text-gray-400">Total Events</p>
+                            {/* Results */}
+                            {calSyncResult && (
+                                <div className="mb-4">
+                                    {calSyncResult.success ? (
+                                        <>
+                                            <div className="grid grid-cols-3 gap-3 mb-3">
+                                                <div className="bg-blue-50 dark:bg-blue-900/30 rounded-lg p-2 text-center">
+                                                    <p className="text-lg font-bold text-blue-600">{calSyncResult.summary?.totalEvents || 0}</p>
+                                                    <p className="text-[10px] text-gray-500 dark:text-gray-400">Total Events</p>
+                                                </div>
+                                                <div className="bg-purple-50 dark:bg-purple-900/30 rounded-lg p-2 text-center">
+                                                    <p className="text-lg font-bold text-purple-600">{calSyncResult.summary?.virtualEvents || 0}</p>
+                                                    <p className="text-[10px] text-gray-500 dark:text-gray-400">Virtual Events</p>
+                                                </div>
+                                                <div className="bg-green-50 dark:bg-green-900/30 rounded-lg p-2 text-center">
+                                                    <p className="text-lg font-bold text-green-600">{calSyncResult.summary?.updated || 0}</p>
+                                                    <p className="text-[10px] text-gray-500 dark:text-gray-400">Classes Updated</p>
+                                                </div>
                                             </div>
-                                            <div className="bg-purple-50 dark:bg-purple-900/30 rounded-lg p-2 text-center">
-                                                <p className="text-lg font-bold text-purple-600">{calSyncResult.summary?.virtualEvents || 0}</p>
-                                                <p className="text-[10px] text-gray-500 dark:text-gray-400">Virtual Events</p>
-                                            </div>
-                                            <div className="bg-green-50 dark:bg-green-900/30 rounded-lg p-2 text-center">
-                                                <p className="text-lg font-bold text-green-600">{calSyncResult.summary?.updated || 0}</p>
-                                                <p className="text-[10px] text-gray-500 dark:text-gray-400">Classes Updated</p>
-                                            </div>
-                                        </div>
 
-                                        {calSyncResult.results?.length > 0 && (
-                                            <div className="max-h-48 overflow-y-auto border dark:border-gray-700 rounded-md">
-                                                <table className="w-full text-xs">
-                                                    <thead className="bg-gray-50 dark:bg-gray-700/50 sticky top-0">
-                                                        <tr>
-                                                            <th className="px-2 py-1.5 text-left text-gray-500 dark:text-gray-400">Run ID</th>
-                                                            <th className="px-2 py-1.5 text-left text-gray-500 dark:text-gray-400">Course</th>
-                                                            <th className="px-2 py-1.5 text-center text-gray-500 dark:text-gray-400">Status</th>
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                                                        {calSyncResult.results.map((r: any, i: number) => (
-                                                            <tr key={i}>
-                                                                <td className="px-2 py-1 text-gray-700 dark:text-gray-300 font-mono">{r.courseRunId || '—'}</td>
-                                                                <td className="px-2 py-1 text-gray-700 dark:text-gray-300 truncate max-w-[200px]">{r.courseTitle || r.event || '—'}</td>
-                                                                <td className="px-2 py-1 text-center">
-                                                                    {r.changes ? (
-                                                                        <span className="text-green-600 font-medium">Updated</span>
-                                                                    ) : r.status === 'no_match' ? (
-                                                                        <span className="text-yellow-500">No match</span>
-                                                                    ) : (
-                                                                        <span className="text-gray-400">Already virtual</span>
-                                                                    )}
-                                                                </td>
+                                            {calSyncResult.results?.length > 0 && (
+                                                <div className="max-h-48 overflow-y-auto border dark:border-gray-700 rounded-md">
+                                                    <table className="w-full text-xs">
+                                                        <thead className="bg-gray-50 dark:bg-gray-700/50 sticky top-0">
+                                                            <tr>
+                                                                <th className="px-2 py-1.5 text-left text-gray-500 dark:text-gray-400">Run ID</th>
+                                                                <th className="px-2 py-1.5 text-left text-gray-500 dark:text-gray-400">Course</th>
+                                                                <th className="px-2 py-1.5 text-center text-gray-500 dark:text-gray-400">Status</th>
                                                             </tr>
-                                                        ))}
-                                                    </tbody>
-                                                </table>
-                                            </div>
-                                        )}
+                                                        </thead>
+                                                        <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                                                            {calSyncResult.results.map((r: any, i: number) => (
+                                                                <tr key={i}>
+                                                                    <td className="px-2 py-1 text-gray-700 dark:text-gray-300 font-mono">{r.courseRunId || '—'}</td>
+                                                                    <td className="px-2 py-1 text-gray-700 dark:text-gray-300 truncate max-w-[200px]">{r.courseTitle || r.event || '—'}</td>
+                                                                    <td className="px-2 py-1 text-center">
+                                                                        {r.changes ? (
+                                                                            <span className="text-green-600 font-medium">Updated</span>
+                                                                        ) : r.status === 'no_match' ? (
+                                                                            <span className="text-yellow-500">No match</span>
+                                                                        ) : (
+                                                                            <span className="text-gray-400">Already virtual</span>
+                                                                        )}
+                                                                    </td>
+                                                                </tr>
+                                                            ))}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            )}
 
-                                        {calSyncResult.summary?.virtualEvents === 0 && (
-                                            <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-2">No [VIRTUAL] events found in the date range.</p>
-                                        )}
-                                    </>
-                                ) : (
-                                    <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-md p-3 text-sm text-red-700 dark:text-red-300">
-                                        {calSyncResult.error || calSyncResult.message || 'Sync failed.'}
-                                    </div>
+                                            {calSyncResult.summary?.virtualEvents === 0 && (
+                                                <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-2">No [VIRTUAL] events found in the date range.</p>
+                                            )}
+                                        </>
+                                    ) : (
+                                        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-md p-3 text-sm text-red-700 dark:text-red-300">
+                                            {calSyncResult.error || calSyncResult.message || 'Sync failed.'}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            <div className="flex gap-3 justify-end">
+                                <Button variant="ghost" onClick={() => setShowCalendarModal(false)} disabled={calSyncing}>
+                                    {calSyncResult?.success ? 'Done' : 'Cancel'}
+                                </Button>
+                                {!calSyncResult && (
+                                    <Button variant="primary" onClick={handleCalendarSync} disabled={calSyncing}>
+                                        {calSyncing ? 'Syncing...' : 'Sync Now'}
+                                    </Button>
                                 )}
                             </div>
-                        )}
-
-                        <div className="flex gap-3 justify-end">
-                            <Button variant="ghost" onClick={() => setShowCalendarModal(false)} disabled={calSyncing}>
-                                {calSyncResult?.success ? 'Done' : 'Cancel'}
-                            </Button>
-                            {!calSyncResult && (
-                                <Button variant="primary" onClick={handleCalendarSync} disabled={calSyncing}>
-                                    {calSyncing ? 'Syncing...' : 'Sync Now'}
-                                </Button>
-                            )}
                         </div>
                     </div>
                 </div>
-            </div>
-        )}
+            )}
         </div>
     );
 };
