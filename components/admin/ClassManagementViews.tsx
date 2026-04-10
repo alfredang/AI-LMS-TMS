@@ -2145,18 +2145,36 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                 {(!isEditMode || activeTab === 'courseRun') && (
                     <>
                         {isEditMode && ssgDataPopulated && !ssgApiLoading && (
-                            <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-md p-3 mb-4">
-                                <p className="text-sm text-green-800 dark:text-green-300">
+                            <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-md p-3 mb-4 flex items-start justify-between gap-3">
+                                <p className="text-sm text-green-800 dark:text-green-300 flex-1">
                                     <strong>✓ Form populated with SSG data</strong> - The form fields below have been automatically filled with data from the SSG API. You can modify any field as needed before updating.
                                 </p>
+                                <button
+                                    type="button"
+                                    onClick={() => fetchCourseRunData(courseRunId)}
+                                    disabled={ssgApiLoading || !courseRunId}
+                                    className="flex-shrink-0 px-3 py-1 text-xs font-medium rounded border border-green-300 dark:border-green-600 text-green-800 dark:text-green-300 hover:bg-green-100 dark:hover:bg-green-900/40 disabled:opacity-50"
+                                    title="Re-fetch this course run from SSG and re-populate the form"
+                                >
+                                    Refetch
+                                </button>
                             </div>
                         )}
 
                         {isEditMode && ssgApiResponse && !ssgApiLoading && !ssgDataPopulated && (
-                            <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-md p-3 mb-4">
-                                <p className="text-sm text-yellow-800 dark:text-yellow-300">
+                            <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-md p-3 mb-4 flex items-start justify-between gap-3">
+                                <p className="text-sm text-yellow-800 dark:text-yellow-300 flex-1">
                                     <strong>⚠ SSG data retrieved but form not populated</strong> - The SSG API returned data, but the form fields could not be filled. The response may have an unexpected structure.
                                 </p>
+                                <button
+                                    type="button"
+                                    onClick={() => fetchCourseRunData(courseRunId)}
+                                    disabled={ssgApiLoading || !courseRunId}
+                                    className="flex-shrink-0 px-3 py-1 text-xs font-medium rounded border border-yellow-400 dark:border-yellow-600 text-yellow-900 dark:text-yellow-200 hover:bg-yellow-100 dark:hover:bg-yellow-900/40 disabled:opacity-50"
+                                    title="Re-fetch this course run from SSG and retry populating the form. Switch SSG App above if you suspect the wrong cert is being used."
+                                >
+                                    Refetch
+                                </button>
                             </div>
                         )}
 
@@ -3239,29 +3257,49 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                             const response = await fetch(`/api/ssg/courses/courseRuns/${courseRunId}?includeExpiredCourses=true&action=assign-trainer`, {
                                                                 method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(requestBody)
                                                             });
-                                                            if (response.ok) {
+
+                                                            // Parse the body regardless of HTTP status — SSG returns HTTP 200 with
+                                                            // `error: { code, message }` in the body on silent/validation failures
+                                                            // (e.g. #62 registration-date-immutable rule). Relying on `response.ok`
+                                                            // alone masked real failures and ghost-wrote local tpg_assigned_trainer_*
+                                                            // (see backlog #60). Extract error uniformly from both paths.
+                                                            const body = await response.json().catch(() => ({} as any));
+                                                            const bodyError = body?.error && (body.error.code || body.error.message) ? body.error : null;
+                                                            const httpErrorDetail = !response.ok
+                                                                ? (body?.details?.[0]?.message || body?.message || '')
+                                                                : '';
+                                                            const ssgErrorMessage: string = bodyError?.message || bodyError?.code || httpErrorDetail || '';
+                                                            const ssgHadError = !!ssgErrorMessage;
+
+                                                            // Legitimate fallback case: trainer isn't registered in SSG's TP Profile
+                                                            // yet. Preserve the existing behavior — save locally and prompt the
+                                                            // admin to register the trainer in SSG.
+                                                            const isExistingTrainerNotFound = ssgErrorMessage.includes('Existing_Trainer_NotFound');
+
+                                                            if (!ssgHadError) {
+                                                                // Real success — write local using the admin's input (not a re-fetch,
+                                                                // which would blank local if the re-fetch itself failed).
+                                                                await fetch(getApiUrl('/api/admin/rename-trainer'), {
+                                                                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                                                    body: JSON.stringify({ action: 'update-tpg-trainer', courseRunId, trainerName: localName, trainerEmail: localEmail })
+                                                                });
                                                                 showSuccessPopup(`Trainer ${localName} assigned to TPG successfully!`);
-                                                                // Re-fetch SSG data to update TPG display
+                                                                // Non-destructive verification re-fetch — only used to refresh the UI,
+                                                                // never to overwrite local.
                                                                 const updated = await fetch(`/api/ssg/courses?runId=${courseRunId}&includeExpired=false`);
                                                                 if (updated.ok) setSsgApiResponse(await updated.json());
-                                                                // Also save locally
+                                                            } else if (isExistingTrainerNotFound) {
+                                                                // Legitimate local-only fallback
                                                                 await fetch(getApiUrl('/api/admin/rename-trainer'), {
                                                                     method: 'POST', headers: { 'Content-Type': 'application/json' },
                                                                     body: JSON.stringify({ action: 'update-tpg-trainer', courseRunId, trainerName: localName, trainerEmail: localEmail })
                                                                 });
+                                                                showInfoPopup(`Trainer ${localName} is not registered in the SSG TP Profile yet. TPG trainer has been saved locally. Please register the trainer in SSG first.`);
                                                             } else {
-                                                                const errData = await response.json().catch(() => ({}));
-                                                                const detail = errData.details?.[0]?.message || errData.message || '';
-                                                                // Save locally as fallback
-                                                                await fetch(getApiUrl('/api/admin/rename-trainer'), {
-                                                                    method: 'POST', headers: { 'Content-Type': 'application/json' },
-                                                                    body: JSON.stringify({ action: 'update-tpg-trainer', courseRunId, trainerName: localName, trainerEmail: localEmail })
-                                                                });
-                                                                if (detail.includes('Existing_Trainer_NotFound')) {
-                                                                    showInfoPopup(`Trainer ${localName} is not registered in the SSG TP Profile yet. TPG trainer has been saved locally. Please register the trainer in SSG first.`);
-                                                                } else {
-                                                                    showInfoPopup(`SSG API returned: ${detail || 'Unknown error'}. TPG trainer saved locally as ${localName}.`);
-                                                                }
+                                                                // Real SSG rejection — do NOT write local, surface the error so the
+                                                                // admin knows the assignment didn't actually go through. This is the
+                                                                // fix for backlog #60 (ghost-write on silent SSG failure).
+                                                                showErrorPopup(`SSG rejected the trainer assignment: ${ssgErrorMessage}. Local DB was NOT updated. Please resolve the SSG-side issue and try again.`);
                                                             }
                                                         } catch { showErrorPopup('Failed to assign trainer to TPG.'); }
                                                         finally { setLoading(false); }
@@ -3279,7 +3317,8 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                 {assignedTrainersList.length > 0 ? (
                                     <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-md p-4">
                                         <div className="space-y-2">
-                                            {assignedTrainersList.slice(0, 1).map((t: any) => {
+                                            {/* Display ALL locally assigned trainers (previously sliced to 1). */}
+                                            {assignedTrainersList.map((t: any) => {
                                                 const trainerDetail = availableTrainers.find((at: any) =>
                                                     (at.email && t.trainer_email && at.email.toLowerCase() === t.trainer_email.toLowerCase()) ||
                                                     (at.trainer_name && t.trainer_name && at.trainer_name.toLowerCase() === t.trainer_name.toLowerCase())
@@ -3436,8 +3475,19 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                     headers: { 'Content-Type': 'application/json' },
                                                     body: JSON.stringify(requestBody)
                                                 });
-                                                if (response.ok) {
-                                                    // Null local TPG columns only after SSG success
+
+                                                // Parse the body regardless of HTTP status — SSG returns HTTP 200 with
+                                                // `error: { code, message }` on silent failures. Same pattern as the
+                                                // assign flow above (backlog #60 fix).
+                                                const body = await response.json().catch(() => ({} as any));
+                                                const bodyError = body?.error && (body.error.code || body.error.message) ? body.error : null;
+                                                const httpErrorDetail = !response.ok
+                                                    ? (body?.details?.[0]?.message || body?.message || body?.error || '')
+                                                    : '';
+                                                const ssgErrorMessage: string = bodyError?.message || bodyError?.code || httpErrorDetail || '';
+
+                                                if (!ssgErrorMessage) {
+                                                    // Real success — null local TPG columns
                                                     await fetch(getApiUrl('/api/admin/rename-trainer'), {
                                                         method: 'POST',
                                                         headers: { 'Content-Type': 'application/json' },
@@ -3448,14 +3498,13 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                             trainerEmail: null,
                                                         }),
                                                     });
-                                                    // Refetch SSG to clear the card
+                                                    // Non-destructive refetch to refresh the card
                                                     const updated = await fetch(`/api/ssg/courses?runId=${courseRunId}&includeExpired=false`);
                                                     if (updated.ok) setSsgApiResponse(await updated.json());
                                                     showSuccessPopup('TPG trainer removed.');
                                                 } else {
-                                                    const errData = await response.json().catch(() => ({}));
-                                                    const detail = errData.details?.[0]?.message || errData.message || errData.error || 'Unknown error';
-                                                    showErrorPopup(`SSG rejected the removal: ${detail}`);
+                                                    // Real SSG rejection — do NOT touch local
+                                                    showErrorPopup(`SSG rejected the removal: ${ssgErrorMessage}. Local DB was NOT updated.`);
                                                 }
                                             } catch {
                                                 showErrorPopup('Failed to remove TPG trainer.');

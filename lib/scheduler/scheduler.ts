@@ -168,6 +168,14 @@ async function seedDefaults() {
             cron_expression: '0 1 * * *', // 1:00 AM SGT daily
             api_endpoint: '/api/external/sync-google-calendar',
         },
+        {
+            id: 'auto_send_courseware_attendance',
+            name: 'Auto Send Courseware and Attendance Email',
+            description: 'Sends courseware and attendance taking emails to learners in course runs starting today. Uses the email template configured in Company Settings.',
+            cron_expression: '0 7 * * *', // 7:00 AM SGT daily
+            api_endpoint: '/api/external/auto-send-courseware-attendance',
+            email_template: 'courseware_attendance',
+        },
     ];
 
     const ids = defaults.map(t => t.id);
@@ -237,6 +245,10 @@ function getDirectHandler(taskId: string): TaskHandler | undefined {
         directHandlers.set('sync_google_calendar', async () => {
             const { runSyncGoogleCalendar } = await import('../../pages/api/external/sync-google-calendar');
             return runSyncGoogleCalendar();
+        });
+        directHandlers.set('auto_send_courseware_attendance', async () => {
+            const { runAutomation } = await import('../../pages/api/external/auto-send-courseware-attendance');
+            return runAutomation();
         });
     }
     return directHandlers.get(taskId);
