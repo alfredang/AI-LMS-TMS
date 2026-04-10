@@ -129,77 +129,95 @@ async function insertLogRow(
 
 // ── Per-table sweepers ───────────────────────────────────────────────────────
 //
-// All sweepers share the same shape: SELECT candidate rows older than the
-// cutoff that still match the unsanitised regex, walk them in JS, and issue
-// one targeted UPDATE per row that actually changes. We deliberately avoid
-// `UPDATE ... FROM (SELECT ...)` because the regex predicate is in PG dialect
-// and the test corpus is small enough that per-row UPDATE is fine — and it
-// gives us individual error isolation.
+// Retention semantics: a row is in scope for sanitisation if the **class it
+// belongs to has already ended more than N months ago** (i.e.
+// `course_run.end_date < cutoff`, where cutoff = today - N months).
+//
+// `class_status` is intentionally NOT filtered — a class whose end_date is
+// in the past is treated as terminal regardless of whether it was Confirmed,
+// Pending, or Cancelled. A pending class that quietly passed its planned
+// end date 8 months ago is just as much stale training data as a cancelled
+// class from the same period, and in both cases the underlying PII should
+// be redacted per the retention window.
+//
+// `trainer_profile.nric` / `trainer_profile.tel` are DELIBERATELY NOT
+// sanitised. Trainers are long-lived contractual partners with recurring
+// engagements — their contact details need to stay intact across
+// arbitrary gaps between course runs. Only learner PII is subject to
+// the retention window.
+//
+// Concretely:
+//   - enrollment        → JOIN course_run, filter cr.end_date < cutoff
+//   - course_attendance → JOIN course_session → course_run, filter end_date
+//   - da_application    → course_end_date column is already on the row
+//   - ssg_enrolments    → JOIN course_run on the text course_run_id
+//   - ssg_claims        → no direct course link, fall back to imported_at
+//   - learner_profile   → sanitise a learner whose MOST RECENT enrollment
+//                         ended before the cutoff (i.e. zero recent activity)
+//
+// All sweepers walk candidate rows in JS, call the idempotent sanitiseNric /
+// sanitisePhone helpers, and issue one targeted UPDATE per row that actually
+// changes. Idempotency is belt-and-braces: both the SQL predicate and the
+// helpers filter already-sanitised values out, so re-running a sweep is a no-op.
 
 const NRIC_PG_REGEX = '^[A-Za-z][0-9]{4}[0-9]{3}[A-Za-z]$';
-// Phone is matched in two flavours: bare 8-digit and the messier free-form
-// in DB. The SQL predicate is intentionally generous; the JS helpers do the
-// real validation.
+// Phone SQL predicate is intentionally loose — it matches any string with
+// 8 consecutive digits somewhere in it, which covers all real shapes in
+// the DB: bare `96983371`, `+65 9698 3371`, `9698-3371`, `+6596983371`, etc.
+// The JS helper `sanitisePhone()` then does the real validation (strips
+// +65 / spaces / hyphens, anchors the 8-digit match, and returns unchanged
+// for already-sanitised values like `9xxxx371` which have only 3 contiguous
+// digits). Idempotency still holds because a sanitised value has fewer
+// than 8 contiguous digits so the SQL predicate skips it too.
 const PHONE_PG_REGEX = '[0-9]{8}';
 
-async function sweepLearnerProfile(cutoffISO: string): Promise<TableResult> {
-  // learner_profile has no own timestamp — join app_user.created_at via user_id.
+async function sweepEnrollment(cutoffISO: string): Promise<TableResult> {
+  // Rows tied to a course_run whose end_date is older than the cutoff.
   const candidates = await pool.query(
-    `SELECT lp.user_id, lp.nric, lp.tel
-     FROM learner_profile lp
-     JOIN app_user au ON au.id = lp.user_id
-     WHERE au.created_at < $1
-       AND ((lp.nric IS NOT NULL AND lp.nric ~ $2)
-            OR (lp.tel IS NOT NULL AND lp.tel ~ $3))
-     LIMIT $4`,
-    [cutoffISO, NRIC_PG_REGEX, PHONE_PG_REGEX, SWEEP_LIMIT_PER_TABLE]
+    `SELECT e.id, e.nric
+     FROM enrollment e
+     JOIN course_run cr ON cr.id = e.course_run_id
+     WHERE cr.end_date < $1::date
+       AND e.nric IS NOT NULL
+       AND e.nric ~ $2
+     LIMIT $3`,
+    [cutoffISO, NRIC_PG_REGEX, SWEEP_LIMIT_PER_TABLE]
   );
-  return await applyUpdates('learner_profile', candidates.rows, async (row) => {
-    const newNric = nricNeedsSanitising(row.nric) ? sanitiseNric(row.nric) : null;
-    const newTel = phoneNeedsSanitising(row.tel) ? sanitisePhone(row.tel) : null;
-    if (newNric == null && newTel == null) return false;
-    await pool.query(
-      `UPDATE learner_profile
-       SET nric = COALESCE($1, nric),
-           tel  = COALESCE($2, tel)
-       WHERE user_id = $3`,
-      [newNric, newTel, row.user_id]
-    );
+  return await applyUpdates('enrollment', candidates.rows, async (row) => {
+    if (!nricNeedsSanitising(row.nric)) return false;
+    const newNric = sanitiseNric(row.nric);
+    await pool.query(`UPDATE enrollment SET nric = $1 WHERE id = $2`, [newNric, row.id]);
     return true;
   });
 }
 
-async function sweepTrainerProfile(cutoffISO: string): Promise<TableResult> {
+async function sweepCourseAttendance(cutoffISO: string): Promise<TableResult> {
+  // course_attendance → course_session → course_run.
   const candidates = await pool.query(
-    `SELECT tp.user_id, tp.nric, tp.tel
-     FROM trainer_profile tp
-     JOIN app_user au ON au.id = tp.user_id
-     WHERE au.created_at < $1
-       AND ((tp.nric IS NOT NULL AND tp.nric ~ $2)
-            OR (tp.tel IS NOT NULL AND tp.tel ~ $3))
-     LIMIT $4`,
-    [cutoffISO, NRIC_PG_REGEX, PHONE_PG_REGEX, SWEEP_LIMIT_PER_TABLE]
+    `SELECT ca.id, ca.nric
+     FROM course_attendance ca
+     JOIN course_session cs ON cs.id = ca.session_id
+     JOIN course_run cr ON cr.id = cs.course_run_id
+     WHERE cr.end_date < $1::date
+       AND ca.nric IS NOT NULL
+       AND ca.nric ~ $2
+     LIMIT $3`,
+    [cutoffISO, NRIC_PG_REGEX, SWEEP_LIMIT_PER_TABLE]
   );
-  return await applyUpdates('trainer_profile', candidates.rows, async (row) => {
-    const newNric = nricNeedsSanitising(row.nric) ? sanitiseNric(row.nric) : null;
-    const newTel = phoneNeedsSanitising(row.tel) ? sanitisePhone(row.tel) : null;
-    if (newNric == null && newTel == null) return false;
-    await pool.query(
-      `UPDATE trainer_profile
-       SET nric = COALESCE($1, nric),
-           tel  = COALESCE($2, tel)
-       WHERE user_id = $3`,
-      [newNric, newTel, row.user_id]
-    );
+  return await applyUpdates('course_attendance', candidates.rows, async (row) => {
+    if (!nricNeedsSanitising(row.nric)) return false;
+    const newNric = sanitiseNric(row.nric);
+    await pool.query(`UPDATE course_attendance SET nric = $1 WHERE id = $2`, [newNric, row.id]);
     return true;
   });
 }
 
 async function sweepDaApplication(cutoffISO: string): Promise<TableResult> {
+  // da_application already carries course_end_date on the row itself.
   const candidates = await pool.query(
     `SELECT id, trainee_id, trainee_phone
      FROM da_application
-     WHERE created_at < $1
+     WHERE course_end_date < $1::date
        AND ((trainee_id IS NOT NULL AND trainee_id ~ $2)
             OR (trainee_phone IS NOT NULL AND trainee_phone ~ $3))
      LIMIT $4`,
@@ -220,49 +238,16 @@ async function sweepDaApplication(cutoffISO: string): Promise<TableResult> {
   });
 }
 
-async function sweepCourseAttendance(cutoffISO: string): Promise<TableResult> {
-  const candidates = await pool.query(
-    `SELECT id, nric
-     FROM course_attendance
-     WHERE created_at < $1
-       AND nric IS NOT NULL
-       AND nric ~ $2
-     LIMIT $3`,
-    [cutoffISO, NRIC_PG_REGEX, SWEEP_LIMIT_PER_TABLE]
-  );
-  return await applyUpdates('course_attendance', candidates.rows, async (row) => {
-    if (!nricNeedsSanitising(row.nric)) return false;
-    const newNric = sanitiseNric(row.nric);
-    await pool.query(`UPDATE course_attendance SET nric = $1 WHERE id = $2`, [newNric, row.id]);
-    return true;
-  });
-}
-
-async function sweepEnrollment(cutoffISO: string): Promise<TableResult> {
-  const candidates = await pool.query(
-    `SELECT id, nric
-     FROM enrollment
-     WHERE created_at < $1
-       AND nric IS NOT NULL
-       AND nric ~ $2
-     LIMIT $3`,
-    [cutoffISO, NRIC_PG_REGEX, SWEEP_LIMIT_PER_TABLE]
-  );
-  return await applyUpdates('enrollment', candidates.rows, async (row) => {
-    if (!nricNeedsSanitising(row.nric)) return false;
-    const newNric = sanitiseNric(row.nric);
-    await pool.query(`UPDATE enrollment SET nric = $1 WHERE id = $2`, [newNric, row.id]);
-    return true;
-  });
-}
-
 async function sweepSsgEnrolments(cutoffISO: string): Promise<TableResult> {
+  // ssg_enrolments.course_run_id is the external TPG string id; join to
+  // course_run.course_run_id (also varchar) — NOT to course_run.id uuid.
   const candidates = await pool.query(
-    `SELECT id, trainee_nric
-     FROM ssg_enrolments
-     WHERE imported_at < $1
-       AND trainee_nric IS NOT NULL
-       AND trainee_nric ~ $2
+    `SELECT se.id, se.trainee_nric
+     FROM ssg_enrolments se
+     JOIN course_run cr ON cr.course_run_id = se.course_run_id
+     WHERE cr.end_date < $1::date
+       AND se.trainee_nric IS NOT NULL
+       AND se.trainee_nric ~ $2
      LIMIT $3`,
     [cutoffISO, NRIC_PG_REGEX, SWEEP_LIMIT_PER_TABLE]
   );
@@ -275,10 +260,14 @@ async function sweepSsgEnrolments(cutoffISO: string): Promise<TableResult> {
 }
 
 async function sweepSsgClaims(cutoffISO: string): Promise<TableResult> {
+  // ssg_claims has no direct link to a specific course run, so we fall back
+  // to imported_at as the retention driver. If a claim record was imported
+  // more than N months ago, any class it refers to is also well past the
+  // retention window.
   const candidates = await pool.query(
     `SELECT id, individual_nric
      FROM ssg_claims
-     WHERE imported_at < $1
+     WHERE imported_at < $1::timestamptz
        AND individual_nric IS NOT NULL
        AND individual_nric ~ $2
      LIMIT $3`,
@@ -291,6 +280,59 @@ async function sweepSsgClaims(cutoffISO: string): Promise<TableResult> {
     return true;
   });
 }
+
+async function sweepLearnerProfile(cutoffISO: string): Promise<TableResult> {
+  // Target: learners whose MOST RECENT enrollment ended before the cutoff,
+  // i.e. their last class has already aged out of the retention window.
+  // Learners with zero enrollments are skipped — they have no class history
+  // so there is no training-data retention concern to drive sanitisation.
+  //
+  // PERF: we filter learner_profile down to just the rows that still have
+  // unsanitised NRIC or phone BEFORE computing the MAX(end_date) aggregate.
+  // On steady-state weekly runs after the first sweep cleans everything,
+  // the candidate_profiles CTE will be empty, so the expensive enrollment
+  // aggregation never runs at all.
+  const candidates = await pool.query(
+    `WITH candidate_profiles AS (
+       SELECT user_id, nric, tel
+       FROM learner_profile
+       WHERE (nric IS NOT NULL AND nric ~ $2)
+          OR (tel  IS NOT NULL AND tel  ~ $3)
+     ),
+     last_class AS (
+       SELECT e.user_id, MAX(cr.end_date) AS last_end_date
+       FROM enrollment e
+       JOIN course_run cr ON cr.id = e.course_run_id
+       WHERE cr.end_date IS NOT NULL
+         AND e.user_id IN (SELECT user_id FROM candidate_profiles)
+       GROUP BY e.user_id
+     )
+     SELECT cp.user_id, cp.nric, cp.tel
+     FROM candidate_profiles cp
+     JOIN last_class lc ON lc.user_id = cp.user_id
+     WHERE lc.last_end_date < $1::date
+     LIMIT $4`,
+    [cutoffISO, NRIC_PG_REGEX, PHONE_PG_REGEX, SWEEP_LIMIT_PER_TABLE]
+  );
+  return await applyUpdates('learner_profile', candidates.rows, async (row) => {
+    const newNric = nricNeedsSanitising(row.nric) ? sanitiseNric(row.nric) : null;
+    const newTel = phoneNeedsSanitising(row.tel) ? sanitisePhone(row.tel) : null;
+    if (newNric == null && newTel == null) return false;
+    await pool.query(
+      `UPDATE learner_profile
+       SET nric = COALESCE($1, nric),
+           tel  = COALESCE($2, tel)
+       WHERE user_id = $3`,
+      [newNric, newTel, row.user_id]
+    );
+    return true;
+  });
+}
+
+// NOTE: trainer_profile is intentionally NOT swept. Trainers are long-lived
+// contractual partners whose contact details need to stay intact across
+// arbitrary gaps between engagements. Only learner PII is subject to the
+// retention window. See the file-level comment above for full rationale.
 
 /**
  * Walks a candidate set, calling the per-row updater. Each row is wrapped in
@@ -378,23 +420,30 @@ export async function runAutomation(): Promise<AutomationSummary> {
 
   console.log(`🧹 [auto-sanitise-data] ${runId} cutoff = ${cutoffDate} (retention ${retentionMonths} months)`);
 
+  // Order: direct per-class rows first (the bulk of the work), then the
+  // per-user aggregate sweep (learner profile) which depends on enrollment
+  // already being accounted for. trainer_profile is intentionally omitted —
+  // trainer PII is exempt from the retention window.
   const sweepers: Array<(c: string) => Promise<TableResult>> = [
-    sweepLearnerProfile,
-    sweepTrainerProfile,
-    sweepDaApplication,
-    sweepCourseAttendance,
     sweepEnrollment,
+    sweepCourseAttendance,
+    sweepDaApplication,
     sweepSsgEnrolments,
     sweepSsgClaims,
+    sweepLearnerProfile,
   ];
 
   const results: TableResult[] = [];
   let totalScanned = 0;
   let totalUpdated = 0;
 
+  // Pass the SGT-computed YYYY-MM-DD date string directly — every sweeper
+  // casts it with ::date (or ::timestamptz for ssg_claims) so this is the
+  // least-ambiguous shape. Avoids any chance of the UTC→SGT day-boundary
+  // shifting the cutoff by one day.
   for (const sweep of sweepers) {
     try {
-      const r = await sweep(cutoffISO);
+      const r = await sweep(cutoffDate);
       results.push(r);
       totalScanned += r.rowsScanned;
       totalUpdated += r.rowsUpdated;
