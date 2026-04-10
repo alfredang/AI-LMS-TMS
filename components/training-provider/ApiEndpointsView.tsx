@@ -27,50 +27,6 @@ const sections: EndpointSection[] = [
     endpoints: [
       {
         method: 'POST',
-        path: '/api/external/assign-trainer',
-        title: 'Assign Trainer to Course Run',
-        description: 'Assigns a trainer to a course run. Creates the course run if it does not exist, or updates it if the digital attendance ID is not yet set.',
-        headers: [
-          { name: 'x-api-key', value: '<API_KEY>', description: 'API key for authentication' },
-          { name: 'Content-Type', value: 'application/json', description: 'Request body format' },
-        ],
-        bodyFields: [
-          { name: 'course_run_id', type: 'string', required: true, description: 'The SSG course run ID (e.g. "1303232")' },
-          { name: 'primary_email', type: 'string', required: true, description: 'Trainer primary email address' },
-          { name: 'course_code', type: 'string', required: true, description: 'Course code (e.g. "TGS-2023011234")' },
-          { name: 'secondary_email', type: 'string', required: false, description: 'Trainer secondary email (empty string if none)' },
-          { name: 'course_title', type: 'string', required: false, description: 'Course title (used to derive mode of learning)' },
-          { name: 'start_date', type: 'string', required: false, description: 'Start date (formats: "12 Mar 2026", "2026-03-12", or 20260312)' },
-          { name: 'end_date', type: 'string', required: false, description: 'End date (same formats as start_date)' },
-          { name: 'ra_code', type: 'string', required: false, description: 'Digital attendance RA code (e.g. "RA741642")' },
-        ],
-        exampleRequest: `curl -X POST https://ai-lms-tms.tertiaryinfo.tech/api/external/assign-trainer \\
-  -H "x-api-key: YOUR_API_KEY" \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "course_run_id": "1303232",
-    "primary_email": "trainer@example.com",
-    "course_code": "TGS-2023011234",
-    "course_title": "Virtual Training Course",
-    "start_date": "12 Mar 2026",
-    "end_date": "14 Mar 2026",
-    "ra_code": "RA741642"
-  }'`,
-        exampleResponse: `{
-  "success": true,
-  "message": "Trainer assigned successfully (course run created)",
-  "action": "created",
-  "data": {
-    "courseRunId": "1303232",
-    "courseCode": "TGS-2023011234",
-    "trainerId": "uuid-...",
-    "trainerName": "John Doe",
-    "trainerEmail": "trainer@example.com"
-  }
-}`,
-      },
-      {
-        method: 'POST',
         path: '/api/external/unassign-trainer',
         title: 'Unassign Trainer from Course Run',
         description: 'Removes the assigned trainer from a course run by clearing the trainer fields.',
@@ -1179,13 +1135,6 @@ const sections: EndpointSection[] = [
         path: '/api/admin/automation-logs',
         title: 'Auto-Create Learner Logs',
         description: 'Returns logs from the automatic learner creation process.',
-        headers: [],
-      },
-      {
-        method: 'GET',
-        path: '/api/admin/assign-trainer-logs',
-        title: 'Assign Trainer Logs',
-        description: 'Returns logs from the trainer assignment automation.',
         headers: [],
       },
       {
