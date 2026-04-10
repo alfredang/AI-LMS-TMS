@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
+import { ensureInvoiceJobsTable } from '../../../lib/services/invoiceJobs';
 
 /** Normalized course run start date as YYYY-MM-DD text (matches sync-all-course-runs-from-ssg). */
 const RUN_START_NORM_SQL = `(
@@ -25,6 +26,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
+    await ensureInvoiceJobsTable();
+
     const page = parseInt(req.query.page as string) || 0;
     const limit = Math.min(parseInt(req.query.limit as string) || 20, 100);
     const search = (req.query.search as string || '').trim();
@@ -135,8 +138,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         sc.claim_id AS sfc_claim_id,
         sc.claim_amount AS sfc_amount,
         sc.payment_date AS sfc_payment_date,
-        sc.claim_status AS sfc_status
+        sc.claim_status AS sfc_status,
+        ij.qbo_invoice_id AS invoice_id
       FROM ssg_enrolments se
+      LEFT JOIN LATERAL (
+        SELECT qbo_invoice_id
+        FROM public.invoice_jobs
+        WHERE enrolment_id = se.enrolment_id
+          AND status = 'done'
+        ORDER BY updated_at DESC
+        LIMIT 1
+      ) ij ON true
       LEFT JOIN LATERAL (
         SELECT grant_id, status, estimated_grant_amount
         FROM ssg_grants

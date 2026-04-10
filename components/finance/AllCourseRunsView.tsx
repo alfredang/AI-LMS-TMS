@@ -38,6 +38,7 @@ interface CourseRunRow {
   sfc_amount: number | null;
   sfc_payment_date: string | null;
   sfc_status: string | null;
+  invoice_id?: string | null;
 }
 
 interface Stats {
@@ -553,7 +554,7 @@ const AllCourseRunsView: React.FC = () => {
                 <th colSpan={5} className={`text-center text-[10px] uppercase tracking-wider px-2 py-1.5 border-b-2 border-blue-300 dark:border-blue-600 ${groupHeaderColors.course}`}>Course</th>
                 <th colSpan={5} className={`text-center text-[10px] uppercase tracking-wider px-2 py-1.5 border-b-2 border-green-300 dark:border-green-600 ${groupHeaderColors.trainee}`}>Trainee</th>
                 <th colSpan={4} className={`text-center text-[10px] uppercase tracking-wider px-2 py-1.5 border-b-2 border-purple-300 dark:border-purple-600 ${groupHeaderColors.sponsor}`}>Employer</th>
-                <th colSpan={2} className={`text-center text-[10px] uppercase tracking-wider px-2 py-1.5 border-b-2 border-amber-300 dark:border-amber-600 ${groupHeaderColors.enrolment}`}>Enrolment</th>
+                <th colSpan={3} className={`text-center text-[10px] uppercase tracking-wider px-2 py-1.5 border-b-2 border-amber-300 dark:border-amber-600 ${groupHeaderColors.enrolment}`}>Enrolment</th>
                 <th colSpan={3} className={`text-center text-[10px] uppercase tracking-wider px-2 py-1.5 border-b-2 border-indigo-300 dark:border-indigo-600 ${groupHeaderColors.bl}`}>BL Grant</th>
                 <th colSpan={4} className={`text-center text-[10px] uppercase tracking-wider px-2 py-1.5 border-b-2 border-teal-300 dark:border-teal-600 ${groupHeaderColors.nbl}`}>Non-BL Grant</th>
                 <th colSpan={1} className={`text-center text-[10px] uppercase tracking-wider px-2 py-1.5 border-b-2 border-orange-300 dark:border-orange-600 ${groupHeaderColors.tg}`}>TG</th>
@@ -582,6 +583,7 @@ const AllCourseRunsView: React.FC = () => {
                 {/* Enrolment (2) */}
                 <th className={headerCell}>Status</th>
                 <th className={headerCell}>Enrolment ID</th>
+                <th className={headerCell}>Invoice ID</th>
                 {/* BL Grant (3) */}
                 <th className={headerCell}>Status</th>
                 <th className={headerCell}>Grant ID</th>
@@ -604,14 +606,14 @@ const AllCourseRunsView: React.FC = () => {
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={29} className="px-4 py-12 text-center text-on-surface-secondary">
+                <tr><td colSpan={30} className="px-4 py-12 text-center text-on-surface-secondary">
                   <div className="flex items-center justify-center gap-2">
                     <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary" />
                     Loading enrolments...
                   </div>
                 </td></tr>
               ) : rows.length === 0 ? (
-                <tr><td colSpan={29} className="px-4 py-12 text-center text-on-surface-secondary">No enrolments found.</td></tr>
+                <tr><td colSpan={30} className="px-4 py-12 text-center text-on-surface-secondary">No enrolments found.</td></tr>
               ) : rows.map((r, i) => {
                 const totalTG = (Number(r.bl_amount) || 0) + (Number(r.nbl_amount) || 0);
                 const enrolmentKey = r.enrolment_id ?? `row-${i}`;
@@ -641,6 +643,7 @@ const AllCourseRunsView: React.FC = () => {
                       </span>
                     </td>
                     <td className={`${cell} text-on-surface-secondary font-mono`}>{r.enrolment_id || '-'}</td>
+                    <td className={`${cell} text-on-surface-secondary font-mono`}>{r.invoice_id || '-'}</td>
                     {/* BL Grant */}
                     <td className={cell}>
                       {r.bl_status ? (

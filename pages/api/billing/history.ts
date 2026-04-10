@@ -1,6 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { syncLearnerFromSSG } from '../../../lib/services/billingSync';
+import { ensureInvoiceJobsTable } from '../../../lib/services/invoiceJobs';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {
@@ -16,6 +17,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     // Sync fresh SSG data for this learner before querying (never throws)
     await syncLearnerFromSSG(userId);
+
+    await ensureInvoiceJobsTable();
 
     // Pull from local enrollment table — now fresh after sync
     const enrolmentResult = await pool.query(
@@ -37,12 +40,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         c.after_mces_funding,
         c.is_wsq_funded,
         c.is_mces_eligible,
-        lp.pro_forma_url
+        lp.pro_forma_url,
+        ij.qbo_invoice_id,
+        ij.drive_file_id,
+        ij.drive_web_view_link
       FROM enrollment e
       JOIN app_user u ON u.id = e.user_id
       LEFT JOIN learner_profile lp ON lp.user_id = e.user_id
       JOIN course_run cr ON cr.id = e.course_run_id
       JOIN course c ON c.id = e.course_id
+      LEFT JOIN LATERAL (
+        SELECT qbo_invoice_id, drive_file_id, drive_web_view_link
+        FROM public.invoice_jobs
+        WHERE enrolment_id = e.enrolment_id
+          AND status = 'done'
+        ORDER BY updated_at DESC
+        LIMIT 1
+      ) ij ON true
       WHERE e.user_id = $1
       ORDER BY e.enrolment_date DESC NULLS LAST, cr.start_date DESC`,
       [userId]

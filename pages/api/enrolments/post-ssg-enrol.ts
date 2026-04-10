@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '@/lib/db';
 import { getTrainingPartnerIdentifiers } from '@/lib/trainingPartnerIdentifiers';
+import { enqueueInvoiceJob } from '@/lib/services/invoiceJobs';
 
 // Maps SSG sponsorship values to the course_sponsorship DB enum
 function mapSponsorshipType(ssgType: string): 'Individual' | 'Employer' {
@@ -222,12 +223,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     await client.query('COMMIT');
 
     const enrollmentCreated = enrollResult.rows.length > 0;
+    const dbEnrollmentId: string | null = enrollResult.rows[0]?.id ?? null;
+
+    // Enqueue invoice workflow (best-effort, non-blocking)
+    if (enrolmentId && dbEnrollmentId) {
+      try {
+        await enqueueInvoiceJob({
+          enrolmentId,
+          userId: learnerId,
+          learnerEmail: traineeEmail,
+          courseCode: courseReferenceNumber,
+          batchId: null,
+        });
+      } catch (e) {
+        console.warn('[post-ssg-enrol] Failed to enqueue invoice job (non-blocking):', e);
+      }
+    }
 
     return res.status(200).json({
       success: true,
       enrollmentCreated,
       alreadyExisted: !enrollmentCreated,
-      enrollmentId: enrollResult.rows[0]?.id ?? null,
+      enrollmentId: dbEnrollmentId,
       created: {
         learner: learnerCreated,
         course: courseCreated,

@@ -30,6 +30,9 @@ interface BillingRecord {
   start_date: string | null;
   end_date: string | null;
   pro_forma_url: string | null;
+  qbo_invoice_id?: string | null;
+  drive_file_id?: string | null;
+  drive_web_view_link?: string | null;
   grants: Grant[];
 }
 
@@ -204,27 +207,42 @@ const BillingHistoryView: React.FC = () => {
                         <td className="py-3 px-4 font-mono text-xs">{record.enrolment_id || record.id || '-'}</td>
                         <td className="py-3 px-4 text-subtle">{formatDate(record.enrolment_date || record.start_date)}</td>
                         <td className="py-3 px-4 text-center">
-                          <button
-                            onClick={() => handleDownload(record)}
-                            disabled={isDownloading}
-                            title="Download PDF"
-                            className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-colors
-                              bg-blue-50 text-blue-700 hover:bg-blue-100
-                              dark:bg-blue-900/20 dark:text-blue-400 dark:hover:bg-blue-900/40
-                              disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
-                            {isDownloading ? (
-                              <>
-                                <Icon name={IconName.Spinner} className="w-3.5 h-3.5 animate-spin" />
-                                <span>Generating...</span>
-                              </>
-                            ) : (
-                              <>
-                                <Icon name={IconName.FilePdf} className="w-3.5 h-3.5" />
-                                <span>Download</span>
-                              </>
-                            )}
-                          </button>
+                          {record.drive_web_view_link ? (
+                            <a
+                              href={record.drive_web_view_link}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-colors
+                                bg-blue-50 text-blue-700 hover:bg-blue-100
+                                dark:bg-blue-900/20 dark:text-blue-400 dark:hover:bg-blue-900/40"
+                              title={record.qbo_invoice_id ? `Invoice ${record.qbo_invoice_id}` : 'Download invoice PDF'}
+                            >
+                              <Icon name={IconName.FilePdf} className="w-3.5 h-3.5" />
+                              <span>Invoice PDF</span>
+                            </a>
+                          ) : (
+                            <button
+                              onClick={() => handleDownload(record)}
+                              disabled={isDownloading}
+                              title="Download PDF"
+                              className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-colors
+                                bg-blue-50 text-blue-700 hover:bg-blue-100
+                                dark:bg-blue-900/20 dark:text-blue-400 dark:hover:bg-blue-900/40
+                                disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              {isDownloading ? (
+                                <>
+                                  <Icon name={IconName.Spinner} className="w-3.5 h-3.5 animate-spin" />
+                                  <span>Generating...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Icon name={IconName.FilePdf} className="w-3.5 h-3.5" />
+                                  <span>Download</span>
+                                </>
+                              )}
+                            </button>
+                          )}
                         </td>
                       </tr>
                     );

@@ -4,6 +4,7 @@ import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { detectIdType } from '@/lib/utils/id-type';
 import { useLms } from '@contexts/LmsContext';
+import { ssgFetch } from '@/lib/ssgAppState';
 
 // Enums based on the Python constants
 enum IdTypeSummary {
@@ -517,7 +518,7 @@ const EnrollLearners: React.FC = () => {
       setEnrolmentError(null);
       console.log('🔍 Searching enrolment records for course run:', courseRunId);
 
-      const response = await fetch('/api/enrolment/search', {
+      const response = await ssgFetch('/api/enrolment/search', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ courseRunId }),
@@ -527,7 +528,10 @@ const EnrollLearners: React.FC = () => {
       const result = await response.json();
 
       if (!response.ok) {
-        throw new Error(result?.error || `Enrolment search failed with status: ${response.status}`);
+        // Don't throw (avoids Next.js redbox overlay); just show error state.
+        const msg = result?.error || `Enrolment search failed with status: ${response.status}`;
+        setEnrolmentError(msg);
+        return;
       }
 
       console.log('✅ Enrolment search results:', result);
@@ -776,7 +780,7 @@ const EnrollLearners: React.FC = () => {
 
       console.log('Submitting enrolment to SSG API:', JSON.stringify(payload, null, 2));
 
-      const response = await fetch('/api/enrolment/create', {
+      const response = await ssgFetch('/api/enrolment/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),

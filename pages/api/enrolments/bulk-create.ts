@@ -4,6 +4,7 @@ import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import { inferIdType } from '../../../lib/utils/id-type';
 import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdentifiers';
+import { enqueueInvoiceJob } from '../../../lib/services/invoiceJobs';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -225,6 +226,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     );
 
     await client.query('COMMIT');
+
+    // Enqueue invoice workflow (best-effort, non-blocking)
+    if (enrolmentId && userId && traineeEmail && courseCode) {
+      try {
+        await enqueueInvoiceJob({
+          enrolmentId,
+          userId,
+          learnerEmail: traineeEmail,
+          courseCode,
+          batchId: null,
+        });
+      } catch (e) {
+        console.warn('[enrolments/bulk-create] Failed to enqueue invoice job (non-blocking):', e);
+      }
+    }
 
     return res.status(200).json({
       success: true,
