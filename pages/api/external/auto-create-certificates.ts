@@ -4,8 +4,6 @@ import pool from '../../../lib/db';
 import crypto from 'crypto';
 import { generateAndUploadCertificate } from '../../../lib/services/certificateService';
 import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdentifiers';
-import { getSSGCredentialsService } from '../../../lib/ssg/services/credentials-service';
-import { HttpClient, HTTPRequestBuilder, HttpMethod } from '../../../lib/ssg/utils/http-utils';
 
 const SCHEDULER_SECRET = process.env.NEXT_PUBLIC_SCHEDULER_SECRET || 'local-dev-fallback';
 
@@ -185,80 +183,12 @@ async function sendCertificateEmail(opts: {
     }
 }
 
-/**
- * Fetch SSG e-attendance for a session and return the set of NRICs marked present.
- */
-async function fetchSsgSessionAttendance(
-    courseCode: string,
-    courseRunId: string,
-    ssgSessionId: string
-): Promise<Set<string>> {
-    const presentNrics = new Set<string>();
-    try {
-        const credentials = await getSSGCredentialsService().getSSGCredentials();
-        if (!credentials) return presentNrics;
-
-        const ssgBaseUrl = credentials.ssgApiBaseUrl || process.env.SSG_API_URL || 'https://api.ssg-wsg.sg';
-        const encKey = Buffer.from(credentials.encryptionKey, 'base64');
-        const iv = Buffer.from('SSGAPIInitVector', 'utf8');
-        const tp = await getTrainingPartnerIdentifiers();
-        const uen = credentials.uen || tp.uen;
-
-        const builder = new HTTPRequestBuilder()
-            .withEndpoint(ssgBaseUrl, `/tpg/sessions/attendance`)
-            .withMethod(HttpMethod.GET)
-            .withParam('uen', uen)
-            .withParam('courseCode', courseCode)
-            .withParam('courseRunId', courseRunId)
-            .withParam('sessionId', ssgSessionId);
-
-        if (credentials.certificateContent && credentials.privateKeyContent) {
-            builder.withCertificate(credentials.certificateContent, credentials.privateKeyContent);
-        }
-
-        const httpClient = new HttpClient(ssgBaseUrl, {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json',
-        });
-
-        const resp = await httpClient.request(builder.build());
-
-        if (resp.status === 200 && resp.data) {
-            // SSG may return encrypted data — try to decrypt
-            let attendanceData: any = resp.data;
-            if (typeof resp.data === 'string' && !resp.data.startsWith('{')) {
-                try {
-                    const decipher = crypto.createDecipheriv('aes-256-cbc', encKey, iv);
-                    let decrypted = decipher.update(resp.data, 'base64', 'utf8');
-                    decrypted += decipher.final('utf8');
-                    attendanceData = JSON.parse(decrypted);
-                } catch { attendanceData = resp.data; }
-            }
-
-            // Extract present NRICs from SSG response
-            const trainees = attendanceData?.data?.attendance || attendanceData?.attendance || [];
-            if (Array.isArray(trainees)) {
-                for (const t of trainees) {
-                    const status = (t.status || t.attendance || '').toLowerCase();
-                    const nric = t.trainee?.id || t.id || t.nric || '';
-                    if (nric && (status === 'confirmed' || status === 'present' || status === 'attended' || status === '1')) {
-                        presentNrics.add(nric);
-                    }
-                }
-            }
-        }
-    } catch (err) {
-        console.warn(`[auto-create-certificates] SSG attendance fetch failed for session ${ssgSessionId}:`, err instanceof Error ? err.message : err);
-    }
-    return presentNrics;
-}
-
 export async function runAutomation(targetDate?: string) {
     await ensureLogTable();
 
     // Use a unique UUID for this run batch
     const runId = crypto.randomUUID();
-    const dateLabel = targetDate ? `for specific date ${targetDate}` : `for current window (last 2 days)`;
+    const dateLabel = targetDate ? `for specific date ${targetDate}` : `for current window (last 7 days)`;
     console.log(`[auto-create-certificates] Starting run ${runId} ${dateLabel} at ${new Date().toISOString()}`);
 
     try {
@@ -273,21 +203,35 @@ export async function runAutomation(targetDate?: string) {
         } catch { /* use default */ }
         console.log(`[auto-create-certificates] Attendance threshold: ${attendanceThreshold}%`);
 
-        // 1. Find Course Runs Ending in the window (Last 2 days + Today)
-        // This ensures timezone overlaps or previous day failures are caught.
-        // If targetDate is provided, we only look at that specific date.
+        // 1. Find Course Runs that ended within the last 7 days AND still have
+        //    confirmed learners without a certificate.
+        //    This self-healing query means already-processed runs are automatically skipped.
         const query = targetDate
             ? `SELECT cr.id as db_uuid, cr.course_run_id, c.course_code, c.title as course_title,
                       TO_CHAR(cr.start_date AT TIME ZONE 'Asia/Singapore', 'DD Mon YYYY') || ' - ' || TO_CHAR(cr.end_date AT TIME ZONE 'Asia/Singapore', 'DD Mon YYYY') as course_dates
                FROM course_run cr
                JOIN course c ON cr.course_id = c.id
-               WHERE DATE(cr.end_date) = $1`
+               WHERE DATE(cr.end_date) = $1
+                 AND (cr.class_status IS NULL OR cr.class_status::text NOT ILIKE 'cancelled')
+                 AND EXISTS (
+                     SELECT 1 FROM enrollment e
+                     WHERE e.course_run_id = cr.id
+                       AND LOWER(e.enrolment_status) = 'confirmed'
+                       AND (e.certificate IS NULL OR e.certificate = '')
+                 )`
             : `SELECT cr.id as db_uuid, cr.course_run_id, c.course_code, c.title as course_title,
                       TO_CHAR(cr.start_date AT TIME ZONE 'Asia/Singapore', 'DD Mon YYYY') || ' - ' || TO_CHAR(cr.end_date AT TIME ZONE 'Asia/Singapore', 'DD Mon YYYY') as course_dates
                FROM course_run cr
                JOIN course c ON cr.course_id = c.id
-               WHERE DATE(cr.end_date) >= CURRENT_DATE - INTERVAL '2 days'
-                 AND DATE(cr.end_date) <= CURRENT_DATE`;
+               WHERE DATE(cr.end_date) >= CURRENT_DATE - INTERVAL '7 days'
+                 AND DATE(cr.end_date) <= CURRENT_DATE
+                 AND (cr.class_status IS NULL OR cr.class_status::text NOT ILIKE 'cancelled')
+                 AND EXISTS (
+                     SELECT 1 FROM enrollment e
+                     WHERE e.course_run_id = cr.id
+                       AND LOWER(e.enrolment_status) = 'confirmed'
+                       AND (e.certificate IS NULL OR e.certificate = '')
+                 )`;
         
         const params = targetDate ? [targetDate] : [];
         const endingRunsRes = await pool.query(query, params);
@@ -306,7 +250,7 @@ export async function runAutomation(targetDate?: string) {
             };
 
             try {
-                // 2. Count total sessions for this Course Run
+                // 2. Count total sessions for this Course Run (from local DB E-attendance)
                 const totalSessionsRes = await pool.query(`
                     SELECT COUNT(*) as total
                     FROM course_session
@@ -315,101 +259,126 @@ export async function runAutomation(targetDate?: string) {
                 `, [run.db_uuid]);
 
                 const totalSessions = parseInt(totalSessionsRes.rows[0].total, 10);
+
                 if (totalSessions === 0) {
-                    throw new Error('No sessions found for this course run in local DB.');
-                }
+                    // No sessions set up — generate certificates for ALL confirmed learners
+                    // without attendance checking (attendance was never tracked for this run)
+                    console.log(`[auto-create-certificates] ${run.course_run_id}: No sessions in E-attendance — generating certs for all confirmed learners.`);
 
-                // 3. Fetch ALL confirmed learners with their manual (DB) attendance
-                const allLearnersRes = await pool.query(`
-                    SELECT
-                        e.id as enrolment_id,
-                        e.nric,
-                        COALESCE(au.full_name, e.nric, 'Unknown') as learner_name,
-                        COALESCE(au.email, e.email) as learner_email,
-                        COUNT(DISTINCT CASE WHEN ca.is_present = true THEN ca.session_id END) as manual_attended
-                    FROM enrollment e
-                    LEFT JOIN app_user au ON e.user_id = au.id
-                    LEFT JOIN course_attendance ca ON ca.user_id = e.user_id AND ca.session_id IN (
-                        SELECT id FROM course_session WHERE course_run_id = $1 AND deleted = false
-                    )
-                    WHERE e.course_run_id = $1
-                      AND LOWER(e.enrolment_status) = 'confirmed'
-                      AND (e.certificate IS NULL OR e.certificate = '')
-                    GROUP BY e.id, e.nric, au.full_name, au.email, e.email
-                `, [run.db_uuid]);
+                    const allLearnersRes = await pool.query(`
+                        SELECT
+                            e.id as enrolment_id,
+                            e.nric,
+                            COALESCE(au.full_name, e.nric, 'Unknown') as learner_name,
+                            COALESCE(au.email, e.email) as learner_email
+                        FROM enrollment e
+                        LEFT JOIN app_user au ON e.user_id = au.id
+                        WHERE e.course_run_id = $1
+                          AND LOWER(e.enrolment_status) = 'confirmed'
+                          AND (e.certificate IS NULL OR e.certificate = '')
+                    `, [run.db_uuid]);
 
-                // 4. Fetch SSG e-attendance per session and count present per NRIC
-                const sessionsRes = await pool.query(`
-                    SELECT id, ssg_session_id FROM course_session
-                    WHERE course_run_id = $1 AND deleted = false AND ssg_session_id IS NOT NULL
-                `, [run.db_uuid]);
+                    console.log(`[auto-create-certificates] ${run.course_run_id}: ${allLearnersRes.rows.length} confirmed learners without certificate.`);
 
-                const ssgAttendanceCount: Record<string, number> = {};
-                for (const sess of sessionsRes.rows) {
-                    if (!sess.ssg_session_id) continue;
-                    try {
-                        const presentNrics = await fetchSsgSessionAttendance(
-                            run.course_code, run.course_run_id, sess.ssg_session_id
-                        );
-                        for (const nric of Array.from(presentNrics)) {
-                            ssgAttendanceCount[nric] = (ssgAttendanceCount[nric] || 0) + 1;
-                        }
-                    } catch (ssgErr) {
-                        console.warn(`[auto-create-certificates] SSG attendance fetch error for session ${sess.ssg_session_id}:`, ssgErr);
-                    }
-                }
+                    for (const trainee of allLearnersRes.rows) {
+                        const traineeLogContext = {
+                            ...logContext,
+                            nric: trainee.nric,
+                            learnerName: trainee.learner_name
+                        };
+                        try {
+                            console.log(`[auto-create-certificates] Generating cert for ${trainee.learner_name} (no sessions — auto-certify)`);
+                            const certificateUrl = await generateAndUploadCertificate(trainee.enrolment_id, pool, trainee.learner_name);
 
-                // 5. Use the HIGHER of manual DB attendance vs SSG e-attendance
-                // Learner is eligible if either score is ≥60%
-                const eligibleTrainees = allLearnersRes.rows.filter(trainee => {
-                    const manualCount = parseInt(trainee.manual_attended, 10) || 0;
-                    const ssgCount = ssgAttendanceCount[trainee.nric] || 0;
-                    const bestCount = Math.max(manualCount, ssgCount);
-                    const percent = (bestCount / totalSessions) * 100;
-                    (trainee as any).attended_count = bestCount;
-                    return percent >= attendanceThreshold;
-                });
-                const ssgFetchedCount = Object.keys(ssgAttendanceCount).length;
-                console.log(`[auto-create-certificates] ${run.course_run_id}: ${totalSessions} sessions, ${allLearnersRes.rows.length} enrolled, ${ssgFetchedCount} SSG e-attendance records, ${eligibleTrainees.length} learners with ≥${attendanceThreshold}% attendance (best of manual/e-attendance).`);
-
-                for (const trainee of eligibleTrainees) {
-                    const attendancePercent = Math.round((parseInt(trainee.attended_count, 10) / totalSessions) * 100);
-                    const traineeLogContext = {
-                        ...logContext,
-                        nric: trainee.nric,
-                        learnerName: trainee.learner_name
-                    };
-
-                    try {
-                        // 4. Generate and Upload Certificate
-                        console.log(`[auto-create-certificates] Generating cert for ${trainee.learner_name} (${attendancePercent}% attendance)`);
-                        const certificateUrl = await generateAndUploadCertificate(trainee.enrolment_id, pool, trainee.learner_name);
-
-                        // 5. Send certificate email to learner
-                        if (trainee.learner_email) {
-                            try {
-                                await sendCertificateEmail({
-                                    studentName: trainee.learner_name,
-                                    studentEmail: trainee.learner_email,
-                                    courseName: run.course_title,
-                                    courseDates: run.course_dates || '',
-                                    certificateUrl,
-                                });
-                                console.log(`[auto-create-certificates] Certificate emailed to ${trainee.learner_email}`);
-                            } catch (emailErr: any) {
-                                console.error(`[auto-create-certificates] Failed to email cert to ${trainee.learner_email}:`, emailErr.message);
-                                // Don't fail the whole process if email fails — cert is already generated
+                            if (trainee.learner_email) {
+                                try {
+                                    await sendCertificateEmail({
+                                        studentName: trainee.learner_name,
+                                        studentEmail: trainee.learner_email,
+                                        courseName: run.course_title,
+                                        courseDates: run.course_dates || '',
+                                        certificateUrl,
+                                    });
+                                    console.log(`[auto-create-certificates] Certificate emailed to ${trainee.learner_email}`);
+                                } catch (emailErr: any) {
+                                    console.error(`[auto-create-certificates] Failed to email cert to ${trainee.learner_email}:`, emailErr.message);
+                                }
                             }
-                        } else {
-                            console.warn(`[auto-create-certificates] No email for ${trainee.learner_name} — certificate generated but not emailed`);
-                        }
 
-                        await logResult(runId, 'created', { ...traineeLogContext, certificateUrl });
-                        totalGenerated++;
-                    } catch (traineeErr: any) {
-                        console.error(`[auto-create-certificates] Error for trainee ${trainee.nric} in run ${run.course_run_id}: `, traineeErr);
-                        await logResult(runId, 'error', { ...traineeLogContext, errorMessage: traineeErr.message });
-                        totalErrors++;
+                            await logResult(runId, 'created', { ...traineeLogContext, certificateUrl });
+                            totalGenerated++;
+                        } catch (traineeErr: any) {
+                            console.error(`[auto-create-certificates] Error for trainee ${trainee.nric} in run ${run.course_run_id}: `, traineeErr);
+                            await logResult(runId, 'error', { ...traineeLogContext, errorMessage: traineeErr.message });
+                            totalErrors++;
+                        }
+                    }
+                } else {
+                    // Sessions exist — use local DB attendance to determine eligibility
+                    // 3. Fetch ALL confirmed learners with their attendance from local E-attendance
+                    const allLearnersRes = await pool.query(`
+                        SELECT
+                            e.id as enrolment_id,
+                            e.nric,
+                            COALESCE(au.full_name, e.nric, 'Unknown') as learner_name,
+                            COALESCE(au.email, e.email) as learner_email,
+                            COUNT(DISTINCT CASE WHEN ca.is_present = true THEN ca.session_id END) as attended_count
+                        FROM enrollment e
+                        LEFT JOIN app_user au ON e.user_id = au.id
+                        LEFT JOIN course_attendance ca ON (ca.nric = e.nric OR ca.user_id = e.user_id) AND ca.session_id IN (
+                            SELECT id FROM course_session WHERE course_run_id = $1 AND deleted = false
+                        )
+                        WHERE e.course_run_id = $1
+                          AND LOWER(e.enrolment_status) = 'confirmed'
+                          AND (e.certificate IS NULL OR e.certificate = '')
+                        GROUP BY e.id, e.nric, au.full_name, au.email, e.email
+                    `, [run.db_uuid]);
+
+                    // 4. Filter learners who meet the attendance threshold
+                    const eligibleTrainees = allLearnersRes.rows.filter(trainee => {
+                        const attendedCount = parseInt(trainee.attended_count, 10) || 0;
+                        const percent = (attendedCount / totalSessions) * 100;
+                        return percent >= attendanceThreshold;
+                    });
+
+                    console.log(`[auto-create-certificates] ${run.course_run_id}: ${totalSessions} sessions, ${allLearnersRes.rows.length} enrolled, ${eligibleTrainees.length} learners with ≥${attendanceThreshold}% attendance.`);
+
+                    for (const trainee of eligibleTrainees) {
+                        const attendancePercent = Math.round((parseInt(trainee.attended_count, 10) / totalSessions) * 100);
+                        const traineeLogContext = {
+                            ...logContext,
+                            nric: trainee.nric,
+                            learnerName: trainee.learner_name
+                        };
+
+                        try {
+                            console.log(`[auto-create-certificates] Generating cert for ${trainee.learner_name} (${attendancePercent}% attendance)`);
+                            const certificateUrl = await generateAndUploadCertificate(trainee.enrolment_id, pool, trainee.learner_name);
+
+                            if (trainee.learner_email) {
+                                try {
+                                    await sendCertificateEmail({
+                                        studentName: trainee.learner_name,
+                                        studentEmail: trainee.learner_email,
+                                        courseName: run.course_title,
+                                        courseDates: run.course_dates || '',
+                                        certificateUrl,
+                                    });
+                                    console.log(`[auto-create-certificates] Certificate emailed to ${trainee.learner_email}`);
+                                } catch (emailErr: any) {
+                                    console.error(`[auto-create-certificates] Failed to email cert to ${trainee.learner_email}:`, emailErr.message);
+                                }
+                            } else {
+                                console.warn(`[auto-create-certificates] No email for ${trainee.learner_name} — certificate generated but not emailed`);
+                            }
+
+                            await logResult(runId, 'created', { ...traineeLogContext, certificateUrl });
+                            totalGenerated++;
+                        } catch (traineeErr: any) {
+                            console.error(`[auto-create-certificates] Error for trainee ${trainee.nric} in run ${run.course_run_id}: `, traineeErr);
+                            await logResult(runId, 'error', { ...traineeLogContext, errorMessage: traineeErr.message });
+                            totalErrors++;
+                        }
                     }
                 }
 

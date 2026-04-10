@@ -6454,6 +6454,7 @@ export const AutoCreateCertificatesLogView: React.FC = () => {
                 <tr>
                   <th className="px-5 py-3">Timestamp</th>
                   <th className="px-5 py-3">Batch/Run ID</th>
+                  <th className="px-5 py-3">Course Run ID</th>
                   <th className="px-5 py-3">Course Code/Title</th>
                   <th className="px-5 py-3">Learner Name</th>
                   <th className="px-5 py-3">Status</th>
@@ -6463,7 +6464,7 @@ export const AutoCreateCertificatesLogView: React.FC = () => {
               <tbody className="divide-y divide-default">
                 {logs.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-5 py-12 text-center text-muted">
+                    <td colSpan={7} className="px-5 py-12 text-center text-muted">
                       No matching logs found.
                     </td>
                   </tr>
@@ -6475,6 +6476,9 @@ export const AutoCreateCertificatesLogView: React.FC = () => {
                       </td>
                       <td className="px-5 py-4 whitespace-nowrap text-on-surface-secondary font-mono text-xs" title={log.run_id}>
                         {log.run_id ? log.run_id.substring(0, 8) + '...' : '—'}
+                      </td>
+                      <td className="px-5 py-4 whitespace-nowrap">
+                        <span className="font-mono text-xs text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 px-2 py-0.5 rounded">{log.course_run_id || '—'}</span>
                       </td>
                       <td className="px-5 py-4">
                         <div className="font-medium text-on-surface">{log.course_code || '—'}</div>
