@@ -282,7 +282,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           cr.virtual_meeting_link,
           ${tpgNameExpr},
           ${tpgEmailExpr}
-        ORDER BY cr.start_date ASC NULLS LAST
+        ORDER BY cr.start_date ASC NULLS LAST, cr.end_date ASC NULLS LAST
         LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
       `,
       [...params, limitNum, offset]

@@ -276,7 +276,7 @@ export default async function handler(
         GROUP BY course_run_id
       ) trainee_count ON cr.id = trainee_count.course_run_id
       WHERE ${whereClause}
-      ORDER BY cr.course_run_id DESC
+      ORDER BY cr.start_date ASC NULLS LAST, cr.end_date ASC NULLS LAST
       LIMIT $${paramCounter} OFFSET $${paramCounter + 1}
     `;
 

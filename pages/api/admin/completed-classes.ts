@@ -272,7 +272,7 @@ export default async function handler(
         GROUP BY course_run_id
       ) trainee_count ON cr.id = trainee_count.course_run_id
       WHERE ${whereClause}
-      ORDER BY cr.course_run_id::bigint DESC
+      ORDER BY cr.start_date DESC NULLS LAST, cr.end_date DESC NULLS LAST
       LIMIT $${paramCounter} OFFSET $${paramCounter + 1}
     `;
 
