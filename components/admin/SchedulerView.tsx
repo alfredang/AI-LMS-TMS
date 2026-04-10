@@ -21,7 +21,7 @@ interface SchedulerTask {
 }
 
 // Tasks that support email template selection
-const EMAIL_TEMPLATE_TASKS = ['auto_send_course_confirmation', 'auto_send_class_confirmation', 'auto_create_certificates'];
+const EMAIL_TEMPLATE_TASKS = ['auto_send_course_confirmation', 'auto_send_class_confirmation', 'auto_create_certificates', 'auto_send_courseware_attendance'];
 
 // Tasks that support days-in-advance setting
 const DAYS_IN_ADVANCE_TASKS = ['auto_send_course_confirmation', 'auto_send_class_confirmation', 'sync_google_calendar'];
@@ -34,6 +34,7 @@ const EMAIL_TEMPLATES: { value: string; label: string }[] = [
     { value: 'trainer_invitation', label: 'Trainer Invitation Email' },
     { value: 'otp', label: 'OTP Email' },
     { value: 'password_reset', label: 'Password Reset Email' },
+    { value: 'courseware_attendance', label: 'Courseware and Attendance Email' },
 ];
 
 // ── Cron Expression Helpers ───────────────────────────────────────────────────
