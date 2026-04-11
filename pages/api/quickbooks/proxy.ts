@@ -31,7 +31,13 @@ async function getQBOCredentials(appOverride?: string): Promise<QBOCredentials |
       `SELECT a.key_name, a.key_value
        FROM training_provider_api a
        JOIN training_provider tp ON tp.id = a.training_provider_id
-       WHERE a.key_name IN ('QUICKBOOKS_APP1_CLIENT_ID', 'QUICKBOOKS_APP1_CLIENT_SECRET', 'QUICKBOOKS_REFRESH_TOKEN', 'QUICKBOOKS_REALM_ID', 'QUICKBOOKS_APP2_CLIENT_ID', 'QUICKBOOKS_APP2_CLIENT_SECRET', 'QUICKBOOKS_DEFAULT_APP')
+       WHERE a.key_name IN (
+         'QUICKBOOKS_APP1_CLIENT_ID', 'QUICKBOOKS_APP1_CLIENT_SECRET',
+         'QUICKBOOKS_APP2_CLIENT_ID', 'QUICKBOOKS_APP2_CLIENT_SECRET',
+         'QUICKBOOKS_REFRESH_TOKEN',
+         'QUICKBOOKS_APP1_REFRESH_TOKEN', 'QUICKBOOKS_APP2_REFRESH_TOKEN',
+         'QUICKBOOKS_REALM_ID', 'QUICKBOOKS_DEFAULT_APP'
+       )
        LIMIT 10`
     );
     const map: Record<string, string> = {};
@@ -40,7 +46,9 @@ async function getQBOCredentials(appOverride?: string): Promise<QBOCredentials |
     const selectedApp = appOverride || map.QUICKBOOKS_DEFAULT_APP || 'app1';
     const clientId = selectedApp === 'app2' ? map.QUICKBOOKS_APP2_CLIENT_ID : map.QUICKBOOKS_APP1_CLIENT_ID;
     const clientSecret = selectedApp === 'app2' ? map.QUICKBOOKS_APP2_CLIENT_SECRET : map.QUICKBOOKS_APP1_CLIENT_SECRET;
-    const refreshToken = map.QUICKBOOKS_REFRESH_TOKEN;
+    const refreshToken =
+      (selectedApp === 'app2' ? map.QUICKBOOKS_APP2_REFRESH_TOKEN : map.QUICKBOOKS_APP1_REFRESH_TOKEN) ||
+      map.QUICKBOOKS_REFRESH_TOKEN;
     const realmId = map.QUICKBOOKS_REALM_ID;
 
     if (clientId && clientSecret && refreshToken && realmId) {

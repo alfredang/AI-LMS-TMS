@@ -285,6 +285,126 @@ export async function refreshGrantsForEnrolments(
   return results;
 }
 
+/**
+ * Ensures `ssg_enrolments` has a row for this SSG enrolment reference so consolidated finance
+ * (`/api/finance/all-course-runs`) can join `invoice_jobs`. New enrolments often exist in
+ * `enrollment` before SSG sync populates `ssg_enrolments`.
+ */
+export async function upsertSsgEnrolmentFromLocalEnrollment(enrolmentId: string): Promise<void> {
+  const ref = (enrolmentId || '').trim();
+  if (!ref) return;
+
+  const r = await pool.query(
+    `SELECT e.enrolment_id, e.enrolment_status, e.raw_data, e.course_sponsorship,
+            e.enrolment_date::text AS enrolment_date_text,
+            u.full_name, u.email AS user_email,
+            lp.nric AS trainee_nric,
+            c.title AS course_title, c.course_code AS course_reference,
+            cr.course_run_id::text AS ssg_run_id,
+            cr.start_date AS run_start,
+            cr.end_date AS run_end
+     FROM enrollment e
+     JOIN app_user u ON u.id = e.user_id
+     LEFT JOIN learner_profile lp ON lp.user_id = e.user_id
+     JOIN course_run cr ON cr.id = e.course_run_id
+     JOIN course c ON c.id = e.course_id
+     WHERE TRIM(e.enrolment_id) = $1
+     LIMIT 1`,
+    [ref]
+  );
+  const row = r.rows[0];
+  if (!row) return;
+
+  const tp = await getTrainingPartnerIdentifiers();
+
+  const fmtYmd = (d: unknown): string | null => {
+    if (!d) return null;
+    const x = d instanceof Date ? d : new Date(String(d));
+    if (Number.isNaN(x.getTime())) return null;
+    const y = x.getFullYear();
+    const m = String(x.getMonth() + 1).padStart(2, '0');
+    const day = String(x.getDate()).padStart(2, '0');
+    return `${y}${m}${day}`;
+  };
+
+  const existing = row.raw_data as Record<string, unknown> | null;
+  const exCourse = (existing?.course ?? {}) as Record<string, unknown>;
+  const exRun = (exCourse.run ?? {}) as Record<string, unknown>;
+  const runId = (exRun.id as string) || row.ssg_run_id || '';
+  let startDateStr =
+    (typeof exRun.startDate === 'string' && exRun.startDate) || fmtYmd(row.run_start) || '';
+  let endDateStr = (typeof exRun.endDate === 'string' && exRun.endDate) || fmtYmd(row.run_end) || '';
+
+  const sponsorship =
+    String(row.course_sponsorship || '').toLowerCase().includes('employer') ? 'EMPLOYER' : 'INDIVIDUAL';
+
+  const record = {
+    referenceNumber: ref,
+    status: row.enrolment_status || 'Confirmed',
+    trainee: {
+      fullName: row.full_name,
+      id: row.trainee_nric || null,
+      email: { full: row.user_email || '' },
+      sponsorshipType: sponsorship,
+      enrolmentDate: row.enrolment_date_text || null,
+    },
+    course: {
+      title: row.course_title,
+      referenceNumber: row.course_reference,
+      run: {
+        id: runId,
+        startDate: startDateStr,
+        endDate: endDateStr,
+      },
+    },
+    trainingPartner: { code: tp.code, uen: tp.uen },
+  };
+
+  const rawJson = JSON.stringify(record);
+
+  let enrolmentDateVal: Date | null = null;
+  if (row.enrolment_date_text) {
+    const d = new Date(String(row.enrolment_date_text));
+    if (!Number.isNaN(d.getTime())) enrolmentDateVal = d;
+  }
+
+  await pool.query(
+    `INSERT INTO ssg_enrolments (
+       id, enrolment_id, trainee_name, trainee_nric,
+       course_title, course_reference, course_run_id,
+       training_partner_code, enrolment_status, sponsorship_type,
+       enrolment_date, raw_data, created_date, imported_at
+     ) VALUES (
+       gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9,
+       $10::timestamptz, $11::jsonb, NOW(), NOW()
+     )
+     ON CONFLICT (enrolment_id) DO UPDATE SET
+       trainee_name = EXCLUDED.trainee_name,
+       trainee_nric = EXCLUDED.trainee_nric,
+       course_title = EXCLUDED.course_title,
+       course_reference = EXCLUDED.course_reference,
+       course_run_id = EXCLUDED.course_run_id,
+       enrolment_status = EXCLUDED.enrolment_status,
+       sponsorship_type = EXCLUDED.sponsorship_type,
+       enrolment_date = EXCLUDED.enrolment_date,
+       raw_data = EXCLUDED.raw_data,
+       imported_at = NOW()`,
+    [
+      ref,
+      row.full_name,
+      row.trainee_nric,
+      row.course_title,
+      row.course_reference,
+      runId || null,
+      tp.code,
+      row.enrolment_status,
+      sponsorship,
+      enrolmentDateVal,
+      rawJson,
+    ]
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Main export
 // ---------------------------------------------------------------------------

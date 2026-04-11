@@ -4,6 +4,7 @@ import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import { inferIdType } from '../../../lib/utils/id-type';
 import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdentifiers';
+import { isEnrolmentEligibleForAutoInvoice } from '../../../lib/services/invoiceEligibility';
 import { enqueueInvoiceJob } from '../../../lib/services/invoiceJobs';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -227,8 +228,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     await client.query('COMMIT');
 
-    // Enqueue invoice workflow (best-effort, non-blocking)
-    if (enrolmentId && userId && traineeEmail && courseCode) {
+    const st = (enrolmentStatus as string | undefined) || 'Confirmed';
+    if (enrolmentId && userId && traineeEmail && courseCode && isEnrolmentEligibleForAutoInvoice(st)) {
       try {
         await enqueueInvoiceJob({
           enrolmentId,

@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { ensureInvoiceJobsTable } from '../../../lib/services/invoiceJobs';
+import { upsertSsgEnrolmentFromLocalEnrollment } from '../../../lib/services/billingSync';
 
 /** Normalized course run start date as YYYY-MM-DD text (matches sync-all-course-runs-from-ssg). */
 const RUN_START_NORM_SQL = `(
@@ -28,6 +29,26 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     await ensureInvoiceJobsTable();
 
+    const backfill = await pool.query(
+      `SELECT ij.enrolment_id::text AS enrolment_id
+       FROM public.invoice_jobs ij
+       WHERE ij.status = 'done'
+         AND ij.enrolment_id IS NOT NULL
+         AND NOT EXISTS (
+           SELECT 1 FROM ssg_enrolments se
+           WHERE TRIM(COALESCE(se.enrolment_id, '')) = TRIM(COALESCE(ij.enrolment_id, ''))
+         )
+       ORDER BY ij.updated_at DESC
+       LIMIT 100`
+    );
+    for (const row of backfill.rows) {
+      try {
+        if (row.enrolment_id) await upsertSsgEnrolmentFromLocalEnrollment(row.enrolment_id);
+      } catch (e) {
+        console.warn('[finance/all-course-runs] ssg backfill:', e);
+      }
+    }
+
     const page = parseInt(req.query.page as string) || 0;
     const limit = Math.min(parseInt(req.query.limit as string) || 20, 100);
     const search = (req.query.search as string || '').trim();
@@ -43,10 +64,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const startFrom = rawStartFrom && rawStartTo ? (rawStartFrom <= rawStartTo ? rawStartFrom : rawStartTo) : rawStartFrom;
     const startTo = rawStartFrom && rawStartTo ? (rawStartFrom <= rawStartTo ? rawStartTo : rawStartFrom) : rawStartTo;
 
-    // Course runs starting after "today" (Singapore) are hidden unless includeFuture
+    // When includeFuture is off: only runs with a parseable start date on or before today (SG). Rows with no parseable start date are excluded (they are not "through today").
     const throughTodayClause = includeFuture
       ? ''
-      : ` AND (${RUN_START_NORM_SQL} IS NULL OR ${RUN_START_NORM_SQL} <= ${TODAY_SG_SQL})`;
+      : ` AND ${RUN_START_NORM_SQL} IS NOT NULL AND ${RUN_START_NORM_SQL} <= ${TODAY_SG_SQL}`;
 
     // Build WHERE conditions — always exclude incomplete rows
     const conditions: string[] = ['se.enrolment_id IS NOT NULL'];
@@ -139,14 +160,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         sc.claim_amount AS sfc_amount,
         sc.payment_date AS sfc_payment_date,
         sc.claim_status AS sfc_status,
-        ij.qbo_invoice_id AS invoice_id
+        NULLIF(TRIM(COALESCE(ij.qbo_invoice_id::text, '')), '') AS invoice_id,
+        COALESCE(
+          NULLIF(TRIM(COALESCE(ij.invoice_no, '')), ''),
+          NULLIF(TRIM(COALESCE(ij.qbo_doc_number, '')), ''),
+          NULLIF(TRIM(COALESCE(ij.qbo_invoice_id::text, '')), '')
+        ) AS invoice_no
       FROM ssg_enrolments se
       LEFT JOIN LATERAL (
-        SELECT qbo_invoice_id
-        FROM public.invoice_jobs
-        WHERE enrolment_id = se.enrolment_id
-          AND status = 'done'
-        ORDER BY updated_at DESC
+        SELECT inv.invoice_no, inv.qbo_invoice_id, inv.qbo_doc_number
+        FROM public.invoice_jobs inv
+        WHERE inv.status = 'done'
+          AND LOWER(TRIM(COALESCE(inv.enrolment_id, ''))) = LOWER(TRIM(COALESCE(se.enrolment_id, '')))
+        ORDER BY inv.updated_at DESC
         LIMIT 1
       ) ij ON true
       LEFT JOIN LATERAL (
@@ -176,14 +202,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     `;
     params.push(limit, offset);
 
-    // Count query
     const countQuery = `
       SELECT COUNT(*) AS total
       FROM ssg_enrolments se
       ${whereClause}
     `;
 
-    const enrolThroughTodaySql = `(${RUN_START_NORM_SQL} IS NULL OR ${RUN_START_NORM_SQL} <= ${TODAY_SG_SQL})`;
+    const enrolThroughTodaySql = `(${RUN_START_NORM_SQL} IS NOT NULL AND ${RUN_START_NORM_SQL} <= ${TODAY_SG_SQL})`;
     const enrolStartRangeSqlParts: string[] = [];
     if (startFrom) enrolStartRangeSqlParts.push(`${RUN_START_NORM_SQL} >= '${startFrom.replace(/'/g, "''")}'`);
     if (startTo) enrolStartRangeSqlParts.push(`${RUN_START_NORM_SQL} <= '${startTo.replace(/'/g, "''")}'`);
@@ -230,14 +255,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const statusBreakdownQuery = includeFuture
       ? `
-      SELECT enrolment_status AS status, COUNT(*) AS count
+      SELECT enrolment_status AS status, COUNT(*)::int AS count
       FROM ssg_enrolments
       WHERE enrolment_id IS NOT NULL
       GROUP BY enrolment_status
       ORDER BY count DESC
     `
       : `
-      SELECT se.enrolment_status AS status, COUNT(*) AS count
+      SELECT se.enrolment_status AS status, COUNT(*)::int AS count
       FROM ssg_enrolments se
       WHERE se.enrolment_id IS NOT NULL AND ${enrolThroughTodaySql}${enrolStartRangeSql}
       GROUP BY se.enrolment_status
@@ -258,17 +283,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       success: true,
       data: {
         rows: dataResult.rows,
-        total: parseInt(countResult.rows[0].total),
+        total: Number(countResult.rows[0]?.total ?? 0),
         page,
         limit,
         stats: {
-          totalEnrolments: parseInt(statsResult.rows[0].total_enrolments),
-          totalBL: parseFloat(statsResult.rows[0].total_bl),
-          totalNBL: parseFloat(statsResult.rows[0].total_nbl),
-          totalSFC: parseFloat(statsResult.rows[0].total_sfc),
-          byStatus: statusResult.rows.map((r: { status: string; count: string }) => ({
-            status: r.status,
-            count: parseInt(r.count),
+          totalEnrolments: Number(statsResult.rows[0]?.total_enrolments ?? 0),
+          totalBL: Number(statsResult.rows[0]?.total_bl ?? 0),
+          totalNBL: Number(statsResult.rows[0]?.total_nbl ?? 0),
+          totalSFC: Number(statsResult.rows[0]?.total_sfc ?? 0),
+          byStatus: statusResult.rows.map((r: { status: string | null; count: string | number }) => ({
+            status: r.status ?? '',
+            count: Number(r.count ?? 0),
           })),
         },
       },

@@ -3,6 +3,7 @@ import { getSSGCredentialsService } from '../../../lib/ssg/services/credentials-
 import { HttpClient, HTTPRequestBuilder, HttpMethod } from '../../../lib/ssg/utils/http-utils';
 import pool from '../../../lib/db';
 import crypto from 'crypto';
+import { upsertSsgEnrolmentFromLocalEnrollment } from '../../../lib/services/billingSync';
 
 /**
  * POST /api/enrolment/cancel
@@ -78,6 +79,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       `UPDATE enrollment SET enrolment_status = 'Cancelled', updated_at = NOW() WHERE enrolment_id = $1`,
       [enrolmentId]
     );
+
+    try {
+      await upsertSsgEnrolmentFromLocalEnrollment(String(enrolmentId).trim());
+    } catch (e) {
+      console.warn('[enrolment/cancel] ssg_enrolments sync:', e);
+    }
 
     return res.status(200).json({ success: true, data: parsed?.data ?? parsed });
 

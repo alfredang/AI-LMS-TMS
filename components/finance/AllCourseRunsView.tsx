@@ -39,6 +39,7 @@ interface CourseRunRow {
   sfc_payment_date: string | null;
   sfc_status: string | null;
   invoice_id?: string | null;
+  invoice_no?: string | null;
 }
 
 interface Stats {
@@ -373,17 +374,21 @@ const AllCourseRunsView: React.FC = () => {
         setViewFrom(from);
         setViewTo(to);
       }
+      const enrolmentIds = rows.map((r) => r.enrolment_id).filter((id): id is string => !!id);
       const res = await ssgFetch('/api/finance/sync-all-course-runs-from-ssg', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ from, to }),
+        body: JSON.stringify({ from, to, enrolmentIds }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Sync failed');
       const up = json?.totals?.upsertedEnrolments ?? 0;
+      const byId = json?.totals?.refreshedByEnrolmentId ?? 0;
       const gr = json?.totals?.enrolmentsForGrantRefresh ?? 0;
       const cb = json?.totals?.claimsEnrollmentIdBackfilled ?? 0;
-      setSyncToast(`Synced ${up} enrolment(s), refreshed grants for ${gr}, backfilled ${cb} claim link(s).`);
+      setSyncToast(
+        `Synced ${up} enrolment row(s) (${byId} from visible list via SSG view), refreshed grants for ${gr}, backfilled ${cb} claim link(s).`
+      );
       await fetchData();
     } catch (e) {
       setSyncToast(e instanceof Error ? e.message : 'Sync failed');
@@ -554,7 +559,7 @@ const AllCourseRunsView: React.FC = () => {
                 <th colSpan={5} className={`text-center text-[10px] uppercase tracking-wider px-2 py-1.5 border-b-2 border-blue-300 dark:border-blue-600 ${groupHeaderColors.course}`}>Course</th>
                 <th colSpan={5} className={`text-center text-[10px] uppercase tracking-wider px-2 py-1.5 border-b-2 border-green-300 dark:border-green-600 ${groupHeaderColors.trainee}`}>Trainee</th>
                 <th colSpan={4} className={`text-center text-[10px] uppercase tracking-wider px-2 py-1.5 border-b-2 border-purple-300 dark:border-purple-600 ${groupHeaderColors.sponsor}`}>Employer</th>
-                <th colSpan={3} className={`text-center text-[10px] uppercase tracking-wider px-2 py-1.5 border-b-2 border-amber-300 dark:border-amber-600 ${groupHeaderColors.enrolment}`}>Enrolment</th>
+                <th colSpan={4} className={`text-center text-[10px] uppercase tracking-wider px-2 py-1.5 border-b-2 border-amber-300 dark:border-amber-600 ${groupHeaderColors.enrolment}`}>Enrolment</th>
                 <th colSpan={3} className={`text-center text-[10px] uppercase tracking-wider px-2 py-1.5 border-b-2 border-indigo-300 dark:border-indigo-600 ${groupHeaderColors.bl}`}>BL Grant</th>
                 <th colSpan={4} className={`text-center text-[10px] uppercase tracking-wider px-2 py-1.5 border-b-2 border-teal-300 dark:border-teal-600 ${groupHeaderColors.nbl}`}>Non-BL Grant</th>
                 <th colSpan={1} className={`text-center text-[10px] uppercase tracking-wider px-2 py-1.5 border-b-2 border-orange-300 dark:border-orange-600 ${groupHeaderColors.tg}`}>TG</th>
@@ -580,10 +585,11 @@ const AllCourseRunsView: React.FC = () => {
                 <th className={headerCell}>UEN</th>
                 <th className={headerCell}>Employer</th>
                 <th className={headerCell}>Employer Contact</th>
-                {/* Enrolment (2) */}
+                {/* Enrolment (4) */}
                 <th className={headerCell}>Status</th>
                 <th className={headerCell}>Enrolment ID</th>
                 <th className={headerCell}>Invoice ID</th>
+                <th className={headerCell}>Invoice No</th>
                 {/* BL Grant (3) */}
                 <th className={headerCell}>Status</th>
                 <th className={headerCell}>Grant ID</th>
@@ -606,14 +612,14 @@ const AllCourseRunsView: React.FC = () => {
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={30} className="px-4 py-12 text-center text-on-surface-secondary">
+                <tr><td colSpan={31} className="px-4 py-12 text-center text-on-surface-secondary">
                   <div className="flex items-center justify-center gap-2">
                     <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary" />
                     Loading enrolments...
                   </div>
                 </td></tr>
               ) : rows.length === 0 ? (
-                <tr><td colSpan={30} className="px-4 py-12 text-center text-on-surface-secondary">No enrolments found.</td></tr>
+                <tr><td colSpan={31} className="px-4 py-12 text-center text-on-surface-secondary">No enrolments found.</td></tr>
               ) : rows.map((r, i) => {
                 const totalTG = (Number(r.bl_amount) || 0) + (Number(r.nbl_amount) || 0);
                 const enrolmentKey = r.enrolment_id ?? `row-${i}`;
@@ -644,6 +650,7 @@ const AllCourseRunsView: React.FC = () => {
                     </td>
                     <td className={`${cell} text-on-surface-secondary font-mono`}>{r.enrolment_id || '-'}</td>
                     <td className={`${cell} text-on-surface-secondary font-mono`}>{r.invoice_id || '-'}</td>
+                    <td className={`${cell} text-on-surface-secondary font-mono`}>{r.invoice_no || '-'}</td>
                     {/* BL Grant */}
                     <td className={cell}>
                       {r.bl_status ? (

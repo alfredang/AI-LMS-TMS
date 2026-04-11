@@ -1,6 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
-import { syncLearnerFromSSG } from '../../../lib/services/billingSync';
+import { syncLearnerFromSSG, upsertSsgEnrolmentFromLocalEnrollment } from '../../../lib/services/billingSync';
 import { ensureInvoiceJobsTable } from '../../../lib/services/invoiceJobs';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -19,6 +19,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     await syncLearnerFromSSG(userId);
 
     await ensureInvoiceJobsTable();
+
+    // Backfill ssg_enrolments for completed invoice jobs so consolidated finance can join; trim enrolment_id for matching.
+    const backfill = await pool.query(
+      `SELECT ij.enrolment_id::text AS enrolment_id
+       FROM public.invoice_jobs ij
+       INNER JOIN enrollment e
+         ON TRIM(COALESCE(ij.enrolment_id, '')) = TRIM(COALESCE(e.enrolment_id, ''))
+       WHERE e.user_id = $1
+         AND ij.status = 'done'
+         AND NOT EXISTS (
+           SELECT 1 FROM ssg_enrolments se
+           WHERE TRIM(COALESCE(se.enrolment_id, '')) = TRIM(COALESCE(ij.enrolment_id, ''))
+         )`,
+      [userId]
+    );
+    for (const row of backfill.rows) {
+      try {
+        if (row.enrolment_id) await upsertSsgEnrolmentFromLocalEnrollment(row.enrolment_id);
+      } catch (e) {
+        console.warn('[billing/history] ssg backfill:', e);
+      }
+    }
 
     // Pull from local enrollment table — now fresh after sync
     const enrolmentResult = await pool.query(
@@ -42,6 +64,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         c.is_mces_eligible,
         lp.pro_forma_url,
         ij.qbo_invoice_id,
+        ij.invoice_no,
+        ij.qbo_doc_number,
         ij.drive_file_id,
         ij.drive_web_view_link
       FROM enrollment e
@@ -50,11 +74,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       JOIN course_run cr ON cr.id = e.course_run_id
       JOIN course c ON c.id = e.course_id
       LEFT JOIN LATERAL (
-        SELECT qbo_invoice_id, drive_file_id, drive_web_view_link
-        FROM public.invoice_jobs
-        WHERE enrolment_id = e.enrolment_id
-          AND status = 'done'
-        ORDER BY updated_at DESC
+        SELECT inv.qbo_invoice_id, inv.invoice_no, inv.qbo_doc_number, inv.drive_file_id, inv.drive_web_view_link
+        FROM public.invoice_jobs inv
+        WHERE inv.status = 'done'
+          AND LOWER(TRIM(COALESCE(inv.enrolment_id, ''))) = LOWER(TRIM(COALESCE(e.enrolment_id, '')))
+        ORDER BY inv.updated_at DESC
         LIMIT 1
       ) ij ON true
       WHERE e.user_id = $1

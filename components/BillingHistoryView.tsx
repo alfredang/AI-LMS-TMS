@@ -31,6 +31,8 @@ interface BillingRecord {
   end_date: string | null;
   pro_forma_url: string | null;
   qbo_invoice_id?: string | null;
+  invoice_no?: string | null;
+  qbo_doc_number?: string | null;
   drive_file_id?: string | null;
   drive_web_view_link?: string | null;
   grants: Grant[];
@@ -78,11 +80,19 @@ const downloadProForma = async (record: BillingRecord): Promise<void> => {
     }),
   });
 
+  const ct = res.headers.get('content-type') || '';
   if (!res.ok) {
-    throw new Error('Failed to generate PDF');
+    if (ct.includes('application/json')) {
+      const j = (await res.json()) as { error?: string; detail?: string };
+      throw new Error(j.detail || j.error || `Proforma failed (${res.status})`);
+    }
+    throw new Error(`Proforma failed (${res.status})`);
+  }
+  if (!ct.includes('application/pdf')) {
+    const text = await res.text();
+    throw new Error(text.slice(0, 200) || 'Response was not a PDF');
   }
 
-  // Trigger browser download
   const blob = await res.blob();
   const url = window.URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -133,7 +143,7 @@ const BillingHistoryView: React.FC = () => {
       await downloadProForma(record);
     } catch (err) {
       console.error('[BillingHistory] Download error:', err);
-      setDownloadError('Failed to generate invoice. Please try again.');
+      setDownloadError(err instanceof Error ? err.message : 'Failed to generate invoice. Please try again.');
     } finally {
       setDownloadingId(null);
     }
@@ -180,7 +190,8 @@ const BillingHistoryView: React.FC = () => {
                     <th className="text-left py-3 px-4 font-semibold text-subtle">Course Title</th>
                     <th className="text-left py-3 px-4 font-semibold text-subtle">Course Ref Code</th>
                     <th className="text-left py-3 px-4 font-semibold text-subtle">Type</th>
-                    <th className="text-left py-3 px-4 font-semibold text-subtle">ID</th>
+                    <th className="text-left py-3 px-4 font-semibold text-subtle">Invoice No</th>
+                    <th className="text-left py-3 px-4 font-semibold text-subtle">Enrolment ID</th>
                     <th className="text-left py-3 px-4 font-semibold text-subtle">Created Date</th>
                     <th className="text-center py-3 px-4 font-semibold text-subtle">PDF Download</th>
                   </tr>
@@ -199,23 +210,27 @@ const BillingHistoryView: React.FC = () => {
                         <td className="py-3 px-4 text-xs">
                           {(() => {
                             if (record.payment_status === 'Paid') return <span className="px-2 py-0.5 rounded-full bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 font-semibold">Receipt</span>;
+                            if (record.drive_web_view_link || record.qbo_invoice_id) {
+                              return <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400 font-semibold">QuickBooks Invoice</span>;
+                            }
                             const started = record.start_date && new Date(record.start_date) <= new Date();
                             if (started) return <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400 font-semibold">Invoice</span>;
                             return <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 font-semibold">Proforma Invoice</span>;
                           })()}
                         </td>
+                        <td className="py-3 px-4 font-mono text-xs">{record.invoice_no || record.qbo_doc_number || '-'}</td>
                         <td className="py-3 px-4 font-mono text-xs">{record.enrolment_id || record.id || '-'}</td>
                         <td className="py-3 px-4 text-subtle">{formatDate(record.enrolment_date || record.start_date)}</td>
                         <td className="py-3 px-4 text-center">
-                          {record.drive_web_view_link ? (
+                          {record.enrolment_id &&
+                          currentUser?.id &&
+                          (record.drive_web_view_link || record.qbo_invoice_id || record.drive_file_id) ? (
                             <a
-                              href={record.drive_web_view_link}
-                              target="_blank"
-                              rel="noreferrer"
+                              href={`/api/billing/invoice-pdf?userId=${encodeURIComponent(currentUser.id)}&enrolmentId=${encodeURIComponent(record.enrolment_id)}`}
                               className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-colors
                                 bg-blue-50 text-blue-700 hover:bg-blue-100
                                 dark:bg-blue-900/20 dark:text-blue-400 dark:hover:bg-blue-900/40"
-                              title={record.qbo_invoice_id ? `Invoice ${record.qbo_invoice_id}` : 'Download invoice PDF'}
+                              title="Download QuickBooks invoice PDF"
                             >
                               <Icon name={IconName.FilePdf} className="w-3.5 h-3.5" />
                               <span>Invoice PDF</span>
@@ -224,7 +239,7 @@ const BillingHistoryView: React.FC = () => {
                             <button
                               onClick={() => handleDownload(record)}
                               disabled={isDownloading}
-                              title="Download PDF"
+                              title="Generate pro forma PDF (requires LibreOffice on the server)"
                               className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-colors
                                 bg-blue-50 text-blue-700 hover:bg-blue-100
                                 dark:bg-blue-900/20 dark:text-blue-400 dark:hover:bg-blue-900/40
@@ -238,7 +253,7 @@ const BillingHistoryView: React.FC = () => {
                               ) : (
                                 <>
                                   <Icon name={IconName.FilePdf} className="w-3.5 h-3.5" />
-                                  <span>Download</span>
+                                  <span>Pro forma</span>
                                 </>
                               )}
                             </button>

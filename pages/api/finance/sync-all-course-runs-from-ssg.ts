@@ -147,7 +147,10 @@ async function backfillClaimsEnrollmentId(): Promise<{ updated: number }> {
 
 /**
  * POST /api/finance/sync-all-course-runs-from-ssg
- * Body: { from?: 'YYYY-MM-DD', to?: 'YYYY-MM-DD', maxPages?: number }
+ * Body: { from?: 'YYYY-MM-DD', to?: 'YYYY-MM-DD', maxPages?: number, enrolmentIds?: string[] }
+ *
+ * When `enrolmentIds` is provided (e.g. current table page), each id is refreshed from SSG via
+ * view-enrolment and upserted so the consolidated grid shows latest status without relying only on run search.
  *
  * Pulls enrolments from SSG (paged), filters by course run startDate within [from,to],
  * upserts matching to ssg_enrolments, refreshes ssg_grants for those enrolments,
@@ -168,6 +171,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const fromIso = rawFromIso <= rawToIso ? rawFromIso : rawToIso;
   const toIso = rawFromIso <= rawToIso ? rawToIso : rawFromIso;
   const maxRuns = Math.min(Math.max(Number(body.maxRuns || 0) || MAX_RUNS_DEFAULT, 1), 600);
+  const enrolmentIdsFromBody = Array.isArray(body.enrolmentIds)
+    ? (body.enrolmentIds as unknown[]).map((x) => String(x ?? '').trim()).filter(Boolean)
+    : [];
 
   const ssgApp = (req.headers['x-ssg-app'] as string | undefined)?.trim() || undefined;
 
@@ -226,6 +232,35 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       await sleep(RATE_LIMIT_MS);
     }
 
+    let refreshedById = 0;
+    const requestedId = new Set<string>();
+    for (const enrolmentId of enrolmentIdsFromBody) {
+      if (requestedId.has(enrolmentId)) continue;
+      requestedId.add(enrolmentId);
+      try {
+        const viewResult = await api.viewEnrolment(enrolmentId);
+        if (viewResult.error) {
+          errors.push({ runId: enrolmentId, error: `view: ${(viewResult as { error?: { message?: string } }).error?.message ?? 'failed'}` });
+          await sleep(RATE_LIMIT_MS);
+          continue;
+        }
+        const raw: any = viewResult.data;
+        const rec = raw?.enrolment ?? raw;
+        if (!rec?.referenceNumber) {
+          await sleep(RATE_LIMIT_MS);
+          continue;
+        }
+        await upsertSsgEnrolmentStaging(rec);
+        refreshedById++;
+        totalUpserted++;
+        const ref = String(rec.referenceNumber);
+        syncedEnrolmentIds.push(ref);
+      } catch (e) {
+        errors.push({ runId: enrolmentId, error: e instanceof Error ? e.message : String(e) });
+      }
+      await sleep(RATE_LIMIT_MS);
+    }
+
     const uniqueEnrolmentIds = Array.from(new Set(syncedEnrolmentIds));
     const grantResults = uniqueEnrolmentIds.length > 0
       ? await refreshGrantsForEnrolments(uniqueEnrolmentIds, ssgApp)
@@ -246,6 +281,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         seenFromSsg: totalSeen,
         matchedByRunStartDate: totalMatched,
         upsertedEnrolments: totalUpserted,
+        refreshedByEnrolmentId: refreshedById,
         enrolmentsForGrantRefresh: uniqueEnrolmentIds.length,
         grantsOk,
         grantsFailed,

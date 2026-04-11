@@ -22,6 +22,7 @@ export interface InvoiceJobRow {
   last_error: string | null;
   qbo_invoice_id: string | null;
   qbo_doc_number: string | null;
+  invoice_no: string | null;
   drive_file_id: string | null;
   drive_web_view_link: string | null;
   created_at: string;
@@ -43,6 +44,7 @@ export async function ensureInvoiceJobsTable(): Promise<void> {
       last_error text NULL,
       qbo_invoice_id varchar(100) NULL,
       qbo_doc_number varchar(100) NULL,
+      invoice_no varchar(64) NULL,
       drive_file_id text NULL,
       drive_web_view_link text NULL,
       last_attempt_at timestamptz NULL,
@@ -65,6 +67,19 @@ export async function ensureInvoiceJobsTable(): Promise<void> {
     `CREATE INDEX IF NOT EXISTS invoice_jobs_batch
      ON public.invoice_jobs(batch_id);`
   );
+
+  await pool.query(
+    `ALTER TABLE public.invoice_jobs ADD COLUMN IF NOT EXISTS invoice_no varchar(64) NULL`
+  );
+  try {
+    await pool.query(
+      `CREATE UNIQUE INDEX IF NOT EXISTS invoice_jobs_invoice_no_unique
+       ON public.invoice_jobs(invoice_no)
+       WHERE invoice_no IS NOT NULL`
+    );
+  } catch (e) {
+    console.warn('[invoice_jobs] invoice_no unique index (non-fatal):', e instanceof Error ? e.message : e);
+  }
 }
 
 export async function enqueueInvoiceJob(input: EnqueueInvoiceJobInput): Promise<{ id: string; status: InvoiceJobStatus }> {
@@ -81,7 +96,14 @@ export async function enqueueInvoiceJob(input: EnqueueInvoiceJobInput): Promise<
      RETURNING id, status`,
     [input.batchId ?? null, input.enrolmentId, input.userId, input.learnerEmail, input.courseCode]
   );
-  return { id: r.rows[0].id, status: r.rows[0].status as InvoiceJobStatus };
+  const out = { id: r.rows[0].id, status: r.rows[0].status as InvoiceJobStatus };
+  // Fire-and-forget: process queue (FIFO) so invoices send without manual POST /invoice-jobs/run.
+  void import('./invoiceJobsRunner')
+    .then(({ runPendingInvoiceJobs }) => runPendingInvoiceJobs(5))
+    .catch((e: unknown) =>
+      console.warn('[invoice_jobs] auto-run after enqueue failed:', e instanceof Error ? e.message : e)
+    );
+  return out;
 }
 
 export async function getInvoiceJobByEnrolmentId(enrolmentId: string): Promise<InvoiceJobRow | null> {

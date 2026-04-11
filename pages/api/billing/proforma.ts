@@ -1,10 +1,10 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { google } from 'googleapis';
 import path from 'path';
 import fs from 'fs';
 import os from 'os';
 import { execSync } from 'child_process';
 import PizZip from 'pizzip';
+import { getDriveClient } from '../../../lib/google-drive/drive-helpers';
 
 interface Grant {
   funding_scheme: string;
@@ -26,14 +26,17 @@ interface ProFormaRequest {
 }
 
 const TEMPLATE_ID = '1KbvgGpNsirzmCvLZOuMv7SY5IWxX0XfTSbnNF_pjZYY';
-const SOFFICE_PATH = 'C:\\Program Files\\LibreOffice\\program\\soffice.exe';
 
-function getAuth() {
-  const keyFile = path.join(process.cwd(), 'service-account.json');
-  return new google.auth.GoogleAuth({
-    keyFile,
-    scopes: ['https://www.googleapis.com/auth/drive.readonly'],
-  });
+function resolveLibreOfficePath(): string {
+  const fromEnv = process.env.LIBREOFFICE_SOFFICE_PATH?.trim();
+  if (fromEnv && fs.existsSync(fromEnv)) return fromEnv;
+  const win = 'C:\\Program Files\\LibreOffice\\program\\soffice.exe';
+  if (fs.existsSync(win)) return win;
+  const mac = '/Applications/LibreOffice.app/Contents/MacOS/soffice';
+  if (fs.existsSync(mac)) return mac;
+  const linux = '/usr/bin/soffice';
+  if (fs.existsSync(linux)) return linux;
+  return process.platform === 'win32' ? win : linux;
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -56,6 +59,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const order = (data.enrolment_id ?? '').replace('#', '');
   const amount1 = parseFloat((data.course_fees_exclude_gst ?? '0').replace(/,/g, ''));
+  if (!Number.isFinite(amount1) || amount1 < 0) {
+    return res.status(400).json({
+      error: 'Invalid course fee',
+      detail: 'course_fees_exclude_gst is missing or not a number. Set course fees on the course in admin.',
+    });
+  }
 
   let subTotal = amount1;
   let amount2 = 0;
@@ -122,9 +131,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const pdfFile = path.join(tmpDir, `invoice_${timestamp}.pdf`);
 
   try {
-    // 1. Download template as docx from Google Drive (read-only, no storage used)
-    const auth = getAuth();
-    const drive = google.drive({ version: 'v3', auth });
+    // 1. Download template as docx — same OAuth Drive client as invoice PDF uploads (Company Settings), not service-account.json
+    const drive = await getDriveClient();
 
     const exportRes = await drive.files.export(
       { fileId: TEMPLATE_ID, mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' },
@@ -162,8 +170,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // 3. Save filled docx to temp folder
     fs.writeFileSync(docxPath, filledDocx);
 
-    // 4. Convert to PDF using LibreOffice
-    execSync(`"${SOFFICE_PATH}" --headless --convert-to pdf --outdir "${tmpDir}" "${docxPath}"`, {
+    // 4. Convert to PDF using LibreOffice (path: LIBREOFFICE_SOFFICE_PATH or common install locations)
+    const soffice = resolveLibreOfficePath();
+    if (!fs.existsSync(soffice)) {
+      return res.status(503).json({
+        error: 'LibreOffice not found',
+        detail: `Install LibreOffice or set LIBREOFFICE_SOFFICE_PATH to soffice.exe. Tried: ${soffice}`,
+      });
+    }
+    execSync(`"${soffice}" --headless --convert-to pdf --outdir "${tmpDir}" "${docxPath}"`, {
       timeout: 30000,
     });
 
@@ -182,9 +197,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     res.status(200).end(pdfBuffer);
 
   } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
     console.error('[proforma] Error:', err);
     try { fs.unlinkSync(docxPath); } catch (_) {}
     try { fs.unlinkSync(pdfFile); } catch (_) {}
-    res.status(500).json({ error: 'Failed to generate PDF' });
+    res.status(500).json({
+      error: 'Failed to generate PDF',
+      detail,
+    });
   }
 }
