@@ -1,0 +1,93 @@
+{
+  "name": "LZ - Update Quickbooks Invoice Upon Payment Received V1",
+  "author": "Liu Zhen",
+  "date": "21 Jan",
+  "purpose": "Reference workflow: pattern for QB invoice lookup, customer handling (hardcoded CustomerRef), payment create + link to invoice. Used by the Direct Application auto-enrol pipeline for invoice/customer call patterns. See lib/quickbooks/createDirectApplicationInvoice.ts and lib/quickbooks/resolveCustomerRef.ts.",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [-1424, 672],
+      "id": "f1959b08-0eae-44e4-882f-2468f17f41ed",
+      "name": "When clicking Execute workflow"
+    },
+    {
+      "parameters": {
+        "jsCode": "const LIMIT = 1;\nreturn items.slice(0, LIMIT);"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-1456, 896],
+      "id": "845fd3cd-5cd1-46e6-aaa7-a87ddcbd1c42",
+      "name": "Limit to 10 Records1"
+    },
+    {
+      "parameters": {
+        "resource": "payment",
+        "operation": "create",
+        "CustomerRef": "1405",
+        "TotalAmt": "={{ $json.payments[0].baselineAmount }}",
+        "additionalFields": { "TxnDate": "={{ $json.payments[0].txnDate }}" }
+      },
+      "type": "n8n-nodes-base.quickbooks",
+      "typeVersion": 1,
+      "position": [816, 336],
+      "id": "2ac1502d-2835-49d1-b9c9-baf8d42419b2",
+      "name": "Create a payment1",
+      "note": "Hardcoded CustomerRef=1405 — follow same pattern for invoice CustomerRef resolution"
+    },
+    {
+      "parameters": {
+        "resource": "invoice",
+        "operation": "getAll",
+        "limit": 1,
+        "filters": {
+          "query": "=WHERE DocNumber = '{{ $json[\"QB Invoice # (Grant)\"] }}'"
+        }
+      },
+      "type": "n8n-nodes-base.quickbooks",
+      "typeVersion": 1,
+      "position": [-112, 544],
+      "id": "3d5b09be-6bd9-4183-a25f-d572fcb1ef73",
+      "name": "Get the Invoice1",
+      "note": "Invoice lookup by DocNumber — use same query form for invoice lookup"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://quickbooks.api.intuit.com/v3/company/1292117680/payment",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "quickBooksOAuth2Api",
+        "jsonBody": "={\n  \"SyncToken\": \"{{ $json.SyncToken }}\",\n  \"sparse\": false,\n  \"Line\": [\n    {\n      \"Amount\": {{ $json.UnappliedAmt }},\n      \"LinkedTxn\": [\n        {\n          \"TxnId\": \"{{ $('Switch3').item.json.payments[0].invoiceId }}\",\n          \"TxnType\": \"Invoice\"\n        }\n      ]\n    }\n  ],\n  \"CustomerRef\": { \"value\": \"{{ $json.CustomerRef.value }}\" },\n  \"Id\": \"{{ $json.Id }}\",\n  \"TotalAmt\": {{ $json.UnappliedAmt }},\n  \"TxnDate\": \"{{ $('Switch3').item.json.payments[0].txnDate }}\",\n  \"PaymentMethodRef\": { \"value\": \"7\" },\n  \"PaymentRefNum\": \"{{ $('Switch3').item.json.payments[0].blPaymentRefNum }}\",\n  \"DepositToAccountRef\": { \"value\": \"12\" }\n}"
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1232, 336],
+      "id": "e1cb9dc0-3006-48ad-9533-8b9c1a6acd94",
+      "name": "Update Payment",
+      "note": "Payment body shape used as reference for createDirectApplicationInvoice invoice body (CustomerRef.value, Line[], TxnDate)"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Parses invoice lines by description: 'baseline' vs 'enhanced' (MCES/SME).\n// For Direct Application net-fee invoices, we use a distinct description\n// containing 'Net Fee after SkillsFuture Subsidy & Credit' so this parser\n// will NOT match them. See lib/quickbooks/createDirectApplicationInvoice.ts."
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [64, 544],
+      "id": "92e29ed7-398a-4669-8994-e0ec2653421a",
+      "name": "Decide Payments3",
+      "note": "Distinguishes grant invoices by 'baseline'/'enhanced' keyword in Description — our DA invoices must use a different description to avoid collision"
+    }
+  ],
+  "notes": [
+    "This file is a trimmed archive of the original n8n workflow preserved as a reference for the Auto-Enrol Direct Applications feature.",
+    "Key patterns adopted by lib/quickbooks/createDirectApplicationInvoice.ts and lib/quickbooks/resolveCustomerRef.ts:",
+    "  1. Look up QB entities by single-field SELECT query (email for customer, DocNumber for invoice).",
+    "  2. Use CustomerRef.value for invoice/payment creation.",
+    "  3. Route all calls through a centralized OAuth proxy (we use /api/quickbooks/proxy).",
+    "  4. Keep Direct Application invoice line descriptions distinct from grant invoice keywords ('baseline', 'enhanced').",
+    "Full original workflow JSON (with credentials) lives in the n8n instance — do NOT copy credential IDs into source control."
+  ]
+}

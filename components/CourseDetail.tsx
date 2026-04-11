@@ -10,6 +10,7 @@ import { extractFilenameFromPath } from '@utils/fileUtils';
 import { courseService } from '@lib/services/courseService';
 import { getApiUrl, getDownloadUrl } from '@/lib/urlHelpers';
 import { AssessmentSummarySection } from './trainer/AssessmentSummarySection';
+import QuizTakerModal from './QuizTakerModal';
 
 // --- Types (assuming these exist in your project) ---
 interface Topic {
@@ -1854,6 +1855,13 @@ const CourseSidebar: React.FC<CourseSidebarProps> = ({ userRole, onSetGradingVie
 // --- Topic Accordion Component ---
 const isUrl = (str: string) => /^https?:\/\//i.test(str) || /^www\./i.test(str);
 
+interface QuizResourceQuestion {
+    id: string;
+    question: string;
+    options: string[];
+    correctIndex: number;
+}
+
 interface TopicAccordionProps {
     topic: Topic;
     progress: number;
@@ -1864,10 +1872,17 @@ interface TopicAccordionProps {
     onToggleCompletion: (subtopicId: string) => void;
     completedTopics: Set<string>;
     onToggleTopicCompletion: (topicId: string) => void;
-    resourceLinks?: { id: string; topicId: string; type: string; title: string; url: string }[];
+    resourceLinks?: { id: string; topicId: string; type: string; title: string; url: string; instructions?: string; questions?: QuizResourceQuestion[] }[];
+    // Quiz-related props: when present, enable the learner-facing Take Quiz
+    // flow inside this accordion's subtopic resource rows.
+    userId?: string;
+    courseId?: string;
+    latestQuizScores?: Record<string, { score: number; total: number }>;
+    onQuizSubmitted?: (quizId: string, result: { score: number; total: number }) => void;
 }
 
-const TopicAccordion: React.FC<TopicAccordionProps> = ({ topic, progress, bookmarkedSubtopics, onToggleBookmark, userRole, completedSubtopics, onToggleCompletion, completedTopics, onToggleTopicCompletion, resourceLinks = [] }) => {
+const TopicAccordion: React.FC<TopicAccordionProps> = ({ topic, progress, bookmarkedSubtopics, onToggleBookmark, userRole, completedSubtopics, onToggleCompletion, completedTopics, onToggleTopicCompletion, resourceLinks = [], userId, courseId, latestQuizScores, onQuizSubmitted }) => {
+    const [openQuizId, setOpenQuizId] = React.useState<string | null>(null);
     const [isOpen, setIsOpen] = React.useState(true);
     const displayTitle = topic.title.replace('Module', 'Learning Unit');
 
@@ -1976,21 +1991,111 @@ const TopicAccordion: React.FC<TopicAccordionProps> = ({ topic, progress, bookma
                                         </div>
                                         {subtopicLinks.length > 0 && (
                                             <div className="ml-11 mt-2 space-y-1.5">
-                                                {subtopicLinks.map(rl => (
-                                                    <a
-                                                        key={rl.id}
-                                                        href={rl.url}
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                        className="flex items-center gap-2 text-sm text-blue-500 hover:text-blue-400 hover:underline"
-                                                    >
-                                                        <Icon
-                                                            name={rl.type === 'youtube' ? IconName.Video : rl.type === 'quiz' ? IconName.FileText : rl.type === 'document' ? IconName.FileText : rl.type === 'activity' ? IconName.Award : IconName.ExternalLink}
-                                                            className="w-3.5 h-3.5 flex-shrink-0"
-                                                        />
-                                                        <span className="truncate">{rl.title || rl.url}</span>
-                                                    </a>
-                                                ))}
+                                                {subtopicLinks.map(rl => {
+                                                    // Activity resources can carry free-text instructions
+                                                    // instead of a URL. If `instructions` is set and
+                                                    // non-empty, render a non-clickable block with the
+                                                    // title + text; otherwise fall through to the normal
+                                                    // anchor-tag rendering.
+                                                    // Quiz: learners get a Take Quiz button that opens
+                                                    // the QuizTakerModal. Developers / admins / trainers
+                                                    // just see a summary badge (no taker UI — they
+                                                    // already author the quiz from CourseEditor).
+                                                    const isQuiz = rl.type === 'quiz' && Array.isArray(rl.questions) && rl.questions.length > 0;
+                                                    if (isQuiz) {
+                                                        const questions = rl.questions as QuizResourceQuestion[];
+                                                        const prev = latestQuizScores?.[rl.id] || null;
+                                                        const canTake = userRole === UserRole.Learner && !!userId && !!courseId;
+                                                        return (
+                                                            <div key={rl.id}>
+                                                                <div className="p-2 rounded-md bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800/50 flex items-center justify-between gap-2">
+                                                                    <div className="flex items-center gap-2 min-w-0">
+                                                                        <Icon
+                                                                            name={IconName.FileText}
+                                                                            className="w-3.5 h-3.5 flex-shrink-0 text-green-600 dark:text-green-400"
+                                                                        />
+                                                                        <span className="text-sm font-semibold text-green-700 dark:text-green-300 truncate">
+                                                                            {rl.title || 'Quiz'}
+                                                                        </span>
+                                                                        <span className="text-[11px] text-green-600/80 dark:text-green-400/80 flex-shrink-0">
+                                                                            · {questions.length} question{questions.length === 1 ? '' : 's'}
+                                                                        </span>
+                                                                        {prev && (
+                                                                            <span className="text-[11px] font-semibold px-1.5 py-0.5 rounded bg-green-200 dark:bg-green-800/60 text-green-800 dark:text-green-200 flex-shrink-0">
+                                                                                Last: {prev.score}/{prev.total}
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                    {canTake && (
+                                                                        <button
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                setOpenQuizId(rl.id);
+                                                                            }}
+                                                                            className="flex-shrink-0 text-xs font-semibold px-2.5 py-1 rounded-md bg-green-600 text-white hover:bg-green-700 transition-colors"
+                                                                        >
+                                                                            {prev ? 'Retake Quiz' : 'Take Quiz'}
+                                                                        </button>
+                                                                    )}
+                                                                </div>
+                                                                {openQuizId === rl.id && canTake && (
+                                                                    <QuizTakerModal
+                                                                        title={rl.title || 'Quiz'}
+                                                                        questions={questions}
+                                                                        userId={userId!}
+                                                                        courseId={courseId!}
+                                                                        quizId={rl.id}
+                                                                        previousScore={prev}
+                                                                        onClose={() => setOpenQuizId(null)}
+                                                                        onSubmitted={(result) => {
+                                                                            onQuizSubmitted?.(rl.id, result);
+                                                                        }}
+                                                                    />
+                                                                )}
+                                                            </div>
+                                                        );
+                                                    }
+                                                    const hasInstructions =
+                                                        rl.type === 'activity' &&
+                                                        typeof rl.instructions === 'string' &&
+                                                        rl.instructions.trim().length > 0;
+                                                    if (hasInstructions) {
+                                                        return (
+                                                            <div
+                                                                key={rl.id}
+                                                                className="p-2 rounded-md bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800/50"
+                                                            >
+                                                                <div className="flex items-center gap-2 mb-1">
+                                                                    <Icon
+                                                                        name={IconName.Award}
+                                                                        className="w-3.5 h-3.5 flex-shrink-0 text-purple-600 dark:text-purple-400"
+                                                                    />
+                                                                    <span className="text-sm font-semibold text-purple-700 dark:text-purple-300">
+                                                                        {rl.title || 'Activity'}
+                                                                    </span>
+                                                                </div>
+                                                                <p className="text-xs text-gray-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed">
+                                                                    {rl.instructions}
+                                                                </p>
+                                                            </div>
+                                                        );
+                                                    }
+                                                    return (
+                                                        <a
+                                                            key={rl.id}
+                                                            href={rl.url}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="flex items-center gap-2 text-sm text-blue-500 hover:text-blue-400 hover:underline"
+                                                        >
+                                                            <Icon
+                                                                name={rl.type === 'youtube' ? IconName.Video : rl.type === 'quiz' ? IconName.FileText : rl.type === 'document' ? IconName.FileText : rl.type === 'activity' ? IconName.Award : IconName.ExternalLink}
+                                                                className="w-3.5 h-3.5 flex-shrink-0"
+                                                            />
+                                                            <span className="truncate">{rl.title || rl.url}</span>
+                                                        </a>
+                                                    );
+                                                })}
                                             </div>
                                         )}
                                     </li>
@@ -2056,6 +2161,9 @@ export const CourseDetail: React.FC = () => {
 
     const [isGradingView, setIsGradingView] = useState(false);
     const [isLessonsOpen, setIsLessonsOpen] = useState(true);
+    // Latest quiz score per quizId for this learner on this course, used
+    // to show a "Last: 7/10" badge on the Quiz card without refetching.
+    const [latestQuizScores, setLatestQuizScores] = useState<Record<string, { score: number; total: number }>>({});
     const [isAttendanceOpen, setIsAttendanceOpen] = useState(false);
     const [isTraqomOpen, setIsTraqomOpen] = useState(false);
     const [isCourseMenuOpen, setIsCourseMenuOpen] = useState(false);
@@ -2121,6 +2229,37 @@ export const CourseDetail: React.FC = () => {
             }
         }
     }, [userRole, courseDetail]);
+
+    // Fetch this learner's prior quiz attempts on this course so we can show
+    // a "Last: 7/10" badge next to each Quiz resource. Only runs for learners.
+    useEffect(() => {
+        if (userRole !== UserRole.Learner) return;
+        if (!currentUser?.id || !selectedCourse?.id) return;
+        let cancelled = false;
+        (async () => {
+            try {
+                const res = await fetch(`/api/courses/quiz-attempts?userId=${currentUser.id}&courseId=${selectedCourse.id}`);
+                const data = await res.json();
+                if (cancelled || !data?.success || !Array.isArray(data.data)) return;
+                // Rows come back ordered by completed_at DESC, so the first
+                // row we see per quiz_id is already the latest attempt.
+                const latest: Record<string, { score: number; total: number }> = {};
+                for (const row of data.data) {
+                    if (!latest[row.quiz_id]) {
+                        latest[row.quiz_id] = { score: row.score, total: row.total };
+                    }
+                }
+                setLatestQuizScores(latest);
+            } catch (err) {
+                console.error('❌ CourseDetail: failed to load quiz attempts', err);
+            }
+        })();
+        return () => { cancelled = true; };
+    }, [userRole, currentUser?.id, selectedCourse?.id]);
+
+    const handleQuizSubmitted = React.useCallback((quizId: string, result: { score: number; total: number }) => {
+        setLatestQuizScores(prev => ({ ...prev, [quizId]: result }));
+    }, []);
 
     if (!selectedCourse) {
         return null;
@@ -2799,6 +2938,10 @@ export const CourseDetail: React.FC = () => {
                                                         completedTopics={completedTopicsSet}
                                                         onToggleTopicCompletion={toggleTopicCompletion}
                                                         resourceLinks={resourceLinks.filter(rl => topic.subtopics.some(st => st.id === rl.topicId))}
+                                                        userId={currentUser?.id}
+                                                        courseId={selectedCourse?.id}
+                                                        latestQuizScores={latestQuizScores}
+                                                        onQuizSubmitted={handleQuizSubmitted}
                                                     />
                                                 );
                                             })}

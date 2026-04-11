@@ -1,9 +1,57 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useLms } from '@contexts/LmsContext';
 import { View, UserRole, AdminPage, TrainerPage } from '@app-types';
 import { Icon, IconName } from './ui/Icon';
 import { ensureAbsoluteImageUrl } from '@utils/imageUtils';
 import { getFileUrl } from '@/lib/urlHelpers';
+
+// ── Live SGT clock ───────────────────────────────────────────────────────────
+// Two-line compact clock shown in the header next to the profile picture.
+// Renders in Asia/Singapore regardless of the browser's local timezone so
+// the display is consistent with every scheduler / log timestamp in the app.
+// Ticks every 15 seconds — we don't show seconds, so a minute-aligned tick is
+// enough and a 15s cadence makes the minute roll-over feel instant.
+const SgtClock: React.FC = () => {
+  const [now, setNow] = useState<Date>(() => new Date());
+
+  useEffect(() => {
+    const tick = () => setNow(new Date());
+    const intervalId = setInterval(tick, 15_000);
+    return () => clearInterval(intervalId);
+  }, []);
+
+  const { dateStr, timeStr } = useMemo(() => {
+    // Weekday + day + month in SGT, e.g. "Sat 11 Apr"
+    const dateStr = new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Asia/Singapore',
+      weekday: 'short',
+      day: '2-digit',
+      month: 'short',
+    }).format(now);
+    // 12-hour format with AM/PM, e.g. "12:33 AM"
+    const timeStr = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Singapore',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+    }).format(now);
+    return { dateStr, timeStr };
+  }, [now]);
+
+  return (
+    <div
+      className="hidden sm:flex flex-col items-end leading-tight select-none pl-1"
+      title="Current Singapore Time (GMT+8)"
+    >
+      <span className="text-[10px] font-mono text-on-surface-secondary whitespace-nowrap">
+        {dateStr}
+      </span>
+      <span className="text-[10px] font-mono font-semibold text-on-surface whitespace-nowrap">
+        {timeStr}
+      </span>
+    </div>
+  );
+};
 
 // Helper to get display name for a role
 const getRoleDisplayName = (role: UserRole): string => {
@@ -233,7 +281,7 @@ const Header: React.FC = () => {
 
   return (
     <header className="bg-surface shadow-sm sticky top-0 z-30">
-      <div className="container mx-auto px-3 sm:px-4 lg:px-6">
+      <div className="w-full px-3 sm:px-4 lg:px-6">
         <div className="grid grid-cols-3 items-center h-14 sm:h-16">
           {/* Left Section: Logo + Company Name */}
           <div className="flex items-center space-x-2 sm:space-x-3 min-w-0">
@@ -351,6 +399,9 @@ const Header: React.FC = () => {
               </button>
               {isProfileOpen && <ProfileDropdown onClose={() => setIsProfileOpen(false)} />}
             </div>
+
+            {/* Live SGT clock — sits at the far right of the header, right-aligned */}
+            <SgtClock />
           </div>
         </div>
       </div>

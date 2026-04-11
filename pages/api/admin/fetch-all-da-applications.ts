@@ -48,6 +48,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 da.highest_qualification,
                 da.highest_relevant_certification,
                 da.enrolment_status,
+                da.enrolment_id,
+                da.grant_id,
+                da.invoice_id,
+                da.qb_customer_ref,
+                da.auto_enrol_status,
+                da.auto_enrol_error,
                 da.created_at,
                 da.updated_at
             FROM da_application da

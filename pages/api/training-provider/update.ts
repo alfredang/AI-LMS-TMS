@@ -563,7 +563,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             ssg_app3_encryption_key = $46,
             ssg_app4_client_id = $47,
             ssg_app4_client_secret = $48,
-            ssg_default_app = $49
+            ssg_default_app = $49,
+            auto_enrol_direct_applications = $50,
+            auto_generate_qb_invoice = $51,
+            sanitise_after_months = $52
         WHERE id = $36
         RETURNING *
       `;
@@ -617,7 +620,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         profileData.ssgApp3EncryptionKey ?? null,
         profileData.ssgApp4ClientId ?? null,
         profileData.ssgApp4ClientSecret ?? null,
-        profileData.ssgDefaultApp || 'app1'
+        profileData.ssgDefaultApp || 'app1',
+        profileData.adminSettings?.autoEnrolDirectApplications || false,
+        profileData.adminSettings?.autoGenerateQbInvoice || false,
+        Math.max(1, Math.min(60, parseInt(String(profileData.securitySettings?.sanitiseAfterMonths ?? 6), 10) || 6))
       ];
 
       console.log('🔍 File upload parameters being sent to database:', {

@@ -151,6 +151,10 @@ export default async function handler(
       whereConditions.push(`cr.class_status = $${paramCounter}`);
       queryParams.push(classStatus);
       paramCounter++;
+    } else if (classStatus === 'ActiveOnly') {
+      // Default Ongoing Classes view: hide cancelled runs. Pass
+      // classStatus=all explicitly to include cancelled classes.
+      whereConditions.push(`cr.class_status IN ('Confirmed', 'Pending')`);
     }
 
     const parseDDMMYYYY = (d: string) => { const p = d.split(/[\/\-]/); return `${p[2]}-${p[1]}-${p[0]}`; };
@@ -276,7 +280,7 @@ export default async function handler(
         GROUP BY course_run_id
       ) trainee_count ON cr.id = trainee_count.course_run_id
       WHERE ${whereClause}
-      ORDER BY cr.course_run_id DESC
+      ORDER BY cr.start_date ASC NULLS LAST, cr.end_date ASC NULLS LAST
       LIMIT $${paramCounter} OFFSET $${paramCounter + 1}
     `;
 

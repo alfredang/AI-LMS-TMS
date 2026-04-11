@@ -122,6 +122,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         cr.class_type,
         cr.tpg_assigned_trainer_name,
         cr.tpg_assigned_trainer_email,
+        cr.assigned_trainer_name AS legacy_assigned_trainer_name,
         r.session_date,
         r.earliest_start AS start_time,
         r.latest_end AS end_time,
@@ -323,12 +324,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         break;
       }
 
-      // Derive class status: sticky-Cancelled, else Confirmed if local trainer
-      // present, else Pending. Mirrors upcoming-classes.ts:494-504.
+      // Derive class status: sticky-Cancelled, else Confirmed if ANY trainer
+      // signal is present (junction-table local, legacy course_run.assigned_trainer_name,
+      // or tpg_assigned_trainer_name), else Pending. Mirrors upcoming-classes.ts.
+      // Previously this only considered the junction table — rows with a
+      // TPG-only trainer OR a legacy (pre-junction) local trainer would be
+      // stomped back to Pending on every page load.
       const hasLocalTrainer = !!(allLocalPairs[0]?.name);
+      const hasLegacyLocalTrainer = !!((row.legacy_assigned_trainer_name || '').toString().trim());
+      const hasTpgTrainer = !!((row.tpg_assigned_trainer_name || '').toString().trim());
       const derivedStatus: 'Cancelled' | 'Confirmed' | 'Pending' = row.class_status === 'Cancelled'
         ? 'Cancelled'
-        : (hasLocalTrainer ? 'Confirmed' : 'Pending');
+        : ((hasLocalTrainer || hasLegacyLocalTrainer || hasTpgTrainer) ? 'Confirmed' : 'Pending');
 
       // Persist sticky-Confirmed/Pending (never overwrites Cancelled).
       // Dedupe writes across multi-session multi-date rows for the same course run.

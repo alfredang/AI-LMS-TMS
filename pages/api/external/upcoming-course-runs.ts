@@ -514,6 +514,8 @@ export async function runUpcomingCourseRuns() {
 
         // Write first trainer to legacy columns (backward compat)
         // Also write tpg_assigned_trainer_name/email ONLY when trainer came from SSG linkCourseRunTrainer
+        // Also auto-confirm the class: if it was 'Pending' (no trainer yet),
+        // flip to 'Confirmed'. One-directional — never touches 'Cancelled'.
         const primary = candidates[0];
         await pool.query(
           `UPDATE course_run
@@ -522,6 +524,7 @@ export async function runUpcomingCourseRuns() {
                assigned_trainer_email    = $4,
                tpg_assigned_trainer_name  = CASE WHEN $5 THEN $3 ELSE tpg_assigned_trainer_name END,
                tpg_assigned_trainer_email = CASE WHEN $5 THEN $4 ELSE tpg_assigned_trainer_email END,
+               class_status = CASE WHEN class_status = 'Pending' THEN 'Confirmed' ELSE class_status END,
                updated_at                = NOW()
            WHERE id = $1`,
           [run.id, primary.id, primary.name, primary.email, fromSSG]

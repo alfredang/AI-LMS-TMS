@@ -549,6 +549,7 @@ export const ViewDirectApplicationView: React.FC = () => {
     const [isCancelling, setIsCancelling] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
     const [isEnrolling, setIsEnrolling] = useState(false);
+    const [isAutoEnrolling, setIsAutoEnrolling] = useState(false);
 
     // Page navigation modal state
     const [showPageModal, setShowPageModal] = useState(false);
@@ -580,6 +581,7 @@ export const ViewDirectApplicationView: React.FC = () => {
         { value: 'sponsorship_type', label: 'Sponsorship' },
         { value: 'application_date', label: 'Application Date' },
         { value: 'highest_qualification', label: 'Highest Qualification' },
+        { value: 'auto_enrol_status', label: 'Auto-Enrol Status' },
     ];
 
     // Selection handlers
@@ -757,6 +759,46 @@ export const ViewDirectApplicationView: React.FC = () => {
             alert(`Failed to trigger enrolment: ${err instanceof Error ? err.message : 'Unknown error'}`);
         } finally {
             setIsEnrolling(false);
+        }
+    };
+
+    // Trigger Auto-Enrol pipeline (SSG enrolment + grant lookup + optional QB invoice)
+    const handleAutoEnrol = async () => {
+        // Map selected application_ids → row ids for the API
+        const selectedRows = applications.filter(app => selectedIds.has(app.application_id));
+        const rowIds = selectedRows.map(app => app.id).filter(Boolean);
+
+        if (rowIds.length === 0) {
+            alert('No eligible applications selected.');
+            return;
+        }
+
+        const confirmMsg =
+            `Auto-Enrol will run in the background for ${rowIds.length} application(s):\n\n` +
+            `  1. Submit to SSG\n` +
+            `  2. Look up grant ID\n` +
+            `  3. Generate QuickBooks invoice (if toggle enabled)\n\n` +
+            `Status will update as each step completes. Continue?`;
+        if (!window.confirm(confirmMsg)) return;
+
+        setIsAutoEnrolling(true);
+        try {
+            const response = await fetch('/api/admin/auto-enrol-direct-applications', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ applicationIds: rowIds }),
+            });
+            const body = await response.json();
+            if (!response.ok || !body.success) {
+                throw new Error(body.error || `Server error ${response.status}`);
+            }
+            alert(`Queued ${body.queued} application(s) for auto-enrol. Refresh the page in a moment to see status updates.`);
+            setSelectedIds(new Set());
+            fetchApplications();
+        } catch (err) {
+            alert(`Failed to queue auto-enrol: ${err instanceof Error ? err.message : 'Unknown error'}`);
+        } finally {
+            setIsAutoEnrolling(false);
         }
     };
 
@@ -1169,6 +1211,21 @@ export const ViewDirectApplicationView: React.FC = () => {
                             <>
                                 <span className="text-sm text-gray-600 dark:text-gray-300">{selectedIds.size} row(s) selected</span>
                                 <button
+                                    onClick={handleAutoEnrol}
+                                    disabled={isAutoEnrolling || isCancelling || isDeleting || isEnrolling}
+                                    className="inline-flex items-center px-3 py-1.5 text-sm bg-green-600 text-white rounded hover:bg-green-700 disabled:bg-green-400"
+                                    title="Run SSG enrolment + grant lookup + QB invoice pipeline in the background"
+                                >
+                                    {isAutoEnrolling ? (
+                                        <>
+                                            <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-1.5"></div>
+                                            Queuing...
+                                        </>
+                                    ) : (
+                                        'Auto Enrol Selected'
+                                    )}
+                                </button>
+                                <button
                                     onClick={handleCancelEnrolment}
                                     disabled={isCancelling || isDeleting}
                                     className="inline-flex items-center px-3 py-1.5 text-sm bg-red-600 text-white rounded hover:bg-red-700 disabled:bg-red-400"
@@ -1238,6 +1295,9 @@ export const ViewDirectApplicationView: React.FC = () => {
                                             <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Application Status</th>
                                             <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Cancelled By</th>
                                             <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Enrolment Status</th>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Enrolment ID</th>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Grant ID</th>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Auto-Enrol</th>
                                         </tr>
                                     </thead>
                                     <tbody className="bg-white dark:bg-gray-700 divide-y divide-gray-200 dark:divide-gray-600">
@@ -1336,6 +1396,34 @@ export const ViewDirectApplicationView: React.FC = () => {
                                                                 : 'bg-red-100 text-red-800 border-red-200'
                                                             }`}>
                                                             {app.enrolment_status}
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-gray-400">-</span>
+                                                    )}
+                                                </td>
+                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
+                                                    {app.enrolment_id || <span className="text-gray-400">-</span>}
+                                                </td>
+                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
+                                                    {app.grant_id || <span className="text-gray-400">-</span>}
+                                                </td>
+                                                <td className="px-4 py-3 whitespace-nowrap">
+                                                    {app.auto_enrol_status ? (
+                                                        <span
+                                                            title={app.auto_enrol_error || ''}
+                                                            className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full border ${
+                                                                app.auto_enrol_status === 'invoiced'
+                                                                    ? 'bg-green-100 text-green-800 border-green-200'
+                                                                    : app.auto_enrol_status === 'grant_found'
+                                                                        ? 'bg-blue-100 text-blue-800 border-blue-200'
+                                                                        : app.auto_enrol_status === 'enroled'
+                                                                            ? 'bg-indigo-100 text-indigo-800 border-indigo-200'
+                                                                            : app.auto_enrol_status === 'failed'
+                                                                                ? 'bg-red-100 text-red-800 border-red-200'
+                                                                                : 'bg-yellow-100 text-yellow-800 border-yellow-200'
+                                                            }`}
+                                                        >
+                                                            {app.auto_enrol_status}
                                                         </span>
                                                     ) : (
                                                         <span className="text-gray-400">-</span>

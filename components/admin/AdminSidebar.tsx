@@ -62,9 +62,6 @@ const REFERENCE_LINKS = [
     { key: 'tertiaryFmsUrl', label: 'Tertiary FMS' },
     { key: 'tertiaryMmsUrl', label: 'Tertiary MMS' },
     { key: 'tertiaryTpmsUrl', label: 'Tertiary TPMS' },
-];
-
-const N8N_LINKS = [
     { key: 'n8nHost1Url', label: 'n8n Host 1' },
     { key: 'n8nHost2Url', label: 'n8n Host 2' },
 ];
@@ -96,7 +93,6 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate, onSelectWorkflo
         wfAdmin: false,
         wfFinance: false,
         referenceLinks: false,
-        n8nLinks: false,
         usefulLinks: false,
     });
 
@@ -137,53 +133,10 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate, onSelectWorkflo
         <nav className="space-y-6 p-4 bg-white dark:bg-slate-800 text-gray-900 dark:text-white h-full">
             <NavItem page={AdminPage.Dashboard} label="Admin Dashboard" />
 
-            <NavSection title="Workflow Guides" isOpen={openSections.workflowGuides} onToggle={() => toggleSection('workflowGuides')}>
-                <SubSection title="Training" isOpen={openSections.wfTraining} onToggle={() => toggleSection('wfTraining')}>
-                    {[
-                        { id: 'lesson-delivery', label: 'Lesson Delivery', icon: '📚' },
-                        { id: 'assessment', label: 'Assessment', icon: '📝' },
-                    ].map(item => (
-                        <a key={item.id} href="#" onClick={(e) => { e.preventDefault(); setAdminPage(AdminPage.WorkflowGuides); onSelectWorkflow?.(item.id); if (onNavigate) onNavigate(); }} className="flex items-center gap-2 rounded-md px-3 py-2 ml-4 text-sm text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-slate-700 dark:hover:text-white transition-colors">
-                            <span className="text-sm">{item.icon}</span>
-                            <span>{item.label}</span>
-                        </a>
-                    ))}
-                </SubSection>
-                <SubSection title="Admin" isOpen={openSections.wfAdmin} onToggle={() => toggleSection('wfAdmin')}>
-                    {[
-                        { id: 'ssg-process-steps', label: 'SSG Process Steps', icon: '🏛️' },
-                        { id: 'support-ticketing', label: 'Support Ticketing', icon: '🎫' },
-                        { id: 'certificate', label: 'Certificate', icon: '🎓' },
-                        { id: 'trainer-invitation', label: 'Trainer Invitation', icon: '📨' },
-                    ].map(item => (
-                        <a key={item.id} href="#" onClick={(e) => { e.preventDefault(); setAdminPage(AdminPage.WorkflowGuides); onSelectWorkflow?.(item.id); if (onNavigate) onNavigate(); }} className="flex items-center gap-2 rounded-md px-3 py-2 ml-4 text-sm text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-slate-700 dark:hover:text-white transition-colors">
-                            <span className="text-sm">{item.icon}</span>
-                            <span>{item.label}</span>
-                        </a>
-                    ))}
-                </SubSection>
-                <SubSection title="Finance" isOpen={openSections.wfFinance} onToggle={() => toggleSection('wfFinance')}>
-                    {[
-                        { id: 'billing-history', label: 'Billing History', icon: '💰' },
-                        { id: 'proforma-invoice', label: 'Proforma Invoice', icon: '🧾' },
-                        { id: 'personal-invoice', label: 'Personal Invoice', icon: '📄' },
-                        { id: 'company-invoice', label: 'Company Invoice', icon: '🏢' },
-                        { id: 'receipt', label: 'Receipt', icon: '🧾' },
-                    ].map(item => (
-                        <a key={item.id} href="#" onClick={(e) => { e.preventDefault(); setAdminPage(AdminPage.WorkflowGuides); onSelectWorkflow?.(item.id); if (onNavigate) onNavigate(); }} className="flex items-center gap-2 rounded-md px-3 py-2 ml-4 text-sm text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-slate-700 dark:hover:text-white transition-colors">
-                            <span className="text-sm">{item.icon}</span>
-                            <span>{item.label}</span>
-                        </a>
-                    ))}
-                </SubSection>
-            </NavSection>
-
-            <NavSection title="Support Tickets" isOpen={openSections.supportTickets} onToggle={() => toggleSection('supportTickets')}>
-                <NavItem page={AdminPage.SupportTickets} label="View All Tickets" isSubItem />
-            </NavSection>
-
             <NavSection title="Calendar & Scheduler" isOpen={openSections.calendar} onToggle={() => toggleSection('calendar')}>
                 <NavItem page={AdminPage.Calendar} label="View Calendar" isSubItem />
+                <NavItem page={AdminPage.Scheduler} label="Task Scheduler" isSubItem />
+                <NavItem page={AdminPage.SchedulerSummary} label="Schedule Summary" isSubItem />
             </NavSection>
 
             <NavSection title="Course Management" isOpen={openSections.courseManagement} onToggle={() => toggleSection('courseManagement')}>
@@ -196,6 +149,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate, onSelectWorkflo
                 <NavItem page={AdminPage.ViewLearners} label="View Learners" isSubItem />
                 <NavItem page={AdminPage.OngoingClasses} label="Ongoing Classes" isSubItem />
                 <NavItem page={AdminPage.UpcomingClasses} label="Upcoming Classes" isSubItem />
+                <NavItem page={AdminPage.UpcomingEnrolment} label="Upcoming Enrolment" isSubItem />
                 <NavItem page={AdminPage.CompletedClasses} label="Completed Classes" isSubItem />
                 <NavItem page={AdminPage.AssignTrainer} label="Assign Trainer" isSubItem />
                 <NavItem page={AdminPage.AssignStudent} label="Assign Learners" isSubItem />
@@ -259,29 +213,49 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate, onSelectWorkflo
                 <NavItem page={AdminPage.SendCertificateGH} label="Send Certificate (GH)" isSubItem />
             </NavSection>
 
-            <NavSection title="Reference Links" isOpen={openSections.referenceLinks} onToggle={() => toggleSection('referenceLinks')}>
-                {REFERENCE_LINKS.map(({ key, label }) => {
-                    const url = (trainingProviderProfile?.integrations as any)?.[key];
-                    if (!url) return null;
-                    return (
-                        <a
-                            key={key}
-                            href={url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center rounded-md px-3 py-2 text-sm font-medium transition-colors pl-8 text-gray-700 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-slate-700 dark:hover:text-white"
-                        >
-                            {label}
-                            <svg className="w-3 h-3 ml-1.5 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                            </svg>
+            <NavSection title="Workflow Guides" isOpen={openSections.workflowGuides} onToggle={() => toggleSection('workflowGuides')}>
+                <SubSection title="Training" isOpen={openSections.wfTraining} onToggle={() => toggleSection('wfTraining')}>
+                    {[
+                        { id: 'lesson-delivery', label: 'Lesson Delivery', icon: '📚' },
+                        { id: 'assessment', label: 'Assessment', icon: '📝' },
+                    ].map(item => (
+                        <a key={item.id} href="#" onClick={(e) => { e.preventDefault(); setAdminPage(AdminPage.WorkflowGuides); onSelectWorkflow?.(item.id); if (onNavigate) onNavigate(); }} className="flex items-center gap-2 rounded-md px-3 py-2 ml-4 text-sm text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-slate-700 dark:hover:text-white transition-colors">
+                            <span className="text-sm">{item.icon}</span>
+                            <span>{item.label}</span>
                         </a>
-                    );
-                })}
+                    ))}
+                </SubSection>
+                <SubSection title="Admin" isOpen={openSections.wfAdmin} onToggle={() => toggleSection('wfAdmin')}>
+                    {[
+                        { id: 'ssg-process-steps', label: 'SSG Process Steps', icon: '🏛️' },
+                        { id: 'support-ticketing', label: 'Support Ticketing', icon: '🎫' },
+                        { id: 'certificate', label: 'Certificate', icon: '🎓' },
+                        { id: 'trainer-invitation', label: 'Trainer Invitation', icon: '📨' },
+                    ].map(item => (
+                        <a key={item.id} href="#" onClick={(e) => { e.preventDefault(); setAdminPage(AdminPage.WorkflowGuides); onSelectWorkflow?.(item.id); if (onNavigate) onNavigate(); }} className="flex items-center gap-2 rounded-md px-3 py-2 ml-4 text-sm text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-slate-700 dark:hover:text-white transition-colors">
+                            <span className="text-sm">{item.icon}</span>
+                            <span>{item.label}</span>
+                        </a>
+                    ))}
+                </SubSection>
+                <SubSection title="Finance" isOpen={openSections.wfFinance} onToggle={() => toggleSection('wfFinance')}>
+                    {[
+                        { id: 'billing-history', label: 'Billing History', icon: '💰' },
+                        { id: 'proforma-invoice', label: 'Proforma Invoice', icon: '🧾' },
+                        { id: 'personal-invoice', label: 'Personal Invoice', icon: '📄' },
+                        { id: 'company-invoice', label: 'Company Invoice', icon: '🏢' },
+                        { id: 'receipt', label: 'Receipt', icon: '🧾' },
+                    ].map(item => (
+                        <a key={item.id} href="#" onClick={(e) => { e.preventDefault(); setAdminPage(AdminPage.WorkflowGuides); onSelectWorkflow?.(item.id); if (onNavigate) onNavigate(); }} className="flex items-center gap-2 rounded-md px-3 py-2 ml-4 text-sm text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-slate-700 dark:hover:text-white transition-colors">
+                            <span className="text-sm">{item.icon}</span>
+                            <span>{item.label}</span>
+                        </a>
+                    ))}
+                </SubSection>
             </NavSection>
 
-            <NavSection title="n8n Links" isOpen={openSections.n8nLinks} onToggle={() => toggleSection('n8nLinks')}>
-                {N8N_LINKS.map(({ key, label }) => {
+            <NavSection title="Reference Links" isOpen={openSections.referenceLinks} onToggle={() => toggleSection('referenceLinks')}>
+                {REFERENCE_LINKS.map(({ key, label }) => {
                     const url = (trainingProviderProfile?.integrations as any)?.[key];
                     if (!url) return null;
                     return (
@@ -347,6 +321,10 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate, onSelectWorkflo
                 })}
             </NavSection>
 
+            <NavSection title="Support Tickets" isOpen={openSections.supportTickets} onToggle={() => toggleSection('supportTickets')}>
+                <NavItem page={AdminPage.SupportTickets} label="View All Tickets" isSubItem />
+            </NavSection>
+
             <NavSection title="Logging" isOpen={openSections.logging} onToggle={() => toggleSection('logging')}>
                 <NavItem page={AdminPage.AutomationLogs} label="Auto Create Learner Log" isSubItem />
                 <NavItem page={AdminPage.TrainerFolderLogs} label="Auto Create Assessment Records Log" isSubItem />
@@ -354,6 +332,8 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate, onSelectWorkflo
                 <NavItem page={AdminPage.CourseRunDateSyncLogs} label="Course Run Date Sync Log" isSubItem />
                 <NavItem page={AdminPage.UpcomingCourseRunsLog} label="TGS Enrolments & Assign Trainers Log" isSubItem />
                 <NavItem page={AdminPage.SyncTrainerTpgLogs} label="Sync Trainer to TPG Log" isSubItem />
+                <NavItem page={AdminPage.AutoSendTrainerInvitationLog} label="Auto Send Trainer Invitation Log" isSubItem />
+                <NavItem page={AdminPage.AutoSanitiseDataLog} label="Auto Sanitise Data Log" isSubItem />
             </NavSection>
 
         </nav>

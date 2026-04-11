@@ -8,6 +8,7 @@ import Spinner from './ui/Spinner';
 import { generateCourseImage } from '@lib/services/geminiService';
 import { getCourseImageUrl } from '@utils/imageUtils';
 import { getApiUrl } from '@/lib/urlHelpers';
+import QuizEditorModal, { QuizQuestion } from './QuizEditorModal';
 
 const inputGhostClasses = (isTitle: boolean) =>
     `flex-grow border border-transparent hover:border-gray-300 dark:hover:border-gray-600 focus:border-gray-300 dark:focus:border-gray-600 rounded-md px-2 py-1 bg-transparent hover:bg-gray-50 dark:hover:bg-gray-800 focus:bg-gray-50 dark:focus:bg-gray-800 focus:outline-none w-full transition-colors dark:text-white ${isTitle ? 'font-bold text-xl' : 'text-base'}`;
@@ -88,16 +89,27 @@ const EditableTopicAccordion: React.FC<{
     dropTargetSubtopic: { topicId: string; subtopicId: string } | null;
     onSubtopicDragStart: (e: React.DragEvent, topicId: string, subtopicId: string) => void;
     onSubtopicDrop: (e: React.DragEvent, topicId: string, subtopicId: string) => void;
+    onSubtopicDropAtEnd: (e: React.DragEvent, targetTopicId: string) => void;
     onSubtopicDragOver: (e: React.DragEvent, topicId: string, subtopicId: string) => void;
     onSubtopicDragLeave: (e: React.DragEvent) => void;
     onSubtopicDragEnd: (e: React.DragEvent) => void;
+    // Whether any subtopic drag is currently in progress — used to light up
+    // the Add Topic row as a drop target in other topics.
+    isSubtopicDragging: boolean;
     // Drag-and-drop props for the topic itself
     onSelfDragStart: (e: React.DragEvent) => void;
     onSelfDragEnd: (e: React.DragEvent) => void;
-    // Resource links props
-    resourceLinks: { id: string; topicId: string; type: 'file' | 'document' | 'youtube' | 'activity' | 'quiz'; title: string; url: string }[];
+    // Resource links props. `instructions` is an optional free-text field
+    // used by Activity-type resources as an alternative to a URL — the
+    // developer chooses between a clickable link and an in-app instruction
+    // block. Stored in the `resource_links` JSONB column on the course row,
+    // so older rows without the field simply render as URL activities.
+    resourceLinks: { id: string; topicId: string; type: 'file' | 'document' | 'youtube' | 'activity' | 'quiz'; title: string; url: string; instructions?: string; questions?: Array<{ id: string; question: string; options: string[]; correctIndex: number }> }[];
     onAddResourceLink: (topicId: string, type: 'file' | 'document' | 'youtube' | 'activity' | 'quiz') => void;
-    onUpdateResourceLink: (id: string, field: 'title' | 'url', value: string) => void;
+    onUpdateResourceLink: (id: string, field: 'title' | 'url' | 'instructions', value: string) => void;
+    // Quiz rows use a dedicated callback to update title + questions
+    // atomically, since the editor modal edits both together.
+    onUpdateResourceLinkQuiz: (id: string, title: string, questions: QuizQuestion[]) => void;
     onDeleteResourceLink: (id: string) => void;
     onReorderResourceLink: (draggedId: string, targetId: string, parentId: string) => void;
     onMoveResourceLink: (draggedId: string, targetParentId: string) => void;
@@ -106,30 +118,47 @@ const EditableTopicAccordion: React.FC<{
     onResourceLinkDragEnd: () => void;
 }> = ({
     topic, onUpdateTitle, onDelete, onAddSubtopic, onUpdateSubtopic, onDeleteSubtopic,
-    draggedSubtopic, dropTargetSubtopic, onSubtopicDragStart, onSubtopicDrop, onSubtopicDragOver, onSubtopicDragLeave, onSubtopicDragEnd,
+    draggedSubtopic, dropTargetSubtopic, onSubtopicDragStart, onSubtopicDrop, onSubtopicDropAtEnd, onSubtopicDragOver, onSubtopicDragLeave, onSubtopicDragEnd, isSubtopicDragging,
     onSelfDragStart, onSelfDragEnd,
-    resourceLinks, onAddResourceLink, onUpdateResourceLink, onDeleteResourceLink, onReorderResourceLink, onMoveResourceLink,
+    resourceLinks, onAddResourceLink, onUpdateResourceLink, onUpdateResourceLinkQuiz, onDeleteResourceLink, onReorderResourceLink, onMoveResourceLink,
     draggedResourceLinkId, onResourceLinkDragStart, onResourceLinkDragEnd
 }) => {
         const [isSubtopicsOpen, setSubtopicsOpen] = useState(true);
+        // Tracks which Quiz-type resource link row has its editor modal open.
+        // Only one modal at a time; clicking Edit Quiz on a row sets this to
+        // the row id. Closing the modal clears it.
+        const [openQuizEditorId, setOpenQuizEditorId] = useState<string | null>(null);
+        // Resolve the currently-open quiz row once so the modal (rendered
+        // outside the draggable subtree) can bind to it. We search across all
+        // subtopics' resource links so this works regardless of which row
+        // triggered the modal.
+        const activeQuizRl = openQuizEditorId
+            ? resourceLinks.find(rl => rl.id === openQuizEditorId && rl.type === 'quiz')
+            : null;
 
         return (
             <Card className="p-0 overflow-hidden bg-white dark:bg-gray-800">
-                {/* Learning Unit Header */}
-                <div className="p-4 flex items-center justify-between gap-2 bg-gray-50 dark:bg-gray-700 border-b dark:border-gray-600">
-                    <div
-                        draggable
-                        onDragStart={onSelfDragStart}
-                        onDragEnd={onSelfDragEnd}
-                        className="cursor-grab p-1"
-                    >
+                {/* Learning Unit Header — the entire header (except the text
+                    input) is a drag source. Previously only the small grip
+                    icon was draggable which made reordering very hard to hit. */}
+                <div
+                    draggable
+                    onDragStart={onSelfDragStart}
+                    onDragEnd={onSelfDragEnd}
+                    className="p-4 flex items-center justify-between gap-2 bg-gray-50 dark:bg-gray-700 border-b dark:border-gray-600 cursor-grab active:cursor-grabbing"
+                >
+                    <div className="p-1 flex-shrink-0">
                         <Icon name={IconName.DragHandle} className="w-5 h-5 text-gray-400" />
                     </div>
                     <input
                         type="text"
                         value={topic.title}
                         onChange={e => onUpdateTitle(topic.id, e.target.value)}
-                        className={inputGhostClasses(true)}
+                        // Prevent the text input from eating the drag when the
+                        // user clicks the title to start dragging from there.
+                        draggable={false}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        className={inputGhostClasses(true) + ' cursor-text'}
                         placeholder="Learning Unit Title"
                     />
                     <div className="flex items-center ml-auto flex-shrink-0">
@@ -259,19 +288,105 @@ const EditableTopicAccordion: React.FC<{
                                                     onChange={e => onUpdateResourceLink(rl.id, 'title', e.target.value)}
                                                     className="flex-1 min-w-0 px-1.5 py-0.5 text-xs border-0 border-b border-transparent hover:border-gray-300 dark:hover:border-gray-600 bg-transparent dark:text-white focus:outline-none focus:border-blue-500"
                                                 />
-                                                <input
-                                                    type="url"
-                                                    placeholder="URL"
-                                                    value={rl.url}
-                                                    draggable={false}
-                                                    onClick={(e) => e.stopPropagation()}
-                                                    onMouseDown={(e) => e.stopPropagation()}
-                                                    onChange={e => onUpdateResourceLink(rl.id, 'url', e.target.value)}
-                                                    className="flex-1 min-w-0 px-1.5 py-0.5 text-xs border-0 border-b border-transparent hover:border-gray-300 dark:hover:border-gray-600 bg-transparent dark:text-white focus:outline-none focus:border-blue-500"
-                                                />
+                                                {rl.type === 'activity' ? (
+                                                    // Activity rows let the developer choose between a URL (external
+                                                    // link) and an inline instructions block (free text). Mode is
+                                                    // implicit from the data: non-empty instructions = instructions
+                                                    // mode, otherwise url mode. The pill button toggles which field
+                                                    // is shown; switching modes clears the *other* field so the row
+                                                    // has exactly one payload.
+                                                    (() => {
+                                                        const isInstructionsMode = !!(rl.instructions && rl.instructions.length > 0);
+                                                        return (
+                                                            <>
+                                                                <button
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        if (isInstructionsMode) {
+                                                                            // Switch to URL mode — clear instructions
+                                                                            onUpdateResourceLink(rl.id, 'instructions', '');
+                                                                        } else {
+                                                                            // Switch to instructions mode — seed with
+                                                                            // a single space so the predicate flips
+                                                                            // (the textarea will be focusable and the
+                                                                            // developer can type their real content).
+                                                                            onUpdateResourceLink(rl.id, 'url', '');
+                                                                            onUpdateResourceLink(rl.id, 'instructions', ' ');
+                                                                        }
+                                                                    }}
+                                                                    className="text-[9px] font-semibold px-1.5 py-0.5 rounded flex-shrink-0 bg-purple-200/60 hover:bg-purple-300/80 dark:bg-purple-900/40 dark:hover:bg-purple-900/60 text-purple-800 dark:text-purple-300 transition-colors"
+                                                                    title={isInstructionsMode ? 'Switch to URL link' : 'Switch to instructions text'}
+                                                                >
+                                                                    {isInstructionsMode ? '📝 Text' : '🔗 URL'}
+                                                                </button>
+                                                                {isInstructionsMode ? (
+                                                                    <textarea
+                                                                        placeholder="Instructions (e.g. steps the learner should follow)"
+                                                                        value={rl.instructions || ''}
+                                                                        draggable={false}
+                                                                        onClick={(e) => e.stopPropagation()}
+                                                                        onMouseDown={(e) => e.stopPropagation()}
+                                                                        onChange={e => onUpdateResourceLink(rl.id, 'instructions', e.target.value)}
+                                                                        rows={2}
+                                                                        className="flex-[2] min-w-0 px-1.5 py-0.5 text-xs border border-purple-200 dark:border-purple-900/50 hover:border-purple-400 dark:hover:border-purple-700 rounded bg-purple-50/30 dark:bg-purple-900/10 dark:text-white focus:outline-none focus:border-purple-500 resize-y leading-snug"
+                                                                    />
+                                                                ) : (
+                                                                    <input
+                                                                        type="url"
+                                                                        placeholder="URL"
+                                                                        value={rl.url}
+                                                                        draggable={false}
+                                                                        onClick={(e) => e.stopPropagation()}
+                                                                        onMouseDown={(e) => e.stopPropagation()}
+                                                                        onChange={e => onUpdateResourceLink(rl.id, 'url', e.target.value)}
+                                                                        className="flex-1 min-w-0 px-1.5 py-0.5 text-xs border-0 border-b border-transparent hover:border-gray-300 dark:hover:border-gray-600 bg-transparent dark:text-white focus:outline-none focus:border-blue-500"
+                                                                    />
+                                                                )}
+                                                            </>
+                                                        );
+                                                    })()
+                                                ) : rl.type === 'quiz' ? (
+                                                    // Quiz rows open a modal to edit questions + correct
+                                                    // answers. The URL input is replaced with a summary
+                                                    // button that shows the current question count.
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setOpenQuizEditorId(rl.id);
+                                                        }}
+                                                        onMouseDown={(e) => e.stopPropagation()}
+                                                        className="flex-1 min-w-0 flex items-center justify-between px-2.5 py-1 text-xs rounded-md border border-green-200 dark:border-green-900/50 hover:border-green-400 dark:hover:border-green-700 bg-green-50/30 dark:bg-green-900/10 text-green-800 dark:text-green-300 font-medium transition-colors"
+                                                    >
+                                                        <span>
+                                                            {rl.questions && rl.questions.length > 0
+                                                                ? `📝 ${rl.questions.length} question${rl.questions.length === 1 ? '' : 's'}`
+                                                                : '📝 Click to add questions'}
+                                                        </span>
+                                                        <span className="text-[10px] opacity-70">Edit Quiz →</span>
+                                                    </button>
+                                                ) : (
+                                                    <input
+                                                        type="url"
+                                                        placeholder="URL"
+                                                        value={rl.url}
+                                                        draggable={false}
+                                                        onClick={(e) => e.stopPropagation()}
+                                                        onMouseDown={(e) => e.stopPropagation()}
+                                                        onChange={e => onUpdateResourceLink(rl.id, 'url', e.target.value)}
+                                                        className="flex-1 min-w-0 px-1.5 py-0.5 text-xs border-0 border-b border-transparent hover:border-gray-300 dark:hover:border-gray-600 bg-transparent dark:text-white focus:outline-none focus:border-blue-500"
+                                                    />
+                                                )}
                                                 <button onClick={() => onDeleteResourceLink(rl.id)} className="p-0.5 text-gray-400 hover:text-red-500 rounded opacity-0 group-hover/rl:opacity-100 transition-opacity flex-shrink-0">
                                                     <Icon name={IconName.Delete} className="w-3 h-3" />
                                                 </button>
+                                                {/* QuizEditorModal is NOT rendered here on purpose:
+                                                    this row is `draggable`, and React synthetic
+                                                    dragstart events would bubble from the modal
+                                                    buttons into the parent drag handler, causing
+                                                    the browser to initiate a drag and swallow the
+                                                    subsequent click (Save Quiz would do nothing).
+                                                    The modal is rendered at the TopicCard root
+                                                    instead — see the bottom of this component. */}
                                             </div>
                                         ))}
                                         <div className="flex gap-1 opacity-0 group-hover:opacity-100 hover:!opacity-100 transition-opacity">
@@ -285,14 +400,43 @@ const EditableTopicAccordion: React.FC<{
                                 </li>
                                 );
                             })}
-                            <li className="pt-2">
+                            <li
+                                className={`pt-2 rounded-md transition-colors ${
+                                    isSubtopicDragging
+                                        ? 'ring-1 ring-dashed ring-blue-400/70 bg-blue-50/30 dark:bg-blue-900/10'
+                                        : ''
+                                }`}
+                                onDragOver={(e) => {
+                                    // Accept a subtopic drop at the end of this topic's list.
+                                    // This is the only way to drop into a learning unit that
+                                    // has zero subtopics, since there's no other drop target.
+                                    if (!draggedSubtopic) return;
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                }}
+                                onDrop={(e) => onSubtopicDropAtEnd(e, topic.id)}
+                            >
                                 <Button size="sm" variant="ghost" onClick={() => onAddSubtopic(topic.id)} className="text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400">
                                     <Icon name={IconName.Add} className="w-4 h-4 mr-2" />
-                                    Add Topic
+                                    {isSubtopicDragging ? 'Drop here to move topic' : 'Add Topic'}
                                 </Button>
                             </li>
                         </ul>
                     </div>
+                )}
+                {/* Quiz editor modal — rendered OUTSIDE the draggable resource
+                    link rows so dragstart events from the modal buttons can't
+                    bubble into the parent drag handler and swallow clicks. */}
+                {activeQuizRl && (
+                    <QuizEditorModal
+                        initialTitle={activeQuizRl.title}
+                        initialQuestions={activeQuizRl.questions || []}
+                        onClose={() => setOpenQuizEditorId(null)}
+                        onSave={(newTitle, newQuestions) => {
+                            onUpdateResourceLinkQuiz(activeQuizRl.id, newTitle, newQuestions);
+                            setOpenQuizEditorId(null);
+                        }}
+                    />
                 )}
             </Card>
         );
@@ -361,7 +505,7 @@ const CourseEditor: React.FC = () => {
     });
 
     // Resource links state (file links, YouTube links, quiz links) — each link belongs to a topic
-    const [resourceLinks, setResourceLinks] = useState<{ id: string; topicId: string; type: 'file' | 'document' | 'youtube' | 'activity' | 'quiz'; title: string; url: string }[]>(
+    const [resourceLinks, setResourceLinks] = useState<{ id: string; topicId: string; type: 'file' | 'document' | 'youtube' | 'activity' | 'quiz'; title: string; url: string; instructions?: string; questions?: Array<{ id: string; question: string; options: string[]; correctIndex: number }> }[]>(
         (course as any).resourceLinks || []
     );
 
@@ -590,8 +734,22 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
     const handleTopicDragStart = (e: React.DragEvent, topicId: string) => {
         setDraggedTopicId(topicId);
         e.dataTransfer.effectAllowed = 'move';
+        // Firefox (and some Chromium builds) silently refuse to start a drag
+        // if setData is never called. We use a custom MIME type that is
+        // unambiguous, so the topic/subtopic/resource-link handlers can tell
+        // what kind of payload is being dragged and bail out if it isn't theirs.
+        try {
+            e.dataTransfer.setData('application/x-lms-topic', topicId);
+            // text/plain is a fallback for browsers that ignore custom types
+            e.dataTransfer.setData('text/plain', topicId);
+        } catch {
+            // Some browsers throw on setData during synthetic events — ignore
+        }
     };
     const handleTopicDragOver = (e: React.DragEvent, topicId: string) => {
+        // Only intercept if an actual topic drag is in progress — otherwise
+        // let the event bubble so subtopic/resource-link handlers can run.
+        if (!draggedTopicId) return;
         e.preventDefault();
         if (topicId !== draggedTopicId) {
             setDropTargetTopicId(topicId);
@@ -601,8 +759,10 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
         setDropTargetTopicId(null);
     };
     const handleTopicDrop = (e: React.DragEvent, dropTargetTopicId: string) => {
+        if (!draggedTopicId) return;
         e.preventDefault();
-        if (!draggedTopicId || draggedTopicId === dropTargetTopicId) return;
+        e.stopPropagation();
+        if (draggedTopicId === dropTargetTopicId) return;
 
         const fromIndex = course.topics.findIndex(t => t.id === draggedTopicId);
         const toIndex = course.topics.findIndex(t => t.id === dropTargetTopicId);
@@ -613,6 +773,9 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
             newTopics.splice(toIndex, 0, removed);
             setCourse(prev => ({ ...prev, topics: newTopics }));
         }
+        // Clear state so the drop indicator disappears immediately
+        setDraggedTopicId(null);
+        setDropTargetTopicId(null);
     };
     const handleTopicDragEnd = () => {
         setDraggedTopicId(null);
@@ -624,44 +787,99 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
         e.stopPropagation();
         setDraggedSubtopic({ topicId, subtopicId });
         e.dataTransfer.effectAllowed = 'move';
+        try {
+            e.dataTransfer.setData('application/x-lms-subtopic', subtopicId);
+            e.dataTransfer.setData('text/plain', subtopicId);
+        } catch { /* ignore */ }
     };
     const handleSubtopicDragOver = (e: React.DragEvent, topicId: string, subtopicId: string) => {
+        // If a topic-level drag is in progress, don't consume this event —
+        // let it bubble up to the parent topic wrapper so the topic reorder
+        // can still register drops that land in a subtopic row.
+        if (draggedTopicId) return;
         e.stopPropagation();
         e.preventDefault();
-        if (draggedSubtopic && draggedSubtopic.topicId === topicId && draggedSubtopic.subtopicId !== subtopicId) {
+        // Accept cross-unit targets: only bail out when we'd be dropping
+        // onto the SAME subtopic the user is dragging (no-op). Any other
+        // subtopic — same learning unit or a different one — is a valid drop.
+        if (draggedSubtopic && draggedSubtopic.subtopicId !== subtopicId) {
             setDropTargetSubtopic({ topicId, subtopicId });
         }
     };
     const handleSubtopicDragLeave = (e: React.DragEvent) => {
+        if (draggedTopicId) return;
         e.stopPropagation();
         e.currentTarget.classList.remove('ring-1', 'ring-blue-400');
         setDropTargetSubtopic(null);
     };
     const handleSubtopicDrop = (e: React.DragEvent, dropTargetTopicId: string, dropTargetSubtopicId: string) => {
+        // If a topic drag is happening, let the event bubble to the topic
+        // wrapper so the topic reorder can complete. Only consume the event
+        // when we're actually handling a subtopic drop.
+        if (draggedTopicId || !draggedSubtopic) return;
         e.stopPropagation();
         e.preventDefault();
-        if (!draggedSubtopic || draggedSubtopic.topicId !== dropTargetTopicId || draggedSubtopic.subtopicId === dropTargetSubtopicId) return;
+        if (draggedSubtopic.subtopicId === dropTargetSubtopicId) return;
 
         setCourse(prev => {
-            const newTopics = [...prev.topics];
-            const topicIndex = newTopics.findIndex(t => t.id === draggedSubtopic.topicId);
-            if (topicIndex === -1) return prev;
+            const newTopics = prev.topics.map(t => ({ ...t, subtopics: [...t.subtopics] }));
+            const srcTopicIdx = newTopics.findIndex(t => t.id === draggedSubtopic.topicId);
+            const dstTopicIdx = newTopics.findIndex(t => t.id === dropTargetTopicId);
+            if (srcTopicIdx === -1 || dstTopicIdx === -1) return prev;
 
-            const topic = { ...newTopics[topicIndex] };
-            const newSubtopics = [...topic.subtopics];
+            const srcSubtopics = newTopics[srcTopicIdx].subtopics;
+            const fromIndex = srcSubtopics.findIndex(st => st.id === draggedSubtopic.subtopicId);
+            if (fromIndex === -1) return prev;
 
-            const fromIndex = newSubtopics.findIndex(st => st.id === draggedSubtopic.subtopicId);
-            const toIndex = newSubtopics.findIndex(st => st.id === dropTargetSubtopicId);
+            // Also migrate any resource_links that belong to the moved subtopic.
+            // (They're keyed by topicId, which in this codebase actually refers
+            // to subtopic id — a historical naming quirk — so no change needed.)
+            const [removed] = srcSubtopics.splice(fromIndex, 1);
 
-            if (fromIndex !== -1 && toIndex !== -1) {
-                const [removed] = newSubtopics.splice(fromIndex, 1);
-                newSubtopics.splice(toIndex, 0, removed);
-                topic.subtopics = newSubtopics;
-                newTopics[topicIndex] = topic;
-                return { ...prev, topics: newTopics };
+            // Insert at the target subtopic's index inside the destination topic
+            const dstSubtopics = newTopics[dstTopicIdx].subtopics;
+            const toIndex = dstSubtopics.findIndex(st => st.id === dropTargetSubtopicId);
+            if (toIndex === -1) {
+                // Shouldn't happen, but be safe: append
+                dstSubtopics.push(removed);
+            } else {
+                dstSubtopics.splice(toIndex, 0, removed);
             }
-            return prev;
+
+            return { ...prev, topics: newTopics };
         });
+    };
+
+    // Drop the dragged subtopic at the END of a target topic's subtopics list.
+    // Used by the "Add Topic" row which acts as a fallback drop target for
+    // learning units that have no subtopics (or when the user just wants to
+    // append rather than insert at a specific position).
+    const handleSubtopicDropAtEnd = (e: React.DragEvent, targetTopicId: string) => {
+        if (draggedTopicId || !draggedSubtopic) return;
+        e.stopPropagation();
+        e.preventDefault();
+        if (draggedSubtopic.topicId === targetTopicId) {
+            // Check whether the subtopic is already last in its own topic
+            const sourceTopic = course.topics.find(t => t.id === targetTopicId);
+            if (sourceTopic && sourceTopic.subtopics[sourceTopic.subtopics.length - 1]?.id === draggedSubtopic.subtopicId) {
+                return; // already at the end — no-op
+            }
+        }
+        setCourse(prev => {
+            const newTopics = prev.topics.map(t => ({ ...t, subtopics: [...t.subtopics] }));
+            const srcTopicIdx = newTopics.findIndex(t => t.id === draggedSubtopic.topicId);
+            const dstTopicIdx = newTopics.findIndex(t => t.id === targetTopicId);
+            if (srcTopicIdx === -1 || dstTopicIdx === -1) return prev;
+
+            const srcSubtopics = newTopics[srcTopicIdx].subtopics;
+            const fromIndex = srcSubtopics.findIndex(st => st.id === draggedSubtopic.subtopicId);
+            if (fromIndex === -1) return prev;
+
+            const [removed] = srcSubtopics.splice(fromIndex, 1);
+            newTopics[dstTopicIdx].subtopics.push(removed);
+            return { ...prev, topics: newTopics };
+        });
+        setDropTargetSubtopic(null);
     };
     const handleSubtopicDragEnd = (e: React.DragEvent) => {
         e.stopPropagation();
@@ -845,7 +1063,22 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                     ? course.assessmentMethods.practicalExam.link
                     : (practicalPerformanceInputType === 'link' ? (course.practicalPerformanceAssessmentLink || null) : null),
                 assessmentMethods: course.assessmentMethods || null,
-                resourceLinks: resourceLinks.filter(rl => rl.url.trim() !== ''),
+                // Drop rows that have no payload at all. Activity-type rows
+                // can use instructions instead of a URL; Quiz-type rows can
+                // use in-app questions instead of a URL. Other resource
+                // types still require a URL.
+                resourceLinks: resourceLinks.filter(rl => {
+                    const hasUrl = rl.url.trim() !== '';
+                    const hasInstructions =
+                        rl.type === 'activity' &&
+                        typeof rl.instructions === 'string' &&
+                        rl.instructions.trim() !== '';
+                    const hasQuizQuestions =
+                        rl.type === 'quiz' &&
+                        Array.isArray(rl.questions) &&
+                        rl.questions.length > 0;
+                    return hasUrl || hasInstructions || hasQuizQuestions;
+                }),
                 // Convert topics to learning units with position
                 learningUnits: course.topics.map((topic, index) => ({
                     id: topic.id,
@@ -1100,8 +1333,14 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
         setResourceLinks(prev => [...prev, { id: `rl_${Date.now()}`, topicId, type, title: '', url: '' }]);
     };
 
-    const updateResourceLink = (id: string, field: 'title' | 'url', value: string) => {
+    const updateResourceLink = (id: string, field: 'title' | 'url' | 'instructions', value: string) => {
         setResourceLinks(prev => prev.map(rl => rl.id === id ? { ...rl, [field]: value } : rl));
+    };
+
+    const updateResourceLinkQuiz = (id: string, title: string, questions: QuizQuestion[]) => {
+        setResourceLinks(prev => prev.map(rl =>
+            rl.id === id ? { ...rl, title, questions } : rl
+        ));
     };
 
     const deleteResourceLink = (id: string) => {
@@ -1925,7 +2164,24 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
 
                     {role === UserRole.Developer && (
                         <div className="space-y-4">
-                            <h3 className="text-xl font-bold px-1">Lesson</h3>
+                            {/* Lesson header row — the save buttons are mirrored here
+                                so developers can save without scrolling back up to
+                                the top of the page after editing topics/resources. */}
+                            <div className="flex flex-wrap items-center justify-between gap-3 px-1">
+                                <h3 className="text-xl font-bold">Lesson</h3>
+                                {!isReadOnly && (
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        {!isNewCourse && (
+                                            <Button variant="outline" size="sm" onClick={() => handleSaveCourse(true)} disabled={isSaving}>
+                                                {isSaving ? <Spinner size="sm" /> : 'Save & Continue Editing'}
+                                            </Button>
+                                        )}
+                                        <Button variant="primary" size="sm" onClick={() => handleSaveCourse(false)} disabled={isSaving}>
+                                            {isSaving ? <Spinner size="sm" /> : (isNewCourse ? 'Create Course' : 'Save Changes')}
+                                        </Button>
+                                    </div>
+                                )}
+                            </div>
                             {course.topics.map(topic => (
                                 <div
                                     key={topic.id}
@@ -1948,12 +2204,15 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                         dropTargetSubtopic={dropTargetSubtopic}
                                         onSubtopicDragStart={handleSubtopicDragStart}
                                         onSubtopicDrop={handleSubtopicDrop}
+                                        onSubtopicDropAtEnd={handleSubtopicDropAtEnd}
                                         onSubtopicDragOver={handleSubtopicDragOver}
                                         onSubtopicDragLeave={handleSubtopicDragLeave}
                                         onSubtopicDragEnd={handleSubtopicDragEnd}
+                                        isSubtopicDragging={!!draggedSubtopic}
                                         resourceLinks={resourceLinks.filter(rl => topic.subtopics.some(st => st.id === rl.topicId))}
                                         onAddResourceLink={addResourceLink}
                                         onUpdateResourceLink={updateResourceLink}
+                                        onUpdateResourceLinkQuiz={updateResourceLinkQuiz}
                                         onDeleteResourceLink={deleteResourceLink}
                                         onReorderResourceLink={reorderResourceLink}
                                         onMoveResourceLink={moveResourceLink}

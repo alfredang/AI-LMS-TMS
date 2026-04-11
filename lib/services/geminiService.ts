@@ -252,6 +252,102 @@ Return the response in the following JSON format:
   }
 };
 
+/**
+ * Generate multiple-choice quiz questions that match the exact shape used by
+ * the in-course QuizEditorModal / QuizTakerModal (`QuizQuestion` from
+ * components/QuizEditorModal.tsx). Each question has 4 options and a
+ * correctIndex (0-3). Caller is responsible for assigning question IDs.
+ *
+ * Uses the same Gemini key + model pathway as the rest of the app — key is
+ * loaded from Company Setting → Credential Setting via `/api/config/gemini-key`
+ * inside `callGeminiAPI`.
+ */
+export interface GeneratedQuizQuestion {
+  question: string;
+  options: string[];
+  correctIndex: number;
+}
+
+export const generateQuizQuestions = async (
+  topic: string,
+  count: number = 5,
+  instruction?: string,
+  courseDetails?: CourseDetails | null
+): Promise<GeneratedQuizQuestion[]> => {
+  const safeCount = Math.max(1, Math.min(10, Math.floor(count)));
+  const courseContext = generateCourseContext(courseDetails);
+
+  const prompt = `You are an expert quiz author for a vocational training platform. Generate exactly ${safeCount} high-quality multiple-choice questions about: "${topic}".
+
+Requirements:
+- Each question MUST have exactly 4 distinct options.
+- Exactly ONE option is correct. Indicate the correct option by its 0-based index in the "correctIndex" field (must be an integer between 0 and 3).
+- Questions should test understanding, not trivia.
+- Keep each question under 200 characters and each option under 120 characters.
+- Do NOT include any explanations, prefixes like "A.", "B.", or extra commentary — just the plain option text.
+- Do NOT repeat the correct option as one of the distractors.
+${instruction ? `\nAdditional instructions from the author:\n${instruction}\n` : ''}${courseContext}
+
+Return ONLY a raw JSON object (no markdown fences, no preamble) in exactly this shape:
+{
+  "questions": [
+    {
+      "question": "Question text here",
+      "options": ["Option 1", "Option 2", "Option 3", "Option 4"],
+      "correctIndex": 0
+    }
+  ]
+}`;
+
+  const response = await callGeminiAPI(prompt, 'gemini-2.5-flash', {
+    responseFormat: 'json',
+  });
+
+  // Defensive parse — strip any stray code fences the model might add
+  let cleaned = response.trim();
+  if (cleaned.startsWith('```')) {
+    cleaned = cleaned.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '');
+  }
+
+  let parsed: any;
+  try {
+    parsed = JSON.parse(cleaned);
+  } catch (err) {
+    console.error('Failed to parse quiz JSON from Gemini:', cleaned);
+    throw new Error('The AI returned an invalid response. Please try again.');
+  }
+
+  const rawQuestions = Array.isArray(parsed?.questions) ? parsed.questions : [];
+  if (rawQuestions.length === 0) {
+    throw new Error('The AI did not return any questions. Please try a more specific topic.');
+  }
+
+  // Validate + normalise each question. Skip malformed ones silently so the
+  // caller at least gets something usable.
+  const validated: GeneratedQuizQuestion[] = [];
+  for (const q of rawQuestions) {
+    if (!q || typeof q.question !== 'string' || !q.question.trim()) continue;
+    if (!Array.isArray(q.options) || q.options.length < 2) continue;
+    const opts = q.options.map((o: any) => String(o || '').trim()).filter((o: string) => o.length > 0);
+    if (opts.length < 2) continue;
+    // Ensure at most 4 options (our modal enforces MIN 2 / MAX 4)
+    const trimmedOpts = opts.slice(0, 4);
+    let correctIdx = typeof q.correctIndex === 'number' && Number.isInteger(q.correctIndex) ? q.correctIndex : 0;
+    if (correctIdx < 0 || correctIdx >= trimmedOpts.length) correctIdx = 0;
+    validated.push({
+      question: q.question.trim(),
+      options: trimmedOpts,
+      correctIndex: correctIdx,
+    });
+  }
+
+  if (validated.length === 0) {
+    throw new Error('The AI response was missing valid questions. Please try again.');
+  }
+
+  return validated;
+};
+
 export const generateCourseContent = async (topic: string, instruction?: string, courseDetails?: CourseDetails | null): Promise<string> => {
   try {
     let courseContext = '';

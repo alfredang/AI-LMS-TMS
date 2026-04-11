@@ -104,7 +104,10 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
     const [courseCode, setCourseCode] = useState('');
     const [courseRunId, setCourseRunId] = useState('');
     const [selectedTrainer, setSelectedTrainer] = useState('');
-    const [selectedClassStatus, setSelectedClassStatus] = useState<'all' | 'Confirmed' | 'Pending' | 'Cancelled'>('all');
+    // Default to 'ActiveOnly' (Pending + Confirmed) so the Upcoming Classes
+    // list doesn't clutter with cancelled runs. Admins can switch to 'all' or
+    // 'Cancelled' from the Advanced Filters dropdown to see cancelled classes.
+    const [selectedClassStatus, setSelectedClassStatus] = useState<'all' | 'ActiveOnly' | 'Confirmed' | 'Pending' | 'Cancelled'>('ActiveOnly');
     const [selectedClassType, setSelectedClassType] = useState<'all' | 'Physical' | 'Virtual' | 'Hybrid'>('all');
     const [selectedCourseType, setSelectedCourseType] = useState<'all' | 'WSQ' | 'IBF' | 'Non-WSQ'>('all');
     const [startDateFrom, setStartDateFrom] = useState('');
@@ -194,6 +197,9 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
             if (debouncedCourseCode) params.append('courseCode', debouncedCourseCode);
             if (debouncedCourseRunId) params.append('courseRunId', debouncedCourseRunId);
             if (selectedTrainer) params.append('trainer', selectedTrainer);
+            // Pass classStatus through unless the admin explicitly picks 'all'
+            // (which means "no filter — include cancelled"). 'ActiveOnly' is
+            // the new default and maps to "Confirmed OR Pending" server-side.
             if (selectedClassStatus !== 'all') params.append('classStatus', selectedClassStatus);
             if (selectedClassType !== 'all') params.append('classType', selectedClassType);
             if (selectedCourseType !== 'all') params.append('courseType', selectedCourseType);
@@ -272,6 +278,21 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
         fetchUpcomingClasses();
     }, [currentPage, debouncedSearch, debouncedCourseTitle, debouncedCourseCode, debouncedCourseRunId, selectedTrainer, selectedClassStatus, selectedClassType, selectedCourseType, debouncedStartDate, debouncedEndDate]);
 
+    // Auto-refresh when the tab becomes visible again. Common flow: admin
+    // sends an invitation, switches to email to test, then comes back — this
+    // picks up any trainer accept/decline that happened while away.
+    useEffect(() => {
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'visible') {
+                console.log('👁️ Tab visible again — refetching upcoming classes');
+                fetchUpcomingClasses();
+            }
+        };
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
     // Date formatting function
     const formatDateInput = (value: string) => {
         const numeric = value.replace(/\D/g, '');
@@ -300,7 +321,9 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
         setCourseCode('');
         setCourseRunId('');
         setSelectedTrainer('');
-        setSelectedClassStatus('all');
+        // Reset to the default view (Pending + Confirmed), not 'all' —
+        // 'all' would surface cancelled runs which admins usually don't want.
+        setSelectedClassStatus('ActiveOnly');
         setSelectedClassType('all');
         setSelectedCourseType('all');
         setStartDateFrom('');
@@ -421,6 +444,25 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
                     <h3 className="text-3xl font-bold dark:text-white">Upcoming Classes</h3>
                     <div className="flex gap-2">
+                        <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => fetchUpcomingClasses()}
+                            disabled={loading}
+                            title="Pull the latest data (use this after a trainer accepts/declines an invitation)"
+                        >
+                            <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                strokeWidth={2}
+                                stroke="currentColor"
+                                className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`}
+                            >
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992V4.356m0 4.992-3.181-3.183a8.25 8.25 0 0 0-13.803 3.7M4.031 9.865a8.25 8.25 0 0 0 13.803 3.7l3.181-3.182m-4.991 0h4.991v-4.99" />
+                            </svg>
+                            Refresh
+                        </Button>
                         <Button
                             variant="secondary"
                             size="sm"
@@ -572,13 +614,14 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Class Status</label>
                                             <select
                                                 value={selectedClassStatus}
-                                                onChange={(e) => setSelectedClassStatus(e.target.value as 'all' | 'Confirmed' | 'Pending' | 'Cancelled')}
+                                                onChange={(e) => setSelectedClassStatus(e.target.value as 'all' | 'ActiveOnly' | 'Confirmed' | 'Pending' | 'Cancelled')}
                                                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                                             >
-                                                <option value="all">All</option>
-                                                <option value="Confirmed">Confirmed</option>
-                                                <option value="Pending">Pending</option>
-                                                <option value="Cancelled">Cancelled</option>
+                                                <option value="ActiveOnly">Active (Pending + Confirmed)</option>
+                                                <option value="all">All (incl. Cancelled)</option>
+                                                <option value="Confirmed">Confirmed only</option>
+                                                <option value="Pending">Pending only</option>
+                                                <option value="Cancelled">Cancelled only</option>
                                             </select>
                                         </div>
 
@@ -660,7 +703,8 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                         <Icon name={IconName.BookOpen} className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                         <p className="text-gray-500 text-lg">No upcoming classes found</p>
                         <p className="text-gray-400 text-sm mt-2">
-                            {searchQuery || courseTitle || courseCode || courseRunId || selectedTrainer || selectedClassStatus !== 'all' || selectedClassType !== 'all' || selectedCourseType !== 'all' || startDateFrom || endDateUntil
+                            {/* 'ActiveOnly' is the default — don't count it as a user-applied filter */}
+                            {searchQuery || courseTitle || courseCode || courseRunId || selectedTrainer || (selectedClassStatus !== 'all' && selectedClassStatus !== 'ActiveOnly') || selectedClassType !== 'all' || selectedCourseType !== 'all' || startDateFrom || endDateUntil
                                 ? 'Try adjusting your search filters'
                                 : 'No classes are scheduled for the future'}
                         </p>
@@ -831,12 +875,10 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                             </td>
                                             <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">
                                                 <div className="flex items-center gap-2">
-                                                    {classItem.latestInvitationStatus && (
+                                                    {(classItem.latestInvitationStatus === 'accepted' || classItem.latestInvitationStatus === 'declined') && (
                                                         <span className={`inline-flex px-2 py-0.5 text-xs font-semibold rounded-full ${classItem.latestInvitationStatus === 'accepted'
                                                             ? 'bg-green-100 text-green-700'
-                                                            : classItem.latestInvitationStatus === 'declined'
-                                                                ? 'bg-red-100 text-red-700'
-                                                                : 'bg-yellow-100 text-yellow-700'
+                                                            : 'bg-red-100 text-red-700'
                                                             }`}>
                                                             {classItem.latestInvitationStatus}
                                                         </span>
@@ -846,13 +888,14 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                                         size="sm"
                                                         onClick={() => handleSendTrainerInvitation(classItem)}
                                                         disabled={!(nextTrainerOverrides[classItem.id] || classItem.nextAvailableTrainer) || sendingInvitationFor === classItem.id}
+                                                        title={classItem.latestInvitationStatus === 'pending' ? 'Resend invitation (overwrites the previous pending one)' : 'Send trainer invitation'}
                                                     >
                                                         {sendingInvitationFor === classItem.id ? (
                                                             <Icon name={IconName.Spinner} className="w-3.5 h-3.5 animate-spin" />
                                                         ) : (
                                                             <>
                                                                 <Icon name={IconName.Send} className="w-3.5 h-3.5 mr-1" />
-                                                                SEND INVITE
+                                                                {classItem.latestInvitationStatus === 'pending' ? 'RESEND' : 'SEND INVITE'}
                                                             </>
                                                         )}
                                                     </Button>

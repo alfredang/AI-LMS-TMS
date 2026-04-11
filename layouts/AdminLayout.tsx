@@ -25,7 +25,7 @@ import OngoingClasses from '../components/admin/OngoingClasses';
 import CompletedClasses from '../components/admin/CompletedClasses';
 import ClassDetailView from '../components/admin/ClassDetailView';
 import { UpcomingClassesTable } from '../components/UpcomingClassesTable';
-import { ClassManagerView, AssignTrainerView, AssignStudentView, AddCourseView, AddCourseRunView, AutomationLogsView, TrainerFolderLogsView, AutoCreateCertificatesLogView, BackfillEnrollmentsView, FetchUpcomingEnrolmentsView, CourseRunDateSyncLogsView, UpcomingCourseRunsLogView, CourseConfirmationEmailLogsView, SyncTrainerTpgLogsView } from '../components/admin/ClassManagementViews';
+import { ClassManagerView, AssignTrainerView, AssignStudentView, AddCourseView, AddCourseRunView, AutomationLogsView, TrainerFolderLogsView, AutoCreateCertificatesLogView, BackfillEnrollmentsView, FetchUpcomingEnrolmentsView, UpcomingEnrolmentView, CourseRunDateSyncLogsView, UpcomingCourseRunsLogView, CourseConfirmationEmailLogsView, SyncTrainerTpgLogsView, AutoSendTrainerInvitationLogView, AutoSanitiseDataLogView } from '../components/admin/ClassManagementViews';
 import { CreateCertificateView, DeleteCertificateView } from '../components/admin/CertificateManagement';
 import { SendCertificateSGView } from '../components/admin/SendCertificateSG';
 import { SendCertificateGHView } from '../components/admin/SendCertificateGH';
@@ -60,6 +60,7 @@ import TrainerAttendanceDashboard from '../components/trainer/TrainerAttendanceD
 import AdminCalendarView from '../components/admin/AdminCalendarView';
 import ViewClassByDateView from '../components/admin/ViewClassByDateView';
 import SchedulerView from '../components/admin/SchedulerView';
+import SchedulerSummaryView from '../components/admin/SchedulerSummaryView';
 import WorkflowGuidesView from '../components/training-provider/WorkflowGuidesView';
 import AddSessionsView from '../components/admin/AddSessionsView';
 import CourseSessionTimingView from '../components/admin/CourseSessionTimingView';
@@ -85,6 +86,7 @@ const ManagementDashboard: React.FC<ManagementDashboardProps> = ({ type }) => {
     { title: "Create New Class", description: "Schedule a new class run from a course template.", icon: IconName.Add, onClick: () => setAdminPage(AdminPage.CreateNewClass) },
     { title: "Enroll Learners", description: "Add or remove learners from a specific class.", icon: IconName.MyAccount, onClick: () => setAdminPage(AdminPage.EnrollLearners) },
     { title: "Assign Trainer", description: "Assign or change the trainer for a class.", icon: IconName.SwitchProfile, onClick: () => setAdminPage(AdminPage.AssignTrainer) },
+    { title: "Upcoming Enrolment", description: "View confirmed enrolments and match with calendar events.", icon: IconName.ClipboardCheck, onClick: () => setAdminPage(AdminPage.UpcomingEnrolment) },
   ];
 
   const tpgManagementLinks: NavBoxProps[] = [
@@ -182,15 +184,19 @@ const PAGE_LABELS: Partial<Record<AdminPage, string>> = {
   [AdminPage.CourseRunDateSyncLogs]: 'Course Run Date Sync Log',
   [AdminPage.UpcomingCourseRunsLog]: 'TGS Enrolments & Assign Trainers Log',
   [AdminPage.SyncTrainerTpgLogs]: 'Sync Trainer to TPG Log',
+  [AdminPage.AutoSendTrainerInvitationLog]: 'Auto Send Trainer Invitation Log',
+  [AdminPage.AutoSanitiseDataLog]: 'Auto Sanitise Data Log',
   [AdminPage.CourseConfirmationEmailLogs]: 'Course Confirmation Email Logs',
   [AdminPage.BackfillEnrollments]: 'Backfill Enrollments',
   [AdminPage.FetchUpcomingEnrolments]: 'Fetch Upcoming Classes Enrolment',
+  [AdminPage.UpcomingEnrolment]: 'Upcoming Enrolment',
   [AdminPage.CreateCertificate]: 'Create Certificate',
   [AdminPage.DeleteCertificate]: 'Delete Certificate',
   [AdminPage.SendCertificateSG]: 'Send Certificate (SG)',
   [AdminPage.SendCertificateGH]: 'Send Certificate (GH)',
   [AdminPage.Calendar]: 'Calendar',
   [AdminPage.Scheduler]: 'Task Scheduler',
+  [AdminPage.SchedulerSummary]: 'Schedule Summary',
   [AdminPage.AddSessions]: 'Add Sessions',
   [AdminPage.CourseSessionTiming]: 'Course Session Timing',
   [AdminPage.SupportTickets]: 'Support Tickets',
@@ -400,12 +406,18 @@ const AdminLayout: React.FC = () => {
         return <UpcomingCourseRunsLogView />;
       case AdminPage.SyncTrainerTpgLogs:
         return <SyncTrainerTpgLogsView />;
+      case AdminPage.AutoSendTrainerInvitationLog:
+        return <AutoSendTrainerInvitationLogView />;
+      case AdminPage.AutoSanitiseDataLog:
+        return <AutoSanitiseDataLogView />;
       case AdminPage.CourseConfirmationEmailLogs:
         return <CourseConfirmationEmailLogsView />;
       case AdminPage.BackfillEnrollments:
         return <BackfillEnrollmentsView />;
       case AdminPage.FetchUpcomingEnrolments:
         return <FetchUpcomingEnrolmentsView />;
+      case AdminPage.UpcomingEnrolment:
+        return <UpcomingEnrolmentView />;
       case AdminPage.CreateCertificate:
         return <CreateCertificateView />;
       case AdminPage.DeleteCertificate:
@@ -418,6 +430,8 @@ const AdminLayout: React.FC = () => {
         return <AdminCalendarView />;
       case AdminPage.Scheduler:
         return <SchedulerView />;
+      case AdminPage.SchedulerSummary:
+        return <SchedulerSummaryView />;
       case AdminPage.WorkflowGuides:
         return <WorkflowGuidesView initialWorkflowId={selectedWorkflowId || undefined} />;
       case AdminPage.SupportTickets:

@@ -6,18 +6,14 @@ import {
   ensureTrainerInvitationTemplateColumns,
   renderInvitationTemplate,
   convertPlainTextToHtml,
-  renderInvitationHtmlEmail,
   formatDateLabel,
-  createInvitationToken,
-  normalizeTrainerName,
-  splitTrainerList,
+  parseCcList,
   DEFAULT_TRAINER_ACCEPT_SUBJECT,
   DEFAULT_TRAINER_ACCEPT_BODY,
   DEFAULT_TRAINER_DECLINE_SUBJECT,
   DEFAULT_TRAINER_DECLINE_BODY,
-  DEFAULT_TRAINER_INVITATION_SUBJECT,
-  DEFAULT_TRAINER_INVITATION_BODY,
 } from '@/lib/trainerInvitations';
+import { sendNextTrainerInvitationForCourseRun } from '@/lib/trainerInvitationSender';
 
 function renderPage(title: string, description: string, tone: 'green' | 'red' | 'gray') {
   const colors = {
@@ -46,7 +42,8 @@ async function sendFollowUpEmail(
   trainerEmail: string,
   subject: string,
   htmlBody: string,
-  tp: any
+  tp: any,
+  ccList?: string[]
 ) {
   try {
     const oauth2Client = new google.auth.OAuth2(
@@ -57,16 +54,22 @@ async function sendFollowUpEmail(
     oauth2Client.setCredentials({ refresh_token: tp.google_refresh_token });
     const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
 
-    const rawEmail = [
+    const headers = [
       `From: ${tp.company_shortname || tp.company_name || 'Training Provider'} <${tp.email_user}>`,
       `Reply-To: ${tp.company_email || tp.email_user}`,
       `To: ${trainerEmail}`,
+    ];
+    if (ccList && ccList.length > 0) {
+      headers.push(`Cc: ${ccList.join(', ')}`);
+    }
+    headers.push(
       `Subject: ${subject}`,
       'MIME-Version: 1.0',
       'Content-Type: text/html; charset=utf-8',
       '',
-      htmlBody,
-    ].join('\r\n');
+      htmlBody
+    );
+    const rawEmail = headers.join('\r\n');
 
     const encodedMessage = Buffer.from(rawEmail)
       .toString('base64')
@@ -87,118 +90,18 @@ async function sendFollowUpEmail(
 
 async function sendNextTrainerInvitation(courseRunUuid: string, tp: any) {
   try {
-    // Get course run details
-    const crResult = await pool.query(
-      `SELECT cr.id, cr.course_run_id, c.title AS course_title, c.course_code,
-              cr.start_date, cr.end_date, c.trainers_list,
-              cr.tpg_assigned_trainer_name
-       FROM course_run cr
-       JOIN course c ON c.id = cr.course_id
-       WHERE cr.id = $1`,
-      [courseRunUuid]
-    );
-    const cr = crResult.rows[0];
-    if (!cr) return;
-
-    // Get already assigned local trainers
-    const localResult = await pool.query(
-      `SELECT trainer_name FROM course_run_trainer WHERE course_run_id = $1`,
-      [courseRunUuid]
-    );
-    const localTrainerSet = new Set(localResult.rows.map((r: any) => normalizeTrainerName(r.trainer_name)));
-
-    // Get all declined invitations
-    const declinedResult = await pool.query(
-      `SELECT trainer_name FROM trainer_invitation WHERE course_run_id = $1 AND status = 'declined'`,
-      [courseRunUuid]
-    );
-    const declinedSet = new Set(declinedResult.rows.map((r: any) => normalizeTrainerName(r.trainer_name)));
-
-    // Get pending invitations
-    const pendingResult = await pool.query(
-      `SELECT trainer_name FROM trainer_invitation WHERE course_run_id = $1 AND status = 'pending'`,
-      [courseRunUuid]
-    );
-    const pendingSet = new Set(pendingResult.rows.map((r: any) => normalizeTrainerName(r.trainer_name)));
-
-    // Find next available trainer from the approved list
-    const approvedTrainers = splitTrainerList(cr.trainers_list);
-    let nextTrainerName: string | null = null;
-
-    for (const name of approvedTrainers) {
-      const normalized = normalizeTrainerName(name);
-      if (localTrainerSet.has(normalized)) continue;
-      if (declinedSet.has(normalized)) continue;
-      if (pendingSet.has(normalized)) continue;
-      nextTrainerName = name;
-      break;
+    const result = await sendNextTrainerInvitationForCourseRun({ courseRunUuid, tp });
+    if (result.status === 'sent') {
+      console.log(
+        `✅ [auto-escalation] course_run=${courseRunUuid} → invited "${result.trainerName}" (${result.trainerEmail})`
+      );
+    } else {
+      console.log(
+        `ℹ️  [auto-escalation] course_run=${courseRunUuid} → ${result.status}: ${result.message}`
+      );
     }
-
-    if (!nextTrainerName) {
-      console.log(`⚠️ No more available trainers for course run ${cr.course_run_id}`);
-      return;
-    }
-
-    // Look up trainer email
-    const trainerResult = await pool.query(
-      `SELECT au.id, au.full_name, au.email
-       FROM app_user au
-       JOIN user_role_map urm ON urm.user_id = au.id
-       WHERE LOWER(au.full_name) = LOWER($1) AND urm.role = 'Trainer'
-       LIMIT 1`,
-      [nextTrainerName]
-    );
-    const trainer = trainerResult.rows[0];
-    if (!trainer?.email) {
-      console.log(`⚠️ No email found for trainer ${nextTrainerName}`);
-      return;
-    }
-
-    // Create invitation
-    const token = createInvitationToken();
-    const siteUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://ai-lms-tms.tertiaryinfo.tech';
-    const acceptUrl = `${siteUrl}/api/public/trainer-invitation/respond?token=${token}&action=accept`;
-    const declineUrl = `${siteUrl}/api/public/trainer-invitation/respond?token=${token}&action=decline`;
-
-    const replacements: Record<string, string> = {
-      COMPANY_SHORT_NAME: tp.company_shortname || tp.company_name || 'Training Provider',
-      TRAINER_NAME: trainer.full_name || nextTrainerName,
-      COURSE_TITLE: cr.course_title || '',
-      COURSE_CODE: cr.course_code || '',
-      COURSE_RUN_ID: cr.course_run_id || '',
-      START_DATE: formatDateLabel(cr.start_date),
-      END_DATE: formatDateLabel(cr.end_date),
-      TPG_TRAINER: cr.tpg_assigned_trainer_name || 'N/A',
-      ACCEPT_URL: acceptUrl,
-      DECLINE_URL: declineUrl,
-    };
-
-    const subject = renderInvitationTemplate(
-      tp.trainer_invitation_email_subject || DEFAULT_TRAINER_INVITATION_SUBJECT,
-      replacements
-    );
-    const body = renderInvitationTemplate(
-      tp.trainer_invitation_email_body || DEFAULT_TRAINER_INVITATION_BODY,
-      replacements
-    );
-    const htmlBody = renderInvitationHtmlEmail(
-      tp.trainer_invitation_email_body || DEFAULT_TRAINER_INVITATION_BODY,
-      replacements,
-      acceptUrl,
-      declineUrl
-    );
-
-    await sendFollowUpEmail(trainer.email, subject, htmlBody, tp);
-
-    await pool.query(
-      `INSERT INTO trainer_invitation (course_run_id, trainer_name, trainer_email, token, status, email_subject, email_body)
-       VALUES ($1, $2, $3, $4, 'pending', $5, $6)`,
-      [courseRunUuid, nextTrainerName, trainer.email, token, subject, body]
-    );
-
-    console.log(`📨 Auto-sent invitation to next trainer: ${nextTrainerName} (${trainer.email})`);
   } catch (e) {
-    console.error('❌ Failed to auto-send next trainer invitation:', e);
+    console.error('❌ [auto-escalation] Failed to auto-send next trainer invitation:', e);
   }
 }
 
@@ -249,49 +152,88 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       [action === 'accept' ? 'accepted' : 'declined', invitation.id]
     );
 
-    // If accepted, assign trainer to course run
+    // If accepted, assign trainer to course run. Isolated in its own
+    // try/catch so a failure here does NOT break the trainer-facing
+    // "Invitation Accepted" page — the invitation status has already been
+    // updated above, and the admin can resync via the Upcoming Classes
+    // Refresh button. Every branch logs loudly so prod failures are visible.
     if (action === 'accept') {
-      const trainerLookup = await pool.query(
-        `SELECT au.id FROM app_user au
-         JOIN trainer_profile tp ON tp.user_id = au.id
-         WHERE LOWER(au.email) = LOWER($1) OR LOWER(au.secondary_email) = LOWER($1)
-         LIMIT 1`,
-        [invitation.trainer_email]
-      );
-      const trainerId = trainerLookup.rows[0]?.id || null;
+      try {
+        const trainerLookup = await pool.query(
+          `SELECT au.id FROM app_user au
+           JOIN trainer_profile tp ON tp.user_id = au.id
+           WHERE LOWER(au.email) = LOWER($1) OR LOWER(au.secondary_email) = LOWER($1)
+           LIMIT 1`,
+          [invitation.trainer_email]
+        );
+        const trainerId = trainerLookup.rows[0]?.id || null;
 
-      await pool.query(`
-        CREATE TABLE IF NOT EXISTS course_run_trainer (
-          id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-          course_run_id UUID NOT NULL REFERENCES course_run(id) ON DELETE CASCADE,
-          trainer_id UUID, trainer_name TEXT NOT NULL, trainer_email TEXT,
-          assigned_at TIMESTAMPTZ DEFAULT NOW()
-        )
-      `);
-      await pool.query(`
-        CREATE UNIQUE INDEX IF NOT EXISTS uq_crt_run_trainer
-        ON course_run_trainer(course_run_id, COALESCE(trainer_id, '00000000-0000-0000-0000-000000000000'))
-      `);
-      await pool.query(
-        `INSERT INTO course_run_trainer (course_run_id, trainer_id, trainer_name, trainer_email)
-         VALUES ($1, $2, $3, $4)
-         ON CONFLICT (course_run_id, COALESCE(trainer_id, '00000000-0000-0000-0000-000000000000'))
-         DO UPDATE SET trainer_name = EXCLUDED.trainer_name, trainer_email = EXCLUDED.trainer_email`,
-        [invitation.course_run_id, trainerId, invitation.trainer_name, invitation.trainer_email]
-      );
+        console.log(
+          `🎯 [trainer-invitation/respond] Accept: course_run=${invitation.course_run_id} ` +
+          `trainer_name="${invitation.trainer_name}" trainer_email="${invitation.trainer_email}" ` +
+          `trainer_id=${trainerId ?? 'NULL (no trainer_profile)'}`
+        );
+
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS course_run_trainer (
+            id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+            course_run_id UUID NOT NULL REFERENCES course_run(id) ON DELETE CASCADE,
+            trainer_id UUID, trainer_name TEXT NOT NULL, trainer_email TEXT,
+            assigned_at TIMESTAMPTZ DEFAULT NOW()
+          )
+        `);
+        await pool.query(`
+          CREATE UNIQUE INDEX IF NOT EXISTS uq_crt_run_trainer
+          ON course_run_trainer(course_run_id, COALESCE(trainer_id, '00000000-0000-0000-0000-000000000000'::uuid))
+        `);
+
+        // Insert with explicit ::uuid cast on the COALESCE literal so the
+        // ON CONFLICT expression matches the unique index signature exactly.
+        // Without the cast, Postgres may refuse to match the expression
+        // index and throw "no unique or exclusion constraint matching the
+        // ON CONFLICT specification".
+        const ins = await pool.query(
+          `INSERT INTO course_run_trainer (course_run_id, trainer_id, trainer_name, trainer_email)
+           VALUES ($1, $2, $3, $4)
+           ON CONFLICT (course_run_id, COALESCE(trainer_id, '00000000-0000-0000-0000-000000000000'::uuid))
+           DO UPDATE SET
+             trainer_name = EXCLUDED.trainer_name,
+             trainer_email = EXCLUDED.trainer_email
+           RETURNING id, (xmax = 0) AS was_inserted`,
+          [invitation.course_run_id, trainerId, invitation.trainer_name, invitation.trainer_email]
+        );
+
+        const row = ins.rows[0];
+        console.log(
+          `✅ [trainer-invitation/respond] course_run_trainer ${row?.was_inserted ? 'INSERTED' : 'UPDATED'} ` +
+          `id=${row?.id} for course_run=${invitation.course_run_id}`
+        );
+      } catch (crtErr) {
+        // Log loudly but do NOT rethrow — the invitation is already marked
+        // accepted and the trainer should still see the thank-you page.
+        // The admin can backfill via the Refresh button / re-run the
+        // accepted invitation from the trainer_invitation table.
+        console.error(
+          `❌ [trainer-invitation/respond] FAILED to upsert course_run_trainer for ` +
+          `course_run=${invitation.course_run_id} trainer="${invitation.trainer_name}":`,
+          crtErr
+        );
+      }
     }
 
     // Get training provider config for sending follow-up emails
     const tpResult = await pool.query(
       `SELECT email_user, company_email, company_name, company_shortname,
               google_client_id, google_client_secret, google_refresh_token,
-              trainer_accept_email_subject, trainer_accept_email_body,
-              trainer_decline_email_subject, trainer_decline_email_body,
-              trainer_invitation_email_subject, trainer_invitation_email_body
+              trainer_accept_email_subject, trainer_accept_email_body, trainer_accept_email_cc,
+              trainer_decline_email_subject, trainer_decline_email_body, trainer_decline_email_cc,
+              trainer_invitation_email_subject, trainer_invitation_email_body, trainer_invitation_email_cc
        FROM training_provider LIMIT 1`
     );
     const tp = tpResult.rows[0];
 
+    // Send the accept/decline acknowledgement email (best-effort; depends on
+    // Gmail OAuth being configured on the training provider).
     if (tp?.email_user && tp?.google_client_id && tp?.google_client_secret && tp?.google_refresh_token) {
       const replacements: Record<string, string> = {
         COMPANY_SHORT_NAME: tp.company_shortname || tp.company_name || 'Training Provider',
@@ -314,7 +256,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           replacements
         );
         const htmlBody = `<div style="font-family:Arial,sans-serif;font-size:14px;color:#334155;line-height:1.6;">${convertPlainTextToHtml(body)}</div>`;
-        await sendFollowUpEmail(invitation.trainer_email, subject, htmlBody, tp);
+        const acceptCc = parseCcList(tp.trainer_accept_email_cc);
+        await sendFollowUpEmail(invitation.trainer_email, subject, htmlBody, tp, acceptCc);
       } else {
         // Send decline acknowledgement email
         const subject = renderInvitationTemplate(
@@ -326,10 +269,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           replacements
         );
         const htmlBody = `<div style="font-family:Arial,sans-serif;font-size:14px;color:#334155;line-height:1.6;">${convertPlainTextToHtml(body)}</div>`;
-        await sendFollowUpEmail(invitation.trainer_email, subject, htmlBody, tp);
+        const declineCc = parseCcList(tp.trainer_decline_email_cc);
+        await sendFollowUpEmail(invitation.trainer_email, subject, htmlBody, tp, declineCc);
+      }
+    }
 
-        // Auto-send invitation to next available trainer
+    // Auto-escalate a decline to the next available trainer. This must run
+    // OUTSIDE the OAuth gate above — the sender loads its own TP config,
+    // and we want the escalation to fire even if the acknowledgement email
+    // failed or Gmail isn't configured. Isolated in its own try/catch so a
+    // failure here cannot break the trainer-facing thank-you page.
+    if (action === 'decline') {
+      try {
+        console.log(
+          `🔁 [trainer-invitation/respond] Auto-escalating decline for course_run=${invitation.course_run_id} ` +
+          `(declined by "${invitation.trainer_name}")`
+        );
         await sendNextTrainerInvitation(invitation.course_run_id, tp);
+      } catch (escErr) {
+        console.error(
+          `❌ [trainer-invitation/respond] Auto-escalation failed for course_run=${invitation.course_run_id}:`,
+          escErr
+        );
       }
     }
 
