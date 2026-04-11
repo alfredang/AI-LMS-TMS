@@ -89,9 +89,13 @@ const EditableTopicAccordion: React.FC<{
     dropTargetSubtopic: { topicId: string; subtopicId: string } | null;
     onSubtopicDragStart: (e: React.DragEvent, topicId: string, subtopicId: string) => void;
     onSubtopicDrop: (e: React.DragEvent, topicId: string, subtopicId: string) => void;
+    onSubtopicDropAtEnd: (e: React.DragEvent, targetTopicId: string) => void;
     onSubtopicDragOver: (e: React.DragEvent, topicId: string, subtopicId: string) => void;
     onSubtopicDragLeave: (e: React.DragEvent) => void;
     onSubtopicDragEnd: (e: React.DragEvent) => void;
+    // Whether any subtopic drag is currently in progress — used to light up
+    // the Add Topic row as a drop target in other topics.
+    isSubtopicDragging: boolean;
     // Drag-and-drop props for the topic itself
     onSelfDragStart: (e: React.DragEvent) => void;
     onSelfDragEnd: (e: React.DragEvent) => void;
@@ -114,7 +118,7 @@ const EditableTopicAccordion: React.FC<{
     onResourceLinkDragEnd: () => void;
 }> = ({
     topic, onUpdateTitle, onDelete, onAddSubtopic, onUpdateSubtopic, onDeleteSubtopic,
-    draggedSubtopic, dropTargetSubtopic, onSubtopicDragStart, onSubtopicDrop, onSubtopicDragOver, onSubtopicDragLeave, onSubtopicDragEnd,
+    draggedSubtopic, dropTargetSubtopic, onSubtopicDragStart, onSubtopicDrop, onSubtopicDropAtEnd, onSubtopicDragOver, onSubtopicDragLeave, onSubtopicDragEnd, isSubtopicDragging,
     onSelfDragStart, onSelfDragEnd,
     resourceLinks, onAddResourceLink, onUpdateResourceLink, onUpdateResourceLinkQuiz, onDeleteResourceLink, onReorderResourceLink, onMoveResourceLink,
     draggedResourceLinkId, onResourceLinkDragStart, onResourceLinkDragEnd
@@ -396,10 +400,25 @@ const EditableTopicAccordion: React.FC<{
                                 </li>
                                 );
                             })}
-                            <li className="pt-2">
+                            <li
+                                className={`pt-2 rounded-md transition-colors ${
+                                    isSubtopicDragging
+                                        ? 'ring-1 ring-dashed ring-blue-400/70 bg-blue-50/30 dark:bg-blue-900/10'
+                                        : ''
+                                }`}
+                                onDragOver={(e) => {
+                                    // Accept a subtopic drop at the end of this topic's list.
+                                    // This is the only way to drop into a learning unit that
+                                    // has zero subtopics, since there's no other drop target.
+                                    if (!draggedSubtopic) return;
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                }}
+                                onDrop={(e) => onSubtopicDropAtEnd(e, topic.id)}
+                            >
                                 <Button size="sm" variant="ghost" onClick={() => onAddSubtopic(topic.id)} className="text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400">
                                     <Icon name={IconName.Add} className="w-4 h-4 mr-2" />
-                                    Add Topic
+                                    {isSubtopicDragging ? 'Drop here to move topic' : 'Add Topic'}
                                 </Button>
                             </li>
                         </ul>
@@ -780,7 +799,10 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
         if (draggedTopicId) return;
         e.stopPropagation();
         e.preventDefault();
-        if (draggedSubtopic && draggedSubtopic.topicId === topicId && draggedSubtopic.subtopicId !== subtopicId) {
+        // Accept cross-unit targets: only bail out when we'd be dropping
+        // onto the SAME subtopic the user is dragging (no-op). Any other
+        // subtopic — same learning unit or a different one — is a valid drop.
+        if (draggedSubtopic && draggedSubtopic.subtopicId !== subtopicId) {
             setDropTargetSubtopic({ topicId, subtopicId });
         }
     };
@@ -797,28 +819,67 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
         if (draggedTopicId || !draggedSubtopic) return;
         e.stopPropagation();
         e.preventDefault();
-        if (draggedSubtopic.topicId !== dropTargetTopicId || draggedSubtopic.subtopicId === dropTargetSubtopicId) return;
+        if (draggedSubtopic.subtopicId === dropTargetSubtopicId) return;
 
         setCourse(prev => {
-            const newTopics = [...prev.topics];
-            const topicIndex = newTopics.findIndex(t => t.id === draggedSubtopic.topicId);
-            if (topicIndex === -1) return prev;
+            const newTopics = prev.topics.map(t => ({ ...t, subtopics: [...t.subtopics] }));
+            const srcTopicIdx = newTopics.findIndex(t => t.id === draggedSubtopic.topicId);
+            const dstTopicIdx = newTopics.findIndex(t => t.id === dropTargetTopicId);
+            if (srcTopicIdx === -1 || dstTopicIdx === -1) return prev;
 
-            const topic = { ...newTopics[topicIndex] };
-            const newSubtopics = [...topic.subtopics];
+            const srcSubtopics = newTopics[srcTopicIdx].subtopics;
+            const fromIndex = srcSubtopics.findIndex(st => st.id === draggedSubtopic.subtopicId);
+            if (fromIndex === -1) return prev;
 
-            const fromIndex = newSubtopics.findIndex(st => st.id === draggedSubtopic.subtopicId);
-            const toIndex = newSubtopics.findIndex(st => st.id === dropTargetSubtopicId);
+            // Also migrate any resource_links that belong to the moved subtopic.
+            // (They're keyed by topicId, which in this codebase actually refers
+            // to subtopic id — a historical naming quirk — so no change needed.)
+            const [removed] = srcSubtopics.splice(fromIndex, 1);
 
-            if (fromIndex !== -1 && toIndex !== -1) {
-                const [removed] = newSubtopics.splice(fromIndex, 1);
-                newSubtopics.splice(toIndex, 0, removed);
-                topic.subtopics = newSubtopics;
-                newTopics[topicIndex] = topic;
-                return { ...prev, topics: newTopics };
+            // Insert at the target subtopic's index inside the destination topic
+            const dstSubtopics = newTopics[dstTopicIdx].subtopics;
+            const toIndex = dstSubtopics.findIndex(st => st.id === dropTargetSubtopicId);
+            if (toIndex === -1) {
+                // Shouldn't happen, but be safe: append
+                dstSubtopics.push(removed);
+            } else {
+                dstSubtopics.splice(toIndex, 0, removed);
             }
-            return prev;
+
+            return { ...prev, topics: newTopics };
         });
+    };
+
+    // Drop the dragged subtopic at the END of a target topic's subtopics list.
+    // Used by the "Add Topic" row which acts as a fallback drop target for
+    // learning units that have no subtopics (or when the user just wants to
+    // append rather than insert at a specific position).
+    const handleSubtopicDropAtEnd = (e: React.DragEvent, targetTopicId: string) => {
+        if (draggedTopicId || !draggedSubtopic) return;
+        e.stopPropagation();
+        e.preventDefault();
+        if (draggedSubtopic.topicId === targetTopicId) {
+            // Check whether the subtopic is already last in its own topic
+            const sourceTopic = course.topics.find(t => t.id === targetTopicId);
+            if (sourceTopic && sourceTopic.subtopics[sourceTopic.subtopics.length - 1]?.id === draggedSubtopic.subtopicId) {
+                return; // already at the end — no-op
+            }
+        }
+        setCourse(prev => {
+            const newTopics = prev.topics.map(t => ({ ...t, subtopics: [...t.subtopics] }));
+            const srcTopicIdx = newTopics.findIndex(t => t.id === draggedSubtopic.topicId);
+            const dstTopicIdx = newTopics.findIndex(t => t.id === targetTopicId);
+            if (srcTopicIdx === -1 || dstTopicIdx === -1) return prev;
+
+            const srcSubtopics = newTopics[srcTopicIdx].subtopics;
+            const fromIndex = srcSubtopics.findIndex(st => st.id === draggedSubtopic.subtopicId);
+            if (fromIndex === -1) return prev;
+
+            const [removed] = srcSubtopics.splice(fromIndex, 1);
+            newTopics[dstTopicIdx].subtopics.push(removed);
+            return { ...prev, topics: newTopics };
+        });
+        setDropTargetSubtopic(null);
     };
     const handleSubtopicDragEnd = (e: React.DragEvent) => {
         e.stopPropagation();
@@ -2143,9 +2204,11 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                         dropTargetSubtopic={dropTargetSubtopic}
                                         onSubtopicDragStart={handleSubtopicDragStart}
                                         onSubtopicDrop={handleSubtopicDrop}
+                                        onSubtopicDropAtEnd={handleSubtopicDropAtEnd}
                                         onSubtopicDragOver={handleSubtopicDragOver}
                                         onSubtopicDragLeave={handleSubtopicDragLeave}
                                         onSubtopicDragEnd={handleSubtopicDragEnd}
+                                        isSubtopicDragging={!!draggedSubtopic}
                                         resourceLinks={resourceLinks.filter(rl => topic.subtopics.some(st => st.id === rl.topicId))}
                                         onAddResourceLink={addResourceLink}
                                         onUpdateResourceLink={updateResourceLink}
