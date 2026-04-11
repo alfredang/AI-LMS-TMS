@@ -1,10 +1,203 @@
 import React, { useState, useEffect, useRef } from 'react';
+import ReactDOM from 'react-dom';
 import { useLms } from '@contexts/LmsContext';
 import { Card } from './ui/Card';
 import { Button } from './ui/Button';
 import { Icon, IconName } from './ui/Icon';
 import { AdminPage } from '@app-types';
 import { getApiUrl } from '@/lib/urlHelpers';
+
+/**
+ * Fixed horizontal scrollbar pinned to the bottom of the viewport.
+ * Syncs scroll position bidirectionally with the table container.
+ */
+const StickyScrollbar: React.FC<{ tableRef: React.RefObject<HTMLDivElement | null> }> = ({ tableRef }) => {
+  const scrollbarRef = useRef<HTMLDivElement>(null);
+  const innerRef = useRef<HTMLDivElement>(null);
+  const syncing = useRef(false);
+  const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
+  const [style, setStyle] = useState<React.CSSProperties>({ display: 'none' });
+
+  useEffect(() => {
+    const el = document.createElement('div');
+    el.id = 'upcoming-sticky-scrollbar-portal';
+    document.body.appendChild(el);
+    setPortalTarget(el);
+    return () => { if (document.body.contains(el)) document.body.removeChild(el); };
+  }, []);
+
+  useEffect(() => {
+    const table = tableRef.current;
+    const scrollbar = scrollbarRef.current;
+    const inner = innerRef.current;
+    if (!table || !scrollbar || !inner) return;
+
+    const update = () => {
+      const rect = table.getBoundingClientRect();
+      const scrollW = table.scrollWidth;
+      const clientW = table.clientWidth;
+      inner.style.width = `${scrollW}px`;
+
+      const overflows = scrollW > clientW;
+      const nativeScrollbarVisible = rect.bottom <= window.innerHeight;
+
+      if (overflows && !nativeScrollbarVisible) {
+        setStyle({
+          position: 'fixed',
+          bottom: 0,
+          left: rect.left,
+          width: rect.width,
+          height: 18,
+          zIndex: 9999,
+          overflowX: 'auto',
+          overflowY: 'hidden',
+          background: '#0f172a',
+        });
+      } else {
+        setStyle({ display: 'none' });
+      }
+    };
+
+    const syncToScrollbar = () => {
+      if (syncing.current) return;
+      syncing.current = true;
+      scrollbar.scrollLeft = table.scrollLeft;
+      requestAnimationFrame(() => { syncing.current = false; });
+    };
+
+    const syncToTable = () => {
+      if (syncing.current) return;
+      syncing.current = true;
+      table.scrollLeft = scrollbar.scrollLeft;
+      requestAnimationFrame(() => { syncing.current = false; });
+    };
+
+    table.addEventListener('scroll', syncToScrollbar);
+    scrollbar.addEventListener('scroll', syncToTable);
+    window.addEventListener('scroll', update, { passive: true });
+    window.addEventListener('resize', update);
+    update();
+
+    return () => {
+      table.removeEventListener('scroll', syncToScrollbar);
+      scrollbar.removeEventListener('scroll', syncToTable);
+      window.removeEventListener('scroll', update);
+      window.removeEventListener('resize', update);
+    };
+  }, [tableRef, portalTarget]);
+
+  if (!portalTarget) return null;
+
+  return ReactDOM.createPortal(
+    <div ref={scrollbarRef} style={style}>
+      <div ref={innerRef} style={{ height: 1 }} />
+    </div>,
+    portalTarget
+  );
+};
+
+/**
+ * Fixed header clone pinned below the site nav (64px).
+ * Clones the real thead and syncs horizontal scroll.
+ */
+const StickyHeader: React.FC<{
+  tableRef: React.RefObject<HTMLDivElement | null>;
+  theadRef: React.RefObject<HTMLTableSectionElement | null>;
+}> = ({ tableRef, theadRef }) => {
+  const cloneRef = useRef<HTMLDivElement>(null);
+  const syncing = useRef(false);
+  const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
+  const [visible, setVisible] = useState(false);
+  const [style, setStyle] = useState<React.CSSProperties>({});
+
+  useEffect(() => {
+    const el = document.createElement('div');
+    el.id = 'upcoming-sticky-header-portal';
+    document.body.appendChild(el);
+    setPortalTarget(el);
+    return () => { if (document.body.contains(el)) document.body.removeChild(el); };
+  }, []);
+
+  useEffect(() => {
+    const table = tableRef.current;
+    const thead = theadRef.current;
+    const clone = cloneRef.current;
+    if (!table || !thead || !clone || !portalTarget) return;
+
+    const SITE_HEADER_HEIGHT = 64;
+
+    const update = () => {
+      const tableRect = table.getBoundingClientRect();
+      const theadRect = thead.getBoundingClientRect();
+
+      const shouldShow = theadRect.top < SITE_HEADER_HEIGHT && tableRect.bottom > SITE_HEADER_HEIGHT + 100;
+
+      setVisible(shouldShow);
+      if (shouldShow) {
+        setStyle({
+          position: 'fixed',
+          top: SITE_HEADER_HEIGHT,
+          left: tableRect.left,
+          width: tableRect.width,
+          zIndex: 25,
+          overflow: 'hidden',
+        });
+
+        const realCells = thead.querySelectorAll('th');
+        clone.innerHTML = '';
+        const cloneTable = document.createElement('table');
+        cloneTable.className = 'w-full text-sm border-collapse';
+        cloneTable.style.width = `${table.scrollWidth}px`;
+        cloneTable.style.marginLeft = `-${table.scrollLeft}px`;
+        const cloneThead = thead.cloneNode(true) as HTMLTableSectionElement;
+        cloneTable.appendChild(cloneThead);
+        clone.appendChild(cloneTable);
+
+        const cloneCells = cloneThead.querySelectorAll('th');
+        realCells.forEach((cell, i) => {
+          if (cloneCells[i]) {
+            (cloneCells[i] as HTMLElement).style.width = `${cell.getBoundingClientRect().width}px`;
+            (cloneCells[i] as HTMLElement).style.minWidth = `${cell.getBoundingClientRect().width}px`;
+          }
+        });
+      }
+    };
+
+    const syncScroll = () => {
+      if (!cloneRef.current) return;
+      const innerTable = cloneRef.current.querySelector('table');
+      if (innerTable) {
+        innerTable.style.marginLeft = `-${table.scrollLeft}px`;
+      }
+    };
+
+    table.addEventListener('scroll', syncScroll);
+    window.addEventListener('scroll', update, { passive: true });
+    window.addEventListener('resize', update);
+    update();
+
+    return () => {
+      table.removeEventListener('scroll', syncScroll);
+      window.removeEventListener('scroll', update);
+      window.removeEventListener('resize', update);
+    };
+  }, [tableRef, theadRef, portalTarget]);
+
+  if (!portalTarget) return null;
+
+  return ReactDOM.createPortal(
+    <div
+      ref={cloneRef}
+      style={{
+        ...style,
+        display: visible ? 'block' : 'none',
+        background: '#1e293b',
+        boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+      }}
+    />,
+    portalTarget
+  );
+};
 
 const getStatusColor = (status: string) => {
     switch (status) {
@@ -157,6 +350,8 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
     const [bulkSelected, setBulkSelected] = useState<Set<string>>(new Set());
     const [bulkDateFrom, setBulkDateFrom] = useState('');
     const [bulkDateTo, setBulkDateTo] = useState('');
+    const tableScrollRef = useRef<HTMLDivElement>(null);
+    const theadRef = useRef<HTMLTableSectionElement>(null);
     const [actionMessage, setActionMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
     // Per-row next trainer overrides (courseRun UUID → selected trainer name)
     const [nextTrainerOverrides, setNextTrainerOverrides] = useState<Record<string, string>>({});
@@ -747,7 +942,7 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                     </div>
                 ) : (
                     <>
-                        <div className="overflow-x-auto">
+                        <div className="overflow-x-auto" ref={tableScrollRef}>
                           {includeOngoing ? (
                             <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                                 <thead className="bg-gray-50 dark:bg-gray-700/50">
@@ -768,10 +963,8 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                 </thead>
                                 <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                                     {upcomingClasses.map((classItem, index) => {
-                                        // Respect Cancelled stickiness from API; otherwise derive from local trainer.
-                                        const status = classItem.classStatus === 'Cancelled'
-                                            ? 'Cancelled'
-                                            : (classItem.assignedTrainerLocal ? 'Confirmed' : 'Pending');
+                                        // Use API-derived status directly (considers junction table, legacy scalar, and TPG trainer).
+                                        const status = classItem.classStatus;
                                         const classType = classItem.classType || 'Physical';
                                         return (
                                             <tr key={index} className="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50">
@@ -814,23 +1007,23 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                 </tbody>
                             </table>
                           ) : (
-                            <table className="divide-y divide-gray-200 dark:divide-gray-700" style={{ tableLayout: 'fixed', width: '2340px' }}>
+                            <table className="w-full divide-y divide-gray-200 dark:divide-gray-700" style={{ tableLayout: 'auto' }}>
                                 <colgroup>
-                                    <col style={{ width: '90px' }} />
-                                    <col style={{ width: '420px' }} />
-                                    <col style={{ width: '160px' }} />
-                                    <col style={{ width: '110px' }} />
-                                    <col style={{ width: '100px' }} />
-                                    <col style={{ width: '110px' }} />
-                                    <col style={{ width: '90px' }} />
-                                    <col style={{ width: '80px' }} />
-                                    <col style={{ width: '200px' }} />
-                                    <col style={{ width: '200px' }} />
-                                    <col style={{ width: '180px' }} />
-                                    <col style={{ width: '220px' }} />
-                                    <col style={{ width: '90px' }} />
+                                    <col style={{ minWidth: '90px', width: '5%' }} />
+                                    <col style={{ minWidth: '250px' }} />
+                                    <col style={{ minWidth: '140px', width: '9%' }} />
+                                    <col style={{ minWidth: '100px', width: '6%' }} />
+                                    <col style={{ minWidth: '80px', width: '5%' }} />
+                                    <col style={{ minWidth: '90px', width: '6%' }} />
+                                    <col style={{ minWidth: '90px', width: '6%' }} />
+                                    <col style={{ minWidth: '60px', width: '4%' }} />
+                                    <col style={{ minWidth: '140px', width: '10%' }} />
+                                    <col style={{ minWidth: '140px', width: '10%' }} />
+                                    <col style={{ minWidth: '140px', width: '10%' }} />
+                                    <col style={{ minWidth: '180px', width: '12%' }} />
+                                    <col style={{ minWidth: '70px', width: '4%' }} />
                                 </colgroup>
-                                <thead className="bg-gray-50 dark:bg-gray-700/50">
+                                <thead ref={theadRef} className="bg-gray-50 dark:bg-gray-700/50">
                                     <tr className="border-b dark:border-gray-700">
                                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Course Run ID</th>
                                         <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Course Title</th>
@@ -864,9 +1057,10 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                                         // compute the auto-derived value client-side so the UI updates optimistically.
                                                         const selection = e.target.value;
                                                         const hasLocalTrainer = !!(classItem.assignedTrainerLocal || '').trim();
+                                                        const hasTpgTrainer = !!(classItem.assignedTrainerTpg || '').trim();
                                                         const newStatus = selection === 'Cancelled'
                                                             ? 'Cancelled'
-                                                            : (hasLocalTrainer ? 'Confirmed' : 'Pending');
+                                                            : ((hasLocalTrainer || hasTpgTrainer) ? 'Confirmed' : 'Pending');
                                                         try {
                                                             await fetch(getApiUrl('/api/admin/upcoming-classes'), {
                                                                 method: 'PUT',
@@ -878,8 +1072,17 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                                     }}
                                                     className={`text-xs font-semibold rounded-full px-2 py-1 border-0 cursor-pointer focus:ring-2 focus:ring-blue-500 ${getStatusColor(classItem.classStatus)}`}
                                                 >
-                                                    <option value="auto">{(classItem.assignedTrainerLocal || '').trim() ? 'Confirmed' : 'Pending'}</option>
-                                                    <option value="Cancelled">Cancelled</option>
+                                                    {classItem.classStatus === 'Cancelled' ? (
+                                                        <>
+                                                            <option value="Cancelled">Cancelled</option>
+                                                            <option value="auto">Confirmed/Pending</option>
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <option value="auto">{classItem.classStatus}</option>
+                                                            <option value="Cancelled">Cancelled</option>
+                                                        </>
+                                                    )}
                                                 </select>
                                             </td>
                                             <td className="px-4 py-2 whitespace-nowrap text-sm">
@@ -989,6 +1192,9 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                 </div>
                             </div>
                         )}
+                        {/* Sticky header + scrollbar */}
+                        <StickyHeader tableRef={tableScrollRef} theadRef={theadRef} />
+                        <StickyScrollbar tableRef={tableScrollRef} />
                     </>
                 )}
             </Card>

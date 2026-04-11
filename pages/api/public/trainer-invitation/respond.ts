@@ -146,6 +146,30 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(200).send(renderPage('Already Responded', msg, 'gray'));
     }
 
+    // If accepting, check if another trainer already accepted for this course run
+    if (action === 'accept') {
+      const alreadyAccepted = await pool.query(
+        `SELECT trainer_name FROM trainer_invitation
+         WHERE course_run_id = $1 AND status = 'accepted' AND id != $2
+         LIMIT 1`,
+        [invitation.course_run_id, invitation.id]
+      );
+      if (alreadyAccepted.rows.length > 0) {
+        // Mark this invitation as declined (too late)
+        await pool.query(
+          `UPDATE trainer_invitation SET status = 'declined', responded_at = NOW(), updated_at = NOW() WHERE id = $1`,
+          [invitation.id]
+        );
+        const assignedName = alreadyAccepted.rows[0].trainer_name;
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        return res.status(200).send(renderPage(
+          'Already Assigned',
+          `Thank you for your response, ${invitation.trainer_name}. Unfortunately, this class has already been assigned to ${assignedName}. We appreciate your willingness and will reach out for future opportunities. If this class is taught by multiple trainers and you are one of them, do ask the admin to manually assign you.`,
+          'gray'
+        ));
+      }
+    }
+
     // Update invitation status
     await pool.query(
       `UPDATE trainer_invitation SET status = $1, responded_at = NOW(), updated_at = NOW() WHERE id = $2`,
