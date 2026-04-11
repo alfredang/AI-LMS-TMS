@@ -5972,7 +5972,14 @@ export const FetchUpcomingEnrolmentsView: React.FC = () => {
         }
     };
 
-    const fmt = (d: string) => d ? new Date(d).toLocaleDateString('en-SG', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+    const fmt = (d: string) => {
+        if (!d) return '—';
+        const date = new Date(d);
+        const day = String(date.getDate()).padStart(2, '0');
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const year = date.getFullYear();
+        return `${day}/${month}/${year}`;
+    };
 
     return (
         <div className="max-w-5xl">
@@ -6131,8 +6138,21 @@ export const UpcomingEnrolmentView: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
     
     // Date states
-    const [startDate, setStartDate] = useState(new Date().toISOString().slice(0, 10));
-    const [endDate, setEndDate] = useState(new Date(new Date().getTime() + 21 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10));
+    const [startDate, setStartDate] = useState(() => {
+        const d = new Date();
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    });
+    const [endDate, setEndDate] = useState(() => {
+        const d = new Date();
+        d.setDate(d.getDate() + 21);
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    });
 
     const fetchData = async () => {
         setLoading(true);
@@ -6156,7 +6176,14 @@ export const UpcomingEnrolmentView: React.FC = () => {
         fetchData();
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-    const fmt = (d: string) => d ? new Date(d).toLocaleDateString('en-SG', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+    const fmt = (d: string) => {
+        if (!d) return '—';
+        const date = new Date(d);
+        const day = String(date.getDate()).padStart(2, '0');
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const year = date.getFullYear();
+        return `${day}/${month}/${year}`;
+    };
 
     return (
         <div className="space-y-6">
@@ -6213,12 +6240,13 @@ export const UpcomingEnrolmentView: React.FC = () => {
                                 <th className="px-4 py-3 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Start Date</th>
                                 <th className="px-4 py-3 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Class Status</th>
                                 <th className="px-4 py-3 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 text-center">Calendar Match</th>
+                                <th className="px-4 py-3 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 text-center">Reason</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                             {data.length === 0 && !loading ? (
                                 <tr>
-                                    <td colSpan={6} className="px-4 py-8 text-center text-gray-500 italic">No enrolments found for this period.</td>
+                                    <td colSpan={7} className="px-4 py-8 text-center text-gray-500 italic">No enrolments found for this period.</td>
                                 </tr>
                             ) : (
                                 data.map((row, idx) => (
@@ -6251,6 +6279,17 @@ export const UpcomingEnrolmentView: React.FC = () => {
                                                     </svg>
                                                     Not Matched
                                                 </span>
+                                            )}
+                                        </td>
+                                        <td className="px-4 py-3 text-center">
+                                            {!row.match && row.reason ? (
+                                                <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${
+                                                    row.reason === 'No Email' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
+                                                }`}>
+                                                    {row.reason}
+                                                </span>
+                                            ) : (
+                                                <span className="text-gray-400 text-xs">—</span>
                                             )}
                                         </td>
                                     </tr>

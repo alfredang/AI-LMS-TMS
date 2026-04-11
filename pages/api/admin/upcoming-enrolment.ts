@@ -106,28 +106,42 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const eDate = formatSgDate(e.start_date);
       const eCode = e.course_code?.trim().toLowerCase();
 
-      const match = calendarEvents.find(ce => {
-        // A. Email Match (trimmed, case-insensitive)
-        const hasEmail = ce.attendees.some(email => email?.trim().toLowerCase() === eEmail);
-        
-        // B. Date Match (YYYY-MM-DD)
+      // 1. Look for full match (Email + Date + Code)
+      const fullMatch = calendarEvents.find(ce => {
         const hasDate = ce.start === eDate;
-        
-        // C. TGS Code Match (case-insensitive, strips HTML from description, supports partial match)
         let hasCode = false;
         if (eCode && ce.description) {
           const cleanDesc = stripHtml(ce.description).toLowerCase();
-          // Check if enrolment code is in description or vice-versa (partial match)
           hasCode = cleanDesc.includes(eCode) || eCode.includes(cleanDesc);
         }
+        const hasEmail = ce.attendees.some(email => email?.trim().toLowerCase() === eEmail);
+        return hasDate && hasCode && hasEmail;
+      });
 
-        return hasEmail && hasDate && hasCode;
+      if (fullMatch) {
+        return {
+          ...e,
+          match: true,
+          matchDetail: `Matched with: ${fullMatch.title}`,
+          reason: null
+        };
+      }
+
+      // 2. If no full match, check if the event exists at all (Date + Code)
+      const eventExists = calendarEvents.find(ce => {
+        const hasDate = ce.start === eDate;
+        let hasCode = false;
+        if (eCode && ce.description) {
+          const cleanDesc = stripHtml(ce.description).toLowerCase();
+          hasCode = cleanDesc.includes(eCode) || eCode.includes(cleanDesc);
+        }
+        return hasDate && hasCode;
       });
 
       return {
         ...e,
-        match: !!match,
-        matchDetail: match ? `Matched with: ${match.title}` : null
+        match: false,
+        reason: eventExists ? "No Email" : "No Event"
       };
     });
 
