@@ -150,6 +150,13 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
     const [calSyncing, setCalSyncing] = useState(false);
     const [calSyncResult, setCalSyncResult] = useState<any>(null);
     const [sendingInvitationFor, setSendingInvitationFor] = useState<string | null>(null);
+    const [bulkSending, setBulkSending] = useState(false);
+    const [showBulkPreview, setShowBulkPreview] = useState(false);
+    const [bulkPreviewData, setBulkPreviewData] = useState<any[]>([]);
+    const [bulkPreviewLoading, setBulkPreviewLoading] = useState(false);
+    const [bulkSelected, setBulkSelected] = useState<Set<string>>(new Set());
+    const [bulkDateFrom, setBulkDateFrom] = useState('');
+    const [bulkDateTo, setBulkDateTo] = useState('');
     const [actionMessage, setActionMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
     // Per-row next trainer overrides (courseRun UUID → selected trainer name)
     const [nextTrainerOverrides, setNextTrainerOverrides] = useState<Record<string, string>>({});
@@ -469,6 +476,35 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                             onClick={() => { setShowCalendarModal(true); setCalSyncResult(null); }}
                         >
                             Sync Google Calendar
+                        </Button>
+                        <Button
+                            variant="secondary"
+                            size="sm"
+                            disabled={bulkPreviewLoading}
+                            onClick={async () => {
+                                setBulkPreviewLoading(true);
+                                setBulkDateFrom('');
+                                setBulkDateTo('');
+                                try {
+                                    const res = await fetch(getApiUrl('/api/admin/preview-bulk-trainer-invitations'));
+                                    const data = await res.json();
+                                    if (data.success) {
+                                        setBulkPreviewData(data.preview || []);
+                                        const sendable = (data.preview || []).filter((p: any) => p.canSend && p.confirmedEnrolments > 0);
+                                        setBulkSelected(new Set(sendable.map((p: any) => p.courseRunUuid)));
+                                        setShowBulkPreview(true);
+                                    } else {
+                                        setActionMessage({ type: 'error', text: data.error || 'Failed to load preview' });
+                                    }
+                                } catch {
+                                    setActionMessage({ type: 'error', text: 'Failed to load preview' });
+                                } finally {
+                                    setBulkPreviewLoading(false);
+                                }
+                            }}
+                        >
+                            <Icon name={IconName.Send} className="w-4 h-4 mr-1" />
+                            {bulkPreviewLoading ? 'Loading...' : 'Invite All Pending'}
                         </Button>
                         <Button
                             variant="primary"
@@ -875,14 +911,6 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                             </td>
                                             <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">
                                                 <div className="flex items-center gap-2">
-                                                    {(classItem.latestInvitationStatus === 'accepted' || classItem.latestInvitationStatus === 'declined') && (
-                                                        <span className={`inline-flex px-2 py-0.5 text-xs font-semibold rounded-full ${classItem.latestInvitationStatus === 'accepted'
-                                                            ? 'bg-green-100 text-green-700'
-                                                            : 'bg-red-100 text-red-700'
-                                                            }`}>
-                                                            {classItem.latestInvitationStatus}
-                                                        </span>
-                                                    )}
                                                     <Button
                                                         variant="secondary"
                                                         size="sm"
@@ -899,6 +927,15 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                                             </>
                                                         )}
                                                     </Button>
+                                                    {(classItem.latestInvitationStatus === 'accepted' || classItem.latestInvitationStatus === 'declined' || classItem.latestInvitationStatus === 'pending') && (
+                                                        <span className={`inline-flex px-2 py-0.5 text-xs font-semibold rounded-full ${
+                                                            classItem.latestInvitationStatus === 'accepted' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
+                                                            : classItem.latestInvitationStatus === 'declined' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
+                                                            : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
+                                                            }`}>
+                                                            {classItem.latestInvitationStatus.charAt(0).toUpperCase() + classItem.latestInvitationStatus.slice(1)}
+                                                        </span>
+                                                    )}
                                                 </div>
                                             </td>
                                             <td className="px-4 py-2 whitespace-nowrap text-sm font-medium">
@@ -955,6 +992,192 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                     </>
                 )}
             </Card>
+            {/* Bulk Invite Preview Modal */}
+            {showBulkPreview && (
+                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-4xl max-h-[85vh] flex flex-col border dark:border-gray-700">
+                        <div className="p-4 border-b dark:border-gray-700">
+                            <div className="flex items-center justify-between mb-3">
+                                <div>
+                                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Preview: Bulk Trainer Invitations</h3>
+                                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+                                        {bulkPreviewData.filter(p => p.canSend).length} sendable / {bulkPreviewData.length} total course runs with no local trainer
+                                    </p>
+                                </div>
+                                <button onClick={() => setShowBulkPreview(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-xl">&times;</button>
+                            </div>
+                            <div className="flex items-center gap-3">
+                                <label className="text-xs text-gray-500 dark:text-gray-400">From</label>
+                                <input
+                                    type="date"
+                                    value={bulkDateFrom}
+                                    onChange={(e) => {
+                                        setBulkDateFrom(e.target.value);
+                                        // Auto-refresh on date change
+                                        const from = e.target.value;
+                                        const to = bulkDateTo;
+                                        setBulkPreviewLoading(true);
+                                        const params = new URLSearchParams();
+                                        if (from) params.set('dateFrom', from);
+                                        if (to) params.set('dateTo', to);
+                                        fetch(getApiUrl(`/api/admin/preview-bulk-trainer-invitations?${params.toString()}`))
+                                            .then(r => r.json())
+                                            .then(data => {
+                                                if (data.success) {
+                                                    setBulkPreviewData(data.preview || []);
+                                                    const sendable = (data.preview || []).filter((p: any) => p.canSend && p.confirmedEnrolments > 0);
+                                                    setBulkSelected(new Set(sendable.map((p: any) => p.courseRunUuid)));
+                                                }
+                                            })
+                                            .catch(() => {})
+                                            .finally(() => setBulkPreviewLoading(false));
+                                    }}
+                                    className="px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                />
+                                <label className="text-xs text-gray-500 dark:text-gray-400">To</label>
+                                <input
+                                    type="date"
+                                    value={bulkDateTo}
+                                    onChange={(e) => {
+                                        setBulkDateTo(e.target.value);
+                                        const from = bulkDateFrom;
+                                        const to = e.target.value;
+                                        setBulkPreviewLoading(true);
+                                        const params = new URLSearchParams();
+                                        if (from) params.set('dateFrom', from);
+                                        if (to) params.set('dateTo', to);
+                                        fetch(getApiUrl(`/api/admin/preview-bulk-trainer-invitations?${params.toString()}`))
+                                            .then(r => r.json())
+                                            .then(data => {
+                                                if (data.success) {
+                                                    setBulkPreviewData(data.preview || []);
+                                                    const sendable = (data.preview || []).filter((p: any) => p.canSend && p.confirmedEnrolments > 0);
+                                                    setBulkSelected(new Set(sendable.map((p: any) => p.courseRunUuid)));
+                                                }
+                                            })
+                                            .catch(() => {})
+                                            .finally(() => setBulkPreviewLoading(false));
+                                    }}
+                                    className="px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                />
+                            </div>
+                        </div>
+                        <div className="flex-1 overflow-auto p-4">
+                            {bulkPreviewData.length === 0 ? (
+                                <p className="text-sm text-gray-500 dark:text-gray-400">No eligible course runs found in the lookahead window.</p>
+                            ) : (
+                                <table className="w-full text-sm">
+                                    <thead>
+                                        <tr className="text-left text-xs text-gray-500 dark:text-gray-400 border-b dark:border-gray-700">
+                                            <th className="pb-2 pr-2 w-8">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={bulkSelected.size === bulkPreviewData.filter(p => p.canSend && p.confirmedEnrolments > 0).length && bulkSelected.size > 0}
+                                                    onChange={(e) => {
+                                                        if (e.target.checked) {
+                                                            setBulkSelected(new Set(bulkPreviewData.filter(p => p.canSend && p.confirmedEnrolments > 0).map(p => p.courseRunUuid)));
+                                                        } else {
+                                                            setBulkSelected(new Set());
+                                                        }
+                                                    }}
+                                                    className="rounded"
+                                                />
+                                            </th>
+                                            <th className="pb-2 pr-2">Course Run</th>
+                                            <th className="pb-2 pr-2">Course Title</th>
+                                            <th className="pb-2 pr-2">Start Date</th>
+                                            <th className="pb-2 pr-2 text-center">Enrolments</th>
+                                            <th className="pb-2 pr-2">Trainer</th>
+                                            <th className="pb-2">Email</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {bulkPreviewData.map((item: any) => (
+                                            <tr
+                                                key={item.courseRunUuid}
+                                                className={`border-b dark:border-gray-700/50 ${!item.canSend ? 'opacity-50' : ''}`}
+                                            >
+                                                <td className="py-2 pr-2">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={bulkSelected.has(item.courseRunUuid)}
+                                                        disabled={!item.canSend}
+                                                        onChange={(e) => {
+                                                            const next = new Set(bulkSelected);
+                                                            if (e.target.checked) next.add(item.courseRunUuid);
+                                                            else next.delete(item.courseRunUuid);
+                                                            setBulkSelected(next);
+                                                        }}
+                                                        className="rounded"
+                                                    />
+                                                </td>
+                                                <td className="py-2 pr-2 font-mono text-xs">{item.courseRunId}</td>
+                                                <td className="py-2 pr-2 max-w-[200px] truncate" title={item.courseTitle}>{item.courseTitle}</td>
+                                                <td className="py-2 pr-2 whitespace-nowrap">{item.startDate ? new Date(item.startDate).toLocaleDateString('en-SG') : '—'}</td>
+                                                <td className="py-2 pr-2 text-center">
+                                                    {item.confirmedEnrolments > 0 ? (
+                                                        <span className="text-gray-900 dark:text-white">{item.confirmedEnrolments}</span>
+                                                    ) : (
+                                                        <span className="text-xs text-amber-500" title="No confirmed enrolments">0</span>
+                                                    )}
+                                                </td>
+                                                <td className="py-2 pr-2">
+                                                    {item.canSend ? (
+                                                        <span className="text-gray-900 dark:text-white">{item.nextTrainer}</span>
+                                                    ) : (
+                                                        <span className="text-xs text-gray-400 italic">{item.reason}</span>
+                                                    )}
+                                                </td>
+                                                <td className="py-2 text-xs text-gray-500 dark:text-gray-400">{item.nextEmail || '—'}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            )}
+                        </div>
+                        <div className="p-4 border-t dark:border-gray-700 flex items-center justify-between">
+                            <span className="text-sm text-gray-500 dark:text-gray-400">
+                                {bulkSelected.size} selected
+                            </span>
+                            <div className="flex items-center gap-2">
+                                <Button variant="secondary" size="sm" onClick={() => setShowBulkPreview(false)}>Cancel</Button>
+                                <Button
+                                    variant="primary"
+                                    size="sm"
+                                    disabled={bulkSelected.size === 0 || bulkSending}
+                                    onClick={async () => {
+                                        setBulkSending(true);
+                                        setActionMessage(null);
+                                        try {
+                                            const res = await fetch(getApiUrl('/api/admin/run-auto-send-trainer-invitations'), {
+                                                method: 'POST',
+                                                headers: { 'Content-Type': 'application/json' },
+                                                body: JSON.stringify({ courseRunUuids: Array.from(bulkSelected) }),
+                                            });
+                                            const data = await res.json();
+                                            if (data.success) {
+                                                setActionMessage({ type: 'success', text: `Sent ${data.sent || 0} invitation(s), skipped ${data.skipped || 0}, errors ${data.errors || 0}` });
+                                                setShowBulkPreview(false);
+                                                fetchUpcomingClasses();
+                                            } else {
+                                                setActionMessage({ type: 'error', text: data.error || 'Failed to send invitations' });
+                                            }
+                                        } catch {
+                                            setActionMessage({ type: 'error', text: 'Failed to send invitations' });
+                                        } finally {
+                                            setBulkSending(false);
+                                        }
+                                    }}
+                                >
+                                    <Icon name={IconName.Send} className="w-4 h-4 mr-1" />
+                                    {bulkSending ? 'Sending...' : `Send ${bulkSelected.size} Invitation${bulkSelected.size !== 1 ? 's' : ''}`}
+                                </Button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Import Run Modal */}
             {showImportModal && (
                 <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">

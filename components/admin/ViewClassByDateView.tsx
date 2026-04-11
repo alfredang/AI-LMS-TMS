@@ -29,6 +29,7 @@ interface CalendarEvent {
   nextAvailableTrainerEmail: string;
   latestInvitationStatus: string;
   approvedTrainers: string[]; // options for the Next Trainer dropdown
+  trainerInvitations?: Record<string, Array<{ status: string; sent_at: string; responded_at: string | null }>>;
 }
 
 // Format session numbers as "S3, S4" (e.g. ["3","4"] → "S3, S4").
@@ -217,19 +218,24 @@ type TrainerMatchState = 'red' | 'orange' | 'purple' | 'yellow' | 'green';
 
 const trainersMatchState = (event: CalendarEvent): TrainerMatchState => {
   const hasTpg = !!(event.tpgTrainerName || '').trim();
-  const hasLocal = !!(event.localTrainerName || '').trim();
+  const locals = event.localTrainers?.filter(t => (t.name || '').trim()) || [];
+  const hasLocal = locals.length > 0 || !!(event.localTrainerName || '').trim();
   if (!hasTpg && !hasLocal) return 'red';
   if (hasLocal && !hasTpg) return 'orange';
   if (hasTpg && !hasLocal) return 'purple';
-  // Both exist — compare by email first (reliable identifier), then normalized name
+  // Both exist — check if any local trainer matches TPG by email or name
   const tpgEmail = (event.tpgTrainerEmail || '').trim().toLowerCase();
-  const localEmail = (event.localTrainerEmail || '').trim().toLowerCase();
-  if (tpgEmail && localEmail) {
-    return tpgEmail === localEmail ? 'green' : 'yellow';
-  }
   const tpgNorm = (event.tpgTrainerName || '').toLowerCase().trim();
-  const localNorm = (event.localTrainerName || '').toLowerCase().trim();
-  return tpgNorm === localNorm ? 'green' : 'yellow';
+  const allLocals = locals.length > 0
+    ? locals
+    : [{ name: event.localTrainerName || '', email: event.localTrainerEmail || '' }];
+  for (const local of allLocals) {
+    const localEmail = (local.email || '').trim().toLowerCase();
+    if (tpgEmail && localEmail && tpgEmail === localEmail) return 'green';
+    const localNorm = (local.name || '').toLowerCase().trim();
+    if (tpgNorm && localNorm && tpgNorm === localNorm) return 'green';
+  }
+  return 'yellow';
 };
 
 const TRAINER_STATE_STYLES: Record<TrainerMatchState, { dot: string; label: string }> = {
@@ -246,7 +252,12 @@ const EventRow: React.FC<EventRowProps> = ({
   // Admin can override the server-computed next trainer via the dropdown.
   // Fall back to server-computed when no override set yet.
   const effectiveNextTrainer = nextTrainerOverride || event.nextAvailableTrainer;
-  const canInvite = !!effectiveNextTrainer && event.classStatus !== 'Cancelled';
+  // Derive display status the same way as the dropdown label so dot color and
+  // pill color stay in sync with the displayed text.
+  const derivedStatus: string = event.classStatus === 'Cancelled'
+    ? 'Cancelled'
+    : ((event.localTrainerName || '').trim() ? 'Confirmed' : 'Pending');
+  const canInvite = !!effectiveNextTrainer && derivedStatus !== 'Cancelled';
   const sessionLabel = formatSessionNumbers(event.sessionNumbers);
   const matchState = trainersMatchState(event);
 
@@ -262,9 +273,9 @@ const EventRow: React.FC<EventRowProps> = ({
         aria-label={expanded ? 'Collapse row' : 'Expand row'}
       >
         <span
-          className={`w-3 h-3 rounded-full flex-shrink-0 ${statusDotClass(event.classStatus)}`}
-          title={statusDotTooltip(event.classStatus)}
-          aria-label={statusDotTooltip(event.classStatus)}
+          className={`w-3 h-3 rounded-full flex-shrink-0 ${statusDotClass(derivedStatus)}`}
+          title={statusDotTooltip(derivedStatus)}
+          aria-label={statusDotTooltip(derivedStatus)}
         />
         <div className="text-xs font-mono text-gray-600 dark:text-gray-400 w-28 flex-shrink-0 tabular-nums">
           {event.startTime} – {event.endTime}
@@ -283,7 +294,7 @@ const EventRow: React.FC<EventRowProps> = ({
             className="text-left text-sm text-gray-900 dark:text-gray-100 truncate rounded px-1 hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:text-blue-700 dark:hover:text-blue-300 transition-colors max-w-full"
             title="Open in Editor (Ctrl+click for new tab)"
           >
-            Day {event.dayNumber} - {event.courseTitle}
+            Day {event.dayNumber} - {event.courseTitle} [{event.courseRunId}]
           </button>
         </div>
         {sessionLabel && (
@@ -299,9 +310,13 @@ const EventRow: React.FC<EventRowProps> = ({
             <span className="inline-block w-10 flex-shrink-0 text-gray-400 dark:text-gray-500">TPG:</span>
             <span className="truncate text-gray-700 dark:text-gray-200">{event.tpgTrainerName || '—'}</span>
           </div>
-          <div className="flex items-baseline gap-1.5 min-w-0" title={event.localTrainerName}>
+          <div className="flex items-baseline gap-1.5 min-w-0" title={event.localTrainers?.length > 1 ? event.localTrainers.map(t => t.name).filter(Boolean).join(', ') : event.localTrainerName}>
             <span className="inline-block w-10 flex-shrink-0 text-gray-400 dark:text-gray-500">Local:</span>
-            <span className="truncate text-gray-700 dark:text-gray-200">{event.localTrainerName || '—'}</span>
+            <span className="truncate text-gray-700 dark:text-gray-200">
+              {event.localTrainers?.length > 1
+                ? event.localTrainers.map(t => t.name).filter(Boolean).join(', ')
+                : (event.localTrainerName || '—')}
+            </span>
           </div>
         </div>
         <span
@@ -328,7 +343,7 @@ const EventRow: React.FC<EventRowProps> = ({
               label="Class Status"
               value={
                 <select
-                  value={event.classStatus === 'Cancelled' ? 'Cancelled' : 'auto'}
+                  value={derivedStatus === 'Cancelled' ? 'Cancelled' : 'auto'}
                   onClick={(e) => e.stopPropagation()}
                   onChange={(e) => {
                     // Two-option dropdown: "Pending/Confirmed" (auto-derived from local trainer)
@@ -340,7 +355,7 @@ const EventRow: React.FC<EventRowProps> = ({
                       : (hasLocalTrainer ? 'Confirmed' : 'Pending');
                     onChangeClassStatus(newStatus);
                   }}
-                  className={`text-[11px] font-semibold rounded-full px-2 py-0.5 border-0 cursor-pointer focus:ring-2 focus:ring-blue-500 ${statusPillClass(event.classStatus)}`}
+                  className={`text-[11px] font-semibold rounded-full px-2 py-0.5 border-0 cursor-pointer focus:ring-2 focus:ring-blue-500 ${statusPillClass(derivedStatus)}`}
                 >
                   {/* Force option colors explicitly — pill background/text on the
                       <select> bleeds into <option> native styling and makes the
@@ -623,6 +638,8 @@ const ViewClassByDateView: React.FC = () => {
       courseCode: event.courseCode,
       startDate: event.sessionDate,
       endDate: event.sessionDate,
+      trainersList: event.approvedTrainers.join(', '),
+      trainerInvitations: event.trainerInvitations || {},
     });
     // Set return-to so ClassManagerView's Cancel button bounces back to the
     // calendar instead of the admin dashboard.
@@ -740,6 +757,14 @@ const ViewClassByDateView: React.FC = () => {
         <div className="flex items-center justify-between">
           <h2 className="text-3xl font-bold dark:text-white">View Class By Date</h2>
           <div className="flex items-center gap-2">
+            <a
+              href="https://www.tpgateway.gov.sg/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-3 py-1.5 text-sm font-medium rounded border border-emerald-600 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 bg-white dark:bg-gray-800"
+            >
+              TPG
+            </a>
             <button
               onClick={() => setUpsertModalOpen(true)}
               className="px-3 py-1.5 text-sm font-medium rounded border border-blue-600 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/30 bg-white dark:bg-gray-800"

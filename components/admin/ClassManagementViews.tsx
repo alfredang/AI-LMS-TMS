@@ -3730,7 +3730,8 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                 );
                             })()}
 
-                            {/* Next Available Trainer */}
+                            {/* Next Available Trainer — hidden when a local trainer is already assigned */}
+                            {!assignedTrainersList.length && !localAssignedTrainerName ? (
                             <div>
                                 <h4 className="text-lg font-medium text-gray-900 dark:text-white mb-3">Next Available Trainer</h4>
                                 {courseToEdit?.nextAvailableTrainer ? (() => {
@@ -3806,6 +3807,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                     </div>
                                 )}
                             </div>
+                            ) : null}
 
                             {/* Approved Trainers List */}
                             <div>
@@ -3865,27 +3867,73 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                         return false;
                                     };
 
+                                    // Invitation data from the API (passed via setEditingCourseRun)
+                                    const invitations = (courseToEdit as any)?.trainerInvitations || {};
+                                    const isDetailedView = classListReturnTo === AdminPage.ViewClassByDate;
+
+                                    const formatDt = (iso: string | null) => {
+                                        if (!iso) return '';
+                                        const d = new Date(iso);
+                                        if (isNaN(d.getTime())) return '';
+                                        return d.toLocaleString('en-SG', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false });
+                                    };
+
+                                    const statusBadge = (status: string) => {
+                                        switch (status) {
+                                            case 'accepted': return <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">Accepted</span>;
+                                            case 'declined': return <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300">Declined</span>;
+                                            case 'pending': return <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">Pending</span>;
+                                            case 'resent': return <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400">Resent</span>;
+                                            case 'not_sent': return <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400">Not Sent</span>;
+                                            case 'manual': return <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">Manually Added</span>;
+                                            default: return <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400">{status}</span>;
+                                        }
+                                    };
+
                                     return (
                                         <div className="bg-gray-50 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700 rounded-md p-4">
                                             <div className="space-y-2">
                                                 {approvedTrainers.map((trainerName: string, idx: number) => {
                                                     const isLocal = isLocallyAssigned(trainerName);
                                                     const isNext = nextName && trainerName.toLowerCase().trim() === nextName.toLowerCase().trim();
+                                                    const norm = trainerName.toLowerCase().replace(/\[[^\]]+\]/g, '').replace(/\s+/g, ' ').trim();
+                                                    const trainerInvs = invitations[norm];
+
                                                     return (
-                                                        <div key={idx} className={`flex items-center justify-between text-sm py-1.5 px-3 rounded border ${
+                                                        <div key={idx} className={`text-sm rounded border ${
                                                             isLocal ? 'bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700' :
                                                             isNext ? 'bg-orange-50 dark:bg-orange-900/20 border-orange-300 dark:border-orange-700' :
                                                             'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700'
                                                         }`}>
-                                                            <div className="flex items-center">
-                                                                <span className="text-gray-400 mr-3 w-6 text-right">{idx + 1}.</span>
-                                                                <span className="text-gray-900 dark:text-white">{trainerName}</span>
+                                                            <div className="flex items-center justify-between py-1.5 px-3">
+                                                                <div className="flex items-center">
+                                                                    <span className="text-gray-400 mr-3 w-6 text-right">{idx + 1}.</span>
+                                                                    <span className="text-gray-900 dark:text-white">{trainerName}</span>
+                                                                </div>
+                                                                <div className="flex items-center gap-2">
+                                                                    {/* Latest status badge — "Manually Added" when local but no invitation, else default to "Not Sent" */}
+                                                                    {statusBadge(isLocal && !trainerInvs?.[0] ? 'manual' : (trainerInvs?.[0]?.status || 'not_sent'))}
+                                                                    {isLocal && (
+                                                                        <span className="text-xs font-medium text-green-600 dark:text-green-400">Assigned (Local)</span>
+                                                                    )}
+                                                                    {isNext && !isLocal && (
+                                                                        <span className="text-xs font-medium text-orange-600 dark:text-orange-400">Next Available</span>
+                                                                    )}
+                                                                </div>
                                                             </div>
-                                                            {isLocal && (
-                                                                <span className="text-xs font-medium text-green-600 dark:text-green-400 ml-2">Assigned (Local)</span>
-                                                            )}
-                                                            {isNext && !isLocal && (
-                                                                <span className="text-xs font-medium text-orange-600 dark:text-orange-400 ml-2">Next Available</span>
+                                                            {/* Detailed view: full invitation history with timestamps */}
+                                                            {isDetailedView && trainerInvs && trainerInvs.length > 0 && (
+                                                                <div className="px-3 pb-2 pt-0.5 ml-9 border-t border-gray-100 dark:border-gray-700/50">
+                                                                    {trainerInvs.map((inv: any, i: number) => (
+                                                                        <div key={i} className="flex items-center gap-2 text-[11px] text-gray-500 dark:text-gray-400 py-0.5">
+                                                                            {statusBadge(inv.status)}
+                                                                            <span>Sent: {formatDt(inv.sent_at)}</span>
+                                                                            {inv.responded_at && (
+                                                                                <span>→ Responded: {formatDt(inv.responded_at)}</span>
+                                                                            )}
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
                                                             )}
                                                         </div>
                                                     );
@@ -5972,7 +6020,14 @@ export const FetchUpcomingEnrolmentsView: React.FC = () => {
         }
     };
 
-    const fmt = (d: string) => d ? new Date(d).toLocaleDateString('en-SG', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+    const fmt = (d: string) => {
+        if (!d) return '—';
+        const date = new Date(d);
+        const day = String(date.getDate()).padStart(2, '0');
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const year = date.getFullYear();
+        return `${day}/${month}/${year}`;
+    };
 
     return (
         <div className="max-w-5xl">
@@ -6131,14 +6186,42 @@ export const UpcomingEnrolmentView: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
     
     // Date states
-    const [startDate, setStartDate] = useState(new Date().toISOString().slice(0, 10));
-    const [endDate, setEndDate] = useState(new Date(new Date().getTime() + 21 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10));
+    const [startDate, setStartDate] = useState(() => {
+        const d = new Date();
+        const day = String(d.getDate()).padStart(2, '0');
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const year = d.getFullYear();
+        return `${day}/${month}/${year}`;
+    });
+    const [endDate, setEndDate] = useState(() => {
+        const d = new Date();
+        d.setDate(d.getDate() + 21);
+        const day = String(d.getDate()).padStart(2, '0');
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const year = d.getFullYear();
+        return `${day}/${month}/${year}`;
+    });
+
+    // Helper to format text input to DD/MM/YYYY
+    const formatDateInput = (value: string) => {
+        const numeric = value.replace(/\D/g, '');
+        if (numeric.length <= 2) return numeric;
+        if (numeric.length <= 4) return `${numeric.slice(0, 2)}/${numeric.slice(2)}`;
+        return `${numeric.slice(0, 2)}/${numeric.slice(2, 4)}/${numeric.slice(4, 8)}`;
+    };
+
+    // Helper to convert DD/MM/YYYY to YYYY-MM-DD for API
+    const toIsoDate = (dmy: string) => {
+        const parts = dmy.split('/');
+        if (parts.length !== 3) return dmy;
+        return `${parts[2]}-${parts[1]}-${parts[0]}`;
+    };
 
     const fetchData = async () => {
         setLoading(true);
         setError(null);
         try {
-            const res = await fetch(`/api/admin/upcoming-enrolment?startDate=${startDate}&endDate=${endDate}`);
+            const res = await fetch(`/api/admin/upcoming-enrolment?startDate=${toIsoDate(startDate)}&endDate=${toIsoDate(endDate)}`);
             const json = await res.json();
             if (json.success) {
                 setData(json.data);
@@ -6156,7 +6239,14 @@ export const UpcomingEnrolmentView: React.FC = () => {
         fetchData();
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-    const fmt = (d: string) => d ? new Date(d).toLocaleDateString('en-SG', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+    const fmt = (d: string) => {
+        if (!d) return '—';
+        const date = new Date(d);
+        const day = String(date.getDate()).padStart(2, '0');
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const year = date.getFullYear();
+        return `${day}/${month}/${year}`;
+    };
 
     return (
         <div className="space-y-6">
@@ -6175,19 +6265,23 @@ export const UpcomingEnrolmentView: React.FC = () => {
                     <div className="space-y-1">
                         <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500">Start Date</label>
                         <input
-                            type="date"
+                            type="text"
+                            placeholder="DD/MM/YYYY"
                             value={startDate}
-                            onChange={(e) => setStartDate(e.target.value)}
-                            className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                            onChange={(e) => setStartDate(formatDateInput(e.target.value))}
+                            maxLength={10}
+                            className="w-32 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
                         />
                     </div>
                     <div className="space-y-1">
                         <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500">End Date</label>
                         <input
-                            type="date"
+                            type="text"
+                            placeholder="DD/MM/YYYY"
                             value={endDate}
-                            onChange={(e) => setEndDate(e.target.value)}
-                            className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                            onChange={(e) => setEndDate(formatDateInput(e.target.value))}
+                            maxLength={10}
+                            className="w-32 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
                         />
                     </div>
                     <Button onClick={fetchData} disabled={loading}>
@@ -6213,12 +6307,13 @@ export const UpcomingEnrolmentView: React.FC = () => {
                                 <th className="px-4 py-3 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Start Date</th>
                                 <th className="px-4 py-3 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Class Status</th>
                                 <th className="px-4 py-3 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 text-center">Calendar Match</th>
+                                <th className="px-4 py-3 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 text-center">Reason</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                             {data.length === 0 && !loading ? (
                                 <tr>
-                                    <td colSpan={6} className="px-4 py-8 text-center text-gray-500 italic">No enrolments found for this period.</td>
+                                    <td colSpan={7} className="px-4 py-8 text-center text-gray-500 italic">No enrolments found for this period.</td>
                                 </tr>
                             ) : (
                                 data.map((row, idx) => (
@@ -6251,6 +6346,17 @@ export const UpcomingEnrolmentView: React.FC = () => {
                                                     </svg>
                                                     Not Matched
                                                 </span>
+                                            )}
+                                        </td>
+                                        <td className="px-4 py-3 text-center">
+                                            {!row.match && row.reason ? (
+                                                <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${
+                                                    row.reason === 'No Email' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
+                                                }`}>
+                                                    {row.reason}
+                                                </span>
+                                            ) : (
+                                                <span className="text-gray-400 text-xs">—</span>
                                             )}
                                         </td>
                                     </tr>

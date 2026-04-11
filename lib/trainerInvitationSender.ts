@@ -287,13 +287,26 @@ export async function sendNextTrainerInvitationForCourseRun(opts: {
     const latestName = latestInvitedResult.rows[0]?.trainer_name;
     if (latestName) {
       const latestNormalized = normalizeTrainerName(latestName);
-      const idx = approvedTrainers.findIndex(
+      // Try exact normalized match first
+      let idx = approvedTrainers.findIndex(
         (n) => normalizeTrainerName(n) === latestNormalized
       );
+      // Fallback: partial match (handles "Dr Smita" vs "Dr Smita Ramakrishna",
+      // or override names that don't exactly match the comma-string entry)
+      if (idx < 0) {
+        idx = approvedTrainers.findIndex((n) => {
+          const norm = normalizeTrainerName(n);
+          return norm.includes(latestNormalized) || latestNormalized.includes(norm);
+        });
+      }
       if (idx >= 0) {
         startIndex = idx + 1;
         console.log(
           `➡️  [trainerInvitationSender] resuming after "${latestName}" at index ${idx} — starting search at ${startIndex}`
+        );
+      } else {
+        console.log(
+          `⚠️  [trainerInvitationSender] "${latestName}" not found in approved list — starting from 0, relying on skip-sets`
         );
       }
     }

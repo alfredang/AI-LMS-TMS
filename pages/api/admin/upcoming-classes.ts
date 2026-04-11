@@ -353,7 +353,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (hasInvitationTable && courseRunIds.length > 0) {
       const invitationResult = await pool.query(
         `
-          SELECT course_run_id, trainer_name, trainer_email, status, created_at
+          SELECT course_run_id, trainer_name, trainer_email, status, created_at, responded_at
           FROM trainer_invitation
           WHERE course_run_id = ANY($1::uuid[])
           ORDER BY created_at DESC
@@ -498,6 +498,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         break;
       }
 
+      // Build per-trainer latest invitation status for the Approved Trainers panel.
+      // Keyed by normalized trainer name → array with latest invitation row only.
+      // Uses array format to match classes-by-date shape (ClassManagementViews reads [0]).
+      const perTrainerInvitation: Record<string, Array<{ status: string; sent_at: string; responded_at: string | null }>> = {};
+      for (const inv of invitations) {
+        const norm = normalizeTrainerName(inv.trainer_name);
+        if (!perTrainerInvitation[norm]) {
+          perTrainerInvitation[norm] = [{
+            status: inv.status,
+            sent_at: inv.created_at,
+            responded_at: inv.responded_at || null,
+          }];
+        }
+      }
+
       // Derive class status: Confirmed if ANY trainer signal is present
       // (junction-table local trainer, legacy course_run.assigned_trainer_name,
       // or tpg_assigned_trainer_name), else Pending. 'Cancelled' is sticky.
@@ -537,6 +552,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         latestInvitationTrainer,
         numOfTrainee: parseInt(row.num_of_trainee || '0', 10),
         trainersList: row.trainers_list || '',
+        trainerInvitations: perTrainerInvitation,
         courseType: row.course_type || '',
         classType: row.class_type || 'Physical',
         virtualMeetingLink: row.virtual_meeting_link || '',

@@ -416,8 +416,8 @@ export const CreateNewClassView: React.FC = () => {
         if (openingRegistrationDate && closingRegistrationDate) {
             const openingDate = new Date(openingRegistrationDate);
             const closingDate = new Date(closingRegistrationDate);
-            if (closingDate < openingDate) {
-                alert('Error: Closing Registration Date cannot be earlier than Opening Registration Date');
+            if (closingDate <= openingDate) {
+                alert('Error: Closing Registration Date must be after Opening Registration Date');
                 return;
             }
         }
