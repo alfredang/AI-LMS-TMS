@@ -640,6 +640,70 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return s;
       };
 
+      // Build the sessions filter: include ONLY sessions that have not yet
+      // started (session startDate > today). This avoids SSG errors on past
+      // sessions — when SSG receives an edit payload that references sessions
+      // whose startDate is in the past, its run-level validation can reject
+      // the whole request. By omitting past sessions from the payload, SSG
+      // leaves them untouched and only re-validates the future ones.
+      //
+      // Edge case: if all sessions are in the past (or there are no sessions
+      // at all), we simply omit the `sessions` field from editRunInfo, which
+      // matches the previous behaviour — SSG leaves sessions untouched.
+      const todayYYYYMMDD = (() => {
+        const now = new Date();
+        const y = now.getUTCFullYear();
+        const m = String(now.getUTCMonth() + 1).padStart(2, '0');
+        const d = String(now.getUTCDate()).padStart(2, '0');
+        return parseInt(`${y}${m}${d}`, 10);
+      })();
+
+      const existingSsgSessions: any[] = Array.isArray(existingSsgRun?.sessions)
+        ? existingSsgRun.sessions
+        : [];
+
+      const futureSsgSessions = existingSsgSessions.filter((s: any) => {
+        const raw = s?.startDate;
+        if (!raw) return false;
+        const asNum = Number(String(raw).replace(/-/g, ''));
+        return Number.isFinite(asNum) && asNum > todayYYYYMMDD;
+      });
+
+      console.log(`📅 Sessions filter for run ${runId}: total=${existingSsgSessions.length}, future=${futureSsgSessions.length}, today=${todayYYYYMMDD}`);
+
+      // Build RunSessionEditInfo entries for the future sessions. Each one
+      // preserves all existing fields from SSG unchanged — we're not trying
+      // to mutate the sessions, just pass-through the subset SSG is allowed
+      // to re-validate. action="update" on each means "no-op update, just
+      // re-sync". toEditPayload will serialise these into the payload.
+      const mappedFutureSessions: any[] | undefined = futureSsgSessions.length > 0
+        ? futureSsgSessions.map((s: any) => {
+            const startDate = toIsoDate(s.startDate);
+            const endDate = toIsoDate(s.endDate);
+            return {
+              sessionId: s.sessionId || s.id,
+              startDate,
+              endDate,
+              startTime: s.startTime,
+              endTime: s.endTime,
+              modeOfTraining: typeof s.modeOfTraining === 'object'
+                ? s.modeOfTraining?.code
+                : s.modeOfTraining,
+              action: 'update',
+              // Pass-through venue — SSG will keep these unchanged, no
+              // surprise mutations from partial venue data.
+              block: s?.venue?.block,
+              street: s?.venue?.street,
+              floor: s?.venue?.floor,
+              unit: s?.venue?.unit,
+              building: s?.venue?.building,
+              postalCode: s?.venue?.postalCode,
+              room: s?.venue?.room,
+              wheelChairAccess: s?.venue?.wheelChairAccess,
+            };
+          })
+        : undefined;
+
       // Create flat EditRunInfo structure that will produce the nested structure we want
       const editRunInfo: EditRunInfo = {
         courseReferenceNumber: requestData.course.courseReferenceNumber,
@@ -649,6 +713,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         closingRegistrationDate: toIsoDate(resolvedClosingReg),
         courseStartDate: toIsoDate(resolvedStartDate),
         courseEndDate: toIsoDate(resolvedEndDate),
+
+        // Only pass future sessions — past sessions cause SSG run-level
+        // validation errors. Omitted entirely when no future sessions exist
+        // (toEditPayload drops undefined/empty arrays via the check at
+        // edit-delete-course-run.ts:448).
+        sessions: mappedFutureSessions,
 
         // Schedule info
         scheduleInfoTypeCode: runData.scheduleInfoType?.code || "01",
