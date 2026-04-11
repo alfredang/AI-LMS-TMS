@@ -189,7 +189,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (hasInvitationTable && courseRunIds.length > 0) {
       const invitationResult = await pool.query(
         `
-        SELECT course_run_id, trainer_name, trainer_email, status, created_at
+        SELECT course_run_id, trainer_name, trainer_email, status, created_at, responded_at
         FROM trainer_invitation
         WHERE course_run_id = ANY($1::uuid[])
         ORDER BY created_at DESC
@@ -297,6 +297,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return false;
       };
 
+      // Build full per-trainer invitation history (all rows, sorted by date desc).
+      // Keyed by normalized trainer name → array of invitation entries.
+      const perTrainerInvitations: Record<string, Array<{ status: string; sent_at: string; responded_at: string | null }>> = {};
+      for (const inv of invitations) {
+        const norm = normalizeTrainerName(inv.trainer_name);
+        if (!perTrainerInvitations[norm]) perTrainerInvitations[norm] = [];
+        perTrainerInvitations[norm].push({
+          status: inv.status,
+          sent_at: inv.created_at,
+          responded_at: inv.responded_at || null,
+        });
+      }
+
       let nextAvailableTrainer = '';
       let nextAvailableTrainerEmail = '';
       let latestInvitationStatus: string = invitations[0]?.status || '';
@@ -393,6 +406,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         nextAvailableTrainerEmail,
         latestInvitationStatus,
         approvedTrainers: trainerPool,
+        trainerInvitations: perTrainerInvitations,
       };
     });
 

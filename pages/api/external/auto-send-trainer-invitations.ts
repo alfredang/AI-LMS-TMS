@@ -126,8 +126,7 @@ export async function runAutomation(): Promise<AutomationSummary> {
   }
 
   // Eligible course runs: start_date in the lookahead window, no locally
-  // assigned trainer. We intentionally do NOT filter on class_status here —
-  // any upcoming run without a trainer should get one.
+  // assigned trainer, and at least one confirmed enrolment.
   const eligibleRes = await pool.query(
     `SELECT cr.id
      FROM course_run cr
@@ -135,6 +134,9 @@ export async function runAutomation(): Promise<AutomationSummary> {
        AND cr.start_date <= CURRENT_DATE + ($1::int * INTERVAL '1 day')
        AND NOT EXISTS (
          SELECT 1 FROM course_run_trainer crt WHERE crt.course_run_id = cr.id
+       )
+       AND EXISTS (
+         SELECT 1 FROM enrollment e WHERE e.course_run_id = cr.id AND e.enrolment_status = 'Confirmed'
        )
      ORDER BY cr.start_date ASC`,
     [windowDays]

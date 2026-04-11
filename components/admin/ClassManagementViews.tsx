@@ -3730,7 +3730,8 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                 );
                             })()}
 
-                            {/* Next Available Trainer */}
+                            {/* Next Available Trainer — hidden when a local trainer is already assigned */}
+                            {!assignedTrainersList.length && !localAssignedTrainerName ? (
                             <div>
                                 <h4 className="text-lg font-medium text-gray-900 dark:text-white mb-3">Next Available Trainer</h4>
                                 {courseToEdit?.nextAvailableTrainer ? (() => {
@@ -3806,6 +3807,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                     </div>
                                 )}
                             </div>
+                            ) : null}
 
                             {/* Approved Trainers List */}
                             <div>
@@ -3865,27 +3867,73 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                         return false;
                                     };
 
+                                    // Invitation data from the API (passed via setEditingCourseRun)
+                                    const invitations = (courseToEdit as any)?.trainerInvitations || {};
+                                    const isDetailedView = classListReturnTo === AdminPage.ViewClassByDate;
+
+                                    const formatDt = (iso: string | null) => {
+                                        if (!iso) return '';
+                                        const d = new Date(iso);
+                                        if (isNaN(d.getTime())) return '';
+                                        return d.toLocaleString('en-SG', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false });
+                                    };
+
+                                    const statusBadge = (status: string) => {
+                                        switch (status) {
+                                            case 'accepted': return <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">Accepted</span>;
+                                            case 'declined': return <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300">Declined</span>;
+                                            case 'pending': return <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">Pending</span>;
+                                            case 'resent': return <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400">Resent</span>;
+                                            case 'not_sent': return <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400">Not Sent</span>;
+                                            case 'manual': return <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">Manually Added</span>;
+                                            default: return <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400">{status}</span>;
+                                        }
+                                    };
+
                                     return (
                                         <div className="bg-gray-50 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700 rounded-md p-4">
                                             <div className="space-y-2">
                                                 {approvedTrainers.map((trainerName: string, idx: number) => {
                                                     const isLocal = isLocallyAssigned(trainerName);
                                                     const isNext = nextName && trainerName.toLowerCase().trim() === nextName.toLowerCase().trim();
+                                                    const norm = trainerName.toLowerCase().replace(/\[[^\]]+\]/g, '').replace(/\s+/g, ' ').trim();
+                                                    const trainerInvs = invitations[norm];
+
                                                     return (
-                                                        <div key={idx} className={`flex items-center justify-between text-sm py-1.5 px-3 rounded border ${
+                                                        <div key={idx} className={`text-sm rounded border ${
                                                             isLocal ? 'bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700' :
                                                             isNext ? 'bg-orange-50 dark:bg-orange-900/20 border-orange-300 dark:border-orange-700' :
                                                             'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700'
                                                         }`}>
-                                                            <div className="flex items-center">
-                                                                <span className="text-gray-400 mr-3 w-6 text-right">{idx + 1}.</span>
-                                                                <span className="text-gray-900 dark:text-white">{trainerName}</span>
+                                                            <div className="flex items-center justify-between py-1.5 px-3">
+                                                                <div className="flex items-center">
+                                                                    <span className="text-gray-400 mr-3 w-6 text-right">{idx + 1}.</span>
+                                                                    <span className="text-gray-900 dark:text-white">{trainerName}</span>
+                                                                </div>
+                                                                <div className="flex items-center gap-2">
+                                                                    {/* Latest status badge — "Manually Added" when local but no invitation, else default to "Not Sent" */}
+                                                                    {statusBadge(isLocal && !trainerInvs?.[0] ? 'manual' : (trainerInvs?.[0]?.status || 'not_sent'))}
+                                                                    {isLocal && (
+                                                                        <span className="text-xs font-medium text-green-600 dark:text-green-400">Assigned (Local)</span>
+                                                                    )}
+                                                                    {isNext && !isLocal && (
+                                                                        <span className="text-xs font-medium text-orange-600 dark:text-orange-400">Next Available</span>
+                                                                    )}
+                                                                </div>
                                                             </div>
-                                                            {isLocal && (
-                                                                <span className="text-xs font-medium text-green-600 dark:text-green-400 ml-2">Assigned (Local)</span>
-                                                            )}
-                                                            {isNext && !isLocal && (
-                                                                <span className="text-xs font-medium text-orange-600 dark:text-orange-400 ml-2">Next Available</span>
+                                                            {/* Detailed view: full invitation history with timestamps */}
+                                                            {isDetailedView && trainerInvs && trainerInvs.length > 0 && (
+                                                                <div className="px-3 pb-2 pt-0.5 ml-9 border-t border-gray-100 dark:border-gray-700/50">
+                                                                    {trainerInvs.map((inv: any, i: number) => (
+                                                                        <div key={i} className="flex items-center gap-2 text-[11px] text-gray-500 dark:text-gray-400 py-0.5">
+                                                                            {statusBadge(inv.status)}
+                                                                            <span>Sent: {formatDt(inv.sent_at)}</span>
+                                                                            {inv.responded_at && (
+                                                                                <span>→ Responded: {formatDt(inv.responded_at)}</span>
+                                                                            )}
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
                                                             )}
                                                         </div>
                                                     );
