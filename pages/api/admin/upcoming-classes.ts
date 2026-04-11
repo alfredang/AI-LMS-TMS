@@ -265,6 +265,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           cr.virtual_meeting_link,
           ${tpgNameExpr} AS assigned_trainer_tpg,
           ${tpgEmailExpr} AS assigned_trainer_tpg_email,
+          cr.assigned_trainer_name AS legacy_assigned_trainer_name,
           COUNT(e.id) AS num_of_trainee
         ${baseQuery}
         GROUP BY
@@ -281,7 +282,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           cr.class_type,
           cr.virtual_meeting_link,
           ${tpgNameExpr},
-          ${tpgEmailExpr}
+          ${tpgEmailExpr},
+          cr.assigned_trainer_name
         ORDER BY cr.start_date ASC NULLS LAST, cr.end_date ASC NULLS LAST
         LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
       `,
@@ -491,17 +493,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         break;
       }
 
-      // Derive class status: Confirmed if a TPG trainer OR a local trainer is
-      // assigned, Pending otherwise. 'Cancelled' is sticky — manual cancellation
-      // is never overridden by this derivation.
-      // IMPORTANT: this derivation previously only checked local trainers,
-      // which meant TPG-only rows would be stomped back to Pending on every
-      // page load — undoing the auto-confirm logic in the trainer-write paths.
+      // Derive class status: Confirmed if ANY trainer signal is present
+      // (junction-table local trainer, legacy course_run.assigned_trainer_name,
+      // or tpg_assigned_trainer_name), else Pending. 'Cancelled' is sticky.
+      //
+      // History: this derivation used to only check the junction table, so
+      // rows with a TPG-only trainer OR a legacy (pre-junction) local trainer
+      // would be stomped back to Pending on every page load, undoing both
+      // the auto-confirm write-paths and the backfill migration.
       const hasLocalTrainer = !!(allLocalPairs[0]?.name);
+      const hasLegacyLocalTrainer = !!((row.legacy_assigned_trainer_name || '').toString().trim());
       const hasTpgTrainer = !!((row.assigned_trainer_tpg || '').toString().trim());
       const derivedStatus = row.class_status === 'Cancelled'
         ? 'Cancelled'
-        : ((hasLocalTrainer || hasTpgTrainer) ? 'Confirmed' : 'Pending');
+        : ((hasLocalTrainer || hasLegacyLocalTrainer || hasTpgTrainer) ? 'Confirmed' : 'Pending');
 
       // Persist to DB if status changed (skipped automatically when already Cancelled)
       if (row.class_status !== derivedStatus) {
