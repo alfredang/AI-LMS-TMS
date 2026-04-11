@@ -30,7 +30,7 @@ const WelcomeDashboard: React.FC = () => {
         };
       case UserRole.Learner:
         return {
-          title: 'My Courses',
+          title: 'My Classes',
           courses: courses
         };
       default: // Fallback for Developer/Admin

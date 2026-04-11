@@ -22,7 +22,7 @@ interface NavItem {
 }
 
 const sidebarItems: NavItem[] = [
-  { view: View.Courses, label: 'My Courses', icon: IconName.Courses },
+  { view: View.Courses, label: 'My Classes', icon: IconName.Courses },
   { view: View.Profile, label: 'My Profile', icon: IconName.MyAccount },
   { view: View.GrantCalculator, label: 'Grant Calculator', icon: IconName.Calculator },
   { view: View.BillingHistory, label: 'Billing History', icon: IconName.DollarSign },
@@ -78,7 +78,7 @@ const LearnerLayout: React.FC = () => {
   const getPageTitle = () => {
     if (selectedCourse) return 'Course Detail';
     const item = sidebarItems.find(i => i.view === currentView);
-    return item?.label || 'My Courses';
+    return item?.label || 'My Classes';
   };
 
   const activeClass = 'bg-primary/10 text-primary font-semibold';
