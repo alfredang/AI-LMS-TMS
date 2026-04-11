@@ -495,10 +495,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // Authoritative date resolvers. SSG returns dates as flat integers in
       // YYYYMMDD form (e.g. 20260410). Client may send them as `registrationDates.opening`
       // (nested). Prefer SSG's flat values; fall back to client nested; then 0.
-      const resolvedOpeningReg = existingSsgRun?.registrationOpeningDate
+      let resolvedOpeningReg = existingSsgRun?.registrationOpeningDate
         || runData.registrationDates?.opening
         || 0;
-      const resolvedClosingReg = existingSsgRun?.registrationClosingDate
+      let resolvedClosingReg = existingSsgRun?.registrationClosingDate
         || runData.registrationDates?.closing
         || 0;
       const resolvedStartDate = existingSsgRun?.courseStartDate
@@ -508,29 +508,54 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         || runData.courseDates?.end
         || 0;
 
-      // Validate BEFORE hitting SSG — if we still have 0/0, no point encrypting + posting
-      // just to get a validation failure. Return a clear error with actionable message.
-      if (!resolvedOpeningReg || !resolvedClosingReg || !resolvedStartDate || !resolvedEndDate) {
-        console.error('❌ Cannot assign trainer: SSG-side dates are missing', {
-          resolvedOpeningReg, resolvedClosingReg, resolvedStartDate, resolvedEndDate,
-          runId,
+      // Validate course dates BEFORE hitting SSG — if missing, nothing we can do.
+      if (!resolvedStartDate || !resolvedEndDate) {
+        console.error('❌ Cannot assign trainer: SSG-side course dates are missing', {
+          resolvedStartDate, resolvedEndDate, runId,
         });
         return res.status(400).json({
           error: {
             code: 'MISSING_SSG_DATES',
-            message: `Cannot assign trainer to course run ${runId}: SSG does not have valid registration/course dates for this run. Please ensure the course run is fully published on TPGateway with opening/closing registration dates set, then try again.`,
+            message: `Cannot assign trainer to course run ${runId}: SSG does not have valid course start/end dates for this run. Please ensure the course run is fully published on TPGateway, then try again.`,
           },
         });
       }
-      if (Number(resolvedOpeningReg) >= Number(resolvedClosingReg)) {
-        console.error('❌ Invalid SSG registration dates (opening >= closing)', {
-          resolvedOpeningReg, resolvedClosingReg, runId,
-        });
-        return res.status(400).json({
-          error: {
-            code: 'INVALID_SSG_DATES',
-            message: `Cannot assign trainer to course run ${runId}: SSG has opening registration date (${resolvedOpeningReg}) on or after closing registration date (${resolvedClosingReg}). Please correct the registration dates on TPGateway first.`,
-          },
+
+      // Auto-correct broken registration dates. Known SSG quirk: a course run
+      // can have both opening and closing registration dates set to the same
+      // day (or even empty), and SSG will reject its OWN data on edit with
+      // "Opening registration date must be before closing registration date".
+      //
+      // Since we're doing action="update" anyway, we fix the dates in the
+      // outbound payload: default opening to the course start date, closing
+      // to course start + 1 day. This lets us push through a trainer assignment
+      // without forcing the admin to hand-edit dates on TPGateway first.
+      const addOneDayYYYYMMDD = (yyyymmdd: number | string): number => {
+        const s = String(yyyymmdd);
+        if (s.length !== 8) return Number(yyyymmdd) || 0;
+        const y = parseInt(s.slice(0, 4), 10);
+        const m = parseInt(s.slice(4, 6), 10);
+        const d = parseInt(s.slice(6, 8), 10);
+        const date = new Date(Date.UTC(y, m - 1, d));
+        date.setUTCDate(date.getUTCDate() + 1);
+        const yy = date.getUTCFullYear();
+        const mm = String(date.getUTCMonth() + 1).padStart(2, '0');
+        const dd = String(date.getUTCDate()).padStart(2, '0');
+        return parseInt(`${yy}${mm}${dd}`, 10);
+      };
+
+      if (!resolvedOpeningReg || !resolvedClosingReg || Number(resolvedOpeningReg) >= Number(resolvedClosingReg)) {
+        const originalOpening = resolvedOpeningReg;
+        const originalClosing = resolvedClosingReg;
+        // Default: open registration on the course start date, close it one day later.
+        // This is a safe minimal window that satisfies SSG's "opening < closing" rule
+        // without assuming anything about the real-world registration window.
+        resolvedOpeningReg = Number(resolvedStartDate);
+        resolvedClosingReg = addOneDayYYYYMMDD(resolvedStartDate);
+        console.warn(`⚠️ SSG registration dates invalid for run ${runId} — auto-correcting`, {
+          originalOpening, originalClosing,
+          newOpening: resolvedOpeningReg, newClosing: resolvedClosingReg,
+          reason: 'opening >= closing or missing',
         });
       }
       
