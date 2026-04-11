@@ -211,6 +211,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       filters.push(`cr.class_status = $${paramIndex}`);
       params.push(classStatus);
       paramIndex++;
+    } else if (classStatus === 'ActiveOnly') {
+      // Default Upcoming Classes view: hide cancelled runs so admins see
+      // only the classes that are actually going to happen. Pass
+      // classStatus=all explicitly to include cancelled classes.
+      filters.push(`cr.class_status IN ('Confirmed', 'Pending')`);
     }
 
     const classType = req.query.classType;
