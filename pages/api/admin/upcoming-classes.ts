@@ -491,12 +491,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         break;
       }
 
-      // Derive class status: Confirmed if local trainer assigned, Pending otherwise.
-      // Exception: if the row is already 'Cancelled', leave it alone — manual cancellation is sticky.
+      // Derive class status: Confirmed if a TPG trainer OR a local trainer is
+      // assigned, Pending otherwise. 'Cancelled' is sticky — manual cancellation
+      // is never overridden by this derivation.
+      // IMPORTANT: this derivation previously only checked local trainers,
+      // which meant TPG-only rows would be stomped back to Pending on every
+      // page load — undoing the auto-confirm logic in the trainer-write paths.
       const hasLocalTrainer = !!(allLocalPairs[0]?.name);
+      const hasTpgTrainer = !!((row.assigned_trainer_tpg || '').toString().trim());
       const derivedStatus = row.class_status === 'Cancelled'
         ? 'Cancelled'
-        : (hasLocalTrainer ? 'Confirmed' : 'Pending');
+        : ((hasLocalTrainer || hasTpgTrainer) ? 'Confirmed' : 'Pending');
 
       // Persist to DB if status changed (skipped automatically when already Cancelled)
       if (row.class_status !== derivedStatus) {

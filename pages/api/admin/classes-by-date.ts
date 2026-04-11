@@ -323,12 +323,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         break;
       }
 
-      // Derive class status: sticky-Cancelled, else Confirmed if local trainer
-      // present, else Pending. Mirrors upcoming-classes.ts:494-504.
+      // Derive class status: sticky-Cancelled, else Confirmed if a TPG or local
+      // trainer is assigned, else Pending. Mirrors upcoming-classes.ts.
+      // Previously this only considered local trainers — TPG-only rows would
+      // get stomped back to Pending on every page load.
       const hasLocalTrainer = !!(allLocalPairs[0]?.name);
+      const hasTpgTrainer = !!((row.tpg_assigned_trainer_name || '').toString().trim());
       const derivedStatus: 'Cancelled' | 'Confirmed' | 'Pending' = row.class_status === 'Cancelled'
         ? 'Cancelled'
-        : (hasLocalTrainer ? 'Confirmed' : 'Pending');
+        : ((hasLocalTrainer || hasTpgTrainer) ? 'Confirmed' : 'Pending');
 
       // Persist sticky-Confirmed/Pending (never overwrites Cancelled).
       // Dedupe writes across multi-session multi-date rows for the same course run.
