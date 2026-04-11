@@ -226,6 +226,12 @@ export const ClassManagerView: React.FC<ClassManagerViewProps> = ({ courseToEdit
     const [manualTrainerContact, setManualTrainerContact] = useState('');
     // Track all locally-assigned trainers from junction table
     const [assignedTrainersList, setAssignedTrainersList] = useState<any[]>([]);
+    // Per-session trainer override state. `sessionTrainerList` is the list of
+    // local course_session rows (not SSG) with each session's resolved trainer
+    // — either the run-level default or a per-session override.
+    const [sessionTrainerList, setSessionTrainerList] = useState<any[]>([]);
+    const [sessionTrainerLoading, setSessionTrainerLoading] = useState(false);
+    const [sessionTrainerExpanded, setSessionTrainerExpanded] = useState(false);
     // Legacy single-trainer state (kept for backward compat during transition)
     const [localAssignedTrainerName, setLocalAssignedTrainerName] = useState(courseToEdit?.assignedTrainerName || '');
     const [localAssignedTrainerEmail, setLocalAssignedTrainerEmail] = useState(courseToEdit?.assignedTrainerEmail || '');
@@ -1678,8 +1684,52 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=update-sessions
         }
         if (isEditMode && activeTab === 'trainer' && courseToEdit?.id) {
             fetchAssignedTrainers();
+            fetchSessionTrainers();
         }
     }, [isEditMode, activeTab]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // Fetch per-session trainer overrides from local DB. The endpoint resolves
+    // the effective trainer per session server-side (inherit or override).
+    const fetchSessionTrainers = async () => {
+        if (!courseToEdit?.id) return;
+        setSessionTrainerLoading(true);
+        try {
+            const res = await fetch(`/api/admin/course-sessions/list-with-trainers?courseRunUuid=${courseToEdit.id}`);
+            const json = await res.json();
+            if (json.success && json.data?.sessions) {
+                setSessionTrainerList(json.data.sessions);
+            }
+        } catch {
+            // silent — feature degrades gracefully
+        } finally {
+            setSessionTrainerLoading(false);
+        }
+    };
+
+    // Update or clear a per-session trainer override. Pass trainerId=null to clear.
+    const updateSessionTrainer = async (
+        sessionId: string,
+        trainerId: string | null,
+        trainerName: string | null,
+        trainerEmail: string | null
+    ) => {
+        try {
+            const res = await fetch('/api/admin/course-sessions/update-trainer', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sessionId, trainerId, trainerName, trainerEmail }),
+            });
+            const json = await res.json();
+            if (!json.success) {
+                showErrorPopup(json.error || 'Failed to update session trainer');
+                return;
+            }
+            // Refetch to pick up the server-resolved effective trainer
+            await fetchSessionTrainers();
+        } catch (err) {
+            showErrorPopup('Failed to update session trainer');
+        }
+    };
 
     // Fetch all trainers assigned to this course run from the junction table
     const fetchAssignedTrainers = async () => {
@@ -3430,6 +3480,123 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                 {loading ? 'Saving...' : 'Add & Assign Trainer'}
                                             </Button>
                                         </div>
+                                    </div>
+                                )}
+
+                                {/* --- Per-Session Trainer Assignment --- */}
+                                {/* By default every session inherits the run-level trainer
+                                    above. This collapsible panel lets the admin override
+                                    specific sessions with a different trainer from the
+                                    pool of locally assigned trainers. */}
+                                {sessionTrainerList.length > 0 && (
+                                    <div className="mt-6 border border-blue-200 dark:border-blue-800 rounded-lg bg-blue-50/40 dark:bg-blue-900/10">
+                                        <button
+                                            type="button"
+                                            onClick={() => setSessionTrainerExpanded(v => !v)}
+                                            className="w-full flex items-center justify-between px-4 py-3 text-left"
+                                        >
+                                            <div className="flex items-center gap-2 min-w-0">
+                                                <span className="text-base">📋</span>
+                                                <div className="min-w-0">
+                                                    <h4 className="text-sm font-semibold text-gray-800 dark:text-white">
+                                                        Per-Session Trainer Assignment
+                                                    </h4>
+                                                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                                                        {sessionTrainerList.length} session{sessionTrainerList.length === 1 ? '' : 's'} ·
+                                                        {' '}{sessionTrainerList.filter(s => s.hasOverride).length} overridden ·
+                                                        {' '}{sessionTrainerList.filter(s => !s.hasOverride).length} using default
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <span className="text-xs text-blue-600 dark:text-blue-400 flex-shrink-0">
+                                                {sessionTrainerExpanded ? 'Hide ▲' : 'Show ▼'}
+                                            </span>
+                                        </button>
+                                        {sessionTrainerExpanded && (
+                                            <div className="px-4 pb-4 border-t border-blue-200 dark:border-blue-800">
+                                                <p className="text-xs text-gray-600 dark:text-gray-400 py-3">
+                                                    Every session below uses the <strong>run-level trainer</strong> by default.
+                                                    Use the dropdown to assign a different trainer to specific sessions —
+                                                    choose a trainer from the Assigned Trainer (Local) list above. Select
+                                                    "Use default" to revert a session back to the run-level trainer.
+                                                </p>
+                                                {sessionTrainerLoading ? (
+                                                    <p className="text-xs text-gray-500 italic">Loading sessions…</p>
+                                                ) : (
+                                                    <div className="space-y-2">
+                                                        {sessionTrainerList.map((s: any) => {
+                                                            const effectiveName = s.trainer?.trainerName || '—';
+                                                            // Format date: 20260411 -> 11 Apr 2026
+                                                            const formatDate = (yyyymmdd: string) => {
+                                                                if (!yyyymmdd || yyyymmdd.length !== 8) return yyyymmdd || '';
+                                                                const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+                                                                const y = yyyymmdd.slice(0, 4);
+                                                                const m = parseInt(yyyymmdd.slice(4, 6), 10) - 1;
+                                                                const d = parseInt(yyyymmdd.slice(6, 8), 10);
+                                                                return `${d} ${months[m] || '?'} ${y}`;
+                                                            };
+                                                            return (
+                                                                <div
+                                                                    key={s.id}
+                                                                    className={`flex items-center gap-3 px-3 py-2 rounded border ${
+                                                                        s.hasOverride
+                                                                            ? 'border-blue-400 dark:border-blue-600 bg-white dark:bg-gray-800'
+                                                                            : 'border-gray-200 dark:border-gray-700 bg-white/70 dark:bg-gray-800/60'
+                                                                    }`}
+                                                                >
+                                                                    <div className="flex-1 min-w-0">
+                                                                        <div className="flex items-center gap-2 flex-wrap">
+                                                                            <span className="text-xs font-bold text-blue-700 dark:text-blue-300">
+                                                                                {s.sessionNumber || 'S?'}
+                                                                            </span>
+                                                                            <span className="text-xs text-gray-600 dark:text-gray-400">
+                                                                                {formatDate(s.startDate)}
+                                                                                {s.startTime && s.endTime && ` · ${s.startTime}–${s.endTime}`}
+                                                                            </span>
+                                                                            {s.hasOverride ? (
+                                                                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 font-semibold">
+                                                                                    Override
+                                                                                </span>
+                                                                            ) : (
+                                                                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300">
+                                                                                    Default
+                                                                                </span>
+                                                                            )}
+                                                                        </div>
+                                                                        <div className="text-xs text-gray-700 dark:text-gray-200 mt-0.5 truncate">
+                                                                            {effectiveName}
+                                                                        </div>
+                                                                    </div>
+                                                                    <select
+                                                                        value={s.hasOverride ? (s.trainer?.trainerId || '') : ''}
+                                                                        onChange={(e) => {
+                                                                            const chosenId = e.target.value;
+                                                                            if (!chosenId) {
+                                                                                // Clear override — revert to run-level default
+                                                                                updateSessionTrainer(s.id, null, null, null);
+                                                                                return;
+                                                                            }
+                                                                            const chosen = assignedTrainersList.find((t: any) => t.trainer_id === chosenId);
+                                                                            if (chosen) {
+                                                                                updateSessionTrainer(s.id, chosen.trainer_id, chosen.trainer_name, chosen.trainer_email);
+                                                                            }
+                                                                        }}
+                                                                        className="flex-shrink-0 text-xs px-2 py-1 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                                    >
+                                                                        <option value="">Use default</option>
+                                                                        {assignedTrainersList.map((t: any) => (
+                                                                            <option key={t.trainer_id || t.trainer_name} value={t.trainer_id || ''}>
+                                                                                {t.trainer_name}
+                                                                            </option>
+                                                                        ))}
+                                                                    </select>
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
                                     </div>
                                 )}
                             </div>
