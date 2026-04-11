@@ -6140,25 +6140,40 @@ export const UpcomingEnrolmentView: React.FC = () => {
     // Date states
     const [startDate, setStartDate] = useState(() => {
         const d = new Date();
-        const year = d.getFullYear();
-        const month = String(d.getMonth() + 1).padStart(2, '0');
         const day = String(d.getDate()).padStart(2, '0');
-        return `${year}-${month}-${day}`;
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const year = d.getFullYear();
+        return `${day}/${month}/${year}`;
     });
     const [endDate, setEndDate] = useState(() => {
         const d = new Date();
         d.setDate(d.getDate() + 21);
-        const year = d.getFullYear();
-        const month = String(d.getMonth() + 1).padStart(2, '0');
         const day = String(d.getDate()).padStart(2, '0');
-        return `${year}-${month}-${day}`;
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const year = d.getFullYear();
+        return `${day}/${month}/${year}`;
     });
+
+    // Helper to format text input to DD/MM/YYYY
+    const formatDateInput = (value: string) => {
+        const numeric = value.replace(/\D/g, '');
+        if (numeric.length <= 2) return numeric;
+        if (numeric.length <= 4) return `${numeric.slice(0, 2)}/${numeric.slice(2)}`;
+        return `${numeric.slice(0, 2)}/${numeric.slice(2, 4)}/${numeric.slice(4, 8)}`;
+    };
+
+    // Helper to convert DD/MM/YYYY to YYYY-MM-DD for API
+    const toIsoDate = (dmy: string) => {
+        const parts = dmy.split('/');
+        if (parts.length !== 3) return dmy;
+        return `${parts[2]}-${parts[1]}-${parts[0]}`;
+    };
 
     const fetchData = async () => {
         setLoading(true);
         setError(null);
         try {
-            const res = await fetch(`/api/admin/upcoming-enrolment?startDate=${startDate}&endDate=${endDate}`);
+            const res = await fetch(`/api/admin/upcoming-enrolment?startDate=${toIsoDate(startDate)}&endDate=${toIsoDate(endDate)}`);
             const json = await res.json();
             if (json.success) {
                 setData(json.data);
@@ -6202,19 +6217,23 @@ export const UpcomingEnrolmentView: React.FC = () => {
                     <div className="space-y-1">
                         <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500">Start Date</label>
                         <input
-                            type="date"
+                            type="text"
+                            placeholder="DD/MM/YYYY"
                             value={startDate}
-                            onChange={(e) => setStartDate(e.target.value)}
-                            className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                            onChange={(e) => setStartDate(formatDateInput(e.target.value))}
+                            maxLength={10}
+                            className="w-32 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
                         />
                     </div>
                     <div className="space-y-1">
                         <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500">End Date</label>
                         <input
-                            type="date"
+                            type="text"
+                            placeholder="DD/MM/YYYY"
                             value={endDate}
-                            onChange={(e) => setEndDate(e.target.value)}
-                            className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                            onChange={(e) => setEndDate(formatDateInput(e.target.value))}
+                            maxLength={10}
+                            className="w-32 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
                         />
                     </div>
                     <Button onClick={fetchData} disabled={loading}>
