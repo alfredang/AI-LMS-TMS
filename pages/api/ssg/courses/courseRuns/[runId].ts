@@ -454,26 +454,85 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       console.log('✅ Trainer assignment validation passed, sending to SSG API...');
 
-      // Try to fetch existing course run data for venue info, but don't fail if unavailable
-      console.log('📥 Fetching existing course run data for venue information...');
+      // Fetch existing course run data from SSG as the AUTHORITATIVE source for
+      // dates, venue, and scheduleInfo. The client's `ssgApiResponse.data.course.run`
+      // may be stale or missing fields — which caused SSG to reject the update with
+      // "Opening registration date must be before closing registration date" when
+      // the client payload defaulted registrationDates to {opening: 0, closing: 0}.
+      //
+      // SSG's viewCourseRun response shape is `data.course.run` — note the previous
+      // version of this code incorrectly read `data.run.venue`, so `existingVenue`
+      // was always empty regardless of whether the SSG fetch succeeded.
+      console.log('📥 Fetching existing course run data from SSG for dates + venue...');
       let existingVenue: any = {};
+      let existingSsgRun: any = null;
       try {
         const existingCourseRun = await apiClient.viewCourseRun(runId, includeExpired);
         if (!existingCourseRun.error) {
-          existingVenue = existingCourseRun.data?.run?.venue || {};
-          console.log('📍 Existing venue data:', JSON.stringify(existingVenue, null, 2));
+          // Correct shape: data.course.run (not data.run)
+          existingSsgRun = (existingCourseRun.data as any)?.course?.run || null;
+          existingVenue = existingSsgRun?.venue || {};
+          console.log('📍 Existing SSG run snapshot:', JSON.stringify({
+            registrationOpeningDate: existingSsgRun?.registrationOpeningDate,
+            registrationClosingDate: existingSsgRun?.registrationClosingDate,
+            courseStartDate: existingSsgRun?.courseStartDate,
+            courseEndDate: existingSsgRun?.courseEndDate,
+            venue: existingVenue,
+          }, null, 2));
         } else {
-          console.log('⚠️ Could not fetch existing course run data, using request body venue data instead');
+          console.log('⚠️ Could not fetch existing course run data from SSG — falling back to client payload');
         }
       } catch (fetchErr) {
         console.log('⚠️ Error fetching existing course run data, proceeding with request body data:', fetchErr);
       }
 
-      console.log('📍 Existing venue data:', JSON.stringify(existingVenue, null, 2));
-
-      // Transform the request to match the exact nested structure expected by SSG API
+      // Transform the request to match the exact nested structure expected by SSG API.
+      // Prefer SSG's own snapshot fields when present — only fall back to client
+      // payload if the SSG fetch failed.
       const runData = requestData.course.run;
       const trainerData = requestData.course.run.linkCourseRunTrainer;
+
+      // Authoritative date resolvers. SSG returns dates as flat integers in
+      // YYYYMMDD form (e.g. 20260410). Client may send them as `registrationDates.opening`
+      // (nested). Prefer SSG's flat values; fall back to client nested; then 0.
+      const resolvedOpeningReg = existingSsgRun?.registrationOpeningDate
+        || runData.registrationDates?.opening
+        || 0;
+      const resolvedClosingReg = existingSsgRun?.registrationClosingDate
+        || runData.registrationDates?.closing
+        || 0;
+      const resolvedStartDate = existingSsgRun?.courseStartDate
+        || runData.courseDates?.start
+        || 0;
+      const resolvedEndDate = existingSsgRun?.courseEndDate
+        || runData.courseDates?.end
+        || 0;
+
+      // Validate BEFORE hitting SSG — if we still have 0/0, no point encrypting + posting
+      // just to get a validation failure. Return a clear error with actionable message.
+      if (!resolvedOpeningReg || !resolvedClosingReg || !resolvedStartDate || !resolvedEndDate) {
+        console.error('❌ Cannot assign trainer: SSG-side dates are missing', {
+          resolvedOpeningReg, resolvedClosingReg, resolvedStartDate, resolvedEndDate,
+          runId,
+        });
+        return res.status(400).json({
+          error: {
+            code: 'MISSING_SSG_DATES',
+            message: `Cannot assign trainer to course run ${runId}: SSG does not have valid registration/course dates for this run. Please ensure the course run is fully published on TPGateway with opening/closing registration dates set, then try again.`,
+          },
+        });
+      }
+      if (Number(resolvedOpeningReg) >= Number(resolvedClosingReg)) {
+        console.error('❌ Invalid SSG registration dates (opening >= closing)', {
+          resolvedOpeningReg, resolvedClosingReg, runId,
+        });
+        return res.status(400).json({
+          error: {
+            code: 'INVALID_SSG_DATES',
+            message: `Cannot assign trainer to course run ${runId}: SSG has opening registration date (${resolvedOpeningReg}) on or after closing registration date (${resolvedClosingReg}). Please correct the registration dates on TPGateway first.`,
+          },
+        });
+      }
       
       console.log('🔍 Raw trainer data received:', JSON.stringify(trainerData, null, 2));
       console.log('🔍 Is trainer data array?', Array.isArray(trainerData));
@@ -499,12 +558,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           run: {
             action: "update",
             registrationDates: {
-              opening: runData.registrationDates?.opening || 0,
-              closing: runData.registrationDates?.closing || 0
+              opening: resolvedOpeningReg,
+              closing: resolvedClosingReg
             },
             courseDates: {
-              start: runData.courseDates?.start || 0,
-              end: runData.courseDates?.end || 0
+              start: resolvedStartDate,
+              end: resolvedEndDate
             },
             scheduleInfoType: {
               code: runData.scheduleInfoType?.code || "01",
@@ -545,27 +604,26 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       console.log('🔄 Transformed payload for SSG API:', JSON.stringify(ssgRequestBody, null, 2));
 
+      // Helper: SSG sends dates as flat YYYYMMDD integers (or strings). EditRunInfo
+      // expects YYYY-MM-DD strings. Normalise either shape.
+      const toIsoDate = (val: any): string | undefined => {
+        if (!val) return undefined;
+        const s = String(val);
+        if (s.length === 8 && /^\d{8}$/.test(s)) {
+          return s.replace(/(\d{4})(\d{2})(\d{2})/, '$1-$2-$3');
+        }
+        return s;
+      };
+
       // Create flat EditRunInfo structure that will produce the nested structure we want
       const editRunInfo: EditRunInfo = {
         courseReferenceNumber: requestData.course.courseReferenceNumber,
-        
-        // Convert dates back to YYYY-MM-DD format for EditRunInfo
-        openingRegistrationDate: runData.registrationDates?.opening ? 
-          (String(runData.registrationDates.opening).length === 8 ? 
-            String(runData.registrationDates.opening).replace(/(\d{4})(\d{2})(\d{2})/, '$1-$2-$3') : 
-            String(runData.registrationDates.opening)) : undefined,
-        closingRegistrationDate: runData.registrationDates?.closing ? 
-          (String(runData.registrationDates.closing).length === 8 ? 
-            String(runData.registrationDates.closing).replace(/(\d{4})(\d{2})(\d{2})/, '$1-$2-$3') : 
-            String(runData.registrationDates.closing)) : undefined,
-        courseStartDate: runData.courseDates?.start ? 
-          (String(runData.courseDates.start).length === 8 ? 
-            String(runData.courseDates.start).replace(/(\d{4})(\d{2})(\d{2})/, '$1-$2-$3') : 
-            String(runData.courseDates.start)) : undefined,
-        courseEndDate: runData.courseDates?.end ? 
-          (String(runData.courseDates.end).length === 8 ? 
-            String(runData.courseDates.end).replace(/(\d{4})(\d{2})(\d{2})/, '$1-$2-$3') : 
-            String(runData.courseDates.end)) : undefined,
+
+        // Dates sourced from SSG (preferred) or client fallback — already validated above.
+        openingRegistrationDate: toIsoDate(resolvedOpeningReg),
+        closingRegistrationDate: toIsoDate(resolvedClosingReg),
+        courseStartDate: toIsoDate(resolvedStartDate),
+        courseEndDate: toIsoDate(resolvedEndDate),
 
         // Schedule info
         scheduleInfoTypeCode: runData.scheduleInfoType?.code || "01",
