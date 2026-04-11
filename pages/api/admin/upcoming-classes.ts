@@ -58,7 +58,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       let paramIdx = 1;
 
       if (class_status) {
-        const validStatuses = ['Confirmed', 'Pending', 'Cancelled'];
+        const validStatuses = ['Confirmed', 'Pending', 'Cancelled', 'Unconfirmed'];
         if (!validStatuses.includes(class_status)) {
           return res.status(400).json({ success: false, error: `Invalid status. Must be one of: ${validStatuses.join(', ')}` });
         }
@@ -215,7 +215,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // Default Upcoming Classes view: hide cancelled runs so admins see
       // only the classes that are actually going to happen. Pass
       // classStatus=all explicitly to include cancelled classes.
-      filters.push(`cr.class_status IN ('Confirmed', 'Pending')`);
+      filters.push(`cr.class_status IN ('Confirmed', 'Pending', 'Unconfirmed')`);
     }
 
     const classType = req.query.classType;
@@ -524,8 +524,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const hasLocalTrainer = !!(allLocalPairs[0]?.name);
       const hasLegacyLocalTrainer = !!((row.legacy_assigned_trainer_name || '').toString().trim());
       const hasTpgTrainer = !!((row.assigned_trainer_tpg || '').toString().trim());
-      const derivedStatus = row.class_status === 'Cancelled'
-        ? 'Cancelled'
+      const derivedStatus = (row.class_status === 'Cancelled' || row.class_status === 'Unconfirmed')
+        ? row.class_status
         : ((hasLocalTrainer || hasLegacyLocalTrainer || hasTpgTrainer) ? 'Confirmed' : 'Pending');
 
       // Persist to DB if status changed (skipped automatically when already Cancelled)
@@ -544,7 +544,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         endDate: row.end_date,
         assignedTrainerTpg: row.assigned_trainer_tpg || '',
         assignedTrainerTpgEmail: row.assigned_trainer_tpg_email || '',
-        assignedTrainerLocal: allLocalPairs[0]?.name || '',
+        assignedTrainerLocal: allLocalPairs[0]?.name || (row.legacy_assigned_trainer_name || '').toString().trim() || '',
         assignedTrainerLocalEmail: allLocalPairs[0]?.email || '',
         nextAvailableTrainer,
         nextAvailableTrainerEmail,

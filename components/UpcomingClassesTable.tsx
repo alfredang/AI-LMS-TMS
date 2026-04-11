@@ -226,6 +226,8 @@ const getStatusColor = (status: string) => {
         case 'Failed':
         case 'Cancelled':
             return 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-200';
+        case 'Unconfirmed':
+            return 'bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-200';
         default:
             return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
     }
@@ -350,6 +352,14 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
     const [bulkSelected, setBulkSelected] = useState<Set<string>>(new Set());
     const [bulkDateFrom, setBulkDateFrom] = useState('');
     const [bulkDateTo, setBulkDateTo] = useState('');
+    const [showTpgPreview, setShowTpgPreview] = useState(false);
+    const [tpgPreviewData, setTpgPreviewData] = useState<any[]>([]);
+    const [tpgPreviewLoading, setTpgPreviewLoading] = useState(false);
+    const [tpgSelected, setTpgSelected] = useState<Set<string>>(new Set());
+    const [tpgSending, setTpgSending] = useState(false);
+    const [tpgDateFrom, setTpgDateFrom] = useState('');
+    const [tpgDateTo, setTpgDateTo] = useState('');
+    const [revealedNrics, setRevealedNrics] = useState<Set<string>>(new Set());
     const tableScrollRef = useRef<HTMLDivElement>(null);
     const theadRef = useRef<HTMLTableSectionElement>(null);
     const [actionMessage, setActionMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -702,6 +712,35 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                             {bulkPreviewLoading ? 'Loading...' : 'Invite All Pending'}
                         </Button>
                         <Button
+                            variant="secondary"
+                            size="sm"
+                            disabled={tpgPreviewLoading}
+                            onClick={async () => {
+                                setTpgPreviewLoading(true);
+                                setTpgDateFrom('');
+                                setTpgDateTo('');
+                                setRevealedNrics(new Set());
+                                try {
+                                    const res = await fetch(getApiUrl('/api/admin/preview-bulk-tpg-assign'));
+                                    const data = await res.json();
+                                    if (data.success) {
+                                        setTpgPreviewData(data.preview || []);
+                                        const assignable = (data.preview || []).filter((p: any) => p.canAssign);
+                                        setTpgSelected(new Set(assignable.map((p: any) => p.courseRunUuid)));
+                                        setShowTpgPreview(true);
+                                    } else {
+                                        setActionMessage({ type: 'error', text: data.error || 'Failed to load TPG preview' });
+                                    }
+                                } catch {
+                                    setActionMessage({ type: 'error', text: 'Failed to load TPG preview' });
+                                } finally {
+                                    setTpgPreviewLoading(false);
+                                }
+                            }}
+                        >
+                            {tpgPreviewLoading ? 'Loading...' : 'Assign to TPG'}
+                        </Button>
+                        <Button
                             variant="primary"
                             size="sm"
                             onClick={() => { setShowImportModal(true); setImportResult(null); setImportRunId(''); }}
@@ -1050,7 +1089,7 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                             <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.courseCode}</td>
                                             <td className="px-4 py-2 whitespace-nowrap text-sm">
                                                 <select
-                                                    value={classItem.classStatus === 'Cancelled' ? 'Cancelled' : 'auto'}
+                                                    value={classItem.classStatus === 'Cancelled' ? 'Cancelled' : classItem.classStatus === 'Unconfirmed' ? 'Unconfirmed' : 'auto'}
                                                     onChange={async (e) => {
                                                         // Two-option dropdown: "Pending/Confirmed" (auto-derived from local trainer)
                                                         // or "Cancelled" (manual sticky override). When switching off Cancelled,
@@ -1058,8 +1097,8 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                                         const selection = e.target.value;
                                                         const hasLocalTrainer = !!(classItem.assignedTrainerLocal || '').trim();
                                                         const hasTpgTrainer = !!(classItem.assignedTrainerTpg || '').trim();
-                                                        const newStatus = selection === 'Cancelled'
-                                                            ? 'Cancelled'
+                                                        const newStatus = (selection === 'Cancelled' || selection === 'Unconfirmed')
+                                                            ? selection
                                                             : ((hasLocalTrainer || hasTpgTrainer) ? 'Confirmed' : 'Pending');
                                                         try {
                                                             await fetch(getApiUrl('/api/admin/upcoming-classes'), {
@@ -1070,17 +1109,26 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                                             setUpcomingClasses(prev => prev.map(c => c.id === classItem.id ? { ...c, classStatus: newStatus } : c));
                                                         } catch { /* silent */ }
                                                     }}
-                                                    className={`text-xs font-semibold rounded-full px-2 py-1 border-0 cursor-pointer focus:ring-2 focus:ring-blue-500 ${getStatusColor(classItem.classStatus)}`}
+                                                    className={`text-xs font-semibold rounded-full px-2 py-1 border-0 cursor-pointer focus:ring-2 focus:ring-blue-500 text-center ${getStatusColor(classItem.classStatus)}`}
+                                                    style={{ width: '120px', textAlignLast: 'center' }}
                                                 >
                                                     {classItem.classStatus === 'Cancelled' ? (
                                                         <>
-                                                            <option value="Cancelled">Cancelled</option>
-                                                            <option value="auto">Confirmed/Pending</option>
+                                                            <option value="Cancelled" className="text-left">Cancelled</option>
+                                                            <option value="auto" className="text-left">Confirmed/Pending</option>
+                                                            <option value="Unconfirmed" className="text-left">Unconfirmed</option>
+                                                        </>
+                                                    ) : classItem.classStatus === 'Unconfirmed' ? (
+                                                        <>
+                                                            <option value="Unconfirmed" className="text-left">Unconfirmed</option>
+                                                            <option value="auto" className="text-left">Confirmed/Pending</option>
+                                                            <option value="Cancelled" className="text-left">Cancelled</option>
                                                         </>
                                                     ) : (
                                                         <>
-                                                            <option value="auto">{classItem.classStatus}</option>
-                                                            <option value="Cancelled">Cancelled</option>
+                                                            <option value="auto" className="text-left">{classItem.classStatus}</option>
+                                                            <option value="Cancelled" className="text-left">Cancelled</option>
+                                                            <option value="Unconfirmed" className="text-left">Unconfirmed</option>
                                                         </>
                                                     )}
                                                 </select>
@@ -1377,6 +1425,201 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                 >
                                     <Icon name={IconName.Send} className="w-4 h-4 mr-1" />
                                     {bulkSending ? 'Sending...' : `Send ${bulkSelected.size} Invitation${bulkSelected.size !== 1 ? 's' : ''}`}
+                                </Button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Bulk TPG Assign Preview Modal */}
+            {showTpgPreview && (
+                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-5xl max-h-[85vh] flex flex-col border dark:border-gray-700">
+                        <div className="p-4 border-b dark:border-gray-700">
+                            <div className="flex items-center justify-between mb-3">
+                                <div>
+                                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Preview: Assign Trainers to TPG</h3>
+                                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+                                        {tpgPreviewData.filter(p => p.canAssign).length} assignable / {tpgPreviewData.length} total course runs with no TPG trainer
+                                    </p>
+                                </div>
+                                <button onClick={() => setShowTpgPreview(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-xl">&times;</button>
+                            </div>
+                            <div className="flex items-center gap-3">
+                                <label className="text-xs text-gray-500 dark:text-gray-400">From</label>
+                                <input type="date" value={tpgDateFrom} onChange={(e) => {
+                                    setTpgDateFrom(e.target.value);
+                                    setTpgPreviewLoading(true);
+                                    const params = new URLSearchParams();
+                                    if (e.target.value) params.set('dateFrom', e.target.value);
+                                    if (tpgDateTo) params.set('dateTo', tpgDateTo);
+                                    fetch(getApiUrl(`/api/admin/preview-bulk-tpg-assign?${params.toString()}`))
+                                        .then(r => r.json())
+                                        .then(data => {
+                                            if (data.success) {
+                                                setTpgPreviewData(data.preview || []);
+                                                setTpgSelected(new Set((data.preview || []).filter((p: any) => p.canAssign).map((p: any) => p.courseRunUuid)));
+                                            }
+                                        })
+                                        .catch(() => {})
+                                        .finally(() => setTpgPreviewLoading(false));
+                                }} className="px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white" />
+                                <label className="text-xs text-gray-500 dark:text-gray-400">To</label>
+                                <input type="date" value={tpgDateTo} onChange={(e) => {
+                                    setTpgDateTo(e.target.value);
+                                    setTpgPreviewLoading(true);
+                                    const params = new URLSearchParams();
+                                    if (tpgDateFrom) params.set('dateFrom', tpgDateFrom);
+                                    if (e.target.value) params.set('dateTo', e.target.value);
+                                    fetch(getApiUrl(`/api/admin/preview-bulk-tpg-assign?${params.toString()}`))
+                                        .then(r => r.json())
+                                        .then(data => {
+                                            if (data.success) {
+                                                setTpgPreviewData(data.preview || []);
+                                                setTpgSelected(new Set((data.preview || []).filter((p: any) => p.canAssign).map((p: any) => p.courseRunUuid)));
+                                            }
+                                        })
+                                        .catch(() => {})
+                                        .finally(() => setTpgPreviewLoading(false));
+                                }} className="px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white" />
+                            </div>
+                        </div>
+                        <div className="flex-1 overflow-auto p-4">
+                            {tpgPreviewData.length === 0 ? (
+                                <p className="text-sm text-gray-500 dark:text-gray-400">No eligible course runs found.</p>
+                            ) : (
+                                <table className="w-full text-sm">
+                                    <thead>
+                                        <tr className="text-left text-xs text-gray-500 dark:text-gray-400 border-b dark:border-gray-700">
+                                            <th className="pb-2 pr-2 w-8">
+                                                <input type="checkbox"
+                                                    checked={tpgSelected.size === tpgPreviewData.filter(p => p.canAssign).length && tpgSelected.size > 0}
+                                                    onChange={(e) => {
+                                                        if (e.target.checked) setTpgSelected(new Set(tpgPreviewData.filter(p => p.canAssign).map(p => p.courseRunUuid)));
+                                                        else setTpgSelected(new Set());
+                                                    }}
+                                                    className="rounded"
+                                                />
+                                            </th>
+                                            <th className="pb-2 pr-2">Course Run</th>
+                                            <th className="pb-2 pr-2">Course Title</th>
+                                            <th className="pb-2 pr-2">Start Date</th>
+                                            <th className="pb-2 pr-2">Status</th>
+                                            <th className="pb-2 pr-2">Trainer</th>
+                                            <th className="pb-2">NRIC</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {tpgPreviewData.map((item: any) => {
+                                            const primary = item.localTrainers?.[0];
+                                            const nricKey = item.courseRunUuid;
+                                            const isRevealed = revealedNrics.has(nricKey);
+                                            return (
+                                                <tr key={item.courseRunUuid} className={`border-b dark:border-gray-700/50 ${!item.canAssign ? 'opacity-50' : ''}`}>
+                                                    <td className="py-2 pr-2">
+                                                        <input type="checkbox" checked={tpgSelected.has(item.courseRunUuid)} disabled={!item.canAssign}
+                                                            onChange={(e) => {
+                                                                const next = new Set(tpgSelected);
+                                                                if (e.target.checked) next.add(item.courseRunUuid);
+                                                                else next.delete(item.courseRunUuid);
+                                                                setTpgSelected(next);
+                                                            }}
+                                                            className="rounded"
+                                                        />
+                                                    </td>
+                                                    <td className="py-2 pr-2 font-mono text-xs">{item.courseRunId}</td>
+                                                    <td className="py-2 pr-2 max-w-[200px] truncate" title={item.courseTitle}>{item.courseTitle}</td>
+                                                    <td className="py-2 pr-2 whitespace-nowrap">{item.startDate ? new Date(item.startDate).toLocaleDateString('en-SG') : '—'}</td>
+                                                    <td className="py-2 pr-2">
+                                                        <span className={`px-1.5 py-0.5 text-[10px] font-semibold rounded ${
+                                                            item.classStatus === 'Confirmed' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' :
+                                                            item.classStatus === 'Pending' ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300' :
+                                                            'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400'
+                                                        }`}>{item.classStatus || '—'}</span>
+                                                    </td>
+                                                    <td className="py-2 pr-2">
+                                                        {item.localTrainers?.length > 0 ? (
+                                                            <div>
+                                                                {item.localTrainers.map((t: any, i: number) => (
+                                                                    <div key={i} className={`${i === 0 ? 'font-medium text-gray-900 dark:text-white' : 'text-xs text-gray-400'}`}>
+                                                                        {t.name}{i === 0 && item.localTrainers.length > 1 && ' (primary)'}
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        ) : (
+                                                            <span className="text-xs text-gray-400 italic">{item.reason}</span>
+                                                        )}
+                                                    </td>
+                                                    <td className="py-2">
+                                                        {primary?.hasNric ? (
+                                                            <div className="flex items-center gap-1.5">
+                                                                <span className="font-mono text-xs">{isRevealed ? primary.nric : primary.maskedNric}</span>
+                                                                <button
+                                                                    onClick={() => {
+                                                                        const next = new Set(revealedNrics);
+                                                                        if (isRevealed) next.delete(nricKey);
+                                                                        else next.add(nricKey);
+                                                                        setRevealedNrics(next);
+                                                                    }}
+                                                                    className="text-gray-400 hover:text-gray-200 text-xs"
+                                                                    title={isRevealed ? 'Hide NRIC' : 'Reveal NRIC'}
+                                                                >
+                                                                    {isRevealed ? '🙈' : '👁️'}
+                                                                </button>
+                                                            </div>
+                                                        ) : (
+                                                            <span className="text-xs text-amber-500">{primary ? 'No NRIC' : '—'}</span>
+                                                        )}
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            )}
+                        </div>
+                        <div className="p-4 border-t dark:border-gray-700 flex items-center justify-between">
+                            <span className="text-sm text-gray-500 dark:text-gray-400">{tpgSelected.size} selected</span>
+                            <div className="flex items-center gap-2">
+                                <Button variant="secondary" size="sm" onClick={() => setShowTpgPreview(false)}>Cancel</Button>
+                                <Button
+                                    variant="primary"
+                                    size="sm"
+                                    disabled={tpgSelected.size === 0 || tpgSending}
+                                    onClick={async () => {
+                                        setTpgSending(true);
+                                        setActionMessage(null);
+                                        try {
+                                            const items = tpgPreviewData
+                                                .filter(p => tpgSelected.has(p.courseRunUuid) && p.canAssign)
+                                                .map(p => ({
+                                                    courseRunUuid: p.courseRunUuid,
+                                                    trainerName: p.localTrainers[0]?.name,
+                                                    trainerEmail: p.localTrainers[0]?.email,
+                                                    nric: p.localTrainers[0]?.nric,
+                                                }));
+                                            const res = await fetch(getApiUrl('/api/admin/run-bulk-tpg-assign'), {
+                                                method: 'POST',
+                                                headers: { 'Content-Type': 'application/json' },
+                                                body: JSON.stringify({ items }),
+                                            });
+                                            const data = await res.json();
+                                            if (data.success) {
+                                                setActionMessage({ type: 'success', text: `TPG assigned: ${data.sent || 0} success, ${data.skipped || 0} skipped, ${data.errors || 0} errors` });
+                                                setShowTpgPreview(false);
+                                                fetchUpcomingClasses();
+                                            } else {
+                                                setActionMessage({ type: 'error', text: data.error || 'Failed to assign to TPG' });
+                                            }
+                                        } catch {
+                                            setActionMessage({ type: 'error', text: 'Failed to assign to TPG' });
+                                        } finally {
+                                            setTpgSending(false);
+                                        }
+                                    }}
+                                >
+                                    {tpgSending ? 'Assigning...' : `Assign ${tpgSelected.size} to TPG`}
                                 </Button>
                             </div>
                         </div>

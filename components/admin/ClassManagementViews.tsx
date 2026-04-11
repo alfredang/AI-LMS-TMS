@@ -2307,11 +2307,12 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                     } catch { /* silent */ }
                                                 }
                                             }}
-                                            className={inputClasses}
+                                            className={`${inputClasses} text-center`}
                                         >
                                             <option value="Confirmed">Confirmed</option>
                                             <option value="Pending">Pending</option>
                                             <option value="Cancelled">Cancelled</option>
+                                            <option value="Unconfirmed">Unconfirmed</option>
                                         </select>
                                     </div>
                                     <div>

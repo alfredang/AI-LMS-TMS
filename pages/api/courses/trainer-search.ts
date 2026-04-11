@@ -44,6 +44,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       LEFT JOIN app_user au ON cr.assigned_trainer_id = au.id
       WHERE (
         cr.assigned_trainer_id = $1
+        OR cr.tpg_assigned_trainer_id = $1
         OR EXISTS (
           SELECT 1 FROM course_run_trainer crt
           WHERE crt.course_run_id = cr.id AND crt.trainer_id = $1

@@ -65,10 +65,11 @@ const SHORT_WEEKDAYS = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
 
 const statusDotClass = (status: string): string => {
   switch (status) {
-    case 'Confirmed': return 'bg-emerald-500';
-    case 'Pending':   return 'bg-yellow-400';
-    case 'Cancelled': return 'bg-red-500';
-    default:          return 'bg-gray-400';
+    case 'Confirmed':   return 'bg-emerald-500';
+    case 'Pending':     return 'bg-yellow-400';
+    case 'Cancelled':   return 'bg-red-500';
+    case 'Unconfirmed': return 'bg-purple-500';
+    default:            return 'bg-gray-400';
   }
 };
 
@@ -76,17 +77,19 @@ const statusDotTooltip = (status: string): string => {
   switch (status) {
     case 'Confirmed': return 'Class confirmed — trainer accepted (in local)';
     case 'Pending':   return 'Pending trainer — waiting for trainers to accept OR have not sent trainer invitation';
-    case 'Cancelled': return 'Class cancelled — no enrolment OR no trainer found';
-    default:          return 'Unknown status';
+    case 'Cancelled':   return 'Class cancelled — no enrolment OR no trainer found';
+    case 'Unconfirmed': return 'Class unconfirmed';
+    default:            return 'Unknown status';
   }
 };
 
 const statusPillClass = (status: string): string => {
   switch (status) {
-    case 'Confirmed': return 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300';
-    case 'Pending':   return 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300';
-    case 'Cancelled': return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300';
-    default:          return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
+    case 'Confirmed':   return 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300';
+    case 'Pending':     return 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300';
+    case 'Cancelled':   return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300';
+    case 'Unconfirmed': return 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300';
+    default:            return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
   }
 };
 
@@ -193,7 +196,7 @@ interface EventRowProps {
   onOpenEditor: () => void;
   onInviteNext: () => void;
   onChangeNextTrainer: (trainerName: string) => void;
-  onChangeClassStatus: (newStatus: 'Confirmed' | 'Pending' | 'Cancelled') => void;
+  onChangeClassStatus: (newStatus: 'Confirmed' | 'Pending' | 'Cancelled' | 'Unconfirmed') => void;
   onChangeClassType: (newType: 'Physical' | 'Virtual' | 'Hybrid') => void;
   onViewAttendance: () => void;
   onViewEnrolment: () => void;
@@ -254,10 +257,10 @@ const EventRow: React.FC<EventRowProps> = ({
   const effectiveNextTrainer = nextTrainerOverride || event.nextAvailableTrainer;
   // Derive display status the same way as the dropdown label so dot color and
   // pill color stay in sync with the displayed text.
-  const derivedStatus: string = event.classStatus === 'Cancelled'
-    ? 'Cancelled'
+  const derivedStatus: string = (event.classStatus === 'Cancelled' || event.classStatus === 'Unconfirmed')
+    ? event.classStatus
     : ((event.localTrainerName || '').trim() ? 'Confirmed' : 'Pending');
-  const canInvite = !!effectiveNextTrainer && derivedStatus !== 'Cancelled';
+  const canInvite = !!effectiveNextTrainer && derivedStatus !== 'Cancelled' && derivedStatus !== 'Unconfirmed';
   const sessionLabel = formatSessionNumbers(event.sessionNumbers);
   const matchState = trainersMatchState(event);
 
@@ -343,29 +346,39 @@ const EventRow: React.FC<EventRowProps> = ({
               label="Class Status"
               value={
                 <select
-                  value={derivedStatus === 'Cancelled' ? 'Cancelled' : 'auto'}
+                  value={derivedStatus === 'Cancelled' ? 'Cancelled' : derivedStatus === 'Unconfirmed' ? 'Unconfirmed' : 'auto'}
                   onClick={(e) => e.stopPropagation()}
                   onChange={(e) => {
-                    // Two-option dropdown: "Pending/Confirmed" (auto-derived from local trainer)
-                    // or "Cancelled" (manual sticky override). Parent handles the PUT.
                     const selection = e.target.value;
                     const hasLocalTrainer = !!(event.localTrainerName || '').trim();
-                    const newStatus: 'Confirmed' | 'Pending' | 'Cancelled' = selection === 'Cancelled'
-                      ? 'Cancelled'
+                    const newStatus = (selection === 'Cancelled' || selection === 'Unconfirmed')
+                      ? selection
                       : (hasLocalTrainer ? 'Confirmed' : 'Pending');
                     onChangeClassStatus(newStatus);
                   }}
                   className={`text-[11px] font-semibold rounded-full px-2 py-0.5 border-0 cursor-pointer focus:ring-2 focus:ring-blue-500 ${statusPillClass(derivedStatus)}`}
                 >
-                  {/* Force option colors explicitly — pill background/text on the
-                      <select> bleeds into <option> native styling and makes the
-                      dropdown menu text blend into the OS dropdown background. */}
-                  <option value="auto" className="bg-white text-gray-900 dark:bg-gray-800 dark:text-white">
-                    {(event.localTrainerName || '').trim() ? 'Confirmed' : 'Pending'}
-                  </option>
-                  <option value="Cancelled" className="bg-white text-gray-900 dark:bg-gray-800 dark:text-white">
-                    Cancelled
-                  </option>
+                  {derivedStatus === 'Cancelled' ? (
+                    <>
+                      <option value="Cancelled" className="bg-white text-gray-900 dark:bg-gray-800 dark:text-white">Cancelled</option>
+                      <option value="auto" className="bg-white text-gray-900 dark:bg-gray-800 dark:text-white">Confirmed/Pending</option>
+                      <option value="Unconfirmed" className="bg-white text-gray-900 dark:bg-gray-800 dark:text-white">Unconfirmed</option>
+                    </>
+                  ) : derivedStatus === 'Unconfirmed' ? (
+                    <>
+                      <option value="Unconfirmed" className="bg-white text-gray-900 dark:bg-gray-800 dark:text-white">Unconfirmed</option>
+                      <option value="auto" className="bg-white text-gray-900 dark:bg-gray-800 dark:text-white">Confirmed/Pending</option>
+                      <option value="Cancelled" className="bg-white text-gray-900 dark:bg-gray-800 dark:text-white">Cancelled</option>
+                    </>
+                  ) : (
+                    <>
+                      <option value="auto" className="bg-white text-gray-900 dark:bg-gray-800 dark:text-white">
+                        {(event.localTrainerName || '').trim() ? 'Confirmed' : 'Pending'}
+                      </option>
+                      <option value="Cancelled" className="bg-white text-gray-900 dark:bg-gray-800 dark:text-white">Cancelled</option>
+                      <option value="Unconfirmed" className="bg-white text-gray-900 dark:bg-gray-800 dark:text-white">Unconfirmed</option>
+                    </>
+                  )}
                 </select>
               }
             />
@@ -692,7 +705,7 @@ const ViewClassByDateView: React.FC = () => {
     setNextTrainerOverrides((prev) => ({ ...prev, [courseRunUuid]: trainerName }));
   }, []);
 
-  const handleChangeClassStatus = useCallback(async (courseRunUuid: string, newStatus: 'Confirmed' | 'Pending' | 'Cancelled') => {
+  const handleChangeClassStatus = useCallback(async (courseRunUuid: string, newStatus: 'Confirmed' | 'Pending' | 'Cancelled' | 'Unconfirmed') => {
     // Optimistic update — flip the row immediately, then PUT to the generic
     // /api/admin/upcoming-classes endpoint which accepts any course_run UUID.
     setEvents((prev) => prev.map((e) =>
@@ -810,6 +823,7 @@ const ViewClassByDateView: React.FC = () => {
                 <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-emerald-500 flex-shrink-0" /> Confirmed</div>
                 <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-yellow-400 flex-shrink-0" /> Pending trainer</div>
                 <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-red-500 flex-shrink-0" /> Cancelled</div>
+                <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-purple-500 flex-shrink-0" /> Unconfirmed</div>
               </div>
             </div>
             <div>
