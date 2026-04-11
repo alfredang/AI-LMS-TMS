@@ -134,21 +134,27 @@ const EditableTopicAccordion: React.FC<{
 
         return (
             <Card className="p-0 overflow-hidden bg-white dark:bg-gray-800">
-                {/* Learning Unit Header */}
-                <div className="p-4 flex items-center justify-between gap-2 bg-gray-50 dark:bg-gray-700 border-b dark:border-gray-600">
-                    <div
-                        draggable
-                        onDragStart={onSelfDragStart}
-                        onDragEnd={onSelfDragEnd}
-                        className="cursor-grab p-1"
-                    >
+                {/* Learning Unit Header — the entire header (except the text
+                    input) is a drag source. Previously only the small grip
+                    icon was draggable which made reordering very hard to hit. */}
+                <div
+                    draggable
+                    onDragStart={onSelfDragStart}
+                    onDragEnd={onSelfDragEnd}
+                    className="p-4 flex items-center justify-between gap-2 bg-gray-50 dark:bg-gray-700 border-b dark:border-gray-600 cursor-grab active:cursor-grabbing"
+                >
+                    <div className="p-1 flex-shrink-0">
                         <Icon name={IconName.DragHandle} className="w-5 h-5 text-gray-400" />
                     </div>
                     <input
                         type="text"
                         value={topic.title}
                         onChange={e => onUpdateTitle(topic.id, e.target.value)}
-                        className={inputGhostClasses(true)}
+                        // Prevent the text input from eating the drag when the
+                        // user clicks the title to start dragging from there.
+                        draggable={false}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        className={inputGhostClasses(true) + ' cursor-text'}
                         placeholder="Learning Unit Title"
                     />
                     <div className="flex items-center ml-auto flex-shrink-0">
@@ -709,8 +715,22 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
     const handleTopicDragStart = (e: React.DragEvent, topicId: string) => {
         setDraggedTopicId(topicId);
         e.dataTransfer.effectAllowed = 'move';
+        // Firefox (and some Chromium builds) silently refuse to start a drag
+        // if setData is never called. We use a custom MIME type that is
+        // unambiguous, so the topic/subtopic/resource-link handlers can tell
+        // what kind of payload is being dragged and bail out if it isn't theirs.
+        try {
+            e.dataTransfer.setData('application/x-lms-topic', topicId);
+            // text/plain is a fallback for browsers that ignore custom types
+            e.dataTransfer.setData('text/plain', topicId);
+        } catch {
+            // Some browsers throw on setData during synthetic events — ignore
+        }
     };
     const handleTopicDragOver = (e: React.DragEvent, topicId: string) => {
+        // Only intercept if an actual topic drag is in progress — otherwise
+        // let the event bubble so subtopic/resource-link handlers can run.
+        if (!draggedTopicId) return;
         e.preventDefault();
         if (topicId !== draggedTopicId) {
             setDropTargetTopicId(topicId);
@@ -720,8 +740,10 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
         setDropTargetTopicId(null);
     };
     const handleTopicDrop = (e: React.DragEvent, dropTargetTopicId: string) => {
+        if (!draggedTopicId) return;
         e.preventDefault();
-        if (!draggedTopicId || draggedTopicId === dropTargetTopicId) return;
+        e.stopPropagation();
+        if (draggedTopicId === dropTargetTopicId) return;
 
         const fromIndex = course.topics.findIndex(t => t.id === draggedTopicId);
         const toIndex = course.topics.findIndex(t => t.id === dropTargetTopicId);
@@ -732,6 +754,9 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
             newTopics.splice(toIndex, 0, removed);
             setCourse(prev => ({ ...prev, topics: newTopics }));
         }
+        // Clear state so the drop indicator disappears immediately
+        setDraggedTopicId(null);
+        setDropTargetTopicId(null);
     };
     const handleTopicDragEnd = () => {
         setDraggedTopicId(null);
@@ -743,8 +768,16 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
         e.stopPropagation();
         setDraggedSubtopic({ topicId, subtopicId });
         e.dataTransfer.effectAllowed = 'move';
+        try {
+            e.dataTransfer.setData('application/x-lms-subtopic', subtopicId);
+            e.dataTransfer.setData('text/plain', subtopicId);
+        } catch { /* ignore */ }
     };
     const handleSubtopicDragOver = (e: React.DragEvent, topicId: string, subtopicId: string) => {
+        // If a topic-level drag is in progress, don't consume this event —
+        // let it bubble up to the parent topic wrapper so the topic reorder
+        // can still register drops that land in a subtopic row.
+        if (draggedTopicId) return;
         e.stopPropagation();
         e.preventDefault();
         if (draggedSubtopic && draggedSubtopic.topicId === topicId && draggedSubtopic.subtopicId !== subtopicId) {
@@ -752,14 +785,19 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
         }
     };
     const handleSubtopicDragLeave = (e: React.DragEvent) => {
+        if (draggedTopicId) return;
         e.stopPropagation();
         e.currentTarget.classList.remove('ring-1', 'ring-blue-400');
         setDropTargetSubtopic(null);
     };
     const handleSubtopicDrop = (e: React.DragEvent, dropTargetTopicId: string, dropTargetSubtopicId: string) => {
+        // If a topic drag is happening, let the event bubble to the topic
+        // wrapper so the topic reorder can complete. Only consume the event
+        // when we're actually handling a subtopic drop.
+        if (draggedTopicId || !draggedSubtopic) return;
         e.stopPropagation();
         e.preventDefault();
-        if (!draggedSubtopic || draggedSubtopic.topicId !== dropTargetTopicId || draggedSubtopic.subtopicId === dropTargetSubtopicId) return;
+        if (draggedSubtopic.topicId !== dropTargetTopicId || draggedSubtopic.subtopicId === dropTargetSubtopicId) return;
 
         setCourse(prev => {
             const newTopics = [...prev.topics];
