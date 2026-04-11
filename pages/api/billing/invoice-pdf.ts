@@ -3,6 +3,7 @@ import pool from '../../../lib/db';
 import { getDriveClient } from '../../../lib/google-drive/drive-helpers';
 import { qboFetchInvoicePdf } from '../../../lib/services/qboInvoiceService';
 import { ensureInvoiceJobsTable } from '../../../lib/services/invoiceJobs';
+import { BILLING_ENR_NORM_SQL } from '../../../lib/billing/canonicalEnrolmentRef';
 
 /**
  * GET — stream QuickBooks invoice PDF for a learner enrolment (same auth model as /api/billing/history).
@@ -23,14 +24,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     await ensureInvoiceJobsTable();
 
+    // Match job by SSG enrolment ref; authorize via enrollment row (raw_data fallback if column ≠ job).
     const r = await pool.query(
       `SELECT ij.drive_file_id, ij.qbo_invoice_id, ij.qbo_doc_number, ij.invoice_no
-       FROM enrollment e
-       INNER JOIN public.invoice_jobs ij
-         ON LOWER(TRIM(COALESCE(ij.enrolment_id, ''))) = LOWER(TRIM(COALESCE(e.enrolment_id, '')))
-         AND ij.status = 'done'
-       WHERE e.user_id = $1::uuid
-         AND LOWER(TRIM(COALESCE(e.enrolment_id, ''))) = LOWER(TRIM($2::text))
+       FROM public.invoice_jobs ij
+       WHERE ij.status = 'done'
+         AND ij.user_id = $1::uuid
+         AND LOWER(TRIM(COALESCE(ij.enrolment_id, ''))) = LOWER(TRIM($2::text))
+         AND EXISTS (
+             SELECT 1
+             FROM enrollment e
+             JOIN app_user u ON u.id = e.user_id
+             JOIN course_run cr ON cr.id = e.course_run_id
+             WHERE e.user_id = $1::uuid
+               AND ${BILLING_ENR_NORM_SQL} = LOWER(TRIM($2::text))
+           )
+       ORDER BY ij.updated_at DESC
        LIMIT 1`,
       [userId, enrolmentId]
     );
@@ -43,19 +52,31 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const driveFileId = row.drive_file_id ? String(row.drive_file_id).trim() : '';
     const qboId = row.qbo_invoice_id ? String(row.qbo_invoice_id).trim() : '';
 
-    let pdf: Buffer;
+    let pdf: Buffer | null = null;
 
     if (driveFileId) {
-      const drive = await getDriveClient();
-      const fileRes = await drive.files.get(
-        { fileId: driveFileId, alt: 'media' },
-        { responseType: 'arraybuffer' }
-      );
-      pdf = Buffer.from(fileRes.data as ArrayBuffer);
-    } else if (qboId) {
-      pdf = await qboFetchInvoicePdf(undefined, qboId);
-    } else {
-      return res.status(404).json({ error: 'Invoice has no PDF source stored.' });
+      try {
+        const drive = await getDriveClient();
+        const fileRes = await drive.files.get(
+          { fileId: driveFileId, alt: 'media' },
+          { responseType: 'arraybuffer' }
+        );
+        pdf = Buffer.from(fileRes.data as ArrayBuffer);
+      } catch (driveErr) {
+        console.warn('[billing/invoice-pdf] Drive fetch failed, will try QBO if available:', driveErr);
+        if (!qboId) {
+          const msg = driveErr instanceof Error ? driveErr.message : 'Drive PDF fetch failed';
+          throw new Error(msg);
+        }
+      }
+    }
+
+    if (!pdf) {
+      if (qboId) {
+        pdf = await qboFetchInvoicePdf(undefined, qboId);
+      } else {
+        return res.status(404).json({ error: 'Invoice has no PDF source stored.' });
+      }
     }
 
     const docRaw = row.invoice_no || row.qbo_doc_number;

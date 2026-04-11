@@ -792,10 +792,20 @@ const EnrollLearners: React.FC = () => {
       const storedDraft = JSON.parse(localStorage.getItem(ENROLMENT_DRAFT_KEY) || '{}');
 
       if (parsed?.success) {
+        const d = parsed.data ?? {};
+        const ref =
+          d?.enrolment?.referenceNumber ??
+          d?.referenceNumber ??
+          undefined;
+        const st =
+          d?.enrolment?.status ??
+          d?.status ??
+          undefined;
+
         setSubmissionResult({
           success: true,
-          referenceNumber:       parsed.data?.enrolment?.referenceNumber,
-          enrolmentStatus:       parsed.data?.enrolment?.status,
+          referenceNumber:       ref,
+          enrolmentStatus:       st,
           traineeName:           storedDraft.traineeFullName,
           traineeId:             storedDraft.traineeId,
           traineeIdType:         storedDraft.traineeIdType,
@@ -807,27 +817,29 @@ const EnrollLearners: React.FC = () => {
           submittedAt:           storedDraft.submittedAt,
         });
 
-        // Sync enrollment to local DB — auto-creates learner / course / course_run
-        // if any are missing, then inserts the enrollment row.
-        try {
-          const syncRes = await fetch(getApiUrl('/api/enrolments/post-ssg-enrol'), {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              traineeEmail:          storedDraft.traineeEmailAddress,
-              courseReferenceNumber: storedDraft.courseReferenceNumber,
-              courseRunId:           storedDraft.courseRunId,
-              sponsorshipType:       storedDraft.sponsorshipType,
-              traineeName:           storedDraft.traineeFullName,
-              traineeNric:           storedDraft.traineeId,
-              enrolmentId:           parsed.data?.enrolment?.referenceNumber,
-              enrolmentStatus:       parsed.data?.enrolment?.status,
-            }),
-          });
-          const syncData = await syncRes.json();
-          console.log('📋 Local enrollment sync:', syncData);
-        } catch (syncErr) {
-          console.warn('⚠️ Local enrollment sync failed (non-critical):', syncErr);
+        // Server runs the same sync in /api/enrolment/create (invoice enqueue). Retry here only if that failed.
+        if (parsed.localEnrollmentSynced !== true) {
+          try {
+            const syncRes = await fetch(getApiUrl('/api/enrolments/post-ssg-enrol'), {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              credentials: 'same-origin',
+              body: JSON.stringify({
+                traineeEmail:          storedDraft.traineeEmailAddress,
+                courseReferenceNumber: storedDraft.courseReferenceNumber,
+                courseRunId:           storedDraft.courseRunId,
+                sponsorshipType:       storedDraft.sponsorshipType,
+                traineeName:           storedDraft.traineeFullName,
+                traineeNric:           storedDraft.traineeId,
+                enrolmentId:           ref,
+                enrolmentStatus:       st,
+              }),
+            });
+            const syncData = await syncRes.json();
+            console.log('📋 Local enrollment sync (client fallback):', syncData);
+          } catch (syncErr) {
+            console.warn('⚠️ Local enrollment sync failed (non-critical):', syncErr);
+          }
         }
 
         setFormData({

@@ -4,21 +4,13 @@ import fs from 'fs';
 import path from 'path';
 import { cors } from '../../../lib/cors';
 import { NextApiRequest, NextApiResponse } from 'next';
+import {
+  TRAINING_PROVIDER_FOLDER_BY_FIELD,
+  trainingProviderSkipTimestampForFolder,
+} from '../../../lib/constants/trainingProviderUploadLayout';
 
-
-// Map field names to specific folder paths with your exact folder structure
-const FOLDER_MAPPING: { [key: string]: string } = {
-  'logo': 'company_logo',
-  'invoiceTemplate': 'invoice_template',
-  'receiptTemplate': 'receipt_template',
-  'certificateTemplate': 'certificate_template',
-  'proFormaInvoiceTemplate': 'pro_forma_invoice_template',
-  'ssgCertFile': 'self_signing_cert',
-  'ssgPrivateKeyFile': 'private_key',
-  'ssgApp1CertFile': 'ssg_app1_cert',
-  'ssgApp1PrivateKeyFile': 'ssg_app1_private_key',
-  'ssgApp3CertFile': 'ssg_app3_cert',
-  'ssgApp3PrivateKeyFile': 'ssg_app3_private_key'
+const FOLDER_MAPPING: { [key: string]: string } = TRAINING_PROVIDER_FOLDER_BY_FIELD as unknown as {
+  [key: string]: string;
 };
 
 // Disable body parser to handle multipart form data
@@ -122,8 +114,7 @@ const saveUploadedFile = async (file: File, userId: string, fieldName: string): 
   // Get just the base name without extension  
   const baseName = path.basename(cleanFilename, fileExtension);
 
-  // Create clean filename — no timestamp for SSG cert/key files (cleaner DB paths)
-  const skipTimestamp = folderName === 'self_signing_cert' || folderName === 'private_key';
+  const skipTimestamp = trainingProviderSkipTimestampForFolder(folderName);
   const fileName = skipTimestamp ? `${baseName}${fileExtension}` : `${timestamp}_${baseName}${fileExtension}`;
   const filePath = path.join(uploadDir, fileName);
 

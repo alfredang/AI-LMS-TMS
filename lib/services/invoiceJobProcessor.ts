@@ -1,6 +1,6 @@
 import pool from '../db';
 import { buildTmsInvoiceNo } from '../utils/tmsInvoiceNo';
-import { isEnrolmentEligibleForAutoInvoice } from './invoiceEligibility';
+import { isEnrolmentBlockedFromAutoInvoice, isEnrolmentEligibleForAutoInvoice } from './invoiceEligibility';
 import { refreshGrantsForEnrolments, upsertSsgEnrolmentFromLocalEnrollment } from './billingSync';
 import { uploadInvoicePdfToDrive } from './invoiceDriveUpload';
 import {
@@ -76,9 +76,23 @@ export async function processInvoiceJob(jobId: string): Promise<void> {
     [userId, enrolmentId]
   );
   const enrStatus = enrRow.rows[0]?.enrolment_status as string | undefined;
-  if (!isEnrolmentEligibleForAutoInvoice(enrStatus)) {
+
+  const ssgStatusRow = await pool.query(
+    `SELECT enrolment_status FROM ssg_enrolments
+     WHERE LOWER(TRIM(COALESCE(enrolment_id, ''))) = LOWER(TRIM($1::text))
+     LIMIT 1`,
+    [enrolmentId]
+  );
+  const ssgStatus = ssgStatusRow.rows[0]?.enrolment_status as string | undefined;
+
+  if (isEnrolmentBlockedFromAutoInvoice(enrStatus) || isEnrolmentBlockedFromAutoInvoice(ssgStatus)) {
     throw new Error(
-      `Skipped: enrolment is not Confirmed (status: ${enrStatus || 'unknown'}). Invoice is not sent for cancelled or removed enrolments.`
+      'Skipped: enrolment is cancelled or removed — invoice is not sent.'
+    );
+  }
+  if (!isEnrolmentEligibleForAutoInvoice(enrStatus) && !isEnrolmentEligibleForAutoInvoice(ssgStatus)) {
+    throw new Error(
+      `Skipped: enrolment is not Confirmed (local enrollment: ${enrStatus ?? '—'}, ssg_enrolments: ${ssgStatus ?? '—'}).`
     );
   }
 

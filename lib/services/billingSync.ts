@@ -308,7 +308,7 @@ export async function upsertSsgEnrolmentFromLocalEnrollment(enrolmentId: string)
      LEFT JOIN learner_profile lp ON lp.user_id = e.user_id
      JOIN course_run cr ON cr.id = e.course_run_id
      JOIN course c ON c.id = e.course_id
-     WHERE TRIM(e.enrolment_id) = $1
+     WHERE LOWER(TRIM(COALESCE(e.enrolment_id, ''))) = LOWER(TRIM($1::text))
      LIMIT 1`,
     [ref]
   );

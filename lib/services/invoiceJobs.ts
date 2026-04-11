@@ -1,4 +1,5 @@
 import pool from '../db';
+import { isEnrolmentEligibleForAutoInvoice } from './invoiceEligibility';
 
 export type InvoiceJobStatus = 'queued' | 'running' | 'done' | 'failed';
 
@@ -82,7 +83,17 @@ export async function ensureInvoiceJobsTable(): Promise<void> {
   }
 }
 
-export async function enqueueInvoiceJob(input: EnqueueInvoiceJobInput): Promise<{ id: string; status: InvoiceJobStatus }> {
+export interface EnqueueInvoiceJobOptions {
+  /**
+   * When true, only queue the row — no immediate `runPendingInvoiceJobs` (use for bulk SSG sync so QBO isn’t hit N times in parallel).
+   */
+  skipAutoProcess?: boolean;
+}
+
+export async function enqueueInvoiceJob(
+  input: EnqueueInvoiceJobInput,
+  options?: EnqueueInvoiceJobOptions
+): Promise<{ id: string; status: InvoiceJobStatus }> {
   await ensureInvoiceJobsTable();
   const r = await pool.query(
     `INSERT INTO public.invoice_jobs (batch_id, status, enrolment_id, user_id, learner_email, course_code)
@@ -92,17 +103,20 @@ export async function enqueueInvoiceJob(input: EnqueueInvoiceJobInput): Promise<
        user_id = EXCLUDED.user_id,
        learner_email = EXCLUDED.learner_email,
        course_code = EXCLUDED.course_code,
+       status = CASE WHEN public.invoice_jobs.status = 'done' THEN public.invoice_jobs.status ELSE 'queued' END,
+       last_error = CASE WHEN public.invoice_jobs.status = 'done' THEN public.invoice_jobs.last_error ELSE NULL END,
        updated_at = now()
      RETURNING id, status`,
     [input.batchId ?? null, input.enrolmentId, input.userId, input.learnerEmail, input.courseCode]
   );
   const out = { id: r.rows[0].id, status: r.rows[0].status as InvoiceJobStatus };
-  // Fire-and-forget: process queue (FIFO) so invoices send without manual POST /invoice-jobs/run.
-  void import('./invoiceJobsRunner')
-    .then(({ runPendingInvoiceJobs }) => runPendingInvoiceJobs(5))
-    .catch((e: unknown) =>
-      console.warn('[invoice_jobs] auto-run after enqueue failed:', e instanceof Error ? e.message : e)
-    );
+  if (!options?.skipAutoProcess) {
+    void import('./invoiceJobsRunner')
+      .then(({ runPendingInvoiceJobs }) => runPendingInvoiceJobs(5))
+      .catch((e: unknown) =>
+        console.warn('[invoice_jobs] auto-run after enqueue failed:', e instanceof Error ? e.message : e)
+      );
+  }
   return out;
 }
 
@@ -113,5 +127,83 @@ export async function getInvoiceJobByEnrolmentId(enrolmentId: string): Promise<I
     [enrolmentId]
   );
   return r.rows[0] ?? null;
+}
+
+function traineeEmailFromSsgRecord(record: any): string | null {
+  const t = record?.trainee;
+  if (!t) return null;
+  const e = t.email;
+  if (typeof e === 'string') return e.trim() || null;
+  if (e && typeof e === 'object' && typeof e.full === 'string') return e.full.trim() || null;
+  return null;
+}
+
+/**
+ * After SSG sync upserts `ssg_enrolments`, enqueue QBO invoice if Confirmed and a learner exists.
+ * Covers rows that never went through `runPostSsgEnrolSync` (local enrollment + enqueue).
+ */
+export async function tryEnqueueInvoiceFromSsgRecord(record: any): Promise<void> {
+  const enrolmentId = String(record?.referenceNumber ?? '').trim();
+  if (!enrolmentId) return;
+  const status = record?.status as string | undefined;
+  if (!isEnrolmentEligibleForAutoInvoice(status)) return;
+
+  let courseCode = String(record?.course?.referenceNumber ?? '').trim();
+  let learnerEmail = traineeEmailFromSsgRecord(record);
+
+  // Prefer local `enrollment` row (created at enrolment time) — SSG view payload email can differ from app_user.
+  const fromEnr = await pool.query(
+    `SELECT e.user_id, u.email::text AS learner_email, e.course_reference::text AS course_ref
+     FROM enrollment e
+     INNER JOIN app_user u ON u.id = e.user_id
+     WHERE LOWER(TRIM(COALESCE(e.enrolment_id, ''))) = LOWER(TRIM($1))
+     LIMIT 1`,
+    [enrolmentId]
+  );
+  const en = fromEnr.rows[0] as { user_id: string; learner_email: string; course_ref: string | null } | undefined;
+
+  let userId: string | undefined = en?.user_id;
+  if (en?.learner_email?.trim()) {
+    learnerEmail = learnerEmail || en.learner_email.trim();
+  }
+  if (!courseCode && en?.course_ref?.trim()) {
+    courseCode = en.course_ref.trim();
+  }
+
+  if (!userId && learnerEmail) {
+    const ur = await pool.query(
+      `SELECT id FROM app_user WHERE LOWER(TRIM(email)) = LOWER(TRIM($1)) LIMIT 1`,
+      [learnerEmail]
+    );
+    userId = ur.rows[0]?.id as string | undefined;
+  }
+
+  if (!courseCode || !learnerEmail || !userId) {
+    console.warn('[invoice_jobs] skip enqueue after SSG upsert — need course code, learner email, and user', {
+      enrolmentId,
+      hasCourse: !!courseCode,
+      hasEmail: !!learnerEmail,
+      hasUser: !!userId,
+    });
+    return;
+  }
+
+  const existing = await getInvoiceJobByEnrolmentId(enrolmentId);
+  if (existing?.status === 'done') return;
+
+  try {
+    await enqueueInvoiceJob(
+      {
+        enrolmentId,
+        userId,
+        learnerEmail,
+        courseCode,
+        batchId: null,
+      },
+      { skipAutoProcess: true }
+    );
+  } catch (e) {
+    console.warn('[invoice_jobs] tryEnqueueInvoiceFromSsgRecord failed:', e);
+  }
 }
 

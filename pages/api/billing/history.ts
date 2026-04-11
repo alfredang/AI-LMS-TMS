@@ -2,6 +2,7 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { syncLearnerFromSSG, upsertSsgEnrolmentFromLocalEnrollment } from '../../../lib/services/billingSync';
 import { ensureInvoiceJobsTable } from '../../../lib/services/invoiceJobs';
+import { BILLING_CANON_ENR_SQL, BILLING_ENR_NORM_SQL } from '../../../lib/billing/canonicalEnrolmentRef';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {
@@ -46,7 +47,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const enrolmentResult = await pool.query(
       `SELECT
         e.id,
-        e.enrolment_id,
+        ${BILLING_CANON_ENR_SQL} AS enrolment_id,
+        NULLIF(TRIM(e.enrolment_id::text), '') AS enrolment_id_db,
         u.full_name,
         c.title AS course_title,
         cr.course_run_id,
@@ -77,7 +79,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         SELECT inv.qbo_invoice_id, inv.invoice_no, inv.qbo_doc_number, inv.drive_file_id, inv.drive_web_view_link
         FROM public.invoice_jobs inv
         WHERE inv.status = 'done'
-          AND LOWER(TRIM(COALESCE(inv.enrolment_id, ''))) = LOWER(TRIM(COALESCE(e.enrolment_id, '')))
+          AND inv.user_id = e.user_id
+          AND LOWER(TRIM(COALESCE(inv.enrolment_id, ''))) = ${BILLING_ENR_NORM_SQL}
         ORDER BY inv.updated_at DESC
         LIMIT 1
       ) ij ON true
@@ -87,9 +90,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     );
 
     // Fetch grants from local ssg_grants (now fresh after sync)
-    const enrolmentIds = enrolmentResult.rows
-      .map(r => r.enrolment_id)
-      .filter(Boolean);
+    const enrolmentIds = [
+      ...new Set(
+        enrolmentResult.rows.flatMap((r: { enrolment_id?: string | null; enrolment_id_db?: string | null }) => {
+          const out: string[] = [];
+          if (r.enrolment_id?.trim()) out.push(r.enrolment_id.trim());
+          if (r.enrolment_id_db?.trim() && r.enrolment_id_db.trim() !== r.enrolment_id?.trim()) {
+            out.push(r.enrolment_id_db.trim());
+          }
+          return out;
+        })
+      ),
+    ];
 
     const grantsByEnrolment: Record<string, Array<{
       funding_scheme: string;
@@ -125,11 +137,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     }
 
-    // Merge grants into enrolment records
-    const data = enrolmentResult.rows.map(row => ({
-      ...row,
-      grants: row.enrolment_id ? (grantsByEnrolment[row.enrolment_id] || []) : [],
-    }));
+    // Merge grants into enrolment records (ssg_grants may key on older ENR before SSG refresh)
+    const data = enrolmentResult.rows.map((row: Record<string, unknown> & { enrolment_id?: string | null; enrolment_id_db?: string | null }) => {
+      const canon = row.enrolment_id?.trim() || '';
+      const local = row.enrolment_id_db?.trim() || '';
+      const g1 = canon ? grantsByEnrolment[canon] || [] : [];
+      const g2 = local && local !== canon ? grantsByEnrolment[local] || [] : [];
+      const merged = [...g1];
+      for (const g of g2) {
+        if (!merged.some(m => m.funding_scheme === g.funding_scheme && m.status === g.status)) merged.push(g);
+      }
+      const { enrolment_id_db: _drop, ...rest } = row;
+      return { ...rest, grants: merged };
+    });
 
     return res.status(200).json({
       success: true,

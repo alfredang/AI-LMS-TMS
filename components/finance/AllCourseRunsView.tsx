@@ -381,13 +381,26 @@ const AllCourseRunsView: React.FC = () => {
         body: JSON.stringify({ from, to, enrolmentIds }),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Sync failed');
+      if (!res.ok) {
+        const issues = Array.isArray(json.credentialIssues) ? json.credentialIssues.join(' · ') : '';
+        throw new Error([json.error || 'Sync failed', issues].filter(Boolean).join(' — '));
+      }
       const up = json?.totals?.upsertedEnrolments ?? 0;
       const byId = json?.totals?.refreshedByEnrolmentId ?? 0;
       const gr = json?.totals?.enrolmentsForGrantRefresh ?? 0;
       const cb = json?.totals?.claimsEnrollmentIdBackfilled ?? 0;
+      const errList = Array.isArray(json.errors) ? json.errors : [];
+      const errTail =
+        errList.length > 0
+          ? ` — ${errList.length} SSG warning(s); first: ${errList[0]?.error ?? JSON.stringify(errList[0])}`
+          : '';
+      const extraLocal = Number(json?.extraLocalEnrolmentIdsMerged ?? 0);
+      const modeHint =
+        json?.syncMode === 'viewOnly'
+          ? ` Fast mode: skipped slow per–course-run SSG search.${extraLocal > 0 ? ` Also refreshed ${extraLocal} recent local enrolment(s) not on this page.` : ''}`
+          : '';
       setSyncToast(
-        `Synced ${up} enrolment row(s) (${byId} from visible list via SSG view), refreshed grants for ${gr}, backfilled ${cb} claim link(s).`
+        `Synced ${up} enrolment row(s) (${byId} from visible list via SSG view), refreshed grants for ${gr}, backfilled ${cb} claim link(s).${modeHint}${errTail}`
       );
       await fetchData();
     } catch (e) {

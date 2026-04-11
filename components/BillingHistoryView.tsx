@@ -1,7 +1,6 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { Card } from './ui/Card';
 import { Icon, IconName } from './ui/Icon';
-import { Button } from './ui/Button';
 import { useLms } from '@contexts/LmsContext';
 
 interface Grant {
@@ -43,92 +42,34 @@ const formatDate = (dateStr: string | null): string => {
   return new Date(dateStr).toLocaleDateString('en-SG', { day: '2-digit', month: 'short', year: 'numeric' });
 };
 
-const formatCurrency = (amount: string | null): string => {
-  if (!amount) return '-';
-  return `$${parseFloat(amount).toFixed(2)}`;
-};
-
-const getPaymentBadge = (status: string | null) => {
-  switch (status) {
-    case 'Paid':
-      return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400';
-    case 'Unpaid':
-      return 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400';
-    default:
-      return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-400';
-  }
-};
-
-// ── Download handler ──────────────────────────────────────────────────────────
-// Calls /api/billing/proforma, receives a PDF blob, triggers browser download.
-
-const downloadProForma = async (record: BillingRecord): Promise<void> => {
-  const res = await fetch('/api/billing/proforma', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      enrolment_id: record.enrolment_id,
-      full_name: record.full_name,
-      course_title: record.course_title,
-      course_code: record.course_code,
-      course_fees_exclude_gst: record.course_fees_exclude_gst,
-      start_date: record.start_date,
-      grants: record.grants,
-      // Pass MCES eligibility based on grants
-      eligibility: record.is_mces_eligible ? 'above' : 'below',
-      sponsorship_type: 'Self-Sponsored', // adjust if you store this on the record
-    }),
-  });
-
-  const ct = res.headers.get('content-type') || '';
-  if (!res.ok) {
-    if (ct.includes('application/json')) {
-      const j = (await res.json()) as { error?: string; detail?: string };
-      throw new Error(j.detail || j.error || `Proforma failed (${res.status})`);
-    }
-    throw new Error(`Proforma failed (${res.status})`);
-  }
-  if (!ct.includes('application/pdf')) {
-    const text = await res.text();
-    throw new Error(text.slice(0, 200) || 'Response was not a PDF');
-  }
-
-  const blob = await res.blob();
-  const url = window.URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  const orderNum = (record.enrolment_id ?? record.id).replace('#', '');
-  a.download = `ProFormaInvoice_${orderNum}.pdf`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  window.URL.revokeObjectURL(url);
-};
-
-// ── Component ─────────────────────────────────────────────────────────────────
-
+/**
+ * Same pattern as Certificate History: open the stored Drive link in a new tab when present;
+ * otherwise open the server PDF endpoint (streams Drive / QBO — no LibreOffice).
+ */
 const BillingHistoryView: React.FC = () => {
   const { currentUser } = useLms();
   const [records, setRecords] = useState<BillingRecord[]>([]);
   const [loading, setLoading] = useState(false);
-  const [fetched, setFetched] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
-  const [downloadError, setDownloadError] = useState<string | null>(null);
 
   const fetchBillingHistory = useCallback(async () => {
     if (!currentUser?.id) return;
     setLoading(true);
+    setError(null);
     try {
       const res = await fetch(`/api/billing/history?userId=${currentUser.id}`);
       const json = await res.json();
       if (json.success) {
-        setRecords(json.data);
+        setRecords(json.data || []);
+      } else {
+        setError(json.error || 'Failed to load billing history');
       }
     } catch (err) {
       console.error('[BillingHistory] Fetch error:', err);
+      setError('Failed to load billing history');
     } finally {
       setLoading(false);
-      setFetched(true);
     }
   }, [currentUser?.id]);
 
@@ -136,110 +77,116 @@ const BillingHistoryView: React.FC = () => {
     fetchBillingHistory();
   }, [fetchBillingHistory]);
 
-  const handleDownload = async (record: BillingRecord) => {
+  const handleDownloadInvoice = (record: BillingRecord) => {
+    if (!currentUser?.id || !record.enrolment_id) return;
     setDownloadingId(record.id);
-    setDownloadError(null);
     try {
-      await downloadProForma(record);
-    } catch (err) {
-      console.error('[BillingHistory] Download error:', err);
-      setDownloadError(err instanceof Error ? err.message : 'Failed to generate invoice. Please try again.');
+      const driveLink = record.drive_web_view_link?.trim();
+      if (driveLink) {
+        window.open(driveLink, '_blank', 'noopener,noreferrer');
+      } else {
+        const pdfUrl = `/api/billing/invoice-pdf?userId=${encodeURIComponent(currentUser.id)}&enrolmentId=${encodeURIComponent(record.enrolment_id)}`;
+        window.open(pdfUrl, '_blank', 'noopener,noreferrer');
+      }
     } finally {
-      setDownloadingId(null);
+      window.setTimeout(() => setDownloadingId(null), 400);
     }
   };
 
-  const receiptCount = records.filter(r => r.payment_status === 'Paid').length;
-  const invoiceCount = records.filter(r => r.payment_status !== 'Paid' && r.start_date && new Date(r.start_date) <= new Date()).length;
-  const proformaCount = records.filter(r => r.payment_status !== 'Paid' && (!r.start_date || new Date(r.start_date) > new Date())).length;
-
   return (
-    <div>
-      <h2 className="text-3xl font-bold mb-6">Billing History</h2>
-      <div className="grid grid-cols-1 gap-6">
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Billing History</h2>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">View and download your course invoices</p>
+      </div>
 
-        {/* Error banner */}
-        {downloadError && (
-          <div className="px-4 py-3 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 text-sm">
-            {downloadError}
-          </div>
-        )}
-
-        {/* Invoice Table */}
-        <Card className="p-6">
-
-          {!fetched ? (
-            <div className="text-center py-12 px-6 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
-              <Icon name={IconName.DollarSign} className="w-24 h-24 mx-auto mb-6 text-primary" />
-              <h4 className="text-xl font-bold text-on-surface">No invoices found</h4>
-              <p className="mt-2 text-subtle max-w-md mx-auto">Your billing history will appear here once invoices are available.</p>
-            </div>
-          ) : records.length === 0 ? (
-            <div className="text-center py-12 px-6 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
-              <Icon name={IconName.DollarSign} className="w-24 h-24 mx-auto mb-6 text-primary" />
-              <h4 className="text-xl font-bold text-on-surface">No invoices yet</h4>
-              <p className="mt-2 text-subtle max-w-md mx-auto">
-                Pro forma invoices will appear here once you are enrolled in a course.
-              </p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm whitespace-nowrap">
-                <thead>
-                  <tr className="border-b border-gray-200 dark:border-gray-700">
-                    <th className="text-left py-3 px-4 font-semibold text-subtle">Course Title</th>
-                    <th className="text-left py-3 px-4 font-semibold text-subtle">Course Ref Code</th>
-                    <th className="text-left py-3 px-4 font-semibold text-subtle">Type</th>
-                    <th className="text-left py-3 px-4 font-semibold text-subtle">Invoice No</th>
-                    <th className="text-left py-3 px-4 font-semibold text-subtle">Enrolment ID</th>
-                    <th className="text-left py-3 px-4 font-semibold text-subtle">Created Date</th>
-                    <th className="text-center py-3 px-4 font-semibold text-subtle">PDF Download</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {[...records].sort((a, b) => {
+      {loading ? (
+        <div className="flex items-center justify-center py-12">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+        </div>
+      ) : error ? (
+        <Card className="p-8 text-center dark:bg-gray-800 dark:border-gray-700">
+          <Icon name={IconName.InfoCircle} className="w-10 h-10 text-red-400 mx-auto mb-3" />
+          <p className="text-gray-500 dark:text-gray-400">{error}</p>
+        </Card>
+      ) : records.length === 0 ? (
+        <Card className="p-8 text-center dark:bg-gray-800 dark:border-gray-700">
+          <Icon name={IconName.DollarSign} className="w-10 h-10 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
+          <p className="text-gray-500 dark:text-gray-400">No billing records yet</p>
+        </Card>
+      ) : (
+        <Card className="overflow-hidden dark:bg-gray-800 dark:border-gray-700">
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+              <thead className="bg-gray-50 dark:bg-gray-900/50">
+                <tr>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    Course Title
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    Course Ref Code
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    Type
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    Invoice No
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    Enrolment ID
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    Created Date
+                  </th>
+                  <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    PDF Download
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                {[...records]
+                  .sort((a, b) => {
                     const dateA = new Date(a.enrolment_date || a.start_date || 0).getTime();
                     const dateB = new Date(b.enrolment_date || b.start_date || 0).getTime();
                     return dateB - dateA;
-                  }).map((record) => {
+                  })
+                  .map((record) => {
                     const isDownloading = downloadingId === record.id;
                     return (
-                      <tr key={record.id} className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/30">
-                        <td className="py-3 px-4 font-semibold text-on-surface">{record.course_title}</td>
-                        <td className="py-3 px-4 font-mono text-xs text-subtle">{record.course_code || '-'}</td>
-                        <td className="py-3 px-4 text-xs">
-                          {(() => {
-                            if (record.payment_status === 'Paid') return <span className="px-2 py-0.5 rounded-full bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 font-semibold">Receipt</span>;
-                            if (record.drive_web_view_link || record.qbo_invoice_id) {
-                              return <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400 font-semibold">QuickBooks Invoice</span>;
-                            }
-                            const started = record.start_date && new Date(record.start_date) <= new Date();
-                            if (started) return <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400 font-semibold">Invoice</span>;
-                            return <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 font-semibold">Proforma Invoice</span>;
-                          })()}
-                        </td>
-                        <td className="py-3 px-4 font-mono text-xs">{record.invoice_no || record.qbo_doc_number || '-'}</td>
-                        <td className="py-3 px-4 font-mono text-xs">{record.enrolment_id || record.id || '-'}</td>
-                        <td className="py-3 px-4 text-subtle">{formatDate(record.enrolment_date || record.start_date)}</td>
-                        <td className="py-3 px-4 text-center">
-                          {record.enrolment_id &&
-                          currentUser?.id &&
-                          (record.drive_web_view_link || record.qbo_invoice_id || record.drive_file_id) ? (
-                            <a
-                              href={`/api/billing/invoice-pdf?userId=${encodeURIComponent(currentUser.id)}&enrolmentId=${encodeURIComponent(record.enrolment_id)}`}
-                              className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-colors
-                                bg-blue-50 text-blue-700 hover:bg-blue-100
-                                dark:bg-blue-900/20 dark:text-blue-400 dark:hover:bg-blue-900/40"
-                              title="Download QuickBooks invoice PDF"
-                            >
-                              <Icon name={IconName.FilePdf} className="w-3.5 h-3.5" />
-                              <span>Invoice PDF</span>
-                            </a>
+                      <tr key={record.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                        <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-white">{record.course_title}</td>
+                        <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-300 font-mono">{record.course_code || '-'}</td>
+                        <td className="px-4 py-3 text-xs">
+                          {record.payment_status === 'Paid' ? (
+                            <span className="px-2 py-0.5 rounded-full bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 font-semibold">
+                              Receipt
+                            </span>
+                          ) : record.drive_web_view_link || record.qbo_invoice_id ? (
+                            <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400 font-semibold">
+                              QuickBooks Invoice
+                            </span>
                           ) : (
+                            <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400 font-semibold">
+                              Invoice
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-sm font-mono text-gray-600 dark:text-gray-300">
+                          {record.invoice_no || record.qbo_doc_number || '-'}
+                        </td>
+                        <td className="px-4 py-3 text-sm font-mono text-gray-600 dark:text-gray-300">
+                          {record.enrolment_id || record.id || '-'}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">
+                          {formatDate(record.enrolment_date || record.start_date)}
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          {record.enrolment_id && currentUser?.id ? (
                             <button
-                              onClick={() => handleDownload(record)}
+                              type="button"
+                              onClick={() => handleDownloadInvoice(record)}
                               disabled={isDownloading}
-                              title="Generate pro forma PDF (requires LibreOffice on the server)"
+                              title="Download PDF"
                               className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-colors
                                 bg-blue-50 text-blue-700 hover:bg-blue-100
                                 dark:bg-blue-900/20 dark:text-blue-400 dark:hover:bg-blue-900/40
@@ -248,26 +195,27 @@ const BillingHistoryView: React.FC = () => {
                               {isDownloading ? (
                                 <>
                                   <Icon name={IconName.Spinner} className="w-3.5 h-3.5 animate-spin" />
-                                  <span>Generating...</span>
+                                  <span>Opening…</span>
                                 </>
                               ) : (
                                 <>
                                   <Icon name={IconName.FilePdf} className="w-3.5 h-3.5" />
-                                  <span>Pro forma</span>
+                                  <span>Download</span>
                                 </>
                               )}
                             </button>
+                          ) : (
+                            <span className="text-sm text-gray-400">—</span>
                           )}
                         </td>
                       </tr>
                     );
                   })}
-                </tbody>
-              </table>
-            </div>
-          )}
+              </tbody>
+            </table>
+          </div>
         </Card>
-      </div>
+      )}
     </div>
   );
 };

@@ -4,11 +4,14 @@ import { createSSGEnrolmentAPI } from '../../../lib/ssg/api/enrolment-api';
 import { getSSGCredentialsService } from '../../../lib/ssg/services/credentials-service';
 import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdentifiers';
 import { refreshGrantsForEnrolments } from '../../../lib/services/billingSync';
+import { tryEnqueueInvoiceFromSsgRecord } from '../../../lib/services/invoiceJobs';
 
 const PAGE_SIZE = 100;
 const MAX_RUNS_DEFAULT = 80;
 // Keep calls reasonably paced; too aggressive can trigger throttling.
 const RATE_LIMIT_MS = 700;
+/** Delay between SSG view-enrolment calls when skipping heavy run search (faster UI refresh). */
+const VIEW_ENROLMENT_GAP_MS = 400;
 
 function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
@@ -147,7 +150,14 @@ async function backfillClaimsEnrollmentId(): Promise<{ updated: number }> {
 
 /**
  * POST /api/finance/sync-all-course-runs-from-ssg
- * Body: { from?: 'YYYY-MM-DD', to?: 'YYYY-MM-DD', maxPages?: number, enrolmentIds?: string[] }
+ * Body: { from?, to?, maxRuns?, enrolmentIds?, includeRunSearch?: boolean }
+ *
+ * When `enrolmentIds` is non-empty and `includeRunSearch` is not true, the heavy per–course-run
+ * SSG **search** pass is skipped (saves minutes and avoids SSG 500s on search). Only view-by-id + grants run.
+ * Set `includeRunSearch: true` to also scan every course run in the date window (slow).
+ *
+ * By default, recently updated rows in `enrollment` (last 14 days) are merged into the view list so
+ * **new** ENR- IDs created locally appear in the refresh even if they are not on the current grid page.
  *
  * When `enrolmentIds` is provided (e.g. current table page), each id is refreshed from SSG via
  * view-enrolment and upserted so the consolidated grid shows latest status without relying only on run search.
@@ -171,9 +181,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const fromIso = rawFromIso <= rawToIso ? rawFromIso : rawToIso;
   const toIso = rawFromIso <= rawToIso ? rawToIso : rawFromIso;
   const maxRuns = Math.min(Math.max(Number(body.maxRuns || 0) || MAX_RUNS_DEFAULT, 1), 600);
-  const enrolmentIdsFromBody = Array.isArray(body.enrolmentIds)
+  const idsFromClient = Array.isArray(body.enrolmentIds)
     ? (body.enrolmentIds as unknown[]).map((x) => String(x ?? '').trim()).filter(Boolean)
     : [];
+
+  /** Full run search: only when no visible IDs to refresh, or caller explicitly asks. */
+  const includeRunSearch = body.includeRunSearch === true || idsFromClient.length === 0;
 
   const ssgApp = (req.headers['x-ssg-app'] as string | undefined)?.trim() || undefined;
 
@@ -191,6 +204,32 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const tpCode = tp.code;
     const api = createSSGEnrolmentAPI(ssgBaseUrl, credentials);
 
+    // Merge recent local `enrollment` ENR ids so new / re-enrolled rows get SSG view even when not on the current page.
+    let viewEnrolmentIds = [...idsFromClient];
+    const mergeRecentLocal = body.mergeRecentLocalEnrolments !== false;
+    if (mergeRecentLocal) {
+      const recent = await pool.query(
+        `SELECT TRIM(e.enrolment_id)::text AS eid
+         FROM enrollment e
+         WHERE e.enrolment_id IS NOT NULL
+           AND TRIM(COALESCE(e.enrolment_id, '')) <> ''
+           AND e.updated_at > NOW() - INTERVAL '14 days'
+         GROUP BY TRIM(e.enrolment_id)
+         ORDER BY MAX(e.updated_at) DESC
+         LIMIT 50`
+      );
+      const seen = new Set(viewEnrolmentIds.map((id) => id.toLowerCase()));
+      for (const row of recent.rows) {
+        const id = String((row as { eid: string }).eid || '').trim();
+        if (!id) continue;
+        const k = id.toLowerCase();
+        if (!seen.has(k)) {
+          seen.add(k);
+          viewEnrolmentIds.push(id);
+        }
+      }
+    }
+
     const syncedEnrolmentIds: string[] = [];
     let runsFetched = 0;
     let totalSeen = 0;
@@ -198,56 +237,66 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     let totalUpserted = 0;
     const errors: Array<{ runId: string; error: string }> = [];
 
-    const runIds = await getCourseRunIdsToSync(fromIso, toIso);
-    const limitedRunIds = runIds.slice(0, maxRuns);
+    let runIds: string[] = [];
+    let limitedRunIds: string[] = [];
 
-    for (const runId of limitedRunIds) {
-      runsFetched++;
-      try {
-        const wrapped = await fetchAllEnrolmentsForRun(api, tpUen, tpCode, runId);
-        totalSeen += wrapped.length;
+    if (includeRunSearch) {
+      runIds = await getCourseRunIdsToSync(fromIso, toIso);
+      limitedRunIds = runIds.slice(0, maxRuns);
 
-        for (const row of wrapped) {
-          const rec = row?.enrolment ?? row;
-          const enrolId = rec?.referenceNumber ? String(rec.referenceNumber) : '';
-          if (!enrolId) continue;
+      for (const runId of limitedRunIds) {
+        runsFetched++;
+        try {
+          const wrapped = await fetchAllEnrolmentsForRun(api, tpUen, tpCode, runId);
+          totalSeen += wrapped.length;
 
-          const runStartIso = toIsoDate(rec?.course?.run?.startDate);
-          if (!runStartIso) continue;
-          if (!withinRange(runStartIso, fromIso, toIso)) continue;
+          for (const row of wrapped) {
+            const rec = row?.enrolment ?? row;
+            const enrolId = rec?.referenceNumber ? String(rec.referenceNumber) : '';
+            if (!enrolId) continue;
 
-          totalMatched++;
-          try {
-            await upsertSsgEnrolmentStaging(rec);
-            totalUpserted++;
-            syncedEnrolmentIds.push(enrolId);
-          } catch {
-            // keep going
+            const runStartIso = toIsoDate(rec?.course?.run?.startDate);
+            if (!runStartIso) continue;
+            if (!withinRange(runStartIso, fromIso, toIso)) continue;
+
+            totalMatched++;
+            try {
+              await upsertSsgEnrolmentStaging(rec);
+              totalUpserted++;
+              syncedEnrolmentIds.push(enrolId);
+              void tryEnqueueInvoiceFromSsgRecord(rec).catch((e: unknown) =>
+                console.warn('[sync-all-course-runs-from-ssg] tryEnqueueInvoiceFromSsgRecord:', e)
+              );
+            } catch {
+              // keep going
+            }
           }
+        } catch (e) {
+          errors.push({ runId, error: e instanceof Error ? e.message : String(e) });
         }
-      } catch (e) {
-        errors.push({ runId, error: e instanceof Error ? e.message : String(e) });
-      }
 
-      await sleep(RATE_LIMIT_MS);
+        await sleep(RATE_LIMIT_MS);
+      }
     }
+
+    const viewGapMs = includeRunSearch ? RATE_LIMIT_MS : VIEW_ENROLMENT_GAP_MS;
 
     let refreshedById = 0;
     const requestedId = new Set<string>();
-    for (const enrolmentId of enrolmentIdsFromBody) {
+    for (const enrolmentId of viewEnrolmentIds) {
       if (requestedId.has(enrolmentId)) continue;
       requestedId.add(enrolmentId);
       try {
         const viewResult = await api.viewEnrolment(enrolmentId);
         if (viewResult.error) {
           errors.push({ runId: enrolmentId, error: `view: ${(viewResult as { error?: { message?: string } }).error?.message ?? 'failed'}` });
-          await sleep(RATE_LIMIT_MS);
+          await sleep(viewGapMs);
           continue;
         }
         const raw: any = viewResult.data;
         const rec = raw?.enrolment ?? raw;
         if (!rec?.referenceNumber) {
-          await sleep(RATE_LIMIT_MS);
+          await sleep(viewGapMs);
           continue;
         }
         await upsertSsgEnrolmentStaging(rec);
@@ -255,10 +304,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         totalUpserted++;
         const ref = String(rec.referenceNumber);
         syncedEnrolmentIds.push(ref);
+        void tryEnqueueInvoiceFromSsgRecord(rec).catch((e: unknown) =>
+          console.warn('[sync-all-course-runs-from-ssg] tryEnqueueInvoiceFromSsgRecord:', e)
+        );
       } catch (e) {
         errors.push({ runId: enrolmentId, error: e instanceof Error ? e.message : String(e) });
       }
-      await sleep(RATE_LIMIT_MS);
+      await sleep(viewGapMs);
     }
 
     const uniqueEnrolmentIds = Array.from(new Set(syncedEnrolmentIds));
@@ -269,10 +321,26 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const grantsOk = grantResults.filter((r) => r.success).length;
     const grantsFailed = grantResults.length - grantsOk;
 
+    try {
+      const { runPendingInvoiceJobs } = await import('@/lib/services/invoiceJobsRunner');
+      // Runner caps at 10 jobs per call — loop until queue is drained (typical page size ≤ 20).
+      for (let wave = 0; wave < 15; wave++) {
+        const r = await runPendingInvoiceJobs(10);
+        if (r.picked === 0) break;
+      }
+    } catch (e: unknown) {
+      console.warn('[sync-all-course-runs-from-ssg] runPendingInvoiceJobs:', e instanceof Error ? e.message : e);
+    }
+
     const claimBackfill = await backfillClaimsEnrollmentId();
 
     return res.status(200).json({
       success: true,
+      syncMode: includeRunSearch ? 'full' : 'viewOnly',
+      includeRunSearch,
+      idsFromClient: idsFromClient.length,
+      viewEnrolmentIdsCount: viewEnrolmentIds.length,
+      extraLocalEnrolmentIdsMerged: Math.max(0, viewEnrolmentIds.length - idsFromClient.length),
       window: { from: fromIso, to: toIso },
       runsConsidered: runIds.length,
       runsFetched,
