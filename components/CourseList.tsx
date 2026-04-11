@@ -116,6 +116,10 @@ const ManagementCourseList: React.FC = () => {
         localStorage.setItem(`managementCourseListViewMode_${role}`, mode);
     };
     const [trainerClassView, setTrainerClassView] = useState<'all' | 'current' | 'upcoming' | 'past'>('all');
+    // Default trainer class-status filter: show only Pending + Confirmed runs.
+    // Trainers rarely want to see cancelled classes on their dashboard, but
+    // they can switch to 'all' or 'Cancelled' from Advanced Filters.
+    const [trainerStatusFilter, setTrainerStatusFilter] = useState<'ActiveOnly' | 'all' | 'Confirmed' | 'Pending' | 'Cancelled'>('ActiveOnly');
 
     // Pagination state - stored in LmsContext so it persists across mount/unmount
     const currentPage = courseListPage;
@@ -248,7 +252,7 @@ const ManagementCourseList: React.FC = () => {
                     : (course.modeOfLearning && course.modeOfLearning.includes(filterMode))
             );
 
-            // Trainer: apply date tab logic
+            // Trainer: apply date tab logic + class-status filter
             if (role === UserRole.Trainer) {
                 const end = parseLocalDate(course.endDate);
                 const start = parseLocalDate(course.startDate);
@@ -260,8 +264,17 @@ const ManagementCourseList: React.FC = () => {
                 } else if (trainerClassView === 'past') {
                     matchesDateView = end !== null && end < todayDate;
                 }
-                // 'all' shows everything
-                return matchesSearch && matchesCourseCode && matchesType && matchesMode && matchesDateView;
+                // Class-status filter. Default is 'ActiveOnly' (Pending + Confirmed),
+                // so cancelled runs stay hidden unless the trainer explicitly opts
+                // in via the Advanced Filters dropdown.
+                const courseStatus = (course.classStatus || '').trim();
+                let matchesStatus = true;
+                if (trainerStatusFilter === 'ActiveOnly') {
+                    matchesStatus = courseStatus === 'Confirmed' || courseStatus === 'Pending';
+                } else if (trainerStatusFilter !== 'all') {
+                    matchesStatus = courseStatus === trainerStatusFilter;
+                }
+                return matchesSearch && matchesCourseCode && matchesType && matchesMode && matchesDateView && matchesStatus;
             }
 
             const matchesStartDate = isDateInRange(course.startDate, filterStartDate);
@@ -273,7 +286,7 @@ const ManagementCourseList: React.FC = () => {
             }
             return 0;
         });
-    }, [relevantCourses, searchQuery, filterCourseCode, filterCourseType, filterMode, filterStartDate, role, trainerClassView]);
+    }, [relevantCourses, searchQuery, filterCourseCode, filterCourseType, filterMode, filterStartDate, role, trainerClassView, trainerStatusFilter]);
 
     // Pagination calculations
     const totalPages = Math.ceil(filteredCourses.length / itemsPerPage);
@@ -780,16 +793,28 @@ const ManagementCourseList: React.FC = () => {
                     return d;
                 };
 
-                const trainerCurrentClasses = (relevantCourses || []).filter(c => {
+                // Apply the same class-status filter to the KPI counts so the
+                // card totals match the list below. When the default
+                // 'ActiveOnly' filter is in effect, cancelled runs don't count.
+                const statusMatches = (course: any): boolean => {
+                    const s = (course.classStatus || '').trim();
+                    if (trainerStatusFilter === 'ActiveOnly') return s === 'Confirmed' || s === 'Pending';
+                    if (trainerStatusFilter === 'all') return true;
+                    return s === trainerStatusFilter;
+                };
+
+                const statusFilteredCourses = (relevantCourses || []).filter(statusMatches);
+
+                const trainerCurrentClasses = statusFilteredCourses.filter(c => {
                     const s = parseLocalDate(c.startDate);
                     const e = parseLocalDate(c.endDate);
                     return s && s <= todayKpi && e && e >= todayKpi;
                 }).length;
-                const trainerUpcomingClasses = (relevantCourses || []).filter(c => {
+                const trainerUpcomingClasses = statusFilteredCourses.filter(c => {
                     const s = parseLocalDate(c.startDate);
                     return s && s > todayKpi;
                 }).length;
-                const trainerPastClasses = (relevantCourses || []).filter(c => {
+                const trainerPastClasses = statusFilteredCourses.filter(c => {
                     const e = parseLocalDate(c.endDate);
                     return e && e < todayKpi;
                 }).length;
@@ -920,6 +945,22 @@ const ManagementCourseList: React.FC = () => {
                                     <option value="Last Month">Last Month</option>
                                     <option value="Earlier">Earlier (Before Last Month)</option>
                                     <option value="Later">Later (After Next Month)</option>
+                                </select>
+                            </div>
+                        )}
+                        {role === UserRole.Trainer && (
+                            <div>
+                                <label className="block text-sm font-medium text-on-surface-secondary">Class Status</label>
+                                <select
+                                    value={trainerStatusFilter}
+                                    onChange={e => setTrainerStatusFilter(e.target.value as 'ActiveOnly' | 'all' | 'Confirmed' | 'Pending' | 'Cancelled')}
+                                    className={`${inputClasses} mt-1`}
+                                >
+                                    <option value="ActiveOnly">Active (Pending + Confirmed)</option>
+                                    <option value="all">All (incl. Cancelled)</option>
+                                    <option value="Confirmed">Confirmed only</option>
+                                    <option value="Pending">Pending only</option>
+                                    <option value="Cancelled">Cancelled only</option>
                                 </select>
                             </div>
                         )}
