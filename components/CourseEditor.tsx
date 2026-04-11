@@ -8,6 +8,7 @@ import Spinner from './ui/Spinner';
 import { generateCourseImage } from '@lib/services/geminiService';
 import { getCourseImageUrl } from '@utils/imageUtils';
 import { getApiUrl } from '@/lib/urlHelpers';
+import QuizEditorModal, { QuizQuestion } from './QuizEditorModal';
 
 const inputGhostClasses = (isTitle: boolean) =>
     `flex-grow border border-transparent hover:border-gray-300 dark:hover:border-gray-600 focus:border-gray-300 dark:focus:border-gray-600 rounded-md px-2 py-1 bg-transparent hover:bg-gray-50 dark:hover:bg-gray-800 focus:bg-gray-50 dark:focus:bg-gray-800 focus:outline-none w-full transition-colors dark:text-white ${isTitle ? 'font-bold text-xl' : 'text-base'}`;
@@ -99,9 +100,12 @@ const EditableTopicAccordion: React.FC<{
     // developer chooses between a clickable link and an in-app instruction
     // block. Stored in the `resource_links` JSONB column on the course row,
     // so older rows without the field simply render as URL activities.
-    resourceLinks: { id: string; topicId: string; type: 'file' | 'document' | 'youtube' | 'activity' | 'quiz'; title: string; url: string; instructions?: string }[];
+    resourceLinks: { id: string; topicId: string; type: 'file' | 'document' | 'youtube' | 'activity' | 'quiz'; title: string; url: string; instructions?: string; questions?: Array<{ id: string; question: string; options: string[]; correctIndex: number }> }[];
     onAddResourceLink: (topicId: string, type: 'file' | 'document' | 'youtube' | 'activity' | 'quiz') => void;
     onUpdateResourceLink: (id: string, field: 'title' | 'url' | 'instructions', value: string) => void;
+    // Quiz rows use a dedicated callback to update title + questions
+    // atomically, since the editor modal edits both together.
+    onUpdateResourceLinkQuiz: (id: string, title: string, questions: QuizQuestion[]) => void;
     onDeleteResourceLink: (id: string) => void;
     onReorderResourceLink: (draggedId: string, targetId: string, parentId: string) => void;
     onMoveResourceLink: (draggedId: string, targetParentId: string) => void;
@@ -112,10 +116,21 @@ const EditableTopicAccordion: React.FC<{
     topic, onUpdateTitle, onDelete, onAddSubtopic, onUpdateSubtopic, onDeleteSubtopic,
     draggedSubtopic, dropTargetSubtopic, onSubtopicDragStart, onSubtopicDrop, onSubtopicDragOver, onSubtopicDragLeave, onSubtopicDragEnd,
     onSelfDragStart, onSelfDragEnd,
-    resourceLinks, onAddResourceLink, onUpdateResourceLink, onDeleteResourceLink, onReorderResourceLink, onMoveResourceLink,
+    resourceLinks, onAddResourceLink, onUpdateResourceLink, onUpdateResourceLinkQuiz, onDeleteResourceLink, onReorderResourceLink, onMoveResourceLink,
     draggedResourceLinkId, onResourceLinkDragStart, onResourceLinkDragEnd
 }) => {
         const [isSubtopicsOpen, setSubtopicsOpen] = useState(true);
+        // Tracks which Quiz-type resource link row has its editor modal open.
+        // Only one modal at a time; clicking Edit Quiz on a row sets this to
+        // the row id. Closing the modal clears it.
+        const [openQuizEditorId, setOpenQuizEditorId] = useState<string | null>(null);
+        // Resolve the currently-open quiz row once so the modal (rendered
+        // outside the draggable subtree) can bind to it. We search across all
+        // subtopics' resource links so this works regardless of which row
+        // triggered the modal.
+        const activeQuizRl = openQuizEditorId
+            ? resourceLinks.find(rl => rl.id === openQuizEditorId && rl.type === 'quiz')
+            : null;
 
         return (
             <Card className="p-0 overflow-hidden bg-white dark:bg-gray-800">
@@ -320,6 +335,25 @@ const EditableTopicAccordion: React.FC<{
                                                             </>
                                                         );
                                                     })()
+                                                ) : rl.type === 'quiz' ? (
+                                                    // Quiz rows open a modal to edit questions + correct
+                                                    // answers. The URL input is replaced with a summary
+                                                    // button that shows the current question count.
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setOpenQuizEditorId(rl.id);
+                                                        }}
+                                                        onMouseDown={(e) => e.stopPropagation()}
+                                                        className="flex-1 min-w-0 flex items-center justify-between px-2.5 py-1 text-xs rounded-md border border-green-200 dark:border-green-900/50 hover:border-green-400 dark:hover:border-green-700 bg-green-50/30 dark:bg-green-900/10 text-green-800 dark:text-green-300 font-medium transition-colors"
+                                                    >
+                                                        <span>
+                                                            {rl.questions && rl.questions.length > 0
+                                                                ? `📝 ${rl.questions.length} question${rl.questions.length === 1 ? '' : 's'}`
+                                                                : '📝 Click to add questions'}
+                                                        </span>
+                                                        <span className="text-[10px] opacity-70">Edit Quiz →</span>
+                                                    </button>
                                                 ) : (
                                                     <input
                                                         type="url"
@@ -335,6 +369,14 @@ const EditableTopicAccordion: React.FC<{
                                                 <button onClick={() => onDeleteResourceLink(rl.id)} className="p-0.5 text-gray-400 hover:text-red-500 rounded opacity-0 group-hover/rl:opacity-100 transition-opacity flex-shrink-0">
                                                     <Icon name={IconName.Delete} className="w-3 h-3" />
                                                 </button>
+                                                {/* QuizEditorModal is NOT rendered here on purpose:
+                                                    this row is `draggable`, and React synthetic
+                                                    dragstart events would bubble from the modal
+                                                    buttons into the parent drag handler, causing
+                                                    the browser to initiate a drag and swallow the
+                                                    subsequent click (Save Quiz would do nothing).
+                                                    The modal is rendered at the TopicCard root
+                                                    instead — see the bottom of this component. */}
                                             </div>
                                         ))}
                                         <div className="flex gap-1 opacity-0 group-hover:opacity-100 hover:!opacity-100 transition-opacity">
@@ -356,6 +398,20 @@ const EditableTopicAccordion: React.FC<{
                             </li>
                         </ul>
                     </div>
+                )}
+                {/* Quiz editor modal — rendered OUTSIDE the draggable resource
+                    link rows so dragstart events from the modal buttons can't
+                    bubble into the parent drag handler and swallow clicks. */}
+                {activeQuizRl && (
+                    <QuizEditorModal
+                        initialTitle={activeQuizRl.title}
+                        initialQuestions={activeQuizRl.questions || []}
+                        onClose={() => setOpenQuizEditorId(null)}
+                        onSave={(newTitle, newQuestions) => {
+                            onUpdateResourceLinkQuiz(activeQuizRl.id, newTitle, newQuestions);
+                            setOpenQuizEditorId(null);
+                        }}
+                    />
                 )}
             </Card>
         );
@@ -424,7 +480,7 @@ const CourseEditor: React.FC = () => {
     });
 
     // Resource links state (file links, YouTube links, quiz links) — each link belongs to a topic
-    const [resourceLinks, setResourceLinks] = useState<{ id: string; topicId: string; type: 'file' | 'document' | 'youtube' | 'activity' | 'quiz'; title: string; url: string; instructions?: string }[]>(
+    const [resourceLinks, setResourceLinks] = useState<{ id: string; topicId: string; type: 'file' | 'document' | 'youtube' | 'activity' | 'quiz'; title: string; url: string; instructions?: string; questions?: Array<{ id: string; question: string; options: string[]; correctIndex: number }> }[]>(
         (course as any).resourceLinks || []
     );
 
@@ -909,16 +965,20 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                     : (practicalPerformanceInputType === 'link' ? (course.practicalPerformanceAssessmentLink || null) : null),
                 assessmentMethods: course.assessmentMethods || null,
                 // Drop rows that have no payload at all. Activity-type rows
-                // are allowed to use instructions INSTEAD of a URL, so they
-                // survive the filter as long as one of the two fields is
-                // non-empty. Other resource types still require a URL.
+                // can use instructions instead of a URL; Quiz-type rows can
+                // use in-app questions instead of a URL. Other resource
+                // types still require a URL.
                 resourceLinks: resourceLinks.filter(rl => {
                     const hasUrl = rl.url.trim() !== '';
                     const hasInstructions =
                         rl.type === 'activity' &&
                         typeof rl.instructions === 'string' &&
                         rl.instructions.trim() !== '';
-                    return hasUrl || hasInstructions;
+                    const hasQuizQuestions =
+                        rl.type === 'quiz' &&
+                        Array.isArray(rl.questions) &&
+                        rl.questions.length > 0;
+                    return hasUrl || hasInstructions || hasQuizQuestions;
                 }),
                 // Convert topics to learning units with position
                 learningUnits: course.topics.map((topic, index) => ({
@@ -1176,6 +1236,12 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
 
     const updateResourceLink = (id: string, field: 'title' | 'url' | 'instructions', value: string) => {
         setResourceLinks(prev => prev.map(rl => rl.id === id ? { ...rl, [field]: value } : rl));
+    };
+
+    const updateResourceLinkQuiz = (id: string, title: string, questions: QuizQuestion[]) => {
+        setResourceLinks(prev => prev.map(rl =>
+            rl.id === id ? { ...rl, title, questions } : rl
+        ));
     };
 
     const deleteResourceLink = (id: string) => {
@@ -2045,6 +2111,7 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                         resourceLinks={resourceLinks.filter(rl => topic.subtopics.some(st => st.id === rl.topicId))}
                                         onAddResourceLink={addResourceLink}
                                         onUpdateResourceLink={updateResourceLink}
+                                        onUpdateResourceLinkQuiz={updateResourceLinkQuiz}
                                         onDeleteResourceLink={deleteResourceLink}
                                         onReorderResourceLink={reorderResourceLink}
                                         onMoveResourceLink={moveResourceLink}
