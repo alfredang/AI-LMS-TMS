@@ -81,36 +81,10 @@ const ED_TOOLS = [
     icon: IconName.Spinner,
     href: 'https://alfredang.github.io/spinning-wheel/',
   },
-  {
-    title: '5 Whys',
-    description: 'Root cause analysis tool using the 5 Whys technique',
-    icon: IconName.Help,
-    href: 'https://alfredang.github.io/5whys/',
-  },
-  {
-    title: 'Fishbone Diagram',
-    description: 'Cause-and-effect fishbone (Ishikawa) diagram for root cause analysis',
-    icon: IconName.Link,
-    href: 'https://alfredang.github.io/fishbone/',
-  },
-  {
-    title: 'Pareto Chart',
-    description: 'Pareto chart for identifying the most significant factors',
-    icon: IconName.Link,
-    href: 'https://alfredang.github.io/paretochart/',
-  },
-  {
-    title: 'System Thinking',
-    description: 'Visualise cause-and-effect feedback loops for systems analysis',
-    icon: IconName.Link,
-    href: 'https://alfredang.github.io/systemloop/',
-  },
-  {
-    title: 'Mock Data Generator',
-    description: 'Generate realistic mock data for testing and demonstrations',
-    icon: IconName.FileText,
-    href: 'https://alfredang.github.io/mockdatagen/',
-  },
+  // Note: 5 Whys, Fishbone Diagram, Pareto Chart, and System Thinking have
+  // been moved to the Problem Solving Tools page; Mock Data Generator has
+  // been moved to the Data Analytics Tools page. This keeps Ed Tools
+  // focused on classroom engagement utilities.
 ];
 
 const EdToolsPage: React.FC = () => {

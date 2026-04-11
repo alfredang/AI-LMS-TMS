@@ -32,11 +32,15 @@ const ED_TOOL_ITEMS: { label: string; icon: IconName; href: string }[] = [
   { label: 'Live Poll',      icon: IconName.ClipboardCheck, href: 'https://alfredang.github.io/livepoll/' },
   { label: 'MindMaps', icon: IconName.Link, href: 'https://alfredang.github.io/mindmapping/' },
   { label: 'Spinning Wheel', icon: IconName.Spinner,  href: 'https://alfredang.github.io/spinning-wheel/' },
-  { label: '5 Whys',         icon: IconName.Help,     href: 'https://alfredang.github.io/5whys/' },
-  { label: 'Fishbone Diagram', icon: IconName.Link,  href: 'https://alfredang.github.io/fishbone/' },
-  { label: 'Pareto Chart',    icon: IconName.Link,   href: 'https://alfredang.github.io/paretochart/' },
-  { label: 'System Thinking', icon: IconName.Link,   href: 'https://alfredang.github.io/systemloop/' },
-  { label: 'Mock Data Generator', icon: IconName.FileText, href: 'https://alfredang.github.io/mockdatagen/' },
+];
+
+// Problem Solving tools — split out from Ed Tools so root-cause analysis
+// tools have their own discoverable home in the sidebar.
+const PROBLEM_SOLVING_TOOL_ITEMS: { label: string; icon: IconName; href: string }[] = [
+  { label: '5 Whys',          icon: IconName.Help, href: 'https://alfredang.github.io/5whys/' },
+  { label: 'Fishbone Diagram', icon: IconName.Link, href: 'https://alfredang.github.io/fishbone/' },
+  { label: 'Pareto Chart',    icon: IconName.Link, href: 'https://alfredang.github.io/paretochart/' },
+  { label: 'System Thinking', icon: IconName.Link, href: 'https://alfredang.github.io/systemloop/' },
 ];
 
 const VIRTUAL_TOOL_ITEMS: { label: string; icon: IconName; href: string }[] = [
@@ -47,6 +51,7 @@ const VIRTUAL_TOOL_ITEMS: { label: string; icon: IconName; href: string }[] = [
 
 const DATA_ANALYTICS_ITEMS: { label: string; icon: IconName; href: string }[] = [
   { label: 'Pivot Visualization', icon: IconName.Analytics, href: 'https://alfredang.github.io/novapivot/' },
+  { label: 'Mock Data Generator', icon: IconName.FileText, href: 'https://alfredang.github.io/mockdatagen/' },
 ];
 
 const FINANCE_TOOL_ITEMS: { label: string; icon: IconName; href: string }[] = [
@@ -190,6 +195,7 @@ const subItemClass = 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:ho
 const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate }) => {
   const { trainerPage, setTrainerPage, setCurrentView, setSelectedCourse } = useLms();
   const [edToolsOpen, setEdToolsOpen] = useState(true);
+  const [problemSolvingOpen, setProblemSolvingOpen] = useState(trainerPage === TrainerPage.ProblemSolvingTools);
   const [dataAnalyticsOpen, setDataAnalyticsOpen] = useState(trainerPage === TrainerPage.DataAnalyticsTools);
   const [financeToolsOpen, setFinanceToolsOpen] = useState(trainerPage === TrainerPage.FinanceTools);
   const [statToolsOpen, setStatToolsOpen] = useState(trainerPage === TrainerPage.StatTools);
@@ -281,6 +287,51 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate }) => {
           {edToolsOpen && (
             <div className="ml-5 pl-3 border-l border-gray-200 dark:border-gray-700 space-y-0.5">
               {ED_TOOL_ITEMS.map(({ label, icon, href }) => (
+                <a
+                  key={label}
+                  href={href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={`group flex items-center gap-2.5 w-full rounded-lg px-2.5 py-2 text-[13px] font-medium transition-all duration-150 ${subItemClass}`}
+                >
+                  <Icon name={icon} className="w-4 h-4 flex-shrink-0 text-gray-400 dark:text-gray-500 group-hover:text-gray-900 dark:group-hover:text-white transition-colors" />
+                  <span className="truncate">{label}</span>
+                  <Icon name={IconName.ExternalLink} className="w-3 h-3 ml-auto text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                </a>
+              ))}
+            </div>
+          )}
+
+          {/* Problem Solving Tools — expandable */}
+          <button
+            onClick={() => {
+              setProblemSolvingOpen(prev => !prev);
+              navigateTo(TrainerPage.ProblemSolvingTools);
+            }}
+            className={`group flex items-center gap-3 w-full rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-150 ${
+              trainerPage === TrainerPage.ProblemSolvingTools
+                ? 'bg-primary/10 text-primary'
+                : inactiveClass
+            }`}
+          >
+            <Icon
+              name={IconName.Help}
+              className={`w-[18px] h-[18px] flex-shrink-0 transition-colors ${
+                trainerPage === TrainerPage.ProblemSolvingTools ? 'text-primary' : inactiveIconClass
+              }`}
+            />
+            <span className="truncate">Problem Solving Tools</span>
+            <Icon
+              name={IconName.ChevronDown}
+              className={`w-4 h-4 ml-auto flex-shrink-0 transition-transform duration-200 ${
+                problemSolvingOpen ? 'rotate-0' : '-rotate-90'
+              } ${trainerPage === TrainerPage.ProblemSolvingTools ? 'text-primary' : 'text-gray-400 dark:text-gray-500'}`}
+            />
+          </button>
+
+          {problemSolvingOpen && (
+            <div className="ml-5 pl-3 border-l border-gray-200 dark:border-gray-700 space-y-0.5">
+              {PROBLEM_SOLVING_TOOL_ITEMS.map(({ label, icon, href }) => (
                 <a
                   key={label}
                   href={href}

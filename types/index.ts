@@ -133,6 +133,7 @@ export enum TrainerPage {
   TaskList = 'taskList',
   GenAIAuthoring = 'genAIAuthoring',
   EdTools = 'edTools',
+  ProblemSolvingTools = 'problemSolvingTools',
   DataAnalyticsTools = 'dataAnalyticsTools',
   FinanceTools = 'financeTools',
   StatTools = 'statTools',
