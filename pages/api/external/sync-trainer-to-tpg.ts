@@ -244,10 +244,14 @@ export async function runSyncTrainerToTpg() {
       }
 
       // ── On success: write tpg_assigned_trainer_name/email from assigned trainer ─
+      // Also auto-confirm the class: if it was 'Pending' (no trainer yet),
+      // flip to 'Confirmed' in the same UPDATE. Never touch 'Cancelled' or
+      // already-'Confirmed' rows — one-directional.
       await pool.query(
         `UPDATE course_run
          SET tpg_assigned_trainer_name  = $2,
              tpg_assigned_trainer_email = $3,
+             class_status = CASE WHEN class_status = 'Pending' THEN 'Confirmed' ELSE class_status END,
              updated_at = NOW()
          WHERE id = $1`,
         [run.id, trainerName, resolvedEmail || null]
