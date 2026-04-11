@@ -587,8 +587,9 @@ export const SchedulerView: React.FC = () => {
                                     };
 
                                     const isCalendarSync = task.id === 'sync_google_calendar';
-                                    const defaultDays = isCalendarSync ? 21 : 3;
-                                    const maxDays = isCalendarSync ? 90 : 30;
+                                    const isTrainerInvitations = task.id === 'auto_send_trainer_invitations';
+                                    const defaultDays = isCalendarSync ? 21 : isTrainerInvitations ? 30 : 3;
+                                    const maxDays = isCalendarSync ? 90 : isTrainerInvitations ? 180 : 30;
 
                                     const handleDaysChange = async (delta: number) => {
                                         const current = task.days_in_advance ?? defaultDays;

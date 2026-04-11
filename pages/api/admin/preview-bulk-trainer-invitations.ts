@@ -23,6 +23,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (typeof n === 'number' && n > 0) windowDays = n;
     } catch { /* table may not exist */ }
 
+    // Optional date range from query params (override the default window)
+    const dateFrom = typeof req.query.dateFrom === 'string' && req.query.dateFrom ? req.query.dateFrom : null;
+    const dateTo = typeof req.query.dateTo === 'string' && req.query.dateTo ? req.query.dateTo : null;
+
     // Eligible course runs: upcoming, no local trainer assigned
     const eligibleRes = await pool.query(
       `SELECT cr.id, cr.course_run_id, cr.start_date, cr.end_date,
@@ -33,13 +37,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
        LEFT JOIN LATERAL (
          SELECT COUNT(*) AS cnt FROM enrollment e WHERE e.course_run_id = cr.id AND e.enrolment_status = 'Confirmed'
        ) enr ON true
-       WHERE cr.start_date >= CURRENT_DATE
-         AND cr.start_date <= CURRENT_DATE + ($1::int * INTERVAL '1 day')
+       WHERE cr.start_date >= COALESCE($2::date, CURRENT_DATE)
+         AND cr.start_date <= COALESCE($3::date, CURRENT_DATE + ($1::int * INTERVAL '1 day'))
          AND NOT EXISTS (
            SELECT 1 FROM course_run_trainer crt WHERE crt.course_run_id = cr.id
          )
        ORDER BY cr.start_date ASC`,
-      [windowDays]
+      [windowDays, dateFrom, dateTo]
     );
 
     if (eligibleRes.rows.length === 0) {

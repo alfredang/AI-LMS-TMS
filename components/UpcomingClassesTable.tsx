@@ -155,6 +155,8 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
     const [bulkPreviewData, setBulkPreviewData] = useState<any[]>([]);
     const [bulkPreviewLoading, setBulkPreviewLoading] = useState(false);
     const [bulkSelected, setBulkSelected] = useState<Set<string>>(new Set());
+    const [bulkDateFrom, setBulkDateFrom] = useState('');
+    const [bulkDateTo, setBulkDateTo] = useState('');
     const [actionMessage, setActionMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
     // Per-row next trainer overrides (courseRun UUID → selected trainer name)
     const [nextTrainerOverrides, setNextTrainerOverrides] = useState<Record<string, string>>({});
@@ -481,6 +483,8 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                             disabled={bulkPreviewLoading}
                             onClick={async () => {
                                 setBulkPreviewLoading(true);
+                                setBulkDateFrom('');
+                                setBulkDateTo('');
                                 try {
                                     const res = await fetch(getApiUrl('/api/admin/preview-bulk-trainer-invitations'));
                                     const data = await res.json();
@@ -992,14 +996,71 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
             {showBulkPreview && (
                 <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
                     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-4xl max-h-[85vh] flex flex-col border dark:border-gray-700">
-                        <div className="p-4 border-b dark:border-gray-700 flex items-center justify-between">
-                            <div>
-                                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Preview: Bulk Trainer Invitations</h3>
-                                <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
-                                    {bulkPreviewData.filter(p => p.canSend).length} sendable / {bulkPreviewData.length} total course runs with no local trainer
-                                </p>
+                        <div className="p-4 border-b dark:border-gray-700">
+                            <div className="flex items-center justify-between mb-3">
+                                <div>
+                                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Preview: Bulk Trainer Invitations</h3>
+                                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+                                        {bulkPreviewData.filter(p => p.canSend).length} sendable / {bulkPreviewData.length} total course runs with no local trainer
+                                    </p>
+                                </div>
+                                <button onClick={() => setShowBulkPreview(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-xl">&times;</button>
                             </div>
-                            <button onClick={() => setShowBulkPreview(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-xl">&times;</button>
+                            <div className="flex items-center gap-3">
+                                <label className="text-xs text-gray-500 dark:text-gray-400">From</label>
+                                <input
+                                    type="date"
+                                    value={bulkDateFrom}
+                                    onChange={(e) => {
+                                        setBulkDateFrom(e.target.value);
+                                        // Auto-refresh on date change
+                                        const from = e.target.value;
+                                        const to = bulkDateTo;
+                                        setBulkPreviewLoading(true);
+                                        const params = new URLSearchParams();
+                                        if (from) params.set('dateFrom', from);
+                                        if (to) params.set('dateTo', to);
+                                        fetch(getApiUrl(`/api/admin/preview-bulk-trainer-invitations?${params.toString()}`))
+                                            .then(r => r.json())
+                                            .then(data => {
+                                                if (data.success) {
+                                                    setBulkPreviewData(data.preview || []);
+                                                    const sendable = (data.preview || []).filter((p: any) => p.canSend && p.confirmedEnrolments > 0);
+                                                    setBulkSelected(new Set(sendable.map((p: any) => p.courseRunUuid)));
+                                                }
+                                            })
+                                            .catch(() => {})
+                                            .finally(() => setBulkPreviewLoading(false));
+                                    }}
+                                    className="px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                />
+                                <label className="text-xs text-gray-500 dark:text-gray-400">To</label>
+                                <input
+                                    type="date"
+                                    value={bulkDateTo}
+                                    onChange={(e) => {
+                                        setBulkDateTo(e.target.value);
+                                        const from = bulkDateFrom;
+                                        const to = e.target.value;
+                                        setBulkPreviewLoading(true);
+                                        const params = new URLSearchParams();
+                                        if (from) params.set('dateFrom', from);
+                                        if (to) params.set('dateTo', to);
+                                        fetch(getApiUrl(`/api/admin/preview-bulk-trainer-invitations?${params.toString()}`))
+                                            .then(r => r.json())
+                                            .then(data => {
+                                                if (data.success) {
+                                                    setBulkPreviewData(data.preview || []);
+                                                    const sendable = (data.preview || []).filter((p: any) => p.canSend && p.confirmedEnrolments > 0);
+                                                    setBulkSelected(new Set(sendable.map((p: any) => p.courseRunUuid)));
+                                                }
+                                            })
+                                            .catch(() => {})
+                                            .finally(() => setBulkPreviewLoading(false));
+                                    }}
+                                    className="px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                />
+                            </div>
                         </div>
                         <div className="flex-1 overflow-auto p-4">
                             {bulkPreviewData.length === 0 ? (
