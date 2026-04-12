@@ -7,6 +7,7 @@
  *   3. Search SSG grants by enrolment reference → save grant_id (non-fatal)
  *   4. (If enabled) Create QuickBooks invoice → save invoice_id
  *   5. (If enabled) Send invoice email (non-fatal)
+ *   6. Add learner email to matching Google Calendar event (non-fatal)
  *
  * Called from:
  *   - pages/api/admin/upload-da-applications.ts (fire-and-forget after upload)
@@ -23,6 +24,8 @@ import {
   createDirectApplicationInvoice,
   type DaApplicationForInvoice,
 } from './quickbooks/createDirectApplicationInvoice';
+import { google } from 'googleapis';
+import { getGoogleCredentials } from './google-auth/googleAuth';
 
 export type AutoEnrolStatus =
   | 'pending'
@@ -184,6 +187,149 @@ async function callInvoiceSend(invoiceId: string, email: string): Promise<void> 
 }
 
 // ---------------------------------------------------------------------------
+// Google Calendar: add learner email to matching event
+// ---------------------------------------------------------------------------
+
+/**
+ * Strip common prefixes from a calendar event summary so we can match it
+ * against the course title from the DA application. Known prefixes:
+ * "WSQ ", "VIRTUAL ", "EXTERNAL ", "[WSQ]", "[VIRTUAL]", "[EXTERNAL]",
+ * and combinations thereof.
+ */
+function stripCalendarPrefixes(title: string): string {
+  return (title || '')
+    .replace(/^\s*\[?(WSQ|VIRTUAL|EXTERNAL|HYBRID)\]?\s*/gi, '')
+    .replace(/^\s*\[?(WSQ|VIRTUAL|EXTERNAL|HYBRID)\]?\s*/gi, '') // second pass for double-prefix
+    .trim();
+}
+
+/**
+ * Attempt to add a learner's email to the Google Calendar event that
+ * matches the DA's course title + course start date.
+ *
+ * Matching rules:
+ *   1. Strip WSQ/VIRTUAL/EXTERNAL/HYBRID prefixes from both sides
+ *   2. Case-insensitive substring match (event title contains course title
+ *      or vice-versa)
+ *   3. Event start date (YYYY-MM-DD) matches course_start_date
+ *   4. If the learner's email is already in the attendee list → no-op
+ *
+ * This step is always non-fatal. If calendar is not configured, credentials
+ * are missing, or no matching event is found, we log a warning and move on.
+ */
+async function addLearnerToCalendarEvent(
+  learnerEmail: string,
+  courseTitle: string,
+  courseStartDate: string | Date | null
+): Promise<void> {
+  if (!learnerEmail || !courseTitle) return;
+
+  // Load calendar config
+  const tpRes = await pool.query(
+    `SELECT sync_google_calendar, google_calendar_url FROM training_provider LIMIT 1`
+  );
+  const tpRow = tpRes.rows[0];
+  if (!tpRow?.sync_google_calendar) {
+    console.log(`📅 [calendar-attendee] sync_google_calendar is off — skipping`);
+    return;
+  }
+
+  const credentials = await getGoogleCredentials(pool);
+
+  // Extract calendar ID
+  let calendarId = 'primary';
+  const calUrl = tpRow.google_calendar_url || '';
+  if (calUrl) {
+    const cidMatch = calUrl.match(/[?&]cid=([^&]+)/);
+    if (cidMatch) {
+      try {
+        calendarId = Buffer.from(cidMatch[1], 'base64').toString('utf-8');
+      } catch {
+        calendarId = cidMatch[1];
+      }
+    } else if (calUrl.includes('@')) {
+      calendarId = calUrl;
+    }
+  }
+
+  const oauth2Client = new google.auth.OAuth2(
+    credentials.clientId,
+    credentials.clientSecret,
+    'https://developers.google.com/oauthplayground'
+  );
+  oauth2Client.setCredentials({ refresh_token: credentials.refreshToken });
+  const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
+
+  // Normalise the course start date to YYYY-MM-DD
+  let startDateIso: string;
+  if (!courseStartDate) return;
+  if (courseStartDate instanceof Date) {
+    startDateIso = courseStartDate.toISOString().slice(0, 10);
+  } else {
+    startDateIso = String(courseStartDate).slice(0, 10);
+  }
+
+  // Fetch calendar events around the course start date (±1 day window)
+  const dayBefore = new Date(startDateIso);
+  dayBefore.setDate(dayBefore.getDate() - 1);
+  const dayAfter = new Date(startDateIso);
+  dayAfter.setDate(dayAfter.getDate() + 2);
+
+  const eventsResponse = await calendar.events.list({
+    calendarId,
+    timeMin: dayBefore.toISOString(),
+    timeMax: dayAfter.toISOString(),
+    singleEvents: true,
+    maxResults: 200,
+  });
+
+  const events = eventsResponse.data.items || [];
+  const strippedCourseTitle = stripCalendarPrefixes(courseTitle).toLowerCase();
+
+  // Find matching event: stripped title contains course title (or vice-versa) AND date matches
+  const matchedEvent = events.find(evt => {
+    const evtSummary = stripCalendarPrefixes(evt.summary || '').toLowerCase();
+    const titleMatch =
+      evtSummary.includes(strippedCourseTitle) ||
+      strippedCourseTitle.includes(evtSummary);
+    if (!titleMatch) return false;
+
+    // Check date match
+    const evtDate = (evt.start?.dateTime?.slice(0, 10) || evt.start?.date || '');
+    return evtDate === startDateIso;
+  });
+
+  if (!matchedEvent || !matchedEvent.id) {
+    console.log(`📅 [calendar-attendee] No matching event for "${courseTitle}" on ${startDateIso} — skipping`);
+    return;
+  }
+
+  // Check if learner email is already an attendee
+  const existingAttendees = matchedEvent.attendees || [];
+  const emailLower = learnerEmail.trim().toLowerCase();
+  if (existingAttendees.some(a => (a.email || '').toLowerCase() === emailLower)) {
+    console.log(`📅 [calendar-attendee] ${learnerEmail} already in event "${matchedEvent.summary}" — no-op`);
+    return;
+  }
+
+  // Add the learner as a new attendee
+  await calendar.events.patch({
+    calendarId,
+    eventId: matchedEvent.id,
+    requestBody: {
+      attendees: [
+        ...existingAttendees,
+        { email: learnerEmail, responseStatus: 'needsAction' },
+      ],
+    },
+    // Don't send update notifications to all attendees for each individual add
+    sendUpdates: 'none',
+  });
+
+  console.log(`📅 [calendar-attendee] Added ${learnerEmail} to event "${matchedEvent.summary}" (${matchedEvent.id})`);
+}
+
+// ---------------------------------------------------------------------------
 // Single-row pipeline
 // ---------------------------------------------------------------------------
 
@@ -298,6 +444,14 @@ export async function processDirectApplication(
 
   // Step 3: QuickBooks invoice (skipped unless toggle is on)
   if (!autoInvoice) {
+    // Still add learner to calendar even when invoice is skipped
+    if (row.trainee_email) {
+      try {
+        await addLearnerToCalendarEvent(row.trainee_email, row.course_title || '', row.course_start_date);
+      } catch (err) {
+        console.warn(`⚠️  auto-enrol [${applicationId}] calendar attendee failed (non-fatal):`, err instanceof Error ? err.message : err);
+      }
+    }
     return {
       id: appId,
       applicationId,
@@ -353,6 +507,24 @@ export async function processDirectApplication(
     } catch (err) {
       console.warn(
         `⚠️  auto-enrol [${applicationId}] invoice send failed (non-fatal):`,
+        err instanceof Error ? err.message : err
+      );
+    }
+  }
+
+  // Step 5: Add learner email to matching Google Calendar event (non-fatal)
+  // Matches by course title (ignoring WSQ/VIRTUAL/EXTERNAL prefixes) + start date.
+  // If the learner is already an attendee, this is a no-op.
+  if (row.trainee_email) {
+    try {
+      await addLearnerToCalendarEvent(
+        row.trainee_email,
+        row.course_title || '',
+        row.course_start_date
+      );
+    } catch (err) {
+      console.warn(
+        `⚠️  auto-enrol [${applicationId}] calendar attendee failed (non-fatal):`,
         err instanceof Error ? err.message : err
       );
     }
