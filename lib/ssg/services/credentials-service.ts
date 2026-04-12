@@ -197,13 +197,22 @@ export class SSGCredentialsService {
       const appBaseUrl = (process.env.NEXT_PUBLIC_BASE_URL || process.env.NEXTAUTH_URL || process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || '').replace(/\/$/, '');
 
       /** Fetch PEM content from a file path stored in DB.
-       *  Tries: 1) HTTP fetch via appBaseUrl + path  2) local filesystem read */
+       *  Tries: 1) HTTP fetch via appBaseUrl + path  2) HTTP fetch via localhost:3000  3) local filesystem read */
       const loadPemFromPath = async (filePath: string | null): Promise<string | null> => {
         if (!filePath || !filePath.trim()) return null;
 
-        // 1. Fetch via URL (works from any environment — local or prod)
-        if (appBaseUrl) {
-          const url = filePath.startsWith('http') ? filePath : `${appBaseUrl}${filePath.startsWith('/') ? '' : '/'}${filePath}`;
+        const normalizedPath = filePath.startsWith('/') ? filePath : `/${filePath}`;
+
+        // Build list of base URLs to try
+        const baseUrls: string[] = [];
+        if (appBaseUrl) baseUrls.push(appBaseUrl);
+        // Always try localhost as a fallback for local dev (cert files served by Next.js)
+        const port = process.env.PORT || '3000';
+        const localhostUrl = `http://localhost:${port}`;
+        if (!baseUrls.includes(localhostUrl)) baseUrls.push(localhostUrl);
+
+        for (const base of baseUrls) {
+          const url = filePath.startsWith('http') ? filePath : `${base}${normalizedPath}`;
           try {
             const res = await fetch(url);
             if (res.ok) {
@@ -213,10 +222,10 @@ export class SSGCredentialsService {
                 return text;
               }
             }
-          } catch { /* fall through to filesystem */ }
+          } catch { /* try next */ }
         }
 
-        // 2. Filesystem fallback (works on the same machine as the files)
+        // Filesystem fallback (works on the same machine as the files)
         const absPath = convertToAbsolutePath(filePath);
         try {
           if (absPath && fs.existsSync(absPath)) {
@@ -240,7 +249,13 @@ export class SSGCredentialsService {
           credentials.certificateContent = resolvePem(certEnv);
           console.log('[creds] Certificate loaded from env var');
         } else {
-          console.warn(`[creds] ❌ Certificate not found — no DB file path and no env var`);
+          // File not on disk — try HTTP fetch (DB path is a URL-relative path served by Next.js)
+          const fetchedCert = await loadPemFromPath(certFile);
+          if (fetchedCert) {
+            credentials.certificateContent = fetchedCert;
+          } else {
+            console.warn(`[creds] ❌ Certificate not found — tried disk, HTTP fetch, and env var`);
+          }
         }
       } catch (fileError) {
         const fetchedCert = await loadPemFromPath(certFile);
@@ -269,7 +284,13 @@ export class SSGCredentialsService {
           credentials.privateKeyContent = resolvePem(keyEnv);
           console.log('[creds] Private key loaded from env var');
         } else {
-          console.warn(`[creds] ❌ Private key not found — no DB file path and no env var`);
+          // File not on disk — try HTTP fetch
+          const fetchedKey = await loadPemFromPath(keyFile);
+          if (fetchedKey) {
+            credentials.privateKeyContent = fetchedKey;
+          } else {
+            console.warn(`[creds] ❌ Private key not found — tried disk, HTTP fetch, and env var`);
+          }
         }
       } catch (fileError) {
         const fetchedKey = await loadPemFromPath(keyFile);

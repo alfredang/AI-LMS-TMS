@@ -6185,18 +6185,10 @@ export const UpcomingEnrolmentView: React.FC = () => {
     const [data, setData] = useState<any[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    
-    // Date states
-    const [startDate, setStartDate] = useState(() => {
+
+    // Single enrolment date (today in DD/MM/YYYY)
+    const [enrolDate, setEnrolDate] = useState(() => {
         const d = new Date();
-        const day = String(d.getDate()).padStart(2, '0');
-        const month = String(d.getMonth() + 1).padStart(2, '0');
-        const year = d.getFullYear();
-        return `${day}/${month}/${year}`;
-    });
-    const [endDate, setEndDate] = useState(() => {
-        const d = new Date();
-        d.setDate(d.getDate() + 21);
         const day = String(d.getDate()).padStart(2, '0');
         const month = String(d.getMonth() + 1).padStart(2, '0');
         const year = d.getFullYear();
@@ -6222,7 +6214,7 @@ export const UpcomingEnrolmentView: React.FC = () => {
         setLoading(true);
         setError(null);
         try {
-            const res = await fetch(`/api/admin/upcoming-enrolment?startDate=${toIsoDate(startDate)}&endDate=${toIsoDate(endDate)}`);
+            const res = await fetch(`/api/admin/upcoming-enrolment?enrolmentDate=${toIsoDate(enrolDate)}`);
             const json = await res.json();
             if (json.success) {
                 setData(json.data);
@@ -6243,10 +6235,11 @@ export const UpcomingEnrolmentView: React.FC = () => {
     const fmt = (d: string) => {
         if (!d) return '—';
         const date = new Date(d);
-        const day = String(date.getDate()).padStart(2, '0');
-        const month = String(date.getMonth() + 1).padStart(2, '0');
-        const year = date.getFullYear();
-        return `${day}/${month}/${year}`;
+        if (isNaN(date.getTime())) return d;
+        return new Intl.DateTimeFormat('en-GB', {
+            day: '2-digit', month: '2-digit', year: 'numeric',
+            timeZone: 'Asia/Singapore'
+        }).format(date);
     };
 
     return (
@@ -6257,36 +6250,25 @@ export const UpcomingEnrolmentView: React.FC = () => {
             </div>
 
             <p className="text-sm text-gray-500 dark:text-gray-400">
-                Displays confirmed enrolments starting within the next 21 days (default) and checks if they match a calendar event.
-                Matches are based on attendee email, start date, and TGS course code in the event description.
+                Displays confirmed enrolments from SSG for the selected enrolment date, and checks if they match a calendar event.
+                Matches are based on attendee email and TGS course code in the event description.
             </p>
 
             <Card className="p-5">
                 <div className="flex flex-wrap items-end gap-4">
                     <div className="space-y-1">
-                        <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500">Start Date</label>
+                        <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500">Enrolment Date</label>
                         <input
                             type="text"
                             placeholder="DD/MM/YYYY"
-                            value={startDate}
-                            onChange={(e) => setStartDate(formatDateInput(e.target.value))}
-                            maxLength={10}
-                            className="w-32 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
-                        />
-                    </div>
-                    <div className="space-y-1">
-                        <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500">End Date</label>
-                        <input
-                            type="text"
-                            placeholder="DD/MM/YYYY"
-                            value={endDate}
-                            onChange={(e) => setEndDate(formatDateInput(e.target.value))}
+                            value={enrolDate}
+                            onChange={(e) => setEnrolDate(formatDateInput(e.target.value))}
                             maxLength={10}
                             className="w-32 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
                         />
                     </div>
                     <Button onClick={fetchData} disabled={loading}>
-                        {loading ? 'Refreshing...' : 'Refresh'}
+                        {loading ? 'Loading...' : 'Refresh'}
                     </Button>
                 </div>
             </Card>
@@ -6302,39 +6284,35 @@ export const UpcomingEnrolmentView: React.FC = () => {
                     <table className="w-full text-sm text-left table-fixed">
                         <thead className="bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
                             <tr>
-                                <th className="px-3 py-3 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 w-[120px]">Enrolment ID</th>
-                                <th className="px-3 py-3 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 w-[90px]">Enrol Date</th>
-                                <th className="px-3 py-3 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 w-[180px]">Email</th>
-                                <th className="px-3 py-3 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Course Title</th>
-                                <th className="px-3 py-3 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 w-[130px]">Course Code</th>
+                                <th className="px-3 py-3 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 w-[130px]">Enrolment ID</th>
+                                <th className="px-3 py-3 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 w-[100px]">Enrolment Date</th>
+                                <th className="px-3 py-3 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 w-[200px]">Email</th>
+                                <th className="px-3 py-3 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Course</th>
+                                <th className="px-3 py-3 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 w-[130px]">TGS Code</th>
+                                <th className="px-3 py-3 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 w-[120px]">Run ID</th>
                                 <th className="px-3 py-3 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 w-[90px]">Start Date</th>
-                                <th className="px-3 py-3 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 w-[80px]">Status</th>
                                 <th className="px-3 py-3 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 text-center w-[120px]">Not In Cal</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-                            {data.length === 0 && !loading ? (
+                            {loading ? (
                                 <tr>
-                                    <td colSpan={8} className="px-3 py-8 text-center text-gray-500 italic">No enrolments found for this period.</td>
+                                    <td colSpan={8} className="px-3 py-8 text-center text-gray-500 italic">Loading...</td>
+                                </tr>
+                            ) : data.length === 0 ? (
+                                <tr>
+                                    <td colSpan={8} className="px-3 py-8 text-center text-gray-500 italic">No confirmed enrolments found for this date.</td>
                                 </tr>
                             ) : (
                                 data.map((row, idx) => (
                                     <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
                                         <td className="px-3 py-2 font-mono text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">{row.enrolment_id || '—'}</td>
                                         <td className="px-3 py-2 text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">{fmt(row.enrolment_date)}</td>
-                                        <td className="px-3 py-2 text-xs font-medium text-gray-900 dark:text-gray-200 truncate" title={row.email}>{row.email}</td>
-                                        <td className="px-3 py-2 text-xs text-gray-700 dark:text-gray-300 truncate" title={row.title}>{row.title}</td>
-                                        <td className="px-3 py-2 font-mono text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">{row.course_code || '—'}</td>
-                                        <td className="px-3 py-2 text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">{fmt(row.start_date)}</td>
-                                        <td className="px-3 py-2">
-                                            <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold uppercase ${
-                                                row.class_status === 'Confirmed' ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300' :
-                                                row.class_status === 'Cancelled' ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300' :
-                                                'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'
-                                            }`}>
-                                                {row.class_status || 'Pending'}
-                                            </span>
-                                        </td>
+                                        <td className="px-3 py-2 text-xs font-medium text-gray-900 dark:text-gray-200 truncate" title={row.email}>{row.email || '—'}</td>
+                                        <td className="px-3 py-2 text-xs text-gray-700 dark:text-gray-300 truncate" title={row.title}>{row.title || '—'}</td>
+                                        <td className="px-3 py-2 font-mono text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">{row.tgs_code || '—'}</td>
+                                        <td className="px-3 py-2 font-mono text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">{row.course_run_id || '—'}</td>
+                                        <td className="px-3 py-2 text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">{row.start_date ? fmt(row.start_date) : '—'}</td>
                                         <td className="px-3 py-2 text-center whitespace-nowrap">
                                             {row.match ? (
                                                 <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 text-[10px] font-semibold" title={row.matchDetail}>
