@@ -38,14 +38,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // 1. Fetch enrolments from local DB
     const enrolmentsResult = await pool.query(
       `SELECT
+        e.id,
         e.enrolment_id,
-        e.created_at AS enrolment_date,
+        e.enrolment_date,
+        e.enrolment_status,
+        e.nric,
         COALESCE(au.email, e.email) AS email,
-        c.title,
+        COALESCE(au.full_name, e.nric) AS learner_name,
+        c.title AS course_title,
         c.course_code,
         cr.course_run_id,
         cr.start_date,
-        cr.class_status
+        cr.class_status,
+        e.calendar_added,
+        e.personal_invoice_number AS invoice_id,
+        e.grant_id,
+        e.grant_amount,
+        e.course_sponsorship,
+        e.payment_status
       FROM public.enrollment AS e
       INNER JOIN public.course_run AS cr ON e.course_run_id = cr.id
       INNER JOIN public.course AS c ON cr.course_id = c.id
