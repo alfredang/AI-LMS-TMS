@@ -55,7 +55,7 @@ const BATCH_SIZE = 5;
 
 async function updateRow(
   id: string,
-  fields: Record<string, string | null>
+  fields: Record<string, string | boolean | null>
 ): Promise<void> {
   const keys = Object.keys(fields);
   if (keys.length === 0) return;
@@ -221,8 +221,8 @@ async function addLearnerToCalendarEvent(
   learnerEmail: string,
   courseTitle: string,
   courseStartDate: string | Date | null
-): Promise<void> {
-  if (!learnerEmail || !courseTitle) return;
+): Promise<boolean> {
+  if (!learnerEmail || !courseTitle) return false;
 
   // Load calendar config
   const tpRes = await pool.query(
@@ -231,7 +231,7 @@ async function addLearnerToCalendarEvent(
   const tpRow = tpRes.rows[0];
   if (!tpRow?.sync_google_calendar) {
     console.log(`📅 [calendar-attendee] sync_google_calendar is off — skipping`);
-    return;
+    return false;
   }
 
   const credentials = await getGoogleCredentials(pool);
@@ -262,7 +262,7 @@ async function addLearnerToCalendarEvent(
 
   // Normalise the course start date to YYYY-MM-DD
   let startDateIso: string;
-  if (!courseStartDate) return;
+  if (!courseStartDate) return false;
   if (courseStartDate instanceof Date) {
     startDateIso = courseStartDate.toISOString().slice(0, 10);
   } else {
@@ -301,7 +301,7 @@ async function addLearnerToCalendarEvent(
 
   if (!matchedEvent || !matchedEvent.id) {
     console.log(`📅 [calendar-attendee] No matching event for "${courseTitle}" on ${startDateIso} — skipping`);
-    return;
+    return false;
   }
 
   // Check if learner email is already an attendee
@@ -309,7 +309,7 @@ async function addLearnerToCalendarEvent(
   const emailLower = learnerEmail.trim().toLowerCase();
   if (existingAttendees.some(a => (a.email || '').toLowerCase() === emailLower)) {
     console.log(`📅 [calendar-attendee] ${learnerEmail} already in event "${matchedEvent.summary}" — no-op`);
-    return;
+    return true; // already present counts as "added"
   }
 
   // Add the learner as a new attendee
@@ -327,6 +327,7 @@ async function addLearnerToCalendarEvent(
   });
 
   console.log(`📅 [calendar-attendee] Added ${learnerEmail} to event "${matchedEvent.summary}" (${matchedEvent.id})`);
+  return true; // signal that the learner was added
 }
 
 // ---------------------------------------------------------------------------
@@ -447,7 +448,8 @@ export async function processDirectApplication(
     // Still add learner to calendar even when invoice is skipped
     if (row.trainee_email) {
       try {
-        await addLearnerToCalendarEvent(row.trainee_email, row.course_title || '', row.course_start_date);
+        const calAdded = await addLearnerToCalendarEvent(row.trainee_email, row.course_title || '', row.course_start_date);
+        if (calAdded) await updateRow(appId, { calendar_added: true });
       } catch (err) {
         console.warn(`⚠️  auto-enrol [${applicationId}] calendar attendee failed (non-fatal):`, err instanceof Error ? err.message : err);
       }
@@ -517,11 +519,12 @@ export async function processDirectApplication(
   // If the learner is already an attendee, this is a no-op.
   if (row.trainee_email) {
     try {
-      await addLearnerToCalendarEvent(
+      const calAdded = await addLearnerToCalendarEvent(
         row.trainee_email,
         row.course_title || '',
         row.course_start_date
       );
+      if (calAdded) await updateRow(appId, { calendar_added: true });
     } catch (err) {
       console.warn(
         `⚠️  auto-enrol [${applicationId}] calendar attendee failed (non-fatal):`,

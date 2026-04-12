@@ -54,6 +54,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 da.qb_customer_ref,
                 da.auto_enrol_status,
                 da.auto_enrol_error,
+                da.calendar_added,
                 da.created_at,
                 da.updated_at
             FROM da_application da

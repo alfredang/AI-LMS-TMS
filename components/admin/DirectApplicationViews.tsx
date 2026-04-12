@@ -1419,7 +1419,8 @@ export const ViewDirectApplicationView: React.FC = () => {
                                                     className="w-3.5 h-3.5 text-blue-600 rounded border-gray-300"
                                                 />
                                             </th>
-                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase">Auto-Enrol</th>
+                                            <th className="px-2 py-2 text-center text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase" title="SSG Enrolment Done">Enrol</th>
+                                            <th className="px-2 py-2 text-center text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase" title="Added to Google Calendar">Cal</th>
                                             <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase">Application ID</th>
                                             <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase">DA Date</th>
                                             <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase">ID Type</th>
@@ -1459,16 +1460,23 @@ export const ViewDirectApplicationView: React.FC = () => {
                                                         className="w-3.5 h-3.5 text-blue-600 rounded border-gray-300"
                                                     />
                                                 </td>
-                                                <td className="px-2 py-1.5 whitespace-nowrap">
-                                                    {app.auto_enrol_status ? (
-                                                        <span title={app.auto_enrol_error || ''} className={`px-1.5 py-0.5 text-[10px] font-bold rounded-full ${
-                                                            app.auto_enrol_status === 'invoiced' ? 'bg-green-100 text-green-800'
-                                                            : app.auto_enrol_status === 'grant_found' ? 'bg-blue-100 text-blue-800'
-                                                            : app.auto_enrol_status === 'enroled' ? 'bg-indigo-100 text-indigo-800'
-                                                            : app.auto_enrol_status === 'failed' ? 'bg-red-100 text-red-800'
-                                                            : 'bg-yellow-100 text-yellow-800'
-                                                        }`}>{app.auto_enrol_status}</span>
-                                                    ) : <span className="text-gray-400">—</span>}
+                                                <td className="px-2 py-1.5 text-center">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={!!(app.enrolment_id && app.enrolment_id.trim() !== '')}
+                                                        readOnly
+                                                        className={`w-3.5 h-3.5 rounded border-gray-300 cursor-default ${app.enrolment_id ? 'text-green-600 accent-green-600' : ''}`}
+                                                        title={app.enrolment_id ? `Enrolled: ${app.enrolment_id}${app.auto_enrol_status ? ` (${app.auto_enrol_status})` : ''}` : app.auto_enrol_status === 'failed' ? `Failed: ${app.auto_enrol_error || 'Unknown error'}` : 'Not yet enrolled'}
+                                                    />
+                                                </td>
+                                                <td className="px-2 py-1.5 text-center">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={!!app.calendar_added}
+                                                        readOnly
+                                                        className={`w-3.5 h-3.5 rounded border-gray-300 cursor-default ${app.calendar_added ? 'text-blue-600 accent-blue-600' : ''}`}
+                                                        title={app.calendar_added ? 'Added to Google Calendar' : 'Not yet added to calendar'}
+                                                    />
                                                 </td>
                                                 <td className="px-2 py-1.5 whitespace-nowrap font-medium text-gray-900 dark:text-white">{app.application_id || 'N/A'}</td>
                                                 <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.application_date ? new Date(app.application_date).toLocaleDateString('en-GB') : '—'}</td>
