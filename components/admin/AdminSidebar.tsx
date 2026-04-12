@@ -133,12 +133,6 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate, onSelectWorkflo
         <nav className="space-y-6 p-4 bg-white dark:bg-slate-800 text-gray-900 dark:text-white h-full">
             <NavItem page={AdminPage.Dashboard} label="Admin Dashboard" />
 
-            <NavSection title="Course Management" isOpen={openSections.courseManagement} onToggle={() => toggleSection('courseManagement')}>
-                <NavItem page={AdminPage.ViewCourses} label="View Courses" isSubItem />
-                <NavItem page={AdminPage.ViewTrainers} label="View Trainers" isSubItem />
-                <NavItem page={AdminPage.FundingValidity} label="Funding Validity" isSubItem />
-            </NavSection>
-
             <NavSection title="Class Management" isOpen={openSections.classManagement} onToggle={() => toggleSection('classManagement')}>
                 <NavItem page={AdminPage.ViewLearners} label="View Learners" isSubItem />
                 <NavItem page={AdminPage.OngoingClasses} label="Ongoing Classes" isSubItem />
@@ -198,6 +192,12 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate, onSelectWorkflo
                     <NavItem page={AdminPage.SearchGrant} label="Search Grant" isSubItem />
                     <NavItem page={AdminPage.ViewGrantStatus} label="View Grant Status" isSubItem />
                 </SubSection>
+            </NavSection>
+
+            <NavSection title="Course Management" isOpen={openSections.courseManagement} onToggle={() => toggleSection('courseManagement')}>
+                <NavItem page={AdminPage.ViewCourses} label="View Courses" isSubItem />
+                <NavItem page={AdminPage.ViewTrainers} label="View Trainers" isSubItem />
+                <NavItem page={AdminPage.FundingValidity} label="Funding Validity" isSubItem />
             </NavSection>
 
             <NavSection title="Calendar & Scheduler" isOpen={openSections.calendar} onToggle={() => toggleSection('calendar')}>
