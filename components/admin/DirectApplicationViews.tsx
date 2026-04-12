@@ -1175,6 +1175,34 @@ export const ViewDirectApplicationView: React.FC = () => {
                 </div>
             )}
 
+            {/* KPI Cards */}
+            {!isLoading && applications.length > 0 && (() => {
+                const total = applications.length;
+                const enrolled = applications.filter(a => a.enrolment_id && a.enrolment_id.trim() !== '').length;
+                const calAdded = applications.filter(a => !!a.calendar_added).length;
+                const invoiced = applications.filter(a => a.invoice_id && a.invoice_id.trim() !== '').length;
+                return (
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <Card className="p-4 text-center">
+                            <p className="text-3xl font-bold text-blue-600">{total}</p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Direct Applications</p>
+                        </Card>
+                        <Card className="p-4 text-center">
+                            <p className="text-3xl font-bold text-green-600">{enrolled}</p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Enrolled</p>
+                        </Card>
+                        <Card className="p-4 text-center">
+                            <p className="text-3xl font-bold text-indigo-600">{calAdded}</p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Added to Calendar</p>
+                        </Card>
+                        <Card className="p-4 text-center">
+                            <p className="text-3xl font-bold text-amber-600">{invoiced}</p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Invoice Created</p>
+                        </Card>
+                    </div>
+                );
+            })()}
+
             {/* Results Table */}
             {!isLoading && (
                 <Card className="p-0">
