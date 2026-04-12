@@ -369,9 +369,10 @@ export async function processDirectApplication(
   }
 
   const tpRes = await pool.query(
-    `SELECT auto_generate_qb_invoice FROM training_provider LIMIT 1`
+    `SELECT auto_generate_qb_invoice, auto_add_learner_to_calendar FROM training_provider LIMIT 1`
   );
   const autoInvoice: boolean = !!tpRes.rows[0]?.auto_generate_qb_invoice;
+  const autoCalendar: boolean = !!tpRes.rows[0]?.auto_add_learner_to_calendar;
 
   await updateRow(appId, { auto_enrol_status: 'pending', auto_enrol_error: null });
 
@@ -445,8 +446,8 @@ export async function processDirectApplication(
 
   // Step 3: QuickBooks invoice (skipped unless toggle is on)
   if (!autoInvoice) {
-    // Still add learner to calendar even when invoice is skipped
-    if (row.trainee_email) {
+    // Add learner to calendar (gated by auto_add_learner_to_calendar toggle)
+    if (autoCalendar && row.trainee_email) {
       try {
         const calAdded = await addLearnerToCalendarEvent(row.trainee_email, row.course_title || '', row.course_start_date);
         if (calAdded) await updateRow(appId, { calendar_added: true });
@@ -515,9 +516,10 @@ export async function processDirectApplication(
   }
 
   // Step 5: Add learner email to matching Google Calendar event (non-fatal)
+  // Gated by the auto_add_learner_to_calendar toggle in Company Settings.
   // Matches by course title (ignoring WSQ/VIRTUAL/EXTERNAL prefixes) + start date.
   // If the learner is already an attendee, this is a no-op.
-  if (row.trainee_email) {
+  if (autoCalendar && row.trainee_email) {
     try {
       const calAdded = await addLearnerToCalendarEvent(
         row.trainee_email,

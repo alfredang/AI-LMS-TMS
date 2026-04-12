@@ -322,6 +322,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
         autoSendThankYouEmail: "Auto Send Thank You Email Upon Class Completed",
         autoEnrolDirectApplications: "Auto Submit Direct Applications to SSG",
         autoGenerateQbInvoice: "Auto Generate QuickBooks Invoice for Direct Applications",
+        autoAddLearnerToCalendar: "Auto Add Learner to Calendar for Direct Applications",
     };
 
     useEffect(() => {
@@ -1662,10 +1663,10 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                     {Object.entries(adminSettingLabels).map(([key, label]) => (
                         <ToggleSwitch
                             key={key}
-                            checked={formData.adminSettings[key as keyof typeof formData.adminSettings]}
+                            checked={!!formData.adminSettings[key as keyof typeof formData.adminSettings]}
                             onChange={(checked) => handleToggleChange('adminSettings', key)}
                             label={label}
-                            isEditing={isEditing}
+                            isEditing={true}
                         />
                     ))}
                 </div>}
