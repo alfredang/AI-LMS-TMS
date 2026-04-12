@@ -24,6 +24,7 @@ import StatToolsPage from '../components/trainer/StatToolsPage';
 import DoeToolsPage from '../components/trainer/DoeToolsPage';
 import SpcToolsPage from '../components/trainer/SpcToolsPage';
 import SustainabilityToolsPage from '../components/trainer/SustainabilityToolsPage';
+import BlockchainToolsPage from '../components/trainer/BlockchainToolsPage';
 import LessonDeliveryGuidePage from '../components/trainer/LessonDeliveryGuidePage';
 import VirtualToolsPage from '../components/trainer/VirtualToolsPage';
 import AgenticAIToolsPage from '../components/trainer/AgenticAIToolsPage';
@@ -36,6 +37,7 @@ const PAGE_LABELS: Record<TrainerPage, string> = {
   [TrainerPage.MyClasses]: 'My Classes',
   [TrainerPage.PastAttendance]: 'Past Attendance',
   [TrainerPage.PastAssessment]: 'Past Assessment',
+  [TrainerPage.TrainingHours]: 'Training Hours',
   [TrainerPage.TaskList]: 'Task List',
   [TrainerPage.GenAIAuthoring]: 'GenAI Tools',
   [TrainerPage.EdTools]: 'Ed Tools',
@@ -46,6 +48,7 @@ const PAGE_LABELS: Record<TrainerPage, string> = {
   [TrainerPage.DoeTools]: 'DOE Tools',
   [TrainerPage.SpcTools]: 'SPC Tools',
   [TrainerPage.SustainabilityTools]: 'Sustainability Tools',
+  [TrainerPage.BlockchainTools]: 'Blockchain Tools',
   [TrainerPage.VirtualTools]: 'Virtual Tools',
   [TrainerPage.AgenticAITools]: 'Agentic AI Tools',
   [TrainerPage.LessonDeliveryGuide]: 'Lesson Delivery Guide',
@@ -96,6 +99,8 @@ const TrainerLayout: React.FC = () => {
         return <SpcToolsPage />;
       case TrainerPage.SustainabilityTools:
         return <SustainabilityToolsPage />;
+      case TrainerPage.BlockchainTools:
+        return <BlockchainToolsPage />;
       case TrainerPage.VirtualTools:
         return <VirtualToolsPage />;
       case TrainerPage.AgenticAITools:

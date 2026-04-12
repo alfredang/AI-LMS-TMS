@@ -140,6 +140,7 @@ export enum TrainerPage {
   DoeTools = 'doeTools',
   SpcTools = 'spcTools',
   SustainabilityTools = 'sustainabilityTools',
+  BlockchainTools = 'blockchainTools',
   VirtualTools = 'virtualTools',
   AgenticAITools = 'agenticAITools',
   TrainingHours = 'trainingHours',
