@@ -6299,36 +6299,36 @@ export const UpcomingEnrolmentView: React.FC = () => {
 
             <Card className="overflow-hidden">
                 <div className="overflow-x-auto">
-                    <table className="w-full text-sm text-left">
+                    <table className="w-full text-sm text-left table-fixed">
                         <thead className="bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
                             <tr>
-                                <th className="px-4 py-3 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Enrolment ID</th>
-                                <th className="px-4 py-3 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Email</th>
-                                <th className="px-4 py-3 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Course Title</th>
-                                <th className="px-4 py-3 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Course Code</th>
-                                <th className="px-4 py-3 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Start Date</th>
-                                <th className="px-4 py-3 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Enrolment Date</th>
-                                <th className="px-4 py-3 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Class Status</th>
-                                <th className="px-4 py-3 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 text-center">Calendar Match</th>
-                                <th className="px-4 py-3 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 text-center">Reason</th>
+                                <th className="px-3 py-3 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 w-[120px]">Enrolment ID</th>
+                                <th className="px-3 py-3 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 w-[90px]">Enrol Date</th>
+                                <th className="px-3 py-3 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 w-[180px]">Email</th>
+                                <th className="px-3 py-3 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Course Title</th>
+                                <th className="px-3 py-3 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 w-[130px]">Course Code</th>
+                                <th className="px-3 py-3 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 w-[90px]">Start Date</th>
+                                <th className="px-3 py-3 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 w-[80px]">Status</th>
+                                <th className="px-3 py-3 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 text-center w-[90px]">Cal Match</th>
+                                <th className="px-3 py-3 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 text-center w-[70px]">Reason</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                             {data.length === 0 && !loading ? (
                                 <tr>
-                                    <td colSpan={9} className="px-4 py-8 text-center text-gray-500 italic">No enrolments found for this period.</td>
+                                    <td colSpan={9} className="px-3 py-8 text-center text-gray-500 italic">No enrolments found for this period.</td>
                                 </tr>
                             ) : (
                                 data.map((row, idx) => (
                                     <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
-                                        <td className="px-4 py-3 font-mono text-xs text-gray-500 dark:text-gray-400">{row.enrolment_id || '—'}</td>
-                                        <td className="px-4 py-3 font-medium text-gray-900 dark:text-gray-200">{row.email}</td>
-                                        <td className="px-4 py-3 text-gray-700 dark:text-gray-300 max-w-xs truncate" title={row.title}>{row.title}</td>
-                                        <td className="px-4 py-3 font-mono text-xs text-gray-500 dark:text-gray-400">{row.course_code || '—'}</td>
-                                        <td className="px-4 py-3 text-gray-500 dark:text-gray-400 whitespace-nowrap">{fmt(row.start_date)}</td>
-                                        <td className="px-4 py-3 text-gray-500 dark:text-gray-400 whitespace-nowrap">{fmt(row.enrolment_date)}</td>
-                                        <td className="px-4 py-3">
-                                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                                        <td className="px-3 py-2 font-mono text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">{row.enrolment_id || '—'}</td>
+                                        <td className="px-3 py-2 text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">{fmt(row.enrolment_date)}</td>
+                                        <td className="px-3 py-2 text-xs font-medium text-gray-900 dark:text-gray-200 truncate" title={row.email}>{row.email}</td>
+                                        <td className="px-3 py-2 text-xs text-gray-700 dark:text-gray-300 truncate" title={row.title}>{row.title}</td>
+                                        <td className="px-3 py-2 font-mono text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">{row.course_code || '—'}</td>
+                                        <td className="px-3 py-2 text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">{fmt(row.start_date)}</td>
+                                        <td className="px-3 py-2">
+                                            <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold uppercase ${
                                                 row.class_status === 'Confirmed' ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300' :
                                                 row.class_status === 'Cancelled' ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300' :
                                                 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'
@@ -6336,26 +6336,26 @@ export const UpcomingEnrolmentView: React.FC = () => {
                                                 {row.class_status || 'Pending'}
                                             </span>
                                         </td>
-                                        <td className="px-4 py-3 text-center">
+                                        <td className="px-3 py-2 text-center">
                                             {row.match ? (
-                                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 text-xs font-semibold" title={row.matchDetail}>
-                                                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 text-[10px] font-semibold" title={row.matchDetail}>
+                                                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
                                                         <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                                                     </svg>
                                                     Match
                                                 </span>
                                             ) : (
-                                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-400 text-xs font-semibold">
-                                                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-400 text-[10px] font-semibold">
+                                                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
                                                         <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                                                     </svg>
-                                                    Not Matched
+                                                    No
                                                 </span>
                                             )}
                                         </td>
-                                        <td className="px-4 py-3 text-center">
+                                        <td className="px-3 py-2 text-center">
                                             {!row.match && row.reason ? (
-                                                <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${
+                                                <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full ${
                                                     row.reason === 'No Email' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
                                                 }`}>
                                                     {row.reason}
