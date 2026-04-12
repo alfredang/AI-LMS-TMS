@@ -34,6 +34,11 @@ interface DaResultRow {
     trainee_name: string;
     trainee_id: string;
     message: string;
+    // SSG enrolment tracking — populated after auto-enrol is triggered
+    enrolStatus?: 'pending' | 'enroled' | 'grant_found' | 'invoiced' | 'failed' | null;
+    enrolmentId?: string | null;
+    grantId?: string | null;
+    enrolError?: string | null;
 }
 
 const RESULTS_PER_PAGE = 10;
@@ -51,6 +56,11 @@ export const UploadDirectApplicationView: React.FC = () => {
     const [showTraineeId, setShowTraineeId] = useState(false);
     const [progressCurrent, setProgressCurrent] = useState(0);
     const [progressTotal, setProgressTotal] = useState(0);
+
+    // SSG auto-enrol state
+    const [isAutoEnrolling, setIsAutoEnrolling] = useState(false);
+    const [autoEnrolQueued, setAutoEnrolQueued] = useState(0);
+    const [autoEnrolPolling, setAutoEnrolPolling] = useState(false);
 
     const maskTraineeId = (id: string | null) => {
         if (!id) return 'N/A';
@@ -276,6 +286,88 @@ export const UploadDirectApplicationView: React.FC = () => {
         setViewState('upload');
     };
 
+    // ── Auto-enrol to SSG + apply grant ─────────────────────────────────────
+    // Triggers the background pipeline for all inserted/updated rows, then
+    // polls the DA table until every row has a terminal enrol status.
+    const handleAutoEnrol = async () => {
+        // Collect application IDs from inserted + updated results only
+        const eligibleIds = allResults
+            .filter(r => r.action === 'inserted' || r.action === 'updated')
+            .map(r => r.application_id)
+            .filter(Boolean);
+        if (eligibleIds.length === 0) return;
+
+        setIsAutoEnrolling(true);
+        try {
+            const res = await fetch('/api/admin/auto-enrol-direct-applications', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ applicationIds: eligibleIds }),
+            });
+            const json = await res.json();
+            if (!json.success) throw new Error(json.error || 'Failed to trigger auto-enrol');
+            setAutoEnrolQueued(json.queued || eligibleIds.length);
+            // Start polling for status updates
+            setAutoEnrolPolling(true);
+            pollEnrolStatus(eligibleIds);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Auto-enrol failed');
+        } finally {
+            setIsAutoEnrolling(false);
+        }
+    };
+
+    const pollEnrolStatus = async (appIds: string[]) => {
+        const appIdSet = new Set(appIds);
+        let attempts = 0;
+        const maxAttempts = 60; // ~5 minutes at 5-second intervals
+        const poll = async () => {
+            attempts++;
+            try {
+                const res = await fetch('/api/admin/fetch-all-da-applications');
+                const json = await res.json();
+                if (json.success && Array.isArray(json.data)) {
+                    const byId = new Map<string, any>();
+                    for (const row of json.data) {
+                        if (row.application_id && appIdSet.has(row.application_id)) {
+                            byId.set(row.application_id, row);
+                        }
+                    }
+                    // Update allResults with enrol status from the DB
+                    setAllResults(prev => prev.map(r => {
+                        const dbRow = byId.get(r.application_id);
+                        if (!dbRow) return r;
+                        return {
+                            ...r,
+                            enrolStatus: dbRow.auto_enrol_status || null,
+                            enrolmentId: dbRow.enrolment_id || null,
+                            grantId: dbRow.grant_id || null,
+                            enrolError: dbRow.auto_enrol_error || null,
+                        };
+                    }));
+                    // Check if all are terminal
+                    const allDone = [...appIdSet].every(id => {
+                        const row = byId.get(id);
+                        return row && (
+                            row.auto_enrol_status === 'enroled' ||
+                            row.auto_enrol_status === 'grant_found' ||
+                            row.auto_enrol_status === 'invoiced' ||
+                            row.auto_enrol_status === 'failed'
+                        );
+                    });
+                    if (allDone || attempts >= maxAttempts) {
+                        setAutoEnrolPolling(false);
+                        return;
+                    }
+                }
+            } catch {
+                // silent — retry on next interval
+            }
+            setTimeout(poll, 5000);
+        };
+        setTimeout(poll, 3000); // first poll after 3s
+    };
+
     // ── Derived state ────────────────────────────────────────────────────────
 
     const filteredResults = filterCategory === 'all'
@@ -372,6 +464,31 @@ export const UploadDirectApplicationView: React.FC = () => {
                     ))}
                 </div>
 
+                {/* Auto-Enrol to SSG action bar */}
+                {(summary.inserted > 0 || summary.updated > 0) && (
+                    <Card className="p-4 dark:bg-gray-800 dark:border-gray-700">
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                            <div>
+                                <h3 className="text-sm font-semibold text-gray-800 dark:text-white">SSG Enrolment & Grant Application</h3>
+                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                                    {autoEnrolPolling
+                                        ? `Processing ${autoEnrolQueued} application(s)… refreshing status every 5s`
+                                        : autoEnrolQueued > 0
+                                            ? `Completed — ${autoEnrolQueued} application(s) processed`
+                                            : `${summary.inserted + summary.updated} eligible application(s) ready to enrol`
+                                    }
+                                </p>
+                            </div>
+                            <Button
+                                onClick={handleAutoEnrol}
+                                disabled={isAutoEnrolling || autoEnrolPolling}
+                            >
+                                {isAutoEnrolling ? 'Triggering…' : autoEnrolPolling ? 'Processing…' : autoEnrolQueued > 0 ? 'Re-run Auto-Enrol' : 'Auto-Enrol to SSG & Apply Grant'}
+                            </Button>
+                        </div>
+                    </Card>
+                )}
+
                 {/* Detail table */}
                 <Card className="p-0 overflow-x-auto dark:bg-gray-800 dark:border-gray-700">
                     <div className="px-6 py-4 border-b dark:border-gray-700 flex justify-between items-center">
@@ -394,6 +511,7 @@ export const UploadDirectApplicationView: React.FC = () => {
                                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Trainee ID</th>
                                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Action</th>
                                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Message</th>
+                                        <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">SSG Enrol</th>
                                     </tr>
                                 </thead>
                                 <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
@@ -429,6 +547,36 @@ export const UploadDirectApplicationView: React.FC = () => {
                                                 </span>
                                             </td>
                                             <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">{r.message}</td>
+                                            <td className="px-4 py-3 text-center">
+                                                {(() => {
+                                                    // Only inserted/updated rows are eligible for SSG enrol
+                                                    if (r.action !== 'inserted' && r.action !== 'updated') {
+                                                        return <span className="text-gray-300 dark:text-gray-600">—</span>;
+                                                    }
+                                                    const s = r.enrolStatus;
+                                                    if (!s || s === 'pending') {
+                                                        // Not yet enroled or still processing
+                                                        return autoEnrolPolling ? (
+                                                            <span className="inline-block w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" title="Processing…" />
+                                                        ) : (
+                                                            <span className="inline-flex items-center justify-center w-5 h-5 rounded border-2 border-gray-300 dark:border-gray-600" title="Not yet enroled" />
+                                                        );
+                                                    }
+                                                    if (s === 'failed') {
+                                                        return (
+                                                            <span className="inline-flex items-center justify-center w-5 h-5 rounded bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 text-xs font-bold" title={r.enrolError || 'Failed'}>
+                                                                ✗
+                                                            </span>
+                                                        );
+                                                    }
+                                                    // enroled, grant_found, invoiced — all success states
+                                                    return (
+                                                        <span className="inline-flex items-center justify-center w-5 h-5 rounded bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 text-xs font-bold" title={`${s}${r.enrolmentId ? ` · ${r.enrolmentId}` : ''}${r.grantId ? ` · Grant: ${r.grantId}` : ''}`}>
+                                                            ✓
+                                                        </span>
+                                                    );
+                                                })()}
+                                            </td>
                                         </tr>
                                     ))}
                                 </tbody>
