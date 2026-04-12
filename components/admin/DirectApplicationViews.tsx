@@ -1432,7 +1432,12 @@ export const ViewDirectApplicationView: React.FC = () => {
                                                     <Icon name={showPii ? IconName.EyeOff : IconName.Eye} className="w-3 h-3" />
                                                 </button>
                                             </th>
-                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">DOB</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">
+                                                DOB
+                                                <button onClick={() => setShowPii(v => !v)} className="ml-1 inline-flex align-middle text-gray-400 hover:text-blue-500" title={showPii ? 'Hide NRIC & DOB' : 'Reveal NRIC & DOB'}>
+                                                    <Icon name={showPii ? IconName.EyeOff : IconName.Eye} className="w-3 h-3" />
+                                                </button>
+                                            </th>
                                             <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Name</th>
                                             <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Email</th>
                                             <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Phone</th>
