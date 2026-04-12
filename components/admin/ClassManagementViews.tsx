@@ -6358,6 +6358,154 @@ export const UpcomingEnrolmentView: React.FC = () => {
     );
 };
 
+// ── New Enrolment View (SSG enrolment records from scheduler) ────────────────
+
+export const NewEnrolmentView: React.FC = () => {
+    const { setAdminPage } = useLms();
+    const [data, setData] = useState<any[]>([]);
+    const [loading, setLoading] = useState(false);
+    const [total, setTotal] = useState(0);
+    const [page, setPage] = useState(0);
+    const [search, setSearch] = useState('');
+    const [debouncedSearch, setDebouncedSearch] = useState('');
+    const [syncing, setSyncing] = useState(false);
+    const limit = 20;
+
+    React.useEffect(() => {
+        const t = setTimeout(() => { setDebouncedSearch(search); setPage(0); }, 300);
+        return () => clearTimeout(t);
+    }, [search]);
+
+    const fetchData = async () => {
+        setLoading(true);
+        try {
+            const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+            if (debouncedSearch) params.set('search', debouncedSearch);
+            const res = await fetch(`/api/admin/ssg-enrolment-records?${params}`);
+            const json = await res.json();
+            if (json.success) { setData(json.data); setTotal(json.total); }
+        } catch { /* silent */ }
+        finally { setLoading(false); }
+    };
+
+    React.useEffect(() => { fetchData(); }, [page, debouncedSearch]);
+
+    const handleSync = async () => {
+        setSyncing(true);
+        try {
+            const res = await fetch('/api/external/sync-ssg-enrolments', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'x-internal-scheduler': '1' },
+            });
+            const json = await res.json();
+            if (json.success) {
+                alert(`Sync complete: ${json.inserted} new, ${json.skipped} existing, ${json.errors} errors (${json.daysChecked} days checked)`);
+                fetchData();
+            } else {
+                alert(`Sync failed: ${json.error || 'Unknown error'}`);
+            }
+        } catch (err) {
+            alert('Sync failed: network error');
+        } finally { setSyncing(false); }
+    };
+
+    const fmt = (d: string | null) => {
+        if (!d) return '—';
+        const date = new Date(d);
+        if (isNaN(date.getTime())) return d;
+        return new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Asia/Singapore' }).format(date);
+    };
+
+    const totalPages = Math.ceil(total / limit);
+
+    return (
+        <div className="space-y-6">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                    <h2 className="text-3xl font-bold">New Enrolment</h2>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                        SSG enrolments pulled by the scheduler (every 2 hours). Only new enrolments are added — existing records are preserved.
+                    </p>
+                </div>
+                <div className="flex items-center gap-2">
+                    <Button onClick={handleSync} disabled={syncing}>
+                        {syncing ? 'Syncing…' : 'Sync from SSG Now'}
+                    </Button>
+                    <Button variant="ghost" onClick={() => setAdminPage(AdminPage.Dashboard)}>Back</Button>
+                </div>
+            </div>
+
+            <Card className="p-4">
+                <div className="flex items-end gap-4">
+                    <div className="flex-1">
+                        <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1">Search</label>
+                        <input
+                            type="text"
+                            placeholder="Search by name, NRIC, email, course, enrolment ID..."
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                            className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                        />
+                    </div>
+                    <span className="text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap">{total} record{total !== 1 ? 's' : ''}</span>
+                </div>
+            </Card>
+
+            <Card className="overflow-hidden">
+                <div className="overflow-x-auto">
+                    <table className="w-full text-xs text-left">
+                        <thead className="bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+                            <tr>
+                                <th className="px-3 py-2 font-semibold text-[10px] uppercase tracking-wide text-gray-500 dark:text-gray-400">Enrolment ID</th>
+                                <th className="px-3 py-2 font-semibold text-[10px] uppercase tracking-wide text-gray-500 dark:text-gray-400">Enrolment Date</th>
+                                <th className="px-3 py-2 font-semibold text-[10px] uppercase tracking-wide text-gray-500 dark:text-gray-400">Learner Name</th>
+                                <th className="px-3 py-2 font-semibold text-[10px] uppercase tracking-wide text-gray-500 dark:text-gray-400">Learner NRIC</th>
+                                <th className="px-3 py-2 font-semibold text-[10px] uppercase tracking-wide text-gray-500 dark:text-gray-400">Course Title</th>
+                                <th className="px-3 py-2 font-semibold text-[10px] uppercase tracking-wide text-gray-500 dark:text-gray-400">Course Ref Code</th>
+                                <th className="px-3 py-2 font-semibold text-[10px] uppercase tracking-wide text-gray-500 dark:text-gray-400">Course Run ID</th>
+                                <th className="px-3 py-2 font-semibold text-[10px] uppercase tracking-wide text-gray-500 dark:text-gray-400">Start Date</th>
+                                <th className="px-3 py-2 font-semibold text-[10px] uppercase tracking-wide text-gray-500 dark:text-gray-400">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                            {loading ? (
+                                <tr><td colSpan={9} className="px-3 py-8 text-center text-gray-500 italic">Loading...</td></tr>
+                            ) : data.length === 0 ? (
+                                <tr><td colSpan={9} className="px-3 py-8 text-center text-gray-500 italic">No enrolment records found. Click &ldquo;Sync from SSG Now&rdquo; to pull the latest data.</td></tr>
+                            ) : data.map((row, idx) => (
+                                <tr key={row.id || idx} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                                    <td className="px-3 py-2 whitespace-nowrap font-mono text-gray-700 dark:text-gray-200">{row.enrolment_reference || '—'}</td>
+                                    <td className="px-3 py-2 whitespace-nowrap text-gray-500 dark:text-gray-400">{fmt(row.enrolment_date)}</td>
+                                    <td className="px-3 py-2 whitespace-nowrap text-gray-700 dark:text-gray-200">{row.learner_name || '—'}</td>
+                                    <td className="px-3 py-2 whitespace-nowrap font-mono text-gray-500 dark:text-gray-400">{row.learner_nric || '—'}</td>
+                                    <td className="px-3 py-2 whitespace-nowrap text-gray-700 dark:text-gray-300 max-w-[200px] truncate" title={row.course_title}>{row.course_title || '—'}</td>
+                                    <td className="px-3 py-2 whitespace-nowrap font-mono text-gray-500 dark:text-gray-400">{row.course_ref_code || '—'}</td>
+                                    <td className="px-3 py-2 whitespace-nowrap font-mono text-gray-500 dark:text-gray-400">{row.course_run_id || '—'}</td>
+                                    <td className="px-3 py-2 whitespace-nowrap text-gray-500 dark:text-gray-400">{fmt(row.start_date)}</td>
+                                    <td className="px-3 py-2 whitespace-nowrap">
+                                        <span className={`px-1.5 py-0.5 text-[10px] font-bold rounded-full ${
+                                            row.status === 'Confirmed' ? 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300'
+                                            : row.status === 'Cancelled' ? 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300'
+                                            : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'
+                                        }`}>{row.status || '—'}</span>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+                {totalPages > 1 && (
+                    <div className="px-4 py-3 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between">
+                        <Button variant="ghost" size="sm" onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0}>Previous</Button>
+                        <span className="text-xs text-gray-500">Page {page + 1} of {totalPages}</span>
+                        <Button variant="ghost" size="sm" onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1}>Next</Button>
+                    </div>
+                )}
+            </Card>
+        </div>
+    );
+};
+
 // ── Course Run Date Sync Log ──────────────────────────────────────────────────
 
 interface DateSyncLogRow {

@@ -78,6 +78,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate, onSelectWorkflo
         courseManagement: false,
         classManagement: false,
         directApplication: false,
+        enrolment: false,
         tpgManagement: false,
         tpgCourseRun: false,
         tpgSession: false,
@@ -137,7 +138,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate, onSelectWorkflo
                 <NavItem page={AdminPage.ViewLearners} label="View Learners" isSubItem />
                 <NavItem page={AdminPage.OngoingClasses} label="Ongoing Classes" isSubItem />
                 <NavItem page={AdminPage.UpcomingClasses} label="Upcoming Classes" isSubItem />
-                <NavItem page={AdminPage.UpcomingEnrolment} label="Upcoming Enrolment" isSubItem />
+                {/* Upcoming Enrolment moved to Enrolment section */}
                 <NavItem page={AdminPage.CompletedClasses} label="Completed Classes" isSubItem />
                 <NavItem page={AdminPage.AssignTrainer} label="Assign Trainer" isSubItem />
                 <NavItem page={AdminPage.AssignStudent} label="Assign Learners" isSubItem />
@@ -147,6 +148,11 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate, onSelectWorkflo
             <NavSection title="Direct Application" isOpen={openSections.directApplication} onToggle={() => toggleSection('directApplication')}>
                 <NavItem page={AdminPage.UploadDirectApplication} label="Upload Direct Application" isSubItem />
                 <NavItem page={AdminPage.ViewDirectApplication} label="View Direct Application" isSubItem />
+            </NavSection>
+
+            <NavSection title="Enrolment" isOpen={openSections.enrolment} onToggle={() => toggleSection('enrolment')}>
+                <NavItem page={AdminPage.UpcomingEnrolment} label="Upcoming Enrolment" isSubItem />
+                <NavItem page={AdminPage.NewEnrolment} label="New Enrolment" isSubItem />
             </NavSection>
 
             <NavSection title="TPG Management" isOpen={openSections.tpgManagement} onToggle={() => toggleSection('tpgManagement')}>

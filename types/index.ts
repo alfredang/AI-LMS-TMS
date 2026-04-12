@@ -112,6 +112,7 @@ export enum AdminPage {
   BackfillEnrollments = 'backfillEnrollments',
   FetchUpcomingEnrolments = 'fetchUpcomingEnrolments',
   UpcomingEnrolment = 'upcomingEnrolment',
+  NewEnrolment = 'newEnrolment',
   CreateCertificate = 'createCertificate',
   DeleteCertificate = 'deleteCertificate',
   SendCertificateSG = 'sendCertificateSG',
