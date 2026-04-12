@@ -16,13 +16,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // 1. Fetch enrolments from DB
     const enrolmentsResult = await pool.query(
       `SELECT
-        e.id AS enrolment_id,
+        e.enrolment_id,
         e.email,
         c.title,
         c.course_code,
         cr.start_date,
         cr.class_status,
-        e.created_at AS enrolment_date
+        e.enrolment_date
       FROM public.enrollment AS e
       INNER JOIN public.course_run AS cr ON e.course_run_id = cr.id
       INNER JOIN public.course AS c ON cr.course_id = c.id

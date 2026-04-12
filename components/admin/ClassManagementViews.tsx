@@ -6321,7 +6321,7 @@ export const UpcomingEnrolmentView: React.FC = () => {
                             ) : (
                                 data.map((row, idx) => (
                                     <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
-                                        <td className="px-4 py-3 font-mono text-xs text-gray-500 dark:text-gray-400" title={row.enrolment_id}>{(row.enrolment_id || '').slice(0, 8)}</td>
+                                        <td className="px-4 py-3 font-mono text-xs text-gray-500 dark:text-gray-400">{row.enrolment_id || '—'}</td>
                                         <td className="px-4 py-3 font-medium text-gray-900 dark:text-gray-200">{row.email}</td>
                                         <td className="px-4 py-3 text-gray-700 dark:text-gray-300 max-w-xs truncate" title={row.title}>{row.title}</td>
                                         <td className="px-4 py-3 font-mono text-xs text-gray-500 dark:text-gray-400">{row.course_code || '—'}</td>
