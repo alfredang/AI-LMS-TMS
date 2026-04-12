@@ -88,6 +88,16 @@ export interface EnqueueInvoiceJobOptions {
    * When true, only queue the row — no immediate `runPendingInvoiceJobs` (use for bulk SSG sync so QBO isn’t hit N times in parallel).
    */
   skipAutoProcess?: boolean;
+  /**
+   * Bypass {@link isQboAutoInvoiceAfterEnrolmentEnabled} (e.g. future admin-only enqueue). Omit for normal enrolment flows.
+   */
+  force?: boolean;
+}
+
+/** When false, `enqueueInvoiceJob` no-ops — no row inserted, no runner (stops QBO after enrolment / SSG sync). */
+export function isQboAutoInvoiceAfterEnrolmentEnabled(): boolean {
+  const v = process.env.QBO_AUTO_INVOICE_AFTER_ENROLMENT?.trim().toLowerCase();
+  return v === 'true' || v === '1' || v === 'yes';
 }
 
 export async function enqueueInvoiceJob(
@@ -95,6 +105,16 @@ export async function enqueueInvoiceJob(
   options?: EnqueueInvoiceJobOptions
 ): Promise<{ id: string; status: InvoiceJobStatus }> {
   await ensureInvoiceJobsTable();
+  if (!options?.force && !isQboAutoInvoiceAfterEnrolmentEnabled()) {
+    console.log(
+      '[invoice_jobs] enqueue skipped — set QBO_AUTO_INVOICE_AFTER_ENROLMENT=true to auto-create QBO invoices after enrolment'
+    );
+    const existing = await getInvoiceJobByEnrolmentId(input.enrolmentId);
+    return {
+      id: existing?.id ?? '',
+      status: (existing?.status as InvoiceJobStatus) ?? 'queued',
+    };
+  }
   const r = await pool.query(
     `INSERT INTO public.invoice_jobs (batch_id, status, enrolment_id, user_id, learner_email, course_code)
      VALUES ($1, 'queued', $2, $3, $4, $5)
