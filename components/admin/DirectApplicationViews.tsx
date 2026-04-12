@@ -700,6 +700,9 @@ export const ViewDirectApplicationView: React.FC = () => {
     const [isAutoEnrolling, setIsAutoEnrolling] = useState(false);
     const [isAddingToCal, setIsAddingToCal] = useState(false);
     const [isGeneratingInv, setIsGeneratingInv] = useState(false);
+    const [isSyncingEnrol, setIsSyncingEnrol] = useState(false);
+    const [isSyncingCal, setIsSyncingCal] = useState(false);
+    const [isSyncingInv, setIsSyncingInv] = useState(false);
     const [showPii, setShowPii] = useState(false);
 
     // Toggle a DA checkbox (enrol/calendar/invoice) and auto-save to DB
@@ -776,6 +779,48 @@ export const ViewDirectApplicationView: React.FC = () => {
             alert(msg);
         } catch { alert('Failed to generate invoices.'); }
         finally { setIsGeneratingInv(false); }
+    };
+
+    // Sync Enrolment: check existing enrollments in DB and update DA rows
+    const handleSyncEnrolment = async () => {
+        setIsSyncingEnrol(true);
+        try {
+            const res = await fetch('/api/admin/da-sync-enrolment', { method: 'POST' });
+            const json = await res.json();
+            if (json.success) {
+                alert(`Sync complete: ${json.enrolmentsMatched} enrolment(s) matched, ${json.grantsMatched} grant(s) matched.`);
+                fetchApplications();
+            } else { alert(`Sync failed: ${json.error}`); }
+        } catch { alert('Sync enrolment failed.'); }
+        finally { setIsSyncingEnrol(false); }
+    };
+
+    // Sync Calendar: check which learner emails are already in calendar events
+    const handleSyncCalendar = async () => {
+        setIsSyncingCal(true);
+        try {
+            const res = await fetch('/api/admin/da-sync-calendar', { method: 'POST' });
+            const json = await res.json();
+            if (json.success) {
+                alert(`Sync complete: ${json.checked} checked, ${json.matched} already in calendar.`);
+                fetchApplications();
+            } else { alert(`Sync failed: ${json.error}`); }
+        } catch { alert('Sync calendar failed.'); }
+        finally { setIsSyncingCal(false); }
+    };
+
+    // Sync Invoice: check which DA rows already have invoices in billing_history
+    const handleSyncInvoice = async () => {
+        setIsSyncingInv(true);
+        try {
+            const res = await fetch('/api/admin/da-sync-invoice', { method: 'POST' });
+            const json = await res.json();
+            if (json.success) {
+                alert(`Sync complete: ${json.matched} invoice(s) matched.`);
+                fetchApplications();
+            } else { alert(`Sync failed: ${json.error}`); }
+        } catch { alert('Sync invoice failed.'); }
+        finally { setIsSyncingInv(false); }
     };
 
     // Page navigation modal state
@@ -1313,6 +1358,28 @@ export const ViewDirectApplicationView: React.FC = () => {
                                 className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-lg transition-colors bg-amber-600 text-white hover:bg-amber-700 disabled:bg-amber-400 disabled:cursor-not-allowed"
                             >
                                 {isGeneratingInv ? 'Generating...' : 'Generate Invoice'}
+                            </button>
+                            <span className="w-px h-5 bg-gray-300 dark:bg-gray-600 mx-1" />
+                            <button
+                                onClick={handleSyncEnrolment}
+                                disabled={isSyncingEnrol}
+                                className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-lg transition-colors border border-green-500 text-green-700 dark:text-green-300 hover:bg-green-50 dark:hover:bg-green-900/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                {isSyncingEnrol ? 'Syncing...' : 'Sync Enrolment'}
+                            </button>
+                            <button
+                                onClick={handleSyncCalendar}
+                                disabled={isSyncingCal}
+                                className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-lg transition-colors border border-indigo-500 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                {isSyncingCal ? 'Syncing...' : 'Sync Calendar'}
+                            </button>
+                            <button
+                                onClick={handleSyncInvoice}
+                                disabled={isSyncingInv}
+                                className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-lg transition-colors border border-amber-500 text-amber-700 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-900/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                {isSyncingInv ? 'Syncing...' : 'Sync Invoice'}
                             </button>
                         </div>
                     </div>
