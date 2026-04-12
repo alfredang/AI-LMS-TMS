@@ -111,10 +111,25 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         oauth2Client.setCredentials({ refresh_token: googleCreds.refreshToken });
         const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
 
+        // Normalize SSG start_date (YYYYMMDD or YYYY-MM-DD) to YYYY-MM-DD
+        const toIsoStartDate = (raw: string | null): string => {
+          if (!raw) return '';
+          if (/^\d{8}$/.test(raw)) return `${raw.slice(0, 4)}-${raw.slice(4, 6)}-${raw.slice(6, 8)}`;
+          return raw.slice(0, 10);
+        };
+
+        // Widen the calendar fetch to span all course start dates in this batch
+        const startDates = enrolments
+          .map(e => toIsoStartDate(e.start_date))
+          .filter(Boolean)
+          .sort();
+        const calMin = startDates[0] || dateIso;
+        const calMax = startDates[startDates.length - 1] || dateIso;
+
         const eventsResponse = await calendar.events.list({
           calendarId,
-          timeMin: new Date(dateIso).toISOString(),
-          timeMax: new Date(dateIso + 'T23:59:59Z').toISOString(),
+          timeMin: new Date(calMin).toISOString(),
+          timeMax: new Date(calMax + 'T23:59:59Z').toISOString(),
           singleEvents: true,
           maxResults: 2500,
         });
@@ -129,16 +144,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }));
 
         // Match each enrolment against calendar events
+        // Match criteria: attendee email + TGS code in description + course start date
         for (const e of enrolments) {
           const eEmail = e.email?.trim().toLowerCase();
           const eCode = e.tgs_code?.trim().toLowerCase();
+          const eStartDate = toIsoStartDate(e.start_date);
 
           const fullMatch = calendarEvents.find(ce => {
-            const hasDate = ce.start === dateIso;
+            const hasDate = eStartDate ? ce.start === eStartDate : true;
             let hasCode = false;
             if (eCode && ce.description) {
               const cleanDesc = stripHtml(ce.description).toLowerCase();
-              hasCode = cleanDesc.includes(eCode) || eCode.includes(cleanDesc);
+              hasCode = cleanDesc.includes(eCode);
             }
             const hasEmail = ce.attendees.some(email => email?.trim().toLowerCase() === eEmail);
             return hasDate && hasCode && hasEmail;
@@ -150,11 +167,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             e.reason = null;
           } else {
             const eventExists = calendarEvents.find(ce => {
-              const hasDate = ce.start === dateIso;
+              const hasDate = eStartDate ? ce.start === eStartDate : true;
               let hasCode = false;
               if (eCode && ce.description) {
                 const cleanDesc = stripHtml(ce.description).toLowerCase();
-                hasCode = cleanDesc.includes(eCode) || eCode.includes(cleanDesc);
+                hasCode = cleanDesc.includes(eCode);
               }
               return hasDate && hasCode;
             });
