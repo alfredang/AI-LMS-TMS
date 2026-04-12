@@ -52,6 +52,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 da.grant_id,
                 da.invoice_id,
                 da.qb_customer_ref,
+                da.grant_amount,
                 da.auto_enrol_status,
                 da.auto_enrol_error,
                 da.calendar_added,

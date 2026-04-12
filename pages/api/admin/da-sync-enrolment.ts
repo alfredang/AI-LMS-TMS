@@ -38,25 +38,31 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const updated = result.rows.length;
 
-    // Also try to match grant IDs from ssg_grants for rows that now have enrolment_id
+    // Also try to match grant IDs + amounts from ssg_grants for rows that have enrolment_id
+    // ssg_grants columns: grant_id (GRN-xxx), enrollment_id (ENR-xxx),
+    // approved_grant_amount, estimated_grant_amount, status
     let grantsMatched = 0;
     try {
       const grantResult = await pool.query(`
         UPDATE da_application da
         SET
-          grant_id = sg.grant_reference_number,
+          grant_id = sg.grant_id,
+          grant_amount = CASE
+            WHEN COALESCE(sg.approved_grant_amount, '0.00') <> '0.00' THEN sg.approved_grant_amount
+            ELSE sg.estimated_grant_amount
+          END,
           updated_at = NOW()
         FROM ssg_grants sg
-        WHERE sg.enrolment_reference_number = da.enrolment_id
+        WHERE sg.enrollment_id = da.enrolment_id
           AND da.enrolment_id IS NOT NULL
           AND da.enrolment_id <> ''
           AND (da.grant_id IS NULL OR da.grant_id = '')
-          AND sg.grant_reference_number IS NOT NULL
-        RETURNING da.id
+          AND sg.grant_id IS NOT NULL
+        RETURNING da.id, sg.grant_id, sg.approved_grant_amount, sg.estimated_grant_amount
       `);
       grantsMatched = grantResult.rows.length;
-    } catch {
-      // ssg_grants table may not exist — non-fatal
+    } catch (grantErr) {
+      console.warn('⚠️ Grant sync failed (non-fatal):', grantErr instanceof Error ? grantErr.message : grantErr);
     }
 
     console.log(`✅ [da-sync-enrolment] Matched ${updated} enrolments, ${grantsMatched} grants`);
