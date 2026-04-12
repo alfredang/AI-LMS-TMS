@@ -56,7 +56,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         e.grant_id,
         e.grant_amount,
         e.course_sponsorship,
-        e.payment_status
+        e.payment_status,
+        COALESCE(c.course_fee, c.course_fees_exclude_gst) AS fee,
+        CASE WHEN c.course_fees_include_gst IS NOT NULL AND c.course_fees_exclude_gst IS NOT NULL
+             THEN (CAST(c.course_fees_include_gst AS numeric) - CAST(c.course_fees_exclude_gst AS numeric))::text
+             ELSE NULL END AS gst
       FROM public.enrollment AS e
       INNER JOIN public.course_run AS cr ON e.course_run_id = cr.id
       INNER JOIN public.course AS c ON cr.course_id = c.id

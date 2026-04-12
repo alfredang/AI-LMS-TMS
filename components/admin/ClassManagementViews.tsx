@@ -6383,13 +6383,16 @@ const EnrolmentTable: React.FC<{
                                 <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Enrol Date</th>
                                 <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Name</th>
                                 <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">NRIC <button onClick={() => setShowPii(v => !v)} className="ml-1 inline-flex align-middle text-gray-400 hover:text-blue-500" title={showPii ? 'Hide' : 'Reveal'}><svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d={showPii ? "M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21" : "M15 12a3 3 0 11-6 0 3 3 0 016 0z M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"} /></svg></button></th>
-                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">DOB</th>
+                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">DOB <button onClick={() => setShowPii(v => !v)} className="ml-1 inline-flex align-middle text-gray-400 hover:text-blue-500" title={showPii ? 'Hide' : 'Reveal'}><svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d={showPii ? "M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21" : "M15 12a3 3 0 11-6 0 3 3 0 016 0z M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"} /></svg></button></th>
                                 <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Email</th>
                                 <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Course Title</th>
                                 <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Course Ref No.</th>
                                 <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Start Date</th>
                                 <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Run ID</th>
+                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Fee</th>
+                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">GST</th>
                                 <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Sponsor</th>
+                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Payment</th>
                                 <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Status</th>
                                 <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Grant ID</th>
                                 <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Grant Amt</th>
@@ -6399,9 +6402,9 @@ const EnrolmentTable: React.FC<{
                         </thead>
                         <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                             {loading ? (
-                                <tr><td colSpan={20} className="px-3 py-8 text-center text-gray-500 italic">Loading...</td></tr>
+                                <tr><td colSpan={23} className="px-3 py-8 text-center text-gray-500 italic">Loading...</td></tr>
                             ) : filteredData.length === 0 ? (
-                                <tr><td colSpan={20} className="px-3 py-8 text-center text-gray-500 italic">No enrolments found.</td></tr>
+                                <tr><td colSpan={23} className="px-3 py-8 text-center text-gray-500 italic">No enrolments found.</td></tr>
                             ) : filteredData.map((row, idx) => (
                                 <tr key={row.id || idx} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
                                     <td className="px-2 py-1.5"><input type="checkbox" checked={selectedIds.has(row.id)} onChange={() => toggleSelect(row.id)} className="w-3.5 h-3.5" /></td>
@@ -6410,7 +6413,7 @@ const EnrolmentTable: React.FC<{
                                     <td className="px-2 py-1.5 text-center"><input type="checkbox" checked={!!(row.invoice_id && String(row.invoice_id).trim())} onChange={e => toggleField(row.id, 'invoice', e.target.checked)} className={`w-3.5 h-3.5 rounded border-gray-300 cursor-pointer ${row.invoice_id ? 'text-amber-600 accent-amber-600' : ''}`} /></td>
                                     <td className="px-2 py-1.5 whitespace-nowrap font-mono text-gray-700 dark:text-gray-200">{row.enrolment_id || '—'}</td>
                                     <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{fmt(row.enrolment_date)}</td>
-                                    <td className="px-2 py-1.5 whitespace-nowrap text-gray-700 dark:text-gray-200">{row.learner_name || '—'}</td>
+                                    <td className="px-2 py-1.5 whitespace-nowrap text-gray-700 dark:text-gray-200 max-w-[140px] truncate" title={row.learner_name}>{row.learner_name || '—'}</td>
                                     <td className="px-2 py-1.5 whitespace-nowrap font-mono text-gray-500 dark:text-gray-300" title={showPii ? row.nric : undefined}>{row.nric ? (showPii ? row.nric : `${row.nric.charAt(0)}****${row.nric.slice(-3)}`) : '—'}</td>
                                     <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{row.date_of_birth ? (showPii ? fmt(row.date_of_birth) : `**/**/${new Date(row.date_of_birth).getFullYear()}`) : '—'}</td>
                                     <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300 max-w-[160px] truncate" title={row.email}>{row.email || '—'}</td>
@@ -6418,7 +6421,10 @@ const EnrolmentTable: React.FC<{
                                     <td className="px-2 py-1.5 whitespace-nowrap font-mono text-gray-500 dark:text-gray-300">{row.course_code || '—'}</td>
                                     <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{fmt(row.start_date)}</td>
                                     <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{row.course_run_id || '—'}</td>
+                                    <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{row.fee != null ? `$${parseFloat(row.fee || 0).toFixed(2)}` : '—'}</td>
+                                    <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{row.gst != null ? `$${parseFloat(row.gst || 0).toFixed(2)}` : '—'}</td>
                                     <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{row.course_sponsorship || '—'}</td>
+                                    <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{row.payment_status || '—'}</td>
                                     <td className="px-2 py-1.5 whitespace-nowrap"><span className={`px-1.5 py-0.5 text-[10px] font-bold rounded-full ${(row.enrolment_status || row.class_status) === 'Confirmed' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'}`}>{row.enrolment_status || row.class_status || '—'}</span></td>
                                     <td className="px-2 py-1.5 whitespace-nowrap font-mono text-gray-500 dark:text-gray-300">{row.grant_id || '—'}</td>
                                     <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{row.grant_amount ? `$${parseFloat(row.grant_amount).toFixed(2)}` : '—'}</td>
