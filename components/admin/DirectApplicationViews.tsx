@@ -1421,6 +1421,7 @@ export const ViewDirectApplicationView: React.FC = () => {
                                             </th>
                                             <th className="px-2 py-2 text-center text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase" title="SSG Enrolment Done">Enrol</th>
                                             <th className="px-2 py-2 text-center text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase" title="Added to Google Calendar">Cal</th>
+                                            <th className="px-2 py-2 text-center text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase" title="Invoice Generated">Inv</th>
                                             <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase">Application ID</th>
                                             <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase">DA Date</th>
                                             <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase">ID Type</th>
@@ -1445,6 +1446,7 @@ export const ViewDirectApplicationView: React.FC = () => {
                                             <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase">Cancel By</th>
                                             <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase">Enrol Status</th>
                                             <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase">Enrol ID</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase">Invoice #</th>
                                             <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase">Grant ID</th>
                                         </tr>
                                     </thead>
@@ -1476,6 +1478,15 @@ export const ViewDirectApplicationView: React.FC = () => {
                                                         readOnly
                                                         className={`w-3.5 h-3.5 rounded border-gray-300 cursor-default ${app.calendar_added ? 'text-blue-600 accent-blue-600' : ''}`}
                                                         title={app.calendar_added ? 'Added to Google Calendar' : 'Not yet added to calendar'}
+                                                    />
+                                                </td>
+                                                <td className="px-2 py-1.5 text-center">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={!!(app.invoice_id && app.invoice_id.trim() !== '')}
+                                                        readOnly
+                                                        className={`w-3.5 h-3.5 rounded border-gray-300 cursor-default ${app.invoice_id ? 'text-amber-600 accent-amber-600' : ''}`}
+                                                        title={app.invoice_id ? `Invoice: ${app.invoice_id}` : 'No invoice generated'}
                                                     />
                                                 </td>
                                                 <td className="px-2 py-1.5 whitespace-nowrap font-medium text-gray-900 dark:text-white">{app.application_id || 'N/A'}</td>
@@ -1512,6 +1523,7 @@ export const ViewDirectApplicationView: React.FC = () => {
                                                     ) : <span className="text-gray-400">—</span>}
                                                 </td>
                                                 <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300 font-mono">{app.enrolment_id || '—'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300 font-mono">{app.invoice_id || '—'}</td>
                                                 <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300 font-mono">{app.grant_id || '—'}</td>
                                             </tr>
                                             );
