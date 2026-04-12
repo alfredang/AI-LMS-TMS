@@ -698,6 +698,8 @@ export const ViewDirectApplicationView: React.FC = () => {
     const [isDeleting, setIsDeleting] = useState(false);
     const [isEnrolling, setIsEnrolling] = useState(false);
     const [isAutoEnrolling, setIsAutoEnrolling] = useState(false);
+    const [isAddingToCal, setIsAddingToCal] = useState(false);
+    const [isGeneratingInv, setIsGeneratingInv] = useState(false);
     const [showPii, setShowPii] = useState(false);
 
     // Toggle a DA checkbox (enrol/calendar/invoice) and auto-save to DB
@@ -720,6 +722,60 @@ export const ViewDirectApplicationView: React.FC = () => {
         } catch {
             console.error('Failed to save toggle');
         }
+    };
+
+    // Bulk: Add selected to Google Calendar
+    const handleAddToCalendar = async () => {
+        const ids = Array.from(selectedIds).filter(appId => {
+            const app = applications.find(a => a.application_id === appId);
+            return app && !app.calendar_added;
+        }).map(appId => applications.find(a => a.application_id === appId)?.id).filter(Boolean);
+        if (ids.length === 0) { alert('No eligible applications selected (all already added to calendar).'); return; }
+        if (!window.confirm(`Add ${ids.length} learner(s) to their Google Calendar events?`)) return;
+        setIsAddingToCal(true);
+        try {
+            const res = await fetch('/api/admin/da-add-to-calendar', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ applicationIds: ids }),
+            });
+            const json = await res.json();
+            const succeeded = (json.results || []).filter((r: any) => r.success).length;
+            const failed = (json.results || []).filter((r: any) => !r.success);
+            // Update local state
+            const successIds = new Set((json.results || []).filter((r: any) => r.success).map((r: any) => r.id));
+            setApplications(prev => prev.map(a => successIds.has(a.id) ? { ...a, calendar_added: true } : a));
+            let msg = `${succeeded} learner(s) added to calendar.`;
+            if (failed.length > 0) msg += `\n${failed.length} failed:\n` + failed.map((f: any) => `• ${f.error}`).join('\n');
+            alert(msg);
+        } catch { alert('Failed to add to calendar.'); }
+        finally { setIsAddingToCal(false); }
+    };
+
+    // Bulk: Generate QuickBooks invoice for selected
+    const handleGenerateInvoice = async () => {
+        const ids = Array.from(selectedIds).filter(appId => {
+            const app = applications.find(a => a.application_id === appId);
+            return app && !(app.invoice_id && String(app.invoice_id).trim());
+        }).map(appId => applications.find(a => a.application_id === appId)?.id).filter(Boolean);
+        if (ids.length === 0) { alert('No eligible applications selected (all already have invoices).'); return; }
+        if (!window.confirm(`Generate QuickBooks invoice for ${ids.length} application(s)?`)) return;
+        setIsGeneratingInv(true);
+        try {
+            const res = await fetch('/api/admin/da-generate-invoice', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ applicationIds: ids }),
+            });
+            const json = await res.json();
+            const succeeded = (json.results || []).filter((r: any) => r.success);
+            const failed = (json.results || []).filter((r: any) => !r.success);
+            // Update local state with invoice IDs
+            const invoiceMap = new Map(succeeded.map((r: any) => [r.id, r.invoiceId]));
+            setApplications(prev => prev.map(a => invoiceMap.has(a.id) ? { ...a, invoice_id: invoiceMap.get(a.id) } : a));
+            let msg = `${succeeded.length} invoice(s) generated.`;
+            if (failed.length > 0) msg += `\n${failed.length} failed:\n` + failed.map((f: any) => `• ${f.error}`).join('\n');
+            alert(msg);
+        } catch { alert('Failed to generate invoices.'); }
+        finally { setIsGeneratingInv(false); }
     };
 
     // Page navigation modal state
@@ -1236,27 +1292,27 @@ export const ViewDirectApplicationView: React.FC = () => {
                                 {(searchQuery || toBeEnrolledFilter) && ` (filtered from ${applications.length} total)`}
                             </p>
                         </div>
-                        <div className="flex items-center gap-3">
-                            {/* To Enroll DA Learners Button */}
+                        <div className="flex items-center gap-2 flex-wrap">
                             <button
                                 onClick={handleEnrolment}
-                                disabled={isEnrolling}
-                                className={`inline-flex items-center px-4 py-2 text-sm font-medium rounded-lg transition-colors bg-blue-600 text-white hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed`}
+                                disabled={isEnrolling || selectedIds.size === 0}
+                                className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-lg transition-colors bg-blue-600 text-white hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed"
                             >
-                                {isEnrolling ? (
-                                    <>
-                                        <svg className="animate-spin w-4 h-4 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                        </svg>
-                                        Enrolling...
-                                    </>
-                                ) : (
-                                    <>
-                                        <Icon name={IconName.Users} className="w-4 h-4 mr-2" />
-                                        To Enroll DA Learners
-                                    </>
-                                )}
+                                {isEnrolling ? 'Enrolling...' : 'Enrol to SSG'}
+                            </button>
+                            <button
+                                onClick={handleAddToCalendar}
+                                disabled={isAddingToCal || selectedIds.size === 0}
+                                className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-lg transition-colors bg-indigo-600 text-white hover:bg-indigo-700 disabled:bg-indigo-400 disabled:cursor-not-allowed"
+                            >
+                                {isAddingToCal ? 'Adding...' : 'Add to Calendar'}
+                            </button>
+                            <button
+                                onClick={handleGenerateInvoice}
+                                disabled={isGeneratingInv || selectedIds.size === 0}
+                                className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-lg transition-colors bg-amber-600 text-white hover:bg-amber-700 disabled:bg-amber-400 disabled:cursor-not-allowed"
+                            >
+                                {isGeneratingInv ? 'Generating...' : 'Generate Invoice'}
                             </button>
                         </div>
                     </div>
