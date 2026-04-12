@@ -6309,14 +6309,13 @@ export const UpcomingEnrolmentView: React.FC = () => {
                                 <th className="px-3 py-3 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 w-[130px]">Course Code</th>
                                 <th className="px-3 py-3 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 w-[90px]">Start Date</th>
                                 <th className="px-3 py-3 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 w-[80px]">Status</th>
-                                <th className="px-3 py-3 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 text-center w-[90px]">Cal Match</th>
-                                <th className="px-3 py-3 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 text-center w-[70px]">Reason</th>
+                                <th className="px-3 py-3 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 text-center w-[120px]">Not In Cal</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                             {data.length === 0 && !loading ? (
                                 <tr>
-                                    <td colSpan={9} className="px-3 py-8 text-center text-gray-500 italic">No enrolments found for this period.</td>
+                                    <td colSpan={8} className="px-3 py-8 text-center text-gray-500 italic">No enrolments found for this period.</td>
                                 </tr>
                             ) : (
                                 data.map((row, idx) => (
@@ -6336,32 +6335,25 @@ export const UpcomingEnrolmentView: React.FC = () => {
                                                 {row.class_status || 'Pending'}
                                             </span>
                                         </td>
-                                        <td className="px-3 py-2 text-center">
+                                        <td className="px-3 py-2 text-center whitespace-nowrap">
                                             {row.match ? (
                                                 <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 text-[10px] font-semibold" title={row.matchDetail}>
                                                     <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
                                                         <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                                                     </svg>
-                                                    Match
+                                                    In Cal
                                                 </span>
                                             ) : (
-                                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-400 text-[10px] font-semibold">
+                                                <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${
+                                                    row.reason === 'No Email'
+                                                        ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
+                                                        : 'bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-400'
+                                                }`}>
                                                     <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
                                                         <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                                                     </svg>
-                                                    No
+                                                    {row.reason || 'No Event'}
                                                 </span>
-                                            )}
-                                        </td>
-                                        <td className="px-3 py-2 text-center">
-                                            {!row.match && row.reason ? (
-                                                <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full ${
-                                                    row.reason === 'No Email' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
-                                                }`}>
-                                                    {row.reason}
-                                                </span>
-                                            ) : (
-                                                <span className="text-gray-400 text-xs">—</span>
                                             )}
                                         </td>
                                     </tr>
