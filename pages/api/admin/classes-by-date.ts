@@ -346,8 +346,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const hasLocalTrainer = !!(allLocalPairs[0]?.name);
       const hasLegacyLocalTrainer = !!((row.legacy_assigned_trainer_name || '').toString().trim());
       const hasTpgTrainer = !!((row.tpg_assigned_trainer_name || '').toString().trim());
-      const derivedStatus: 'Cancelled' | 'Confirmed' | 'Pending' = row.class_status === 'Cancelled'
-        ? 'Cancelled'
+      const derivedStatus = (row.class_status === 'Cancelled' || row.class_status === 'Unconfirmed')
+        ? row.class_status
         : ((hasLocalTrainer || hasLegacyLocalTrainer || hasTpgTrainer) ? 'Confirmed' : 'Pending');
 
       // Persist sticky-Confirmed/Pending (never overwrites Cancelled).
@@ -399,7 +399,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         numLearners: parseInt(row.num_learners || '0', 10),
         tpgTrainerName: row.tpg_assigned_trainer_name || '',
         tpgTrainerEmail: row.tpg_assigned_trainer_email || '',
-        localTrainerName: displayLocal.name,
+        localTrainerName: displayLocal.name || (row.legacy_assigned_trainer_name || '').toString().trim(),
         localTrainerEmail: displayLocal.email,
         localTrainers: allLocalPairs,
         nextAvailableTrainer,
