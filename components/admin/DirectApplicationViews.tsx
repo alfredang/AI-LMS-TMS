@@ -690,7 +690,7 @@ export const ViewDirectApplicationView: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [currentPage, setCurrentPage] = useState(1);
-    const itemsPerPage = 10;
+    const itemsPerPage = 20;
 
     // Selection state
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -1035,15 +1035,16 @@ export const ViewDirectApplicationView: React.FC = () => {
         );
     });
 
-    // Sort applications
+    // Sort applications — default: application_date descending (today first)
     const sortedApplications = [...filteredApplications].sort((a, b) => {
-        if (!sortColumn) return 0;
+        const col = sortColumn || 'application_date';
+        const dir = sortColumn ? sortDirection : 'desc';
 
-        const valA = (a[sortColumn] || '').toString().toLowerCase();
-        const valB = (b[sortColumn] || '').toString().toLowerCase();
+        const valA = (a[col] || '').toString().toLowerCase();
+        const valB = (b[col] || '').toString().toLowerCase();
 
-        if (valA < valB) return sortDirection === 'asc' ? -1 : 1;
-        if (valA > valB) return sortDirection === 'asc' ? 1 : -1;
+        if (valA < valB) return dir === 'asc' ? -1 : 1;
+        if (valA > valB) return dir === 'asc' ? 1 : -1;
         return 0;
     });
 
@@ -1418,8 +1419,9 @@ export const ViewDirectApplicationView: React.FC = () => {
                                                     className="w-3.5 h-3.5 text-blue-600 rounded border-gray-300"
                                                 />
                                             </th>
-                                            <th className="px-2 py-2 text-center text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase">Enrol Done</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase">Auto-Enrol</th>
                                             <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase">Application ID</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase">DA Date</th>
                                             <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase">ID Type</th>
                                             <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase">Trainee ID</th>
                                             <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase">DOB</th>
@@ -1430,7 +1432,6 @@ export const ViewDirectApplicationView: React.FC = () => {
                                             <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase">Ref No.</th>
                                             <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase">Run ID</th>
                                             <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase">Sponsor</th>
-                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase">App Date</th>
                                             <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase">Fee</th>
                                             <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase">GST</th>
                                             <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase">SF Sub</th>
@@ -1444,12 +1445,10 @@ export const ViewDirectApplicationView: React.FC = () => {
                                             <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase">Enrol Status</th>
                                             <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase">Enrol ID</th>
                                             <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase">Grant ID</th>
-                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase">Auto-Enrol</th>
                                         </tr>
                                     </thead>
                                     <tbody className="bg-white dark:bg-gray-700 divide-y divide-gray-200 dark:divide-gray-600">
                                         {paginatedApplications.map((app, index) => {
-                                            const enrolDone = !!(app.enrolment_id && app.enrolment_id.trim() !== '');
                                             return (
                                             <tr key={app.id || index} className={`hover:bg-gray-50 dark:hover:bg-gray-600 ${selectedIds.has(app.application_id) ? 'bg-blue-50 dark:bg-blue-900/30' : ''}`}>
                                                 <td className="px-2 py-1.5">
@@ -1460,16 +1459,19 @@ export const ViewDirectApplicationView: React.FC = () => {
                                                         className="w-3.5 h-3.5 text-blue-600 rounded border-gray-300"
                                                     />
                                                 </td>
-                                                <td className="px-2 py-1.5 text-center">
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={enrolDone}
-                                                        readOnly
-                                                        className={`w-3.5 h-3.5 rounded border-gray-300 ${enrolDone ? 'text-green-600 accent-green-600' : ''}`}
-                                                        title={enrolDone ? `Enrolled: ${app.enrolment_id}` : 'Not yet enrolled'}
-                                                    />
+                                                <td className="px-2 py-1.5 whitespace-nowrap">
+                                                    {app.auto_enrol_status ? (
+                                                        <span title={app.auto_enrol_error || ''} className={`px-1.5 py-0.5 text-[10px] font-bold rounded-full ${
+                                                            app.auto_enrol_status === 'invoiced' ? 'bg-green-100 text-green-800'
+                                                            : app.auto_enrol_status === 'grant_found' ? 'bg-blue-100 text-blue-800'
+                                                            : app.auto_enrol_status === 'enroled' ? 'bg-indigo-100 text-indigo-800'
+                                                            : app.auto_enrol_status === 'failed' ? 'bg-red-100 text-red-800'
+                                                            : 'bg-yellow-100 text-yellow-800'
+                                                        }`}>{app.auto_enrol_status}</span>
+                                                    ) : <span className="text-gray-400">—</span>}
                                                 </td>
                                                 <td className="px-2 py-1.5 whitespace-nowrap font-medium text-gray-900 dark:text-white">{app.application_id || 'N/A'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.application_date ? new Date(app.application_date).toLocaleDateString('en-GB') : '—'}</td>
                                                 <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.trainee_id_type || 'N/A'}</td>
                                                 <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.trainee_id || 'N/A'}</td>
                                                 <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.date_of_birth ? new Date(app.date_of_birth).toLocaleDateString('en-GB') : '—'}</td>
@@ -1480,7 +1482,6 @@ export const ViewDirectApplicationView: React.FC = () => {
                                                 <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300 font-mono">{app.course_reference_number || '—'}</td>
                                                 <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.course_run_id || '—'}</td>
                                                 <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.sponsorship_type || '—'}</td>
-                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.application_date ? new Date(app.application_date).toLocaleDateString('en-GB') : '—'}</td>
                                                 <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.full_course_fee != null ? `$${parseFloat(app.full_course_fee || 0).toFixed(2)}` : '—'}</td>
                                                 <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.gst != null ? `$${parseFloat(app.gst || 0).toFixed(2)}` : '—'}</td>
                                                 <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.skillsfuture_subsidy != null ? `$${parseFloat(app.skillsfuture_subsidy || 0).toFixed(2)}` : '—'}</td>
@@ -1504,17 +1505,6 @@ export const ViewDirectApplicationView: React.FC = () => {
                                                 </td>
                                                 <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300 font-mono">{app.enrolment_id || '—'}</td>
                                                 <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300 font-mono">{app.grant_id || '—'}</td>
-                                                <td className="px-2 py-1.5 whitespace-nowrap">
-                                                    {app.auto_enrol_status ? (
-                                                        <span title={app.auto_enrol_error || ''} className={`px-1.5 py-0.5 text-[10px] font-bold rounded-full ${
-                                                            app.auto_enrol_status === 'invoiced' ? 'bg-green-100 text-green-800'
-                                                            : app.auto_enrol_status === 'grant_found' ? 'bg-blue-100 text-blue-800'
-                                                            : app.auto_enrol_status === 'enroled' ? 'bg-indigo-100 text-indigo-800'
-                                                            : app.auto_enrol_status === 'failed' ? 'bg-red-100 text-red-800'
-                                                            : 'bg-yellow-100 text-yellow-800'
-                                                        }`}>{app.auto_enrol_status}</span>
-                                                    ) : <span className="text-gray-400">—</span>}
-                                                </td>
                                             </tr>
                                             );
                                         })}
