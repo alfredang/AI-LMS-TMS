@@ -38,8 +38,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const api = createSSGEnrolmentAPI(ssgBaseUrl, credentials);
 
     // 2. Search SSG for enrolments by date
+    // The SearchEnrolmentPayload type expects `meta` (not `parameters`)
+    // with `enrolmentDate` in YYYYMMDD format, `pageSize`, and `pageIndex`.
     const result = await api.searchEnrolment({
-      parameters: { page: 0, pageSize: 100, enrolmentDate: dateCompact },
+      meta: { enrolmentDate: dateCompact, pageSize: 100, pageIndex: 0 },
       enrolment: {
         trainingPartner: { uen: tpUen, code: tpCode },
       },
