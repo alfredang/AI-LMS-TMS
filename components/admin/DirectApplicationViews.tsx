@@ -700,6 +700,28 @@ export const ViewDirectApplicationView: React.FC = () => {
     const [isAutoEnrolling, setIsAutoEnrolling] = useState(false);
     const [showPii, setShowPii] = useState(false);
 
+    // Toggle a DA checkbox (enrol/calendar/invoice) and auto-save to DB
+    const toggleDaField = async (appId: string, field: 'enrol' | 'calendar' | 'invoice', newValue: boolean) => {
+        // Optimistic UI update
+        setApplications(prev => prev.map(a => {
+            if (a.id !== appId) return a;
+            if (field === 'enrol') return { ...a, enrolment_status: newValue ? 'Confirmed' : null, enrolment_id: newValue ? (a.enrolment_id || 'MANUAL') : null };
+            if (field === 'calendar') return { ...a, calendar_added: newValue };
+            if (field === 'invoice') return { ...a, invoice_id: newValue ? (a.invoice_id || 'MANUAL') : null };
+            return a;
+        }));
+        try {
+            const res = await fetch('/api/admin/da-toggle-field', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: appId, field, value: newValue }),
+            });
+            if (!res.ok) console.error('Failed to save toggle');
+        } catch {
+            console.error('Failed to save toggle');
+        }
+    };
+
     // Page navigation modal state
     const [showPageModal, setShowPageModal] = useState(false);
     const [pendingPage, setPendingPage] = useState<number | null>(null);
@@ -1505,28 +1527,28 @@ export const ViewDirectApplicationView: React.FC = () => {
                                                 <td className="px-2 py-1.5 text-center">
                                                     <input
                                                         type="checkbox"
-                                                        checked={!!(app.enrolment_id && app.enrolment_id.trim() !== '')}
-                                                        readOnly
-                                                        className={`w-3.5 h-3.5 rounded border-gray-300 cursor-default ${app.enrolment_id ? 'text-green-600 accent-green-600' : ''}`}
-                                                        title={app.enrolment_id ? `Enrolled: ${app.enrolment_id}${app.auto_enrol_status ? ` (${app.auto_enrol_status})` : ''}` : app.auto_enrol_status === 'failed' ? `Failed: ${app.auto_enrol_error || 'Unknown error'}` : 'Not yet enrolled'}
+                                                        checked={!!(app.enrolment_id && String(app.enrolment_id).trim() !== '')}
+                                                        onChange={(e) => toggleDaField(app.id, 'enrol', e.target.checked)}
+                                                        className={`w-3.5 h-3.5 rounded border-gray-300 cursor-pointer ${app.enrolment_id ? 'text-green-600 accent-green-600' : ''}`}
+                                                        title={app.enrolment_id ? `Enrolled: ${app.enrolment_id}` : 'Click to mark as enrolled'}
                                                     />
                                                 </td>
                                                 <td className="px-2 py-1.5 text-center">
                                                     <input
                                                         type="checkbox"
                                                         checked={!!app.calendar_added}
-                                                        readOnly
-                                                        className={`w-3.5 h-3.5 rounded border-gray-300 cursor-default ${app.calendar_added ? 'text-blue-600 accent-blue-600' : ''}`}
-                                                        title={app.calendar_added ? 'Added to Google Calendar' : 'Not yet added to calendar'}
+                                                        onChange={(e) => toggleDaField(app.id, 'calendar', e.target.checked)}
+                                                        className={`w-3.5 h-3.5 rounded border-gray-300 cursor-pointer ${app.calendar_added ? 'text-blue-600 accent-blue-600' : ''}`}
+                                                        title={app.calendar_added ? 'Added to calendar — click to uncheck' : 'Click to mark as added to calendar'}
                                                     />
                                                 </td>
                                                 <td className="px-2 py-1.5 text-center">
                                                     <input
                                                         type="checkbox"
-                                                        checked={!!(app.invoice_id && app.invoice_id.trim() !== '')}
-                                                        readOnly
-                                                        className={`w-3.5 h-3.5 rounded border-gray-300 cursor-default ${app.invoice_id ? 'text-amber-600 accent-amber-600' : ''}`}
-                                                        title={app.invoice_id ? `Invoice: ${app.invoice_id}` : 'No invoice generated'}
+                                                        checked={!!(app.invoice_id && String(app.invoice_id).trim() !== '')}
+                                                        onChange={(e) => toggleDaField(app.id, 'invoice', e.target.checked)}
+                                                        className={`w-3.5 h-3.5 rounded border-gray-300 cursor-pointer ${app.invoice_id ? 'text-amber-600 accent-amber-600' : ''}`}
+                                                        title={app.invoice_id ? `Invoice: ${app.invoice_id} — click to uncheck` : 'Click to mark as invoiced'}
                                                     />
                                                 </td>
                                                 <td className="px-2 py-1.5 whitespace-nowrap font-medium text-gray-900 dark:text-white">{app.application_id || 'N/A'}</td>
