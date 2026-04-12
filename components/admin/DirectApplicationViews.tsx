@@ -1407,180 +1407,117 @@ export const ViewDirectApplicationView: React.FC = () => {
                     {paginatedApplications.length > 0 ? (
                         <>
                             <div className="overflow-x-auto">
-                                <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-600">
+                                <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-600 text-[11px]">
                                     <thead className="bg-gray-50 dark:bg-gray-800">
                                         <tr>
-                                            <th className="px-3 py-3 w-10">
+                                            <th className="px-2 py-2 w-8">
                                                 <input
                                                     type="checkbox"
                                                     checked={paginatedApplications.length > 0 && paginatedApplications.every(app => selectedIds.has(app.application_id))}
                                                     onChange={toggleSelectAll}
-                                                    className="w-4 h-4 text-blue-600 rounded border-gray-300"
+                                                    className="w-3.5 h-3.5 text-blue-600 rounded border-gray-300"
                                                 />
                                             </th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Application ID</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Trainee ID Type</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Trainee ID</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">DOB</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Trainee Name</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Email</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Phone</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Course Title</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Course Ref No.</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Course Run ID</th>
-                                            {/* <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Start Date</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">End Date</th> */}
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Sponsorship</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Application Date</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Full Course Fee</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">GST</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">SF Subsidy</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">SF Credit</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Payable Fee</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">SF Credit Claim ID</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Highest Qualification</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Highest Certification</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Application Status</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Cancelled By</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Enrolment Status</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Enrolment ID</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Grant ID</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Auto-Enrol</th>
+                                            <th className="px-2 py-2 text-center text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase">Enrol Done</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase">Application ID</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase">ID Type</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase">Trainee ID</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase">DOB</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase">Name</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase">Email</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase">Phone</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase">Course Title</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase">Ref No.</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase">Run ID</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase">Sponsor</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase">App Date</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase">Fee</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase">GST</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase">SF Sub</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase">SF Cr</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase">Payable</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase">SF Claim ID</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase">Qualification</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase">Certification</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase">Status</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase">Cancel By</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase">Enrol Status</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase">Enrol ID</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase">Grant ID</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase">Auto-Enrol</th>
                                         </tr>
                                     </thead>
                                     <tbody className="bg-white dark:bg-gray-700 divide-y divide-gray-200 dark:divide-gray-600">
-                                        {paginatedApplications.map((app, index) => (
-                                            <tr key={app.id || index} className={`hover:bg-gray-50 dark:hover:bg-gray-600 ${selectedIds.has(app.application_id) ? 'bg-blue-50 dark:bg-blue-900' : ''}`}>
-                                                <td className="px-3 py-3">
+                                        {paginatedApplications.map((app, index) => {
+                                            const enrolDone = !!(app.enrolment_id && app.enrolment_id.trim() !== '');
+                                            return (
+                                            <tr key={app.id || index} className={`hover:bg-gray-50 dark:hover:bg-gray-600 ${selectedIds.has(app.application_id) ? 'bg-blue-50 dark:bg-blue-900/30' : ''}`}>
+                                                <td className="px-2 py-1.5">
                                                     <input
                                                         type="checkbox"
                                                         checked={selectedIds.has(app.application_id)}
                                                         onChange={() => toggleSelect(app.application_id)}
-                                                        className="w-4 h-4 text-blue-600 rounded border-gray-300"
+                                                        className="w-3.5 h-3.5 text-blue-600 rounded border-gray-300"
                                                     />
                                                 </td>
-                                                <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
-                                                    {app.application_id || 'N/A'}
+                                                <td className="px-2 py-1.5 text-center">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={enrolDone}
+                                                        readOnly
+                                                        className={`w-3.5 h-3.5 rounded border-gray-300 ${enrolDone ? 'text-green-600 accent-green-600' : ''}`}
+                                                        title={enrolDone ? `Enrolled: ${app.enrolment_id}` : 'Not yet enrolled'}
+                                                    />
                                                 </td>
-                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
-                                                    {app.trainee_id_type || 'N/A'}
-                                                </td>
-                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
-                                                    {app.trainee_id || 'N/A'}
-                                                </td>
-                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
-                                                    {app.date_of_birth ? new Date(app.date_of_birth).toLocaleDateString('en-GB') : 'N/A'}
-                                                </td>
-                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
-                                                    {app.trainee_name || 'N/A'}
-                                                </td>
-                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
-                                                    {app.trainee_email || 'N/A'}
-                                                </td>
-                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
-                                                    {app.trainee_phone_country_code && app.trainee_phone
-                                                        ? `+${app.trainee_phone_country_code} ${app.trainee_phone}`
-                                                        : app.trainee_phone || 'N/A'}
-                                                </td>
-                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
-                                                    {app.course_title || 'N/A'}
-                                                </td>
-                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
-                                                    {app.course_reference_number || 'N/A'}
-                                                </td>
-                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
-                                                    {app.course_run_id || 'N/A'}
-                                                </td>
-                                                {/* <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
-                                                    {app.course_start_date ? new Date(app.course_start_date).toLocaleDateString('en-GB') : 'N/A'}
-                                                </td>
-                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
-                                                    {app.course_end_date ? new Date(app.course_end_date).toLocaleDateString('en-GB') : 'N/A'}
-                                                </td> */}
-                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
-                                                    {app.sponsorship_type || 'N/A'}
-                                                </td>
-                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
-                                                    {app.application_date ? new Date(app.application_date).toLocaleDateString('en-GB') : 'N/A'}
-                                                </td>
-                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
-                                                    {app.full_course_fee != null ? `$${parseFloat(app.full_course_fee || 0).toFixed(2)}` : 'N/A'}
-                                                </td>
-                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
-                                                    {app.gst != null ? `$${parseFloat(app.gst || 0).toFixed(2)}` : 'N/A'}
-                                                </td>
-                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
-                                                    {app.skillsfuture_subsidy != null ? `$${parseFloat(app.skillsfuture_subsidy || 0).toFixed(2)}` : 'N/A'}
-                                                </td>
-                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
-                                                    {app.skillsfuture_credit != null ? `$${parseFloat(app.skillsfuture_credit || 0).toFixed(2)}` : 'N/A'}
-                                                </td>
-                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
-                                                    ${parseFloat(app.payable_fee || 0).toFixed(2)}
-                                                </td>
-                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
-                                                    {app.skillsfuture_credit_claim_id || 'N/A'}
-                                                </td>
-                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
-                                                    {app.highest_qualification || 'N/A'}
-                                                </td>
-                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
-                                                    {app.highest_relevant_certification || 'N/A'}
-                                                </td>
-                                                <td className="px-4 py-3 whitespace-nowrap">
-                                                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full border ${getStatusColor(app.application_status || 'Pending')}`}>
+                                                <td className="px-2 py-1.5 whitespace-nowrap font-medium text-gray-900 dark:text-white">{app.application_id || 'N/A'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.trainee_id_type || 'N/A'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.trainee_id || 'N/A'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.date_of_birth ? new Date(app.date_of_birth).toLocaleDateString('en-GB') : '—'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.trainee_name || '—'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300 max-w-[160px] truncate" title={app.trainee_email}>{app.trainee_email || '—'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.trainee_phone_country_code && app.trainee_phone ? `+${app.trainee_phone_country_code} ${app.trainee_phone}` : app.trainee_phone || '—'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300 max-w-[180px] truncate" title={app.course_title}>{app.course_title || '—'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300 font-mono">{app.course_reference_number || '—'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.course_run_id || '—'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.sponsorship_type || '—'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.application_date ? new Date(app.application_date).toLocaleDateString('en-GB') : '—'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.full_course_fee != null ? `$${parseFloat(app.full_course_fee || 0).toFixed(2)}` : '—'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.gst != null ? `$${parseFloat(app.gst || 0).toFixed(2)}` : '—'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.skillsfuture_subsidy != null ? `$${parseFloat(app.skillsfuture_subsidy || 0).toFixed(2)}` : '—'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.skillsfuture_credit != null ? `$${parseFloat(app.skillsfuture_credit || 0).toFixed(2)}` : '—'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">${parseFloat(app.payable_fee || 0).toFixed(2)}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.skillsfuture_credit_claim_id || '—'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.highest_qualification || '—'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.highest_relevant_certification || '—'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap">
+                                                    <span className={`px-1.5 py-0.5 text-[10px] font-bold rounded-full ${getStatusColor(app.application_status || 'Pending')}`}>
                                                         {app.application_status || 'Pending'}
                                                     </span>
                                                 </td>
-                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
-                                                    {app.application_cancelled_by || '-'}
-                                                </td>
-                                                <td className="px-4 py-3 whitespace-nowrap">
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.application_cancelled_by || '—'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap">
                                                     {app.enrolment_status && app.enrolment_status.trim() !== '' ? (
-                                                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full border ${app.enrolment_status === 'Confirmed'
-                                                            ? 'bg-green-100 text-green-800 border-green-200'
-                                                            : app.enrolment_status === 'Not Found'
-                                                                ? 'bg-orange-100 text-orange-800 border-orange-200'
-                                                                : 'bg-red-100 text-red-800 border-red-200'
-                                                            }`}>
+                                                        <span className={`px-1.5 py-0.5 text-[10px] font-bold rounded-full ${app.enrolment_status === 'Confirmed' ? 'bg-green-100 text-green-800' : app.enrolment_status === 'Not Found' ? 'bg-orange-100 text-orange-800' : 'bg-red-100 text-red-800'}`}>
                                                             {app.enrolment_status}
                                                         </span>
-                                                    ) : (
-                                                        <span className="text-gray-400">-</span>
-                                                    )}
+                                                    ) : <span className="text-gray-400">—</span>}
                                                 </td>
-                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
-                                                    {app.enrolment_id || <span className="text-gray-400">-</span>}
-                                                </td>
-                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
-                                                    {app.grant_id || <span className="text-gray-400">-</span>}
-                                                </td>
-                                                <td className="px-4 py-3 whitespace-nowrap">
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300 font-mono">{app.enrolment_id || '—'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300 font-mono">{app.grant_id || '—'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap">
                                                     {app.auto_enrol_status ? (
-                                                        <span
-                                                            title={app.auto_enrol_error || ''}
-                                                            className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full border ${
-                                                                app.auto_enrol_status === 'invoiced'
-                                                                    ? 'bg-green-100 text-green-800 border-green-200'
-                                                                    : app.auto_enrol_status === 'grant_found'
-                                                                        ? 'bg-blue-100 text-blue-800 border-blue-200'
-                                                                        : app.auto_enrol_status === 'enroled'
-                                                                            ? 'bg-indigo-100 text-indigo-800 border-indigo-200'
-                                                                            : app.auto_enrol_status === 'failed'
-                                                                                ? 'bg-red-100 text-red-800 border-red-200'
-                                                                                : 'bg-yellow-100 text-yellow-800 border-yellow-200'
-                                                            }`}
-                                                        >
-                                                            {app.auto_enrol_status}
-                                                        </span>
-                                                    ) : (
-                                                        <span className="text-gray-400">-</span>
-                                                    )}
+                                                        <span title={app.auto_enrol_error || ''} className={`px-1.5 py-0.5 text-[10px] font-bold rounded-full ${
+                                                            app.auto_enrol_status === 'invoiced' ? 'bg-green-100 text-green-800'
+                                                            : app.auto_enrol_status === 'grant_found' ? 'bg-blue-100 text-blue-800'
+                                                            : app.auto_enrol_status === 'enroled' ? 'bg-indigo-100 text-indigo-800'
+                                                            : app.auto_enrol_status === 'failed' ? 'bg-red-100 text-red-800'
+                                                            : 'bg-yellow-100 text-yellow-800'
+                                                        }`}>{app.auto_enrol_status}</span>
+                                                    ) : <span className="text-gray-400">—</span>}
                                                 </td>
-
-
                                             </tr>
-                                        ))}
+                                            );
+                                        })}
                                     </tbody>
                                 </table>
                             </div>
