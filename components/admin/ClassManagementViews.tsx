@@ -226,6 +226,12 @@ export const ClassManagerView: React.FC<ClassManagerViewProps> = ({ courseToEdit
     const [manualTrainerContact, setManualTrainerContact] = useState('');
     // Track all locally-assigned trainers from junction table
     const [assignedTrainersList, setAssignedTrainersList] = useState<any[]>([]);
+    // Per-session trainer override state. `sessionTrainerList` is the list of
+    // local course_session rows (not SSG) with each session's resolved trainer
+    // — either the run-level default or a per-session override.
+    const [sessionTrainerList, setSessionTrainerList] = useState<any[]>([]);
+    const [sessionTrainerLoading, setSessionTrainerLoading] = useState(false);
+    const [sessionTrainerExpanded, setSessionTrainerExpanded] = useState(false);
     // Legacy single-trainer state (kept for backward compat during transition)
     const [localAssignedTrainerName, setLocalAssignedTrainerName] = useState(courseToEdit?.assignedTrainerName || '');
     const [localAssignedTrainerEmail, setLocalAssignedTrainerEmail] = useState(courseToEdit?.assignedTrainerEmail || '');
@@ -1678,8 +1684,52 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=update-sessions
         }
         if (isEditMode && activeTab === 'trainer' && courseToEdit?.id) {
             fetchAssignedTrainers();
+            fetchSessionTrainers();
         }
     }, [isEditMode, activeTab]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // Fetch per-session trainer overrides from local DB. The endpoint resolves
+    // the effective trainer per session server-side (inherit or override).
+    const fetchSessionTrainers = async () => {
+        if (!courseToEdit?.id) return;
+        setSessionTrainerLoading(true);
+        try {
+            const res = await fetch(`/api/admin/course-sessions/list-with-trainers?courseRunUuid=${courseToEdit.id}`);
+            const json = await res.json();
+            if (json.success && json.data?.sessions) {
+                setSessionTrainerList(json.data.sessions);
+            }
+        } catch {
+            // silent — feature degrades gracefully
+        } finally {
+            setSessionTrainerLoading(false);
+        }
+    };
+
+    // Update or clear a per-session trainer override. Pass trainerId=null to clear.
+    const updateSessionTrainer = async (
+        sessionId: string,
+        trainerId: string | null,
+        trainerName: string | null,
+        trainerEmail: string | null
+    ) => {
+        try {
+            const res = await fetch('/api/admin/course-sessions/update-trainer', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sessionId, trainerId, trainerName, trainerEmail }),
+            });
+            const json = await res.json();
+            if (!json.success) {
+                showErrorPopup(json.error || 'Failed to update session trainer');
+                return;
+            }
+            // Refetch to pick up the server-resolved effective trainer
+            await fetchSessionTrainers();
+        } catch (err) {
+            showErrorPopup('Failed to update session trainer');
+        }
+    };
 
     // Fetch all trainers assigned to this course run from the junction table
     const fetchAssignedTrainers = async () => {
@@ -2145,18 +2195,36 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                 {(!isEditMode || activeTab === 'courseRun') && (
                     <>
                         {isEditMode && ssgDataPopulated && !ssgApiLoading && (
-                            <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-md p-3 mb-4">
-                                <p className="text-sm text-green-800 dark:text-green-300">
+                            <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-md p-3 mb-4 flex items-start justify-between gap-3">
+                                <p className="text-sm text-green-800 dark:text-green-300 flex-1">
                                     <strong>✓ Form populated with SSG data</strong> - The form fields below have been automatically filled with data from the SSG API. You can modify any field as needed before updating.
                                 </p>
+                                <button
+                                    type="button"
+                                    onClick={() => fetchCourseRunData(courseRunId)}
+                                    disabled={ssgApiLoading || !courseRunId}
+                                    className="flex-shrink-0 px-3 py-1 text-xs font-medium rounded border border-green-300 dark:border-green-600 text-green-800 dark:text-green-300 hover:bg-green-100 dark:hover:bg-green-900/40 disabled:opacity-50"
+                                    title="Re-fetch this course run from SSG and re-populate the form"
+                                >
+                                    Refetch
+                                </button>
                             </div>
                         )}
 
                         {isEditMode && ssgApiResponse && !ssgApiLoading && !ssgDataPopulated && (
-                            <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-md p-3 mb-4">
-                                <p className="text-sm text-yellow-800 dark:text-yellow-300">
+                            <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-md p-3 mb-4 flex items-start justify-between gap-3">
+                                <p className="text-sm text-yellow-800 dark:text-yellow-300 flex-1">
                                     <strong>⚠ SSG data retrieved but form not populated</strong> - The SSG API returned data, but the form fields could not be filled. The response may have an unexpected structure.
                                 </p>
+                                <button
+                                    type="button"
+                                    onClick={() => fetchCourseRunData(courseRunId)}
+                                    disabled={ssgApiLoading || !courseRunId}
+                                    className="flex-shrink-0 px-3 py-1 text-xs font-medium rounded border border-yellow-400 dark:border-yellow-600 text-yellow-900 dark:text-yellow-200 hover:bg-yellow-100 dark:hover:bg-yellow-900/40 disabled:opacity-50"
+                                    title="Re-fetch this course run from SSG and retry populating the form. Switch SSG App above if you suspect the wrong cert is being used."
+                                >
+                                    Refetch
+                                </button>
                             </div>
                         )}
 
@@ -2239,11 +2307,12 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                     } catch { /* silent */ }
                                                 }
                                             }}
-                                            className={inputClasses}
+                                            className={`${inputClasses} text-center`}
                                         >
                                             <option value="Confirmed">Confirmed</option>
                                             <option value="Pending">Pending</option>
                                             <option value="Cancelled">Cancelled</option>
+                                            <option value="Unconfirmed">Unconfirmed</option>
                                         </select>
                                     </div>
                                     <div>
@@ -3239,29 +3308,49 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                             const response = await fetch(`/api/ssg/courses/courseRuns/${courseRunId}?includeExpiredCourses=true&action=assign-trainer`, {
                                                                 method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(requestBody)
                                                             });
-                                                            if (response.ok) {
+
+                                                            // Parse the body regardless of HTTP status — SSG returns HTTP 200 with
+                                                            // `error: { code, message }` in the body on silent/validation failures
+                                                            // (e.g. #62 registration-date-immutable rule). Relying on `response.ok`
+                                                            // alone masked real failures and ghost-wrote local tpg_assigned_trainer_*
+                                                            // (see backlog #60). Extract error uniformly from both paths.
+                                                            const body = await response.json().catch(() => ({} as any));
+                                                            const bodyError = body?.error && (body.error.code || body.error.message) ? body.error : null;
+                                                            const httpErrorDetail = !response.ok
+                                                                ? (body?.details?.[0]?.message || body?.message || '')
+                                                                : '';
+                                                            const ssgErrorMessage: string = bodyError?.message || bodyError?.code || httpErrorDetail || '';
+                                                            const ssgHadError = !!ssgErrorMessage;
+
+                                                            // Legitimate fallback case: trainer isn't registered in SSG's TP Profile
+                                                            // yet. Preserve the existing behavior — save locally and prompt the
+                                                            // admin to register the trainer in SSG.
+                                                            const isExistingTrainerNotFound = ssgErrorMessage.includes('Existing_Trainer_NotFound');
+
+                                                            if (!ssgHadError) {
+                                                                // Real success — write local using the admin's input (not a re-fetch,
+                                                                // which would blank local if the re-fetch itself failed).
+                                                                await fetch(getApiUrl('/api/admin/rename-trainer'), {
+                                                                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                                                    body: JSON.stringify({ action: 'update-tpg-trainer', courseRunId, trainerName: localName, trainerEmail: localEmail })
+                                                                });
                                                                 showSuccessPopup(`Trainer ${localName} assigned to TPG successfully!`);
-                                                                // Re-fetch SSG data to update TPG display
+                                                                // Non-destructive verification re-fetch — only used to refresh the UI,
+                                                                // never to overwrite local.
                                                                 const updated = await fetch(`/api/ssg/courses?runId=${courseRunId}&includeExpired=false`);
                                                                 if (updated.ok) setSsgApiResponse(await updated.json());
-                                                                // Also save locally
+                                                            } else if (isExistingTrainerNotFound) {
+                                                                // Legitimate local-only fallback
                                                                 await fetch(getApiUrl('/api/admin/rename-trainer'), {
                                                                     method: 'POST', headers: { 'Content-Type': 'application/json' },
                                                                     body: JSON.stringify({ action: 'update-tpg-trainer', courseRunId, trainerName: localName, trainerEmail: localEmail })
                                                                 });
+                                                                showInfoPopup(`Trainer ${localName} is not registered in the SSG TP Profile yet. TPG trainer has been saved locally. Please register the trainer in SSG first.`);
                                                             } else {
-                                                                const errData = await response.json().catch(() => ({}));
-                                                                const detail = errData.details?.[0]?.message || errData.message || '';
-                                                                // Save locally as fallback
-                                                                await fetch(getApiUrl('/api/admin/rename-trainer'), {
-                                                                    method: 'POST', headers: { 'Content-Type': 'application/json' },
-                                                                    body: JSON.stringify({ action: 'update-tpg-trainer', courseRunId, trainerName: localName, trainerEmail: localEmail })
-                                                                });
-                                                                if (detail.includes('Existing_Trainer_NotFound')) {
-                                                                    showInfoPopup(`Trainer ${localName} is not registered in the SSG TP Profile yet. TPG trainer has been saved locally. Please register the trainer in SSG first.`);
-                                                                } else {
-                                                                    showInfoPopup(`SSG API returned: ${detail || 'Unknown error'}. TPG trainer saved locally as ${localName}.`);
-                                                                }
+                                                                // Real SSG rejection — do NOT write local, surface the error so the
+                                                                // admin knows the assignment didn't actually go through. This is the
+                                                                // fix for backlog #60 (ghost-write on silent SSG failure).
+                                                                showErrorPopup(`SSG rejected the trainer assignment: ${ssgErrorMessage}. Local DB was NOT updated. Please resolve the SSG-side issue and try again.`);
                                                             }
                                                         } catch { showErrorPopup('Failed to assign trainer to TPG.'); }
                                                         finally { setLoading(false); }
@@ -3279,7 +3368,8 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                 {assignedTrainersList.length > 0 ? (
                                     <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-md p-4">
                                         <div className="space-y-2">
-                                            {assignedTrainersList.slice(0, 1).map((t: any) => {
+                                            {/* Display ALL locally assigned trainers (previously sliced to 1). */}
+                                            {assignedTrainersList.map((t: any) => {
                                                 const trainerDetail = availableTrainers.find((at: any) =>
                                                     (at.email && t.trainer_email && at.email.toLowerCase() === t.trainer_email.toLowerCase()) ||
                                                     (at.trainer_name && t.trainer_name && at.trainer_name.toLowerCase() === t.trainer_name.toLowerCase())
@@ -3393,6 +3483,123 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                         </div>
                                     </div>
                                 )}
+
+                                {/* --- Per-Session Trainer Assignment --- */}
+                                {/* By default every session inherits the run-level trainer
+                                    above. This collapsible panel lets the admin override
+                                    specific sessions with a different trainer from the
+                                    pool of locally assigned trainers. */}
+                                {sessionTrainerList.length > 0 && (
+                                    <div className="mt-6 border border-blue-200 dark:border-blue-800 rounded-lg bg-blue-50/40 dark:bg-blue-900/10">
+                                        <button
+                                            type="button"
+                                            onClick={() => setSessionTrainerExpanded(v => !v)}
+                                            className="w-full flex items-center justify-between px-4 py-3 text-left"
+                                        >
+                                            <div className="flex items-center gap-2 min-w-0">
+                                                <span className="text-base">📋</span>
+                                                <div className="min-w-0">
+                                                    <h4 className="text-sm font-semibold text-gray-800 dark:text-white">
+                                                        Per-Session Trainer Assignment
+                                                    </h4>
+                                                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                                                        {sessionTrainerList.length} session{sessionTrainerList.length === 1 ? '' : 's'} ·
+                                                        {' '}{sessionTrainerList.filter(s => s.hasOverride).length} overridden ·
+                                                        {' '}{sessionTrainerList.filter(s => !s.hasOverride).length} using default
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <span className="text-xs text-blue-600 dark:text-blue-400 flex-shrink-0">
+                                                {sessionTrainerExpanded ? 'Hide ▲' : 'Show ▼'}
+                                            </span>
+                                        </button>
+                                        {sessionTrainerExpanded && (
+                                            <div className="px-4 pb-4 border-t border-blue-200 dark:border-blue-800">
+                                                <p className="text-xs text-gray-600 dark:text-gray-400 py-3">
+                                                    Every session below uses the <strong>run-level trainer</strong> by default.
+                                                    Use the dropdown to assign a different trainer to specific sessions —
+                                                    choose a trainer from the Assigned Trainer (Local) list above. Select
+                                                    "Use default" to revert a session back to the run-level trainer.
+                                                </p>
+                                                {sessionTrainerLoading ? (
+                                                    <p className="text-xs text-gray-500 italic">Loading sessions…</p>
+                                                ) : (
+                                                    <div className="space-y-2">
+                                                        {sessionTrainerList.map((s: any) => {
+                                                            const effectiveName = s.trainer?.trainerName || '—';
+                                                            // Format date: 20260411 -> 11 Apr 2026
+                                                            const formatDate = (yyyymmdd: string) => {
+                                                                if (!yyyymmdd || yyyymmdd.length !== 8) return yyyymmdd || '';
+                                                                const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+                                                                const y = yyyymmdd.slice(0, 4);
+                                                                const m = parseInt(yyyymmdd.slice(4, 6), 10) - 1;
+                                                                const d = parseInt(yyyymmdd.slice(6, 8), 10);
+                                                                return `${d} ${months[m] || '?'} ${y}`;
+                                                            };
+                                                            return (
+                                                                <div
+                                                                    key={s.id}
+                                                                    className={`flex items-center gap-3 px-3 py-2 rounded border ${
+                                                                        s.hasOverride
+                                                                            ? 'border-blue-400 dark:border-blue-600 bg-white dark:bg-gray-800'
+                                                                            : 'border-gray-200 dark:border-gray-700 bg-white/70 dark:bg-gray-800/60'
+                                                                    }`}
+                                                                >
+                                                                    <div className="flex-1 min-w-0">
+                                                                        <div className="flex items-center gap-2 flex-wrap">
+                                                                            <span className="text-xs font-bold text-blue-700 dark:text-blue-300">
+                                                                                {s.sessionNumber || 'S?'}
+                                                                            </span>
+                                                                            <span className="text-xs text-gray-600 dark:text-gray-400">
+                                                                                {formatDate(s.startDate)}
+                                                                                {s.startTime && s.endTime && ` · ${s.startTime}–${s.endTime}`}
+                                                                            </span>
+                                                                            {s.hasOverride ? (
+                                                                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 font-semibold">
+                                                                                    Override
+                                                                                </span>
+                                                                            ) : (
+                                                                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300">
+                                                                                    Default
+                                                                                </span>
+                                                                            )}
+                                                                        </div>
+                                                                        <div className="text-xs text-gray-700 dark:text-gray-200 mt-0.5 truncate">
+                                                                            {effectiveName}
+                                                                        </div>
+                                                                    </div>
+                                                                    <select
+                                                                        value={s.hasOverride ? (s.trainer?.trainerId || '') : ''}
+                                                                        onChange={(e) => {
+                                                                            const chosenId = e.target.value;
+                                                                            if (!chosenId) {
+                                                                                // Clear override — revert to run-level default
+                                                                                updateSessionTrainer(s.id, null, null, null);
+                                                                                return;
+                                                                            }
+                                                                            const chosen = assignedTrainersList.find((t: any) => t.trainer_id === chosenId);
+                                                                            if (chosen) {
+                                                                                updateSessionTrainer(s.id, chosen.trainer_id, chosen.trainer_name, chosen.trainer_email);
+                                                                            }
+                                                                        }}
+                                                                        className="flex-shrink-0 text-xs px-2 py-1 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                                    >
+                                                                        <option value="">Use default</option>
+                                                                        {assignedTrainersList.map((t: any) => (
+                                                                            <option key={t.trainer_id || t.trainer_name} value={t.trainer_id || ''}>
+                                                                                {t.trainer_name}
+                                                                            </option>
+                                                                        ))}
+                                                                    </select>
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
                             </div>
 
                             {/* Assigned Trainer (TPG) */}
@@ -3402,10 +3609,98 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                 const tpgName = ssgTrainers?.[0]?.trainer?.name || courseToEdit?.assignedTrainerTpg;
                                 const tpgEmail = ssgTrainers?.[0]?.trainer?.email || courseToEdit?.assignedTrainerTpgEmail;
                                 const tpgId = ssgTrainers?.[0]?.trainer?.idNumber;
+                                const handleRemoveTpgTrainer = () => {
+                                    const runData = ssgApiResponse?.data?.course?.run;
+                                    if (!runData) {
+                                        showErrorPopup('Cannot remove — SSG course run data not loaded. Please refresh.');
+                                        return;
+                                    }
+                                    showConfirmPopup(
+                                        `Remove ${tpgName} from SSG/TPG for this course run?`,
+                                        async () => {
+                                            setLoading(true);
+                                            try {
+                                                const requestBody = {
+                                                    course: {
+                                                        courseReferenceNumber: courseReferenceNumber,
+                                                        trainingProvider: { uen: runData.organizationKey },
+                                                        run: {
+                                                            action: "update",
+                                                            registrationDates: { opening: runData.registrationOpeningDate || runData.registrationDates?.opening || 0, closing: runData.registrationClosingDate || runData.registrationDates?.closing || 0 },
+                                                            courseDates: { start: runData.courseStartDate || runData.courseDates?.start || 0, end: runData.courseEndDate || runData.courseDates?.end || 0 },
+                                                            scheduleInfoType: { code: "01", description: "Description" },
+                                                            scheduleInfo: "Schedule",
+                                                            venue: runData.venue || {},
+                                                            courseAdminEmail: runData.courseAdminEmail || currentUserEmail,
+                                                            courseVacancy: runData.courseVacancy || { code: "A", description: "Available" },
+                                                            file: { Name: "", content: "" },
+                                                            linkCourseRunTrainer: []
+                                                        }
+                                                    }
+                                                };
+                                                const response = await fetch(`/api/ssg/courses/courseRuns/${courseRunId}?includeExpiredCourses=true&action=assign-trainer`, {
+                                                    method: 'POST',
+                                                    headers: { 'Content-Type': 'application/json' },
+                                                    body: JSON.stringify(requestBody)
+                                                });
+
+                                                // Parse the body regardless of HTTP status — SSG returns HTTP 200 with
+                                                // `error: { code, message }` on silent failures. Same pattern as the
+                                                // assign flow above (backlog #60 fix).
+                                                const body = await response.json().catch(() => ({} as any));
+                                                const bodyError = body?.error && (body.error.code || body.error.message) ? body.error : null;
+                                                const httpErrorDetail = !response.ok
+                                                    ? (body?.details?.[0]?.message || body?.message || body?.error || '')
+                                                    : '';
+                                                const ssgErrorMessage: string = bodyError?.message || bodyError?.code || httpErrorDetail || '';
+
+                                                if (!ssgErrorMessage) {
+                                                    // Real success — null local TPG columns
+                                                    await fetch(getApiUrl('/api/admin/rename-trainer'), {
+                                                        method: 'POST',
+                                                        headers: { 'Content-Type': 'application/json' },
+                                                        body: JSON.stringify({
+                                                            action: 'update-tpg-trainer',
+                                                            courseRunId,
+                                                            trainerName: null,
+                                                            trainerEmail: null,
+                                                        }),
+                                                    });
+                                                    // Non-destructive refetch to refresh the card
+                                                    const updated = await fetch(`/api/ssg/courses?runId=${courseRunId}&includeExpired=false`);
+                                                    if (updated.ok) setSsgApiResponse(await updated.json());
+                                                    showSuccessPopup('TPG trainer removed.');
+                                                } else {
+                                                    // Real SSG rejection — do NOT touch local
+                                                    showErrorPopup(`SSG rejected the removal: ${ssgErrorMessage}. Local DB was NOT updated.`);
+                                                }
+                                            } catch {
+                                                showErrorPopup('Failed to remove TPG trainer.');
+                                            } finally {
+                                                setLoading(false);
+                                            }
+                                        }
+                                    );
+                                };
                                 return (
                                 <div>
-                                    <h4 className="text-lg font-medium text-gray-900 dark:text-white mb-3">Assigned Trainer (TPG)</h4>
-                                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">Auto-pulled from the SSG/TPG API.</p>
+                                    <div className="flex items-start justify-between mb-3">
+                                        <div>
+                                            <h4 className="text-lg font-medium text-gray-900 dark:text-white">Assigned Trainer (TPG)</h4>
+                                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Auto-pulled from the SSG/TPG API.</p>
+                                        </div>
+                                        {tpgName && (
+                                            <Button
+                                                type="button"
+                                                size="sm"
+                                                className="bg-red-600 hover:bg-red-700 text-white"
+                                                onClick={handleRemoveTpgTrainer}
+                                                disabled={loading}
+                                            >
+                                                {loading ? 'Removing...' : 'Remove'}
+                                            </Button>
+                                        )}
+                                    </div>
                                     {tpgName ? (
                                         <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-md p-4">
                                             <div className="flex flex-wrap gap-6 text-sm">
@@ -3436,7 +3731,8 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                 );
                             })()}
 
-                            {/* Next Available Trainer */}
+                            {/* Next Available Trainer — hidden when a local trainer is already assigned */}
+                            {!assignedTrainersList.length && !localAssignedTrainerName ? (
                             <div>
                                 <h4 className="text-lg font-medium text-gray-900 dark:text-white mb-3">Next Available Trainer</h4>
                                 {courseToEdit?.nextAvailableTrainer ? (() => {
@@ -3512,6 +3808,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                     </div>
                                 )}
                             </div>
+                            ) : null}
 
                             {/* Approved Trainers List */}
                             <div>
@@ -3571,27 +3868,73 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                         return false;
                                     };
 
+                                    // Invitation data from the API (passed via setEditingCourseRun)
+                                    const invitations = (courseToEdit as any)?.trainerInvitations || {};
+                                    const isDetailedView = classListReturnTo === AdminPage.ViewClassByDate;
+
+                                    const formatDt = (iso: string | null) => {
+                                        if (!iso) return '';
+                                        const d = new Date(iso);
+                                        if (isNaN(d.getTime())) return '';
+                                        return d.toLocaleString('en-SG', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false });
+                                    };
+
+                                    const statusBadge = (status: string) => {
+                                        switch (status) {
+                                            case 'accepted': return <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">Accepted</span>;
+                                            case 'declined': return <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300">Declined</span>;
+                                            case 'pending': return <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">Pending</span>;
+                                            case 'resent': return <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400">Resent</span>;
+                                            case 'not_sent': return <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400">Not Sent</span>;
+                                            case 'manual': return <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">Manually Added</span>;
+                                            default: return <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400">{status}</span>;
+                                        }
+                                    };
+
                                     return (
                                         <div className="bg-gray-50 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700 rounded-md p-4">
                                             <div className="space-y-2">
                                                 {approvedTrainers.map((trainerName: string, idx: number) => {
                                                     const isLocal = isLocallyAssigned(trainerName);
                                                     const isNext = nextName && trainerName.toLowerCase().trim() === nextName.toLowerCase().trim();
+                                                    const norm = trainerName.toLowerCase().replace(/\[[^\]]+\]/g, '').replace(/\s+/g, ' ').trim();
+                                                    const trainerInvs = invitations[norm];
+
                                                     return (
-                                                        <div key={idx} className={`flex items-center justify-between text-sm py-1.5 px-3 rounded border ${
+                                                        <div key={idx} className={`text-sm rounded border ${
                                                             isLocal ? 'bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700' :
                                                             isNext ? 'bg-orange-50 dark:bg-orange-900/20 border-orange-300 dark:border-orange-700' :
                                                             'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700'
                                                         }`}>
-                                                            <div className="flex items-center">
-                                                                <span className="text-gray-400 mr-3 w-6 text-right">{idx + 1}.</span>
-                                                                <span className="text-gray-900 dark:text-white">{trainerName}</span>
+                                                            <div className="flex items-center justify-between py-1.5 px-3">
+                                                                <div className="flex items-center">
+                                                                    <span className="text-gray-400 mr-3 w-6 text-right">{idx + 1}.</span>
+                                                                    <span className="text-gray-900 dark:text-white">{trainerName}</span>
+                                                                </div>
+                                                                <div className="flex items-center gap-2">
+                                                                    {/* Latest status badge — "Manually Added" when local but no invitation, else default to "Not Sent" */}
+                                                                    {statusBadge(isLocal && !trainerInvs?.[0] ? 'manual' : (trainerInvs?.[0]?.status || 'not_sent'))}
+                                                                    {isLocal && (
+                                                                        <span className="text-xs font-medium text-green-600 dark:text-green-400">Assigned (Local)</span>
+                                                                    )}
+                                                                    {isNext && !isLocal && (
+                                                                        <span className="text-xs font-medium text-orange-600 dark:text-orange-400">Next Available</span>
+                                                                    )}
+                                                                </div>
                                                             </div>
-                                                            {isLocal && (
-                                                                <span className="text-xs font-medium text-green-600 dark:text-green-400 ml-2">Assigned (Local)</span>
-                                                            )}
-                                                            {isNext && !isLocal && (
-                                                                <span className="text-xs font-medium text-orange-600 dark:text-orange-400 ml-2">Next Available</span>
+                                                            {/* Detailed view: full invitation history with timestamps */}
+                                                            {isDetailedView && trainerInvs && trainerInvs.length > 0 && (
+                                                                <div className="px-3 pb-2 pt-0.5 ml-9 border-t border-gray-100 dark:border-gray-700/50">
+                                                                    {trainerInvs.map((inv: any, i: number) => (
+                                                                        <div key={i} className="flex items-center gap-2 text-[11px] text-gray-500 dark:text-gray-400 py-0.5">
+                                                                            {statusBadge(inv.status)}
+                                                                            <span>Sent: {formatDt(inv.sent_at)}</span>
+                                                                            {inv.responded_at && (
+                                                                                <span>→ Responded: {formatDt(inv.responded_at)}</span>
+                                                                            )}
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
                                                             )}
                                                         </div>
                                                     );
@@ -4891,7 +5234,7 @@ export const AddCourseView: React.FC = () => {
         <div>
             <div className="flex justify-between items-center mb-6">
                 <h2 className="text-3xl font-bold dark:text-white">Add Course</h2>
-                <Button variant="ghost" onClick={() => setAdminPage(AdminPage.Dashboard)}>Back to Dashboard</Button>
+                <Button variant="ghost" onClick={() => setAdminPage(AdminPage.ViewCourses)}>Back to Courses</Button>
             </div>
             {message && (
                 <div className={`mb-4 p-3 rounded-md text-sm ${message.type === 'success' ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 text-green-800 dark:text-green-300' : 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 text-red-800 dark:text-red-300'}`}>
@@ -5021,7 +5364,7 @@ export const AddCourseRunView: React.FC = () => {
         <div>
             <div className="flex justify-between items-center mb-6">
                 <h2 className="text-3xl font-bold dark:text-white">Add Course Run</h2>
-                <Button variant="ghost" onClick={() => setAdminPage(AdminPage.Dashboard)}>Back to Dashboard</Button>
+                <Button variant="ghost" onClick={() => setAdminPage(AdminPage.ViewCourses)}>Back to Courses</Button>
             </div>
             {message && (
                 <div className={`mb-4 p-3 rounded-md text-sm ${message.type === 'success' ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 text-green-800 dark:text-green-300' : 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 text-red-800 dark:text-red-300'}`}>
@@ -5400,222 +5743,6 @@ export const AutomationLogsView: React.FC = () => {
     );
 };
 
-// ─── Assign Trainer Logging ───────────────────────────────────────────────────
-
-interface AssignTrainerLogRow {
-    id: number;
-    created_at: string;
-    course_run_id: string;
-    course_code: string | null;
-    course_title: string | null;
-    start_date: string | null;
-    end_date: string | null;
-    ra_code: string | null;
-    trainer_name: string | null;
-    trainer_email: string | null;
-    action: string | null;
-    status: 'success' | 'error';
-    error_message: string | null;
-}
-
-export const AssignTrainerLogsView: React.FC = () => {
-    const { setAdminPage } = useLms();
-    const [logs, setLogs] = useState<AssignTrainerLogRow[]>([]);
-    const [loading, setLoading] = useState(false);
-    const [expandedDates, setExpandedDates] = useState<Set<string>>(new Set());
-
-    const fetchLogs = async () => {
-        setLoading(true);
-        try {
-            const res = await fetch('/api/admin/assign-trainer-logs?limit=500');
-            const json = await res.json();
-            if (json.success) setLogs(json.data);
-        } catch {
-            /* silent */
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    useEffect(() => { fetchLogs(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-    const displayLogs = logs;
-
-    // Flatten to one batch per date+hour (SG time), e.g. "31 Mar 2026 · 07:00"
-    const batches = useMemo(() => {
-        const map = new Map<string, AssignTrainerLogRow[]>();
-        for (const log of displayLogs) {
-            const dt = new Date(log.created_at);
-            const dateLabel = dt.toLocaleDateString('en-SG', {
-                timeZone: 'Asia/Singapore',
-                day: '2-digit', month: 'short', year: 'numeric',
-            });
-            const hourLabel = dt.toLocaleTimeString('en-SG', {
-                timeZone: 'Asia/Singapore',
-                hour: '2-digit', minute: '2-digit', hour12: false,
-            }).slice(0, 2) + ':00';
-            const key = `${dateLabel} · ${hourLabel}`;
-            if (!map.has(key)) map.set(key, []);
-            map.get(key)!.push(log);
-        }
-        return Array.from(map.entries()); // [ ["31 Mar 2026 · 07:00", rows[]], ... ]
-    }, [displayLogs]);
-
-    // Expand the most recent batch by default
-    useEffect(() => {
-        if (batches.length > 0) {
-            setExpandedDates(new Set([batches[0][0]]));
-        }
-    }, [batches.length]); // eslint-disable-line react-hooks/exhaustive-deps
-
-    const toggleDate = (key: string) => {
-        setExpandedDates(prev => {
-            const next = new Set(prev);
-            next.has(key) ? next.delete(key) : next.add(key);
-            return next;
-        });
-    };
-
-    const actionBadge = (action: string | null) => {
-        const map: Record<string, string> = {
-            created: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
-            updated: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
-            skipped: 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400',
-            error:   'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
-        };
-        const key = action ?? 'skipped';
-        return (
-            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${map[key] ?? map.skipped}`}>
-                {key}
-            </span>
-        );
-    };
-
-    return (
-        <div>
-            <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
-                <h2 className="text-3xl font-bold">Assign Trainer Log</h2>
-                <div className="flex items-center gap-2">
-                    <Button variant="ghost" onClick={fetchLogs} disabled={loading}>
-                        {loading ? 'Refreshing…' : 'Refresh'}
-                    </Button>
-                    <Button variant="ghost" onClick={() => setAdminPage(AdminPage.Dashboard)}>
-                        Back
-                    </Button>
-                </div>
-            </div>
-
-            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-                Records every trainer assignment made via the external API (Kael). Each card is one automation batch (grouped by date &amp; hour).
-            </p>
-
-            {loading ? (
-                <div className="text-center py-12 text-gray-400">Loading logs…</div>
-            ) : batches.length === 0 ? (
-                <Card className="p-8 text-center text-gray-500 dark:text-gray-400">No assign trainer logs yet.</Card>
-            ) : (
-                <div className="space-y-3">
-                    {batches.map(([batchKey, rows]) => {
-                        const isOpen = expandedDates.has(batchKey);
-                        const successCount = rows.filter(r => r.status === 'success').length;
-                        const errorCount   = rows.filter(r => r.status === 'error').length;
-                        return (
-                            <Card key={batchKey} className="overflow-hidden">
-                                {/* Batch header */}
-                                <button
-                                    onClick={() => toggleDate(batchKey)}
-                                    className="w-full flex items-center justify-between px-5 py-4 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors text-left"
-                                >
-                                    <div className="flex items-center gap-4 flex-wrap">
-                                        <span className="font-semibold text-gray-900 dark:text-white font-mono">{batchKey}</span>
-                                        <span className="text-sm text-gray-500 dark:text-gray-400">{rows.length} assignment{rows.length !== 1 ? 's' : ''}</span>
-                                        {successCount > 0 && (
-                                            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
-                                                {successCount} success
-                                            </span>
-                                        )}
-                                        {errorCount > 0 && (
-                                            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300">
-                                                {errorCount} error{errorCount !== 1 ? 's' : ''}
-                                            </span>
-                                        )}
-                                    </div>
-                                    <svg className={`w-5 h-5 text-gray-400 transition-transform flex-shrink-0 ${isOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
-                                </button>
-
-                                {/* Rows table */}
-                                {isOpen && (
-                                    <div className="border-t border-gray-100 dark:border-gray-700 overflow-x-auto">
-                                        <table className="w-full text-sm">
-                                            <thead className="bg-gray-50 dark:bg-gray-800 text-left">
-                                                <tr>
-                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Time</th>
-                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Course Title</th>
-                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Course Code</th>
-                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Course Run ID</th>
-                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Start Date</th>
-                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">End Date</th>
-                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">RA Code</th>
-                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Trainer</th>
-                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 text-center">Action</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-                                                {rows.map(log => (
-                                                    <tr key={log.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
-                                                        <td className="px-4 py-3 whitespace-nowrap text-gray-500 dark:text-gray-400 text-xs">
-                                                            {new Date(log.created_at).toLocaleTimeString('en-SG', {
-                                                                timeZone: 'Asia/Singapore',
-                                                                hour: '2-digit', minute: '2-digit', hour12: false,
-                                                            })}
-                                                        </td>
-                                                        <td className="px-4 py-3 max-w-[260px]">
-                                                            <div className="font-medium text-gray-900 dark:text-gray-100 whitespace-normal break-words">{log.course_title || '—'}</div>
-                                                        </td>
-                                                        <td className="px-4 py-3 whitespace-nowrap">
-                                                            {log.course_code
-                                                                ? <span className="text-xs text-indigo-600 dark:text-indigo-400 font-mono bg-indigo-50 dark:bg-indigo-900/30 px-1.5 py-0.5 rounded">{log.course_code}</span>
-                                                                : <span className="text-gray-400">—</span>}
-                                                        </td>
-                                                        <td className="px-4 py-3 whitespace-nowrap">
-                                                            <span className="text-xs text-gray-500 dark:text-gray-400 font-mono bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded">
-                                                                {log.course_run_id || '—'}
-                                                            </span>
-                                                        </td>
-                                                        <td className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
-                                                            {log.start_date || '—'}
-                                                        </td>
-                                                        <td className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
-                                                            {log.end_date || '—'}
-                                                        </td>
-                                                        <td className="px-4 py-3 text-xs font-mono text-gray-500 dark:text-gray-400 whitespace-nowrap">
-                                                            {log.ra_code || '—'}
-                                                        </td>
-                                                        <td className="px-4 py-3">
-                                                            <div className="font-medium text-gray-800 dark:text-gray-200">{log.trainer_name || '—'}</div>
-                                                            <div className="text-xs text-gray-400 font-mono">{log.trainer_email || ''}</div>
-                                                            {log.error_message && (
-                                                                <div className="text-xs text-red-500 mt-0.5">{log.error_message}</div>
-                                                            )}
-                                                        </td>
-                                                        <td className="px-4 py-3 text-center">
-                                                            {actionBadge(log.status === 'error' ? 'error' : log.action)}
-                                                        </td>
-                                                    </tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                )}
-                            </Card>
-                        );
-                    })}
-                </div>
-            )}
-        </div>
-    );
-};
-
 // ── Backfill Enrollments ──────────────────────────────────────────────────────
 
 interface BackfillPreviewRow {
@@ -5894,7 +6021,14 @@ export const FetchUpcomingEnrolmentsView: React.FC = () => {
         }
     };
 
-    const fmt = (d: string) => d ? new Date(d).toLocaleDateString('en-SG', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+    const fmt = (d: string) => {
+        if (!d) return '—';
+        const date = new Date(d);
+        const day = String(date.getDate()).padStart(2, '0');
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const year = date.getFullYear();
+        return `${day}/${month}/${year}`;
+    };
 
     return (
         <div className="max-w-5xl">
@@ -6040,6 +6174,199 @@ export const FetchUpcomingEnrolmentsView: React.FC = () => {
                     Click <strong>Fetch Preview</strong> to see upcoming course runs.
                 </Card>
             )}
+        </div>
+    );
+};
+
+// ── Upcoming Enrolment View (with Calendar Matching) ─────────────────────────
+
+export const UpcomingEnrolmentView: React.FC = () => {
+    const { setAdminPage } = useLms();
+    const [data, setData] = useState<any[]>([]);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    
+    // Date states
+    const [startDate, setStartDate] = useState(() => {
+        const d = new Date();
+        const day = String(d.getDate()).padStart(2, '0');
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const year = d.getFullYear();
+        return `${day}/${month}/${year}`;
+    });
+    const [endDate, setEndDate] = useState(() => {
+        const d = new Date();
+        d.setDate(d.getDate() + 21);
+        const day = String(d.getDate()).padStart(2, '0');
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const year = d.getFullYear();
+        return `${day}/${month}/${year}`;
+    });
+
+    // Helper to format text input to DD/MM/YYYY
+    const formatDateInput = (value: string) => {
+        const numeric = value.replace(/\D/g, '');
+        if (numeric.length <= 2) return numeric;
+        if (numeric.length <= 4) return `${numeric.slice(0, 2)}/${numeric.slice(2)}`;
+        return `${numeric.slice(0, 2)}/${numeric.slice(2, 4)}/${numeric.slice(4, 8)}`;
+    };
+
+    // Helper to convert DD/MM/YYYY to YYYY-MM-DD for API
+    const toIsoDate = (dmy: string) => {
+        const parts = dmy.split('/');
+        if (parts.length !== 3) return dmy;
+        return `${parts[2]}-${parts[1]}-${parts[0]}`;
+    };
+
+    const fetchData = async () => {
+        setLoading(true);
+        setError(null);
+        try {
+            const res = await fetch(`/api/admin/upcoming-enrolment?startDate=${toIsoDate(startDate)}&endDate=${toIsoDate(endDate)}`);
+            const json = await res.json();
+            if (json.success) {
+                setData(json.data);
+            } else {
+                setError(json.error || 'Failed to fetch enrolment data');
+            }
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Network error');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchData();
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+    const fmt = (d: string) => {
+        if (!d) return '—';
+        const date = new Date(d);
+        const day = String(date.getDate()).padStart(2, '0');
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const year = date.getFullYear();
+        return `${day}/${month}/${year}`;
+    };
+
+    return (
+        <div className="space-y-6">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+                <h2 className="text-3xl font-bold">Upcoming Enrolment</h2>
+                <Button variant="ghost" onClick={() => setAdminPage(AdminPage.Dashboard)}>Back</Button>
+            </div>
+
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+                Displays confirmed enrolments starting within the next 21 days (default) and checks if they match a calendar event.
+                Matches are based on attendee email, start date, and TGS course code in the event description.
+            </p>
+
+            <Card className="p-5">
+                <div className="flex flex-wrap items-end gap-4">
+                    <div className="space-y-1">
+                        <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500">Start Date</label>
+                        <input
+                            type="text"
+                            placeholder="DD/MM/YYYY"
+                            value={startDate}
+                            onChange={(e) => setStartDate(formatDateInput(e.target.value))}
+                            maxLength={10}
+                            className="w-32 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                        />
+                    </div>
+                    <div className="space-y-1">
+                        <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500">End Date</label>
+                        <input
+                            type="text"
+                            placeholder="DD/MM/YYYY"
+                            value={endDate}
+                            onChange={(e) => setEndDate(formatDateInput(e.target.value))}
+                            maxLength={10}
+                            className="w-32 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                        />
+                    </div>
+                    <Button onClick={fetchData} disabled={loading}>
+                        {loading ? 'Refreshing...' : 'Refresh'}
+                    </Button>
+                </div>
+            </Card>
+
+            {error && (
+                <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-700 dark:text-red-300">
+                    ❌ {error}
+                </div>
+            )}
+
+            <Card className="overflow-hidden">
+                <div className="overflow-x-auto">
+                    <table className="w-full text-sm text-left">
+                        <thead className="bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+                            <tr>
+                                <th className="px-4 py-3 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Email</th>
+                                <th className="px-4 py-3 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Course Title</th>
+                                <th className="px-4 py-3 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Course Code</th>
+                                <th className="px-4 py-3 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Start Date</th>
+                                <th className="px-4 py-3 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Class Status</th>
+                                <th className="px-4 py-3 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 text-center">Calendar Match</th>
+                                <th className="px-4 py-3 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 text-center">Reason</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                            {data.length === 0 && !loading ? (
+                                <tr>
+                                    <td colSpan={7} className="px-4 py-8 text-center text-gray-500 italic">No enrolments found for this period.</td>
+                                </tr>
+                            ) : (
+                                data.map((row, idx) => (
+                                    <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                                        <td className="px-4 py-3 font-medium text-gray-900 dark:text-gray-200">{row.email}</td>
+                                        <td className="px-4 py-3 text-gray-700 dark:text-gray-300 max-w-xs truncate" title={row.title}>{row.title}</td>
+                                        <td className="px-4 py-3 font-mono text-xs text-gray-500 dark:text-gray-400">{row.course_code || '—'}</td>
+                                        <td className="px-4 py-3 text-gray-500 dark:text-gray-400 whitespace-nowrap">{fmt(row.start_date)}</td>
+                                        <td className="px-4 py-3">
+                                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                                                row.class_status === 'Confirmed' ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300' :
+                                                row.class_status === 'Cancelled' ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300' :
+                                                'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'
+                                            }`}>
+                                                {row.class_status || 'Pending'}
+                                            </span>
+                                        </td>
+                                        <td className="px-4 py-3 text-center">
+                                            {row.match ? (
+                                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 text-xs font-semibold" title={row.matchDetail}>
+                                                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                                    </svg>
+                                                    Match
+                                                </span>
+                                            ) : (
+                                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-400 text-xs font-semibold">
+                                                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                                    </svg>
+                                                    Not Matched
+                                                </span>
+                                            )}
+                                        </td>
+                                        <td className="px-4 py-3 text-center">
+                                            {!row.match && row.reason ? (
+                                                <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${
+                                                    row.reason === 'No Email' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
+                                                }`}>
+                                                    {row.reason}
+                                                </span>
+                                            ) : (
+                                                <span className="text-gray-400 text-xs">—</span>
+                                            )}
+                                        </td>
+                                    </tr>
+                                ))
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            </Card>
         </div>
     );
 };
@@ -6592,6 +6919,7 @@ export const AutoCreateCertificatesLogView: React.FC = () => {
                 <tr>
                   <th className="px-5 py-3">Timestamp</th>
                   <th className="px-5 py-3">Batch/Run ID</th>
+                  <th className="px-5 py-3">Course Run ID</th>
                   <th className="px-5 py-3">Course Code/Title</th>
                   <th className="px-5 py-3">Learner Name</th>
                   <th className="px-5 py-3">Status</th>
@@ -6601,7 +6929,7 @@ export const AutoCreateCertificatesLogView: React.FC = () => {
               <tbody className="divide-y divide-default">
                 {logs.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-5 py-12 text-center text-muted">
+                    <td colSpan={7} className="px-5 py-12 text-center text-muted">
                       No matching logs found.
                     </td>
                   </tr>
@@ -6613,6 +6941,9 @@ export const AutoCreateCertificatesLogView: React.FC = () => {
                       </td>
                       <td className="px-5 py-4 whitespace-nowrap text-on-surface-secondary font-mono text-xs" title={log.run_id}>
                         {log.run_id ? log.run_id.substring(0, 8) + '...' : '—'}
+                      </td>
+                      <td className="px-5 py-4 whitespace-nowrap">
+                        <span className="font-mono text-xs text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 px-2 py-0.5 rounded">{log.course_run_id || '—'}</span>
                       </td>
                       <td className="px-5 py-4">
                         <div className="font-medium text-on-surface">{log.course_code || '—'}</div>
@@ -7196,6 +7527,394 @@ export const SyncTrainerTpgLogsView: React.FC = () => {
                         <td className="px-3 py-2 whitespace-nowrap">{row.ssg_status ?? '—'}</td>
                         <td className="px-3 py-2">{statusBadge(row.status)}</td>
                         <td className="px-3 py-2 text-red-600 dark:text-red-400 max-w-[200px] truncate">{row.error_message ?? ''}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
+// ── Auto Send Trainer Invitation Log ─────────────────────────────────────────
+
+interface AutoSendTrainerInvitationLogRow {
+  id: number;
+  run_id: string;
+  created_at: string;
+  course_run_uuid: string | null;
+  course_run_id: string | null;
+  course_title: string | null;
+  trainer_name: string | null;
+  trainer_email: string | null;
+  status: string;
+  message: string | null;
+}
+
+export const AutoSendTrainerInvitationLogView: React.FC = () => {
+  const { setAdminPage } = useLms();
+  const [logs, setLogs] = useState<AutoSendTrainerInvitationLogRow[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [running, setRunning] = useState(false);
+  const [runResult, setRunResult] = useState<{ totalEligible: number; sent: number; skipped: number; errors: number; windowDays: number } | null>(null);
+  const [runError, setRunError] = useState<string | null>(null);
+  const [expandedBatches, setExpandedBatches] = useState<Set<string>>(new Set());
+
+  const fetchLogs = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/admin/auto-send-trainer-invitation-logs?limit=500');
+      const json = await res.json();
+      if (json.success) setLogs(json.data);
+    } catch { /* silent */ } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { fetchLogs(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleRunNow = async () => {
+    setRunning(true);
+    setRunResult(null);
+    setRunError(null);
+    try {
+      const res = await fetch('/api/admin/run-auto-send-trainer-invitations', { method: 'POST' });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error || 'Run failed');
+      setRunResult({
+        totalEligible: json.totalEligible,
+        sent: json.sent,
+        skipped: json.skipped,
+        errors: json.errors,
+        windowDays: json.windowDays,
+      });
+      await fetchLogs();
+    } catch (err) {
+      setRunError(err instanceof Error ? err.message : 'Failed to run');
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  const batches = useMemo(() => {
+    const map = new Map<string, AutoSendTrainerInvitationLogRow[]>();
+    for (const log of logs) {
+      if (!map.has(log.run_id)) map.set(log.run_id, []);
+      map.get(log.run_id)!.push(log);
+    }
+    return Array.from(map.entries());
+  }, [logs]);
+
+  useEffect(() => {
+    if (batches.length > 0) setExpandedBatches(new Set([batches[0][0]]));
+  }, [batches.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const toggleBatch = (runId: string) => {
+    setExpandedBatches(prev => {
+      const next = new Set(prev);
+      next.has(runId) ? next.delete(runId) : next.add(runId);
+      return next;
+    });
+  };
+
+  // Success, error, and every skipped_* variant share consistent colors so the
+  // grouped header counts (sent / skipped / error) stay readable at a glance.
+  const statusBadge = (status: string) => {
+    let cls: string;
+    if (status === 'sent') cls = 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300';
+    else if (status === 'error') cls = 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300';
+    else if (status.startsWith('skipped')) cls = 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300';
+    else cls = 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300';
+    return (
+      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${cls}`}>
+        {status}
+      </span>
+    );
+  };
+
+  return (
+    <div>
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+        <h2 className="text-3xl font-bold">Auto Send Trainer Invitation Log</h2>
+        <div className="flex items-center gap-2">
+          <Button onClick={handleRunNow} disabled={running || loading}>
+            {running ? 'Running…' : 'Run Now'}
+          </Button>
+          <Button variant="ghost" onClick={fetchLogs} disabled={loading || running}>
+            {loading ? 'Refreshing…' : 'Refresh'}
+          </Button>
+          <Button variant="ghost" onClick={() => setAdminPage(AdminPage.Dashboard)}>
+            Back
+          </Button>
+        </div>
+      </div>
+
+      <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+        Scheduled sweep (default Mon &amp; Thu 10:00 AM SGT): scans upcoming course runs within the lookahead window and, for every class missing a locally-assigned trainer, invites the next approved trainer who hasn't already been invited, declined, or assigned. Use <strong>Run Now</strong> to trigger manually.
+      </p>
+
+      {runResult && (
+        <div className="mb-4 p-3 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-sm text-green-800 dark:text-green-300">
+          ✅ Done — {runResult.totalEligible} eligible run(s) within {runResult.windowDays}-day window: {runResult.sent} sent, {runResult.skipped} skipped, {runResult.errors} error(s).
+        </div>
+      )}
+      {runError && (
+        <div className="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-800 dark:text-red-300">
+          ❌ {runError}
+        </div>
+      )}
+
+      {loading && <p className="text-sm text-gray-500 py-6 text-center">Loading…</p>}
+
+      {!loading && batches.length === 0 && (
+        <p className="text-sm text-gray-500 py-6 text-center">No logs yet. Click <strong>Run Now</strong> to invite trainers for upcoming classes.</p>
+      )}
+
+      {batches.map(([runId, rows]) => {
+        const isOpen = expandedBatches.has(runId);
+        const ts = new Date(rows[0].created_at).toLocaleString('en-SG', {
+          timeZone: 'Asia/Singapore', day: '2-digit', month: 'short', year: 'numeric',
+          hour: '2-digit', minute: '2-digit', hour12: false,
+        });
+        const sentCount    = rows.filter(r => r.status === 'sent').length;
+        const skippedCount = rows.filter(r => r.status.startsWith('skipped')).length;
+        const errorCount   = rows.filter(r => r.status === 'error').length;
+
+        return (
+          <div key={runId} className="mb-3 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden">
+            <button
+              onClick={() => toggleBatch(runId)}
+              className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-slate-700/50 hover:bg-gray-100 dark:hover:bg-slate-700 text-left"
+            >
+              <div className="flex items-center gap-3">
+                <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">{ts} SGT</span>
+                <span className="text-xs text-gray-500">{rows.length} row(s)</span>
+                {sentCount    > 0 && <span className="text-xs text-green-600 dark:text-green-400">{sentCount} sent</span>}
+                {skippedCount > 0 && <span className="text-xs text-yellow-600 dark:text-yellow-400">{skippedCount} skipped</span>}
+                {errorCount   > 0 && <span className="text-xs text-red-600 dark:text-red-400">{errorCount} error</span>}
+              </div>
+              <span className="text-gray-400 text-xs">{isOpen ? '▲' : '▼'}</span>
+            </button>
+
+            {isOpen && (
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-xs">
+                  <thead className="bg-gray-50 dark:bg-slate-700/30">
+                    <tr>
+                      {['Course Run ID', 'Course Title', 'Trainer Name', 'Trainer Email', 'Status', 'Message'].map(h => (
+                        <th key={h} className="px-3 py-2 text-left font-semibold text-gray-600 dark:text-gray-300 whitespace-nowrap">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                    {rows.map(row => (
+                      <tr key={row.id} className="hover:bg-gray-50 dark:hover:bg-slate-700/30">
+                        <td className="px-3 py-2 font-mono text-gray-700 dark:text-gray-300 whitespace-nowrap">{row.course_run_id ?? '—'}</td>
+                        <td className="px-3 py-2 max-w-[220px] truncate">{row.course_title ?? '—'}</td>
+                        <td className="px-3 py-2 whitespace-nowrap">{row.trainer_name ?? '—'}</td>
+                        <td className="px-3 py-2 whitespace-nowrap">{row.trainer_email ?? '—'}</td>
+                        <td className="px-3 py-2">{statusBadge(row.status)}</td>
+                        <td className="px-3 py-2 max-w-[320px] truncate" title={row.message ?? ''}>{row.message ?? ''}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
+// ── Auto Sanitise Data Log ───────────────────────────────────────────────────
+
+interface AutoSanitiseDataLogRow {
+  id: number;
+  run_id: string;
+  created_at: string;
+  table_name: string;
+  rows_scanned: number;
+  rows_updated: number;
+  cutoff_date: string | null;
+  status: string;
+  message: string | null;
+}
+
+export const AutoSanitiseDataLogView: React.FC = () => {
+  const { setAdminPage } = useLms();
+  const [logs, setLogs] = useState<AutoSanitiseDataLogRow[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [running, setRunning] = useState(false);
+  const [runResult, setRunResult] = useState<{ totalScanned: number; totalUpdated: number; retentionMonths: number; cutoffDate: string; enabled: boolean } | null>(null);
+  const [runError, setRunError] = useState<string | null>(null);
+  const [expandedBatches, setExpandedBatches] = useState<Set<string>>(new Set());
+
+  const fetchLogs = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/admin/auto-sanitise-data-logs?limit=500');
+      const json = await res.json();
+      if (json.success) setLogs(json.data);
+    } catch { /* silent */ } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { fetchLogs(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleRunNow = async () => {
+    setRunning(true);
+    setRunResult(null);
+    setRunError(null);
+    try {
+      const res = await fetch('/api/admin/run-auto-sanitise-data', { method: 'POST' });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error || 'Run failed');
+      setRunResult({
+        totalScanned: json.totalScanned,
+        totalUpdated: json.totalUpdated,
+        retentionMonths: json.retentionMonths,
+        cutoffDate: json.cutoffDate,
+        enabled: json.enabled,
+      });
+      await fetchLogs();
+    } catch (err) {
+      setRunError(err instanceof Error ? err.message : 'Failed to run');
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  const batches = useMemo(() => {
+    const map = new Map<string, AutoSanitiseDataLogRow[]>();
+    for (const log of logs) {
+      if (!map.has(log.run_id)) map.set(log.run_id, []);
+      map.get(log.run_id)!.push(log);
+    }
+    return Array.from(map.entries());
+  }, [logs]);
+
+  useEffect(() => {
+    if (batches.length > 0) setExpandedBatches(new Set([batches[0][0]]));
+  }, [batches.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const toggleBatch = (runId: string) => {
+    setExpandedBatches(prev => {
+      const next = new Set(prev);
+      next.has(runId) ? next.delete(runId) : next.add(runId);
+      return next;
+    });
+  };
+
+  const statusBadge = (status: string) => {
+    let cls: string;
+    if (status === 'success') cls = 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300';
+    else if (status === 'error') cls = 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300';
+    else if (status === 'skipped') cls = 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300';
+    else cls = 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300';
+    return (
+      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${cls}`}>
+        {status}
+      </span>
+    );
+  };
+
+  return (
+    <div>
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+        <h2 className="text-3xl font-bold">Auto Sanitise Data Log</h2>
+        <div className="flex items-center gap-2">
+          <Button onClick={handleRunNow} disabled={running || loading}>
+            {running ? 'Running…' : 'Run Once'}
+          </Button>
+          <Button variant="ghost" onClick={fetchLogs} disabled={loading || running}>
+            {loading ? 'Refreshing…' : 'Refresh'}
+          </Button>
+          <Button variant="ghost" onClick={() => setAdminPage(AdminPage.Dashboard)}>
+            Back
+          </Button>
+        </div>
+      </div>
+
+      <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+        Weekly sweep (default Sunday 02:00 SGT): redacts NRIC and phone digits on rows older than the retention window configured in <strong>Company Settings → Security Setting → Auto Sanitise Data</strong>. Honours the master toggle (off → skipped). Use <strong>Run Once</strong> to trigger manually.
+      </p>
+
+      {runResult && (
+        <div className={`mb-4 p-3 rounded-lg border text-sm ${runResult.enabled
+          ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 text-green-800 dark:text-green-300'
+          : 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800 text-yellow-800 dark:text-yellow-300'}`}>
+          {runResult.enabled
+            ? <>✅ Done — scanned <strong>{runResult.totalScanned}</strong>, sanitised <strong>{runResult.totalUpdated}</strong> row(s) older than {runResult.cutoffDate} (retention {runResult.retentionMonths} months).</>
+            : <>⚠️ Skipped — Auto Sanitise Data is currently <strong>disabled</strong>. Enable it in Company Settings → Security Setting.</>
+          }
+        </div>
+      )}
+      {runError && (
+        <div className="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-800 dark:text-red-300">
+          ❌ {runError}
+        </div>
+      )}
+
+      {loading && <p className="text-sm text-gray-500 py-6 text-center">Loading…</p>}
+
+      {!loading && batches.length === 0 && (
+        <p className="text-sm text-gray-500 py-6 text-center">No logs yet. Click <strong>Run Once</strong> to sanitise old PII now.</p>
+      )}
+
+      {batches.map(([runId, rows]) => {
+        const isOpen = expandedBatches.has(runId);
+        const ts = new Date(rows[0].created_at).toLocaleString('en-SG', {
+          timeZone: 'Asia/Singapore', day: '2-digit', month: 'short', year: 'numeric',
+          hour: '2-digit', minute: '2-digit', hour12: false,
+        });
+        const totalScanned = rows.reduce((sum, r) => sum + (r.rows_scanned || 0), 0);
+        const totalUpdated = rows.reduce((sum, r) => sum + (r.rows_updated || 0), 0);
+        const errorCount   = rows.filter(r => r.status === 'error').length;
+        const skippedCount = rows.filter(r => r.status === 'skipped').length;
+
+        return (
+          <div key={runId} className="mb-3 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden">
+            <button
+              onClick={() => toggleBatch(runId)}
+              className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-slate-700/50 hover:bg-gray-100 dark:hover:bg-slate-700 text-left"
+            >
+              <div className="flex items-center gap-3">
+                <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">{ts} SGT</span>
+                <span className="text-xs text-gray-500">{rows.length} table(s)</span>
+                {totalUpdated > 0 && <span className="text-xs text-green-600 dark:text-green-400">{totalUpdated} sanitised / {totalScanned} scanned</span>}
+                {totalUpdated === 0 && totalScanned > 0 && <span className="text-xs text-gray-500 dark:text-gray-400">{totalScanned} scanned</span>}
+                {skippedCount > 0 && <span className="text-xs text-yellow-600 dark:text-yellow-400">{skippedCount} skipped</span>}
+                {errorCount > 0 && <span className="text-xs text-red-600 dark:text-red-400">{errorCount} error</span>}
+              </div>
+              <span className="text-gray-400 text-xs">{isOpen ? '▲' : '▼'}</span>
+            </button>
+
+            {isOpen && (
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-xs">
+                  <thead className="bg-gray-50 dark:bg-slate-700/30">
+                    <tr>
+                      {['Table', 'Scanned', 'Updated', 'Cutoff Date', 'Status', 'Message'].map(h => (
+                        <th key={h} className="px-3 py-2 text-left font-semibold text-gray-600 dark:text-gray-300 whitespace-nowrap">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                    {rows.map(row => (
+                      <tr key={row.id} className="hover:bg-gray-50 dark:hover:bg-slate-700/30">
+                        <td className="px-3 py-2 font-mono text-gray-700 dark:text-gray-300 whitespace-nowrap">{row.table_name}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">{row.rows_scanned}</td>
+                        <td className="px-3 py-2 text-right tabular-nums font-semibold">{row.rows_updated}</td>
+                        <td className="px-3 py-2 whitespace-nowrap">{row.cutoff_date ?? '—'}</td>
+                        <td className="px-3 py-2">{statusBadge(row.status)}</td>
+                        <td className="px-3 py-2 max-w-[320px] truncate" title={row.message ?? ''}>{row.message ?? ''}</td>
                       </tr>
                     ))}
                   </tbody>

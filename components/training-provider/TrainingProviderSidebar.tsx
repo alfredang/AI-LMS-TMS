@@ -13,13 +13,15 @@ const TrainingProviderSidebar: React.FC<TrainingProviderSidebarProps> = ({ onNav
     const { currentView, handleNavigation, selectedCourse } = useLms();
     const appVersion = useAppVersion();
 
-    const templateViews = [View.OtpEmailTemplate, View.CertificateEmailTemplate, View.FeedbackEmailTemplate, View.PasswordResetEmailTemplate, View.TrainerInvitationEmailTemplate, View.TrainerResponseEmailTemplates, View.FinalCourseConfirmationEmailTemplate, View.CourseConfirmationEmailTemplate, View.PrivacyPolicy, View.AcceptableUsePolicy];
+    const templateViews = [View.OtpEmailTemplate, View.CertificateEmailTemplate, View.FeedbackEmailTemplate, View.PasswordResetEmailTemplate, View.TrainerInvitationEmailTemplate, View.TrainerResponseEmailTemplates, View.FinalCourseConfirmationEmailTemplate, View.CourseConfirmationEmailTemplate, View.CoursewareAttendanceEmailTemplate, View.PrivacyPolicy, View.AcceptableUsePolicy];
+    const cronJobsViews = [View.Scheduler, View.SchedulerSummary];
     const [templatesOpen, setTemplatesOpen] = useState(templateViews.includes(currentView));
     const [workflowsOpen, setWorkflowsOpen] = useState(currentView === View.WorkflowGuides);
     const [wfTrainingOpen, setWfTrainingOpen] = useState(false);
     const [wfAdminOpen, setWfAdminOpen] = useState(false);
     const [wfFinanceOpen, setWfFinanceOpen] = useState(false);
     const [usefulLinksOpen, setUsefulLinksOpen] = useState(false);
+    const [cronJobsOpen, setCronJobsOpen] = useState(cronJobsViews.includes(currentView));
 
     const navItemsTop = [
         { view: View.Dashboard, label: 'Training Dashboard', icon: IconName.Dashboard },
@@ -33,8 +35,12 @@ const TrainingProviderSidebar: React.FC<TrainingProviderSidebarProps> = ({ onNav
     const navItemsBottom = [
         { view: View.SsgApiSummary, label: 'SSG API Summary', icon: IconName.ClipboardCheck },
         { view: View.ApiEndpoints, label: 'API Endpoints', icon: IconName.Link },
-        { view: View.Scheduler, label: 'Task Scheduler', icon: IconName.Calendar },
         { view: View.Webhooks, label: 'Webhooks', icon: IconName.Link },
+    ];
+
+    const cronJobsItems = [
+        { view: View.SchedulerSummary, label: 'Schedule Summary', icon: IconName.ClipboardCheck },
+        { view: View.Scheduler, label: 'Task Scheduler', icon: IconName.Calendar },
     ];
 
     const templateItems = [
@@ -46,6 +52,7 @@ const TrainingProviderSidebar: React.FC<TrainingProviderSidebarProps> = ({ onNav
         { view: View.TrainerResponseEmailTemplates, label: 'Trainer Accept/Decline Email', icon: IconName.Mail },
         { view: View.FinalCourseConfirmationEmailTemplate, label: 'Final Class Confirm Email', icon: IconName.Send },
         { view: View.CourseConfirmationEmailTemplate, label: 'Class Confirm Email', icon: IconName.Send },
+        { view: View.CoursewareAttendanceEmailTemplate, label: 'Courseware and Attendance Taking', icon: IconName.Send },
         { view: View.PrivacyPolicy, label: 'Privacy Policy', icon: IconName.Shield },
         { view: View.AcceptableUsePolicy, label: 'Acceptable Use Policy', icon: IconName.ClipboardCheck },
     ];
@@ -125,7 +132,8 @@ const TrainingProviderSidebar: React.FC<TrainingProviderSidebarProps> = ({ onNav
                         {wfFinanceOpen && [
                             { id: 'billing-history', label: 'Billing History', icon: '💰' },
                             { id: 'proforma-invoice', label: 'Proforma Invoice', icon: '🧾' },
-                            { id: 'invoice', label: 'Invoice', icon: '📄' },
+                            { id: 'personal-invoice', label: 'Personal Invoice', icon: '📄' },
+                            { id: 'company-invoice', label: 'Company Invoice', icon: '🏢' },
                             { id: 'receipt', label: 'Receipt', icon: '🧾' },
                         ].map(item => (
                             <a key={item.id} href="#" onClick={(e) => { e.preventDefault(); handleClick(View.WorkflowGuides); onSelectWorkflow?.(item.id); }} className="flex items-center gap-2 rounded-md px-3 py-2 ml-4 text-sm text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-slate-700 dark:hover:text-white transition-colors">
@@ -151,6 +159,43 @@ const TrainingProviderSidebar: React.FC<TrainingProviderSidebarProps> = ({ onNav
                     <span>{item.label}</span>
                 </a>
             ))}
+
+            {/* Cron Jobs - Collapsible */}
+            <div>
+                <button
+                    onClick={() => setCronJobsOpen(!cronJobsOpen)}
+                    className={`flex items-center justify-between w-full rounded-md px-3 py-2.5 text-sm font-medium transition-colors ${cronJobsViews.includes(activeView)
+                        ? 'bg-blue-50 text-blue-600 dark:bg-blue-600/20 dark:text-blue-400'
+                        : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-slate-700 dark:hover:text-white'}`}
+                >
+                    <div className="flex items-center gap-3">
+                        <Icon name={IconName.Clock} className="w-5 h-5" />
+                        <span>Cron Jobs</span>
+                    </div>
+                    <Icon
+                        name={IconName.ChevronDown}
+                        className={`w-4 h-4 transition-transform ${cronJobsOpen ? 'rotate-180' : ''}`}
+                    />
+                </button>
+                {cronJobsOpen && (
+                    <div className="ml-4 mt-1 space-y-1">
+                        {cronJobsItems.map((item) => (
+                            <a
+                                key={item.view}
+                                href="#"
+                                onClick={(e) => {
+                                    e.preventDefault();
+                                    handleClick(item.view);
+                                }}
+                                className={linkClass(item.view)}
+                            >
+                                <Icon name={item.icon} className="w-4 h-4" />
+                                <span>{item.label}</span>
+                            </a>
+                        ))}
+                    </div>
+                )}
+            </div>
 
             {/* Templates Section - Collapsible */}
             <div>

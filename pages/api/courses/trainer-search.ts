@@ -37,12 +37,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           cr.start_date,
           cr.end_date,
           cr.mode_of_learning,
+          cr.class_status,
           COALESCE(cr.class_type, 'Physical') AS class_type
       FROM course_run cr
       JOIN course c ON cr.course_id = c.id
       LEFT JOIN app_user au ON cr.assigned_trainer_id = au.id
       WHERE (
         cr.assigned_trainer_id = $1
+        OR cr.tpg_assigned_trainer_id = $1
         OR EXISTS (
           SELECT 1 FROM course_run_trainer crt
           WHERE crt.course_run_id = cr.id AND crt.trainer_id = $1
@@ -111,6 +113,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       startDate: row.start_date,
       endDate: row.end_date,
       classType: row.class_type || 'Physical',
+      classStatus: row.class_status,
       modeOfLearning: Array.isArray(row.mode_of_learning)
         ? row.mode_of_learning
         : [row.mode_of_learning],

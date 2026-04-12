@@ -69,7 +69,10 @@ const OngoingClasses: React.FC = () => {
   const [courseCode, setCourseCode] = useState('');
   const [courseRunId, setCourseRunId] = useState('');
   const [selectedTrainer, setSelectedTrainer] = useState('');
-  const [selectedClassStatus, setSelectedClassStatus] = useState<'all' | 'Confirmed' | 'Pending' | 'Cancelled'>('all');
+  // Default to 'ActiveOnly' (Pending + Confirmed) so the Ongoing Classes
+  // list doesn't clutter with cancelled runs. Admins can switch to 'all'
+  // from the Advanced Filters dropdown to include cancelled classes.
+  const [selectedClassStatus, setSelectedClassStatus] = useState<'all' | 'ActiveOnly' | 'Confirmed' | 'Pending' | 'Cancelled'>('ActiveOnly');
   const [selectedClassType, setSelectedClassType] = useState<'all' | 'Physical' | 'Virtual' | 'Hybrid'>('all');
   const [selectedCourseType, setSelectedCourseType] = useState<'all' | 'WSQ' | 'IBF' | 'Non-WSQ'>('all');
   const [startDateFrom, setStartDateFrom] = useState('');
@@ -247,7 +250,9 @@ const OngoingClasses: React.FC = () => {
     setCourseCode('');
     setCourseRunId('');
     setSelectedTrainer('');
-    setSelectedClassStatus('all');
+    // Reset to the default view (Pending + Confirmed), not 'all' — 'all'
+    // would surface cancelled runs which admins usually don't want to see.
+    setSelectedClassStatus('ActiveOnly');
     setSelectedClassType('all');
     setSelectedCourseType('all');
     setStartDateFrom('');
@@ -417,13 +422,14 @@ const OngoingClasses: React.FC = () => {
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Class Status</label>
                   <select
                     value={selectedClassStatus}
-                    onChange={(e) => setSelectedClassStatus(e.target.value as 'all' | 'Confirmed' | 'Pending' | 'Cancelled')}
+                    onChange={(e) => setSelectedClassStatus(e.target.value as 'all' | 'ActiveOnly' | 'Confirmed' | 'Pending' | 'Cancelled')}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                   >
-                    <option value="all">All</option>
-                    <option value="Confirmed">Confirmed</option>
-                    <option value="Pending">Pending</option>
-                    <option value="Cancelled">Cancelled</option>
+                    <option value="ActiveOnly">Active (Pending + Confirmed)</option>
+                    <option value="all">All (incl. Cancelled)</option>
+                    <option value="Confirmed">Confirmed only</option>
+                    <option value="Pending">Pending only</option>
+                    <option value="Cancelled">Cancelled only</option>
                   </select>
                 </div>
 
@@ -537,9 +543,15 @@ const OngoingClasses: React.FC = () => {
                       <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.courseCode}</td>
                       <td className="px-4 py-2 whitespace-nowrap text-sm">
                         <select
-                          value={classItem.classStatus}
+                          value={classItem.classStatus === 'Cancelled' ? 'Cancelled' : 'auto'}
                           onChange={async (e) => {
-                            const newStatus = e.target.value;
+                            // Two-option dropdown: "Pending/Confirmed" (auto-derived from local trainer)
+                            // or "Cancelled" (manual sticky override).
+                            const selection = e.target.value;
+                            const hasLocalTrainer = !!(classItem.assignedTrainerLocal || '').trim();
+                            const newStatus = selection === 'Cancelled'
+                              ? 'Cancelled'
+                              : (hasLocalTrainer ? 'Confirmed' : 'Pending');
                             try {
                               await fetch(getApiUrl('/api/admin/ongoing-classes'), {
                                 method: 'PUT',
@@ -551,8 +563,7 @@ const OngoingClasses: React.FC = () => {
                           }}
                           className={`text-xs font-semibold rounded-full px-2 py-1 border-0 cursor-pointer focus:ring-2 focus:ring-blue-500 ${getStatusColor(classItem.classStatus)}`}
                         >
-                          <option value="Confirmed">Confirmed</option>
-                          <option value="Pending">Pending</option>
+                          <option value="auto">{(classItem.assignedTrainerLocal || '').trim() ? 'Confirmed' : 'Pending'}</option>
                           <option value="Cancelled">Cancelled</option>
                         </select>
                       </td>

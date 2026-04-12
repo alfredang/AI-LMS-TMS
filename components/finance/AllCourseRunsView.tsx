@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Icon, IconName } from '../ui/Icon';
+import { ssgFetch } from '../../lib/ssgAppState';
 
 interface CourseRunRow {
   enrolment_id: string | null;
@@ -37,6 +38,8 @@ interface CourseRunRow {
   sfc_amount: number | null;
   sfc_payment_date: string | null;
   sfc_status: string | null;
+  invoice_id?: string | null;
+  invoice_no?: string | null;
 }
 
 interface Stats {
@@ -298,6 +301,10 @@ const AllCourseRunsView: React.FC = () => {
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  /** When false (default), list + KPIs only include course runs with start date on or before today (Singapore). */
+  const [includeFutureCourseRuns, setIncludeFutureCourseRuns] = useState(false);
+  const [viewFrom, setViewFrom] = useState(''); // start date (course run)
+  const [viewTo, setViewTo] = useState(''); // start date (course run)
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
   const [page, setPage] = useState(0);
   const [rows, setRows] = useState<CourseRunRow[]>([]);
@@ -305,6 +312,8 @@ const AllCourseRunsView: React.FC = () => {
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  const [syncToast, setSyncToast] = useState<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
   const tableScrollRef = useRef<HTMLDivElement>(null);
   const theadRef = useRef<HTMLTableSectionElement>(null);
@@ -325,6 +334,9 @@ const AllCourseRunsView: React.FC = () => {
       const params = new URLSearchParams({ page: String(page), limit: String(PAGE_SIZE), sort: sortOrder });
       if (debouncedSearch) params.set('search', debouncedSearch);
       if (statusFilter) params.set('status', statusFilter);
+      if (includeFutureCourseRuns) params.set('includeFuture', '1');
+      if (viewFrom) params.set('startFrom', viewFrom);
+      if (viewTo) params.set('startTo', viewTo);
       const res = await fetch(`/api/finance/all-course-runs?${params}`);
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Failed to fetch data');
@@ -336,9 +348,67 @@ const AllCourseRunsView: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [page, debouncedSearch, statusFilter, sortOrder]);
+  }, [page, debouncedSearch, statusFilter, sortOrder, includeFutureCourseRuns, viewFrom, viewTo]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  useEffect(() => {
+    if (!syncToast) return;
+    const t = setTimeout(() => setSyncToast(null), 8000);
+    return () => clearTimeout(t);
+  }, [syncToast]);
+
+  const runSync = async () => {
+    setSyncing(true);
+    setSyncToast(null);
+    try {
+      const todayIso = new Date().toISOString().slice(0, 10);
+      const defaultFromIso = new Date(Date.now() - 30 * 86400_000).toISOString().slice(0, 10);
+
+      const rawFrom = viewFrom || defaultFromIso;
+      const rawTo = viewTo || todayIso;
+      const from = rawFrom <= rawTo ? rawFrom : rawTo;
+      const to = rawFrom <= rawTo ? rawTo : rawFrom;
+
+      if (viewFrom && viewTo && (from !== viewFrom || to !== viewTo)) {
+        setViewFrom(from);
+        setViewTo(to);
+      }
+      const enrolmentIds = rows.map((r) => r.enrolment_id).filter((id): id is string => !!id);
+      const res = await ssgFetch('/api/finance/sync-all-course-runs-from-ssg', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ from, to, enrolmentIds }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        const issues = Array.isArray(json.credentialIssues) ? json.credentialIssues.join(' · ') : '';
+        throw new Error([json.error || 'Sync failed', issues].filter(Boolean).join(' — '));
+      }
+      const up = json?.totals?.upsertedEnrolments ?? 0;
+      const byId = json?.totals?.refreshedByEnrolmentId ?? 0;
+      const gr = json?.totals?.enrolmentsForGrantRefresh ?? 0;
+      const cb = json?.totals?.claimsEnrollmentIdBackfilled ?? 0;
+      const errList = Array.isArray(json.errors) ? json.errors : [];
+      const errTail =
+        errList.length > 0
+          ? ` — ${errList.length} SSG warning(s); first: ${errList[0]?.error ?? JSON.stringify(errList[0])}`
+          : '';
+      const extraLocal = Number(json?.extraLocalEnrolmentIdsMerged ?? 0);
+      const modeHint =
+        json?.syncMode === 'viewOnly'
+          ? ` Fast mode: skipped slow per–course-run SSG search.${extraLocal > 0 ? ` Also refreshed ${extraLocal} recent local enrolment(s) not on this page.` : ''}`
+          : '';
+      setSyncToast(
+        `Synced ${up} enrolment row(s) (${byId} from visible list via SSG view), refreshed grants for ${gr}, backfilled ${cb} claim link(s).${modeHint}${errTail}`
+      );
+      await fetchData();
+    } catch (e) {
+      setSyncToast(e instanceof Error ? e.message : 'Sync failed');
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   const totalPages = Math.ceil(total / PAGE_SIZE);
   const statusOptions = stats?.byStatus.map(s => s.status) ?? [];
@@ -349,8 +419,13 @@ const AllCourseRunsView: React.FC = () => {
   return (
     <div className="space-y-6 relative">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold text-on-surface">All Course Runs</h2>
+      <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between">
+        <h2 className="text-2xl font-bold text-on-surface">Consolidated Finance Data</h2>
+        {!includeFutureCourseRuns && (
+          <p className="text-xs text-on-surface-secondary">
+            Showing enrolments through today (Singapore time). Tick “Include future course runs” for all dates.
+          </p>
+        )}
       </div>
 
       {/* KPI Cards */}
@@ -377,7 +452,8 @@ const AllCourseRunsView: React.FC = () => {
 
       {/* Search + Filter */}
       <Card className="p-4">
-        <div className="flex flex-col sm:flex-row gap-3">
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-col sm:flex-row gap-3">
           <div className="relative flex-1">
             <Icon name={IconName.Search} className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-on-surface-secondary" />
             <input
@@ -406,8 +482,74 @@ const AllCourseRunsView: React.FC = () => {
             <option value="newest">Newest First</option>
             <option value="oldest">Oldest First</option>
           </select>
+          <label className="flex items-center gap-2 px-1 py-2 text-sm text-on-surface whitespace-nowrap cursor-pointer">
+            <input
+              type="checkbox"
+              checked={includeFutureCourseRuns}
+              onChange={(e) => { setIncludeFutureCourseRuns(e.target.checked); setPage(0); }}
+              className="rounded border-default"
+            />
+            Include future course runs
+          </label>
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-end">
+            <div className="flex gap-3 flex-wrap items-end">
+              <div>
+                <label className="block text-xs font-semibold text-on-surface-secondary mb-1">View start from</label>
+                <input
+                  type="date"
+                  value={viewFrom}
+                  onChange={(e) => { setViewFrom(e.target.value); setPage(0); }}
+                  className="px-3 py-2 text-sm bg-surface border border-default rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-on-surface"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-on-surface-secondary mb-1">View start to</label>
+                <input
+                  type="date"
+                  value={viewTo}
+                  onChange={(e) => { setViewTo(e.target.value); setPage(0); }}
+                  className="px-3 py-2 text-sm bg-surface border border-default rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-on-surface"
+                />
+              </div>
+            </div>
+            <div className="flex gap-2 sm:ml-auto">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setViewFrom(new Date(Date.now() - 30 * 86400_000).toISOString().slice(0, 10));
+                  setViewTo(new Date().toISOString().slice(0, 10));
+                  setPage(0);
+                }}
+                disabled={syncing || loading}
+              >
+                Last 30 days
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setViewFrom('');
+                  setViewTo('');
+                  setPage(0);
+                }}
+                disabled={syncing || loading}
+              >
+                Clear
+              </Button>
+              <Button onClick={() => void runSync()} disabled={syncing}>
+                {syncing ? 'Refreshing…' : 'Refresh from SSG'}
+              </Button>
+            </div>
+          </div>
         </div>
       </Card>
+
+      {syncToast && (
+        <div className={`p-3 rounded-lg text-sm ${syncToast.toLowerCase().includes('failed') ? 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300' : 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300'}`}>
+          {syncToast}
+        </div>
+      )}
 
       {/* Error */}
       {error && (
@@ -430,7 +572,7 @@ const AllCourseRunsView: React.FC = () => {
                 <th colSpan={5} className={`text-center text-[10px] uppercase tracking-wider px-2 py-1.5 border-b-2 border-blue-300 dark:border-blue-600 ${groupHeaderColors.course}`}>Course</th>
                 <th colSpan={5} className={`text-center text-[10px] uppercase tracking-wider px-2 py-1.5 border-b-2 border-green-300 dark:border-green-600 ${groupHeaderColors.trainee}`}>Trainee</th>
                 <th colSpan={4} className={`text-center text-[10px] uppercase tracking-wider px-2 py-1.5 border-b-2 border-purple-300 dark:border-purple-600 ${groupHeaderColors.sponsor}`}>Employer</th>
-                <th colSpan={2} className={`text-center text-[10px] uppercase tracking-wider px-2 py-1.5 border-b-2 border-amber-300 dark:border-amber-600 ${groupHeaderColors.enrolment}`}>Enrolment</th>
+                <th colSpan={4} className={`text-center text-[10px] uppercase tracking-wider px-2 py-1.5 border-b-2 border-amber-300 dark:border-amber-600 ${groupHeaderColors.enrolment}`}>Enrolment</th>
                 <th colSpan={3} className={`text-center text-[10px] uppercase tracking-wider px-2 py-1.5 border-b-2 border-indigo-300 dark:border-indigo-600 ${groupHeaderColors.bl}`}>BL Grant</th>
                 <th colSpan={4} className={`text-center text-[10px] uppercase tracking-wider px-2 py-1.5 border-b-2 border-teal-300 dark:border-teal-600 ${groupHeaderColors.nbl}`}>Non-BL Grant</th>
                 <th colSpan={1} className={`text-center text-[10px] uppercase tracking-wider px-2 py-1.5 border-b-2 border-orange-300 dark:border-orange-600 ${groupHeaderColors.tg}`}>TG</th>
@@ -456,9 +598,11 @@ const AllCourseRunsView: React.FC = () => {
                 <th className={headerCell}>UEN</th>
                 <th className={headerCell}>Employer</th>
                 <th className={headerCell}>Employer Contact</th>
-                {/* Enrolment (2) */}
+                {/* Enrolment (4) */}
                 <th className={headerCell}>Status</th>
                 <th className={headerCell}>Enrolment ID</th>
+                <th className={headerCell}>Invoice ID</th>
+                <th className={headerCell}>Invoice No</th>
                 {/* BL Grant (3) */}
                 <th className={headerCell}>Status</th>
                 <th className={headerCell}>Grant ID</th>
@@ -481,14 +625,14 @@ const AllCourseRunsView: React.FC = () => {
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={29} className="px-4 py-12 text-center text-on-surface-secondary">
+                <tr><td colSpan={31} className="px-4 py-12 text-center text-on-surface-secondary">
                   <div className="flex items-center justify-center gap-2">
                     <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary" />
                     Loading enrolments...
                   </div>
                 </td></tr>
               ) : rows.length === 0 ? (
-                <tr><td colSpan={29} className="px-4 py-12 text-center text-on-surface-secondary">No enrolments found.</td></tr>
+                <tr><td colSpan={31} className="px-4 py-12 text-center text-on-surface-secondary">No enrolments found.</td></tr>
               ) : rows.map((r, i) => {
                 const totalTG = (Number(r.bl_amount) || 0) + (Number(r.nbl_amount) || 0);
                 const enrolmentKey = r.enrolment_id ?? `row-${i}`;
@@ -518,6 +662,8 @@ const AllCourseRunsView: React.FC = () => {
                       </span>
                     </td>
                     <td className={`${cell} text-on-surface-secondary font-mono`}>{r.enrolment_id || '-'}</td>
+                    <td className={`${cell} text-on-surface-secondary font-mono`}>{r.invoice_id || '-'}</td>
+                    <td className={`${cell} text-on-surface-secondary font-mono`}>{r.invoice_no || '-'}</td>
                     {/* BL Grant */}
                     <td className={cell}>
                       {r.bl_status ? (

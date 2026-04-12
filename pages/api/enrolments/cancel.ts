@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
+import { upsertSsgEnrolmentFromLocalEnrollment } from '../../../lib/services/billingSync';
 
 /**
  * POST /api/enrolments/cancel
@@ -34,6 +35,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       console.warn(`⚠️ No enrollment found with enrolment_id: ${enrolmentId} (SSG cancel succeeded, but no local record to update)`);
     } else {
       console.log(`✅ Cancelled ${result.rows.length} enrollment row(s) for enrolment_id: ${enrolmentId}`);
+      try {
+        await upsertSsgEnrolmentFromLocalEnrollment(enrolmentId.trim());
+      } catch (e) {
+        console.warn('[enrolments/cancel] ssg_enrolments sync:', e);
+      }
     }
 
     return res.status(200).json({

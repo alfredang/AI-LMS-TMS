@@ -168,6 +168,29 @@ async function seedDefaults() {
             cron_expression: '0 1 * * *', // 1:00 AM SGT daily
             api_endpoint: '/api/external/sync-google-calendar',
         },
+        {
+            id: 'auto_send_courseware_attendance',
+            name: 'Auto Send Courseware and Attendance Email',
+            description: 'Sends courseware and attendance taking emails to learners in course runs starting today. Uses the email template configured in Company Settings.',
+            cron_expression: '0 7 * * *', // 7:00 AM SGT daily
+            api_endpoint: '/api/external/auto-send-courseware-attendance',
+            email_template: 'courseware_attendance',
+        },
+        {
+            id: 'auto_send_trainer_invitations',
+            name: 'Auto Send Trainer Invitations',
+            description: 'Scans all upcoming course runs within the lookahead window and, for any class that has no locally-assigned trainer, sends an invitation email to the next approved trainer who has not already been invited, declined, or assigned. Default schedule is Monday and Thursday at 10:00 AM SGT — adjust days and time from the Task Scheduler UI.',
+            cron_expression: '0 10 * * 1,4', // 10:00 AM SGT every Mon & Thu
+            api_endpoint: '/api/external/auto-send-trainer-invitations',
+            days_in_advance: 30,
+        },
+        {
+            id: 'auto_sanitise_data',
+            name: 'Auto Sanitise Old PII',
+            description: 'Weekly sweep that redacts NRIC and phone digits on rows older than the retention window configured in Company Settings → Security Setting → Auto Sanitise Data. Honours the master toggle (off → skipped). Default Sunday 02:00 SGT.',
+            cron_expression: '0 2 * * 0', // 2:00 AM SGT every Sunday
+            api_endpoint: '/api/external/auto-sanitise-data',
+        },
     ];
 
     const ids = defaults.map(t => t.id);
@@ -237,6 +260,18 @@ function getDirectHandler(taskId: string): TaskHandler | undefined {
         directHandlers.set('sync_google_calendar', async () => {
             const { runSyncGoogleCalendar } = await import('../../pages/api/external/sync-google-calendar');
             return runSyncGoogleCalendar();
+        });
+        directHandlers.set('auto_send_courseware_attendance', async () => {
+            const { runAutomation } = await import('../../pages/api/external/auto-send-courseware-attendance');
+            return runAutomation();
+        });
+        directHandlers.set('auto_send_trainer_invitations', async () => {
+            const { runAutomation } = await import('../../pages/api/external/auto-send-trainer-invitations');
+            return runAutomation();
+        });
+        directHandlers.set('auto_sanitise_data', async () => {
+            const { runAutomation } = await import('../../pages/api/external/auto-sanitise-data');
+            return runAutomation();
         });
     }
     return directHandlers.get(taskId);

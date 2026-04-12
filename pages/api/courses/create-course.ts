@@ -108,7 +108,7 @@ interface CourseData {
     category: string;
     fileName?: string;
   }>;
-  resourceLinks?: Array<{ id: string; topicId: string; type: string; title: string; url: string }>;
+  resourceLinks?: Array<{ id: string; topicId: string; type: string; title: string; url: string; instructions?: string }>;
 }
 
 export default function handler(req: NextApiRequest & { files?: any }, res: NextApiResponse) {

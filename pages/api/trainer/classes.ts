@@ -26,7 +26,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 cr.assigned_trainer_name
             FROM course_run cr
             JOIN course c ON cr.course_id = c.id
-            WHERE cr.assigned_trainer_email ILIKE $1
+            WHERE (
+                cr.assigned_trainer_email ILIKE $1
+                OR cr.tpg_assigned_trainer_email ILIKE $1
+                OR EXISTS (
+                    SELECT 1 FROM course_run_trainer crt
+                    WHERE crt.course_run_id = cr.id AND crt.trainer_email ILIKE $1
+                )
+            )
               AND (cr.end_date IS NULL OR cr.end_date >= CURRENT_DATE)
             ORDER BY cr.start_date DESC
         `;

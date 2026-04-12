@@ -434,8 +434,9 @@ export const BulkUploadEnrolmentView: React.FC = () => {
                 const item = allItems[i];
                 const parsedResult = item.parsedResult;
 
-                const ssgStatus = parsedResult?.data?.enrolment?.status;
-                const ssgRefNumber = parsedResult?.data?.enrolment?.referenceNumber;
+                const ssgStatus = parsedResult?.data?.enrolment?.status ?? parsedResult?.data?.status;
+                const ssgRefNumber =
+                    parsedResult?.data?.enrolment?.referenceNumber ?? parsedResult?.data?.referenceNumber;
                 const ssgHardError = !parsedResult?.success;
 
                 if (!ssgHardError) {

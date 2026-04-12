@@ -25,7 +25,7 @@ import OngoingClasses from '../components/admin/OngoingClasses';
 import CompletedClasses from '../components/admin/CompletedClasses';
 import ClassDetailView from '../components/admin/ClassDetailView';
 import { UpcomingClassesTable } from '../components/UpcomingClassesTable';
-import { ClassManagerView, AssignTrainerView, AssignStudentView, AddCourseView, AddCourseRunView, AutomationLogsView, AssignTrainerLogsView, TrainerFolderLogsView, AutoCreateCertificatesLogView, BackfillEnrollmentsView, FetchUpcomingEnrolmentsView, CourseRunDateSyncLogsView, UpcomingCourseRunsLogView, CourseConfirmationEmailLogsView, SyncTrainerTpgLogsView } from '../components/admin/ClassManagementViews';
+import { ClassManagerView, AssignTrainerView, AssignStudentView, AddCourseView, AddCourseRunView, AutomationLogsView, TrainerFolderLogsView, AutoCreateCertificatesLogView, BackfillEnrollmentsView, FetchUpcomingEnrolmentsView, UpcomingEnrolmentView, CourseRunDateSyncLogsView, UpcomingCourseRunsLogView, CourseConfirmationEmailLogsView, SyncTrainerTpgLogsView, AutoSendTrainerInvitationLogView, AutoSanitiseDataLogView } from '../components/admin/ClassManagementViews';
 import { CreateCertificateView, DeleteCertificateView } from '../components/admin/CertificateManagement';
 import { SendCertificateSGView } from '../components/admin/SendCertificateSG';
 import { SendCertificateGHView } from '../components/admin/SendCertificateGH';
@@ -58,10 +58,14 @@ import { UploadDirectApplicationView, ViewDirectApplicationView, UpdateDirectApp
 import { BulkUploadEnrolmentView } from '../components/admin/BulkEnrolmentViews';
 import TrainerAttendanceDashboard from '../components/trainer/TrainerAttendanceDashboard';
 import AdminCalendarView from '../components/admin/AdminCalendarView';
+import ViewClassByDateView from '../components/admin/ViewClassByDateView';
 import SchedulerView from '../components/admin/SchedulerView';
+import SchedulerSummaryView from '../components/admin/SchedulerSummaryView';
 import WorkflowGuidesView from '../components/training-provider/WorkflowGuidesView';
 import AddSessionsView from '../components/admin/AddSessionsView';
 import CourseSessionTimingView from '../components/admin/CourseSessionTimingView';
+import SupportTicketsView from '../components/admin/SupportTicketsView';
+import SupportTicketDetailView from '../components/admin/SupportTicketDetailView';
 
 // Management Dashboard Component
 interface ManagementDashboardProps {
@@ -82,6 +86,7 @@ const ManagementDashboard: React.FC<ManagementDashboardProps> = ({ type }) => {
     { title: "Create New Class", description: "Schedule a new class run from a course template.", icon: IconName.Add, onClick: () => setAdminPage(AdminPage.CreateNewClass) },
     { title: "Enroll Learners", description: "Add or remove learners from a specific class.", icon: IconName.MyAccount, onClick: () => setAdminPage(AdminPage.EnrollLearners) },
     { title: "Assign Trainer", description: "Assign or change the trainer for a class.", icon: IconName.SwitchProfile, onClick: () => setAdminPage(AdminPage.AssignTrainer) },
+    { title: "Upcoming Enrolment", description: "View confirmed enrolments and match with calendar events.", icon: IconName.ClipboardCheck, onClick: () => setAdminPage(AdminPage.UpcomingEnrolment) },
   ];
 
   const tpgManagementLinks: NavBoxProps[] = [
@@ -148,6 +153,7 @@ const PAGE_LABELS: Partial<Record<AdminPage, string>> = {
   [AdminPage.FundingValidity]: 'Funding Validity',
   [AdminPage.ViewLearners]: 'View Learners',
   [AdminPage.UpcomingClasses]: 'Upcoming Classes',
+  [AdminPage.ViewClassByDate]: 'View Class By Date',
   [AdminPage.OngoingClasses]: 'Ongoing Classes',
   [AdminPage.CompletedClasses]: 'Completed Classes',
   [AdminPage.CreateNewClass]: 'Create New Class',
@@ -174,22 +180,27 @@ const PAGE_LABELS: Partial<Record<AdminPage, string>> = {
   [AdminPage.AssignStudent]: 'Assign Learners',
   [AdminPage.SearchPastLearners]: 'Search Past Learners',
   [AdminPage.AutomationLogs]: 'Automation Logging',
-  [AdminPage.AssignTrainerLogs]: 'Assign Trainer Log',
   [AdminPage.TrainerFolderLogs]: 'Auto Create Assessment Records Log',
   [AdminPage.CourseRunDateSyncLogs]: 'Course Run Date Sync Log',
   [AdminPage.UpcomingCourseRunsLog]: 'TGS Enrolments & Assign Trainers Log',
   [AdminPage.SyncTrainerTpgLogs]: 'Sync Trainer to TPG Log',
+  [AdminPage.AutoSendTrainerInvitationLog]: 'Auto Send Trainer Invitation Log',
+  [AdminPage.AutoSanitiseDataLog]: 'Auto Sanitise Data Log',
   [AdminPage.CourseConfirmationEmailLogs]: 'Course Confirmation Email Logs',
   [AdminPage.BackfillEnrollments]: 'Backfill Enrollments',
   [AdminPage.FetchUpcomingEnrolments]: 'Fetch Upcoming Classes Enrolment',
+  [AdminPage.UpcomingEnrolment]: 'Upcoming Enrolment',
   [AdminPage.CreateCertificate]: 'Create Certificate',
   [AdminPage.DeleteCertificate]: 'Delete Certificate',
   [AdminPage.SendCertificateSG]: 'Send Certificate (SG)',
   [AdminPage.SendCertificateGH]: 'Send Certificate (GH)',
   [AdminPage.Calendar]: 'Calendar',
   [AdminPage.Scheduler]: 'Task Scheduler',
+  [AdminPage.SchedulerSummary]: 'Schedule Summary',
   [AdminPage.AddSessions]: 'Add Sessions',
   [AdminPage.CourseSessionTiming]: 'Course Session Timing',
+  [AdminPage.SupportTickets]: 'Support Tickets',
+  [AdminPage.SupportTicketDetail]: 'Ticket Detail',
 };
 
 const AdminLayout: React.FC = () => {
@@ -205,6 +216,7 @@ const AdminLayout: React.FC = () => {
       { title: "View Direct Application", description: "Review and manage uploaded direct application records.", icon: IconName.Eye, onClick: () => setAdminPage(AdminPage.ViewDirectApplication) },
     ],
     [AdminPage.TpgCourseRun]: [
+      { title: "View Class By Date", description: "Browse classes grouped by day from the local database.", icon: IconName.Calendar, onClick: () => setAdminPage(AdminPage.ViewClassByDate) },
       { title: "Create New Class", description: "Create a new course run for TPG workflows.", icon: IconName.Add, onClick: () => setAdminPage(AdminPage.CreateNewClass) },
       { title: "Search Course Runs", description: "Search existing course runs by code, title, or schedule.", icon: IconName.Search, onClick: () => setAdminPage(AdminPage.SearchCourseRuns) },
       { title: "View Course Run", description: "Open the course run detail view.", icon: IconName.Eye, onClick: () => setAdminPage(AdminPage.ViewCourseRun) },
@@ -298,6 +310,8 @@ const AdminLayout: React.FC = () => {
         return <ViewLearners />;
       case AdminPage.UpcomingClasses:
         return <UpcomingClassesTable showTitle={true} showFilters={true} />;
+      case AdminPage.ViewClassByDate:
+        return <ViewClassByDateView />;
       case AdminPage.OngoingClasses:
         return <OngoingClasses />;
       case AdminPage.CompletedClasses:
@@ -382,8 +396,6 @@ const AdminLayout: React.FC = () => {
         );
       case AdminPage.AutomationLogs:
         return <AutomationLogsView />;
-      case AdminPage.AssignTrainerLogs:
-        return <AssignTrainerLogsView />;
       case AdminPage.TrainerFolderLogs:
         return <TrainerFolderLogsView />;
       case AdminPage.AutoCreateCertificatesLog:
@@ -394,12 +406,18 @@ const AdminLayout: React.FC = () => {
         return <UpcomingCourseRunsLogView />;
       case AdminPage.SyncTrainerTpgLogs:
         return <SyncTrainerTpgLogsView />;
+      case AdminPage.AutoSendTrainerInvitationLog:
+        return <AutoSendTrainerInvitationLogView />;
+      case AdminPage.AutoSanitiseDataLog:
+        return <AutoSanitiseDataLogView />;
       case AdminPage.CourseConfirmationEmailLogs:
         return <CourseConfirmationEmailLogsView />;
       case AdminPage.BackfillEnrollments:
         return <BackfillEnrollmentsView />;
       case AdminPage.FetchUpcomingEnrolments:
         return <FetchUpcomingEnrolmentsView />;
+      case AdminPage.UpcomingEnrolment:
+        return <UpcomingEnrolmentView />;
       case AdminPage.CreateCertificate:
         return <CreateCertificateView />;
       case AdminPage.DeleteCertificate:
@@ -412,8 +430,14 @@ const AdminLayout: React.FC = () => {
         return <AdminCalendarView />;
       case AdminPage.Scheduler:
         return <SchedulerView />;
+      case AdminPage.SchedulerSummary:
+        return <SchedulerSummaryView />;
       case AdminPage.WorkflowGuides:
         return <WorkflowGuidesView initialWorkflowId={selectedWorkflowId || undefined} />;
+      case AdminPage.SupportTickets:
+        return <SupportTicketsView />;
+      case AdminPage.SupportTicketDetail:
+        return <SupportTicketDetailView />;
       default:
         return <AdminDashboard />;
     }
@@ -488,8 +512,8 @@ const AdminLayout: React.FC = () => {
 
         {/* Main Content Area */}
         <main className="flex-1 min-w-0 overflow-x-hidden">
-          <div className={`container mx-auto px-4 sm:px-6 lg:px-8 ${editingCourse ? 'pt-3 pb-8' : 'py-8'}`}>
-            {[AdminPage.CreateNewClass, AdminPage.SearchCourseRuns, AdminPage.ViewCourseRun, AdminPage.EditCourseRun, AdminPage.UploadCourseRuns, AdminPage.DeleteCourseRun, AdminPage.AddSessions, AdminPage.CourseSessionTiming, AdminPage.CourseSessions, AdminPage.EnrollLearners, AdminPage.UploadEnrolments, AdminPage.SearchEnrolment, AdminPage.ViewEnrolment, AdminPage.UpdateEnrolment, AdminPage.CancelEnrolment, AdminPage.UpdateEnrolmentFees, AdminPage.CourseSessionAttendance, AdminPage.CheckAttendance, AdminPage.SubmitAssessment, AdminPage.UpdateAssessment, AdminPage.SearchAssessments, AdminPage.ViewAssessment, AdminPage.SearchGrant, AdminPage.ViewGrantStatus].includes(adminPage) && <SsgAppSelector />}
+          <div className={`w-full px-4 sm:px-6 lg:px-8 ${editingCourse ? 'pt-3 pb-8' : 'py-8'}`}>
+            {[AdminPage.CreateNewClass, AdminPage.EditClass, AdminPage.ClassDetail, AdminPage.ViewClassByDate, AdminPage.SearchCourseRuns, AdminPage.ViewCourseRun, AdminPage.EditCourseRun, AdminPage.UploadCourseRuns, AdminPage.DeleteCourseRun, AdminPage.AddSessions, AdminPage.CourseSessionTiming, AdminPage.CourseSessions, AdminPage.EnrollLearners, AdminPage.UploadEnrolments, AdminPage.SearchEnrolment, AdminPage.ViewEnrolment, AdminPage.UpdateEnrolment, AdminPage.CancelEnrolment, AdminPage.UpdateEnrolmentFees, AdminPage.CourseSessionAttendance, AdminPage.CheckAttendance, AdminPage.SubmitAssessment, AdminPage.UpdateAssessment, AdminPage.SearchAssessments, AdminPage.ViewAssessment, AdminPage.SearchGrant, AdminPage.ViewGrantStatus].includes(adminPage) && <SsgAppSelector />}
             {renderContent()}
           </div>
         </main>

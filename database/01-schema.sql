@@ -1141,6 +1141,8 @@ CREATE TABLE public.training_provider (
     auto_send_receipt boolean DEFAULT false NOT NULL,
     auto_send_certificate boolean DEFAULT false NOT NULL,
     auto_send_thankyou_email boolean DEFAULT false NOT NULL,
+    auto_enrol_direct_applications boolean DEFAULT false NOT NULL,
+    auto_generate_qb_invoice boolean DEFAULT false NOT NULL,
     auto_mask_sensitive_data boolean DEFAULT false NOT NULL,
     auto_delete_after_six_months boolean DEFAULT false NOT NULL,
     enable_otp_login boolean DEFAULT false NOT NULL,
@@ -1298,6 +1300,12 @@ CREATE TABLE public.da_application (
     skillsfuture_credit_claim_id character varying(100),
     highest_qualification character varying(255),
     highest_relevant_certification character varying(255),
+    enrolment_id character varying(100),
+    grant_id character varying(100),
+    invoice_id character varying(100),
+    qb_customer_ref character varying(50),
+    auto_enrol_status character varying(50),
+    auto_enrol_error text,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT da_application_pkey PRIMARY KEY (id),
@@ -1315,11 +1323,18 @@ COMMENT ON COLUMN public.da_application.skillsfuture_credit IS 'SkillsFuture cre
 COMMENT ON COLUMN public.da_application.skillsfuture_credit_claim_id IS 'SkillsFuture credit claim ID';
 COMMENT ON COLUMN public.da_application.highest_qualification IS 'Trainee highest qualification';
 COMMENT ON COLUMN public.da_application.highest_relevant_certification IS 'Trainee highest relevant certification';
+COMMENT ON COLUMN public.da_application.enrolment_id IS 'SSG enrolment reference number returned by /tpg/enrolments';
+COMMENT ON COLUMN public.da_application.grant_id IS 'SSG grant identifier from grant search';
+COMMENT ON COLUMN public.da_application.invoice_id IS 'QuickBooks invoice ID for the net-fee invoice';
+COMMENT ON COLUMN public.da_application.qb_customer_ref IS 'Cached QuickBooks CustomerRef for the trainee (find-or-create)';
+COMMENT ON COLUMN public.da_application.auto_enrol_status IS 'Auto-enrol pipeline status: pending | enroled | grant_found | invoiced | failed';
+COMMENT ON COLUMN public.da_application.auto_enrol_error IS 'Last error from auto-enrol pipeline, format: "<step>: <reason>"';
 
 CREATE INDEX IF NOT EXISTS idx_da_application_application_id ON public.da_application(application_id);
 CREATE INDEX IF NOT EXISTS idx_da_application_trainee_id ON public.da_application(trainee_id);
 CREATE INDEX IF NOT EXISTS idx_da_application_course_run_id ON public.da_application(course_run_id);
 CREATE INDEX IF NOT EXISTS idx_da_application_trainee_email ON public.da_application(trainee_email);
+CREATE INDEX IF NOT EXISTS idx_da_application_auto_enrol_status ON public.da_application(auto_enrol_status);
 
 
 -- Ownership managed by Supabase
@@ -2303,3 +2318,44 @@ CREATE TABLE IF NOT EXISTS public.api_subscription (
 --
 -- PostgreSQL database dump complete
 --
+
+-- ============================================================
+-- Support Ticketing System
+-- ============================================================
+
+-- Auto-increment sequence for ticket numbers
+CREATE SEQUENCE IF NOT EXISTS public.support_ticket_number_seq START WITH 1 INCREMENT BY 1;
+
+-- Support tickets raised by learners
+CREATE TABLE IF NOT EXISTS public.support_ticket (
+    id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+    ticket_number TEXT NOT NULL UNIQUE,
+    user_id uuid NOT NULL REFERENCES public.app_user(id),
+    subject TEXT NOT NULL,
+    description TEXT NOT NULL,
+    category TEXT NOT NULL DEFAULT 'General',
+    status TEXT NOT NULL DEFAULT 'Open',
+    created_at TIMESTAMPTZ DEFAULT now() NOT NULL,
+    updated_at TIMESTAMPTZ DEFAULT now() NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_support_ticket_user_id ON public.support_ticket(user_id);
+CREATE INDEX IF NOT EXISTS idx_support_ticket_status ON public.support_ticket(status);
+
+-- Replies on a support ticket (from admin or learner)
+CREATE TABLE IF NOT EXISTS public.support_ticket_reply (
+    id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+    ticket_id uuid NOT NULL REFERENCES public.support_ticket(id) ON DELETE CASCADE,
+    user_id uuid NOT NULL REFERENCES public.app_user(id),
+    user_role TEXT NOT NULL,
+    message TEXT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT now() NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_support_ticket_reply_ticket_id ON public.support_ticket_reply(ticket_id);
+
+-- Trigger to auto-update updated_at on support_ticket
+CREATE TRIGGER support_ticket_updated_at
+    BEFORE UPDATE ON public.support_ticket
+    FOR EACH ROW
+    EXECUTE FUNCTION public.touch_updated_at();

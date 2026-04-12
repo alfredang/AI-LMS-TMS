@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useRouter } from 'next/router';
 import { useLms } from '../../contexts/LmsContext';
 import { useTrainerCourses } from '../../hooks/useTrainerCourses';
 
@@ -156,6 +157,7 @@ const SectionHeader: React.FC<{ title: string; count?: number; right?: React.Rea
 );
 
 const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdminMode = false }) => {
+  const router = useRouter();
   const { currentUser, pendingAttendanceCourseRunId, setPendingAttendanceCourseRunId } = useLms();
   const { courses, loading: coursesLoading } = useTrainerCourses(isAdminMode ? undefined : currentUser?.id, false);
 
@@ -306,6 +308,49 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
       setIsSearching(false);
     }
   };
+
+  // Auto-populate from URL query param (e.g. ctrl+click from calendar)
+  const urlCourseRunIdHandled = useRef(false);
+  useEffect(() => {
+    if (!isAdminMode || urlCourseRunIdHandled.current) return;
+    const urlCourseRunId = router.query.courseRunId;
+    if (urlCourseRunId && typeof urlCourseRunId === 'string') {
+      urlCourseRunIdHandled.current = true;
+      setAdminInput(urlCourseRunId);
+      // Trigger search after state update
+      setTimeout(async () => {
+        setIsSearching(true);
+        setSearchError(null);
+        try {
+          const res = await fetch(`/api/admin/lookup-course-run?courseRunCode=${encodeURIComponent(urlCourseRunId)}`);
+          const json = await res.json();
+          if (!res.ok) throw new Error(json.error || 'Course run not found');
+          const course = json.data;
+          setAdminCourse(course);
+          setSelectedCourseRunId(course.courseRunId);
+          if (course.digitalAttendanceId) {
+            setDigitalAttendanceId(course.digitalAttendanceId);
+          } else if (course.courseRunId && course.courseRunCode) {
+            fetchDigitalAttendanceId(course.courseRunId, course.courseRunCode);
+          }
+          if (course.courseRunCode && course.courseCode) {
+            setUen(course.uen || '');
+            handleFetchSessions(course.courseRunCode, course.courseCode, course);
+            fetchEnrolments(course.courseRunCode, course);
+          }
+          if (course.courseRunId) {
+            fetchManualSessions(course.courseRunId);
+            fetchAttendanceSummary(course.courseRunId);
+            fetchLocalAssignments(course.courseRunId);
+          }
+        } catch (err: any) {
+          setSearchError(err.message || 'Failed to look up course run');
+        } finally {
+          setIsSearching(false);
+        }
+      }, 0);
+    }
+  }, [isAdminMode, router.query.courseRunId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Manual Attendance handlers ──
 

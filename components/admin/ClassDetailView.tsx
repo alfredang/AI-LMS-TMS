@@ -5,6 +5,7 @@ import { Button } from '../ui/Button';
 import { Icon, IconName } from '../ui/Icon';
 import { useLms } from '@contexts/LmsContext';
 import { AdminPage } from '@app-types';
+import { ssgFetch } from '@/lib/ssgAppState';
 
 // Helper function for status colors (matching the reference)
 const getStatusColor = (status: string) => {
@@ -197,7 +198,7 @@ const ClassDetailView: React.FC<ClassDetailViewProps> = ({ courseRunId }) => {
 
       console.log('📤 Enrolment search request:', searchRequest);
 
-      const response = await fetch('/api/enrolment/search', {
+      const response = await ssgFetch('/api/enrolment/search', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'

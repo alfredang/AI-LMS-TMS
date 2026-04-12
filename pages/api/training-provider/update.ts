@@ -4,21 +4,13 @@ import fs from 'fs';
 import path from 'path';
 import { cors } from '../../../lib/cors';
 import { NextApiRequest, NextApiResponse } from 'next';
+import {
+  TRAINING_PROVIDER_FOLDER_BY_FIELD,
+  trainingProviderSkipTimestampForFolder,
+} from '../../../lib/constants/trainingProviderUploadLayout';
 
-
-// Map field names to specific folder paths with your exact folder structure
-const FOLDER_MAPPING: { [key: string]: string } = {
-  'logo': 'company_logo',
-  'invoiceTemplate': 'invoice_template',
-  'receiptTemplate': 'receipt_template',
-  'certificateTemplate': 'certificate_template',
-  'proFormaInvoiceTemplate': 'pro_forma_invoice_template',
-  'ssgCertFile': 'self_signing_cert',
-  'ssgPrivateKeyFile': 'private_key',
-  'ssgApp1CertFile': 'ssg_app1_cert',
-  'ssgApp1PrivateKeyFile': 'ssg_app1_private_key',
-  'ssgApp3CertFile': 'ssg_app3_cert',
-  'ssgApp3PrivateKeyFile': 'ssg_app3_private_key'
+const FOLDER_MAPPING: { [key: string]: string } = TRAINING_PROVIDER_FOLDER_BY_FIELD as unknown as {
+  [key: string]: string;
 };
 
 // Disable body parser to handle multipart form data
@@ -122,8 +114,7 @@ const saveUploadedFile = async (file: File, userId: string, fieldName: string): 
   // Get just the base name without extension  
   const baseName = path.basename(cleanFilename, fileExtension);
 
-  // Create clean filename — no timestamp for SSG cert/key files (cleaner DB paths)
-  const skipTimestamp = folderName === 'self_signing_cert' || folderName === 'private_key';
+  const skipTimestamp = trainingProviderSkipTimestampForFolder(folderName);
   const fileName = skipTimestamp ? `${baseName}${fileExtension}` : `${timestamp}_${baseName}${fileExtension}`;
   const filePath = path.join(uploadDir, fileName);
 
@@ -563,7 +554,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             ssg_app3_encryption_key = $46,
             ssg_app4_client_id = $47,
             ssg_app4_client_secret = $48,
-            ssg_default_app = $49
+            ssg_default_app = $49,
+            auto_enrol_direct_applications = $50,
+            auto_generate_qb_invoice = $51,
+            sanitise_after_months = $52
         WHERE id = $36
         RETURNING *
       `;
@@ -575,10 +569,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         profileData.companyAddress,
         profileData.contactPerson?.name,
         profileData.contactPerson?.tel,
-        filePaths.invoice_template_url,
-        filePaths.receipt_template_url,
-        filePaths.certificate_template_url,
-        filePaths.pro_forma_template_url,
+        filePaths.invoice_template_url || profileData.invoiceTemplateUrl || null,
+        filePaths.receipt_template_url || profileData.receiptTemplateUrl || null,
+        filePaths.certificate_template_url || profileData.certificateTemplateUrl || null,
+        filePaths.pro_forma_template_url || profileData.proFormaInvoiceTemplateUrl || null,
         filePaths.ssg_self_sign_cert_file,
         filePaths.ssg_private_key_file,
         profileData.ssgEncryptionKey,
@@ -617,7 +611,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         profileData.ssgApp3EncryptionKey ?? null,
         profileData.ssgApp4ClientId ?? null,
         profileData.ssgApp4ClientSecret ?? null,
-        profileData.ssgDefaultApp || 'app1'
+        profileData.ssgDefaultApp || 'app1',
+        profileData.adminSettings?.autoEnrolDirectApplications || false,
+        profileData.adminSettings?.autoGenerateQbInvoice || false,
+        Math.max(1, Math.min(60, parseInt(String(profileData.securitySettings?.sanitiseAfterMonths ?? 6), 10) || 6))
       ];
 
       console.log('🔍 File upload parameters being sent to database:', {

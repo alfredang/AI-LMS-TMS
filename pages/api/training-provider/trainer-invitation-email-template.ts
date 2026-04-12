@@ -9,14 +9,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (req.method === 'GET') {
     try {
       await ensureTrainerInvitationTemplateColumns((sql, params) => pool.query(sql, params));
-      const result = await pool.query('SELECT trainer_invitation_email_subject, trainer_invitation_email_body FROM training_provider LIMIT 1');
+      const result = await pool.query(
+        `SELECT trainer_invitation_email_subject,
+                trainer_invitation_email_body,
+                trainer_invitation_email_cc
+         FROM training_provider LIMIT 1`
+      );
       const row = result.rows[0] || {};
       return res.status(200).json({
         success: true,
         data: {
           trainerInvitationEmailSubject: row.trainer_invitation_email_subject || '',
           trainerInvitationEmailBody: row.trainer_invitation_email_body || '',
-        }
+          trainerInvitationEmailCc: row.trainer_invitation_email_cc || '',
+        },
       });
     } catch (error) {
       console.error('Error fetching trainer invitation email template:', error);
@@ -26,14 +32,27 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   if (req.method === 'PUT') {
     try {
-      const { trainerInvitationEmailSubject, trainerInvitationEmailBody } = req.body;
+      const {
+        trainerInvitationEmailSubject,
+        trainerInvitationEmailBody,
+        trainerInvitationEmailCc,
+      } = req.body;
       if (typeof trainerInvitationEmailSubject !== 'string' || typeof trainerInvitationEmailBody !== 'string') {
         return res.status(400).json({ success: false, error: 'trainerInvitationEmailSubject and trainerInvitationEmailBody must be strings' });
       }
+      // CC is optional — accept empty string, null, or undefined as "no CC"
+      const ccValue: string | null =
+        typeof trainerInvitationEmailCc === 'string' && trainerInvitationEmailCc.trim().length > 0
+          ? trainerInvitationEmailCc.trim()
+          : null;
+
       await ensureTrainerInvitationTemplateColumns((sql, params) => pool.query(sql, params));
       await pool.query(
-        'UPDATE training_provider SET trainer_invitation_email_subject = $1, trainer_invitation_email_body = $2',
-        [trainerInvitationEmailSubject, trainerInvitationEmailBody]
+        `UPDATE training_provider
+           SET trainer_invitation_email_subject = $1,
+               trainer_invitation_email_body = $2,
+               trainer_invitation_email_cc = $3`,
+        [trainerInvitationEmailSubject, trainerInvitationEmailBody, ccValue]
       );
       return res.status(200).json({ success: true, message: 'Trainer invitation email template updated successfully' });
     } catch (error) {

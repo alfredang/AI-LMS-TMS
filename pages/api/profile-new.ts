@@ -667,10 +667,13 @@ async function getTrainingProviderProfile(userId: string) {
       autoSendReceiptOnPayment: profileData.auto_send_receipt || false,
       autoSendCertificateOnCompletion: profileData.auto_send_certificate || false,
       autoSendThankYouEmail: profileData.auto_send_thankyou_email || false,
+      autoEnrolDirectApplications: profileData.auto_enrol_direct_applications || false,
+      autoGenerateQbInvoice: profileData.auto_generate_qb_invoice || false,
       upcomingClassesThresholdDays
     },
     securitySettings: {
       autoMaskSensitiveData: profileData.auto_mask_sensitive_data || false,
+      sanitiseAfterMonths: profileData.sanitise_after_months ?? 6,
       autoDeleteAfter6Months: profileData.auto_delete_after_six_months || false,
       enableOtpLogin: profileData.enable_otp_login || false,
       enableDefaultOtp: profileData.enable_default_otp || false,

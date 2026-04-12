@@ -194,6 +194,16 @@ export default async function handler(
     // Sync legacy columns so backward-compat code keeps working
     await syncLegacyColumns(courseRunUuid);
 
+    // Auto-confirm the class: if this run was still 'Pending' (no trainer yet),
+    // flip to 'Confirmed' now that a trainer is assigned. Never touch
+    // 'Cancelled' or already-'Confirmed' rows — this is one-directional.
+    await pool.query(
+      `UPDATE course_run
+       SET class_status = 'Confirmed', updated_at = NOW()
+       WHERE id = $1 AND class_status = 'Pending'`,
+      [courseRunUuid]
+    );
+
     // ── Auto-share Google Drive folders (courseware + trainer slides) ──
     if (trainerEmail) {
       // We need course_id to lookup the drive links

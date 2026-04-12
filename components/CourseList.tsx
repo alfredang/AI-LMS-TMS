@@ -102,7 +102,24 @@ const ManagementCourseList: React.FC = () => {
     const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
     const [viewMode, setViewMode] = useState<'block' | 'table'>(role === UserRole.Admin ? 'table' : 'block');
     const [selectedCourse, setSelectedCourse] = useState<any>(null);
+
+    // Persist view mode when it changes
+    useEffect(() => {
+        const savedViewMode = localStorage.getItem(`managementCourseListViewMode_${role}`);
+        if (savedViewMode === 'block' || savedViewMode === 'table') {
+            setViewMode(savedViewMode);
+        }
+    }, [role]);
+
+    const handleViewModeChange = (mode: 'block' | 'table') => {
+        setViewMode(mode);
+        localStorage.setItem(`managementCourseListViewMode_${role}`, mode);
+    };
     const [trainerClassView, setTrainerClassView] = useState<'all' | 'current' | 'upcoming' | 'past'>('all');
+    // Default trainer class-status filter: show only Pending + Confirmed runs.
+    // Trainers rarely want to see cancelled classes on their dashboard, but
+    // they can switch to 'all' or 'Cancelled' from Advanced Filters.
+    const [trainerStatusFilter, setTrainerStatusFilter] = useState<'ActiveOnly' | 'all' | 'Confirmed' | 'Pending' | 'Cancelled'>('ActiveOnly');
 
     // Pagination state - stored in LmsContext so it persists across mount/unmount
     const currentPage = courseListPage;
@@ -235,7 +252,7 @@ const ManagementCourseList: React.FC = () => {
                     : (course.modeOfLearning && course.modeOfLearning.includes(filterMode))
             );
 
-            // Trainer: apply date tab logic
+            // Trainer: apply date tab logic + class-status filter
             if (role === UserRole.Trainer) {
                 const end = parseLocalDate(course.endDate);
                 const start = parseLocalDate(course.startDate);
@@ -247,8 +264,17 @@ const ManagementCourseList: React.FC = () => {
                 } else if (trainerClassView === 'past') {
                     matchesDateView = end !== null && end < todayDate;
                 }
-                // 'all' shows everything
-                return matchesSearch && matchesCourseCode && matchesType && matchesMode && matchesDateView;
+                // Class-status filter. Default is 'ActiveOnly' (Pending + Confirmed),
+                // so cancelled runs stay hidden unless the trainer explicitly opts
+                // in via the Advanced Filters dropdown.
+                const courseStatus = (course.classStatus || '').trim();
+                let matchesStatus = true;
+                if (trainerStatusFilter === 'ActiveOnly') {
+                    matchesStatus = courseStatus === 'Confirmed' || courseStatus === 'Pending';
+                } else if (trainerStatusFilter !== 'all') {
+                    matchesStatus = courseStatus === trainerStatusFilter;
+                }
+                return matchesSearch && matchesCourseCode && matchesType && matchesMode && matchesDateView && matchesStatus;
             }
 
             const matchesStartDate = isDateInRange(course.startDate, filterStartDate);
@@ -260,7 +286,7 @@ const ManagementCourseList: React.FC = () => {
             }
             return 0;
         });
-    }, [relevantCourses, searchQuery, filterCourseCode, filterCourseType, filterMode, filterStartDate, role, trainerClassView]);
+    }, [relevantCourses, searchQuery, filterCourseCode, filterCourseType, filterMode, filterStartDate, role, trainerClassView, trainerStatusFilter]);
 
     // Pagination calculations
     const totalPages = Math.ceil(filteredCourses.length / itemsPerPage);
@@ -392,6 +418,23 @@ const ManagementCourseList: React.FC = () => {
                                     {course.classType || 'Physical'}
                                 </span>
                             }
+                        />
+                        <LearnerCardDetailRow
+                            label="Class Status"
+                            value={(() => {
+                                const status = (course.classStatus || '').toLowerCase();
+                                const styleMap: Record<string, string> = {
+                                    cancelled: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300',
+                                    pending:   'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300',
+                                    confirmed: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300',
+                                };
+                                const style = styleMap[status] || 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300';
+                                return (
+                                    <span className={`px-2 py-0.5 rounded text-xs font-semibold ${style}`}>
+                                        {course.classStatus || 'N/A'}
+                                    </span>
+                                );
+                            })()}
                         />
                         {course.startDate && (
                             <LearnerCardDetailRow label="Start Date" value={new Date(course.startDate).toLocaleDateString('en-SG', { year: 'numeric', month: 'short', day: 'numeric' })} />
@@ -750,16 +793,28 @@ const ManagementCourseList: React.FC = () => {
                     return d;
                 };
 
-                const trainerCurrentClasses = (relevantCourses || []).filter(c => {
+                // Apply the same class-status filter to the KPI counts so the
+                // card totals match the list below. When the default
+                // 'ActiveOnly' filter is in effect, cancelled runs don't count.
+                const statusMatches = (course: any): boolean => {
+                    const s = (course.classStatus || '').trim();
+                    if (trainerStatusFilter === 'ActiveOnly') return s === 'Confirmed' || s === 'Pending';
+                    if (trainerStatusFilter === 'all') return true;
+                    return s === trainerStatusFilter;
+                };
+
+                const statusFilteredCourses = (relevantCourses || []).filter(statusMatches);
+
+                const trainerCurrentClasses = statusFilteredCourses.filter(c => {
                     const s = parseLocalDate(c.startDate);
                     const e = parseLocalDate(c.endDate);
                     return s && s <= todayKpi && e && e >= todayKpi;
                 }).length;
-                const trainerUpcomingClasses = (relevantCourses || []).filter(c => {
+                const trainerUpcomingClasses = statusFilteredCourses.filter(c => {
                     const s = parseLocalDate(c.startDate);
                     return s && s > todayKpi;
                 }).length;
-                const trainerPastClasses = (relevantCourses || []).filter(c => {
+                const trainerPastClasses = statusFilteredCourses.filter(c => {
                     const e = parseLocalDate(c.endDate);
                     return e && e < todayKpi;
                 }).length;
@@ -823,7 +878,7 @@ const ManagementCourseList: React.FC = () => {
                             <label className="text-sm font-medium text-on-surface-secondary hidden sm:block">View:</label>
                             <div className="flex items-center rounded-md bg-surface-elevated p-0.5 border border-default">
                                 <button
-                                    onClick={() => setViewMode('block')}
+                                    onClick={() => handleViewModeChange('block')}
                                     className={`p-1.5 rounded-md transition-colors ${viewMode === 'block' ? 'bg-white shadow text-primary dark:bg-gray-600 dark:text-blue-400' : 'text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200'}`}
                                     aria-label="Block view"
                                     aria-pressed={viewMode === 'block'}
@@ -831,7 +886,7 @@ const ManagementCourseList: React.FC = () => {
                                     <Icon name={IconName.Eye} className="w-5 h-5" />
                                 </button>
                                 <button
-                                    onClick={() => setViewMode('table')}
+                                    onClick={() => handleViewModeChange('table')}
                                     className={`p-1.5 rounded-md transition-colors ${viewMode === 'table' ? 'bg-white shadow text-primary dark:bg-gray-600 dark:text-blue-400' : 'text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200'}`}
                                     aria-label="Table view"
                                     aria-pressed={viewMode === 'table'}
@@ -890,6 +945,22 @@ const ManagementCourseList: React.FC = () => {
                                     <option value="Last Month">Last Month</option>
                                     <option value="Earlier">Earlier (Before Last Month)</option>
                                     <option value="Later">Later (After Next Month)</option>
+                                </select>
+                            </div>
+                        )}
+                        {role === UserRole.Trainer && (
+                            <div>
+                                <label className="block text-sm font-medium text-on-surface-secondary">Class Status</label>
+                                <select
+                                    value={trainerStatusFilter}
+                                    onChange={e => setTrainerStatusFilter(e.target.value as 'ActiveOnly' | 'all' | 'Confirmed' | 'Pending' | 'Cancelled')}
+                                    className={`${inputClasses} mt-1`}
+                                >
+                                    <option value="ActiveOnly">Active (Pending + Confirmed)</option>
+                                    <option value="all">All (incl. Cancelled)</option>
+                                    <option value="Confirmed">Confirmed only</option>
+                                    <option value="Pending">Pending only</option>
+                                    <option value="Cancelled">Cancelled only</option>
                                 </select>
                             </div>
                         )}
@@ -1082,6 +1153,23 @@ const LearnerCourseCard: React.FC<{ course: any }> = ({ course }) => {
                                 : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
                             }`}>{course.classType || 'Physical'}</span>
                         </div>
+                        <div className="flex justify-between items-center">
+                            <span className="font-semibold text-gray-500 dark:text-gray-400">Class Status</span>
+                            {(() => {
+                                const status = (course.classStatus || '').toLowerCase();
+                                const styleMap: Record<string, string> = {
+                                    cancelled: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300',
+                                    pending:   'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300',
+                                    confirmed: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300',
+                                };
+                                const style = styleMap[status] || 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300';
+                                return (
+                                    <span className={`font-semibold px-2 py-0.5 rounded ${style}`}>
+                                        {course.classStatus || 'N/A'}
+                                    </span>
+                                );
+                            })()}
+                        </div>
                         {course.startDate && (
                             <div className="flex justify-between items-center">
                                 <span className="font-semibold text-gray-500 dark:text-gray-400">Start Date</span>
@@ -1118,6 +1206,19 @@ const LearnerCourseList: React.FC = () => {
     const [searchQuery, setSearchQuery] = useState('');
     const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
     const [classTab, setClassTab] = useState<'all' | 'current' | 'upcoming' | 'past'>('all');
+
+    // Persist view mode when it changes
+    useEffect(() => {
+        const savedViewMode = localStorage.getItem('learnerCourseListViewMode');
+        if (savedViewMode === 'grid' || savedViewMode === 'list') {
+            setViewMode(savedViewMode);
+        }
+    }, []);
+
+    const handleViewModeChange = (mode: 'grid' | 'list') => {
+        setViewMode(mode);
+        localStorage.setItem('learnerCourseListViewMode', mode);
+    };
 
     // Poll every 30s — refetch if admin changed this learner's enrollments
     const loadedAtRef = useRef(new Date().toISOString());
@@ -1214,7 +1315,7 @@ const LearnerCourseList: React.FC = () => {
     return (
         <div className="space-y-4">
             {/* Page Header */}
-            <h2 className="text-3xl font-bold dark:text-white">My Courses</h2>
+            <h2 className="text-3xl font-bold dark:text-white">My Classes</h2>
 
             {/* KPI Stat Cards */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -1276,7 +1377,7 @@ const LearnerCourseList: React.FC = () => {
                 {/* View toggle */}
                 <div className="flex items-center rounded-xl bg-surface border border-default p-0.5 shadow-sm flex-shrink-0">
                     <button
-                        onClick={() => setViewMode('grid')}
+                        onClick={() => handleViewModeChange('grid')}
                         title="Card view"
                         className={`p-2 rounded-lg transition-colors ${viewMode === 'grid' ? 'bg-primary text-white shadow' : 'text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}
                     >
@@ -1286,7 +1387,7 @@ const LearnerCourseList: React.FC = () => {
                         </svg>
                     </button>
                     <button
-                        onClick={() => setViewMode('list')}
+                        onClick={() => handleViewModeChange('list')}
                         title="List view"
                         className={`p-2 rounded-lg transition-colors ${viewMode === 'list' ? 'bg-primary text-white shadow' : 'text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}
                     >

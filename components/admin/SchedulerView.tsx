@@ -4,6 +4,7 @@ import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { useLms } from '@contexts/LmsContext';
 import { AdminPage } from '@app-types';
+import { SCHEDULER_FOCUS_STORAGE_KEY } from './SchedulerSummaryView';
 
 interface SchedulerTask {
     id: string;
@@ -21,10 +22,10 @@ interface SchedulerTask {
 }
 
 // Tasks that support email template selection
-const EMAIL_TEMPLATE_TASKS = ['auto_send_course_confirmation', 'auto_send_class_confirmation', 'auto_create_certificates'];
+const EMAIL_TEMPLATE_TASKS = ['auto_send_course_confirmation', 'auto_send_class_confirmation', 'auto_create_certificates', 'auto_send_courseware_attendance'];
 
 // Tasks that support days-in-advance setting
-const DAYS_IN_ADVANCE_TASKS = ['auto_send_course_confirmation', 'auto_send_class_confirmation', 'sync_google_calendar'];
+const DAYS_IN_ADVANCE_TASKS = ['auto_send_course_confirmation', 'auto_send_class_confirmation', 'sync_google_calendar', 'auto_send_trainer_invitations'];
 
 const EMAIL_TEMPLATES: { value: string; label: string }[] = [
     { value: 'final_course_confirmation', label: 'Final Class Confirm Email' },
@@ -34,6 +35,7 @@ const EMAIL_TEMPLATES: { value: string; label: string }[] = [
     { value: 'trainer_invitation', label: 'Trainer Invitation Email' },
     { value: 'otp', label: 'OTP Email' },
     { value: 'password_reset', label: 'Password Reset Email' },
+    { value: 'courseware_attendance', label: 'Courseware and Attendance Email' },
 ];
 
 // ── Cron Expression Helpers ───────────────────────────────────────────────────
@@ -57,17 +59,25 @@ function describeCron(expr: string): string {
     const displayM = String(m).padStart(2, '0');
     const timeStr = `${displayH}:${displayM} ${period} SGT`;
 
-    // Weekly pattern: "M H * * N"
-    if (dayOfMonth === '*' && month === '*' && dayOfWeek !== '*') {
-        const dow = parseInt(dayOfWeek, 10);
-        if (!isNaN(dow) && dow >= 0 && dow <= 6) {
-            return `Every ${DAY_NAMES[dow]} at ${timeStr}`;
-        }
-    }
-
     // Daily pattern: "M H * * *"
     if (dayOfMonth === '*' && month === '*' && dayOfWeek === '*') {
         return `Daily at ${timeStr}`;
+    }
+
+    // Weekly pattern: "M H * * N" (single) or "M H * * N1,N2" (multi)
+    if (dayOfMonth === '*' && month === '*' && dayOfWeek !== '*') {
+        const dowList = dayOfWeek
+            .split(',')
+            .map((s) => parseInt(s.trim(), 10))
+            .filter((d) => !isNaN(d) && d >= 0 && d <= 6)
+            .sort((a, b) => a - b);
+
+        if (dowList.length === 0) return expr;
+        if (dowList.length === 1) {
+            return `Every ${DAY_NAMES[dowList[0]]} at ${timeStr}`;
+        }
+        const dayLabels = dowList.map((d) => DAY_ABBREVS[d]).join(', ');
+        return `Weekly on ${dayLabels} at ${timeStr}`;
     }
 
     return expr;
@@ -77,7 +87,7 @@ interface ParsedSchedule {
     hour: number;
     minute: number;
     frequency: 'daily' | 'weekly';
-    dayOfWeek: number; // 0=Sun, 1=Mon, ..., 6=Sat
+    daysOfWeek: number[]; // 0=Sun..6=Sat, empty when daily
 }
 
 /** Parse a cron expression into structured schedule data */
@@ -91,17 +101,26 @@ function parseCron(expr: string): ParsedSchedule | null {
     if (isNaN(h) || isNaN(m)) return null;
 
     if (dow !== '*') {
-        const d = parseInt(dow, 10);
-        if (isNaN(d) || d < 0 || d > 6) return null;
-        return { hour: h, minute: m, frequency: 'weekly', dayOfWeek: d };
+        const parsedDays = dow
+            .split(',')
+            .map((s) => parseInt(s.trim(), 10))
+            .filter((d) => !isNaN(d) && d >= 0 && d <= 6);
+        if (parsedDays.length === 0) return null;
+        const unique = Array.from(new Set(parsedDays)).sort((a, b) => a - b);
+        return { hour: h, minute: m, frequency: 'weekly', daysOfWeek: unique };
     }
-    return { hour: h, minute: m, frequency: 'daily', dayOfWeek: 1 };
+    return { hour: h, minute: m, frequency: 'daily', daysOfWeek: [] };
 }
 
 /** Build a cron expression from structured schedule data */
 function buildCron(schedule: ParsedSchedule): string {
-    const dow = schedule.frequency === 'weekly' ? String(schedule.dayOfWeek) : '*';
-    return `${schedule.minute} ${schedule.hour} * * ${dow}`;
+    if (schedule.frequency === 'weekly') {
+        const dow = schedule.daysOfWeek.length > 0
+            ? Array.from(new Set(schedule.daysOfWeek)).sort((a, b) => a - b).join(',')
+            : '1'; // Safety fallback: Monday
+        return `${schedule.minute} ${schedule.hour} * * ${dow}`;
+    }
+    return `${schedule.minute} ${schedule.hour} * * *`;
 }
 
 // ── Status Badge ──────────────────────────────────────────────────────────────
@@ -134,12 +153,14 @@ const StatusBadge: React.FC<{ status: string | null }> = ({ status }) => {
 // ── Task ID → Log Page mapping ────────────────────────────────────────────────
 
 const TASK_LOG_PAGE: Record<string, AdminPage> = {
-    auto_create_learners:           AdminPage.AutomationLogs,
-    auto_create_trainer_folders:    AdminPage.TrainerFolderLogs,
-    sync_course_run_dates:          AdminPage.CourseRunDateSyncLogs,
-    upcoming_course_runs:           AdminPage.UpcomingCourseRunsLog,
-    auto_send_course_confirmation:  AdminPage.CourseConfirmationEmailLogs,
-    auto_send_class_confirmation:   AdminPage.CourseConfirmationEmailLogs,
+    auto_create_learners:             AdminPage.AutomationLogs,
+    auto_create_trainer_folders:      AdminPage.TrainerFolderLogs,
+    sync_course_run_dates:            AdminPage.CourseRunDateSyncLogs,
+    upcoming_course_runs:             AdminPage.UpcomingCourseRunsLog,
+    auto_send_course_confirmation:    AdminPage.CourseConfirmationEmailLogs,
+    auto_send_class_confirmation:     AdminPage.CourseConfirmationEmailLogs,
+    auto_send_trainer_invitations:    AdminPage.AutoSendTrainerInvitationLog,
+    auto_sanitise_data:               AdminPage.AutoSanitiseDataLog,
 };
 
 // ── Main Component ────────────────────────────────────────────────────────────
@@ -154,7 +175,18 @@ export const SchedulerView: React.FC = () => {
     const [editMinute, setEditMinute] = useState(0);
     const [editPeriod, setEditPeriod] = useState<'AM' | 'PM'>('PM');
     const [editFrequency, setEditFrequency] = useState<'daily' | 'weekly'>('daily');
-    const [editDayOfWeek, setEditDayOfWeek] = useState(1); // 0=Sun..6=Sat
+    const [editDaysOfWeek, setEditDaysOfWeek] = useState<number[]>([1]); // 0=Sun..6=Sat, multi-select
+
+    const toggleEditDay = (idx: number) => {
+        setEditDaysOfWeek(prev => {
+            if (prev.includes(idx)) {
+                // Don't allow clearing all days — at least one must remain selected
+                if (prev.length <= 1) return prev;
+                return prev.filter(d => d !== idx);
+            }
+            return [...prev, idx].sort((a, b) => a - b);
+        });
+    };
     const [saving, setSaving] = useState(false);
     const [runningTaskId, setRunningTaskId] = useState<string | null>(null);
     const [actionMessage, setActionMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -163,6 +195,57 @@ export const SchedulerView: React.FC = () => {
     const [currentPage, setCurrentPage] = useState(0);
     const ITEMS_PER_PAGE = 10;
     const templateDropdownRef = useRef<HTMLDivElement>(null);
+
+    // Cross-page navigation: when user clicks a row in Schedule Summary, the
+    // target task id is stashed in sessionStorage. On mount we read it, clear
+    // it, and trigger a brief highlight + scroll on the matching task card.
+    const [focusedTaskId, setFocusedTaskId] = useState<string | null>(null);
+    const taskCardRefs = useRef<Record<string, HTMLDivElement | null>>({});
+
+    useEffect(() => {
+        let pending: string | null = null;
+        try {
+            pending = sessionStorage.getItem(SCHEDULER_FOCUS_STORAGE_KEY);
+            if (pending) sessionStorage.removeItem(SCHEDULER_FOCUS_STORAGE_KEY);
+        } catch {
+            // ignore (incognito/quota)
+        }
+        if (pending) setFocusedTaskId(pending);
+    }, []);
+
+    // When tasks load (or the focus request lands first), flip to the page
+    // that contains the focused task, clear the search filter so it's visible,
+    // then scroll its card into view and apply a brief highlight ring. Ring
+    // is auto-cleared after a short delay so it doesn't stay forever.
+    useEffect(() => {
+        if (!focusedTaskId || tasks.length === 0) return;
+
+        const idx = tasks.findIndex(t => t.id === focusedTaskId);
+        if (idx === -1) return;
+
+        // Clear any active filter so the target row isn't hidden.
+        setSearchQuery('');
+        const targetPage = Math.floor(idx / ITEMS_PER_PAGE);
+        setCurrentPage(targetPage);
+
+        // Wait for React to render the target page before scrolling.
+        const scrollTimer = setTimeout(() => {
+            const el = taskCardRefs.current[focusedTaskId];
+            if (el) {
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        }, 50);
+
+        // Clear the highlight after the user has had time to see it.
+        const clearTimer = setTimeout(() => {
+            setFocusedTaskId(null);
+        }, 2500);
+
+        return () => {
+            clearTimeout(scrollTimer);
+            clearTimeout(clearTimer);
+        };
+    }, [focusedTaskId, tasks]);
 
     // Fetch tasks
     // Close template dropdown on outside click
@@ -244,7 +327,7 @@ export const SchedulerView: React.FC = () => {
             hour: hour24,
             minute: editMinute,
             frequency: editFrequency,
-            dayOfWeek: editDayOfWeek,
+            daysOfWeek: editDaysOfWeek,
         });
         setSaving(true);
 
@@ -325,13 +408,13 @@ export const SchedulerView: React.FC = () => {
             setEditMinute(parsed.minute);
             setEditPeriod(period as 'AM' | 'PM');
             setEditFrequency(parsed.frequency);
-            setEditDayOfWeek(parsed.dayOfWeek);
+            setEditDaysOfWeek(parsed.daysOfWeek.length > 0 ? parsed.daysOfWeek : [1]);
         } else {
             setEditHour(2);
             setEditMinute(0);
             setEditPeriod('PM');
             setEditFrequency('daily');
-            setEditDayOfWeek(1);
+            setEditDaysOfWeek([1]);
         }
         setEditingTaskId(task.id);
     };
@@ -422,7 +505,16 @@ export const SchedulerView: React.FC = () => {
                 return (
                 <div className="space-y-4">
                     {paginatedTasks.map(task => (
-                        <Card key={task.id} className="p-0 overflow-visible">
+                        <div
+                            key={task.id}
+                            ref={(el) => { taskCardRefs.current[task.id] = el; }}
+                            className={`rounded-lg transition-all duration-500 ${
+                                focusedTaskId === task.id
+                                    ? 'ring-4 ring-blue-400 dark:ring-blue-500 ring-offset-2 ring-offset-background'
+                                    : ''
+                            }`}
+                        >
+                        <Card className="p-0 overflow-visible">
                             {/* Card Header */}
                             <div className={`px-6 py-4 flex items-center justify-between border-b rounded-t-lg ${
                                 task.enabled
@@ -495,8 +587,9 @@ export const SchedulerView: React.FC = () => {
                                     };
 
                                     const isCalendarSync = task.id === 'sync_google_calendar';
-                                    const defaultDays = isCalendarSync ? 21 : 3;
-                                    const maxDays = isCalendarSync ? 90 : 30;
+                                    const isTrainerInvitations = task.id === 'auto_send_trainer_invitations';
+                                    const defaultDays = isCalendarSync ? 21 : isTrainerInvitations ? 30 : 3;
+                                    const maxDays = isCalendarSync ? 90 : isTrainerInvitations ? 180 : 30;
 
                                     const handleDaysChange = async (delta: number) => {
                                         const current = task.days_in_advance ?? defaultDays;
@@ -602,22 +695,31 @@ export const SchedulerView: React.FC = () => {
                                                     ))}
                                                 </div>
 
-                                                {/* Day of Week Selector (weekly only) */}
+                                                {/* Day of Week Selector (weekly only) — multi-select */}
                                                 {editFrequency === 'weekly' && (
-                                                    <div className="flex items-center gap-1.5 flex-wrap">
-                                                        {DAY_ABBREVS.map((day, idx) => (
-                                                            <button
-                                                                key={day}
-                                                                onClick={() => setEditDayOfWeek(idx)}
-                                                                className={`w-10 h-10 rounded-full text-xs font-semibold transition-colors ${
-                                                                    editDayOfWeek === idx
-                                                                        ? 'bg-blue-600 text-white shadow-sm'
-                                                                        : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-                                                                }`}
-                                                            >
-                                                                {day}
-                                                            </button>
-                                                        ))}
+                                                    <div>
+                                                        <div className="flex items-center gap-1.5 flex-wrap">
+                                                            {DAY_ABBREVS.map((day, idx) => {
+                                                                const selected = editDaysOfWeek.includes(idx);
+                                                                return (
+                                                                    <button
+                                                                        key={day}
+                                                                        onClick={() => toggleEditDay(idx)}
+                                                                        className={`w-10 h-10 rounded-full text-xs font-semibold transition-colors ${
+                                                                            selected
+                                                                                ? 'bg-blue-600 text-white shadow-sm'
+                                                                                : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                                                                        }`}
+                                                                        title={DAY_NAMES[idx]}
+                                                                    >
+                                                                        {day}
+                                                                    </button>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                        <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                                                            Click multiple days to run weekly on each (e.g. Mon + Thu).
+                                                        </p>
                                                     </div>
                                                 )}
 
@@ -737,12 +839,13 @@ export const SchedulerView: React.FC = () => {
                                                 Running…
                                             </div>
                                         ) : (
-                                            '▶ Run Now'
+                                            '▶ Run Once'
                                         )}
                                     </Button>
                                 </div>
                             </div>
                         </Card>
+                        </div>
                     ))}
 
                     {filteredTasks.length === 0 && (

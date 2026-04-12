@@ -419,13 +419,11 @@ const CompletedClasses: React.FC = () => {
                     aria-checked={skipExisting}
                     onClick={() => setSkipExisting(!skipExisting)}
                     disabled={syncing}
-                    className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
-                      skipExisting ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'
-                    } disabled:opacity-50`}
+                    className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${skipExisting ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'
+                      } disabled:opacity-50`}
                   >
-                    <span className={`inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform ${
-                      skipExisting ? 'translate-x-[18px]' : 'translate-x-[3px]'
-                    }`} />
+                    <span className={`inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform ${skipExisting ? 'translate-x-[18px]' : 'translate-x-[3px]'
+                      }`} />
                   </button>
                 </label>
               </div>
@@ -765,9 +763,15 @@ const CompletedClasses: React.FC = () => {
                       <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.courseCode}</td>
                       <td className="px-4 py-2 whitespace-nowrap text-sm">
                         <select
-                          value={classItem.classStatus}
+                          value={classItem.classStatus === 'Cancelled' ? 'Cancelled' : 'auto'}
                           onChange={async (e) => {
-                            const newStatus = e.target.value;
+                            // Two-option dropdown: "Pending/Confirmed" (auto-derived from local trainer)
+                            // or "Cancelled" (manual sticky override).
+                            const selection = e.target.value;
+                            const hasLocalTrainer = !!(classItem.assignedTrainerLocal || '').trim();
+                            const newStatus = selection === 'Cancelled'
+                              ? 'Cancelled'
+                              : (hasLocalTrainer ? 'Confirmed' : 'Pending');
                             try {
                               await fetch(getApiUrl('/api/admin/completed-classes'), {
                                 method: 'PUT',
@@ -777,15 +781,13 @@ const CompletedClasses: React.FC = () => {
                               setCompletedClasses(prev => prev.map(c => c.id === classItem.id ? { ...c, classStatus: newStatus } : c));
                             } catch { /* silent */ }
                           }}
-                          className={`text-xs font-semibold rounded-full px-2 py-1 border-0 cursor-pointer focus:ring-2 focus:ring-blue-500 ${
-                            classItem.classStatus === 'Confirmed' ? 'bg-green-100 text-green-800' :
-                            classItem.classStatus === 'Pending' ? 'bg-yellow-100 text-yellow-800' :
-                            classItem.classStatus === 'Cancelled' ? 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-200' :
-                            'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
-                          }`}
+                          className={`text-xs font-semibold rounded-full px-2 py-1 border-0 cursor-pointer focus:ring-2 focus:ring-blue-500 ${classItem.classStatus === 'Confirmed' ? 'bg-green-100 text-green-800' :
+                              classItem.classStatus === 'Pending' ? 'bg-yellow-100 text-yellow-800' :
+                                classItem.classStatus === 'Cancelled' ? 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-200' :
+                                  'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+                            }`}
                         >
-                          <option value="Confirmed">Confirmed</option>
-                          <option value="Pending">Pending</option>
+                          <option value="auto">{(classItem.assignedTrainerLocal || '').trim() ? 'Confirmed' : 'Pending'}</option>
                           <option value="Cancelled">Cancelled</option>
                         </select>
                       </td>
@@ -848,11 +850,10 @@ const CompletedClasses: React.FC = () => {
                         <button
                           key={p}
                           onClick={() => setCurrentPage(p)}
-                          className={`px-3 py-1 text-sm rounded-md ${
-                            p === currentPage
+                          className={`px-3 py-1 text-sm rounded-md ${p === currentPage
                               ? 'bg-blue-600 text-white font-semibold'
                               : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
-                          }`}
+                            }`}
                         >
                           {p + 1}
                         </button>

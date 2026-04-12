@@ -556,7 +556,7 @@ const FinanceLayout: React.FC = () => {
 
   const getPageTitle = () => {
     switch (page) {
-      case 'allCourseRuns': return 'All Course Runs';
+      case 'allCourseRuns': return 'Consolidated Finance Data';
       case 'autoProcessEnrolments': return 'Process Enrolments';
       case 'autoManualEnrolment': return 'Manual Enrolment';
       case 'autoCreateEnrolmentsErrorStatus': return 'Create Enrolments For Error Status';
@@ -689,6 +689,7 @@ const FinanceLayout: React.FC = () => {
   const sidebarContent = (
     <nav className="space-y-6 p-4 bg-white dark:bg-slate-800 text-gray-900 dark:text-white h-full">
       <NavItem target="dashboard" label="Financial Dashboard" />
+      <NavItem target="allCourseRuns" label="Consolidated Finance Data" />
 
       <NavSection title="Workflow Guides" sectionKey="workflowGuides">
         <SubSection title="Training" sectionKey="wfTraining">
@@ -718,7 +719,8 @@ const FinanceLayout: React.FC = () => {
           {[
             { id: 'billing-history', label: 'Billing History', icon: '💰' },
             { id: 'proforma-invoice', label: 'Proforma Invoice', icon: '🧾' },
-            { id: 'invoice', label: 'Invoice', icon: '📄' },
+            { id: 'personal-invoice', label: 'Personal Invoice', icon: '📄' },
+            { id: 'company-invoice', label: 'Company Invoice', icon: '🏢' },
             { id: 'receipt', label: 'Receipt', icon: '🧾' },
           ].map(item => (
             <a key={item.id} href="#" onClick={(e) => { e.preventDefault(); navigateTo('workflowGuides'); setSelectedWorkflowId(item.id); }} className="flex items-center gap-2 rounded-md px-3 py-2 ml-4 text-sm text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-slate-700 dark:hover:text-white transition-colors">
@@ -730,7 +732,6 @@ const FinanceLayout: React.FC = () => {
       </NavSection>
 
       <NavSection title="FMS (n8n)" sectionKey="courseRunAutomations">
-        <NavItem target="allCourseRuns" label="View All Course Runs" isSubItem />
         <NavItem target="autoProcessEnrolments" label="Process Enrolments" isSubItem />
         <NavItem target="autoManualEnrolment" label="Manual Enrolment" isSubItem />
         <NavItem target="autoCreateEnrolmentsErrorStatus" label="Create Enrolments For Error Status" isSubItem />
@@ -913,6 +914,7 @@ const FinanceLayout: React.FC = () => {
         <main className="flex-1 overflow-x-hidden">
           <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
             {(page.startsWith('tpg') ||
+              page === 'allCourseRuns' ||
               page === 'autoProcessGrants' ||
               page === 'searchGrant' ||
               page === 'viewGrant') && <SsgAppSelector />}

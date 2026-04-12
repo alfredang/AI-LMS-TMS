@@ -49,9 +49,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     }
     
-    // Retrieve SSG credentials from database
+    // Retrieve SSG credentials from database. The x-ssg-app header (set by
+    // SsgAppSelector's fetch interceptor — values: app1 / app2 / app3 / app4)
+    // lets the admin pick which SSG cert profile to use at runtime. Without
+    // this second arg, the header is silently ignored and the default app is
+    // always used — which is what was causing the "App 2 selected but App 1
+    // behavior" bug on local.
+    const appOverride = (req.headers['x-ssg-app'] as string) || undefined;
     const credentialsService = getSSGCredentialsService();
-    const credentials = await credentialsService.getSSGCredentials(trainingProviderIdNum);
+    const credentials = await credentialsService.getSSGCredentials(trainingProviderIdNum, appOverride);
 
     if (!credentials) {
       return res.status(400).json({ 

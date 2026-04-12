@@ -24,10 +24,12 @@ import PasswordResetEmailTemplateView from '../components/training-provider/Pass
 import TrainerInvitationEmailTemplateView from '../components/training-provider/TrainerInvitationEmailTemplateView';
 import FinalCourseConfirmationEmailTemplateView from '../components/training-provider/FinalCourseConfirmationEmailTemplateView';
 import CourseConfirmationEmailTemplateView from '../components/training-provider/CourseConfirmationEmailTemplateView';
+import CoursewareAttendanceEmailTemplateView from '../components/training-provider/CoursewareAttendanceEmailTemplateView';
 import FinanceManagementView from '../components/training-provider/FinanceManagementView';
 import TrainingProviderSidebar from '../components/training-provider/TrainingProviderSidebar';
 import SchedulerView from '../components/admin/SchedulerView';
-import { AutomationLogsView, TrainerFolderLogsView, CourseRunDateSyncLogsView, UpcomingCourseRunsLogView, CourseConfirmationEmailLogsView } from '../components/admin/ClassManagementViews';
+import SchedulerSummaryView from '../components/admin/SchedulerSummaryView';
+import { AutomationLogsView, TrainerFolderLogsView, CourseRunDateSyncLogsView, UpcomingCourseRunsLogView, CourseConfirmationEmailLogsView, AutoSendTrainerInvitationLogView, AutoSanitiseDataLogView } from '../components/admin/ClassManagementViews';
 import TrainerResponseEmailTemplatesView from '../components/training-provider/TrainerResponseEmailTemplatesView';
 import WorkflowGuidesView from '../components/training-provider/WorkflowGuidesView';
 import WebhooksView from '../components/training-provider/WebhooksView';
@@ -63,6 +65,8 @@ const TrainingProviderLayout: React.FC = () => {
         case AdminPage.CourseRunDateSyncLogs: return <CourseRunDateSyncLogsView />;
         case AdminPage.UpcomingCourseRunsLog: return <UpcomingCourseRunsLogView />;
         case AdminPage.CourseConfirmationEmailLogs: return <CourseConfirmationEmailLogsView />;
+        case AdminPage.AutoSendTrainerInvitationLog: return <AutoSendTrainerInvitationLogView />;
+        case AdminPage.AutoSanitiseDataLog: return <AutoSanitiseDataLogView />;
       }
     }
 
@@ -105,10 +109,14 @@ const TrainingProviderLayout: React.FC = () => {
         return <FinalCourseConfirmationEmailTemplateView />;
       case View.CourseConfirmationEmailTemplate:
         return <CourseConfirmationEmailTemplateView />;
+      case View.CoursewareAttendanceEmailTemplate:
+        return <CoursewareAttendanceEmailTemplateView />;
       case View.FinanceManagement:
         return <FinanceManagementView />;
       case View.Scheduler:
         return <SchedulerView />;
+      case View.SchedulerSummary:
+        return <SchedulerSummaryView />;
       case View.Webhooks:
         return <WebhooksView />;
       case View.SsgApiSummary:
@@ -141,8 +149,10 @@ const TrainingProviderLayout: React.FC = () => {
       case View.WorkflowGuides: return 'Workflow Guides';
       case View.FinalCourseConfirmationEmailTemplate: return 'Final Course Confirmation Email Template';
       case View.CourseConfirmationEmailTemplate: return 'Course Confirmation Email Template';
+      case View.CoursewareAttendanceEmailTemplate: return 'Courseware and Attendance Taking Email Template';
       case View.FinanceManagement: return 'Finance Management';
       case View.Scheduler: return 'Task Scheduler';
+      case View.SchedulerSummary: return 'Schedule Summary';
       case View.Webhooks: return 'Webhooks';
       case View.SsgApiSummary: return 'SSG API Summary';
       default: return 'Dashboard';

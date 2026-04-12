@@ -17,6 +17,7 @@ import AssessmentGrading from '../components/trainer/AssessmentGrading';
 import PastAttendance from '../components/trainer/PastAttendance';
 import PastAssessment from '../components/trainer/PastAssessment';
 import EdToolsPage from '../components/trainer/EdToolsPage';
+import ProblemSolvingToolsPage from '../components/trainer/ProblemSolvingToolsPage';
 import DataAnalyticsToolsPage from '../components/trainer/DataAnalyticsToolsPage';
 import FinanceToolsPage from '../components/trainer/FinanceToolsPage';
 import StatToolsPage from '../components/trainer/StatToolsPage';
@@ -38,6 +39,7 @@ const PAGE_LABELS: Record<TrainerPage, string> = {
   [TrainerPage.TaskList]: 'Task List',
   [TrainerPage.GenAIAuthoring]: 'GenAI Tools',
   [TrainerPage.EdTools]: 'Ed Tools',
+  [TrainerPage.ProblemSolvingTools]: 'Problem Solving Tools',
   [TrainerPage.DataAnalyticsTools]: 'Data Analytics Tools',
   [TrainerPage.FinanceTools]: 'Finance Tools',
   [TrainerPage.StatTools]: 'Statistical Tools',
@@ -80,6 +82,8 @@ const TrainerLayout: React.FC = () => {
         return <CreateView />;
       case TrainerPage.EdTools:
         return <EdToolsPage />;
+      case TrainerPage.ProblemSolvingTools:
+        return <ProblemSolvingToolsPage />;
       case TrainerPage.DataAnalyticsTools:
         return <DataAnalyticsToolsPage />;
       case TrainerPage.FinanceTools:

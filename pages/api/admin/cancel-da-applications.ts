@@ -2,6 +2,7 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { searchEnrolment, cancelEnrolment } from '../../../lib/ssg/services/enrolment-service';
 import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdentifiers';
+import { upsertSsgEnrolmentFromLocalEnrollment } from '../../../lib/services/billingSync';
 
 /**
  * Build the search enrolment payload for a single DA application record.
@@ -174,6 +175,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                     [succeededRefs]
                 );
                 console.log(`✅ Updated ${enrolmentUpdateResult.rows.length} enrollment record(s) to Cancelled`);
+                for (const ref of succeededRefs) {
+                    try {
+                        await upsertSsgEnrolmentFromLocalEnrollment(String(ref));
+                    } catch (e) {
+                        console.warn('[cancel-da-applications] ssg_enrolments sync:', ref, e);
+                    }
+                }
             }
         }
 

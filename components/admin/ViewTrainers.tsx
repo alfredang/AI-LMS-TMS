@@ -820,11 +820,10 @@ const ViewTrainers: React.FC = () => {
                         <button
                           key={item}
                           onClick={() => setCurrentPage(item)}
-                          className={`px-3 py-1.5 text-xs font-medium rounded-md border transition-colors ${
-                            currentPage === item
+                          className={`px-3 py-1.5 text-xs font-medium rounded-md border transition-colors ${currentPage === item
                               ? 'bg-blue-600 text-white border-blue-600'
                               : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
-                          }`}
+                            }`}
                         >
                           {item}
                         </button>

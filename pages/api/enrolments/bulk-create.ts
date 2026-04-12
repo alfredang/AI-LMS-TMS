@@ -4,6 +4,8 @@ import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import { inferIdType } from '../../../lib/utils/id-type';
 import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdentifiers';
+import { isEnrolmentEligibleForAutoInvoice } from '../../../lib/services/invoiceEligibility';
+import { enqueueInvoiceJob } from '../../../lib/services/invoiceJobs';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -225,6 +227,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     );
 
     await client.query('COMMIT');
+
+    const st = (enrolmentStatus as string | undefined) || 'Confirmed';
+    if (enrolmentId && userId && traineeEmail && courseCode && isEnrolmentEligibleForAutoInvoice(st)) {
+      try {
+        await enqueueInvoiceJob({
+          enrolmentId,
+          userId,
+          learnerEmail: traineeEmail,
+          courseCode,
+          batchId: null,
+        });
+      } catch (e) {
+        console.warn('[enrolments/bulk-create] Failed to enqueue invoice job (non-blocking):', e);
+      }
+    }
 
     return res.status(200).json({
       success: true,

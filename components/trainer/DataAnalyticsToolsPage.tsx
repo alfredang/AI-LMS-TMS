@@ -9,6 +9,12 @@ const DATA_ANALYTICS_TOOLS = [
     icon: IconName.Analytics,
     href: 'https://alfredang.github.io/novapivot/',
   },
+  {
+    title: 'Mock Data Generator',
+    description: 'Generate realistic mock data for testing and demonstrations',
+    icon: IconName.FileText,
+    href: 'https://alfredang.github.io/mockdatagen/',
+  },
 ];
 
 const DataAnalyticsToolsPage: React.FC = () => {

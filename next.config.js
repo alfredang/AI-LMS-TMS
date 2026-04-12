@@ -1,4 +1,6 @@
 const { execSync } = require('child_process');
+const fs = require('fs');
+const path = require('path');
 const COMMIT_HASH = (() => {
   const formatDate = (d) => {
     const dd = String(d.getDate()).padStart(2, '0');
@@ -8,26 +10,18 @@ const COMMIT_HASH = (() => {
     const min = String(d.getMinutes()).padStart(2, '0');
     return `${dd}-${mm}-${yyyy} ${hh}:${min}`;
   };
-  // If already set via Docker build arg or env, use it directly
-  if (process.env.NEXT_PUBLIC_COMMIT_HASH && process.env.NEXT_PUBLIC_COMMIT_HASH !== 'dev') {
-    return process.env.NEXT_PUBLIC_COMMIT_HASH;
-  }
-  // Get commit hash
-  let hash = 'dev';
-  if (process.env.VERCEL_GIT_COMMIT_SHA) {
-    hash = process.env.VERCEL_GIT_COMMIT_SHA.substring(0, 7);
-  } else {
-    try { hash = execSync('git rev-parse --short HEAD').toString().trim(); } catch {}
-  }
+  // Try reading pre-generated .version file (used in Docker builds)
+  try {
+    const v = fs.readFileSync(path.join(__dirname, '.version'), 'utf8').trim();
+    if (v) return v;
+  } catch {}
   // Get commit timestamp, fall back to build time
-  let timestamp;
   try {
     const isoDate = execSync('git log -1 --format=%ci').toString().trim();
-    timestamp = formatDate(new Date(isoDate));
+    return formatDate(new Date(isoDate));
   } catch {
-    timestamp = formatDate(new Date());
+    return formatDate(new Date());
   }
-  return `${hash} ${timestamp}`;
 })();
 
 /** @type {import('next').NextConfig} */

@@ -1,6 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { getSSGCredentialsService } from '../../../lib/ssg/services/credentials-service';
 import { HttpClient, HTTPRequestBuilder, HttpMethod } from '../../../lib/ssg/utils/http-utils';
+import { normalizeSsgCreateEnrolmentData, runPostSsgEnrolSync } from '@/lib/services/postSsgEnrolSync';
 import crypto from 'crypto';
 
 /**
@@ -62,7 +63,49 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(Number(parsed.status) || 400).json({ success: false, error: parsed?.error ?? `SSG status ${parsed.status}` });
     }
 
-    return res.status(200).json({ success: true, data: parsed?.data ?? parsed });
+    const rawData = parsed?.data ?? parsed;
+    const normalizedData = normalizeSsgCreateEnrolmentData(rawData);
+
+    const enrol = req.body?.enrolment as Record<string, unknown> | undefined;
+    const trainee = enrol?.trainee as Record<string, unknown> | undefined;
+    const course = enrol?.course as Record<string, unknown> | undefined;
+    const run = course?.run as Record<string, unknown> | undefined;
+
+    const traineeEmail = typeof trainee?.emailAddress === 'string' ? trainee.emailAddress : '';
+    const courseReferenceNumber = typeof course?.referenceNumber === 'string' ? course.referenceNumber : '';
+    const courseRunId = run?.id != null ? String(run.id) : '';
+
+    const en = normalizedData.enrolment as Record<string, unknown> | undefined;
+    const enrolmentRef =
+      typeof en?.referenceNumber === 'string' ? en.referenceNumber.trim() : '';
+    const enrolmentSt = typeof en?.status === 'string' ? en.status : undefined;
+
+    let localEnrollmentSynced = false;
+    if (traineeEmail && courseReferenceNumber && courseRunId) {
+      try {
+        await runPostSsgEnrolSync({
+          traineeEmail,
+          courseReferenceNumber,
+          courseRunId,
+          sponsorshipType: typeof trainee?.sponsorshipType === 'string' ? trainee.sponsorshipType : undefined,
+          traineeName: typeof trainee?.fullName === 'string' ? trainee.fullName : undefined,
+          traineeNric: typeof trainee?.id === 'string' ? trainee.id : undefined,
+          enrolmentId: enrolmentRef || null,
+          enrolmentStatus: enrolmentSt ?? null,
+        });
+        localEnrollmentSynced = true;
+      } catch (syncErr) {
+        console.warn('[enrolment/create] Local enrollment sync failed (non-blocking):', syncErr);
+      }
+    } else {
+      console.warn('[enrolment/create] Skipping local sync — missing traineeEmail, course ref, or run id');
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: normalizedData,
+      localEnrollmentSynced,
+    });
 
   } catch (error) {
     console.error('❌ Create enrolment error:', error);
