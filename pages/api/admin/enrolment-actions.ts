@@ -66,38 +66,53 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (action === 'sync-calendar') {
       const { calendar, calendarId } = await getCalendarClient();
       const rows = await pool.query(`
-        SELECT e.id, COALESCE(au.email, e.email) as email, c.title as course_title, cr.start_date
+        SELECT e.id, COALESCE(au.email, e.email) as email, c.title as course_title,
+               TO_CHAR(cr.start_date AT TIME ZONE 'Asia/Singapore', 'YYYY-MM-DD') as start_date_iso
         FROM enrollment e
         JOIN course_run cr ON e.course_run_id = cr.id
         JOIN course c ON cr.course_id = c.id
         LEFT JOIN app_user au ON e.user_id = au.id
         WHERE (e.calendar_added IS NULL OR e.calendar_added = false)
           AND COALESCE(au.email, e.email) IS NOT NULL
+          AND COALESCE(au.email, e.email) <> ''
           AND cr.start_date >= CURRENT_DATE
       `);
       if (rows.rows.length === 0) return res.status(200).json({ success: true, checked: 0, matched: 0 });
 
-      const dates = rows.rows.map(r => r.start_date ? new Date(r.start_date).toISOString().slice(0, 10) : '').filter(Boolean).sort();
+      // Use SGT-normalized dates for calendar fetch window
+      const dates = rows.rows.map(r => r.start_date_iso || '').filter(Boolean).sort();
       const minD = new Date(dates[0]); minD.setDate(minD.getDate() - 1);
       const maxD = new Date(dates[dates.length - 1]); maxD.setDate(maxD.getDate() + 2);
 
+      console.log(`📅 [sync-calendar] Fetching events from ${minD.toISOString()} to ${maxD.toISOString()} for ${rows.rows.length} enrolments`);
+
       const evts = await calendar.events.list({ calendarId, timeMin: minD.toISOString(), timeMax: maxD.toISOString(), singleEvents: true, maxResults: 2500 });
       const events = evts.data.items || [];
+      console.log(`📅 [sync-calendar] Found ${events.length} calendar events`);
+
       let matched = 0;
       for (const row of rows.rows) {
         if (!row.email || !row.course_title) continue;
-        const startIso = row.start_date ? new Date(row.start_date).toISOString().slice(0, 10) : '';
+        const startIso = row.start_date_iso || '';
         const stripped = stripPrefixes(row.course_title).toLowerCase();
         const emailLower = row.email.trim().toLowerCase();
+
+        // Match: event title contains course title (or vice-versa) + event date matches start date
         const evt = events.find(e => {
-          const t = stripPrefixes(e.summary || '').toLowerCase();
-          return (t.includes(stripped) || stripped.includes(t)) && (e.start?.dateTime?.slice(0, 10) || e.start?.date || '') === startIso;
+          const evtTitle = stripPrefixes(e.summary || '').toLowerCase();
+          const titleMatch = evtTitle.includes(stripped) || stripped.includes(evtTitle);
+          if (!titleMatch) return false;
+          const evtDate = e.start?.dateTime?.slice(0, 10) || e.start?.date || '';
+          return evtDate === startIso;
         });
+
         if (evt && (evt.attendees || []).some(a => (a.email || '').toLowerCase() === emailLower)) {
           await pool.query(`UPDATE enrollment SET calendar_added = true, updated_at = NOW() WHERE id = $1`, [row.id]);
           matched++;
+          console.log(`📅 [sync-calendar] ✓ ${row.email} found in "${evt.summary}" on ${startIso}`);
         }
       }
+      console.log(`📅 [sync-calendar] Done: checked=${rows.rows.length}, matched=${matched}`);
       return res.status(200).json({ success: true, checked: rows.rows.length, matched });
     }
 
@@ -139,7 +154,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (!Array.isArray(enrollmentIds)) return res.status(400).json({ success: false, error: 'enrollmentIds required' });
       const { calendar, calendarId } = await getCalendarClient();
       const rows = await pool.query(`
-        SELECT e.id, COALESCE(au.email, e.email) as email, c.title as course_title, cr.start_date, e.calendar_added
+        SELECT e.id, COALESCE(au.email, e.email) as email, c.title as course_title,
+               TO_CHAR(cr.start_date AT TIME ZONE 'Asia/Singapore', 'YYYY-MM-DD') as start_date_iso,
+               e.calendar_added
         FROM enrollment e
         JOIN course_run cr ON e.course_run_id = cr.id
         JOIN course c ON cr.course_id = c.id
@@ -147,7 +164,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         WHERE e.id = ANY($1::uuid[])
       `, [enrollmentIds]);
 
-      const dates = rows.rows.map(r => r.start_date ? new Date(r.start_date).toISOString().slice(0, 10) : '').filter(Boolean).sort();
+      const dates = rows.rows.map(r => r.start_date_iso || '').filter(Boolean).sort();
       if (dates.length === 0) return res.status(200).json({ success: true, results: [] });
       const minD = new Date(dates[0]); minD.setDate(minD.getDate() - 1);
       const maxD = new Date(dates[dates.length - 1]); maxD.setDate(maxD.getDate() + 2);
@@ -158,7 +175,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       for (const row of rows.rows) {
         if (row.calendar_added) { results.push({ id: row.id, success: true }); continue; }
         if (!row.email || !row.course_title) { results.push({ id: row.id, success: false, error: 'Missing email/title' }); continue; }
-        const startIso = row.start_date ? new Date(row.start_date).toISOString().slice(0, 10) : '';
+        const startIso = row.start_date_iso || '';
         const stripped = stripPrefixes(row.course_title).toLowerCase();
         const evt = events.find(e => {
           const t = stripPrefixes(e.summary || '').toLowerCase();

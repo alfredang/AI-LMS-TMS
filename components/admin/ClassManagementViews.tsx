@@ -6381,9 +6381,9 @@ const EnrolmentTable: React.FC<{
                                 <th className="px-2 py-2 text-center text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap" title="Invoice">Inv</th>
                                 <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Enrolment ID</th>
                                 <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Enrol Date</th>
+                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Name</th>
                                 <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">NRIC <button onClick={() => setShowPii(v => !v)} className="ml-1 inline-flex align-middle text-gray-400 hover:text-blue-500" title={showPii ? 'Hide' : 'Reveal'}><svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d={showPii ? "M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21" : "M15 12a3 3 0 11-6 0 3 3 0 016 0z M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"} /></svg></button></th>
                                 <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">DOB</th>
-                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Name</th>
                                 <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Email</th>
                                 <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Course Title</th>
                                 <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Course Ref No.</th>
@@ -6410,9 +6410,9 @@ const EnrolmentTable: React.FC<{
                                     <td className="px-2 py-1.5 text-center"><input type="checkbox" checked={!!(row.invoice_id && String(row.invoice_id).trim())} onChange={e => toggleField(row.id, 'invoice', e.target.checked)} className={`w-3.5 h-3.5 rounded border-gray-300 cursor-pointer ${row.invoice_id ? 'text-amber-600 accent-amber-600' : ''}`} /></td>
                                     <td className="px-2 py-1.5 whitespace-nowrap font-mono text-gray-700 dark:text-gray-200">{row.enrolment_id || '—'}</td>
                                     <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{fmt(row.enrolment_date)}</td>
+                                    <td className="px-2 py-1.5 whitespace-nowrap text-gray-700 dark:text-gray-200">{row.learner_name || '—'}</td>
                                     <td className="px-2 py-1.5 whitespace-nowrap font-mono text-gray-500 dark:text-gray-300" title={showPii ? row.nric : undefined}>{row.nric ? (showPii ? row.nric : `${row.nric.charAt(0)}****${row.nric.slice(-3)}`) : '—'}</td>
                                     <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{row.date_of_birth ? (showPii ? fmt(row.date_of_birth) : `**/**/${new Date(row.date_of_birth).getFullYear()}`) : '—'}</td>
-                                    <td className="px-2 py-1.5 whitespace-nowrap text-gray-700 dark:text-gray-200">{row.learner_name || '—'}</td>
                                     <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300 max-w-[160px] truncate" title={row.email}>{row.email || '—'}</td>
                                     <td className="px-2 py-1.5 whitespace-nowrap text-gray-700 dark:text-gray-300 max-w-[180px] truncate" title={row.course_title || row.title}>{row.course_title || row.title || '—'}</td>
                                     <td className="px-2 py-1.5 whitespace-nowrap font-mono text-gray-500 dark:text-gray-300">{row.course_code || '—'}</td>
@@ -6441,10 +6441,14 @@ const EnrolmentTable: React.FC<{
 };
 
 export const UpcomingEnrolmentView: React.FC = () => {
+    const { trainingProviderProfile } = useLms();
     const [data, setData] = useState<any[]>([]);
     const [loading, setLoading] = useState(false);
-    const [startDate, setStartDate] = useState(() => { const d = new Date(); return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`; });
-    const [endDate, setEndDate] = useState(() => { const d = new Date(); d.setDate(d.getDate() + 21); return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`; });
+    // Use admin threshold from Company Settings (default 21 days, same as Upcoming Classes)
+    const thresholdDays = (trainingProviderProfile as any)?.adminSettings?.upcomingClassesThresholdDays || 21;
+    const fmtDmy = (d: Date) => `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+    const [startDate, setStartDate] = useState(() => fmtDmy(new Date()));
+    const [endDate, setEndDate] = useState(() => { const d = new Date(); d.setDate(d.getDate() + thresholdDays); return fmtDmy(d); });
     const toIsoDate = (dmy: string) => { const p = dmy.split('/'); return p.length === 3 ? `${p[2]}-${p[1]}-${p[0]}` : dmy; };
     const fetchData = async () => {
         setLoading(true);
@@ -6452,7 +6456,7 @@ export const UpcomingEnrolmentView: React.FC = () => {
         catch { /* silent */ } finally { setLoading(false); }
     };
     useEffect(() => { fetchData(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
-    return <EnrolmentTable title="Upcoming Enrolment" description="Confirmed enrolments starting within the date range (default: next 21 days)." data={data} loading={loading} onRefresh={fetchData} showDateRange startDate={startDate} endDate={endDate} onStartDateChange={setStartDate} onEndDateChange={setEndDate} />;
+    return <EnrolmentTable title="Upcoming Enrolment" description={`Confirmed enrolments starting from today to ${thresholdDays} days ahead (same threshold as Upcoming Classes). Sorted by start date.`} data={data} loading={loading} onRefresh={fetchData} showDateRange startDate={startDate} endDate={endDate} onStartDateChange={setStartDate} onEndDateChange={setEndDate} />;
 };
 
 export const NewEnrolmentView: React.FC = () => {
