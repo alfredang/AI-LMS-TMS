@@ -59,7 +59,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 da.updated_at
             FROM da_application da
             LEFT JOIN course_run cr ON da.course_run_id = cr.course_run_id
-            ORDER BY da.created_at DESC
+            WHERE COALESCE(cr.start_date, da.course_start_date) >= CURRENT_DATE
+            ORDER BY COALESCE(cr.start_date, da.course_start_date) ASC NULLS LAST
         `);
 
         console.log(`✅ Fetched ${result.rows.length} DA applications`);
