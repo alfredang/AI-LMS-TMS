@@ -6302,10 +6302,12 @@ export const UpcomingEnrolmentView: React.FC = () => {
                     <table className="w-full text-sm text-left">
                         <thead className="bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
                             <tr>
+                                <th className="px-4 py-3 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Enrolment ID</th>
                                 <th className="px-4 py-3 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Email</th>
                                 <th className="px-4 py-3 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Course Title</th>
                                 <th className="px-4 py-3 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Course Code</th>
                                 <th className="px-4 py-3 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Start Date</th>
+                                <th className="px-4 py-3 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Enrolment Date</th>
                                 <th className="px-4 py-3 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Class Status</th>
                                 <th className="px-4 py-3 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 text-center">Calendar Match</th>
                                 <th className="px-4 py-3 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 text-center">Reason</th>
@@ -6314,15 +6316,17 @@ export const UpcomingEnrolmentView: React.FC = () => {
                         <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                             {data.length === 0 && !loading ? (
                                 <tr>
-                                    <td colSpan={7} className="px-4 py-8 text-center text-gray-500 italic">No enrolments found for this period.</td>
+                                    <td colSpan={9} className="px-4 py-8 text-center text-gray-500 italic">No enrolments found for this period.</td>
                                 </tr>
                             ) : (
                                 data.map((row, idx) => (
                                     <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                                        <td className="px-4 py-3 font-mono text-xs text-gray-500 dark:text-gray-400" title={row.enrolment_id}>{(row.enrolment_id || '').slice(0, 8)}</td>
                                         <td className="px-4 py-3 font-medium text-gray-900 dark:text-gray-200">{row.email}</td>
                                         <td className="px-4 py-3 text-gray-700 dark:text-gray-300 max-w-xs truncate" title={row.title}>{row.title}</td>
                                         <td className="px-4 py-3 font-mono text-xs text-gray-500 dark:text-gray-400">{row.course_code || '—'}</td>
                                         <td className="px-4 py-3 text-gray-500 dark:text-gray-400 whitespace-nowrap">{fmt(row.start_date)}</td>
+                                        <td className="px-4 py-3 text-gray-500 dark:text-gray-400 whitespace-nowrap">{fmt(row.enrolment_date)}</td>
                                         <td className="px-4 py-3">
                                             <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
                                                 row.class_status === 'Confirmed' ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300' :
