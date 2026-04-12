@@ -45,6 +45,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         e.nric,
         COALESCE(au.email, e.email) AS email,
         COALESCE(au.full_name, e.nric) AS learner_name,
+        lp.dob AS date_of_birth,
         c.title AS course_title,
         c.course_code,
         cr.course_run_id,
@@ -60,6 +61,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       INNER JOIN public.course_run AS cr ON e.course_run_id = cr.id
       INNER JOIN public.course AS c ON cr.course_id = c.id
       LEFT JOIN public.app_user AS au ON e.user_id = au.id
+      LEFT JOIN public.learner_profile AS lp ON e.user_id = lp.user_id
       WHERE
         LOWER(COALESCE(e.enrolment_status, '')) NOT IN ('admin removed', 'cancelled', 'withdrawn')
         AND cr.class_status <> 'Cancelled'
