@@ -6186,13 +6186,15 @@ export const UpcomingEnrolmentView: React.FC = () => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    // Single enrolment date (today in DD/MM/YYYY)
-    const [enrolDate, setEnrolDate] = useState(() => {
+    // Date range matching the Upcoming Classes view (today → today + 21 days)
+    const [startDate, setStartDate] = useState(() => {
         const d = new Date();
-        const day = String(d.getDate()).padStart(2, '0');
-        const month = String(d.getMonth() + 1).padStart(2, '0');
-        const year = d.getFullYear();
-        return `${day}/${month}/${year}`;
+        return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+    });
+    const [endDate, setEndDate] = useState(() => {
+        const d = new Date();
+        d.setDate(d.getDate() + 21);
+        return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
     });
 
     // Helper to format text input to DD/MM/YYYY
@@ -6214,7 +6216,7 @@ export const UpcomingEnrolmentView: React.FC = () => {
         setLoading(true);
         setError(null);
         try {
-            const res = await fetch(`/api/admin/upcoming-enrolment?enrolmentDate=${toIsoDate(enrolDate)}`);
+            const res = await fetch(`/api/admin/upcoming-enrolment?startDate=${toIsoDate(startDate)}&endDate=${toIsoDate(endDate)}`);
             const json = await res.json();
             if (json.success) {
                 setData(json.data);
@@ -6250,19 +6252,30 @@ export const UpcomingEnrolmentView: React.FC = () => {
             </div>
 
             <p className="text-sm text-gray-500 dark:text-gray-400">
-                Displays confirmed enrolments from SSG for the selected enrolment date, and checks if they match a calendar event.
-                Matches are based on attendee email and TGS course code in the event description.
+                Displays confirmed enrolments starting within the date range (default: next 21 days, same as Upcoming Classes)
+                and checks if they match a Google Calendar event. Matches are based on attendee email, start date, and TGS course code in the event description.
             </p>
 
             <Card className="p-5">
                 <div className="flex flex-wrap items-end gap-4">
                     <div className="space-y-1">
-                        <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500">Enrolment Date</label>
+                        <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500">Start Date</label>
                         <input
                             type="text"
                             placeholder="DD/MM/YYYY"
-                            value={enrolDate}
-                            onChange={(e) => setEnrolDate(formatDateInput(e.target.value))}
+                            value={startDate}
+                            onChange={(e) => setStartDate(formatDateInput(e.target.value))}
+                            maxLength={10}
+                            className="w-32 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                        />
+                    </div>
+                    <div className="space-y-1">
+                        <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500">End Date</label>
+                        <input
+                            type="text"
+                            placeholder="DD/MM/YYYY"
+                            value={endDate}
+                            onChange={(e) => setEndDate(formatDateInput(e.target.value))}
                             maxLength={10}
                             className="w-32 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
                         />
@@ -6301,7 +6314,7 @@ export const UpcomingEnrolmentView: React.FC = () => {
                                 </tr>
                             ) : data.length === 0 ? (
                                 <tr>
-                                    <td colSpan={8} className="px-3 py-8 text-center text-gray-500 italic">No confirmed enrolments found for this date.</td>
+                                    <td colSpan={8} className="px-3 py-8 text-center text-gray-500 italic">No enrolments found for this period.</td>
                                 </tr>
                             ) : (
                                 data.map((row, idx) => (
@@ -6310,7 +6323,7 @@ export const UpcomingEnrolmentView: React.FC = () => {
                                         <td className="px-3 py-2 text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">{fmt(row.enrolment_date)}</td>
                                         <td className="px-3 py-2 text-xs font-medium text-gray-900 dark:text-gray-200 truncate" title={row.email}>{row.email || '—'}</td>
                                         <td className="px-3 py-2 text-xs text-gray-700 dark:text-gray-300 truncate" title={row.title}>{row.title || '—'}</td>
-                                        <td className="px-3 py-2 font-mono text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">{row.tgs_code || '—'}</td>
+                                        <td className="px-3 py-2 font-mono text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">{row.tgs_code || row.course_code || '—'}</td>
                                         <td className="px-3 py-2 font-mono text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">{row.course_run_id || '—'}</td>
                                         <td className="px-3 py-2 text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">{row.start_date ? fmt(row.start_date) : '—'}</td>
                                         <td className="px-3 py-2 text-center whitespace-nowrap">
