@@ -133,12 +133,6 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate, onSelectWorkflo
         <nav className="space-y-6 p-4 bg-white dark:bg-slate-800 text-gray-900 dark:text-white h-full">
             <NavItem page={AdminPage.Dashboard} label="Admin Dashboard" />
 
-            <NavSection title="Calendar & Scheduler" isOpen={openSections.calendar} onToggle={() => toggleSection('calendar')}>
-                <NavItem page={AdminPage.Calendar} label="View Calendar" isSubItem />
-                <NavItem page={AdminPage.Scheduler} label="Task Scheduler" isSubItem />
-                <NavItem page={AdminPage.SchedulerSummary} label="Schedule Summary" isSubItem />
-            </NavSection>
-
             <NavSection title="Course Management" isOpen={openSections.courseManagement} onToggle={() => toggleSection('courseManagement')}>
                 <NavItem page={AdminPage.ViewCourses} label="View Courses" isSubItem />
                 <NavItem page={AdminPage.ViewTrainers} label="View Trainers" isSubItem />
@@ -204,6 +198,12 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate, onSelectWorkflo
                     <NavItem page={AdminPage.SearchGrant} label="Search Grant" isSubItem />
                     <NavItem page={AdminPage.ViewGrantStatus} label="View Grant Status" isSubItem />
                 </SubSection>
+            </NavSection>
+
+            <NavSection title="Calendar & Scheduler" isOpen={openSections.calendar} onToggle={() => toggleSection('calendar')}>
+                <NavItem page={AdminPage.Calendar} label="View Calendar" isSubItem />
+                <NavItem page={AdminPage.Scheduler} label="Task Scheduler" isSubItem />
+                <NavItem page={AdminPage.SchedulerSummary} label="Schedule Summary" isSubItem />
             </NavSection>
 
             <NavSection title="Certificate" isOpen={openSections.certificate} onToggle={() => toggleSection('certificate')}>
