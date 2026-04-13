@@ -138,7 +138,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     // Merge grants into enrolment records (ssg_grants may key on older ENR before SSG refresh)
-    const data = enrolmentResult.rows.map((row: Record<string, unknown> & { enrolment_id?: string | null; enrolment_id_db?: string | null }) => {
+    const data = enrolmentResult.rows.map((row: Record<string, unknown> & { enrolment_id?: string | null; enrolment_id_db?: string | null, pro_forma_url?: string | null, drive_web_view_link?: string | null }) => {
       const canon = row.enrolment_id?.trim() || '';
       const local = row.enrolment_id_db?.trim() || '';
       const g1 = canon ? grantsByEnrolment[canon] || [] : [];
@@ -147,8 +147,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       for (const g of g2) {
         if (!merged.some(m => m.funding_scheme === g.funding_scheme && m.status === g.status)) merged.push(g);
       }
+      // Always provide a non-empty enrolment_id if possible
+      const enrolment_id_final = canon || local || null;
+      // Prefer drive_web_view_link (from invoice_jobs), fallback to pro_forma_url (from learner_profile)
+      const pro_forma_url_final = row.drive_web_view_link || row.pro_forma_url || null;
       const { enrolment_id_db: _drop, ...rest } = row;
-      return { ...rest, grants: merged };
+      return { ...rest, enrolment_id: enrolment_id_final, pro_forma_url: pro_forma_url_final, grants: merged };
     });
 
     return res.status(200).json({
