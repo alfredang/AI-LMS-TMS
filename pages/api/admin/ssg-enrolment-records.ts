@@ -18,21 +18,26 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const offset = page * limit;
 
   try {
-    let whereClause = '';
+    const conditions: string[] = [];
     const params: any[] = [];
     let paramIdx = 1;
 
+    // Only show enrolments for courses starting after today
+    conditions.push(`(start_date IS NULL OR start_date::date > CURRENT_DATE)`);
+
     if (search) {
-      whereClause = `WHERE enrolment_reference ILIKE $${paramIdx}
+      conditions.push(`(enrolment_reference ILIKE $${paramIdx}
         OR learner_name ILIKE $${paramIdx}
         OR learner_nric ILIKE $${paramIdx}
         OR learner_email ILIKE $${paramIdx}
         OR course_title ILIKE $${paramIdx}
         OR course_ref_code ILIKE $${paramIdx}
-        OR course_run_id ILIKE $${paramIdx}`;
+        OR course_run_id ILIKE $${paramIdx})`);
       params.push(`%${search}%`);
       paramIdx++;
     }
+
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
     const countRes = await pool.query(
       `SELECT COUNT(*)::int AS total FROM ssg_enrolment_record ${whereClause}`,

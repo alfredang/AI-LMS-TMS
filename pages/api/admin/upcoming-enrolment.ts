@@ -57,10 +57,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         e.grant_amount,
         e.course_sponsorship,
         e.payment_status,
-        COALESCE(c.course_fee, c.course_fees_exclude_gst) AS fee,
-        CASE WHEN c.course_fees_include_gst IS NOT NULL AND c.course_fees_exclude_gst IS NOT NULL
+        COALESCE(c.course_fee::text, c.course_fees_exclude_gst) AS fee,
+        CASE WHEN NULLIF(c.course_fees_include_gst, '') IS NOT NULL AND NULLIF(c.course_fees_exclude_gst, '') IS NOT NULL
              THEN (CAST(c.course_fees_include_gst AS numeric) - CAST(c.course_fees_exclude_gst AS numeric))::text
-             ELSE NULL END AS gst
+             ELSE NULL END AS gst,
+        (SELECT da.skillsfuture_subsidy::text FROM public.da_application da WHERE LOWER(da.trainee_id) = LOWER(e.nric) AND da.course_run_id = cr.course_run_id LIMIT 1) AS sf_subsidy,
+        (SELECT da.skillsfuture_credit::text FROM public.da_application da WHERE LOWER(da.trainee_id) = LOWER(e.nric) AND da.course_run_id = cr.course_run_id LIMIT 1) AS sf_credit,
+        (SELECT da.payable_fee::text FROM public.da_application da WHERE LOWER(da.trainee_id) = LOWER(e.nric) AND da.course_run_id = cr.course_run_id LIMIT 1) AS payable,
+        (SELECT da.skillsfuture_credit_claim_id FROM public.da_application da WHERE LOWER(da.trainee_id) = LOWER(e.nric) AND da.course_run_id = cr.course_run_id LIMIT 1) AS sf_claim_id
       FROM public.enrollment AS e
       INNER JOIN public.course_run AS cr ON e.course_run_id = cr.id
       INNER JOIN public.course AS c ON cr.course_id = c.id
@@ -68,7 +72,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       LEFT JOIN public.learner_profile AS lp ON e.user_id = lp.user_id
       WHERE
         LOWER(COALESCE(e.enrolment_status, '')) NOT IN ('admin removed', 'cancelled', 'withdrawn')
-        AND cr.class_status <> 'Cancelled'
+        AND (cr.class_status IS NULL OR cr.class_status <> 'Cancelled')
         AND cr.start_date BETWEEN $1 AND $2
       ORDER BY cr.start_date ASC, e.created_at DESC`,
       [start, end]

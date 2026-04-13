@@ -187,8 +187,8 @@ async function seedDefaults() {
         {
             id: 'sync_ssg_enrolments',
             name: 'Sync SSG Enrolments',
-            description: 'Pulls recent enrolments from SSG (last 7 days) and stores new ones in the local ssg_enrolment_record table. Runs every 2 hours. Only inserts new records — existing enrolment references are skipped.',
-            cron_expression: '0 */2 * * *', // Every 2 hours
+            description: 'Pulls recent enrolments from SSG (last 7 days) and stores new ones in the local ssg_enrolment_record table. Runs every 3 hours. Only inserts new records — existing enrolment references are skipped.',
+            cron_expression: '0 */3 * * *', // Every 3 hours
             api_endpoint: '/api/external/sync-ssg-enrolments',
         },
         {

@@ -6392,6 +6392,10 @@ const EnrolmentTable: React.FC<{
                                 <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Fee</th>
                                 <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">GST</th>
                                 <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Sponsor</th>
+                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">SF Sub</th>
+                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">SF Cr</th>
+                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Payable</th>
+                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">SF Claim ID</th>
                                 <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Payment</th>
                                 <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Status</th>
                                 <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Grant ID</th>
@@ -6402,9 +6406,9 @@ const EnrolmentTable: React.FC<{
                         </thead>
                         <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                             {loading ? (
-                                <tr><td colSpan={23} className="px-3 py-8 text-center text-gray-500 italic">Loading...</td></tr>
+                                <tr><td colSpan={27} className="px-3 py-8 text-center text-gray-500 italic">Loading...</td></tr>
                             ) : filteredData.length === 0 ? (
-                                <tr><td colSpan={23} className="px-3 py-8 text-center text-gray-500 italic">No enrolments found.</td></tr>
+                                <tr><td colSpan={27} className="px-3 py-8 text-center text-gray-500 italic">No enrolments found.</td></tr>
                             ) : filteredData.map((row, idx) => (
                                 <tr key={row.id || idx} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
                                     <td className="px-2 py-1.5"><input type="checkbox" checked={selectedIds.has(row.id)} onChange={() => toggleSelect(row.id)} className="w-3.5 h-3.5" /></td>
@@ -6423,7 +6427,11 @@ const EnrolmentTable: React.FC<{
                                     <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{row.course_run_id || '—'}</td>
                                     <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{row.fee != null ? `$${parseFloat(row.fee || 0).toFixed(2)}` : '—'}</td>
                                     <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{row.gst != null ? `$${parseFloat(row.gst || 0).toFixed(2)}` : '—'}</td>
-                                    <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{row.course_sponsorship || '—'}</td>
+                                    <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{row.course_sponsorship || row.sponsorship_type || '—'}</td>
+                                    <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{row.sf_subsidy != null ? `$${parseFloat(row.sf_subsidy || 0).toFixed(2)}` : '—'}</td>
+                                    <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{row.sf_credit != null ? `$${parseFloat(row.sf_credit || 0).toFixed(2)}` : '—'}</td>
+                                    <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{row.payable != null ? `$${parseFloat(row.payable || 0).toFixed(2)}` : '—'}</td>
+                                    <td className="px-2 py-1.5 whitespace-nowrap font-mono text-gray-500 dark:text-gray-300">{row.sf_claim_id || '—'}</td>
                                     <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{row.payment_status || '—'}</td>
                                     <td className="px-2 py-1.5 whitespace-nowrap"><span className={`px-1.5 py-0.5 text-[10px] font-bold rounded-full ${(row.enrolment_status || row.class_status) === 'Confirmed' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'}`}>{row.enrolment_status || row.class_status || '—'}</span></td>
                                     <td className="px-2 py-1.5 whitespace-nowrap font-mono text-gray-500 dark:text-gray-300">{row.grant_id || '—'}</td>
@@ -6480,7 +6488,7 @@ export const NewEnrolmentView: React.FC = () => {
         catch { alert('Sync failed.'); } finally { setSyncing(false); }
     };
     React.useEffect(() => { fetchData(); }, []);
-    return <EnrolmentTable title="New Enrolment" description="SSG enrolments pulled by the scheduler (every 2 hours). Click Sync to pull latest." data={data} loading={loading} onRefresh={fetchData} onSync={handleSync} syncLabel="Sync from SSG Now" syncing={syncing} />;
+    return <EnrolmentTable title="New Enrolment" description="SSG enrolments pulled by the scheduler (every 3 hours). Only showing courses starting after today. Click Sync to pull latest." data={data} loading={loading} onRefresh={fetchData} onSync={handleSync} syncLabel="Sync from SSG Now" syncing={syncing} />;
 };
 
 // ── Course Run Date Sync Log ──────────────────────────────────────────────────
