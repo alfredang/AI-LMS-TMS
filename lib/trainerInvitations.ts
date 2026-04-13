@@ -103,7 +103,8 @@ export interface InvitationClassRow {
   course_run_id?: string | null;          // external/TPG course run id
   course_title?: string | null;
   course_code?: string | null;
-  course_mode?: string | null;            // maps to mode_of_learning (Physical/Virtual/...)
+  course_mode?: string | null;            // mode_of_learning: Physical/Virtual/Hybrid
+  course_type?: string | null;            // WSQ, Non-WSQ, etc.
   training_hours?: string | number | null;
   assessment_hours?: string | number | null;
   start_date?: string | Date | null;
@@ -158,7 +159,8 @@ export function buildInvitationReplacements(opts: {
     TRAINER_NAME: trainerName,
     COURSE_TITLE: classRow.course_title || '',
     COURSE_CODE: classRow.course_code || '',
-    COURSE_TYPE: classRow.course_mode || 'N/A',
+    CLASS_TYPE: classRow.course_mode || 'N/A',
+    COURSE_TYPE: classRow.course_type || classRow.course_mode || 'N/A',
     COURSE_RUN_ID: classRow.course_run_id || '',
     START_DATE: formatDateLabel(classRow.start_date),
     END_DATE: formatDateLabel(classRow.end_date),

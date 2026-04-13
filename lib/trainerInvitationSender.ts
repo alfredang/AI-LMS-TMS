@@ -172,6 +172,7 @@ export async function sendNextTrainerInvitationForCourseRun(opts: {
         cr.tpg_assigned_trainer_name,
         c.title AS course_title,
         c.course_code,
+        c.course_type,
         c.training_hours,
         c.assessment_hours,
         c.trainers_list
