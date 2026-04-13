@@ -87,7 +87,7 @@ const CompletedClasses: React.FC = () => {
   const [courseRunId, setCourseRunId] = useState('');
   const [selectedTrainer, setSelectedTrainer] = useState('');
   const [selectedClassStatus, setSelectedClassStatus] = useState<'all' | 'Confirmed' | 'Pending' | 'Cancelled'>('all');
-  const [selectedClassType, setSelectedClassType] = useState<'all' | 'Physical' | 'Virtual' | 'Hybrid'>('all');
+  const [selectedClassType, setSelectedClassType] = useState<'all' | 'Physical' | 'Virtual' | 'Hybrid' | 'External'>('all');
   const [selectedCourseType, setSelectedCourseType] = useState<'all' | 'WSQ' | 'IBF' | 'Non-WSQ'>('all');
   const [startDateFrom, setStartDateFrom] = useState('');
   const [endDateUntil, setEndDateUntil] = useState('');
@@ -657,13 +657,14 @@ const CompletedClasses: React.FC = () => {
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Class Type</label>
                   <select
                     value={selectedClassType}
-                    onChange={(e) => setSelectedClassType(e.target.value as 'all' | 'Physical' | 'Virtual' | 'Hybrid')}
+                    onChange={(e) => setSelectedClassType(e.target.value as 'all' | 'Physical' | 'Virtual' | 'Hybrid' | 'External')}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                   >
                     <option value="all">All</option>
                     <option value="Physical">Physical</option>
                     <option value="Virtual">Virtual</option>
                     <option value="Hybrid">Hybrid</option>
+                    <option value="External">External</option>
                   </select>
                 </div>
 
@@ -792,7 +793,7 @@ const CompletedClasses: React.FC = () => {
                         </select>
                       </td>
                       <td className="px-4 py-2 whitespace-nowrap text-sm">
-                        <span className={`px-2 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full ${(classItem.classType || 'Physical') === 'Virtual' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300' : (classItem.classType || 'Physical') === 'Hybrid' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300' : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'}`}>{classItem.classType || 'Physical'}</span>
+                        <span className={`px-2 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full ${(classItem.classType || 'Physical') === 'Virtual' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300' : (classItem.classType || 'Physical') === 'Hybrid' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300' : (classItem.classType || 'Physical') === 'External' ? 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/40 dark:text-cyan-300' : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'}`}>{classItem.classType || 'Physical'}</span>
                       </td>
                       <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{formatDate(classItem.startDate)}</td>
                       <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{formatDate(classItem.endDate)}</td>

@@ -178,7 +178,7 @@ export default async function handler(
     }
 
     const classType = req.query.classType;
-    if (classType === 'Physical' || classType === 'Virtual' || classType === 'Hybrid') {
+    if (classType === 'Physical' || classType === 'Virtual' || classType === 'Hybrid' || classType === 'External') {
       whereConditions.push(`COALESCE(cr.class_type, 'Physical') = $${paramCounter}`);
       queryParams.push(classType);
       paramCounter++;

@@ -2097,8 +2097,8 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                     />
                                 </div>
                                 {availableTrainerChoices.length > 0 && (
-                                    <div className="max-h-56 overflow-y-auto rounded-md border border-gray-300 dark:border-gray-600">
-                                        {availableTrainerChoices.slice(0, 12).map((trainer) => (
+                                    <div className="max-h-80 overflow-y-auto rounded-md border border-gray-300 dark:border-gray-600">
+                                        {availableTrainerChoices.map((trainer) => (
                                             <button
                                                 key={trainer.user_id}
                                                 type="button"

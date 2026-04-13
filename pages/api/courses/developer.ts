@@ -32,7 +32,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           c.brochure_link,
           c.num_of_trainers,
           c.trainers_list,
-          c.trainers_email_list
+          c.trainers_email_list,
+          (SELECT ARRAY_AGG(cr.course_run_id) FROM course_run cr WHERE cr.course_id = c.id) AS course_run_ids
       FROM course c
       ORDER BY c.course_code DESC
     `;
@@ -69,6 +70,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         ? String(row.trainers_list).split(',').map((name: string) => name.trim()).filter(Boolean)
         : [],
       courseRunId: null,
+      courseRunIds: row.course_run_ids || [],
       startDate: null,
       endDate: null,
       classStatus: 'Published',

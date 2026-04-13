@@ -16,14 +16,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const client = await pool.connect();
     
     const query = `
-      SELECT 
-        id,
-        title,
-        course_code,
-        tsc_title,
-        tsc_code
-      FROM course
-      ORDER BY created_at DESC;
+      SELECT
+        c.id,
+        c.title,
+        c.course_code,
+        c.tsc_title,
+        c.tsc_code,
+        (SELECT ARRAY_AGG(cr.course_run_id) FROM course_run cr WHERE cr.course_id = c.id) AS course_run_ids
+      FROM course c
+      ORDER BY c.created_at DESC;
     `;
 
     const result = await client.query(query);
@@ -34,7 +35,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       title: row.title,
       courseCode: row.course_code,
       tscTitle: row.tsc_title,
-      tscCode: row.tsc_code
+      tscCode: row.tsc_code,
+      courseRunIds: row.course_run_ids || [],
     }));
 
     res.status(200).json({ 
