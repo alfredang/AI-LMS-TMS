@@ -25,6 +25,7 @@ import TrainerInvitationEmailTemplateView from '../components/training-provider/
 import FinalCourseConfirmationEmailTemplateView from '../components/training-provider/FinalCourseConfirmationEmailTemplateView';
 import CourseConfirmationEmailTemplateView from '../components/training-provider/CourseConfirmationEmailTemplateView';
 import CoursewareAttendanceEmailTemplateView from '../components/training-provider/CoursewareAttendanceEmailTemplateView';
+import ProformaInvoiceEmailTemplateView from '../components/training-provider/templates/ProformaInvoiceEmailTemplateView';
 import FinanceManagementView from '../components/training-provider/FinanceManagementView';
 import TrainingProviderSidebar from '../components/training-provider/TrainingProviderSidebar';
 import SchedulerView from '../components/admin/SchedulerView';
@@ -111,6 +112,8 @@ const TrainingProviderLayout: React.FC = () => {
         return <CourseConfirmationEmailTemplateView />;
       case View.CoursewareAttendanceEmailTemplate:
         return <CoursewareAttendanceEmailTemplateView />;
+      case View.ProformaInvoiceEmailTemplate:
+        return <ProformaInvoiceEmailTemplateView />;
       case View.FinanceManagement:
         return <FinanceManagementView />;
       case View.Scheduler:
@@ -150,6 +153,7 @@ const TrainingProviderLayout: React.FC = () => {
       case View.FinalCourseConfirmationEmailTemplate: return 'Final Course Confirmation Email Template';
       case View.CourseConfirmationEmailTemplate: return 'Course Confirmation Email Template';
       case View.CoursewareAttendanceEmailTemplate: return 'Courseware and Attendance Taking Email Template';
+      case View.ProformaInvoiceEmailTemplate: return 'Proforma Invoice Email Template';
       case View.FinanceManagement: return 'Finance Management';
       case View.Scheduler: return 'Task Scheduler';
       case View.SchedulerSummary: return 'Schedule Summary';

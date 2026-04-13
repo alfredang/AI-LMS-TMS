@@ -27,6 +27,7 @@ export enum View {
   FinalCourseConfirmationEmailTemplate = 'finalCourseConfirmationEmailTemplate',
   CourseConfirmationEmailTemplate = 'courseConfirmationEmailTemplate',
   CoursewareAttendanceEmailTemplate = 'coursewareAttendanceEmailTemplate',
+  ProformaInvoiceEmailTemplate = 'proformaInvoiceEmailTemplate',
   FinanceManagement = 'financeManagement',
   BillingHistory = 'billingHistory',
   CertificateHistory = 'certificateHistory',
