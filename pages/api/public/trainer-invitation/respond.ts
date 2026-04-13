@@ -146,26 +146,53 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(200).send(renderPage('Already Responded', msg, 'gray'));
     }
 
-    // If accepting, check if another trainer already accepted for this course run
+    // If accepting, check if another trainer already accepted AND is still
+    // assigned locally. If the accepted trainer was later removed by admin,
+    // the late accept should go through instead of being blocked.
     if (action === 'accept') {
       const alreadyAccepted = await pool.query(
-        `SELECT trainer_name FROM trainer_invitation
-         WHERE course_run_id = $1 AND status = 'accepted' AND id != $2
+        `SELECT ti.trainer_name, ti.trainer_email
+         FROM trainer_invitation ti
+         WHERE ti.course_run_id = $1 AND ti.status = 'accepted' AND ti.id != $2
          LIMIT 1`,
         [invitation.course_run_id, invitation.id]
       );
       if (alreadyAccepted.rows.length > 0) {
-        // Mark this invitation as declined (too late)
-        await pool.query(
-          `UPDATE trainer_invitation SET status = 'declined', responded_at = NOW(), updated_at = NOW() WHERE id = $1`,
-          [invitation.id]
+        // Verify the accepted trainer is still assigned locally
+        // (junction table first, fall back to scalar)
+        const acceptedEmail = alreadyAccepted.rows[0].trainer_email;
+        const stillAssigned = await pool.query(
+          `SELECT 1 FROM course_run_trainer
+           WHERE course_run_id = $1 AND LOWER(trainer_email) = LOWER($2)
+           LIMIT 1`,
+          [invitation.course_run_id, acceptedEmail]
         );
-        res.setHeader('Content-Type', 'text/html; charset=utf-8');
-        return res.status(200).send(renderPage(
-          'Already Assigned',
-          `Thank you for your response, ${invitation.trainer_name}. Unfortunately, this class has already been assigned. We appreciate your willingness and will reach out for future opportunities.`,
-          'gray'
-        ));
+        const scalarCheck = stillAssigned.rows.length === 0
+          ? await pool.query(
+              `SELECT 1 FROM course_run
+               WHERE id = $1 AND LOWER(assigned_trainer_email) = LOWER($2)
+               LIMIT 1`,
+              [invitation.course_run_id, acceptedEmail]
+            )
+          : stillAssigned;
+
+        if (scalarCheck.rows.length > 0) {
+          // Still assigned — block the late accept
+          await pool.query(
+            `UPDATE trainer_invitation SET status = 'declined', responded_at = NOW(), updated_at = NOW() WHERE id = $1`,
+            [invitation.id]
+          );
+          res.setHeader('Content-Type', 'text/html; charset=utf-8');
+          return res.status(200).send(renderPage(
+            'Already Assigned',
+            `Thank you for your response, ${invitation.trainer_name}. Unfortunately, this class has already been assigned. We appreciate your willingness and will reach out for future opportunities.`,
+            'gray'
+          ));
+        }
+        // Accepted trainer was removed — allow this late accept to proceed
+        console.log(
+          `ℹ️ [trainer-invitation/respond] Previous acceptor "${alreadyAccepted.rows[0].trainer_name}" no longer assigned locally — allowing late accept from "${invitation.trainer_name}"`
+        );
       }
     }
 
