@@ -1,6 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { Pool } from 'pg';
-import { generateAndUploadCertificate, deleteCertificate } from '../../../lib/services/certificateService';
+import { deleteCertificate } from '../../../lib/services/certificateService';
 
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,

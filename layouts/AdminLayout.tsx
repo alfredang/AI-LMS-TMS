@@ -25,7 +25,7 @@ import OngoingClasses from '../components/admin/OngoingClasses';
 import CompletedClasses from '../components/admin/CompletedClasses';
 import ClassDetailView from '../components/admin/ClassDetailView';
 import { UpcomingClassesTable } from '../components/UpcomingClassesTable';
-import { ClassManagerView, AssignTrainerView, AssignStudentView, AddCourseView, AddCourseRunView, AutomationLogsView, TrainerFolderLogsView, AutoCreateCertificatesLogView, BackfillEnrollmentsView, FetchUpcomingEnrolmentsView, UpcomingEnrolmentView, CourseRunDateSyncLogsView, UpcomingCourseRunsLogView, CourseConfirmationEmailLogsView, SyncTrainerTpgLogsView, AutoSendTrainerInvitationLogView, AutoSanitiseDataLogView } from '../components/admin/ClassManagementViews';
+import { ClassManagerView, AssignTrainerView, AssignStudentView, AddCourseView, AddCourseRunView, AutomationLogsView, TrainerFolderLogsView, AutoCreateCertificatesLogView, BackfillEnrollmentsView, FetchUpcomingEnrolmentsView, UpcomingEnrolmentView, NewEnrolmentView, CourseRunDateSyncLogsView, UpcomingCourseRunsLogView, CourseConfirmationEmailLogsView, SyncTrainerTpgLogsView, AutoSendTrainerInvitationLogView, AutoSanitiseDataLogView } from '../components/admin/ClassManagementViews';
 import { CreateCertificateView, DeleteCertificateView } from '../components/admin/CertificateManagement';
 import { SendCertificateSGView } from '../components/admin/SendCertificateSG';
 import { SendCertificateGHView } from '../components/admin/SendCertificateGH';
@@ -190,6 +190,7 @@ const PAGE_LABELS: Partial<Record<AdminPage, string>> = {
   [AdminPage.BackfillEnrollments]: 'Backfill Enrollments',
   [AdminPage.FetchUpcomingEnrolments]: 'Fetch Upcoming Classes Enrolment',
   [AdminPage.UpcomingEnrolment]: 'Upcoming Enrolment',
+  [AdminPage.NewEnrolment]: 'New Enrolment',
   [AdminPage.CreateCertificate]: 'Create Certificate',
   [AdminPage.DeleteCertificate]: 'Delete Certificate',
   [AdminPage.SendCertificateSG]: 'Send Certificate (SG)',
@@ -418,6 +419,8 @@ const AdminLayout: React.FC = () => {
         return <FetchUpcomingEnrolmentsView />;
       case AdminPage.UpcomingEnrolment:
         return <UpcomingEnrolmentView />;
+      case AdminPage.NewEnrolment:
+        return <NewEnrolmentView />;
       case AdminPage.CreateCertificate:
         return <CreateCertificateView />;
       case AdminPage.DeleteCertificate:

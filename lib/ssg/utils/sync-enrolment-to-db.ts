@@ -87,11 +87,13 @@ export async function syncEnrolmentToDB(
     if (inserted.rows.length > 0) {
       userId = inserted.rows[0].id;
 
+      const traineeDob = trainee.dateOfBirth || null;
       await client.query(
-        `INSERT INTO learner_profile (user_id, nric, tel)
-         VALUES ($1, $2, '')
-         ON CONFLICT (user_id) DO NOTHING`,
-        [userId, traineeNric]
+        `INSERT INTO learner_profile (user_id, nric, tel, dob)
+         VALUES ($1, $2, '', $3::date)
+         ON CONFLICT (user_id) DO UPDATE SET
+           dob = COALESCE(learner_profile.dob, EXCLUDED.dob)`,
+        [userId, traineeNric, traineeDob]
       );
 
       await client.query(
@@ -110,6 +112,14 @@ export async function syncEnrolmentToDB(
     }
   } else {
     userId = userRow.rows[0].id;
+    // Update DOB on existing learner_profile if missing
+    const traineeDob = trainee.dateOfBirth || null;
+    if (traineeDob) {
+      await client.query(
+        `UPDATE learner_profile SET dob = $1::date WHERE user_id = $2 AND dob IS NULL`,
+        [traineeDob, userId]
+      );
+    }
   }
 
   if (!userId!) return 'skipped';

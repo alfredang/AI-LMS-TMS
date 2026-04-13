@@ -34,6 +34,11 @@ interface DaResultRow {
     trainee_name: string;
     trainee_id: string;
     message: string;
+    // SSG enrolment tracking — populated after auto-enrol is triggered
+    enrolStatus?: 'pending' | 'enroled' | 'grant_found' | 'invoiced' | 'failed' | null;
+    enrolmentId?: string | null;
+    grantId?: string | null;
+    enrolError?: string | null;
 }
 
 const RESULTS_PER_PAGE = 10;
@@ -51,6 +56,11 @@ export const UploadDirectApplicationView: React.FC = () => {
     const [showTraineeId, setShowTraineeId] = useState(false);
     const [progressCurrent, setProgressCurrent] = useState(0);
     const [progressTotal, setProgressTotal] = useState(0);
+
+    // SSG auto-enrol state
+    const [isAutoEnrolling, setIsAutoEnrolling] = useState(false);
+    const [autoEnrolQueued, setAutoEnrolQueued] = useState(0);
+    const [autoEnrolPolling, setAutoEnrolPolling] = useState(false);
 
     const maskTraineeId = (id: string | null) => {
         if (!id) return 'N/A';
@@ -276,6 +286,88 @@ export const UploadDirectApplicationView: React.FC = () => {
         setViewState('upload');
     };
 
+    // ── Auto-enrol to SSG + apply grant ─────────────────────────────────────
+    // Triggers the background pipeline for all inserted/updated rows, then
+    // polls the DA table until every row has a terminal enrol status.
+    const handleAutoEnrol = async () => {
+        // Collect application IDs from inserted + updated results only
+        const eligibleIds = allResults
+            .filter(r => r.action === 'inserted' || r.action === 'updated')
+            .map(r => r.application_id)
+            .filter(Boolean);
+        if (eligibleIds.length === 0) return;
+
+        setIsAutoEnrolling(true);
+        try {
+            const res = await fetch('/api/admin/auto-enrol-direct-applications', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ applicationIds: eligibleIds }),
+            });
+            const json = await res.json();
+            if (!json.success) throw new Error(json.error || 'Failed to trigger auto-enrol');
+            setAutoEnrolQueued(json.queued || eligibleIds.length);
+            // Start polling for status updates
+            setAutoEnrolPolling(true);
+            pollEnrolStatus(eligibleIds);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Auto-enrol failed');
+        } finally {
+            setIsAutoEnrolling(false);
+        }
+    };
+
+    const pollEnrolStatus = async (appIds: string[]) => {
+        const appIdSet = new Set(appIds);
+        let attempts = 0;
+        const maxAttempts = 60; // ~5 minutes at 5-second intervals
+        const poll = async () => {
+            attempts++;
+            try {
+                const res = await fetch('/api/admin/fetch-all-da-applications');
+                const json = await res.json();
+                if (json.success && Array.isArray(json.data)) {
+                    const byId = new Map<string, any>();
+                    for (const row of json.data) {
+                        if (row.application_id && appIdSet.has(row.application_id)) {
+                            byId.set(row.application_id, row);
+                        }
+                    }
+                    // Update allResults with enrol status from the DB
+                    setAllResults(prev => prev.map(r => {
+                        const dbRow = byId.get(r.application_id);
+                        if (!dbRow) return r;
+                        return {
+                            ...r,
+                            enrolStatus: dbRow.auto_enrol_status || null,
+                            enrolmentId: dbRow.enrolment_id || null,
+                            grantId: dbRow.grant_id || null,
+                            enrolError: dbRow.auto_enrol_error || null,
+                        };
+                    }));
+                    // Check if all are terminal
+                    const allDone = [...appIdSet].every(id => {
+                        const row = byId.get(id);
+                        return row && (
+                            row.auto_enrol_status === 'enroled' ||
+                            row.auto_enrol_status === 'grant_found' ||
+                            row.auto_enrol_status === 'invoiced' ||
+                            row.auto_enrol_status === 'failed'
+                        );
+                    });
+                    if (allDone || attempts >= maxAttempts) {
+                        setAutoEnrolPolling(false);
+                        return;
+                    }
+                }
+            } catch {
+                // silent — retry on next interval
+            }
+            setTimeout(poll, 5000);
+        };
+        setTimeout(poll, 3000); // first poll after 3s
+    };
+
     // ── Derived state ────────────────────────────────────────────────────────
 
     const filteredResults = filterCategory === 'all'
@@ -372,6 +464,31 @@ export const UploadDirectApplicationView: React.FC = () => {
                     ))}
                 </div>
 
+                {/* Auto-Enrol to SSG action bar */}
+                {(summary.inserted > 0 || summary.updated > 0) && (
+                    <Card className="p-4 dark:bg-gray-800 dark:border-gray-700">
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                            <div>
+                                <h3 className="text-sm font-semibold text-gray-800 dark:text-white">SSG Enrolment & Grant Application</h3>
+                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                                    {autoEnrolPolling
+                                        ? `Processing ${autoEnrolQueued} application(s)… refreshing status every 5s`
+                                        : autoEnrolQueued > 0
+                                            ? `Completed — ${autoEnrolQueued} application(s) processed`
+                                            : `${summary.inserted + summary.updated} eligible application(s) ready to enrol`
+                                    }
+                                </p>
+                            </div>
+                            <Button
+                                onClick={handleAutoEnrol}
+                                disabled={isAutoEnrolling || autoEnrolPolling}
+                            >
+                                {isAutoEnrolling ? 'Triggering…' : autoEnrolPolling ? 'Processing…' : autoEnrolQueued > 0 ? 'Re-run Auto-Enrol' : 'Auto-Enrol to SSG & Apply Grant'}
+                            </Button>
+                        </div>
+                    </Card>
+                )}
+
                 {/* Detail table */}
                 <Card className="p-0 overflow-x-auto dark:bg-gray-800 dark:border-gray-700">
                     <div className="px-6 py-4 border-b dark:border-gray-700 flex justify-between items-center">
@@ -394,6 +511,7 @@ export const UploadDirectApplicationView: React.FC = () => {
                                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Trainee ID</th>
                                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Action</th>
                                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Message</th>
+                                        <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">SSG Enrol</th>
                                     </tr>
                                 </thead>
                                 <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
@@ -429,6 +547,36 @@ export const UploadDirectApplicationView: React.FC = () => {
                                                 </span>
                                             </td>
                                             <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">{r.message}</td>
+                                            <td className="px-4 py-3 text-center">
+                                                {(() => {
+                                                    // Only inserted/updated rows are eligible for SSG enrol
+                                                    if (r.action !== 'inserted' && r.action !== 'updated') {
+                                                        return <span className="text-gray-300 dark:text-gray-600">—</span>;
+                                                    }
+                                                    const s = r.enrolStatus;
+                                                    if (!s || s === 'pending') {
+                                                        // Not yet enroled or still processing
+                                                        return autoEnrolPolling ? (
+                                                            <span className="inline-block w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" title="Processing…" />
+                                                        ) : (
+                                                            <span className="inline-flex items-center justify-center w-5 h-5 rounded border-2 border-gray-300 dark:border-gray-600" title="Not yet enroled" />
+                                                        );
+                                                    }
+                                                    if (s === 'failed') {
+                                                        return (
+                                                            <span className="inline-flex items-center justify-center w-5 h-5 rounded bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 text-xs font-bold" title={r.enrolError || 'Failed'}>
+                                                                ✗
+                                                            </span>
+                                                        );
+                                                    }
+                                                    // enroled, grant_found, invoiced — all success states
+                                                    return (
+                                                        <span className="inline-flex items-center justify-center w-5 h-5 rounded bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 text-xs font-bold" title={`${s}${r.enrolmentId ? ` · ${r.enrolmentId}` : ''}${r.grantId ? ` · Grant: ${r.grantId}` : ''}`}>
+                                                            ✓
+                                                        </span>
+                                                    );
+                                                })()}
+                                            </td>
                                         </tr>
                                     ))}
                                 </tbody>
@@ -542,7 +690,7 @@ export const ViewDirectApplicationView: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [currentPage, setCurrentPage] = useState(1);
-    const itemsPerPage = 10;
+    const itemsPerPage = 20;
 
     // Selection state
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -550,6 +698,130 @@ export const ViewDirectApplicationView: React.FC = () => {
     const [isDeleting, setIsDeleting] = useState(false);
     const [isEnrolling, setIsEnrolling] = useState(false);
     const [isAutoEnrolling, setIsAutoEnrolling] = useState(false);
+    const [isAddingToCal, setIsAddingToCal] = useState(false);
+    const [isGeneratingInv, setIsGeneratingInv] = useState(false);
+    const [isSyncingEnrol, setIsSyncingEnrol] = useState(false);
+    const [isSyncingCal, setIsSyncingCal] = useState(false);
+    const [isSyncingInv, setIsSyncingInv] = useState(false);
+    const [showPii, setShowPii] = useState(false);
+
+    // Toggle a DA checkbox (enrol/calendar/invoice) and auto-save to DB
+    const toggleDaField = async (appId: string, field: 'enrol' | 'calendar' | 'invoice', newValue: boolean) => {
+        // Optimistic UI update
+        setApplications(prev => prev.map(a => {
+            if (a.id !== appId) return a;
+            if (field === 'enrol') return { ...a, enrolment_status: newValue ? 'Confirmed' : null, enrolment_id: newValue ? (a.enrolment_id || 'MANUAL') : null };
+            if (field === 'calendar') return { ...a, calendar_added: newValue };
+            if (field === 'invoice') return { ...a, invoice_id: newValue ? (a.invoice_id || 'MANUAL') : null };
+            return a;
+        }));
+        try {
+            const res = await fetch('/api/admin/da-toggle-field', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: appId, field, value: newValue }),
+            });
+            if (!res.ok) console.error('Failed to save toggle');
+        } catch {
+            console.error('Failed to save toggle');
+        }
+    };
+
+    // Bulk: Add selected to Google Calendar
+    const handleAddToCalendar = async () => {
+        const ids = Array.from(selectedIds).filter(appId => {
+            const app = applications.find(a => a.application_id === appId);
+            return app && !app.calendar_added;
+        }).map(appId => applications.find(a => a.application_id === appId)?.id).filter(Boolean);
+        if (ids.length === 0) { alert('No eligible applications selected (all already added to calendar).'); return; }
+        if (!window.confirm(`Add ${ids.length} learner(s) to their Google Calendar events?`)) return;
+        setIsAddingToCal(true);
+        try {
+            const res = await fetch('/api/admin/da-add-to-calendar', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ applicationIds: ids }),
+            });
+            const json = await res.json();
+            const succeeded = (json.results || []).filter((r: any) => r.success).length;
+            const failed = (json.results || []).filter((r: any) => !r.success);
+            // Update local state
+            const successIds = new Set((json.results || []).filter((r: any) => r.success).map((r: any) => r.id));
+            setApplications(prev => prev.map(a => successIds.has(a.id) ? { ...a, calendar_added: true } : a));
+            let msg = `${succeeded} learner(s) added to calendar.`;
+            if (failed.length > 0) msg += `\n${failed.length} failed:\n` + failed.map((f: any) => `• ${f.error}`).join('\n');
+            alert(msg);
+        } catch { alert('Failed to add to calendar.'); }
+        finally { setIsAddingToCal(false); }
+    };
+
+    // Bulk: Generate QuickBooks invoice for selected
+    const handleGenerateInvoice = async () => {
+        const ids = Array.from(selectedIds).filter(appId => {
+            const app = applications.find(a => a.application_id === appId);
+            return app && !(app.invoice_id && String(app.invoice_id).trim());
+        }).map(appId => applications.find(a => a.application_id === appId)?.id).filter(Boolean);
+        if (ids.length === 0) { alert('No eligible applications selected (all already have invoices).'); return; }
+        if (!window.confirm(`Generate QuickBooks invoice for ${ids.length} application(s)?`)) return;
+        setIsGeneratingInv(true);
+        try {
+            const res = await fetch('/api/admin/da-generate-invoice', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ applicationIds: ids }),
+            });
+            const json = await res.json();
+            const succeeded = (json.results || []).filter((r: any) => r.success);
+            const failed = (json.results || []).filter((r: any) => !r.success);
+            // Update local state with invoice IDs
+            const invoiceMap = new Map(succeeded.map((r: any) => [r.id, r.invoiceId]));
+            setApplications(prev => prev.map(a => invoiceMap.has(a.id) ? { ...a, invoice_id: invoiceMap.get(a.id) } : a));
+            let msg = `${succeeded.length} invoice(s) generated.`;
+            if (failed.length > 0) msg += `\n${failed.length} failed:\n` + failed.map((f: any) => `• ${f.error}`).join('\n');
+            alert(msg);
+        } catch { alert('Failed to generate invoices.'); }
+        finally { setIsGeneratingInv(false); }
+    };
+
+    // Sync Enrolment: check existing enrollments in DB and update DA rows
+    const handleSyncEnrolment = async () => {
+        setIsSyncingEnrol(true);
+        try {
+            const res = await fetch('/api/admin/da-sync-enrolment', { method: 'POST' });
+            const json = await res.json();
+            if (json.success) {
+                alert(`Sync complete: ${json.enrolmentsMatched} enrolment(s) matched, ${json.grantsMatched} grant(s) matched.`);
+                fetchApplications();
+            } else { alert(`Sync failed: ${json.error}`); }
+        } catch { alert('Sync enrolment failed.'); }
+        finally { setIsSyncingEnrol(false); }
+    };
+
+    // Sync Calendar: check which learner emails are already in calendar events
+    const handleSyncCalendar = async () => {
+        setIsSyncingCal(true);
+        try {
+            const res = await fetch('/api/admin/da-sync-calendar', { method: 'POST' });
+            const json = await res.json();
+            if (json.success) {
+                alert(`Sync complete: ${json.checked} checked, ${json.matched} already in calendar.`);
+                fetchApplications();
+            } else { alert(`Sync failed: ${json.error}`); }
+        } catch { alert('Sync calendar failed.'); }
+        finally { setIsSyncingCal(false); }
+    };
+
+    // Sync Invoice: check which DA rows already have invoices in billing_history
+    const handleSyncInvoice = async () => {
+        setIsSyncingInv(true);
+        try {
+            const res = await fetch('/api/admin/da-sync-invoice', { method: 'POST' });
+            const json = await res.json();
+            if (json.success) {
+                alert(`Sync complete: ${json.matched} invoice(s) matched.`);
+                fetchApplications();
+            } else { alert(`Sync failed: ${json.error}`); }
+        } catch { alert('Sync invoice failed.'); }
+        finally { setIsSyncingInv(false); }
+    };
 
     // Page navigation modal state
     const [showPageModal, setShowPageModal] = useState(false);
@@ -887,15 +1159,16 @@ export const ViewDirectApplicationView: React.FC = () => {
         );
     });
 
-    // Sort applications
+    // Sort applications — default: application_date descending (today first)
     const sortedApplications = [...filteredApplications].sort((a, b) => {
-        if (!sortColumn) return 0;
+        const col = sortColumn || 'application_date';
+        const dir = sortColumn ? sortDirection : 'desc';
 
-        const valA = (a[sortColumn] || '').toString().toLowerCase();
-        const valB = (b[sortColumn] || '').toString().toLowerCase();
+        const valA = (a[col] || '').toString().toLowerCase();
+        const valB = (b[col] || '').toString().toLowerCase();
 
-        if (valA < valB) return sortDirection === 'asc' ? -1 : 1;
-        if (valA > valB) return sortDirection === 'asc' ? 1 : -1;
+        if (valA < valB) return dir === 'asc' ? -1 : 1;
+        if (valA > valB) return dir === 'asc' ? 1 : -1;
         return 0;
     });
 
@@ -982,6 +1255,34 @@ export const ViewDirectApplicationView: React.FC = () => {
         <div>
             <h2 className="text-3xl font-bold mb-6">View Direct Applications</h2>
 
+            {/* KPI Cards */}
+            {!isLoading && applications.length > 0 && (() => {
+                const total = applications.length;
+                const enrolled = applications.filter(a => a.enrolment_id && a.enrolment_id.trim() !== '').length;
+                const calAdded = applications.filter(a => !!a.calendar_added).length;
+                const invoiced = applications.filter(a => a.invoice_id && a.invoice_id.trim() !== '').length;
+                return (
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                        <Card className="p-4 text-center">
+                            <p className="text-3xl font-bold text-blue-600">{total}</p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Direct Applications</p>
+                        </Card>
+                        <Card className="p-4 text-center">
+                            <p className="text-3xl font-bold text-green-600">{enrolled}</p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Enrolled</p>
+                        </Card>
+                        <Card className="p-4 text-center">
+                            <p className="text-3xl font-bold text-indigo-600">{calAdded}</p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Added to Calendar</p>
+                        </Card>
+                        <Card className="p-4 text-center">
+                            <p className="text-3xl font-bold text-amber-600">{invoiced}</p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Invoice Created</p>
+                        </Card>
+                    </div>
+                );
+            })()}
+
             {/* Search and Refresh Controls */}
             <Card className="p-6 mb-6">
                 <div className="flex flex-col md:flex-row gap-4 items-end">
@@ -1036,27 +1337,49 @@ export const ViewDirectApplicationView: React.FC = () => {
                                 {(searchQuery || toBeEnrolledFilter) && ` (filtered from ${applications.length} total)`}
                             </p>
                         </div>
-                        <div className="flex items-center gap-3">
-                            {/* To Enroll DA Learners Button */}
+                        <div className="flex items-center gap-2 flex-wrap">
                             <button
                                 onClick={handleEnrolment}
-                                disabled={isEnrolling}
-                                className={`inline-flex items-center px-4 py-2 text-sm font-medium rounded-lg transition-colors bg-blue-600 text-white hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed`}
+                                disabled={isEnrolling || selectedIds.size === 0}
+                                className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-lg transition-colors bg-blue-600 text-white hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed"
                             >
-                                {isEnrolling ? (
-                                    <>
-                                        <svg className="animate-spin w-4 h-4 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                        </svg>
-                                        Enrolling...
-                                    </>
-                                ) : (
-                                    <>
-                                        <Icon name={IconName.Users} className="w-4 h-4 mr-2" />
-                                        To Enroll DA Learners
-                                    </>
-                                )}
+                                {isEnrolling ? 'Enrolling...' : 'Enrol to SSG'}
+                            </button>
+                            <button
+                                onClick={handleAddToCalendar}
+                                disabled={isAddingToCal || selectedIds.size === 0}
+                                className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-lg transition-colors bg-indigo-600 text-white hover:bg-indigo-700 disabled:bg-indigo-400 disabled:cursor-not-allowed"
+                            >
+                                {isAddingToCal ? 'Adding...' : 'Add to Calendar'}
+                            </button>
+                            <button
+                                onClick={handleGenerateInvoice}
+                                disabled={isGeneratingInv || selectedIds.size === 0}
+                                className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-lg transition-colors bg-amber-600 text-white hover:bg-amber-700 disabled:bg-amber-400 disabled:cursor-not-allowed"
+                            >
+                                {isGeneratingInv ? 'Generating...' : 'Generate Invoice'}
+                            </button>
+                            <span className="w-px h-5 bg-gray-300 dark:bg-gray-600 mx-1" />
+                            <button
+                                onClick={handleSyncEnrolment}
+                                disabled={isSyncingEnrol}
+                                className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-lg transition-colors border border-green-500 text-green-700 dark:text-green-300 hover:bg-green-50 dark:hover:bg-green-900/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                {isSyncingEnrol ? 'Syncing...' : 'Sync Enrolment'}
+                            </button>
+                            <button
+                                onClick={handleSyncCalendar}
+                                disabled={isSyncingCal}
+                                className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-lg transition-colors border border-indigo-500 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                {isSyncingCal ? 'Syncing...' : 'Sync Calendar'}
+                            </button>
+                            <button
+                                onClick={handleSyncInvoice}
+                                disabled={isSyncingInv}
+                                className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-lg transition-colors border border-amber-500 text-amber-700 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-900/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                {isSyncingInv ? 'Syncing...' : 'Sync Invoice'}
                             </button>
                         </div>
                     </div>
@@ -1259,180 +1582,140 @@ export const ViewDirectApplicationView: React.FC = () => {
                     {paginatedApplications.length > 0 ? (
                         <>
                             <div className="overflow-x-auto">
-                                <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-600">
+                                <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-600 text-[11px]">
                                     <thead className="bg-gray-50 dark:bg-gray-800">
                                         <tr>
-                                            <th className="px-3 py-3 w-10">
+                                            <th className="px-2 py-2 w-8">
                                                 <input
                                                     type="checkbox"
                                                     checked={paginatedApplications.length > 0 && paginatedApplications.every(app => selectedIds.has(app.application_id))}
                                                     onChange={toggleSelectAll}
-                                                    className="w-4 h-4 text-blue-600 rounded border-gray-300"
+                                                    className="w-3.5 h-3.5 text-blue-600 rounded border-gray-300"
                                                 />
                                             </th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Application ID</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Trainee ID Type</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Trainee ID</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">DOB</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Trainee Name</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Email</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Phone</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Course Title</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Course Ref No.</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Course Run ID</th>
-                                            {/* <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Start Date</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">End Date</th> */}
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Sponsorship</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Application Date</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Full Course Fee</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">GST</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">SF Subsidy</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">SF Credit</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Payable Fee</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">SF Credit Claim ID</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Highest Qualification</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Highest Certification</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Application Status</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Cancelled By</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Enrolment Status</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Enrolment ID</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Grant ID</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Auto-Enrol</th>
+                                            <th className="px-2 py-2 text-center text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase" title="SSG Enrolment Done">Enrol</th>
+                                            <th className="px-2 py-2 text-center text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase" title="Added to Google Calendar">Cal</th>
+                                            <th className="px-2 py-2 text-center text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase" title="Invoice Generated">Inv</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Application ID</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">DA Date</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">ID Type</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">
+                                                NRIC
+                                                <button onClick={() => setShowPii(v => !v)} className="ml-1 inline-flex align-middle text-gray-400 hover:text-blue-500" title={showPii ? 'Hide NRIC & DOB' : 'Reveal NRIC & DOB'}>
+                                                    <Icon name={showPii ? IconName.EyeOff : IconName.Eye} className="w-3 h-3" />
+                                                </button>
+                                            </th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">
+                                                DOB
+                                                <button onClick={() => setShowPii(v => !v)} className="ml-1 inline-flex align-middle text-gray-400 hover:text-blue-500" title={showPii ? 'Hide NRIC & DOB' : 'Reveal NRIC & DOB'}>
+                                                    <Icon name={showPii ? IconName.EyeOff : IconName.Eye} className="w-3 h-3" />
+                                                </button>
+                                            </th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Name</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Email</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Phone</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Course Title</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Course Ref No.</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Start Date</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Run ID</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Sponsor</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Fee</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">GST</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">SF Sub</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">SF Cr</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Payable</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">SF Claim ID</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Qualification</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Certification</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Status</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Cancel By</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Enrol Status</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Enrol ID</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Grant ID</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Grant Amt</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Invoice #</th>
                                         </tr>
                                     </thead>
                                     <tbody className="bg-white dark:bg-gray-700 divide-y divide-gray-200 dark:divide-gray-600">
-                                        {paginatedApplications.map((app, index) => (
-                                            <tr key={app.id || index} className={`hover:bg-gray-50 dark:hover:bg-gray-600 ${selectedIds.has(app.application_id) ? 'bg-blue-50 dark:bg-blue-900' : ''}`}>
-                                                <td className="px-3 py-3">
+                                        {paginatedApplications.map((app, index) => {
+                                            return (
+                                            <tr key={app.id || index} className={`hover:bg-gray-50 dark:hover:bg-gray-600 ${selectedIds.has(app.application_id) ? 'bg-blue-50 dark:bg-blue-900/30' : ''}`}>
+                                                <td className="px-2 py-1.5">
                                                     <input
                                                         type="checkbox"
                                                         checked={selectedIds.has(app.application_id)}
                                                         onChange={() => toggleSelect(app.application_id)}
-                                                        className="w-4 h-4 text-blue-600 rounded border-gray-300"
+                                                        className="w-3.5 h-3.5 text-blue-600 rounded border-gray-300"
                                                     />
                                                 </td>
-                                                <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
-                                                    {app.application_id || 'N/A'}
+                                                <td className="px-2 py-1.5 text-center">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={!!(app.enrolment_id && String(app.enrolment_id).trim() !== '')}
+                                                        onChange={(e) => toggleDaField(app.id, 'enrol', e.target.checked)}
+                                                        className={`w-3.5 h-3.5 rounded border-gray-300 cursor-pointer ${app.enrolment_id ? 'text-green-600 accent-green-600' : ''}`}
+                                                        title={app.enrolment_id ? `Enrolled: ${app.enrolment_id}` : 'Click to mark as enrolled'}
+                                                    />
                                                 </td>
-                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
-                                                    {app.trainee_id_type || 'N/A'}
+                                                <td className="px-2 py-1.5 text-center">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={!!app.calendar_added}
+                                                        onChange={(e) => toggleDaField(app.id, 'calendar', e.target.checked)}
+                                                        className={`w-3.5 h-3.5 rounded border-gray-300 cursor-pointer ${app.calendar_added ? 'text-blue-600 accent-blue-600' : ''}`}
+                                                        title={app.calendar_added ? 'Added to calendar — click to uncheck' : 'Click to mark as added to calendar'}
+                                                    />
                                                 </td>
-                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
-                                                    {app.trainee_id || 'N/A'}
+                                                <td className="px-2 py-1.5 text-center">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={!!(app.invoice_id && String(app.invoice_id).trim() !== '')}
+                                                        onChange={(e) => toggleDaField(app.id, 'invoice', e.target.checked)}
+                                                        className={`w-3.5 h-3.5 rounded border-gray-300 cursor-pointer ${app.invoice_id ? 'text-amber-600 accent-amber-600' : ''}`}
+                                                        title={app.invoice_id ? `Invoice: ${app.invoice_id} — click to uncheck` : 'Click to mark as invoiced'}
+                                                    />
                                                 </td>
-                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
-                                                    {app.date_of_birth ? new Date(app.date_of_birth).toLocaleDateString('en-GB') : 'N/A'}
-                                                </td>
-                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
-                                                    {app.trainee_name || 'N/A'}
-                                                </td>
-                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
-                                                    {app.trainee_email || 'N/A'}
-                                                </td>
-                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
-                                                    {app.trainee_phone_country_code && app.trainee_phone
-                                                        ? `+${app.trainee_phone_country_code} ${app.trainee_phone}`
-                                                        : app.trainee_phone || 'N/A'}
-                                                </td>
-                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
-                                                    {app.course_title || 'N/A'}
-                                                </td>
-                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
-                                                    {app.course_reference_number || 'N/A'}
-                                                </td>
-                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
-                                                    {app.course_run_id || 'N/A'}
-                                                </td>
-                                                {/* <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
-                                                    {app.course_start_date ? new Date(app.course_start_date).toLocaleDateString('en-GB') : 'N/A'}
-                                                </td>
-                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
-                                                    {app.course_end_date ? new Date(app.course_end_date).toLocaleDateString('en-GB') : 'N/A'}
-                                                </td> */}
-                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
-                                                    {app.sponsorship_type || 'N/A'}
-                                                </td>
-                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
-                                                    {app.application_date ? new Date(app.application_date).toLocaleDateString('en-GB') : 'N/A'}
-                                                </td>
-                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
-                                                    {app.full_course_fee != null ? `$${parseFloat(app.full_course_fee || 0).toFixed(2)}` : 'N/A'}
-                                                </td>
-                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
-                                                    {app.gst != null ? `$${parseFloat(app.gst || 0).toFixed(2)}` : 'N/A'}
-                                                </td>
-                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
-                                                    {app.skillsfuture_subsidy != null ? `$${parseFloat(app.skillsfuture_subsidy || 0).toFixed(2)}` : 'N/A'}
-                                                </td>
-                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
-                                                    {app.skillsfuture_credit != null ? `$${parseFloat(app.skillsfuture_credit || 0).toFixed(2)}` : 'N/A'}
-                                                </td>
-                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
-                                                    ${parseFloat(app.payable_fee || 0).toFixed(2)}
-                                                </td>
-                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
-                                                    {app.skillsfuture_credit_claim_id || 'N/A'}
-                                                </td>
-                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
-                                                    {app.highest_qualification || 'N/A'}
-                                                </td>
-                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
-                                                    {app.highest_relevant_certification || 'N/A'}
-                                                </td>
-                                                <td className="px-4 py-3 whitespace-nowrap">
-                                                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full border ${getStatusColor(app.application_status || 'Pending')}`}>
+                                                <td className="px-2 py-1.5 whitespace-nowrap font-medium text-gray-900 dark:text-white">{app.application_id || 'N/A'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.application_date ? new Date(app.application_date).toLocaleDateString('en-GB') : '—'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.trainee_id_type || 'N/A'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300 font-mono" title={showPii ? app.trainee_id : undefined}>{app.trainee_id ? (showPii ? app.trainee_id : `${app.trainee_id.charAt(0)}****${app.trainee_id.slice(-3)}`) : '—'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.date_of_birth ? (showPii ? new Date(app.date_of_birth).toLocaleDateString('en-GB') : `**/**/` + new Date(app.date_of_birth).getFullYear()) : '—'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.trainee_name || '—'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300 max-w-[160px] truncate" title={app.trainee_email}>{app.trainee_email || '—'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.trainee_phone_country_code && app.trainee_phone ? `+${app.trainee_phone_country_code} ${app.trainee_phone}` : app.trainee_phone || '—'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300 max-w-[180px] truncate" title={app.course_title}>{app.course_title || '—'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300 font-mono">{app.course_reference_number || '—'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.course_start_date ? new Date(app.course_start_date).toLocaleDateString('en-GB') : '—'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.course_run_id || '—'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.sponsorship_type || '—'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.full_course_fee != null ? `$${parseFloat(app.full_course_fee || 0).toFixed(2)}` : '—'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.gst != null ? `$${parseFloat(app.gst || 0).toFixed(2)}` : '—'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.skillsfuture_subsidy != null ? `$${parseFloat(app.skillsfuture_subsidy || 0).toFixed(2)}` : '—'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.skillsfuture_credit != null ? `$${parseFloat(app.skillsfuture_credit || 0).toFixed(2)}` : '—'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">${parseFloat(app.payable_fee || 0).toFixed(2)}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.skillsfuture_credit_claim_id || '—'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.highest_qualification || '—'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.highest_relevant_certification || '—'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap">
+                                                    <span className={`px-1.5 py-0.5 text-[10px] font-bold rounded-full ${getStatusColor(app.application_status || 'Pending')}`}>
                                                         {app.application_status || 'Pending'}
                                                     </span>
                                                 </td>
-                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
-                                                    {app.application_cancelled_by || '-'}
-                                                </td>
-                                                <td className="px-4 py-3 whitespace-nowrap">
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.application_cancelled_by || '—'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap">
                                                     {app.enrolment_status && app.enrolment_status.trim() !== '' ? (
-                                                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full border ${app.enrolment_status === 'Confirmed'
-                                                            ? 'bg-green-100 text-green-800 border-green-200'
-                                                            : app.enrolment_status === 'Not Found'
-                                                                ? 'bg-orange-100 text-orange-800 border-orange-200'
-                                                                : 'bg-red-100 text-red-800 border-red-200'
-                                                            }`}>
+                                                        <span className={`px-1.5 py-0.5 text-[10px] font-bold rounded-full ${app.enrolment_status === 'Confirmed' ? 'bg-green-100 text-green-800' : app.enrolment_status === 'Not Found' ? 'bg-orange-100 text-orange-800' : 'bg-red-100 text-red-800'}`}>
                                                             {app.enrolment_status}
                                                         </span>
-                                                    ) : (
-                                                        <span className="text-gray-400">-</span>
-                                                    )}
+                                                    ) : <span className="text-gray-400">—</span>}
                                                 </td>
-                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
-                                                    {app.enrolment_id || <span className="text-gray-400">-</span>}
-                                                </td>
-                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-200">
-                                                    {app.grant_id || <span className="text-gray-400">-</span>}
-                                                </td>
-                                                <td className="px-4 py-3 whitespace-nowrap">
-                                                    {app.auto_enrol_status ? (
-                                                        <span
-                                                            title={app.auto_enrol_error || ''}
-                                                            className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full border ${
-                                                                app.auto_enrol_status === 'invoiced'
-                                                                    ? 'bg-green-100 text-green-800 border-green-200'
-                                                                    : app.auto_enrol_status === 'grant_found'
-                                                                        ? 'bg-blue-100 text-blue-800 border-blue-200'
-                                                                        : app.auto_enrol_status === 'enroled'
-                                                                            ? 'bg-indigo-100 text-indigo-800 border-indigo-200'
-                                                                            : app.auto_enrol_status === 'failed'
-                                                                                ? 'bg-red-100 text-red-800 border-red-200'
-                                                                                : 'bg-yellow-100 text-yellow-800 border-yellow-200'
-                                                            }`}
-                                                        >
-                                                            {app.auto_enrol_status}
-                                                        </span>
-                                                    ) : (
-                                                        <span className="text-gray-400">-</span>
-                                                    )}
-                                                </td>
-
-
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300 font-mono">{app.enrolment_id || '—'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300 font-mono">{app.grant_id || '—'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.grant_amount ? `$${parseFloat(app.grant_amount).toFixed(2)}` : '—'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300 font-mono">{app.invoice_id || '—'}</td>
                                             </tr>
-                                        ))}
+                                            );
+                                        })}
                                     </tbody>
                                 </table>
                             </div>

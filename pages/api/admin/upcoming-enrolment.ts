@@ -3,38 +3,88 @@ import pool from '../../../lib/db';
 import { google } from 'googleapis';
 import { getGoogleCredentials } from '../../../lib/google-auth/googleAuth';
 
+/**
+ * GET /api/admin/upcoming-enrolment?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD
+ *
+ * Queries the LOCAL enrollment table (not SSG live) for confirmed enrolments
+ * whose course run starts within the given date range. Uses the same date
+ * range logic as Upcoming Classes so the two views are consistent.
+ *
+ * Also checks if each learner's email is in the matching Google Calendar
+ * event (same calendar-matching logic as before).
+ *
+ * Defaults to today → today + 21 days if no dates are provided.
+ */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {
     return res.status(405).json({ success: false, error: 'Method not allowed' });
   }
 
   const { startDate, endDate } = req.query;
-  const start = startDate ? (startDate as string) : new Date().toISOString().slice(0, 10);
-  const end = endDate ? (endDate as string) : new Date(new Date(start).getTime() + 21 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const start = startDate
+    ? (startDate as string)
+    : new Intl.DateTimeFormat('en-CA', {
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        timeZone: 'Asia/Singapore',
+      }).format(new Date());
+  const end = endDate
+    ? (endDate as string)
+    : new Intl.DateTimeFormat('en-CA', {
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        timeZone: 'Asia/Singapore',
+      }).format(new Date(Date.now() + 21 * 24 * 60 * 60 * 1000));
 
   try {
-    // 1. Fetch enrolments from DB
+    // 1. Fetch enrolments from local DB
     const enrolmentsResult = await pool.query(
       `SELECT
-        e.email,
-        c.title,
+        e.id,
+        e.enrolment_id,
+        e.enrolment_date,
+        e.enrolment_status,
+        e.nric,
+        COALESCE(au.email, e.email) AS email,
+        COALESCE(au.full_name, e.nric) AS learner_name,
+        lp.dob AS date_of_birth,
+        c.title AS course_title,
         c.course_code,
+        cr.course_run_id,
         cr.start_date,
-        cr.class_status
+        cr.class_status,
+        e.calendar_added,
+        e.personal_invoice_number AS invoice_id,
+        e.grant_id,
+        e.grant_amount,
+        e.course_sponsorship,
+        e.payment_status,
+        COALESCE(c.course_fee, c.course_fees_exclude_gst) AS fee,
+        CASE WHEN c.course_fees_include_gst IS NOT NULL AND c.course_fees_exclude_gst IS NOT NULL
+             THEN (CAST(c.course_fees_include_gst AS numeric) - CAST(c.course_fees_exclude_gst AS numeric))::text
+             ELSE NULL END AS gst
       FROM public.enrollment AS e
       INNER JOIN public.course_run AS cr ON e.course_run_id = cr.id
       INNER JOIN public.course AS c ON cr.course_id = c.id
+      LEFT JOIN public.app_user AS au ON e.user_id = au.id
+      LEFT JOIN public.learner_profile AS lp ON e.user_id = lp.user_id
       WHERE
-        e.enrolment_status = 'Confirmed' AND
-        cr.class_status <> 'Cancelled' AND
-        cr.start_date BETWEEN $1 AND $2
-      ORDER BY cr.start_date ASC`,
+        LOWER(COALESCE(e.enrolment_status, '')) NOT IN ('admin removed', 'cancelled', 'withdrawn')
+        AND cr.class_status <> 'Cancelled'
+        AND cr.start_date BETWEEN $1 AND $2
+      ORDER BY cr.start_date ASC, e.created_at DESC`,
       [start, end]
     );
 
     const enrolments = enrolmentsResult.rows;
 
-    // 2. Fetch calendar events
+    // 2. Fetch calendar events and match
+    const formatSgDate = (date: any) => {
+      if (!date) return '';
+      return new Intl.DateTimeFormat('en-CA', {
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        timeZone: 'Asia/Singapore',
+      }).format(new Date(date));
+    };
+
     let calendarEvents: any[] = [];
     try {
       const credentials = await getGoogleCredentials(pool);
@@ -79,79 +129,55 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           title: event.summary || '',
           description: event.description || '',
           start: event.start?.dateTime?.slice(0, 10) || event.start?.date || '',
-          attendees: (event.attendees || []).map(a => a.email?.toLowerCase()),
+          attendees: (event.attendees || []).map(a => (a.email || '').toLowerCase()),
         }));
       }
     } catch (calErr) {
       console.error('❌ Failed to fetch calendar events:', calErr);
-      // Continue without calendar matching if it fails
     }
 
     // 3. Match enrolments with calendar events
     const stripHtml = (html: string) => html.replace(/<[^>]*>?/gm, ' ');
-    
-    // Helper to format date to YYYY-MM-DD in Singapore timezone
-    const formatSgDate = (date: any) => {
-      if (!date) return '';
-      return new Intl.DateTimeFormat('en-CA', {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        timeZone: 'Asia/Singapore'
-      }).format(new Date(date));
-    };
-    
-    const matchedEnrolments = enrolments.map(e => {
-      const eEmail = e.email?.trim().toLowerCase();
-      const eDate = formatSgDate(e.start_date);
-      const eCode = e.course_code?.trim().toLowerCase();
 
-      // 1. Look for full match (Email + Date + Code)
+    const matchedEnrolments = enrolments.map(e => {
+      const eEmail = (e.email || '').trim().toLowerCase();
+      const eDate = formatSgDate(e.start_date);
+      const eCode = (e.course_code || '').trim().toLowerCase();
+
       const fullMatch = calendarEvents.find(ce => {
         const hasDate = ce.start === eDate;
         let hasCode = false;
         if (eCode && ce.description) {
           const cleanDesc = stripHtml(ce.description).toLowerCase();
-          hasCode = cleanDesc.includes(eCode) || eCode.includes(cleanDesc);
+          hasCode = cleanDesc.includes(eCode);
         }
-        const hasEmail = ce.attendees.some(email => email?.trim().toLowerCase() === eEmail);
+        const hasEmail = ce.attendees.some((email: string) => email === eEmail);
         return hasDate && hasCode && hasEmail;
       });
 
       if (fullMatch) {
-        return {
-          ...e,
-          match: true,
-          matchDetail: `Matched with: ${fullMatch.title}`,
-          reason: null
-        };
+        return { ...e, match: true, matchDetail: `Matched with: ${fullMatch.title}`, reason: null };
       }
 
-      // 2. If no full match, check if the event exists at all (Date + Code)
       const eventExists = calendarEvents.find(ce => {
         const hasDate = ce.start === eDate;
         let hasCode = false;
         if (eCode && ce.description) {
           const cleanDesc = stripHtml(ce.description).toLowerCase();
-          hasCode = cleanDesc.includes(eCode) || eCode.includes(cleanDesc);
+          hasCode = cleanDesc.includes(eCode);
         }
         return hasDate && hasCode;
       });
 
-      return {
-        ...e,
-        match: false,
-        reason: eventExists ? "No Email" : "No Event"
-      };
+      return { ...e, match: false, reason: eventExists ? 'No Email' : 'No Event' };
     });
 
     return res.status(200).json({
       success: true,
       data: matchedEnrolments,
       start,
-      end
+      end,
     });
-
   } catch (error) {
     console.error('❌ Error in upcoming-enrolment API:', error);
     return res.status(500).json({ success: false, error: 'Internal server error' });

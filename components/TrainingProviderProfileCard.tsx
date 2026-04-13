@@ -322,6 +322,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
         autoSendThankYouEmail: "Auto Send Thank You Email Upon Class Completed",
         autoEnrolDirectApplications: "Auto Submit Direct Applications to SSG",
         autoGenerateQbInvoice: "Auto Generate QuickBooks Invoice for Direct Applications",
+        autoAddLearnerToCalendar: "Auto Add Learner to Calendar for Direct Applications",
     };
 
     useEffect(() => {
@@ -520,14 +521,40 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
         </div>
     );
 
+    // Map from camelCase admin setting keys to snake_case DB column names
+    // for the lightweight auto-save that bypasses the full profile save.
+    const adminSettingDbColumns: Record<string, string> = {
+        autoSendProFormaInvoice: 'auto_send_proforma_invoice',
+        autoSendConfirmationEmail: 'auto_send_confirm_email',
+        autoSendInvoiceOnGrantSuccess: 'auto_send_invoice',
+        autoSendReceiptOnPayment: 'auto_send_receipt',
+        autoSendCertificateOnCompletion: 'auto_send_certificate',
+        autoSendThankYouEmail: 'auto_send_thankyou_email',
+        autoEnrolDirectApplications: 'auto_enrol_direct_applications',
+        autoGenerateQbInvoice: 'auto_generate_qb_invoice',
+        autoAddLearnerToCalendar: 'auto_add_learner_to_calendar',
+    };
+
     const handleToggleChange = (section: 'adminSettings' | 'securitySettings' | 'integrations' | 'gamingSettings' | 'fundingSettings', key: string) => {
         setFormData(prev => {
             const currentSection = prev[section];
+            const newValue = !(currentSection as any)[key];
+
+            // Auto-save admin setting toggles immediately via a lightweight
+            // PATCH-style endpoint so the user doesn't have to click Save.
+            if (section === 'adminSettings' && adminSettingDbColumns[key]) {
+                fetch(getApiUrl('/api/training-provider/toggle-setting'), {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ column: adminSettingDbColumns[key], value: newValue }),
+                }).catch(err => console.error('Failed to auto-save toggle:', err));
+            }
+
             return {
                 ...prev,
                 [section]: {
                     ...currentSection,
-                    [key]: !(currentSection as any)[key]
+                    [key]: newValue
                 }
             };
         });
@@ -1662,10 +1689,10 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                     {Object.entries(adminSettingLabels).map(([key, label]) => (
                         <ToggleSwitch
                             key={key}
-                            checked={formData.adminSettings[key as keyof typeof formData.adminSettings]}
+                            checked={!!formData.adminSettings[key as keyof typeof formData.adminSettings]}
                             onChange={(checked) => handleToggleChange('adminSettings', key)}
                             label={label}
-                            isEditing={isEditing}
+                            isEditing={true}
                         />
                     ))}
                 </div>}

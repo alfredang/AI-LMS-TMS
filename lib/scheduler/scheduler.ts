@@ -185,6 +185,13 @@ async function seedDefaults() {
             days_in_advance: 30,
         },
         {
+            id: 'sync_ssg_enrolments',
+            name: 'Sync SSG Enrolments',
+            description: 'Pulls recent enrolments from SSG (last 7 days) and stores new ones in the local ssg_enrolment_record table. Runs every 2 hours. Only inserts new records — existing enrolment references are skipped.',
+            cron_expression: '0 */2 * * *', // Every 2 hours
+            api_endpoint: '/api/external/sync-ssg-enrolments',
+        },
+        {
             id: 'auto_sanitise_data',
             name: 'Auto Sanitise Old PII',
             description: 'Weekly sweep that redacts NRIC and phone digits on rows older than the retention window configured in Company Settings → Security Setting → Auto Sanitise Data. Honours the master toggle (off → skipped). Default Sunday 02:00 SGT.',
@@ -267,6 +274,10 @@ function getDirectHandler(taskId: string): TaskHandler | undefined {
         });
         directHandlers.set('auto_send_trainer_invitations', async () => {
             const { runAutomation } = await import('../../pages/api/external/auto-send-trainer-invitations');
+            return runAutomation();
+        });
+        directHandlers.set('sync_ssg_enrolments', async () => {
+            const { runAutomation } = await import('../../pages/api/external/sync-ssg-enrolments');
             return runAutomation();
         });
         directHandlers.set('auto_sanitise_data', async () => {

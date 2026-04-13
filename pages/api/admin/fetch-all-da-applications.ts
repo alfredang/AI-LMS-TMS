@@ -52,13 +52,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 da.grant_id,
                 da.invoice_id,
                 da.qb_customer_ref,
+                da.grant_amount,
                 da.auto_enrol_status,
                 da.auto_enrol_error,
+                da.calendar_added,
                 da.created_at,
                 da.updated_at
             FROM da_application da
             LEFT JOIN course_run cr ON da.course_run_id = cr.course_run_id
-            ORDER BY da.created_at DESC
+            WHERE COALESCE(cr.start_date, da.course_start_date) >= CURRENT_DATE
+            ORDER BY COALESCE(cr.start_date, da.course_start_date) ASC NULLS LAST
         `);
 
         console.log(`✅ Fetched ${result.rows.length} DA applications`);

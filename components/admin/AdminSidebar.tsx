@@ -78,6 +78,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate, onSelectWorkflo
         courseManagement: false,
         classManagement: false,
         directApplication: false,
+        enrolment: false,
         tpgManagement: false,
         tpgCourseRun: false,
         tpgSession: false,
@@ -133,23 +134,11 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate, onSelectWorkflo
         <nav className="space-y-6 p-4 bg-white dark:bg-slate-800 text-gray-900 dark:text-white h-full">
             <NavItem page={AdminPage.Dashboard} label="Admin Dashboard" />
 
-            <NavSection title="Calendar & Scheduler" isOpen={openSections.calendar} onToggle={() => toggleSection('calendar')}>
-                <NavItem page={AdminPage.Calendar} label="View Calendar" isSubItem />
-                <NavItem page={AdminPage.Scheduler} label="Task Scheduler" isSubItem />
-                <NavItem page={AdminPage.SchedulerSummary} label="Schedule Summary" isSubItem />
-            </NavSection>
-
-            <NavSection title="Course Management" isOpen={openSections.courseManagement} onToggle={() => toggleSection('courseManagement')}>
-                <NavItem page={AdminPage.ViewCourses} label="View Courses" isSubItem />
-                <NavItem page={AdminPage.ViewTrainers} label="View Trainers" isSubItem />
-                <NavItem page={AdminPage.FundingValidity} label="Funding Validity" isSubItem />
-            </NavSection>
-
             <NavSection title="Class Management" isOpen={openSections.classManagement} onToggle={() => toggleSection('classManagement')}>
                 <NavItem page={AdminPage.ViewLearners} label="View Learners" isSubItem />
                 <NavItem page={AdminPage.OngoingClasses} label="Ongoing Classes" isSubItem />
                 <NavItem page={AdminPage.UpcomingClasses} label="Upcoming Classes" isSubItem />
-                <NavItem page={AdminPage.UpcomingEnrolment} label="Upcoming Enrolment" isSubItem />
+                {/* Upcoming Enrolment moved to Enrolment section */}
                 <NavItem page={AdminPage.CompletedClasses} label="Completed Classes" isSubItem />
                 <NavItem page={AdminPage.AssignTrainer} label="Assign Trainer" isSubItem />
                 <NavItem page={AdminPage.AssignStudent} label="Assign Learners" isSubItem />
@@ -159,6 +148,11 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate, onSelectWorkflo
             <NavSection title="Direct Application" isOpen={openSections.directApplication} onToggle={() => toggleSection('directApplication')}>
                 <NavItem page={AdminPage.UploadDirectApplication} label="Upload Direct Application" isSubItem />
                 <NavItem page={AdminPage.ViewDirectApplication} label="View Direct Application" isSubItem />
+            </NavSection>
+
+            <NavSection title="Enrolment" isOpen={openSections.enrolment} onToggle={() => toggleSection('enrolment')}>
+                <NavItem page={AdminPage.UpcomingEnrolment} label="Upcoming Enrolment" isSubItem />
+                <NavItem page={AdminPage.NewEnrolment} label="New Enrolment" isSubItem />
             </NavSection>
 
             <NavSection title="TPG Management" isOpen={openSections.tpgManagement} onToggle={() => toggleSection('tpgManagement')}>
@@ -204,6 +198,18 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate, onSelectWorkflo
                     <NavItem page={AdminPage.SearchGrant} label="Search Grant" isSubItem />
                     <NavItem page={AdminPage.ViewGrantStatus} label="View Grant Status" isSubItem />
                 </SubSection>
+            </NavSection>
+
+            <NavSection title="Course Management" isOpen={openSections.courseManagement} onToggle={() => toggleSection('courseManagement')}>
+                <NavItem page={AdminPage.ViewCourses} label="View Courses" isSubItem />
+                <NavItem page={AdminPage.ViewTrainers} label="View Trainers" isSubItem />
+                <NavItem page={AdminPage.FundingValidity} label="Funding Validity" isSubItem />
+            </NavSection>
+
+            <NavSection title="Calendar & Scheduler" isOpen={openSections.calendar} onToggle={() => toggleSection('calendar')}>
+                <NavItem page={AdminPage.Calendar} label="View Calendar" isSubItem />
+                <NavItem page={AdminPage.Scheduler} label="Task Scheduler" isSubItem />
+                <NavItem page={AdminPage.SchedulerSummary} label="Schedule Summary" isSubItem />
             </NavSection>
 
             <NavSection title="Certificate" isOpen={openSections.certificate} onToggle={() => toggleSection('certificate')}>

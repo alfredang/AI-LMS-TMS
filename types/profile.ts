@@ -292,6 +292,7 @@ export interface TrainingProviderProfile extends BaseProfile {
     autoSendThankYouEmail: boolean;
     autoEnrolDirectApplications: boolean;
     autoGenerateQbInvoice: boolean;
+    autoAddLearnerToCalendar: boolean;
     upcomingClassesThresholdDays: number;
   };
   securitySettings: {

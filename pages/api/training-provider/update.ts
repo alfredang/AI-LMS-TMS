@@ -557,7 +557,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             ssg_default_app = $49,
             auto_enrol_direct_applications = $50,
             auto_generate_qb_invoice = $51,
-            sanitise_after_months = $52
+            sanitise_after_months = $52,
+            auto_add_learner_to_calendar = $53
         WHERE id = $36
         RETURNING *
       `;
@@ -614,7 +615,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         profileData.ssgDefaultApp || 'app1',
         profileData.adminSettings?.autoEnrolDirectApplications || false,
         profileData.adminSettings?.autoGenerateQbInvoice || false,
-        Math.max(1, Math.min(60, parseInt(String(profileData.securitySettings?.sanitiseAfterMonths ?? 6), 10) || 6))
+        Math.max(1, Math.min(60, parseInt(String(profileData.securitySettings?.sanitiseAfterMonths ?? 6), 10) || 6)),
+        profileData.adminSettings?.autoAddLearnerToCalendar || false
       ];
 
       console.log('🔍 File upload parameters being sent to database:', {

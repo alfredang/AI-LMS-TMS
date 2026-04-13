@@ -6180,30 +6180,133 @@ export const FetchUpcomingEnrolmentsView: React.FC = () => {
 
 // ── Upcoming Enrolment View (with Calendar Matching) ─────────────────────────
 
-export const UpcomingEnrolmentView: React.FC = () => {
-    const { setAdminPage } = useLms();
-    const [data, setData] = useState<any[]>([]);
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
-    
-    // Date states
-    const [startDate, setStartDate] = useState(() => {
-        const d = new Date();
-        const day = String(d.getDate()).padStart(2, '0');
-        const month = String(d.getMonth() + 1).padStart(2, '0');
-        const year = d.getFullYear();
-        return `${day}/${month}/${year}`;
-    });
-    const [endDate, setEndDate] = useState(() => {
-        const d = new Date();
-        d.setDate(d.getDate() + 21);
-        const day = String(d.getDate()).padStart(2, '0');
-        const month = String(d.getMonth() + 1).padStart(2, '0');
-        const year = d.getFullYear();
-        return `${day}/${month}/${year}`;
-    });
+// ── Shared Enrolment Table (used by both Upcoming + New Enrolment) ───────────
+// Mirrors the View DA table columns: Enrol/Cal/Inv checkboxes, KPI cards,
+// Sync + Action buttons, NRIC/DOB masking with eye toggle.
 
-    // Helper to format text input to DD/MM/YYYY
+const EnrolmentTable: React.FC<{
+    title: string;
+    description: string;
+    data: any[];
+    loading: boolean;
+    onRefresh: () => void;
+    onSync?: () => void;
+    syncLabel?: string;
+    syncing?: boolean;
+    showDateRange?: boolean;
+    startDate?: string;
+    endDate?: string;
+    onStartDateChange?: (v: string) => void;
+    onEndDateChange?: (v: string) => void;
+}> = ({ title, description, data, loading, onRefresh, onSync, syncLabel, syncing, showDateRange, startDate, endDate, onStartDateChange, onEndDateChange }) => {
+    const { setAdminPage } = useLms();
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+    const [showPii, setShowPii] = useState(false);
+    const [isAddingToCal, setIsAddingToCal] = useState(false);
+    const [isSyncingCal, setIsSyncingCal] = useState(false);
+    const [isSyncingInv, setIsSyncingInv] = useState(false);
+    const [isSyncingGrants, setIsSyncingGrants] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [localData, setLocalData] = useState<any[]>([]);
+
+    React.useEffect(() => { setLocalData(data); }, [data]);
+
+    const filteredData = searchQuery.trim()
+        ? localData.filter(r => {
+            const q = searchQuery.toLowerCase();
+            return (r.learner_name || '').toLowerCase().includes(q)
+                || (r.email || '').toLowerCase().includes(q)
+                || (r.enrolment_id || '').toLowerCase().includes(q)
+                || (r.nric || '').toLowerCase().includes(q)
+                || (r.course_title || r.title || '').toLowerCase().includes(q)
+                || (r.course_code || '').toLowerCase().includes(q)
+                || (r.course_run_id || '').toLowerCase().includes(q);
+        })
+        : localData;
+
+    const total = localData.length;
+    const enrolled = localData.filter(r => r.enrolment_id && String(r.enrolment_id).trim()).length;
+    const calAdded = localData.filter(r => !!r.calendar_added).length;
+    const invoiced = localData.filter(r => r.invoice_id && String(r.invoice_id).trim()).length;
+
+    const toggleSelect = (id: string) => setSelectedIds(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s; });
+    const toggleSelectAll = () => {
+        const allSelected = filteredData.length > 0 && filteredData.every(r => selectedIds.has(r.id));
+        setSelectedIds(allSelected ? new Set() : new Set(filteredData.map(r => r.id)));
+    };
+
+    const toggleField = async (enrollmentId: string, field: 'calendar' | 'invoice', newValue: boolean) => {
+        setLocalData(prev => prev.map(r => {
+            if (r.id !== enrollmentId) return r;
+            if (field === 'calendar') return { ...r, calendar_added: newValue };
+            if (field === 'invoice') return { ...r, invoice_id: newValue ? 'MANUAL' : null };
+            return r;
+        }));
+        try {
+            await fetch('/api/admin/enrolment-actions', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'toggle-field', enrollmentId, field, value: newValue }),
+            });
+        } catch { console.error('Toggle save failed'); }
+    };
+
+    const handleSyncCal = async () => {
+        setIsSyncingCal(true);
+        try {
+            const res = await fetch('/api/admin/enrolment-actions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'sync-calendar' }) });
+            const json = await res.json();
+            alert(json.success ? `Sync: ${json.checked} checked, ${json.matched} in calendar.` : `Failed: ${json.error}`);
+            onRefresh();
+        } catch { alert('Sync calendar failed.'); }
+        finally { setIsSyncingCal(false); }
+    };
+
+    const handleSyncInv = async () => {
+        setIsSyncingInv(true);
+        try {
+            const res = await fetch('/api/admin/enrolment-actions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'sync-invoice' }) });
+            const json = await res.json();
+            alert(json.success ? `Sync: ${json.matched} invoice(s) matched.` : `Failed: ${json.error}`);
+            onRefresh();
+        } catch { alert('Sync invoice failed.'); }
+        finally { setIsSyncingInv(false); }
+    };
+
+    const handleSyncGrants = async () => {
+        setIsSyncingGrants(true);
+        try {
+            const res = await fetch('/api/admin/enrolment-actions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'sync-grants' }) });
+            const json = await res.json();
+            alert(json.success ? `Sync: ${json.matched} grant(s) matched.` : `Failed: ${json.error}`);
+            onRefresh();
+        } catch { alert('Sync grants failed.'); }
+        finally { setIsSyncingGrants(false); }
+    };
+
+    const handleAddToCal = async () => {
+        const ids = Array.from(selectedIds).filter(id => { const r = localData.find(d => d.id === id); return r && !r.calendar_added; });
+        if (ids.length === 0) { alert('No eligible rows selected.'); return; }
+        if (!window.confirm(`Add ${ids.length} learner(s) to calendar?`)) return;
+        setIsAddingToCal(true);
+        try {
+            const res = await fetch('/api/admin/enrolment-actions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'add-to-calendar', enrollmentIds: ids }) });
+            const json = await res.json();
+            const ok = (json.results || []).filter((r: any) => r.success).length;
+            const fail = (json.results || []).filter((r: any) => !r.success);
+            const successIds = new Set((json.results || []).filter((r: any) => r.success).map((r: any) => r.id));
+            setLocalData(prev => prev.map(r => successIds.has(r.id) ? { ...r, calendar_added: true } : r));
+            alert(`${ok} added.` + (fail.length ? `\n${fail.length} failed.` : ''));
+        } catch { alert('Failed.'); }
+        finally { setIsAddingToCal(false); }
+    };
+
+    const fmt = (d: string | null) => {
+        if (!d) return '—';
+        const date = new Date(d);
+        if (isNaN(date.getTime())) return d;
+        return new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Asia/Singapore' }).format(date);
+    };
+
     const formatDateInput = (value: string) => {
         const numeric = value.replace(/\D/g, '');
         if (numeric.length <= 2) return numeric;
@@ -6211,164 +6314,173 @@ export const UpcomingEnrolmentView: React.FC = () => {
         return `${numeric.slice(0, 2)}/${numeric.slice(2, 4)}/${numeric.slice(4, 8)}`;
     };
 
-    // Helper to convert DD/MM/YYYY to YYYY-MM-DD for API
-    const toIsoDate = (dmy: string) => {
-        const parts = dmy.split('/');
-        if (parts.length !== 3) return dmy;
-        return `${parts[2]}-${parts[1]}-${parts[0]}`;
-    };
-
-    const fetchData = async () => {
-        setLoading(true);
-        setError(null);
-        try {
-            const res = await fetch(`/api/admin/upcoming-enrolment?startDate=${toIsoDate(startDate)}&endDate=${toIsoDate(endDate)}`);
-            const json = await res.json();
-            if (json.success) {
-                setData(json.data);
-            } else {
-                setError(json.error || 'Failed to fetch enrolment data');
-            }
-        } catch (err) {
-            setError(err instanceof Error ? err.message : 'Network error');
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    useEffect(() => {
-        fetchData();
-    }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-    const fmt = (d: string) => {
-        if (!d) return '—';
-        const date = new Date(d);
-        const day = String(date.getDate()).padStart(2, '0');
-        const month = String(date.getMonth() + 1).padStart(2, '0');
-        const year = date.getFullYear();
-        return `${day}/${month}/${year}`;
-    };
-
     return (
         <div className="space-y-6">
             <div className="flex flex-wrap items-center justify-between gap-3">
-                <h2 className="text-3xl font-bold">Upcoming Enrolment</h2>
-                <Button variant="ghost" onClick={() => setAdminPage(AdminPage.Dashboard)}>Back</Button>
+                <div>
+                    <h2 className="text-3xl font-bold">{title}</h2>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{description}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                    {onSync && <Button onClick={onSync} disabled={syncing}>{syncing ? 'Syncing…' : syncLabel || 'Sync'}</Button>}
+                    <Button variant="ghost" onClick={() => setAdminPage(AdminPage.Dashboard)}>Back</Button>
+                </div>
             </div>
 
-            <p className="text-sm text-gray-500 dark:text-gray-400">
-                Displays confirmed enrolments starting within the next 21 days (default) and checks if they match a calendar event.
-                Matches are based on attendee email, start date, and TGS course code in the event description.
-            </p>
-
-            <Card className="p-5">
-                <div className="flex flex-wrap items-end gap-4">
-                    <div className="space-y-1">
-                        <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500">Start Date</label>
-                        <input
-                            type="text"
-                            placeholder="DD/MM/YYYY"
-                            value={startDate}
-                            onChange={(e) => setStartDate(formatDateInput(e.target.value))}
-                            maxLength={10}
-                            className="w-32 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
-                        />
-                    </div>
-                    <div className="space-y-1">
-                        <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500">End Date</label>
-                        <input
-                            type="text"
-                            placeholder="DD/MM/YYYY"
-                            value={endDate}
-                            onChange={(e) => setEndDate(formatDateInput(e.target.value))}
-                            maxLength={10}
-                            className="w-32 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
-                        />
-                    </div>
-                    <Button onClick={fetchData} disabled={loading}>
-                        {loading ? 'Refreshing...' : 'Refresh'}
-                    </Button>
-                </div>
-            </Card>
-
-            {error && (
-                <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-700 dark:text-red-300">
-                    ❌ {error}
+            {/* KPI Cards */}
+            {total > 0 && (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <Card className="p-4 text-center"><p className="text-3xl font-bold text-blue-600">{total}</p><p className="text-xs text-gray-500 mt-1">Total Enrolments</p></Card>
+                    <Card className="p-4 text-center"><p className="text-3xl font-bold text-green-600">{enrolled}</p><p className="text-xs text-gray-500 mt-1">Enrolled (SSG)</p></Card>
+                    <Card className="p-4 text-center"><p className="text-3xl font-bold text-indigo-600">{calAdded}</p><p className="text-xs text-gray-500 mt-1">Added to Calendar</p></Card>
+                    <Card className="p-4 text-center"><p className="text-3xl font-bold text-amber-600">{invoiced}</p><p className="text-xs text-gray-500 mt-1">Invoice Created</p></Card>
                 </div>
             )}
 
+            {/* Date Range + Search */}
+            <Card className="p-4">
+                <div className="flex flex-wrap items-end gap-4">
+                    {showDateRange && (
+                        <>
+                            <div className="space-y-1">
+                                <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500">Start Date</label>
+                                <input type="text" placeholder="DD/MM/YYYY" value={startDate} onChange={e => onStartDateChange?.(formatDateInput(e.target.value))} maxLength={10} className="w-32 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none" />
+                            </div>
+                            <div className="space-y-1">
+                                <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500">End Date</label>
+                                <input type="text" placeholder="DD/MM/YYYY" value={endDate} onChange={e => onEndDateChange?.(formatDateInput(e.target.value))} maxLength={10} className="w-32 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none" />
+                            </div>
+                        </>
+                    )}
+                    <div className="flex-1">
+                        <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1">Search</label>
+                        <input type="text" placeholder="Search name, NRIC, email, course..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none" />
+                    </div>
+                    <Button onClick={onRefresh} disabled={loading}>{loading ? 'Loading...' : 'Refresh'}</Button>
+                </div>
+            </Card>
+
+            {/* Action + Sync buttons */}
+            <div className="flex flex-wrap items-center gap-2">
+                <button onClick={handleAddToCal} disabled={isAddingToCal || selectedIds.size === 0} className="px-3 py-1.5 text-xs font-medium rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:bg-indigo-400 disabled:cursor-not-allowed">{isAddingToCal ? 'Adding...' : 'Add to Calendar'}</button>
+                <span className="w-px h-5 bg-gray-300 dark:bg-gray-600 mx-1" />
+                <button onClick={handleSyncGrants} disabled={isSyncingGrants} className="px-3 py-1.5 text-xs font-medium rounded-lg border border-green-500 text-green-700 dark:text-green-300 hover:bg-green-50 dark:hover:bg-green-900/20 disabled:opacity-50">{isSyncingGrants ? 'Syncing...' : 'Sync Grants'}</button>
+                <button onClick={handleSyncCal} disabled={isSyncingCal} className="px-3 py-1.5 text-xs font-medium rounded-lg border border-indigo-500 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 disabled:opacity-50">{isSyncingCal ? 'Syncing...' : 'Sync Calendar'}</button>
+                <button onClick={handleSyncInv} disabled={isSyncingInv} className="px-3 py-1.5 text-xs font-medium rounded-lg border border-amber-500 text-amber-700 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-900/20 disabled:opacity-50">{isSyncingInv ? 'Syncing...' : 'Sync Invoice'}</button>
+            </div>
+
+            {/* Table */}
             <Card className="overflow-hidden">
                 <div className="overflow-x-auto">
-                    <table className="w-full text-sm text-left">
+                    <table className="w-full text-xs text-left">
                         <thead className="bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
                             <tr>
-                                <th className="px-4 py-3 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Email</th>
-                                <th className="px-4 py-3 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Course Title</th>
-                                <th className="px-4 py-3 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Course Code</th>
-                                <th className="px-4 py-3 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Start Date</th>
-                                <th className="px-4 py-3 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Class Status</th>
-                                <th className="px-4 py-3 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 text-center">Calendar Match</th>
-                                <th className="px-4 py-3 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 text-center">Reason</th>
+                                <th className="px-2 py-2 w-8"><input type="checkbox" checked={filteredData.length > 0 && filteredData.every(r => selectedIds.has(r.id))} onChange={toggleSelectAll} className="w-3.5 h-3.5" /></th>
+                                <th className="px-2 py-2 text-center text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap" title="SSG Enrolled">Enrol</th>
+                                <th className="px-2 py-2 text-center text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap" title="In Calendar">Cal</th>
+                                <th className="px-2 py-2 text-center text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap" title="Invoice">Inv</th>
+                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Enrolment ID</th>
+                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Enrol Date</th>
+                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Name</th>
+                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">NRIC <button onClick={() => setShowPii(v => !v)} className="ml-1 inline-flex align-middle text-gray-400 hover:text-blue-500" title={showPii ? 'Hide' : 'Reveal'}><svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d={showPii ? "M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21" : "M15 12a3 3 0 11-6 0 3 3 0 016 0z M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"} /></svg></button></th>
+                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">DOB <button onClick={() => setShowPii(v => !v)} className="ml-1 inline-flex align-middle text-gray-400 hover:text-blue-500" title={showPii ? 'Hide' : 'Reveal'}><svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d={showPii ? "M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21" : "M15 12a3 3 0 11-6 0 3 3 0 016 0z M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"} /></svg></button></th>
+                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Email</th>
+                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Course Title</th>
+                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Course Ref No.</th>
+                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Start Date</th>
+                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Run ID</th>
+                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Fee</th>
+                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">GST</th>
+                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Sponsor</th>
+                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Payment</th>
+                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Status</th>
+                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Grant ID</th>
+                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Grant Amt</th>
+                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Invoice #</th>
+                                <th className="px-2 py-2 text-center text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Not In Cal</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-                            {data.length === 0 && !loading ? (
-                                <tr>
-                                    <td colSpan={7} className="px-4 py-8 text-center text-gray-500 italic">No enrolments found for this period.</td>
+                            {loading ? (
+                                <tr><td colSpan={23} className="px-3 py-8 text-center text-gray-500 italic">Loading...</td></tr>
+                            ) : filteredData.length === 0 ? (
+                                <tr><td colSpan={23} className="px-3 py-8 text-center text-gray-500 italic">No enrolments found.</td></tr>
+                            ) : filteredData.map((row, idx) => (
+                                <tr key={row.id || idx} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                                    <td className="px-2 py-1.5"><input type="checkbox" checked={selectedIds.has(row.id)} onChange={() => toggleSelect(row.id)} className="w-3.5 h-3.5" /></td>
+                                    <td className="px-2 py-1.5 text-center"><input type="checkbox" checked={!!(row.enrolment_id && String(row.enrolment_id).trim())} readOnly className={`w-3.5 h-3.5 rounded border-gray-300 cursor-default ${row.enrolment_id ? 'text-green-600 accent-green-600' : ''}`} title={row.enrolment_id || 'Not enrolled'} /></td>
+                                    <td className="px-2 py-1.5 text-center"><input type="checkbox" checked={!!row.calendar_added} onChange={e => toggleField(row.id, 'calendar', e.target.checked)} className={`w-3.5 h-3.5 rounded border-gray-300 cursor-pointer ${row.calendar_added ? 'text-blue-600 accent-blue-600' : ''}`} /></td>
+                                    <td className="px-2 py-1.5 text-center"><input type="checkbox" checked={!!(row.invoice_id && String(row.invoice_id).trim())} onChange={e => toggleField(row.id, 'invoice', e.target.checked)} className={`w-3.5 h-3.5 rounded border-gray-300 cursor-pointer ${row.invoice_id ? 'text-amber-600 accent-amber-600' : ''}`} /></td>
+                                    <td className="px-2 py-1.5 whitespace-nowrap font-mono text-gray-700 dark:text-gray-200">{row.enrolment_id || '—'}</td>
+                                    <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{fmt(row.enrolment_date)}</td>
+                                    <td className="px-2 py-1.5 whitespace-nowrap text-gray-700 dark:text-gray-200 max-w-[140px] truncate" title={row.learner_name}>{row.learner_name || '—'}</td>
+                                    <td className="px-2 py-1.5 whitespace-nowrap font-mono text-gray-500 dark:text-gray-300" title={showPii ? row.nric : undefined}>{row.nric ? (showPii ? row.nric : `${row.nric.charAt(0)}****${row.nric.slice(-3)}`) : '—'}</td>
+                                    <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{row.date_of_birth ? (showPii ? fmt(row.date_of_birth) : `**/**/${new Date(row.date_of_birth).getFullYear()}`) : '—'}</td>
+                                    <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300 max-w-[160px] truncate" title={row.email}>{row.email || '—'}</td>
+                                    <td className="px-2 py-1.5 whitespace-nowrap text-gray-700 dark:text-gray-300 max-w-[180px] truncate" title={row.course_title || row.title}>{row.course_title || row.title || '—'}</td>
+                                    <td className="px-2 py-1.5 whitespace-nowrap font-mono text-gray-500 dark:text-gray-300">{row.course_code || '—'}</td>
+                                    <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{fmt(row.start_date)}</td>
+                                    <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{row.course_run_id || '—'}</td>
+                                    <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{row.fee != null ? `$${parseFloat(row.fee || 0).toFixed(2)}` : '—'}</td>
+                                    <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{row.gst != null ? `$${parseFloat(row.gst || 0).toFixed(2)}` : '—'}</td>
+                                    <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{row.course_sponsorship || '—'}</td>
+                                    <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{row.payment_status || '—'}</td>
+                                    <td className="px-2 py-1.5 whitespace-nowrap"><span className={`px-1.5 py-0.5 text-[10px] font-bold rounded-full ${(row.enrolment_status || row.class_status) === 'Confirmed' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'}`}>{row.enrolment_status || row.class_status || '—'}</span></td>
+                                    <td className="px-2 py-1.5 whitespace-nowrap font-mono text-gray-500 dark:text-gray-300">{row.grant_id || '—'}</td>
+                                    <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{row.grant_amount ? `$${parseFloat(row.grant_amount).toFixed(2)}` : '—'}</td>
+                                    <td className="px-2 py-1.5 whitespace-nowrap font-mono text-gray-500 dark:text-gray-300">{row.invoice_id || '—'}</td>
+                                    <td className="px-2 py-1.5 text-center whitespace-nowrap">
+                                        {row.match ? (
+                                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-[10px] font-semibold" title={row.matchDetail}><svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>In Cal</span>
+                                        ) : row.reason ? (
+                                            <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${row.reason === 'No Email' ? 'bg-amber-100 text-amber-700' : 'bg-red-50 text-red-600'}`}><svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>{row.reason}</span>
+                                        ) : <span className="text-gray-400">—</span>}
+                                    </td>
                                 </tr>
-                            ) : (
-                                data.map((row, idx) => (
-                                    <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
-                                        <td className="px-4 py-3 font-medium text-gray-900 dark:text-gray-200">{row.email}</td>
-                                        <td className="px-4 py-3 text-gray-700 dark:text-gray-300 max-w-xs truncate" title={row.title}>{row.title}</td>
-                                        <td className="px-4 py-3 font-mono text-xs text-gray-500 dark:text-gray-400">{row.course_code || '—'}</td>
-                                        <td className="px-4 py-3 text-gray-500 dark:text-gray-400 whitespace-nowrap">{fmt(row.start_date)}</td>
-                                        <td className="px-4 py-3">
-                                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
-                                                row.class_status === 'Confirmed' ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300' :
-                                                row.class_status === 'Cancelled' ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300' :
-                                                'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'
-                                            }`}>
-                                                {row.class_status || 'Pending'}
-                                            </span>
-                                        </td>
-                                        <td className="px-4 py-3 text-center">
-                                            {row.match ? (
-                                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 text-xs font-semibold" title={row.matchDetail}>
-                                                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                                                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                                                    </svg>
-                                                    Match
-                                                </span>
-                                            ) : (
-                                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-400 text-xs font-semibold">
-                                                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                                                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                                                    </svg>
-                                                    Not Matched
-                                                </span>
-                                            )}
-                                        </td>
-                                        <td className="px-4 py-3 text-center">
-                                            {!row.match && row.reason ? (
-                                                <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${
-                                                    row.reason === 'No Email' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
-                                                }`}>
-                                                    {row.reason}
-                                                </span>
-                                            ) : (
-                                                <span className="text-gray-400 text-xs">—</span>
-                                            )}
-                                        </td>
-                                    </tr>
-                                ))
-                            )}
+                            ))}
                         </tbody>
                     </table>
                 </div>
             </Card>
         </div>
     );
+};
+
+export const UpcomingEnrolmentView: React.FC = () => {
+    const { trainingProviderProfile } = useLms();
+    const [data, setData] = useState<any[]>([]);
+    const [loading, setLoading] = useState(false);
+    // Use admin threshold from Company Settings (default 21 days, same as Upcoming Classes)
+    const thresholdDays = (trainingProviderProfile as any)?.adminSettings?.upcomingClassesThresholdDays || 21;
+    const fmtDmy = (d: Date) => `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+    const [startDate, setStartDate] = useState(() => fmtDmy(new Date()));
+    const [endDate, setEndDate] = useState(() => { const d = new Date(); d.setDate(d.getDate() + thresholdDays); return fmtDmy(d); });
+    const toIsoDate = (dmy: string) => { const p = dmy.split('/'); return p.length === 3 ? `${p[2]}-${p[1]}-${p[0]}` : dmy; };
+    const fetchData = async () => {
+        setLoading(true);
+        try { const res = await fetch(`/api/admin/upcoming-enrolment?startDate=${toIsoDate(startDate)}&endDate=${toIsoDate(endDate)}`); const json = await res.json(); if (json.success) setData(json.data); }
+        catch { /* silent */ } finally { setLoading(false); }
+    };
+    useEffect(() => { fetchData(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    return <EnrolmentTable title="Upcoming Enrolment" description={`Confirmed enrolments starting from today to ${thresholdDays} days ahead (same threshold as Upcoming Classes). Sorted by start date.`} data={data} loading={loading} onRefresh={fetchData} showDateRange startDate={startDate} endDate={endDate} onStartDateChange={setStartDate} onEndDateChange={setEndDate} />;
+};
+
+export const NewEnrolmentView: React.FC = () => {
+    const [data, setData] = useState<any[]>([]);
+    const [loading, setLoading] = useState(false);
+    const [syncing, setSyncing] = useState(false);
+    const fetchData = async () => {
+        setLoading(true);
+        try { const res = await fetch('/api/admin/ssg-enrolment-records?limit=500'); const json = await res.json(); if (json.success) setData((json.data || []).map((r: any) => ({ ...r, enrolment_id: r.enrolment_reference, nric: r.learner_nric, email: r.learner_email, course_title: r.course_title, course_code: r.course_ref_code, start_date: r.start_date, enrolment_status: r.status }))); }
+        catch { /* silent */ } finally { setLoading(false); }
+    };
+    const handleSync = async () => {
+        setSyncing(true);
+        try { const res = await fetch('/api/external/sync-ssg-enrolments', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-internal-scheduler': '1' } }); const json = await res.json(); if (json.success) { alert(`Sync: ${json.inserted} new, ${json.skipped} existing, ${json.errors} errors`); fetchData(); } else alert(`Failed: ${json.error}`); }
+        catch { alert('Sync failed.'); } finally { setSyncing(false); }
+    };
+    React.useEffect(() => { fetchData(); }, []);
+    return <EnrolmentTable title="New Enrolment" description="SSG enrolments pulled by the scheduler (every 2 hours). Click Sync to pull latest." data={data} loading={loading} onRefresh={fetchData} onSync={handleSync} syncLabel="Sync from SSG Now" syncing={syncing} />;
 };
 
 // ── Course Run Date Sync Log ──────────────────────────────────────────────────
