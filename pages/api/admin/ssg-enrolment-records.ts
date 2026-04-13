@@ -2,66 +2,75 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 
 /**
- * GET /api/admin/ssg-enrolment-records?page=0&limit=20&search=...
+ * GET /api/admin/ssg-enrolment-records?limit=500&search=...
  *
- * Returns SSG enrolment records from the local ssg_enrolment_record table,
- * ordered by enrolment_date DESC. Supports pagination and search.
+ * Returns enrolments from the local enrollment table where the enrolment_date
+ * is yesterday or today AND the course start date is in the future.
+ * Sorted by enrolment_date DESC (today first, then yesterday).
  */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {
     return res.status(405).json({ success: false, error: 'Method not allowed' });
   }
 
-  const page = parseInt(req.query.page as string, 10) || 0;
-  const limit = Math.min(parseInt(req.query.limit as string, 10) || 20, 100);
+  const limit = Math.min(parseInt(req.query.limit as string, 10) || 100, 500);
   const search = (req.query.search as string || '').trim();
-  const offset = page * limit;
 
   try {
-    const conditions: string[] = [];
+    const conditions: string[] = [
+      // Enrolment date = yesterday or today (include NULL dates)
+      `(e.enrolment_date IS NULL OR e.enrolment_date >= CURRENT_DATE - INTERVAL '1 day')`,
+      // Course starts in the future
+      `cr.start_date >= CURRENT_DATE`,
+      // Exclude removed/cancelled
+      `LOWER(COALESCE(e.enrolment_status, '')) NOT IN ('admin removed', 'cancelled', 'withdrawn')`,
+    ];
     const params: any[] = [];
     let paramIdx = 1;
 
-    // Only show enrolments for courses starting after today
-    conditions.push(`(start_date IS NULL OR start_date::date > CURRENT_DATE)`);
-
     if (search) {
-      conditions.push(`(enrolment_reference ILIKE $${paramIdx}
-        OR learner_name ILIKE $${paramIdx}
-        OR learner_nric ILIKE $${paramIdx}
-        OR learner_email ILIKE $${paramIdx}
-        OR course_title ILIKE $${paramIdx}
-        OR course_ref_code ILIKE $${paramIdx}
-        OR course_run_id ILIKE $${paramIdx})`);
+      conditions.push(`(
+        COALESCE(au.full_name, e.nric, '') ILIKE $${paramIdx}
+        OR e.nric ILIKE $${paramIdx}
+        OR COALESCE(au.email, e.email, '') ILIKE $${paramIdx}
+        OR e.enrolment_id ILIKE $${paramIdx}
+        OR c.title ILIKE $${paramIdx}
+        OR c.course_code ILIKE $${paramIdx}
+        OR cr.course_run_id ILIKE $${paramIdx}
+      )`);
       params.push(`%${search}%`);
       paramIdx++;
     }
 
-    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-
-    const countRes = await pool.query(
-      `SELECT COUNT(*)::int AS total FROM ssg_enrolment_record ${whereClause}`,
-      params
-    );
-    const total = countRes.rows[0].total;
+    const whereClause = `WHERE ${conditions.join(' AND ')}`;
 
     const dataRes = await pool.query(
-      `SELECT id, enrolment_reference, enrolment_date, learner_name, learner_nric,
-              learner_email, course_title, course_ref_code, course_run_id, start_date, status
-       FROM ssg_enrolment_record
-       ${whereClause}
-       ORDER BY enrolment_date DESC NULLS LAST, created_at DESC
-       LIMIT $${paramIdx} OFFSET $${paramIdx + 1}`,
-      [...params, limit, offset]
+      `SELECT
+        e.id,
+        e.enrolment_id AS enrolment_reference,
+        e.enrolment_date,
+        COALESCE(au.full_name, e.nric) AS learner_name,
+        e.nric AS learner_nric,
+        COALESCE(au.email, e.email) AS learner_email,
+        c.title AS course_title,
+        c.course_code AS course_ref_code,
+        cr.course_run_id,
+        cr.start_date,
+        e.enrolment_status AS status
+      FROM public.enrollment AS e
+      INNER JOIN public.course_run AS cr ON e.course_run_id = cr.id
+      INNER JOIN public.course AS c ON cr.course_id = c.id
+      LEFT JOIN public.app_user AS au ON e.user_id = au.id
+      ${whereClause}
+      ORDER BY e.enrolment_date DESC NULLS LAST, e.created_at DESC
+      LIMIT $${paramIdx}`,
+      [...params, limit]
     );
 
     return res.status(200).json({
       success: true,
       data: dataRes.rows,
-      total,
-      page,
-      limit,
-      totalPages: Math.ceil(total / limit),
+      total: dataRes.rows.length,
     });
   } catch (err) {
     console.error('❌ ssg-enrolment-records error:', err);

@@ -6488,7 +6488,7 @@ export const NewEnrolmentView: React.FC = () => {
         catch { alert('Sync failed.'); } finally { setSyncing(false); }
     };
     React.useEffect(() => { fetchData(); }, []);
-    return <EnrolmentTable title="New Enrolment" description="SSG enrolments pulled by the scheduler (every 3 hours). Only showing courses starting after today. Click Sync to pull latest." data={data} loading={loading} onRefresh={fetchData} onSync={handleSync} syncLabel="Sync from SSG Now" syncing={syncing} />;
+    return <EnrolmentTable title="New Enrolment" description="Enrolments from yesterday & today for upcoming courses. Synced from SSG every 3 hours. Click Sync to pull latest." data={data} loading={loading} onRefresh={fetchData} onSync={handleSync} syncLabel="Sync from SSG Now" syncing={syncing} />;
 };
 
 // ── Course Run Date Sync Log ──────────────────────────────────────────────────

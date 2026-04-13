@@ -77,6 +77,8 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate, onSelectWorkflo
         calendar: false,
         courseManagement: false,
         classManagement: false,
+        cmClasses: true,
+        cmLearnersTrainers: true,
         directApplication: false,
         enrolment: false,
         tpgManagement: false,
@@ -135,14 +137,17 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate, onSelectWorkflo
             <NavItem page={AdminPage.Dashboard} label="Admin Dashboard" />
 
             <NavSection title="Class Management" isOpen={openSections.classManagement} onToggle={() => toggleSection('classManagement')}>
-                <NavItem page={AdminPage.ViewLearners} label="View Learners" isSubItem />
-                <NavItem page={AdminPage.OngoingClasses} label="Ongoing Classes" isSubItem />
-                <NavItem page={AdminPage.UpcomingClasses} label="Upcoming Classes" isSubItem />
-                {/* Upcoming Enrolment moved to Enrolment section */}
-                <NavItem page={AdminPage.CompletedClasses} label="Completed Classes" isSubItem />
-                <NavItem page={AdminPage.AssignTrainer} label="Assign Trainer" isSubItem />
-                <NavItem page={AdminPage.AssignStudent} label="Assign Learners" isSubItem />
-                <NavItem page={AdminPage.SearchPastLearners} label="Search Past Learners" isSubItem />
+                <SubSection title="Classes" isOpen={openSections.cmClasses} onToggle={() => toggleSection('cmClasses')}>
+                    <NavItem page={AdminPage.OngoingClasses} label="Ongoing Classes" isSubItem />
+                    <NavItem page={AdminPage.UpcomingClasses} label="Upcoming Classes" isSubItem />
+                    <NavItem page={AdminPage.CompletedClasses} label="Completed Classes" isSubItem />
+                </SubSection>
+                <SubSection title="Learners / Trainers" isOpen={openSections.cmLearnersTrainers} onToggle={() => toggleSection('cmLearnersTrainers')}>
+                    <NavItem page={AdminPage.AssignTrainer} label="Assign Trainer" isSubItem />
+                    <NavItem page={AdminPage.ViewLearners} label="View Learners" isSubItem />
+                    <NavItem page={AdminPage.AssignStudent} label="Assign Learners" isSubItem />
+                    <NavItem page={AdminPage.SearchPastLearners} label="Search Past Learners" isSubItem />
+                </SubSection>
             </NavSection>
 
             <NavSection title="Direct Application" isOpen={openSections.directApplication} onToggle={() => toggleSection('directApplication')}>
