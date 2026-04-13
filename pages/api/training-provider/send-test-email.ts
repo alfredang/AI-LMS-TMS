@@ -8,10 +8,11 @@ import { renderInvitationHtmlEmail, renderInvitationTemplate, parseCcList } from
  * POST /api/training-provider/send-test-email
  *
  * Generic test email sender for all email templates.
- * Body: { testEmail, subject, body, templateType }
+ * Body: { testEmail, subject, body, templateType, cc, attachmentUrl }
  *
  * templateType: 'certificate' | 'course-confirmation' | 'final-course-confirmation' |
- *               'otp' | 'feedback' | 'password-reset' | 'trainer-invitation' | 'courseware-attendance'
+ *               'otp' | 'feedback' | 'password-reset' | 'trainer-invitation' |
+ *               'courseware-attendance' | 'proforma-invoice'
  */
 
 // Sample data per template type for variable replacement
@@ -62,6 +63,15 @@ const SAMPLE_DATA: Record<string, Record<string, string>> = {
     '{COURSE_NAME}': 'WSQ - Tax Computations for Individuals and Organizations',
     '{DIGITAL_ATTENDANCE_ID}': 'RA572084',
   },
+  'proforma-invoice': {
+    '{PARTICIPANT_NAME}': 'John Tan',
+    '{COURSE_NAME}': 'WSQ - R Fundamental and Statistical Analysis for Beginners',
+    '{COURSE_START_DATE}': 'Tue Apr 14 2026 09:30:00',
+    '{INVOICE_NUMBER}': 'PI-2026-00123',
+    '{INVOICE_DATE}': 'Sun Apr 12 2026',
+    '{AMOUNT_DUE}': 'SGD 500.00',
+    '{PAYMENT_DUE_DATE}': 'Sun Apr 19 2026',
+  },
 };
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -69,7 +79,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).json({ success: false, error: 'Method not allowed' });
   }
 
-  const { testEmail, subject, body: emailBody, templateType = 'certificate', cc } = req.body;
+  const { testEmail, subject, body: emailBody, templateType = 'certificate', cc, attachmentUrl } = req.body;
 
   if (!testEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(testEmail)) {
     return res.status(400).json({ success: false, error: 'Valid test email address is required.' });
@@ -119,8 +129,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Trainer-invitation templates need the specialized HTML renderer so that
     // **bold** lines, tight line spacing, and side-by-side Accept/Decline
-    // buttons render correctly. Strip the leading `{` in sample keys to match
-    // the placeholder shape expected by renderInvitationHtmlEmail.
+    // buttons render correctly.
     let htmlBody: string;
     if (templateType === 'trainer-invitation') {
       const invitationReplacements: Record<string, string> = {};
@@ -139,9 +148,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       `;
     } else {
       const isHtml = /<[a-z][\s\S]*>/i.test(sampleBody);
+
+      // Build optional attachment link block for proforma invoice
+      const attachmentBlock = attachmentUrl
+        ? `<div style="margin: 16px 0; padding: 12px 16px; background: #f0f7ff; border: 1px solid #c7dff7; border-radius: 6px;">
+            <p style="margin: 0 0 4px 0; font-weight: bold; color: #1a56db;">📎 Proforma Invoice Attached</p>
+            <a href="${attachmentUrl}" style="color: #1a56db; word-break: break-all;">${attachmentUrl}</a>
+          </div>`
+        : '';
+
       htmlBody = `
       <div style="font-family: Arial, sans-serif; color: #333;">
         ${isHtml ? sampleBody : sampleBody.split('\n').map((line: string) => line.trim() ? `<p style="margin:0 0 2px 0;">${line}</p>` : '<br/>').join('\n        ')}
+        ${attachmentBlock}
         <br/>
         <p style="margin:0; color: #999; font-size: 11px;">--- This is a test email sent from the Email Template editor ---</p>
       </div>
@@ -155,8 +174,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     oauth2Client.setCredentials({ refresh_token: google_refresh_token });
     const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
 
-    // Optional CC list passed from the template editor — validates and
-    // dedupes via parseCcList so test sends mirror real production sends.
     const ccList = parseCcList(typeof cc === 'string' ? cc : null);
 
     const headers = [

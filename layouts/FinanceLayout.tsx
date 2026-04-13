@@ -57,6 +57,7 @@ import QBCustomerView from '../components/finance/QBCustomerView';
 import QBEstimateView from '../components/finance/QBEstimateView';
 import QBInvoiceView from '../components/finance/QBInvoiceView';
 import QBPaymentView from '../components/finance/QBPaymentView';
+import ProFormaInvoiceView from '../components/finance/ProFormaInvoiceView';
 
 import { ProfilePage } from '../components/ProfilePage';
 import { useLms } from '@contexts/LmsContext';
@@ -66,6 +67,7 @@ type FinancePage =
   | 'dashboard' | 'allCourseRuns'
   | 'grantCalculator' | 'searchGrant' | 'viewGrant'
   | 'claimManagement' | 'claimCheck' | 'viewClaim' | 'cancelClaim' | 'uploadDocument'
+  | 'proformaInvoice' | 'taxInvoice' | 'receipt'
   // Finance automation (migrated from Google Sheets "Start Processing")
   | 'autoProcessEnrolments' | 'autoManualEnrolment' | 'autoCreateEnrolmentsErrorStatus' | 'autoCreateEmployerEnrolment' | 'autoAppendCancelledClassTrainees'
   | 'autoUpdateAssessment'
@@ -93,8 +95,8 @@ const FinanceLayout: React.FC = () => {
   const [isDesktopSidebarCollapsed, setIsDesktopSidebarCollapsed] = useState(false);
   const [selectedWorkflowId, setSelectedWorkflowId] = useState<string | null>(null);
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
-    courseRunAutomations: false,
-    claimManagement: false,
+    courseRunAutomations: true,
+    claimManagement: true,
     tpgManagement: false,
     tpgCourseRun: false,
     tpgSession: false,
@@ -124,7 +126,10 @@ const FinanceLayout: React.FC = () => {
       setOpenSections(prev => ({ ...prev, courseRunAutomations: true }));
     }
     if (['claimCheck', 'viewClaim', 'cancelClaim', 'uploadDocument'].includes(page)) {
-      setOpenSections(prev => ({ ...prev, claimManagement: true }));
+      setOpenSections(prev => ({ ...prev, claimManagement: true, claimSub: true }));
+    }
+    if (['proformaInvoice', 'taxInvoice', 'receipt'].includes(page)) {
+      setOpenSections(prev => ({ ...prev, claimManagement: true, invoiceSub: true }));
     }
   }, [page]);
 
@@ -245,12 +250,35 @@ const FinanceLayout: React.FC = () => {
       case 'claimManagement': return (
         <div>
           <h2 className="text-3xl font-bold mb-6 dark:text-white">Claim Management</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+
+          {/* Claim */}
+          <h3 className="text-xl font-semibold mb-4 dark:text-white">Claim</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
             {[
               { key: 'claimCheck', label: 'Check / Add Claim', icon: IconName.ClipboardCheck, description: 'Check existing claims and add new ones' },
               { key: 'viewClaim', label: 'View Claim', icon: IconName.InfoCircle, description: 'View claim details and status' },
               { key: 'cancelClaim', label: 'Cancel Claim', icon: IconName.Close, description: 'Cancel an existing claim' },
-              { key: 'uploadDocument', label: 'Upload Document', icon: IconName.Upload, description: 'Upload supporting documents' },
+              { key: 'uploadDocument', label: 'Supporting Document', icon: IconName.Upload, description: 'Upload supporting documents' },
+            ].map(item => (
+              <button key={item.key} onClick={() => setPage(item.key as FinancePage)} className="block w-full">
+                <Card className="p-6 flex flex-col text-center items-center dark:bg-gray-800 dark:border-gray-700 hover:shadow-lg transition-shadow cursor-pointer h-full">
+                  <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-3">
+                    <Icon name={item.icon} className="w-6 h-6 text-primary" />
+                  </div>
+                  <h3 className="text-xl font-bold mb-2 dark:text-white">{item.label}</h3>
+                  <p className="text-gray-600 dark:text-gray-300 text-sm flex-grow">{item.description}</p>
+                </Card>
+              </button>
+            ))}
+          </div>
+
+          {/* Invoices */}
+          <h3 className="text-xl font-semibold mb-4 dark:text-white">Invoices</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[
+              { key: 'proformaInvoice', label: 'ProForma Invoice', icon: IconName.FileText, description: 'Generate and manage pro forma invoices' },
+              { key: 'taxInvoice', label: 'Tax Invoice', icon: IconName.DollarSign, description: 'Generate and manage tax invoices' },
+              { key: 'receipt', label: 'Receipt', icon: IconName.ClipboardCheck, description: 'Generate and manage payment receipts' },
             ].map(item => (
               <button key={item.key} onClick={() => setPage(item.key as FinancePage)} className="block w-full">
                 <Card className="p-6 flex flex-col text-center items-center dark:bg-gray-800 dark:border-gray-700 hover:shadow-lg transition-shadow cursor-pointer h-full">
@@ -273,6 +301,26 @@ const FinanceLayout: React.FC = () => {
         return <CancelClaimView />;
       case 'uploadDocument':
         return <UploadDocumentView />;
+      case 'proformaInvoice':
+        return <ProFormaInvoiceView />;
+      case 'taxInvoice':
+        return (
+          <div>
+            <h2 className="text-3xl font-bold mb-6 dark:text-white">Tax Invoice</h2>
+            <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
+              <p className="text-gray-600 dark:text-gray-300">Tax Invoice management coming soon.</p>
+            </Card>
+          </div>
+        );
+      case 'receipt':
+        return (
+          <div>
+            <h2 className="text-3xl font-bold mb-6 dark:text-white">Receipt</h2>
+            <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
+              <p className="text-gray-600 dark:text-gray-300">Receipt management coming soon.</p>
+            </Card>
+          </div>
+        );
       case 'bizfile':
         return <BizfileView />;
       case 'bizfileDirectorySearch':
@@ -529,6 +577,9 @@ const FinanceLayout: React.FC = () => {
       case 'viewClaim': return 'View Claim';
       case 'cancelClaim': return 'Cancel Claim';
       case 'uploadDocument': return 'Upload Supporting Document';
+      case 'proformaInvoice': return 'ProForma Invoice';
+      case 'taxInvoice': return 'Tax Invoice';
+      case 'receipt': return 'Receipt';
       case 'bizfile': return 'Bizfile — Business Profile';
       case 'bizfileDirectorySearch': return 'Bizfile — Directory Search';
       case 'bizfileNameSearch': return 'Bizfile — Name Search';
@@ -741,10 +792,17 @@ const FinanceLayout: React.FC = () => {
       </NavSection>
 
       <NavSection title="Claim Management" sectionKey="claimManagement">
-        <NavItem target="claimCheck" label="Check / Add Claim" isSubItem />
-        <NavItem target="viewClaim" label="View Claim" isSubItem />
-        <NavItem target="cancelClaim" label="Cancel Claim" isSubItem />
-        <NavItem target="uploadDocument" label="Supporting Document" isSubItem />
+        <SubSection title="Claim" sectionKey="claimSub">
+          <NavItem target="claimCheck" label="Check / Add Claim" isSubItem />
+          <NavItem target="viewClaim" label="View Claim" isSubItem />
+          <NavItem target="cancelClaim" label="Cancel Claim" isSubItem />
+          <NavItem target="uploadDocument" label="Supporting Document" isSubItem />
+        </SubSection>
+        <SubSection title="Invoices" sectionKey="invoiceSub">
+          <NavItem target="proformaInvoice" label="ProForma Invoice" isSubItem />
+          <NavItem target="taxInvoice" label="Tax Invoice" isSubItem />
+          <NavItem target="receipt" label="Receipt" isSubItem />
+        </SubSection>
       </NavSection>
 
       <NavSection title="Quickbooks" sectionKey="quickbooks">
