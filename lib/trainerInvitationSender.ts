@@ -173,6 +173,7 @@ export async function sendNextTrainerInvitationForCourseRun(opts: {
         c.title AS course_title,
         c.course_code,
         c.training_hours,
+        c.assessment_hours,
         c.trainers_list
       FROM course_run cr
       JOIN course c ON c.id = cr.course_id

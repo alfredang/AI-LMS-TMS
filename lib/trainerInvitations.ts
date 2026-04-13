@@ -8,12 +8,11 @@ We hope this message finds you well. As one of our valued trainers, we are pleas
 
 **Course Schedule**
 **Course Title:** {COURSE_TITLE}
-**Course Type:** {COURSE_TYPE}
 **Course Code:** {COURSE_CODE}
+**Class Type:** {COURSE_TYPE}
 **Start Date:** {START_DATE}
 **End Date:** {END_DATE}
-**Duration:** {DURATION}
-**Course Hours:** {COURSE_HOURS}
+**Total Class Duration:** {DURATION}
 
 **Note:** Each day represents 8 hours of training (evening classes are around 3 hours each). Detailed timing and dates will be sent via Google Calendar invite upon acceptance.
 
@@ -106,6 +105,7 @@ export interface InvitationClassRow {
   course_code?: string | null;
   course_mode?: string | null;            // maps to mode_of_learning (Physical/Virtual/...)
   training_hours?: string | number | null;
+  assessment_hours?: string | number | null;
   start_date?: string | Date | null;
   end_date?: string | Date | null;
   tpg_assigned_trainer_name?: string | null;
@@ -148,8 +148,10 @@ export function buildInvitationReplacements(opts: {
   const confirmByLabel = `${dd}-${mm}-${yyyy}, 23:59 PM`;
 
   // Course hours: show as "Xh" when a positive numeric value is present
-  const hoursVal = classRow.training_hours != null ? Number(classRow.training_hours) : NaN;
-  const courseHoursLabel = Number.isFinite(hoursVal) && hoursVal > 0 ? `${hoursVal}h` : 'N/A';
+  const trainingVal = classRow.training_hours != null ? Number(classRow.training_hours) : 0;
+  const assessmentVal = classRow.assessment_hours != null ? Number(classRow.assessment_hours) : 0;
+  const hoursVal = (Number.isFinite(trainingVal) ? trainingVal : 0) + (Number.isFinite(assessmentVal) ? assessmentVal : 0);
+  const courseHoursLabel = hoursVal > 0 ? `${hoursVal} hours` : 'N/A';
 
   return {
     COMPANY_SHORT_NAME: companyShortName,
@@ -304,7 +306,7 @@ export function renderInvitationHtmlEmail(template: string, replacements: Record
   htmlBody = htmlBody.replace(/\{DECLINE_URL\}/g, declineButtonHtml);
 
   return `
-<div style="font-family:Arial,sans-serif;font-size:14px;color:#1f2937;line-height:1.55;max-width:640px;margin:0 auto;padding:24px;background-color:#ffffff;">
+<div style="font-family:Arial,sans-serif;font-size:14px;color:#1f2937;line-height:1.55;background-color:#ffffff;">
   ${htmlBody}
   <div style="border-top:1px solid #e5e7eb;padding-top:14px;margin-top:28px;">
     <p style="margin:0;font-size:12px;color:#94a3b8;font-style:italic;">This is an automated email. Please do not reply directly to this message.</p>
