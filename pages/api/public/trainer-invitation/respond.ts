@@ -160,11 +160,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           `UPDATE trainer_invitation SET status = 'declined', responded_at = NOW(), updated_at = NOW() WHERE id = $1`,
           [invitation.id]
         );
-        const assignedName = alreadyAccepted.rows[0].trainer_name;
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         return res.status(200).send(renderPage(
           'Already Assigned',
-          `Thank you for your response, ${invitation.trainer_name}. Unfortunately, this class has already been assigned to ${assignedName}. We appreciate your willingness and will reach out for future opportunities. If this class is taught by multiple trainers and you are one of them, do ask the admin to manually assign you.`,
+          `Thank you for your response, ${invitation.trainer_name}. Unfortunately, this class has already been assigned. We appreciate your willingness and will reach out for future opportunities.`,
           'gray'
         ));
       }
@@ -243,6 +242,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           crtErr
         );
       }
+
+      // TODO #77: Add trainer to Google Calendar event on accept.
+      // Removed for now — calendar sync needs course run matching to be
+      // reliable first (most CRs not yet in local DB).
     }
 
     // Get training provider config for sending follow-up emails
