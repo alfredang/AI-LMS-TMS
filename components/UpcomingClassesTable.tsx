@@ -253,6 +253,8 @@ interface UpcomingClass {
     numOfTrainee: number;
     modeOfTraining: string;
     classType: string;
+    invitationPaused: boolean;
+    trainerInCalendar: boolean | null;
     attendanceScore: number | null;
     trainersList: string;
 }
@@ -303,7 +305,7 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
     // list doesn't clutter with cancelled runs. Admins can switch to 'all' or
     // 'Cancelled' from the Advanced Filters dropdown to see cancelled classes.
     const [selectedClassStatus, setSelectedClassStatus] = useState<'all' | 'ActiveOnly' | 'Confirmed' | 'Pending' | 'Cancelled'>('ActiveOnly');
-    const [selectedClassType, setSelectedClassType] = useState<'all' | 'Physical' | 'Virtual' | 'Hybrid'>('all');
+    const [selectedClassType, setSelectedClassType] = useState<'all' | 'Physical' | 'Virtual' | 'Hybrid' | 'External'>('all');
     const [selectedCourseType, setSelectedCourseType] = useState<'all' | 'WSQ' | 'IBF' | 'Non-WSQ'>('all');
     const [startDateFrom, setStartDateFrom] = useState('');
     const [endDateUntil, setEndDateUntil] = useState('');
@@ -345,6 +347,7 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
     const [calSyncing, setCalSyncing] = useState(false);
     const [calSyncResult, setCalSyncResult] = useState<any>(null);
     const [sendingInvitationFor, setSendingInvitationFor] = useState<string | null>(null);
+    const [checkingCalendar, setCheckingCalendar] = useState(false);
     const [bulkSending, setBulkSending] = useState(false);
     const [showBulkPreview, setShowBulkPreview] = useState(false);
     const [bulkPreviewData, setBulkPreviewData] = useState<any[]>([]);
@@ -627,6 +630,10 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
     };
 
     const handleSendTrainerInvitation = async (classItem: UpcomingClass) => {
+        if (classItem.invitationPaused) {
+            setActionMessage({ type: 'error', text: 'Invitations are paused for this course run. Unpause from Edit Class to send.' });
+            return;
+        }
         setSendingInvitationFor(classItem.id);
         setActionMessage(null);
         try {
@@ -681,6 +688,35 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                             onClick={() => { setShowCalendarModal(true); setCalSyncResult(null); }}
                         >
                             Sync Google Calendar
+                        </Button>
+                        <Button
+                            variant="secondary"
+                            size="sm"
+                            disabled={checkingCalendar}
+                            onClick={async () => {
+                                setCheckingCalendar(true);
+                                try {
+                                    const res = await fetch(getApiUrl('/api/admin/check-calendar-trainers'), {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ daysAhead: 60 }),
+                                    });
+                                    const json = await res.json();
+                                    if (json.success) {
+                                        setActionMessage({ type: 'success', text: `Calendar check: ${json.trainerInCalendar} matched, ${json.trainerNotInCalendar} not matched` });
+                                        fetchUpcomingClasses();
+                                    } else {
+                                        setActionMessage({ type: 'error', text: json.error || 'Calendar check failed' });
+                                    }
+                                } catch {
+                                    setActionMessage({ type: 'error', text: 'Failed to check calendar' });
+                                } finally {
+                                    setCheckingCalendar(false);
+                                }
+                            }}
+                            title="Check if local trainers match Google Calendar attendees"
+                        >
+                            {checkingCalendar ? 'Checking...' : 'Check Calendar'}
                         </Button>
                         <Button
                             variant="secondary"
@@ -900,13 +936,14 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Class Type</label>
                                             <select
                                                 value={selectedClassType}
-                                                onChange={(e) => setSelectedClassType(e.target.value as 'all' | 'Physical' | 'Virtual' | 'Hybrid')}
+                                                onChange={(e) => setSelectedClassType(e.target.value as 'all' | 'Physical' | 'Virtual' | 'Hybrid' | 'External')}
                                                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                                             >
                                                 <option value="all">All</option>
                                                 <option value="Physical">Physical</option>
                                                 <option value="Virtual">Virtual</option>
                                                 <option value="Hybrid">Hybrid</option>
+                                                <option value="External">External</option>
                                             </select>
                                         </div>
 
@@ -996,6 +1033,7 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Learners</th>
                                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Trainer (TPG)</th>
                                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Trainer (Local)</th>
+                                        <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap" title="Trainer matches Google Calendar attendee">Cal</th>
                                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Attendance</th>
                                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"></th>
                                     </tr>
@@ -1011,7 +1049,7 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                                 <td className="px-4 py-2 text-sm font-medium min-w-[350px]"><button type="button" onClick={() => handleViewDetails(classItem)} className="text-left text-blue-600 dark:text-blue-400 hover:underline">{classItem.courseTitle}</button></td>
                                                 <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.courseCode}</td>
                                                 <td className="px-4 py-2 whitespace-nowrap text-sm">
-                                                    <span className={`px-2 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full ${classType === 'Virtual' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300' : classType === 'Hybrid' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300' : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'}`}>{classType}</span>
+                                                    <span className={`px-2 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full ${classType === 'Virtual' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300' : classType === 'Hybrid' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300' : classType === 'External' ? 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/40 dark:text-cyan-300' : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'}`}>{classType}</span>
                                                 </td>
                                                 <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{formatDate(classItem.startDate)}</td>
                                                 <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{formatDate(classItem.endDate)}</td>
@@ -1021,6 +1059,15 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                                 <td className="px-4 py-2 whitespace-nowrap text-sm text-center text-gray-700 dark:text-gray-200">{classItem.numOfTrainee}</td>
                                                 <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{renderTrainerCell(classItem.assignedTrainerTpg, classItem.assignedTrainerTpgEmail)}</td>
                                                 <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{renderTrainerCell(classItem.assignedTrainerLocal, classItem.assignedTrainerLocalEmail)}</td>
+                                                <td className="px-4 py-2 whitespace-nowrap text-sm text-center">
+                                                    {classItem.trainerInCalendar === true ? (
+                                                        <span className="text-green-500" title="Trainer matches calendar">✓</span>
+                                                    ) : classItem.trainerInCalendar === false ? (
+                                                        <span className="text-red-500" title="Trainer not in calendar">✗</span>
+                                                    ) : (
+                                                        <span className="text-gray-400" title="Not checked yet">—</span>
+                                                    )}
+                                                </td>
                                                 <td className="px-4 py-2 whitespace-nowrap text-sm text-center">
                                                     {classItem.attendanceScore != null ? (
                                                         <span className={`font-semibold ${classItem.attendanceScore >= 75 ? 'text-green-600' : classItem.attendanceScore >= 50 ? 'text-yellow-600' : 'text-red-600'}`}>
@@ -1074,6 +1121,7 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Learners</th>
                                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Trainer (TPG)</th>
                                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Trainer (Local)</th>
+                                        <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap" title="Trainer matches Google Calendar attendee">Cal</th>
                                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Next Trainer</th>
                                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Invite Next Trainer</th>
                                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"></th>
@@ -1134,13 +1182,22 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                                 </select>
                                             </td>
                                             <td className="px-4 py-2 whitespace-nowrap text-sm">
-                                                <span className={`px-2 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full ${classType === 'Virtual' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300' : classType === 'Hybrid' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300' : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'}`}>{classType}</span>
+                                                <span className={`px-2 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full ${classType === 'Virtual' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300' : classType === 'Hybrid' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300' : classType === 'External' ? 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/40 dark:text-cyan-300' : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'}`}>{classType}</span>
                                             </td>
                                             <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{formatDate(classItem.startDate)}</td>
                                             <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{formatDate(classItem.endDate)}</td>
                                             <td className="px-4 py-2 whitespace-nowrap text-sm text-center text-gray-700 dark:text-gray-200">{classItem.numOfTrainee}</td>
                                             <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{renderTrainerCell(classItem.assignedTrainerTpg, classItem.assignedTrainerTpgEmail)}</td>
                                             <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{renderTrainerCell(classItem.assignedTrainerLocal, classItem.assignedTrainerLocalEmail)}</td>
+                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-center">
+                                                {classItem.trainerInCalendar === true ? (
+                                                    <span className="text-green-500" title="Trainer matches calendar">✓</span>
+                                                ) : classItem.trainerInCalendar === false ? (
+                                                    <span className="text-red-500" title="Trainer not in calendar">✗</span>
+                                                ) : (
+                                                    <span className="text-gray-400" title="Not checked yet">—</span>
+                                                )}
+                                            </td>
                                             <td className="px-4 py-2 text-sm text-gray-700 dark:text-gray-200">
                                                 {classItem.nextAvailableTrainer ? (() => {
                                                     const courseTrainers = splitTrainerList(classItem.trainersList);
@@ -1178,13 +1235,13 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                                             </>
                                                         )}
                                                     </Button>
-                                                    {(classItem.latestInvitationStatus === 'accepted' || classItem.latestInvitationStatus === 'declined' || classItem.latestInvitationStatus === 'pending') && (
+                                                    {(classItem.latestInvitationStatus === 'accepted' || classItem.latestInvitationStatus === 'declined' || classItem.latestInvitationStatus === 'blocked' || classItem.latestInvitationStatus === 'pending') && (
                                                         <span className={`inline-flex px-2 py-0.5 text-xs font-semibold rounded-full ${
                                                             classItem.latestInvitationStatus === 'accepted' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
-                                                            : classItem.latestInvitationStatus === 'declined' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
+                                                            : (classItem.latestInvitationStatus === 'declined' || classItem.latestInvitationStatus === 'blocked') ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
                                                             : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
                                                             }`}>
-                                                            {classItem.latestInvitationStatus.charAt(0).toUpperCase() + classItem.latestInvitationStatus.slice(1)}
+                                                            {classItem.latestInvitationStatus === 'blocked' ? 'Declined' : classItem.latestInvitationStatus.charAt(0).toUpperCase() + classItem.latestInvitationStatus.slice(1)}
                                                         </span>
                                                     )}
                                                 </div>

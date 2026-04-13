@@ -66,6 +66,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
+    // Ensure invitation_paused column exists
+    await pool.query('ALTER TABLE course_run ADD COLUMN IF NOT EXISTS invitation_paused BOOLEAN DEFAULT false');
+    await pool.query('ALTER TABLE course_run ADD COLUMN IF NOT EXISTS invitation_replies_blocked BOOLEAN DEFAULT false');
+
     const { monthStart, monthEnd } = req.query;
 
     if (typeof monthStart !== 'string' || !isoDateRegex.test(monthStart)) {
@@ -120,6 +124,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         c.trainers_list,
         cr.class_status,
         cr.class_type,
+        cr.invitation_paused,
+        cr.invitation_replies_blocked,
         cr.tpg_assigned_trainer_name,
         cr.tpg_assigned_trainer_email,
         cr.assigned_trainer_name AS legacy_assigned_trainer_name,
@@ -326,7 +332,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const normalized = normalizedTrainerPool[index];
         if (!normalized || isLocallyAssigned(normalized)) continue;
         const invitation = invitations.find((entry) => normalizeTrainerName(entry.trainer_name) === normalized);
-        if (invitation?.status === 'declined') continue;
+        if (invitation?.status === 'declined' || invitation?.status === 'blocked') continue;
         nextAvailableTrainer = trainerName;
         nextAvailableTrainerEmail = invitation?.trainer_email || nameToEmail.get(normalized) || '';
         if (invitation?.status) {
@@ -388,6 +394,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         courseCode: row.course_code || '',
         classStatus: derivedStatus,
         classType: row.class_type || 'Physical',
+        invitationPaused: !!row.invitation_paused,
+        invitationRepliesBlocked: !!row.invitation_replies_blocked,
         sessionDate: compactToIso(row.session_date),
         startTime: row.start_time || '',
         endTime: row.end_time || '',
@@ -410,11 +418,72 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       };
     });
 
+    // #64: Find course runs that are ongoing (start_date <= date <= end_date)
+    // but have NO session on any date in this month window.
+    // These are "ongoing but not running today" — shown in a separate section.
+    const ongoingResult = await pool.query(
+      `
+      SELECT
+        cr.id AS course_run_uuid,
+        cr.course_run_id,
+        c.title AS course_title,
+        c.course_code,
+        cr.class_status,
+        cr.class_type,
+        cr.start_date::text AS start_date,
+        cr.end_date::text AS end_date,
+        cr.tpg_assigned_trainer_name,
+        cr.tpg_assigned_trainer_email,
+        cr.assigned_trainer_name AS legacy_assigned_trainer_name,
+        cr.assigned_trainer_email AS legacy_assigned_trainer_email,
+        (SELECT COUNT(*) FROM enrollment e WHERE e.course_run_id = cr.id) AS num_learners,
+        (SELECT COUNT(*) FROM course_session cs
+         WHERE cs.course_run_id = cr.id AND cs.deleted = false
+           AND cs.start_date IS NOT NULL AND cs.start_date <> '') AS total_sessions,
+        (SELECT ARRAY_AGG(DISTINCT cs.start_date ORDER BY cs.start_date ASC)
+         FROM course_session cs
+         WHERE cs.course_run_id = cr.id AND cs.deleted = false
+           AND cs.start_date IS NOT NULL AND cs.start_date <> '') AS session_dates
+      FROM course_run cr
+      JOIN course c ON c.id = cr.course_id
+      WHERE cr.start_date <= $2::date
+        AND cr.end_date >= $1::date
+        AND cr.class_status NOT IN ('Cancelled')
+        AND NOT EXISTS (
+          SELECT 1 FROM course_session cs
+          WHERE cs.course_run_id = cr.id
+            AND cs.deleted = false
+            AND cs.start_date >= $3 AND cs.start_date <= $4
+        )
+      ORDER BY cr.start_date ASC, c.title ASC
+      `,
+      [monthStart, monthEnd, compactStart, compactEnd]
+    );
+
+    const ongoingEvents = ongoingResult.rows.map((row: any) => ({
+      courseRunUuid: row.course_run_uuid,
+      courseRunId: row.course_run_id,
+      courseTitle: row.course_title,
+      courseCode: row.course_code,
+      classStatus: row.class_status || 'Pending',
+      classType: row.class_type || 'Physical',
+      startDate: row.start_date,
+      endDate: row.end_date,
+      tpgTrainerName: row.tpg_assigned_trainer_name || '',
+      tpgTrainerEmail: row.tpg_assigned_trainer_email || '',
+      localTrainerName: row.legacy_assigned_trainer_name || '',
+      localTrainerEmail: row.legacy_assigned_trainer_email || '',
+      numLearners: parseInt(row.num_learners || '0', 10),
+      totalSessions: parseInt(row.total_sessions || '0', 10),
+      sessionDates: (row.session_dates || []).map((d: string) => compactToIso(d)).filter(Boolean),
+    }));
+
     return res.status(200).json({
       success: true,
       data: {
         events,
         totalCount: events.length,
+        ongoingEvents,
       },
     });
   } catch (error) {
