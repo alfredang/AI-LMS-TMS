@@ -260,11 +260,19 @@ export async function addLearnerToCalendarEvent(
   oauth2Client.setCredentials({ refresh_token: credentials.refreshToken });
   const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
 
-  // Normalise the course start date to YYYY-MM-DD
+  // Normalise the course start date to YYYY-MM-DD natively using SGT
   let startDateIso: string;
   if (!courseStartDate) return false;
+  
   if (courseStartDate instanceof Date) {
-    startDateIso = courseStartDate.toISOString().slice(0, 10);
+    // Format safely in Asia/Singapore timezone (handling UTC zero-time drift)
+    const formatter = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Singapore',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    });
+    startDateIso = formatter.format(courseStartDate); 
   } else {
     startDateIso = String(courseStartDate).slice(0, 10);
   }
@@ -595,9 +603,20 @@ export async function createNativeEnrolmentFromDA(record: any, pool: any) {
   if (!record.course_run_id || !record.trainee_id || !record.trainee_email) return null;
   try {
     // Look up the course_id from course_run
-    const runRes = await pool.query(`SELECT course_id FROM course_run WHERE id = $1`, [record.course_run_id]);
+    // DA record.course_run_id often contains the external string ID (e.g. TGS-...) 
+    // rather than the internal UUID. We check both.
+    const runRes = await pool.query(
+      `SELECT id as internal_id, course_id FROM course_run 
+       WHERE (id::text = $1 OR course_run_id = $1) AND is_deleted IS NOT TRUE LIMIT 1`, 
+      [record.course_run_id]
+    );
+    
+    const internalRunId = runRes.rows[0]?.internal_id;
     const courseId = runRes.rows[0]?.course_id;
-    if (!courseId) return null;
+    if (!courseId || !internalRunId) {
+      console.warn(`⚠️ [DA] Could not find course_run for ID: ${record.course_run_id}`);
+      return null;
+    }
 
     // We must ensure the user has an app_user and learner_profile
     // Look up by email first
@@ -635,15 +654,28 @@ export async function createNativeEnrolmentFromDA(record: any, pool: any) {
       [
         userId,
         courseId,
-        record.course_run_id,
+        internalRunId,
         record.trainee_email,
         record.trainee_id
       ]
     );
-    return rows[0]?.id || null;
+
+    const enrolmentId = rows[0]?.id;
+
+    // Update the DA record to link it and show success
+    if (record.application_id) {
+      await pool.query(
+        `UPDATE da_application 
+         SET enrolment_status = 'Confirmed',
+             enrolment_id = $1
+         WHERE application_id = $2`,
+        [enrolmentId || null, record.application_id]
+      );
+    }
+
+    return enrolmentId || true;
   } catch (err) {
-    console.error('Failed creating native enrolment for DA:', err);
+    console.error(`❌ createNativeEnrolmentFromDA failed:`, err);
     return null;
   }
 }
-

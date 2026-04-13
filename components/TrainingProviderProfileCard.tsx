@@ -1203,7 +1203,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                         { key: 'emailUser', label: 'Email User', placeholder: 'e.g. sales@yourcompany.com', isSecret: false },
                                         { key: 'googleClientId', label: 'Google Client ID', placeholder: 'From Google Cloud Console', isSecret: false },
                                         { key: 'googleClientSecret', label: 'Google Client Secret', placeholder: 'From Google Cloud Console', isSecret: true, visible: isVisibleGoogleSecret, setVisible: setIsVisibleGoogleSecret },
-                                        { key: 'googleRefreshToken', label: 'Google Refresh Token', placeholder: 'OAuth2 refresh token', isSecret: true, visible: isVisibleGoogleRefreshToken, setVisible: setIsVisibleGoogleRefreshToken, helpText: 'REQUIRED SCOPES: https://www.googleapis.com/auth/drive AND https://www.googleapis.com/auth/presentations (separated by space)' },
+                                        { key: 'googleRefreshToken', label: 'Google Refresh Token', placeholder: 'OAuth2 refresh token', isSecret: true, visible: isVisibleGoogleRefreshToken, setVisible: setIsVisibleGoogleRefreshToken, helpText: 'REQUIRED SCOPES: https://www.googleapis.com/auth/drive AND https://www.googleapis.com/auth/presentations AND https://www.googleapis.com/auth/calendar (separated by space)' },
                                     ].map(({ key, label, placeholder, helpText, isSecret, visible, setVisible }) => (
                                         <div key={key}>
                                             <label className="block text-sm font-medium text-on-surface-secondary mb-1">{label}</label>

@@ -49,6 +49,8 @@ const columnMapping: Record<string, string> = {
     'Highest Qualification': 'highest_qualification',
     'Highest Relevant Certification': 'highest_relevant_certification',
     'Enrol Status': 'enrolment_status',
+    'Enrolment Status': 'enrolment_status',
+    'Status': 'application_status',
 };
 
 // Parse date from various formats
@@ -508,23 +510,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             // Background async processing to avoid blocking UI response
             setImmediate(async () => {
                 for (const record of allProcessedRecords) {
-                    // Automation 1: Google Calendar Sync (if application_status is Confirmed)
-                    if (String(record.application_status || '').toLowerCase() === 'confirmed' && record.trainee_email) {
+                    // Automation 1: Google Calendar Sync (triggers if Status/application_status is Confirmed)
+                    const isAppConfirmed = String(record.application_status || '').toLowerCase() === 'confirmed';
+                    if (isAppConfirmed && record.trainee_email) {
                         try {
                             await addLearnerToCalendarEvent(record.trainee_email, record.course_title, record.course_start_date);
                             console.log(`📅 Automatically synced learner ${record.trainee_email} to Google Calendar event`);
+                            
+                            // Tick the CAL column in DA view
+                            await pool.query(
+                                `UPDATE da_application SET calendar_added = true WHERE application_id = $1`,
+                                [record.application_id]
+                            );
                         } catch (calErr) {
                             console.error('Failed to sync to Calendar:', calErr);
                         }
                     }
 
-                    // Automation 2: Native Enrolment Creation (if enrolment_status is Confirmed)
-                    const isNewlyConfirmed = 
-                        (String(record.enrolment_status || '').toLowerCase() === 'confirmed') && 
-                        (String(record.old_status || '').toLowerCase() !== 'confirmed'); 
+                    // Automation 2: Native Enrolment Creation (triggers if Enrol Status/enrolment_status is Confirmed)
+                    const isEnrolConfirmed = String(record.enrolment_status || '').toLowerCase() === 'confirmed';
+                    const wasEnrolAlreadyConfirmed = String(record.old_enrolment_status || '').toLowerCase() === 'confirmed';
 
-                    // For newly inserted records, old_status is undefined but it's still newly confirmed
-                    if ((isNewlyConfirmed || !record.old_status) && String(record.enrolment_status || '').toLowerCase() === 'confirmed') {
+                    if (isEnrolConfirmed && (!wasEnrolAlreadyConfirmed || !record.old_enrolment_status)) {
                         await createNativeEnrolmentFromDA(record, pool);
                         console.log(`✅ Automatically created native enrolment for DA ${record.application_id}`);
                     }

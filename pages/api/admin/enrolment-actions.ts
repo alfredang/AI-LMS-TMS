@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { google } from 'googleapis';
 import { getGoogleCredentials } from '../../../lib/google-auth/googleAuth';
+import { addLearnerToCalendarEvent } from '../../../lib/autoEnrolDirectApplications';
 
 /**
  * POST /api/admin/enrolment-actions
@@ -81,10 +82,25 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       // Use SGT-normalized dates for calendar fetch window
       const dates = rows.rows.map(r => r.start_date_iso || '').filter(Boolean).sort();
-      const minD = new Date(dates[0]); minD.setDate(minD.getDate() - 1);
-      const maxD = new Date(dates[dates.length - 1]); maxD.setDate(maxD.getDate() + 2);
+      
+      let minD: Date;
+      let maxD: Date;
+
+      if (dates.length > 0) {
+          const firstDateStr = dates[0];
+          const lastDateStr = dates[dates.length - 1];
+          minD = new Date(firstDateStr + 'T00:00:00+08:00'); 
+          minD.setDate(minD.getDate() - 1);
+          maxD = new Date(lastDateStr + 'T23:59:59+08:00'); 
+          maxD.setDate(maxD.getDate() + 2);
+      } else {
+          // Fallback to current window if no dates found in records
+          minD = new Date(); minD.setDate(minD.getDate() - 30);
+          maxD = new Date(); maxD.setDate(maxD.getDate() + 90);
+      }
 
       console.log(`📅 [sync-calendar] Fetching events from ${minD.toISOString()} to ${maxD.toISOString()} for ${rows.rows.length} enrolments`);
+
 
       const evts = await calendar.events.list({ calendarId, timeMin: minD.toISOString(), timeMax: maxD.toISOString(), singleEvents: true, maxResults: 2500 });
       const events = evts.data.items || [];
@@ -106,10 +122,30 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           return evtDate === startIso;
         });
 
-        if (evt && (evt.attendees || []).some(a => (a.email || '').toLowerCase() === emailLower)) {
-          await pool.query(`UPDATE enrollment SET calendar_added = true, updated_at = NOW() WHERE id = $1`, [row.id]);
-          matched++;
-          console.log(`📅 [sync-calendar] ✓ ${row.email} found in "${evt.summary}" on ${startIso}`);
+        if (evt) {
+          const isAttendee = (evt.attendees || []).some(a => (a.email || '').toLowerCase() === emailLower);
+          
+          if (isAttendee) {
+            await pool.query(`UPDATE enrollment SET calendar_added = true, updated_at = NOW() WHERE id = $1`, [row.id]);
+            // Also update DA record for the tick column
+            await pool.query(`UPDATE da_application SET calendar_added = true WHERE LOWER(trainee_email) = LOWER($1) AND course_title = $2`, [row.email, row.course_title]);
+            matched++;
+            console.log(`📅 [sync-calendar] ✓ ${row.email} found in "${evt.summary}" on ${startIso}`);
+          } else {
+            // Found a matching event but learner is missing -> ADD THEM
+            console.log(`📅 [sync-calendar] + Adding ${row.email} to "${evt.summary}" on ${startIso}`);
+            try {
+              const success = await addLearnerToCalendarEvent(row.email, row.course_title, startIso);
+              if (success) {
+                await pool.query(`UPDATE enrollment SET calendar_added = true, updated_at = NOW() WHERE id = $1`, [row.id]);
+                // Also update DA record for the tick column
+                await pool.query(`UPDATE da_application SET calendar_added = true WHERE LOWER(trainee_email) = LOWER($1) AND course_title = $2`, [row.email, row.course_title]);
+                matched++;
+              }
+            } catch (addErr) {
+              console.error(`❌ [sync-calendar] Failed to add ${row.email}:`, addErr);
+            }
+          }
         }
       }
       console.log(`📅 [sync-calendar] Done: checked=${rows.rows.length}, matched=${matched}`);
@@ -197,8 +233,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     return res.status(400).json({ success: false, error: 'Unknown action' });
-  } catch (err) {
+  } catch (err: any) {
     console.error('❌ enrolment-actions error:', err);
-    return res.status(500).json({ success: false, error: err instanceof Error ? err.message : 'Internal server error' });
+    let msg = err instanceof Error ? err.message : 'Internal server error';
+    if (msg.includes('insufficient authentication scopes')) {
+        msg = 'Insufficient Google Calendar permissions. Please re-generate your Google Refresh Token with the Calendar scope enabled.';
+    }
+    return res.status(500).json({ success: false, error: msg });
   }
 }
