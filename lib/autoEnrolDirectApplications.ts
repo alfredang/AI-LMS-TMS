@@ -217,7 +217,7 @@ function stripCalendarPrefixes(title: string): string {
  * This step is always non-fatal. If calendar is not configured, credentials
  * are missing, or no matching event is found, we log a warning and move on.
  */
-async function addLearnerToCalendarEvent(
+export async function addLearnerToCalendarEvent(
   learnerEmail: string,
   courseTitle: string,
   courseStartDate: string | Date | null
@@ -589,3 +589,61 @@ export async function bulkProcessDirectApplications(
 
   return results;
 }
+
+// Automatically creates a public.enrollment record from a da_application
+export async function createNativeEnrolmentFromDA(record: any, pool: any) {
+  if (!record.course_run_id || !record.trainee_id || !record.trainee_email) return null;
+  try {
+    // Look up the course_id from course_run
+    const runRes = await pool.query(`SELECT course_id FROM course_run WHERE id = $1`, [record.course_run_id]);
+    const courseId = runRes.rows[0]?.course_id;
+    if (!courseId) return null;
+
+    // We must ensure the user has an app_user and learner_profile
+    // Look up by email first
+    const existingUser = await pool.query(
+      `SELECT id FROM app_user WHERE LOWER(email) = LOWER($1) OR LOWER(secondary_email) = LOWER($1) LIMIT 1`,
+      [record.trainee_email]
+    );
+
+    let userId = existingUser.rows[0]?.id;
+
+    if (!userId) {
+      // Create user if they don't exist, using empty password hash, we can let them reset it
+      const newUser = await pool.query(
+        `INSERT INTO app_user (id, email, full_name, password_hash, account_status, created_at, updated_at)
+         VALUES (gen_random_uuid(), $1, $2, '', 'active', NOW(), NOW())
+         RETURNING id`,
+        [record.trainee_email.toLowerCase(), record.trainee_name || '']
+      );
+      userId = newUser.rows[0].id;
+      
+      await pool.query(`INSERT INTO user_role_map (user_id, role) VALUES ($1, 'Learner') ON CONFLICT DO NOTHING`, [userId]);
+      await pool.query(`INSERT INTO learner_profile (user_id, nric, tel) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`, 
+        [userId, record.trainee_id, record.trainee_phone || '']
+      );
+    }
+
+    const { rows } = await pool.query(
+      `INSERT INTO enrollment (
+          id, user_id, course_id, course_run_id, progress_percent, payment_status, 
+          assessment_status, enrolment_status, enrolment_date, email, nric, created_at, updated_at
+       )
+       VALUES (gen_random_uuid(), $1, $2, $3, 0, 'Unpaid', 'Pending', 'Confirmed', CURRENT_DATE, $4, $5, NOW(), NOW())
+       ON CONFLICT DO NOTHING
+       RETURNING id`,
+      [
+        userId,
+        courseId,
+        record.course_run_id,
+        record.trainee_email,
+        record.trainee_id
+      ]
+    );
+    return rows[0]?.id || null;
+  } catch (err) {
+    console.error('Failed creating native enrolment for DA:', err);
+    return null;
+  }
+}
+
