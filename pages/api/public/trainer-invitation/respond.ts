@@ -14,6 +14,7 @@ import {
   DEFAULT_TRAINER_DECLINE_BODY,
 } from '@/lib/trainerInvitations';
 import { sendNextTrainerInvitationForCourseRun } from '@/lib/trainerInvitationSender';
+import { addLearnerToCalendarEvent } from '@/lib/autoEnrolDirectApplications';
 
 function renderPage(title: string, description: string, tone: 'green' | 'red' | 'gray') {
   const colors = {
@@ -121,7 +122,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const invitationResult = await pool.query(
       `SELECT ti.*, cr.course_run_id AS external_course_run_id,
               c.title AS course_title, c.course_code,
-              cr.start_date, cr.end_date
+              cr.start_date, cr.end_date,
+              COALESCE(cr.invitation_replies_blocked, false) AS replies_blocked
        FROM trainer_invitation ti
        JOIN course_run cr ON cr.id = ti.course_run_id
        JOIN course c ON c.id = cr.course_id
@@ -141,58 +143,119 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         ? `This invitation has already been accepted. ${invitation.trainer_name} is assigned to this class.`
         : invitation.status === 'declined'
         ? `This invitation was declined. The class may have been assigned to another trainer.`
+        : invitation.status === 'blocked'
+        ? `Thank you for your response, ${invitation.trainer_name}. Unfortunately, this class has already been assigned. We appreciate your willingness and will reach out for future opportunities.`
         : `This invitation for ${invitation.trainer_name} was already marked as ${invitation.status}.`;
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       return res.status(200).send(renderPage('Already Responded', msg, 'gray'));
     }
 
-    // If accepting, check if another trainer already accepted AND is still
-    // assigned locally. If the accepted trainer was later removed by admin,
-    // the late accept should go through instead of being blocked.
-    if (action === 'accept') {
-      const alreadyAccepted = await pool.query(
-        `SELECT ti.trainer_name, ti.trainer_email
-         FROM trainer_invitation ti
-         WHERE ti.course_run_id = $1 AND ti.status = 'accepted' AND ti.id != $2
-         LIMIT 1`,
-        [invitation.course_run_id, invitation.id]
-      );
-      if (alreadyAccepted.rows.length > 0) {
-        // Verify the accepted trainer is still assigned locally
-        // (junction table first, fall back to scalar)
-        const acceptedEmail = alreadyAccepted.rows[0].trainer_email;
-        const stillAssigned = await pool.query(
-          `SELECT 1 FROM course_run_trainer
-           WHERE course_run_id = $1 AND LOWER(trainer_email) = LOWER($2)
-           LIMIT 1`,
-          [invitation.course_run_id, acceptedEmail]
+    // If replies are blocked for this course run:
+    // - Decline: always allow (mark declined, show decline message, no cascade)
+    // - Accept + is local trainer: show "already accepted" (green)
+    // - Accept + not local trainer: block
+    if (invitation.replies_blocked) {
+      if (action === 'decline') {
+        await pool.query(
+          `UPDATE trainer_invitation SET status = 'declined', responded_at = NOW(), updated_at = NOW() WHERE id = $1`,
+          [invitation.id]
         );
-        const scalarCheck = stillAssigned.rows.length === 0
-          ? await pool.query(
-              `SELECT 1 FROM course_run
-               WHERE id = $1 AND LOWER(assigned_trainer_email) = LOWER($2)
-               LIMIT 1`,
-              [invitation.course_run_id, acceptedEmail]
-            )
-          : stillAssigned;
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        return res.status(200).send(renderPage(
+          'Invitation Declined',
+          `Thank you, ${invitation.trainer_name}, for your response. The invitation for course run ${invitation.external_course_run_id} has been declined. We will reach out to the next available trainer.`,
+          'red'
+        ));
+      }
 
-        if (scalarCheck.rows.length > 0) {
-          // Still assigned — block the late accept
-          await pool.query(
-            `UPDATE trainer_invitation SET status = 'declined', responded_at = NOW(), updated_at = NOW() WHERE id = $1`,
-            [invitation.id]
-          );
-          res.setHeader('Content-Type', 'text/html; charset=utf-8');
-          return res.status(200).send(renderPage(
-            'Already Assigned',
-            `Thank you for your response, ${invitation.trainer_name}. Unfortunately, this class has already been assigned. We appreciate your willingness and will reach out for future opportunities.`,
-            'gray'
-          ));
-        }
-        // Accepted trainer was removed — allow this late accept to proceed
-        console.log(
-          `ℹ️ [trainer-invitation/respond] Previous acceptor "${alreadyAccepted.rows[0].trainer_name}" no longer assigned locally — allowing late accept from "${invitation.trainer_name}"`
+      // Accept path — check if this trainer is already assigned locally
+      const isLocalTrainer = await pool.query(
+        `SELECT 1 FROM course_run_trainer
+         WHERE course_run_id = $1 AND LOWER(trainer_email) = LOWER($2)
+         LIMIT 1`,
+        [invitation.course_run_id, invitation.trainer_email]
+      );
+      const isScalarTrainer = isLocalTrainer.rows.length === 0
+        ? await pool.query(
+            `SELECT 1 FROM course_run
+             WHERE id = $1 AND LOWER(assigned_trainer_email) = LOWER($2)
+             LIMIT 1`,
+            [invitation.course_run_id, invitation.trainer_email]
+          )
+        : isLocalTrainer;
+
+      if (isScalarTrainer.rows.length > 0) {
+        // This trainer is the local trainer — show "already accepted"
+        await pool.query(
+          `UPDATE trainer_invitation SET status = 'accepted', responded_at = NOW(), updated_at = NOW() WHERE id = $1`,
+          [invitation.id]
         );
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        return res.status(200).send(renderPage(
+          'Invitation Accepted',
+          `This invitation has already been accepted. ${invitation.trainer_name} is assigned to this class.`,
+          'green'
+        ));
+      }
+
+      // Not the local trainer trying to accept — block
+      await pool.query(
+        `UPDATE trainer_invitation SET status = 'blocked', responded_at = NOW(), updated_at = NOW() WHERE id = $1`,
+        [invitation.id]
+      );
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      return res.status(200).send(renderPage(
+        'Already Assigned',
+        `Thank you for your response, ${invitation.trainer_name}. Unfortunately, this class has already been assigned. We appreciate your willingness and will reach out for future opportunities.`,
+        'gray'
+      ));
+    }
+
+    // If accepting, check if ANY trainer is already assigned locally
+    // (via junction table, legacy scalar, or accepted invitation).
+    // Covers: manual admin assignment, calendar sync, invitation accept.
+    if (action === 'accept') {
+      // Check junction table for any assigned trainer (not this trainer)
+      const junctionAssigned = await pool.query(
+        `SELECT trainer_name, trainer_email FROM course_run_trainer
+         WHERE course_run_id = $1 AND LOWER(trainer_email) != LOWER($2)
+         LIMIT 1`,
+        [invitation.course_run_id, invitation.trainer_email]
+      );
+
+      // Check legacy scalar for any assigned trainer (not this trainer)
+      const scalarAssigned = junctionAssigned.rows.length === 0
+        ? await pool.query(
+            `SELECT assigned_trainer_name, assigned_trainer_email FROM course_run
+             WHERE id = $1
+               AND assigned_trainer_email IS NOT NULL AND assigned_trainer_email != ''
+               AND LOWER(assigned_trainer_email) != LOWER($2)
+             LIMIT 1`,
+            [invitation.course_run_id, invitation.trainer_email]
+          )
+        : { rows: [] };
+
+      // Check accepted invitation (not this one)
+      const acceptedInvitation = (junctionAssigned.rows.length === 0 && scalarAssigned.rows.length === 0)
+        ? await pool.query(
+            `SELECT trainer_name FROM trainer_invitation
+             WHERE course_run_id = $1 AND status = 'accepted' AND id != $2
+             LIMIT 1`,
+            [invitation.course_run_id, invitation.id]
+          )
+        : { rows: [] };
+
+      if (junctionAssigned.rows.length > 0 || scalarAssigned.rows.length > 0 || acceptedInvitation.rows.length > 0) {
+        await pool.query(
+          `UPDATE trainer_invitation SET status = 'blocked', responded_at = NOW(), updated_at = NOW() WHERE id = $1`,
+          [invitation.id]
+        );
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        return res.status(200).send(renderPage(
+          'Already Assigned',
+          `Thank you for your response, ${invitation.trainer_name}. Unfortunately, this class has already been assigned. We appreciate your willingness and will reach out for future opportunities.`,
+          'gray'
+        ));
       }
     }
 
@@ -270,9 +333,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         );
       }
 
-      // TODO #77: Add trainer to Google Calendar event on accept.
-      // Removed for now — calendar sync needs course run matching to be
-      // reliable first (most CRs not yet in local DB).
+      // #77: Add trainer to Google Calendar event on accept.
+      try {
+        const added = await addLearnerToCalendarEvent(
+          invitation.trainer_email,
+          invitation.course_title,
+          invitation.start_date
+        );
+        console.log(
+          added
+            ? `📅 [trainer-invitation/respond] Added ${invitation.trainer_email} to calendar for "${invitation.course_title}"`
+            : `📅 [trainer-invitation/respond] Could not add to calendar (disabled, no match, or already attendee)`
+        );
+      } catch (calErr) {
+        console.error(`❌ [trainer-invitation/respond] Calendar add failed:`, calErr);
+      }
     }
 
     // Get training provider config for sending follow-up emails
