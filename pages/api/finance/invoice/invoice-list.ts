@@ -5,13 +5,20 @@ import pool from '../../../../lib/db';
  * GET /api/finance/invoice/proforma-invoices
  * Returns enrollments with pro forma invoice data for the finance role.
  * Supports pagination (page, limit) and filters (courseTitle, startDate, endDate).
+ *
+ * notGeneratedOnly=true  → only enrollments WHERE pro_forma_url IS NULL
+ * generatedOnly=true     → only enrollments WHERE pro_forma_url IS NOT NULL
  */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {
     return res.status(405).json({ success: false, error: 'Method not allowed' });
   }
 
-  const { courseTitle, startDate, endDate, courseRun, courseCode, name, notGeneratedOnly, search } = req.query;
+  const {
+    courseTitle, startDate, endDate, courseRun, courseCode,
+    name, notGeneratedOnly, generatedOnly, search,
+  } = req.query;
+
   const page = Math.max(1, parseInt(req.query.page as string) || 1);
   const limit = Math.min(parseInt(req.query.limit as string) || 20, 100);
   const offset = (page - 1) * limit;
@@ -21,9 +28,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const params: (string | number)[] = [];
     let paramIndex = 1;
 
+    // Mutually exclusive: notGeneratedOnly takes priority if both somehow passed
     if (notGeneratedOnly === 'true') {
       conditions.push('e.pro_forma_url IS NULL');
+    } else if (generatedOnly === 'true') {
+      conditions.push('e.pro_forma_url IS NOT NULL');
     }
+
     if (search && typeof search === 'string' && search.trim()) {
       conditions.push(`(u.full_name ILIKE $${paramIndex} OR c.title ILIKE $${paramIndex} OR c.course_code ILIKE $${paramIndex} OR cr.course_run_id ILIKE $${paramIndex})`);
       params.push(`%${search.trim()}%`);
@@ -111,7 +122,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       totalPages: Math.ceil(total / limit),
     });
   } catch (error) {
-    console.error('[finance/invoice/proforma-invoices] Error:', error);
+    console.error('[finance/invoice/invoice-list] Error:', error);
     return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 }

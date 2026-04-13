@@ -9,7 +9,6 @@ import { Readable } from 'stream';
 import { getDriveClient } from '../../../../lib/google-drive/drive-helpers';
 import pool from '../../../../lib/db';
 
-// Extend timeout for bulk PDF generation
 export const config = {
   maxDuration: 300,
   api: { responseLimit: false },
@@ -37,8 +36,8 @@ interface Grant {
 /**
  * POST /api/finance/invoice/generate-proforma
  * Bulk-generates pro forma PDFs for enrollments missing a pro_forma_url.
- * Accepts optional filters: courseTitle, startDate, endDate.
- * Returns { success, generated, skipped, errors }.
+ * Filename format: PRFM_{course_code}_{learner_name}.pdf
+ * Saves proforma_invoice_number to enrollment table.
  */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -48,18 +47,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const { courseTitle, startDate, endDate, courseRun, courseCode, name, enrollmentIds } = req.body || {};
 
   try {
-    // 1. Find enrollments without a pro_forma_url (matching filters)
     const conditions: string[] = ['e.pro_forma_url IS NULL'];
     const params: (string | string[])[] = [];
     let paramIndex = 1;
 
-    // If specific enrollment IDs provided, filter to those only
     if (Array.isArray(enrollmentIds) && enrollmentIds.length > 0) {
       conditions.push(`e.id = ANY($${paramIndex}::uuid[])`);
       params.push(enrollmentIds);
       paramIndex++;
     } else {
-      // Otherwise use text filters
       if (courseRun && typeof courseRun === 'string' && courseRun.trim()) {
         conditions.push(`cr.course_run_id ILIKE $${paramIndex}`);
         params.push(`%${courseRun.trim()}%`);
@@ -113,8 +109,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     );
 
     const enrollments = result.rows;
-
-    // Setup SSE early so client gets progress ASAP
     const isStream = req.query.stream === 'true';
 
     if (enrollments.length === 0) {
@@ -142,7 +136,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (typeof (res as any).flush === 'function') (res as any).flush();
     }
 
-    // 2. Fetch grants for these enrollments
+    // Fetch grants
     const enrolmentIds = enrollments.map((e: any) => e.enrolment_id).filter(Boolean);
     const grantsByEnrolment: Record<string, Grant[]> = {};
 
@@ -171,7 +165,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     }
 
-    // 3. Download template once
+    // Download template once
     const auth = getAuth();
     const serviceDrive = google.drive({ version: 'v3', auth });
     const exportRes = await serviceDrive.files.export(
@@ -180,14 +174,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     );
     const templateBuffer = Buffer.from(exportRes.data as ArrayBuffer);
 
-    // 4. Get OAuth Drive client once for uploads
+    // Get OAuth Drive client
     const uploadDrive = await getDriveClient();
+
+    // Ensure invoice number column exists
+    await pool.query('ALTER TABLE enrollment ADD COLUMN IF NOT EXISTS proforma_invoice_number TEXT');
 
     let generated = 0;
     let errored = 0;
     const tmpDir = os.tmpdir();
 
-    // 5. Process each enrollment
     for (const enr of enrollments) {
       try {
         const grants: Grant[] = enr.enrolment_id ? (grantsByEnrolment[enr.enrolment_id] || []) : [];
@@ -195,10 +191,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const amount1 = parseFloat((enr.course_fees_exclude_gst ?? '0').replace(/,/g, ''));
 
         let subTotal = amount1;
-        let amount2 = 0;
-
-        // Default to Self-Sponsored
-        amount2 = amount1 * -0.5;
+        let amount2 = amount1 * -0.5;
         subTotal += amount2;
 
         let amount3: number | string = '';
@@ -250,7 +243,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           '{{total}}': total.toFixed(2),
         };
 
-        // Fill template
         const zip = new PizZip(templateBuffer);
         const xmlFiles = ['word/document.xml', 'word/header1.xml', 'word/header2.xml', 'word/footer1.xml', 'word/footer2.xml'];
         for (const xmlFile of xmlFiles) {
@@ -265,7 +257,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }
         const filledDocx = zip.generate({ type: 'nodebuffer', compression: 'DEFLATE' });
 
-        // Convert to PDF
         const timestamp = Date.now();
         const docxPath = path.join(tmpDir, `sync_${timestamp}_${generated}.docx`);
         const pdfPath = path.join(tmpDir, `sync_${timestamp}_${generated}.pdf`);
@@ -274,16 +265,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         execSync(`"${SOFFICE_PATH}" --headless --convert-to pdf --outdir "${tmpDir}" "${docxPath}"`, { timeout: 30000 });
 
         const pdfBuffer = fs.readFileSync(pdfPath);
-
-        // Cleanup temp
         try { fs.unlinkSync(docxPath); } catch (_) {}
         try { fs.unlinkSync(pdfPath); } catch (_) {}
 
+        // Build invoice number: PRFM_{course_code}_{learner_name}
+        const safeCourseCode = (enr.course_code || order || 'invoice').replace(/[^a-zA-Z0-9-]/g, '_');
+        const safeName = enr.full_name.replace(/[^a-zA-Z0-9]/g, '_');
+        const invoiceNumber = `PRFM_${safeCourseCode}_${safeName}`;
+
         // Upload to Drive
-        const orderNum = order || enr.course_code || 'invoice';
         const uploadRes = await uploadDrive.files.create({
           requestBody: {
-            name: `ProFormaInvoice_${orderNum}.pdf`,
+            name: `${invoiceNumber}.pdf`,
             parents: [DRIVE_FOLDER_ID],
             mimeType: 'application/pdf',
           },
@@ -296,18 +289,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
         const driveUrl = uploadRes.data.webViewLink ?? null;
 
-        // Save URL to DB
+        // Save URL and invoice number to DB
         if (driveUrl) {
           if (enr.enrolment_id) {
             const rawId = enr.enrolment_id.replace('#', '');
-            await pool.query('UPDATE enrollment SET pro_forma_url = $1 WHERE enrolment_id = $2', [driveUrl, rawId]);
+            await pool.query(
+              'UPDATE enrollment SET pro_forma_url = $1, proforma_invoice_number = $2 WHERE enrolment_id = $3',
+              [driveUrl, invoiceNumber, rawId]
+            );
           } else {
-            await pool.query('UPDATE enrollment SET pro_forma_url = $1 WHERE id = $2', [driveUrl, enr.enrollment_id]);
+            await pool.query(
+              'UPDATE enrollment SET pro_forma_url = $1, proforma_invoice_number = $2 WHERE id = $3',
+              [driveUrl, invoiceNumber, enr.enrollment_id]
+            );
           }
         }
 
         generated++;
-        console.log(`[generate-proforma] Generated ${generated}/${enrollments.length}: ${orderNum}`);
+        console.log(`[generate-proforma] Generated ${generated}/${enrollments.length}: ${invoiceNumber}`);
 
         if (isStream) {
           res.write(`data: ${JSON.stringify({ type: 'progress', current: generated + errored, total: enrollments.length, generated, errors: errored, name: enr.full_name })}\n\n`);
@@ -316,7 +315,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       } catch (err) {
         errored++;
         console.error(`[generate-proforma] Failed for ${enr.enrolment_id || enr.enrollment_id}:`, err);
-
         if (isStream) {
           res.write(`data: ${JSON.stringify({ type: 'progress', current: generated + errored, total: enrollments.length, generated, errors: errored, name: enr.full_name })}\n\n`);
           (res as any).flush?.();
@@ -332,20 +330,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     return res.status(200).json({
-      success: true,
-      generated,
-      skipped: 0,
-      errors: errored,
-      total: enrollments.length,
+      success: true, generated, skipped: 0, errors: errored, total: enrollments.length,
       message: `Generated ${generated} invoice(s), ${errored} error(s).`,
     });
   } catch (error: any) {
     console.error('[generate-proforma] Error:', error);
     if (req.query.stream === 'true') {
-      try {
-        res.write(`data: ${JSON.stringify({ type: 'error', message: error?.message || 'Generation failed' })}\n\n`);
-        res.end();
-      } catch (_) {}
+      try { res.write(`data: ${JSON.stringify({ type: 'error', message: error?.message || 'Generation failed' })}\n\n`); res.end(); } catch (_) {}
       return;
     }
     return res.status(500).json({ success: false, error: error?.message || 'Generation failed' });
