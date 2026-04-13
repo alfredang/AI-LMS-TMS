@@ -14,6 +14,7 @@ interface CalendarEvent {
   classStatus: 'Pending' | 'Confirmed' | 'Cancelled' | string;
   classType: 'Physical' | 'Virtual' | 'Hybrid' | 'External' | string;
   invitationPaused: boolean;
+  invitationRepliesBlocked: boolean;
   sessionDate: string;   // YYYY-MM-DD
   startTime: string;     // HH:MM
   endTime: string;       // HH:MM
@@ -200,6 +201,7 @@ interface EventRowProps {
   onChangeClassStatus: (newStatus: 'Confirmed' | 'Pending' | 'Cancelled' | 'Unconfirmed') => void;
   onChangeClassType: (newType: 'Physical' | 'Virtual' | 'Hybrid' | 'External') => void;
   onTogglePauseInvites: () => void;
+  onToggleBlockReplies: () => void;
   onViewAttendance: () => void;
   onViewEnrolment: () => void;
 }
@@ -252,7 +254,7 @@ const TRAINER_STATE_STYLES: Record<TrainerMatchState, { dot: string; label: stri
 };
 
 const EventRow: React.FC<EventRowProps> = ({
-  event, expanded, inviting, nextTrainerOverride, onToggle, onOpenEditor, onInviteNext, onChangeNextTrainer, onChangeClassStatus, onChangeClassType, onTogglePauseInvites, onViewAttendance, onViewEnrolment
+  event, expanded, inviting, nextTrainerOverride, onToggle, onOpenEditor, onInviteNext, onChangeNextTrainer, onChangeClassStatus, onChangeClassType, onTogglePauseInvites, onToggleBlockReplies, onViewAttendance, onViewEnrolment
 }) => {
   // Admin can override the server-computed next trainer via the dropdown.
   // Fall back to server-computed when no override set yet.
@@ -516,9 +518,23 @@ const EventRow: React.FC<EventRowProps> = ({
                     ? 'border-orange-400 bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300 dark:border-orange-600'
                     : 'border-gray-300 text-gray-500 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-700'
                 }`}
-                title={event.invitationPaused ? 'Invitations paused — click to resume' : 'Click to pause invitations for this CR'}
+                title={event.invitationPaused ? 'Invitations paused — click to unpause' : 'Click to pause invitations for this CR'}
               >
-                {event.invitationPaused ? 'Paused' : 'Pause Invites'}
+                {event.invitationPaused ? 'Unpause Invite' : 'Pause Invite'}
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggleBlockReplies();
+                }}
+                className={`px-2 py-1 text-[10px] font-medium rounded border ${
+                  event.invitationRepliesBlocked
+                    ? 'border-red-400 bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 dark:border-red-600'
+                    : 'border-gray-300 text-gray-500 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-700'
+                }`}
+                title={event.invitationRepliesBlocked ? 'Replies blocked — click to unblock' : 'Click to block trainer replies for this CR'}
+              >
+                {event.invitationRepliesBlocked ? 'Unblock Reply' : 'Block Reply'}
               </button>
               <button
                 onClick={onInviteNext}
@@ -742,6 +758,8 @@ const ViewClassByDateView: React.FC = () => {
       endDate: event.sessionDate,
       trainersList: event.approvedTrainers.join(', '),
       trainerInvitations: event.trainerInvitations || {},
+      invitationPaused: event.invitationPaused,
+      invitationRepliesBlocked: event.invitationRepliesBlocked,
     });
     // Set return-to so ClassManagerView's Cancel button bounces back to the
     // calendar instead of the admin dashboard.
@@ -845,6 +863,25 @@ const ViewClassByDateView: React.FC = () => {
     } catch {
       setEvents((prev) => prev.map((e) =>
         e.courseRunUuid === courseRunUuid ? { ...e, invitationPaused: !newVal } : e
+      ));
+    }
+  }, [events]);
+
+  const handleToggleBlockReplies = useCallback(async (courseRunUuid: string) => {
+    const current = events.find(e => e.courseRunUuid === courseRunUuid);
+    const newVal = !current?.invitationRepliesBlocked;
+    setEvents((prev) => prev.map((e) =>
+      e.courseRunUuid === courseRunUuid ? { ...e, invitationRepliesBlocked: newVal } : e
+    ));
+    try {
+      await fetch(getApiUrl('/api/admin/upcoming-classes'), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: courseRunUuid, invitation_replies_blocked: newVal }),
+      });
+    } catch {
+      setEvents((prev) => prev.map((e) =>
+        e.courseRunUuid === courseRunUuid ? { ...e, invitationRepliesBlocked: !newVal } : e
       ));
     }
   }, [events]);
@@ -1182,6 +1219,7 @@ const ViewClassByDateView: React.FC = () => {
                         onChangeClassStatus={(newStatus) => handleChangeClassStatus(event.courseRunUuid, newStatus)}
                         onChangeClassType={(newType) => handleChangeClassType(event.courseRunUuid, newType)}
                         onTogglePauseInvites={() => handleTogglePauseInvites(event.courseRunUuid)}
+                        onToggleBlockReplies={() => handleToggleBlockReplies(event.courseRunUuid)}
                         onViewAttendance={() => handleViewAttendance()}
                         onViewEnrolment={() => handleViewEnrolment()}
                         onInviteNext={() => handleInviteNext(event)}
@@ -1197,6 +1235,9 @@ const ViewClassByDateView: React.FC = () => {
                     const end = oe.endDate?.slice(0, 10);
                     return start && end && dateIso >= start && dateIso <= end;
                   });
+                  const noSessionsInCalendar = ongoingForDay.filter((oe) => oe.totalSessions === 0 && oe.inCalendar === true);
+                  const noSessionsNotInCalendar = ongoingForDay.filter((oe) => oe.totalSessions === 0 && oe.inCalendar !== true);
+                  const ongoingWithSessions = ongoingForDay.filter((oe) => oe.totalSessions > 0);
                   if (cancelledForDay.length === 0 && ongoingForDay.length === 0) return null;
                   return (
                     <div className="mt-3">
@@ -1227,6 +1268,7 @@ const ViewClassByDateView: React.FC = () => {
                                 onChangeClassStatus={(newStatus) => handleChangeClassStatus(event.courseRunUuid, newStatus)}
                                 onChangeClassType={(newType) => handleChangeClassType(event.courseRunUuid, newType)}
                                 onTogglePauseInvites={() => handleTogglePauseInvites(event.courseRunUuid)}
+                                onToggleBlockReplies={() => handleToggleBlockReplies(event.courseRunUuid)}
                                 onViewAttendance={() => handleViewAttendance()}
                                 onViewEnrolment={() => handleViewEnrolment()}
                                 onInviteNext={() => handleInviteNext(event)}
@@ -1236,14 +1278,14 @@ const ViewClassByDateView: React.FC = () => {
                         </div>
                       </details>
                     )}
-                    {ongoingForDay.length > 0 && (
-                    <details className="border border-dashed border-gray-300 dark:border-gray-600 rounded-lg">
-                      <summary className="cursor-pointer px-3 py-1.5 text-xs font-medium text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg select-none">
-                        Ongoing course runs, no session today
-                        <span className="ml-1 text-gray-400">({ongoingForDay.length})</span>
+                    {noSessionsInCalendar.length > 0 && (
+                    <details className="mb-2 border border-dashed border-orange-300 dark:border-orange-700 rounded-lg">
+                      <summary className="cursor-pointer px-3 py-1.5 text-xs font-medium text-orange-600 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded-lg select-none">
+                        In Calendar, no sessions imported
+                        <span className="ml-1 text-orange-400">({noSessionsInCalendar.length})</span>
                       </summary>
                       <div className="px-3 pb-2 space-y-1">
-                        {ongoingForDay.map((oe: any) => {
+                        {noSessionsInCalendar.map((oe: any) => {
                           const oeKey = `ongoing|${oe.courseRunUuid}|${dateIso}`;
                           const oeExpanded = !!expanded[oeKey];
                           return (
@@ -1357,6 +1399,236 @@ const ViewClassByDateView: React.FC = () => {
                                     ) : (
                                       <p className="font-semibold text-red-600 dark:text-red-400">No sessions imported</p>
                                     )}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </details>
+                    )}
+                    {noSessionsNotInCalendar.length > 0 && (
+                    <details className="mb-2 border border-dashed border-red-300 dark:border-red-700 rounded-lg">
+                      <summary className="cursor-pointer px-3 py-1.5 text-xs font-medium text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg select-none">
+                        Not in Calendar, no sessions
+                        <span className="ml-1 text-red-400">({noSessionsNotInCalendar.length})</span>
+                      </summary>
+                      <div className="px-3 pb-2 space-y-1">
+                        {noSessionsNotInCalendar.map((oe: any) => {
+                          const oeKey = `ongoing-nic|${oe.courseRunUuid}|${dateIso}`;
+                          const oeExpanded = !!expanded[oeKey];
+                          return (
+                            <div key={oe.courseRunUuid}>
+                              <div
+                                className="flex items-center gap-2 px-2 py-1.5 rounded bg-gray-50 dark:bg-gray-800/50 text-xs cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700/50"
+                                onClick={() => toggleExpanded(oeKey)}
+                              >
+                                {(() => {
+                                  const oeStatus = (oe.classStatus === 'Cancelled' || oe.classStatus === 'Unconfirmed')
+                                    ? oe.classStatus
+                                    : ((oe.localTrainerName || oe.tpgTrainerName || '').trim() ? 'Confirmed' : 'Pending');
+                                  return <span className={`w-2 h-2 rounded-full flex-shrink-0 ${statusDotClass(oeStatus)}`} title={statusDotTooltip(oeStatus)} />;
+                                })()}
+                                <span className="truncate flex-1 text-gray-600 dark:text-gray-300">
+                                  {oe.courseTitle}
+                                  <span className="ml-1 text-gray-400 font-mono">[{oe.courseRunId}]</span>
+                                </span>
+                                <span className="text-gray-400 flex-shrink-0">
+                                  {oe.startDate?.slice(0, 10)} → {oe.endDate?.slice(0, 10)}
+                                </span>
+                                <span className="text-gray-500 dark:text-gray-400 flex-shrink-0">
+                                  {oe.localTrainerName || oe.tpgTrainerName || '—'}
+                                </span>
+                                <span className="px-1 py-0.5 rounded bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300 flex-shrink-0 text-[10px]">
+                                  0 sessions
+                                </span>
+                                <span className="text-gray-400 flex-shrink-0 select-none text-[10px]">{oeExpanded ? '▴' : '▾'}</span>
+                              </div>
+                              {oeExpanded && (
+                                <div className="ml-4 mt-1 mb-2 px-3 py-2 rounded border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900/40 grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-2 text-xs">
+                                  <div>
+                                    <p className="text-gray-400 dark:text-gray-500 mb-1">Class Status</p>
+                                    <select
+                                      value={oe.classStatus === 'Cancelled' || oe.classStatus === 'Unconfirmed' ? oe.classStatus : 'auto'}
+                                      onClick={(e) => e.stopPropagation()}
+                                      onChange={(e) => {
+                                        const val = e.target.value;
+                                        const newStatus = val === 'auto'
+                                          ? ((oe.localTrainerName || '').trim() ? 'Confirmed' : 'Pending')
+                                          : val;
+                                        handleChangeClassStatus(oe.courseRunUuid, newStatus as any);
+                                      }}
+                                      className="text-[11px] font-semibold rounded-full px-2 py-0.5 border-0 cursor-pointer focus:ring-2 focus:ring-blue-500 bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300"
+                                    >
+                                      {(oe.classStatus === 'Cancelled' || oe.classStatus === 'Unconfirmed') ? (
+                                        <>
+                                          <option value={oe.classStatus}>{oe.classStatus}</option>
+                                          <option value="auto">{(oe.localTrainerName || '').trim() ? 'Confirmed' : 'Pending'}</option>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <option value="auto">{(oe.localTrainerName || '').trim() ? 'Confirmed' : 'Pending'}</option>
+                                          <option value="Cancelled">Cancelled</option>
+                                          <option value="Unconfirmed">Unconfirmed</option>
+                                        </>
+                                      )}
+                                    </select>
+                                  </div>
+                                  <div>
+                                    <p className="text-gray-400 dark:text-gray-500 mb-1">Class Type</p>
+                                    <select
+                                      value={oe.classType || 'Physical'}
+                                      onClick={(e) => e.stopPropagation()}
+                                      onChange={(e) => handleChangeClassType(oe.courseRunUuid, e.target.value as any)}
+                                      className="text-[11px] font-semibold rounded-full px-2 py-0.5 border-0 cursor-pointer focus:ring-2 focus:ring-blue-500 bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300"
+                                    >
+                                      <option value="Physical">Physical</option>
+                                      <option value="Virtual">Virtual</option>
+                                      <option value="Hybrid">Hybrid</option>
+                                      <option value="External">External</option>
+                                    </select>
+                                  </div>
+                                  <div>
+                                    <span className="text-gray-400 dark:text-gray-500">Start Date</span>
+                                    <p className="font-semibold text-gray-700 dark:text-gray-200">{oe.startDate?.slice(0, 10) || '—'}</p>
+                                  </div>
+                                  <div>
+                                    <span className="text-gray-400 dark:text-gray-500">End Date</span>
+                                    <p className="font-semibold text-gray-700 dark:text-gray-200">{oe.endDate?.slice(0, 10) || '—'}</p>
+                                  </div>
+                                  <div>
+                                    <span className="text-gray-400 dark:text-gray-500">TPG Trainer</span>
+                                    <p className="font-semibold text-gray-700 dark:text-gray-200">{oe.tpgTrainerName || '—'}</p>
+                                  </div>
+                                  <div>
+                                    <span className="text-gray-400 dark:text-gray-500">Local Trainer</span>
+                                    <p className="font-semibold text-gray-700 dark:text-gray-200">{oe.localTrainerName || '—'}</p>
+                                  </div>
+                                  <div>
+                                    <span className="text-gray-400 dark:text-gray-500">Learners</span>
+                                    <p className="font-semibold text-gray-700 dark:text-gray-200">{oe.numLearners}</p>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </details>
+                    )}
+                    {ongoingWithSessions.length > 0 && (
+                    <details className="border border-dashed border-gray-300 dark:border-gray-600 rounded-lg">
+                      <summary className="cursor-pointer px-3 py-1.5 text-xs font-medium text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg select-none">
+                        Ongoing course runs, no session today
+                        <span className="ml-1 text-gray-400">({ongoingWithSessions.length})</span>
+                      </summary>
+                      <div className="px-3 pb-2 space-y-1">
+                        {ongoingWithSessions.map((oe: any) => {
+                          const oeKey = `ongoing-ws|${oe.courseRunUuid}|${dateIso}`;
+                          const oeExpanded = !!expanded[oeKey];
+                          return (
+                            <div key={oe.courseRunUuid}>
+                              <div
+                                className="flex items-center gap-2 px-2 py-1.5 rounded bg-gray-50 dark:bg-gray-800/50 text-xs cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700/50"
+                                onClick={() => toggleExpanded(oeKey)}
+                              >
+                                {(() => {
+                                  const oeStatus = (oe.classStatus === 'Cancelled' || oe.classStatus === 'Unconfirmed')
+                                    ? oe.classStatus
+                                    : ((oe.localTrainerName || oe.tpgTrainerName || '').trim() ? 'Confirmed' : 'Pending');
+                                  return <span className={`w-2 h-2 rounded-full flex-shrink-0 ${statusDotClass(oeStatus)}`} title={statusDotTooltip(oeStatus)} />;
+                                })()}
+                                <span className="truncate flex-1 text-gray-600 dark:text-gray-300">
+                                  {oe.courseTitle}
+                                  <span className="ml-1 text-gray-400 font-mono">[{oe.courseRunId}]</span>
+                                </span>
+                                <span className="text-gray-400 flex-shrink-0">
+                                  {oe.startDate?.slice(0, 10)} → {oe.endDate?.slice(0, 10)}
+                                </span>
+                                <span className="text-gray-500 dark:text-gray-400 flex-shrink-0">
+                                  {oe.localTrainerName || oe.tpgTrainerName || '—'}
+                                </span>
+                                <span className="text-gray-400 flex-shrink-0 select-none text-[10px]">{oeExpanded ? '▴' : '▾'}</span>
+                              </div>
+                              {oeExpanded && (
+                                <div className="ml-4 mt-1 mb-2 px-3 py-2 rounded border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900/40 grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-2 text-xs">
+                                  <div>
+                                    <p className="text-gray-400 dark:text-gray-500 mb-1">Class Status</p>
+                                    <select
+                                      value={oe.classStatus === 'Cancelled' || oe.classStatus === 'Unconfirmed' ? oe.classStatus : 'auto'}
+                                      onClick={(e) => e.stopPropagation()}
+                                      onChange={(e) => {
+                                        const val = e.target.value;
+                                        const newStatus = val === 'auto'
+                                          ? ((oe.localTrainerName || '').trim() ? 'Confirmed' : 'Pending')
+                                          : val;
+                                        handleChangeClassStatus(oe.courseRunUuid, newStatus as any);
+                                      }}
+                                      className="text-[11px] font-semibold rounded-full px-2 py-0.5 border-0 cursor-pointer focus:ring-2 focus:ring-blue-500 bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300"
+                                    >
+                                      {(oe.classStatus === 'Cancelled' || oe.classStatus === 'Unconfirmed') ? (
+                                        <>
+                                          <option value={oe.classStatus}>{oe.classStatus}</option>
+                                          <option value="auto">{(oe.localTrainerName || '').trim() ? 'Confirmed' : 'Pending'}</option>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <option value="auto">{(oe.localTrainerName || '').trim() ? 'Confirmed' : 'Pending'}</option>
+                                          <option value="Cancelled">Cancelled</option>
+                                          <option value="Unconfirmed">Unconfirmed</option>
+                                        </>
+                                      )}
+                                    </select>
+                                  </div>
+                                  <div>
+                                    <p className="text-gray-400 dark:text-gray-500 mb-1">Class Type</p>
+                                    <select
+                                      value={oe.classType || 'Physical'}
+                                      onClick={(e) => e.stopPropagation()}
+                                      onChange={(e) => handleChangeClassType(oe.courseRunUuid, e.target.value as any)}
+                                      className="text-[11px] font-semibold rounded-full px-2 py-0.5 border-0 cursor-pointer focus:ring-2 focus:ring-blue-500 bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300"
+                                    >
+                                      <option value="Physical">Physical</option>
+                                      <option value="Virtual">Virtual</option>
+                                      <option value="Hybrid">Hybrid</option>
+                                      <option value="External">External</option>
+                                    </select>
+                                  </div>
+                                  <div>
+                                    <span className="text-gray-400 dark:text-gray-500">Start Date</span>
+                                    <p className="font-semibold text-gray-700 dark:text-gray-200">{oe.startDate?.slice(0, 10) || '—'}</p>
+                                  </div>
+                                  <div>
+                                    <span className="text-gray-400 dark:text-gray-500">End Date</span>
+                                    <p className="font-semibold text-gray-700 dark:text-gray-200">{oe.endDate?.slice(0, 10) || '—'}</p>
+                                  </div>
+                                  <div>
+                                    <span className="text-gray-400 dark:text-gray-500">TPG Trainer</span>
+                                    <p className="font-semibold text-gray-700 dark:text-gray-200">{oe.tpgTrainerName || '—'}</p>
+                                  </div>
+                                  <div>
+                                    <span className="text-gray-400 dark:text-gray-500">Local Trainer</span>
+                                    <p className="font-semibold text-gray-700 dark:text-gray-200">{oe.localTrainerName || '—'}</p>
+                                  </div>
+                                  <div>
+                                    <span className="text-gray-400 dark:text-gray-500">Learners</span>
+                                    <p className="font-semibold text-gray-700 dark:text-gray-200">{oe.numLearners}</p>
+                                  </div>
+                                  <div className="col-span-2 md:col-span-4">
+                                    <span className="text-gray-400 dark:text-gray-500">Sessions ({oe.totalSessions})</span>
+                                    <div className="flex flex-wrap gap-1 mt-1">
+                                      {oe.sessionDates.map((d: string) => (
+                                        <span
+                                          key={d}
+                                          className={`px-1.5 py-0.5 rounded text-[10px] ${
+                                            d === dateIso
+                                              ? 'font-semibold bg-blue-600 text-white'
+                                              : 'text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-800'
+                                          }`}
+                                        >{d}</span>
+                                      ))}
+                                    </div>
                                   </div>
                                 </div>
                               )}

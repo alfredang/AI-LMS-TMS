@@ -1,5 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
+import { google } from 'googleapis';
 import pool from '../../../lib/db';
+import { getGoogleCredentials } from '../../../lib/google-auth/googleAuth';
 import { normalizeTrainerName, splitTrainerList } from '@/lib/trainerInvitations';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -34,6 +36,9 @@ interface CalendarEvent {
   nextAvailableTrainerEmail: string;
   latestInvitationStatus: string;
   approvedTrainers: string[]; // course.trainers_list split — populates Next Trainer dropdown
+  invitationPaused: boolean;
+  invitationRepliesBlocked: boolean;
+  trainerInvitations: Record<string, Array<{ status: string; sent_at: string; responded_at: string | null }>>;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -50,6 +55,61 @@ const compactToIso = (compact: string): string => {
   if (!compact || compact.length !== 8) return compact || '';
   return `${compact.slice(0, 4)}-${compact.slice(4, 6)}-${compact.slice(6, 8)}`;
 };
+
+// Strip calendar event title to bare course name for matching
+function stripCalendarTitle(title: string): string {
+  return (title || '')
+    .replace(/\[(?:WSQ|IBF|VIRTUAL|EXTERNAL|HYBRID)\]\s*/gi, '')
+    .replace(/^\*\s*/, '')
+    .replace(/^Day\s+\d+\s*[-–]\s*/i, '')
+    .replace(/^(?:WSQ|IBF)\s*[-–]\s*/i, '')
+    .trim()
+    .toLowerCase();
+}
+
+// Fetch Google Calendar event titles for a date range, return a Set of stripped course titles
+async function getCalendarTitlesForMonth(monthStart: string, monthEnd: string): Promise<Set<string>> {
+  try {
+    const credentials = await getGoogleCredentials(pool);
+    const tpRes = await pool.query('SELECT google_calendar_url FROM training_provider LIMIT 1');
+    const calUrl = tpRes.rows[0]?.google_calendar_url || '';
+    let calendarId = 'primary';
+    if (calUrl) {
+      const cidMatch = calUrl.match(/[?&]cid=([^&]+)/);
+      if (cidMatch) {
+        try { calendarId = Buffer.from(cidMatch[1], 'base64').toString('utf-8'); }
+        catch { calendarId = cidMatch[1]; }
+      } else if (calUrl.includes('@')) {
+        calendarId = calUrl;
+      }
+    }
+    const oauth2Client = new google.auth.OAuth2(
+      credentials.clientId, credentials.clientSecret,
+      'https://developers.google.com/oauthplayground'
+    );
+    oauth2Client.setCredentials({ refresh_token: credentials.refreshToken });
+    const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
+
+    const eventsRes = await calendar.events.list({
+      calendarId,
+      timeMin: new Date(monthStart + 'T00:00:00+08:00').toISOString(),
+      timeMax: new Date(monthEnd + 'T23:59:59+08:00').toISOString(),
+      singleEvents: true,
+      maxResults: 500,
+      fields: 'items(summary)',
+    });
+
+    const titles = new Set<string>();
+    for (const evt of eventsRes.data.items || []) {
+      if (!/WSQ|IBF/i.test(evt.summary || '')) continue;
+      titles.add(stripCalendarTitle(evt.summary || ''));
+    }
+    return titles;
+  } catch (err) {
+    console.error('[classes-by-date] Google Calendar fetch failed (non-fatal):', err);
+    return new Set(); // graceful fallback — treat all as unknown
+  }
+}
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -460,23 +520,33 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       [monthStart, monthEnd, compactStart, compactEnd]
     );
 
-    const ongoingEvents = ongoingResult.rows.map((row: any) => ({
-      courseRunUuid: row.course_run_uuid,
-      courseRunId: row.course_run_id,
-      courseTitle: row.course_title,
-      courseCode: row.course_code,
-      classStatus: row.class_status || 'Pending',
-      classType: row.class_type || 'Physical',
-      startDate: row.start_date,
-      endDate: row.end_date,
-      tpgTrainerName: row.tpg_assigned_trainer_name || '',
-      tpgTrainerEmail: row.tpg_assigned_trainer_email || '',
-      localTrainerName: row.legacy_assigned_trainer_name || '',
-      localTrainerEmail: row.legacy_assigned_trainer_email || '',
-      numLearners: parseInt(row.num_learners || '0', 10),
-      totalSessions: parseInt(row.total_sessions || '0', 10),
-      sessionDates: (row.session_dates || []).map((d: string) => compactToIso(d)).filter(Boolean),
-    }));
+    // Fetch Google Calendar titles for the month to tag ongoing events
+    const calendarTitles = await getCalendarTitlesForMonth(monthStart, monthEnd);
+    const hasCalendarData = calendarTitles.size > 0;
+
+    const ongoingEvents = ongoingResult.rows.map((row: any) => {
+      const title = (row.course_title || '').trim().toLowerCase();
+      // Match if any calendar event title matches this course's title
+      const inCalendar = hasCalendarData ? calendarTitles.has(title) : null;
+      return {
+        courseRunUuid: row.course_run_uuid,
+        courseRunId: row.course_run_id,
+        courseTitle: row.course_title,
+        courseCode: row.course_code,
+        classStatus: row.class_status || 'Pending',
+        classType: row.class_type || 'Physical',
+        startDate: row.start_date,
+        endDate: row.end_date,
+        tpgTrainerName: row.tpg_assigned_trainer_name || '',
+        tpgTrainerEmail: row.tpg_assigned_trainer_email || '',
+        localTrainerName: row.legacy_assigned_trainer_name || '',
+        localTrainerEmail: row.legacy_assigned_trainer_email || '',
+        numLearners: parseInt(row.num_learners || '0', 10),
+        totalSessions: parseInt(row.total_sessions || '0', 10),
+        sessionDates: (row.session_dates || []).map((d: string) => compactToIso(d)).filter(Boolean),
+        inCalendar,
+      };
+    });
 
     return res.status(200).json({
       success: true,

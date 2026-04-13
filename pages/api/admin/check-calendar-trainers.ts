@@ -82,11 +82,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       WHERE urm.role = 'Trainer'
     `);
     const trainerEmails = new Set<string>();
+    // Map any trainer email → all emails for that person (for identity resolution)
+    const trainerEmailGroups = new Map<string, Set<string>>();
     for (const t of trainersRes.rows) {
-      if (t.email) trainerEmails.add(t.email);
-      if (t.sec) trainerEmails.add(t.sec);
+      const allEmails = new Set<string>();
+      if (t.email) allEmails.add(t.email);
+      if (t.sec) allEmails.add(t.sec);
       if (Array.isArray(t.additional_emails)) {
-        for (const ae of t.additional_emails) { if (ae) trainerEmails.add(ae.toLowerCase()); }
+        for (const ae of t.additional_emails) { if (ae) allEmails.add(ae.toLowerCase()); }
+      }
+      for (const e of allEmails) {
+        trainerEmails.add(e);
+        trainerEmailGroups.set(e, allEmails);
       }
     }
 
@@ -146,10 +153,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         if (updatedUuids.has(cr.uuid)) continue; // already processed
 
         // Check if any calendar trainer matches local trainer
+        // Expand local emails through identity groups so different emails
+        // for the same person (e.g. iris@tertiaryinfotech.com vs wangyanhong2017@gmail.com) still match
         const localEmails = new Set<string>();
-        if (cr.assigned_trainer_email) localEmails.add(cr.assigned_trainer_email.toLowerCase());
+        const rawLocalEmails: string[] = [];
+        if (cr.assigned_trainer_email) rawLocalEmails.push(cr.assigned_trainer_email.toLowerCase());
         if (Array.isArray(cr.junction_emails)) {
-          for (const e of cr.junction_emails) { if (e) localEmails.add(e); }
+          for (const e of cr.junction_emails) { if (e) rawLocalEmails.push(e); }
+        }
+        for (const e of rawLocalEmails) {
+          localEmails.add(e);
+          const group = trainerEmailGroups.get(e);
+          if (group) { for (const ge of group) localEmails.add(ge); }
         }
 
         const hasMatch = calTrainerEmails.some((ce: string) => localEmails.has(ce));
