@@ -336,16 +336,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate, onSelectWorkflo
                 <NavItem page={AdminPage.SupportTickets} label="View All Tickets" isSubItem />
             </NavSection>
 
-            <NavSection title="Logging" isOpen={openSections.logging} onToggle={() => toggleSection('logging')}>
-                <NavItem page={AdminPage.AutomationLogs} label="Auto Create Learner Log" isSubItem />
-                <NavItem page={AdminPage.TrainerFolderLogs} label="Auto Create Assessment Records Log" isSubItem />
-                <NavItem page={AdminPage.AutoCreateCertificatesLog} label="Auto Create Certificates Log" isSubItem />
-                <NavItem page={AdminPage.CourseRunDateSyncLogs} label="Course Run Date Sync Log" isSubItem />
-                <NavItem page={AdminPage.UpcomingCourseRunsLog} label="TGS Enrolments & Assign Trainers Log" isSubItem />
-                <NavItem page={AdminPage.SyncTrainerTpgLogs} label="Sync Trainer to TPG Log" isSubItem />
-                <NavItem page={AdminPage.AutoSendTrainerInvitationLog} label="Auto Send Trainer Invitation Log" isSubItem />
-                <NavItem page={AdminPage.AutoSanitiseDataLog} label="Auto Sanitise Data Log" isSubItem />
-            </NavSection>
+
 
         </nav>
     );

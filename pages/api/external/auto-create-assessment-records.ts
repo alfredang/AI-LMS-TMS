@@ -120,6 +120,7 @@ export async function runAutomation() {
          WHERE DATE(cr.start_date) = CURRENT_DATE
            AND cr.course_run_id IS NOT NULL
            AND cr.course_run_id <> ''
+           AND COALESCE(cr.class_status, '') != 'Cancelled'
          ORDER BY cr.start_date ASC`
     );
 

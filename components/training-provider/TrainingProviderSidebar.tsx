@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useLms } from '@contexts/LmsContext';
 import { useAppVersion } from '@hooks/useAppVersion';
-import { View } from '@app-types';
+import { View, AdminPage } from '@app-types';
 import { Icon, IconName } from '../ui/Icon';
 
 interface TrainingProviderSidebarProps {
@@ -10,7 +10,7 @@ interface TrainingProviderSidebarProps {
 }
 
 const TrainingProviderSidebar: React.FC<TrainingProviderSidebarProps> = ({ onNavigate, onSelectWorkflow }) => {
-    const { currentView, handleNavigation, selectedCourse } = useLms();
+    const { currentView, handleNavigation, selectedCourse, adminPage, setAdminPage } = useLms();
     const appVersion = useAppVersion();
 
     const templateViews = [View.OtpEmailTemplate, View.CertificateEmailTemplate, View.FeedbackEmailTemplate, View.PasswordResetEmailTemplate, View.TrainerInvitationEmailTemplate, View.TrainerResponseEmailTemplates, View.FinalCourseConfirmationEmailTemplate, View.CourseConfirmationEmailTemplate, View.CoursewareAttendanceEmailTemplate, View.ProformaInvoiceEmailTemplate, View.PrivacyPolicy, View.AcceptableUsePolicy];
@@ -22,6 +22,7 @@ const TrainingProviderSidebar: React.FC<TrainingProviderSidebarProps> = ({ onNav
     const [wfFinanceOpen, setWfFinanceOpen] = useState(false);
     const [usefulLinksOpen, setUsefulLinksOpen] = useState(false);
     const [cronJobsOpen, setCronJobsOpen] = useState(cronJobsViews.includes(currentView));
+    const [loggingOpen, setLoggingOpen] = useState(false);
 
     const navItemsTop = [
         { view: View.Dashboard, label: 'Training Dashboard', icon: IconName.Dashboard },
@@ -41,6 +42,18 @@ const TrainingProviderSidebar: React.FC<TrainingProviderSidebarProps> = ({ onNav
     const cronJobsItems = [
         { view: View.SchedulerSummary, label: 'Schedule Summary', icon: IconName.ClipboardCheck },
         { view: View.Scheduler, label: 'Task Scheduler', icon: IconName.Calendar },
+    ];
+
+    const loggingItems = [
+        { page: AdminPage.AutomationLogs, label: 'Auto Create Learner Log' },
+        { page: AdminPage.TrainerFolderLogs, label: 'Auto Create Assessment Records Log' },
+        { page: AdminPage.AutoCreateCertificatesLog, label: 'Auto Create Certificates Log' },
+        { page: AdminPage.CourseRunDateSyncLogs, label: 'Course Run Date Sync Log' },
+        { page: AdminPage.UpcomingCourseRunsLog, label: 'TGS Enrolments & Assign Trainers Log' },
+        { page: AdminPage.SyncTrainerTpgLogs, label: 'Sync Trainer to TPG Log' },
+        { page: AdminPage.AutoSendTrainerInvitationLog, label: 'Auto Send Trainer Invitation Log' },
+        { page: AdminPage.AutoSanitiseDataLog, label: 'Auto Sanitise Data Log' },
+        { page: AdminPage.CourseConfirmationEmailLogs, label: 'Course Confirmation Email' },
     ];
 
     const templateItems = [
@@ -194,6 +207,46 @@ const TrainingProviderSidebar: React.FC<TrainingProviderSidebarProps> = ({ onNav
                                 <span>{item.label}</span>
                             </a>
                         ))}
+                    </div>
+                )}
+            </div>
+
+            {/* Logging - Collapsible */}
+            <div>
+                <button
+                    onClick={() => setLoggingOpen(!loggingOpen)}
+                    className={`flex items-center justify-between w-full rounded-md px-3 py-2.5 text-sm font-medium transition-colors ${currentView === View.Scheduler && loggingItems.some(i => i.page === adminPage)
+                        ? 'bg-blue-50 text-blue-600 dark:bg-blue-600/20 dark:text-blue-400'
+                        : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-slate-700 dark:hover:text-white'}`}
+                >
+                    <div className="flex items-center gap-3">
+                        <Icon name={IconName.FileText} className="w-5 h-5" />
+                        <span>Logging</span>
+                    </div>
+                    <Icon
+                        name={IconName.ChevronDown}
+                        className={`w-4 h-4 transition-transform ${loggingOpen ? 'rotate-180' : ''}`}
+                    />
+                </button>
+                {loggingOpen && (
+                    <div className="ml-4 mt-1 space-y-1">
+                        {loggingItems.map((item) => {
+                            const isActive = currentView === View.Scheduler && adminPage === item.page;
+                            return (
+                                <a
+                                    key={item.page}
+                                    href="#"
+                                    onClick={(e) => {
+                                        e.preventDefault();
+                                        setAdminPage(item.page);
+                                        handleClick(View.Scheduler);
+                                    }}
+                                    className={`flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors ${isActive ? 'bg-blue-50 text-blue-600 border-l-3 border-blue-500 dark:bg-blue-600/20 dark:text-blue-400 dark:border-blue-500' : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-slate-700 dark:hover:text-white'}`}
+                                >
+                                    <span>{item.label}</span>
+                                </a>
+                            );
+                        })}
                     </div>
                 )}
             </div>

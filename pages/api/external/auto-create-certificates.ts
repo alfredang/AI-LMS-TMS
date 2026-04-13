@@ -261,58 +261,8 @@ export async function runAutomation(targetDate?: string) {
                 const totalSessions = parseInt(totalSessionsRes.rows[0].total, 10);
 
                 if (totalSessions === 0) {
-                    // No sessions set up — generate certificates for ALL confirmed learners
-                    // without attendance checking (attendance was never tracked for this run)
-                    console.log(`[auto-create-certificates] ${run.course_run_id}: No sessions in E-attendance — generating certs for all confirmed learners.`);
-
-                    const allLearnersRes = await pool.query(`
-                        SELECT
-                            e.id as enrolment_id,
-                            e.nric,
-                            COALESCE(au.full_name, e.nric, 'Unknown') as learner_name,
-                            COALESCE(au.email, e.email) as learner_email
-                        FROM enrollment e
-                        LEFT JOIN app_user au ON e.user_id = au.id
-                        WHERE e.course_run_id = $1
-                          AND LOWER(e.enrolment_status) = 'confirmed'
-                          AND (e.certificate IS NULL OR e.certificate = '')
-                    `, [run.db_uuid]);
-
-                    console.log(`[auto-create-certificates] ${run.course_run_id}: ${allLearnersRes.rows.length} confirmed learners without certificate.`);
-
-                    for (const trainee of allLearnersRes.rows) {
-                        const traineeLogContext = {
-                            ...logContext,
-                            nric: trainee.nric,
-                            learnerName: trainee.learner_name
-                        };
-                        try {
-                            console.log(`[auto-create-certificates] Generating cert for ${trainee.learner_name} (no sessions — auto-certify)`);
-                            const certificateUrl = await generateAndUploadCertificate(trainee.enrolment_id, pool, trainee.learner_name);
-
-                            if (trainee.learner_email) {
-                                try {
-                                    await sendCertificateEmail({
-                                        studentName: trainee.learner_name,
-                                        studentEmail: trainee.learner_email,
-                                        courseName: run.course_title,
-                                        courseDates: run.course_dates || '',
-                                        certificateUrl,
-                                    });
-                                    console.log(`[auto-create-certificates] Certificate emailed to ${trainee.learner_email}`);
-                                } catch (emailErr: any) {
-                                    console.error(`[auto-create-certificates] Failed to email cert to ${trainee.learner_email}:`, emailErr.message);
-                                }
-                            }
-
-                            await logResult(runId, 'created', { ...traineeLogContext, certificateUrl });
-                            totalGenerated++;
-                        } catch (traineeErr: any) {
-                            console.error(`[auto-create-certificates] Error for trainee ${trainee.nric} in run ${run.course_run_id}: `, traineeErr);
-                            await logResult(runId, 'error', { ...traineeLogContext, errorMessage: traineeErr.message });
-                            totalErrors++;
-                        }
-                    }
+                    // System logic changed: No sessions set up — SKIP certificate generation instead of auto-certifying.
+                    console.log(`[auto-create-certificates] ${run.course_run_id}: No sessions in E-attendance — skipping automated certificate generation.`);
                 } else {
                     // Sessions exist — use local DB attendance to determine eligibility
                     // 3. Fetch ALL confirmed learners with their attendance from local E-attendance
