@@ -263,8 +263,12 @@ interface Trainer {
     trainer_name: string;
 }
 
-const splitTrainerList = (list: string): string[] =>
-    (list || '').split(',').map(s => s.trim()).filter(Boolean);
+const splitTrainerList = (list: string): string[] => {
+    const s = (list || '').trim();
+    if (!s) return [];
+    if (s.includes('|')) return s.split('|').map(x => x.trim()).filter(Boolean);
+    return s.split(',').map(x => x.trim()).filter(Boolean);
+};
 
 interface UpcomingClassesTableProps {
     showTitle?: boolean;
@@ -277,8 +281,14 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
     showFilters = true,
     includeOngoing = false,
 }) => {
-    const { setAdminPage, setSelectedCourseRunId, setEditingCourseRun, setClassListReturnTo, classListCurrentPage, setClassListCurrentPage } = useLms();
-    const [currentPage, setCurrentPage] = useState(() => classListCurrentPage);
+    const {
+        setAdminPage,
+        setEditingCourseRun,
+        setSelectedCourseRunId,
+        setClassListCurrentPage,
+        setClassListReturnTo,
+    } = useLms();
+    const [currentPage, setCurrentPage] = useState(0);
 
     // Track initial mount to prevent filter-reset effects from overriding the restored page
     const isInitialMount = useRef(true);
@@ -287,8 +297,6 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
 
     useEffect(() => {
         currentPageRef.current = currentPage;
-        // Sync back to context so edit→return preserves the page
-        setClassListCurrentPage(currentPage);
     }, [currentPage]);
     const [searchQuery, setSearchQuery] = useState('');
     const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);

@@ -756,7 +756,7 @@ const ViewClassByDateView: React.FC = () => {
       courseCode: event.courseCode,
       startDate: event.sessionDate,
       endDate: event.sessionDate,
-      trainersList: event.approvedTrainers.join(', '),
+      trainersList: event.approvedTrainers.join(' | '),
       trainerInvitations: event.trainerInvitations || {},
       invitationPaused: event.invitationPaused,
       invitationRepliesBlocked: event.invitationRepliesBlocked,
