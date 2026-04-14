@@ -16,6 +16,13 @@ function safeText(v: unknown): string {
   return typeof v === 'string' ? v : String(v ?? '');
 }
 
+function formatDate(d: string | Date | null | undefined): string {
+  if (!d) return '—';
+  return new Date(d).toLocaleDateString('en-SG', {
+    day: '2-digit', month: 'short', year: 'numeric'
+  });
+}
+
 async function step<T>(phase: string, fn: () => Promise<T>): Promise<T> {
   try {
     return await fn();
@@ -30,7 +37,6 @@ async function getLearnerDisplayName(userId: string, fallbackEmail: string): Pro
   return (r.rows[0]?.full_name || '').trim() || fallbackEmail;
 }
 
-/** Reserve a unique TMS invoice number on the job row before QBO create (DocNumber). */
 async function reserveTmsInvoiceNo(jobId: string, enrolmentId: string, existing: string | null | undefined): Promise<string> {
   const trimmed = (existing || '').trim();
   if (trimmed) return trimmed;
@@ -69,6 +75,34 @@ export async function processInvoiceJob(jobId: string): Promise<void> {
   const learnerEmail: string = job.learner_email;
   const courseCode: string = job.course_code;
 
+  // Fetch all needed fields from da_application
+  const daRes = await pool.query(
+    `SELECT full_course_fee, gst, skillsfuture_subsidy, skillsfuture_credit,
+            course_title, course_reference_number, course_start_date, course_end_date,
+            trainee_name, trainee_id, course_run_id, grant_id,
+            skillsfuture_credit_claim_id, application_id
+     FROM da_application WHERE enrolment_id = $1 LIMIT 1`,
+    [enrolmentId]
+  );
+  const da = daRes.rows[0] || {};
+
+  const fullCourseFee = Number(da.full_course_fee) || 0;
+  const gst = Number(da.gst) || 0;
+  const grantSubsidy = Number(da.skillsfuture_subsidy) || 0;
+  const sfcCredit = Number(da.skillsfuture_credit) || 0;
+
+  console.log('[DA Application values]', {
+    enrolmentId,
+    full_course_fee: da.full_course_fee,
+    gst: da.gst,
+    skillsfuture_subsidy: da.skillsfuture_subsidy,
+    skillsfuture_credit: da.skillsfuture_credit,
+    course_title: da.course_title,
+    trainee_name: da.trainee_name,
+    grant_id: da.grant_id,
+    application_id: da.application_id,
+  });
+
   const enrRow = await pool.query(
     `SELECT enrolment_status FROM enrollment
      WHERE user_id = $1 AND LOWER(TRIM(COALESCE(enrolment_id, ''))) = LOWER(TRIM($2::text))
@@ -86,9 +120,7 @@ export async function processInvoiceJob(jobId: string): Promise<void> {
   const ssgStatus = ssgStatusRow.rows[0]?.enrolment_status as string | undefined;
 
   if (isEnrolmentBlockedFromAutoInvoice(enrStatus) || isEnrolmentBlockedFromAutoInvoice(ssgStatus)) {
-    throw new Error(
-      'Skipped: enrolment is cancelled or removed — invoice is not sent.'
-    );
+    throw new Error('Skipped: enrolment is cancelled or removed — invoice is not sent.');
   }
   if (!isEnrolmentEligibleForAutoInvoice(enrStatus) && !isEnrolmentEligibleForAutoInvoice(ssgStatus)) {
     throw new Error(
@@ -96,14 +128,14 @@ export async function processInvoiceJob(jobId: string): Promise<void> {
     );
   }
 
-  // 1) Best-effort grant refresh (continue even if Processing/failed)
+  // 1) Best-effort grant refresh
   try {
     await refreshGrantsForEnrolments([enrolmentId]);
   } catch (e) {
     console.warn('[invoice-job] Grant refresh failed (non-blocking):', e);
   }
 
-  // 2) Find QBO item by SKU (course code / ref)
+  // 2) Find QBO item by SKU
   const item = await qboFindItemBySku(undefined, courseCode);
   if (!item) throw new Error(`QuickBooks item not found for SKU: ${courseCode}`);
   if (!Number.isFinite(item.unitPrice) || item.unitPrice <= 0) {
@@ -112,30 +144,68 @@ export async function processInvoiceJob(jobId: string): Promise<void> {
     );
   }
 
-  // 3) Find/Create customer by learner email
+  const actualFullCourseFee = fullCourseFee || item.unitPrice;
+
+  // 3) Find/Create customer
   const displayName = await getLearnerDisplayName(userId, learnerEmail);
   const customerId = await qboFindOrCreateCustomerByEmail(undefined, learnerEmail, displayName);
 
-  // 4) Create invoice (skip if a previous run created it but failed later — avoids duplicates)
+  // 4) Build invoice lines
   const taxCodeRef = await qboResolveInvoiceLineTaxCodeRef(undefined);
-  const lineDetail: Record<string, unknown> = {
-    ItemRef: { value: item.id },
-    Qty: 1,
-    UnitPrice: item.unitPrice,
-    TaxCodeRef: { value: taxCodeRef },
-  };
+  const lines: any[] = [];
+
+  // Line 1: Full course fee with rich description
+  lines.push({
+    Amount: actualFullCourseFee,
+    DetailType: 'SalesItemLineDetail',
+    SalesItemLineDetail: {
+      ItemRef: { value: item.id },
+      Qty: 1,
+      UnitPrice: actualFullCourseFee,
+      TaxCodeRef: { value: taxCodeRef },
+    },
+    Description: [
+      `Course Name: ${da.course_title ?? courseCode}`,
+      `(${da.course_reference_number ?? courseCode})`,
+      `Participant Name: ${da.trainee_name ?? displayName}`,
+      `NRIC: ${da.trainee_id ?? '—'}`,
+      `Course Date: ${formatDate(da.course_start_date)} - ${formatDate(da.course_end_date)}`,
+      `Course Run: ${da.course_run_id ?? '—'}`,
+    ].join('\n'),
+  });
+
+  // Line 2: WSQ Grant/subsidy deduction
+  if (grantSubsidy > 0) {
+    lines.push({
+      Amount: -grantSubsidy,
+      DetailType: 'SalesItemLineDetail',
+      SalesItemLineDetail: {
+        ItemRef: { value: item.id },
+        Qty: 1,
+        UnitPrice: -grantSubsidy,
+        TaxCodeRef: { value: taxCodeRef },
+      },
+      Description: `Less: WSQ funding (Baseline)\nGrant Ref#: ${da.grant_id ?? '—'}`,
+    });
+  }
+
+  // Line 3: SkillsFuture Credit (always show, even if 0)
+  lines.push({
+    Amount: -sfcCredit,
+    DetailType: 'SalesItemLineDetail',
+    SalesItemLineDetail: {
+      ItemRef: { value: item.id },
+      Qty: 1,
+      UnitPrice: -sfcCredit,
+      TaxCodeRef: { value: taxCodeRef },
+    },
+    Description: `SkillsFuture Credit Usage/Claim:\nApplication ID: ${da.application_id ?? '—'}`,
+  });
 
   const gtc = process.env.QBO_INVOICE_GLOBAL_TAX_CALC?.trim();
   const invoiceBody: Record<string, unknown> = {
     CustomerRef: { value: customerId },
-    Line: [
-      {
-        Amount: item.unitPrice,
-        DetailType: 'SalesItemLineDetail',
-        SalesItemLineDetail: lineDetail,
-        Description: `Course enrolment: ${courseCode} (SSG enrolment: ${enrolmentId})`,
-      },
-    ],
+    Line: lines,
     BillEmail: { Address: learnerEmail },
     PrivateNote: `SSG enrolment: ${enrolmentId}`,
   };
@@ -151,7 +221,17 @@ export async function processInvoiceJob(jobId: string): Promise<void> {
     invoiceNo = await reserveTmsInvoiceNo(jobId, enrolmentId, invoiceNo);
     invoiceBody.DocNumber = invoiceNo;
 
-    const inv = await step('QBO create invoice', () => qboCreateInvoice(undefined, invoiceBody));
+    let inv;
+    try {
+      inv = await step('QBO create invoice', () => qboCreateInvoice(undefined, invoiceBody));
+    } catch (err) {
+      if (err && typeof err === 'object') {
+        console.error('[QBO create invoice error]', JSON.stringify(err, Object.getOwnPropertyNames(err), 2));
+      } else {
+        console.error('[QBO create invoice error]', err);
+      }
+      throw err;
+    }
     if (!inv.id) throw new Error('QBO create invoice: QuickBooks returned no Id');
     invoiceId = inv.id;
     docNumber = inv.docNumber ?? invoiceNo;
@@ -163,7 +243,7 @@ export async function processInvoiceJob(jobId: string): Promise<void> {
     );
   }
 
-  // 5) Send — use BillEmail on the invoice only (no sendTo query); optional ?sendTo often triggers Intuit NPE (10000).
+  // 5) Send invoice
   const skipSend = process.env.QBO_SKIP_SEND_INVOICE === '1' || process.env.QBO_SKIP_SEND_INVOICE === 'true';
   if (!skipSend) {
     await step('QBO send invoice', () => qboSendInvoice(undefined, invoiceId));
@@ -182,7 +262,7 @@ export async function processInvoiceJob(jobId: string): Promise<void> {
     console.warn('[invoice-job] ssg_enrolments upsert (non-blocking):', e);
   }
 
-  // 8) Mark done with Drive links
+  // 8) Mark done
   await pool.query(
     `UPDATE public.invoice_jobs
      SET status = 'done',
@@ -193,4 +273,3 @@ export async function processInvoiceJob(jobId: string): Promise<void> {
     [jobId, drive.fileId, drive.webViewLink]
   );
 }
-

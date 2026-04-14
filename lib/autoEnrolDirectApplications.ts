@@ -153,8 +153,6 @@ async function ssgEncryptedPost(
 }
 
 function extractEnrolmentReference(parsed: any): string | null {
-  // SSG /tpg/enrolments success response shapes vary slightly by version;
-  // try the common paths in order.
   return (
     parsed?.data?.enrolment?.referenceNumber ||
     parsed?.enrolment?.referenceNumber ||
@@ -190,41 +188,20 @@ async function callInvoiceSend(invoiceId: string, email: string): Promise<void> 
 // Google Calendar: add learner email to matching event
 // ---------------------------------------------------------------------------
 
-/**
- * Strip common prefixes from a calendar event summary so we can match it
- * against the course title from the DA application. Known prefixes:
- * "WSQ ", "VIRTUAL ", "EXTERNAL ", "[WSQ]", "[VIRTUAL]", "[EXTERNAL]",
- * and combinations thereof.
- */
 function stripCalendarPrefixes(title: string): string {
   return (title || '')
     .replace(/^\s*\[?(WSQ|VIRTUAL|EXTERNAL|HYBRID)\]?\s*/gi, '')
-    .replace(/^\s*\[?(WSQ|VIRTUAL|EXTERNAL|HYBRID)\]?\s*/gi, '') // second pass for double-prefix
+    .replace(/^\s*\[?(WSQ|VIRTUAL|EXTERNAL|HYBRID)\]?\s*/gi, '')
     .trim();
 }
 
-/**
- * Attempt to add a learner's email to the Google Calendar event that
- * matches the DA's course title + course start date.
- *
- * Matching rules:
- *   1. Strip WSQ/VIRTUAL/EXTERNAL/HYBRID prefixes from both sides
- *   2. Case-insensitive substring match (event title contains course title
- *      or vice-versa)
- *   3. Event start date (YYYY-MM-DD) matches course_start_date
- *   4. If the learner's email is already in the attendee list → no-op
- *
- * This step is always non-fatal. If calendar is not configured, credentials
- * are missing, or no matching event is found, we log a warning and move on.
- */
-export async function addLearnerToCalendarEvent(
+async function addLearnerToCalendarEvent(
   learnerEmail: string,
   courseTitle: string,
   courseStartDate: string | Date | null
 ): Promise<boolean> {
   if (!learnerEmail || !courseTitle) return false;
 
-  // Load calendar config
   const tpRes = await pool.query(
     `SELECT sync_google_calendar, google_calendar_url FROM training_provider LIMIT 1`
   );
@@ -236,7 +213,6 @@ export async function addLearnerToCalendarEvent(
 
   const credentials = await getGoogleCredentials(pool);
 
-  // Extract calendar ID
   let calendarId = 'primary';
   const calUrl = tpRow.google_calendar_url || '';
   if (calUrl) {
@@ -260,24 +236,14 @@ export async function addLearnerToCalendarEvent(
   oauth2Client.setCredentials({ refresh_token: credentials.refreshToken });
   const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
 
-  // Normalise the course start date to YYYY-MM-DD natively using SGT
   let startDateIso: string;
   if (!courseStartDate) return false;
-  
   if (courseStartDate instanceof Date) {
-    // Format safely in Asia/Singapore timezone (handling UTC zero-time drift)
-    const formatter = new Intl.DateTimeFormat('en-CA', {
-      timeZone: 'Asia/Singapore',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-    });
-    startDateIso = formatter.format(courseStartDate); 
+    startDateIso = courseStartDate.toISOString().slice(0, 10);
   } else {
     startDateIso = String(courseStartDate).slice(0, 10);
   }
 
-  // Fetch calendar events around the course start date (±1 day window)
   const dayBefore = new Date(startDateIso);
   dayBefore.setDate(dayBefore.getDate() - 1);
   const dayAfter = new Date(startDateIso);
@@ -294,15 +260,12 @@ export async function addLearnerToCalendarEvent(
   const events = eventsResponse.data.items || [];
   const strippedCourseTitle = stripCalendarPrefixes(courseTitle).toLowerCase();
 
-  // Find matching event: stripped title contains course title (or vice-versa) AND date matches
   const matchedEvent = events.find(evt => {
     const evtSummary = stripCalendarPrefixes(evt.summary || '').toLowerCase();
     const titleMatch =
       evtSummary.includes(strippedCourseTitle) ||
       strippedCourseTitle.includes(evtSummary);
     if (!titleMatch) return false;
-
-    // Check date match
     const evtDate = (evt.start?.dateTime?.slice(0, 10) || evt.start?.date || '');
     return evtDate === startDateIso;
   });
@@ -312,15 +275,13 @@ export async function addLearnerToCalendarEvent(
     return false;
   }
 
-  // Check if learner email is already an attendee
   const existingAttendees = matchedEvent.attendees || [];
   const emailLower = learnerEmail.trim().toLowerCase();
   if (existingAttendees.some(a => (a.email || '').toLowerCase() === emailLower)) {
     console.log(`📅 [calendar-attendee] ${learnerEmail} already in event "${matchedEvent.summary}" — no-op`);
-    return true; // already present counts as "added"
+    return true;
   }
 
-  // Add the learner as a new attendee
   await calendar.events.patch({
     calendarId,
     eventId: matchedEvent.id,
@@ -330,12 +291,11 @@ export async function addLearnerToCalendarEvent(
         { email: learnerEmail, responseStatus: 'needsAction' },
       ],
     },
-    // Don't send update notifications to all attendees for each individual add
     sendUpdates: 'none',
   });
 
   console.log(`📅 [calendar-attendee] Added ${learnerEmail} to event "${matchedEvent.summary}" (${matchedEvent.id})`);
-  return true; // signal that the learner was added
+  return true;
 }
 
 // ---------------------------------------------------------------------------
@@ -344,9 +304,9 @@ export async function addLearnerToCalendarEvent(
 
 export async function processDirectApplication(
   appId: string,
-  sharedCtx?: SSGContext
+  sharedCtx?: SSGContext,
+  options?: { forceInvoice?: boolean }
 ): Promise<DaPipelineResult> {
-  // Step 0: Load row + training-provider toggles
   const rowRes = await pool.query(
     `SELECT * FROM da_application WHERE id = $1`,
     [appId]
@@ -365,7 +325,7 @@ export async function processDirectApplication(
 
   const applicationId: string = row.application_id || '';
 
-  if ((row.application_status || '').toLowerCase() !== 'confirm application') {
+  if ((row.application_status || '').toLowerCase() !== 'confirm application' && !options?.forceInvoice) {
     return {
       id: appId,
       applicationId,
@@ -384,77 +344,85 @@ export async function processDirectApplication(
 
   await updateRow(appId, { auto_enrol_status: 'pending', auto_enrol_error: null });
 
-  // Step 1: SSG enrolment
-  let enrolmentReference: string | null = null;
-  try {
-    const ctx = sharedCtx || (await loadSsgContext());
-    const payload = buildEnrolmentPayload(row, ctx.uen, ctx.tpCode);
-    const parsed = await ssgEncryptedPost(ctx, '/tpg/enrolments', payload);
-    console.log(`📦 auto-enrol [${applicationId}]:`, JSON.stringify(parsed));
+  // Step 1: SSG enrolment (skip if already enrolled)
+  let enrolmentReference: string | null = row.enrolment_id || null;
+  if (!enrolmentReference) {
+    try {
+      const ctx = sharedCtx || (await loadSsgContext());
+      const payload = buildEnrolmentPayload(row, ctx.uen, ctx.tpCode);
+      const parsed = await ssgEncryptedPost(ctx, '/tpg/enrolments', payload);
+      console.log(`📦 auto-enrol [${applicationId}]:`, JSON.stringify(parsed));
 
-    const errMsg = hasSsgError(parsed);
-    if (errMsg) throw new Error(errMsg);
+      const errMsg = hasSsgError(parsed);
+      if (errMsg) throw new Error(errMsg);
 
-    enrolmentReference = extractEnrolmentReference(parsed);
-    if (!enrolmentReference) {
-      throw new Error('no enrolment reference in SSG response');
-    }
-
-    await updateRow(appId, {
-      enrolment_id: enrolmentReference,
-      enrolment_status: 'Confirmed',
-      auto_enrol_status: 'enroled',
-    });
-  } catch (err) {
-    await markFailed(appId, 'enrolment', err);
-    return {
-      id: appId,
-      applicationId,
-      success: false,
-      finalStatus: 'failed',
-      error: err instanceof Error ? err.message : String(err),
-      failedStep: 'enrolment',
-    };
-  }
-
-  // Step 2: Grant search (non-fatal on failure)
-  let grantId: string | null = null;
-  try {
-    const ctx = sharedCtx || (await loadSsgContext());
-    const grantPayload = {
-      grants: {
-        enrolment: { referenceNumber: enrolmentReference },
-        trainingPartner: { uen: ctx.uen, code: ctx.tpCode },
-      },
-      parameters: { page: 0, pageSize: 10 },
-    };
-    const parsed = await ssgEncryptedPost(ctx, '/tpg/grants/search', grantPayload);
-    const errMsg = hasSsgError(parsed);
-    if (errMsg) {
-      console.warn(`⚠️  auto-enrol [${applicationId}] grant search warning:`, errMsg);
-    } else {
-      const grants = parsed?.data ?? [];
-      const first = Array.isArray(grants) ? grants[0] : null;
-      grantId = first?.referenceNumber || null;
-      if (grantId) {
-        await updateRow(appId, {
-          grant_id: grantId,
-          auto_enrol_status: 'grant_found',
-        });
-      } else {
-        console.log(`ℹ️  auto-enrol [${applicationId}] grant not yet available`);
+      enrolmentReference = extractEnrolmentReference(parsed);
+      if (!enrolmentReference) {
+        throw new Error('no enrolment reference in SSG response');
       }
+
+      await updateRow(appId, {
+        enrolment_id: enrolmentReference,
+        enrolment_status: 'Confirmed',
+        auto_enrol_status: 'enroled',
+      });
+    } catch (err) {
+      await markFailed(appId, 'enrolment', err);
+      return {
+        id: appId,
+        applicationId,
+        success: false,
+        finalStatus: 'failed',
+        error: err instanceof Error ? err.message : String(err),
+        failedStep: 'enrolment',
+      };
     }
-  } catch (err) {
-    console.warn(
-      `⚠️  auto-enrol [${applicationId}] grant search failed (non-fatal):`,
-      err instanceof Error ? err.message : err
-    );
+  } else {
+    console.log(`ℹ️  auto-enrol [${applicationId}] enrolment already exists: ${enrolmentReference}`);
   }
 
-  // Step 3: QuickBooks invoice (skipped unless toggle is on)
-  if (!autoInvoice) {
-    // Add learner to calendar (gated by auto_add_learner_to_calendar toggle)
+  // Step 2: Grant search (skip if already found; non-fatal)
+  let grantId: string | null = row.grant_id || null;
+  if (!grantId) {
+    try {
+      const ctx = sharedCtx || (await loadSsgContext());
+      const grantPayload = {
+        grants: {
+          enrolment: { referenceNumber: enrolmentReference },
+          trainingPartner: { uen: ctx.uen, code: ctx.tpCode },
+        },
+        parameters: { page: 0, pageSize: 10 },
+      };
+      const parsed = await ssgEncryptedPost(ctx, '/tpg/grants/search', grantPayload);
+      const errMsg = hasSsgError(parsed);
+      if (errMsg) {
+        console.warn(`⚠️  auto-enrol [${applicationId}] grant search warning:`, errMsg);
+      } else {
+        const grants = Array.isArray(parsed?.data) ? parsed.data : [];
+        console.log(`📋 auto-enrol [${applicationId}] grant search returned ${grants.length} record(s):`, JSON.stringify(grants));
+        const first = grants[0] ?? null;
+        grantId = first?.referenceNumber || null;
+        if (grantId) {
+          await updateRow(appId, {
+            grant_id: grantId,
+            auto_enrol_status: 'grant_found',
+          });
+        } else {
+          console.log(`ℹ️  auto-enrol [${applicationId}] grant not yet available — SSG has not created a grant for enrolment ${enrolmentReference} yet`);
+        }
+      }
+    } catch (err) {
+      console.warn(
+        `⚠️  auto-enrol [${applicationId}] grant search failed (non-fatal):`,
+        err instanceof Error ? err.message : err
+      );
+    }
+  } else {
+    console.log(`ℹ️  auto-enrol [${applicationId}] grant already exists: ${grantId}`);
+  }
+
+  // Step 3: QuickBooks invoice
+  if (!autoInvoice && !options?.forceInvoice) {
     if (autoCalendar && row.trainee_email) {
       try {
         const calAdded = await addLearnerToCalendarEvent(row.trainee_email, row.course_title || '', row.course_start_date);
@@ -475,7 +443,7 @@ export async function processDirectApplication(
 
   let invoiceId: string | null = null;
   try {
-    const forInvoice: DaApplicationForInvoice = {
+    const forInvoice: DaApplicationForInvoice & { enrolment_id?: string } = {
       id: row.id,
       trainee_name: row.trainee_name,
       trainee_email: row.trainee_email,
@@ -485,9 +453,17 @@ export async function processDirectApplication(
         ? new Date(row.course_start_date).toISOString().slice(0, 10)
         : null,
       full_course_fee: row.full_course_fee,
+      gst: row.gst,
       skillsfuture_subsidy: row.skillsfuture_subsidy,
       skillsfuture_credit: row.skillsfuture_credit,
       qb_customer_ref: row.qb_customer_ref,
+      // Add missing fields with fallback to null or appropriate value
+      trainee_id: row.trainee_id ?? null,
+      course_end_date: row.course_end_date ? new Date(row.course_end_date).toISOString().slice(0, 10) : null,
+      course_run_id: row.course_run_id ?? null,
+      grant_id: grantId ?? null,
+      application_id: row.application_id ?? null,
+      enrolment_id: enrolmentReference ?? undefined,
     };
     const created = await createDirectApplicationInvoice(forInvoice);
     invoiceId = created.invoiceId;
@@ -523,10 +499,7 @@ export async function processDirectApplication(
     }
   }
 
-  // Step 5: Add learner email to matching Google Calendar event (non-fatal)
-  // Gated by the auto_add_learner_to_calendar toggle in Company Settings.
-  // Matches by course title (ignoring WSQ/VIRTUAL/EXTERNAL prefixes) + start date.
-  // If the learner is already an attendee, this is a no-op.
+  // Step 5: Add learner to calendar (non-fatal)
   if (autoCalendar && row.trainee_email) {
     try {
       const calAdded = await addLearnerToCalendarEvent(
@@ -564,7 +537,6 @@ export async function bulkProcessDirectApplications(
   const results: DaPipelineResult[] = [];
   if (appIds.length === 0) return results;
 
-  // Load SSG context once and share across rows to avoid re-fetching creds.
   let sharedCtx: SSGContext | undefined;
   try {
     sharedCtx = await loadSsgContext();
@@ -596,86 +568,4 @@ export async function bulkProcessDirectApplications(
   console.log(`✅ auto-enrol batch complete: ${succeeded}/${results.length} succeeded`);
 
   return results;
-}
-
-// Automatically creates a public.enrollment record from a da_application
-export async function createNativeEnrolmentFromDA(record: any, pool: any) {
-  if (!record.course_run_id || !record.trainee_id || !record.trainee_email) return null;
-  try {
-    // Look up the course_id from course_run
-    // DA record.course_run_id often contains the external string ID (e.g. TGS-...) 
-    // rather than the internal UUID. We check both.
-    const runRes = await pool.query(
-      `SELECT id as internal_id, course_id FROM course_run 
-       WHERE (id::text = $1 OR course_run_id = $1) AND is_deleted IS NOT TRUE LIMIT 1`, 
-      [record.course_run_id]
-    );
-    
-    const internalRunId = runRes.rows[0]?.internal_id;
-    const courseId = runRes.rows[0]?.course_id;
-    if (!courseId || !internalRunId) {
-      console.warn(`⚠️ [DA] Could not find course_run for ID: ${record.course_run_id}`);
-      return null;
-    }
-
-    // We must ensure the user has an app_user and learner_profile
-    // Look up by email first
-    const existingUser = await pool.query(
-      `SELECT id FROM app_user WHERE LOWER(email) = LOWER($1) OR LOWER(secondary_email) = LOWER($1) LIMIT 1`,
-      [record.trainee_email]
-    );
-
-    let userId = existingUser.rows[0]?.id;
-
-    if (!userId) {
-      // Create user if they don't exist, using empty password hash, we can let them reset it
-      const newUser = await pool.query(
-        `INSERT INTO app_user (id, email, full_name, password_hash, account_status, created_at, updated_at)
-         VALUES (gen_random_uuid(), $1, $2, '', 'active', NOW(), NOW())
-         RETURNING id`,
-        [record.trainee_email.toLowerCase(), record.trainee_name || '']
-      );
-      userId = newUser.rows[0].id;
-      
-      await pool.query(`INSERT INTO user_role_map (user_id, role) VALUES ($1, 'Learner') ON CONFLICT DO NOTHING`, [userId]);
-      await pool.query(`INSERT INTO learner_profile (user_id, nric, tel) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`, 
-        [userId, record.trainee_id, record.trainee_phone || '']
-      );
-    }
-
-    const { rows } = await pool.query(
-      `INSERT INTO enrollment (
-          id, user_id, course_id, course_run_id, progress_percent, payment_status, 
-          assessment_status, enrolment_status, enrolment_date, email, nric, created_at, updated_at
-       )
-       VALUES (gen_random_uuid(), $1, $2, $3, 0, 'Unpaid', 'Pending', 'Confirmed', CURRENT_DATE, $4, $5, NOW(), NOW())
-       ON CONFLICT DO NOTHING
-       RETURNING id`,
-      [
-        userId,
-        courseId,
-        internalRunId,
-        record.trainee_email,
-        record.trainee_id
-      ]
-    );
-
-    const enrolmentId = rows[0]?.id;
-
-    // Update the DA record to link it and show success
-    if (record.application_id) {
-      await pool.query(
-        `UPDATE da_application 
-         SET enrolment_status = 'Confirmed',
-             enrolment_id = $1
-         WHERE application_id = $2`,
-        [enrolmentId || null, record.application_id]
-      );
-    }
-
-    return enrolmentId || true;
-  } catch (err) {
-    console.error(`❌ createNativeEnrolmentFromDA failed:`, err);
-    return null;
-  }
 }
