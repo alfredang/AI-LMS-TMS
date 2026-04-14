@@ -34,7 +34,7 @@ const sidebarItems: NavItem[] = [
 const LearnerLayout: React.FC = () => {
   const { currentView, selectedCourse, handleNavigation } = useLms();
   const appVersion = useAppVersion();
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
   const navigateTo = (view: View) => {
     handleNavigation(view);

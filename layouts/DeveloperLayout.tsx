@@ -16,7 +16,7 @@ import { useAppVersion } from '@hooks/useAppVersion';
 const DeveloperLayout: React.FC = () => {
   const { currentView, selectedCourse, editingCourse, developerPage } = useLms();
   const appVersion = useAppVersion();
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
   // Handle full-width views (Profile and Help & Support)
   if (currentView === View.Profile || currentView === View.HelpAndSupport) {
