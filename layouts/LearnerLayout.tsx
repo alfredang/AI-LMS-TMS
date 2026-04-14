@@ -77,6 +77,18 @@ const LearnerLayout: React.FC = () => {
         {/* Sidebar: icon rail when collapsed, full panel when expanded */}
         <div className="flex flex-shrink-0">
           <aside className={`${isSidebarOpen ? 'w-64' : 'w-14'} bg-white dark:bg-slate-800 border-r border-gray-200 dark:border-slate-700 flex flex-col h-[calc(100vh-64px)] sticky top-[64px] transition-all duration-200`}>
+            {/* Toggle arrow at top */}
+            <div className={`flex ${isSidebarOpen ? 'justify-end' : 'justify-center'} px-2 py-2 border-b border-gray-200 dark:border-gray-700`}>
+              <button
+                onClick={() => setIsSidebarOpen(prev => !prev)}
+                className="p-1 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+                title={isSidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
+              >
+                <svg className={`w-5 h-5 transition-transform ${isSidebarOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+            </div>
             <div className="flex-1 overflow-y-auto px-2 py-4 space-y-1" style={{ scrollbarWidth: 'none' }}>
               {sidebarItems.map((item) => {
                 const isActive = !item.href && currentView === item.view && !selectedCourse;
@@ -104,16 +116,6 @@ const LearnerLayout: React.FC = () => {
               })}
             </div>
             {isSidebarOpen && <p className="px-3 py-2 text-[10px] text-gray-400 dark:text-gray-300 font-mono border-t border-gray-200 dark:border-gray-700">version {appVersion}</p>}
-            {/* Toggle arrow — fixed at viewport center, always visible */}
-            <button
-              onClick={() => setIsSidebarOpen(prev => !prev)}
-              className="fixed top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors z-10"
-              title={isSidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
-            >
-              <svg className={`w-5 h-5 transition-transform ${isSidebarOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-              </svg>
-            </button>
           </aside>
         </div>
 
