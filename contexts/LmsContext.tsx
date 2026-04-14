@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/router';
-import { View, UserRole, AdminPage, TrainerPage, CurrentUserProfile, CalendarEvent, Course, CourseDetail, LearningUnit, CourseAssessment, Submission } from '@app-types';
+import { View, UserRole, AdminPage, TrainerPage, DeveloperPage, CurrentUserProfile, CalendarEvent, Course, CourseDetail, LearningUnit, CourseAssessment, Submission } from '@app-types';
 import { TrainingProviderProfile } from '@app-types/profile';
 import { courseService } from '@lib/services/courseService';
 import { authService, User } from '@lib/services/authService';
@@ -216,6 +216,8 @@ interface LmsContextType {
   setAdminPage: (page: AdminPage) => void;
   trainerPage: TrainerPage;
   setTrainerPage: (page: TrainerPage) => void;
+  developerPage: DeveloperPage;
+  setDeveloperPage: (page: DeveloperPage) => void;
   selectedCourseRunId: string | null;
   setSelectedCourseRunId: (courseRunId: string | null) => void;
   pendingAttendanceCourseRunId: string | null;
@@ -299,6 +301,7 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [currentView, setCurrentView] = useState<View>(View.Dashboard);
   const [adminPage, setAdminPage] = useState<AdminPage>(AdminPage.Dashboard);
   const [trainerPage, setTrainerPage] = useState<TrainerPage>(TrainerPage.MyClasses);
+  const [developerPage, setDeveloperPage] = useState<DeveloperPage>(DeveloperPage.Dashboard);
   const [selectedCourseRunId, setSelectedCourseRunId] = useState<string | null>(null);
   const [pendingAttendanceCourseRunId, setPendingAttendanceCourseRunId] = useState<string | null>(null);
   const [pendingGradingCourseRunId, setPendingGradingCourseRunId] = useState<string | null>(null);
@@ -750,6 +753,16 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const newQuery: any = { ...router.query, trainerPage: page };
     delete newQuery.courseId;
     // Clear stale view param so profile view doesn't persist
+    delete newQuery.view;
+    router.push({ pathname: router.pathname, query: newQuery }, undefined, { shallow: true });
+  }, [router]);
+
+  // Wrapped setDeveloperPage to sync with URL
+  const navigateDeveloperPage = useCallback((page: DeveloperPage) => {
+    setDeveloperPage(page);
+    setSelectedCourse(null);
+    const newQuery: any = { ...router.query, developerPage: page };
+    delete newQuery.courseId;
     delete newQuery.view;
     router.push({ pathname: router.pathname, query: newQuery }, undefined, { shallow: true });
   }, [router]);
@@ -1645,6 +1658,8 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setAdminPage: navigateAdminPage,
     trainerPage,
     setTrainerPage: navigateTrainerPage,
+    developerPage,
+    setDeveloperPage: navigateDeveloperPage,
     selectedCourseRunId,
     setSelectedCourseRunId,
     pendingAttendanceCourseRunId,
