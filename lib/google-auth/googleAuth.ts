@@ -50,10 +50,11 @@ export async function getGoogleDriveClient(pool: Pool): Promise<drive_v3.Drive> 
  * The DB column (google_service_account_json) holds the relative URL path
  * (e.g. /uploads/training_provider/service_account/service-account.json).
  *
- * Resolution order (mirrors credentials-service.ts pattern):
- *   1. HTTP fetch via NEXT_PUBLIC_BASE_URL + path (production)
- *   2. HTTP fetch via localhost:3000 + path (local dev)
- *   3. Filesystem read from public/ directory (same-machine fallback)
+ * Resolution order (mirrors credentials-service.ts loadPemFromPath pattern):
+ *   1. Filesystem read from public/ directory (fastest, works in Docker)
+ *   2. HTTP fetch via NEXT_PUBLIC_BASE_URL + path (production)
+ *   3. HTTP fetch via APP_URL + path
+ *   4. HTTP fetch via localhost:PORT + path (local dev)
  */
 export async function getServiceAccountAuth(dbPool: Pool, scopes: string[]) {
     const result = await dbPool.query(`
@@ -72,16 +73,33 @@ export async function getServiceAccountAuth(dbPool: Pool, scopes: string[]) {
     }
 
     const normalizedPath = relativeUrl.startsWith('/') ? relativeUrl : `/${relativeUrl}`;
+    const tried: string[] = [];
 
-    // Build list of base URLs to try (same pattern as credentials-service.ts)
+    // 1. Filesystem first (works in Docker where public/ is copied into the image)
+    const path = await import('path');
+    const fs = await import('fs');
+    const absPath = path.join(process.cwd(), 'public', normalizedPath);
+    try {
+        if (fs.existsSync(absPath)) {
+            const text = fs.readFileSync(absPath, 'utf8');
+            const credentials = JSON.parse(text);
+            console.log(`[google-auth] Service account loaded from file: ${absPath}`);
+            return new google.auth.GoogleAuth({ credentials, scopes });
+        }
+    } catch { /* fall through */ }
+    tried.push(`file:${absPath}`);
+
+    // 2. HTTP fetch (multiple base URLs, same pattern as credentials-service.ts)
     const appBaseUrl = (process.env.NEXT_PUBLIC_BASE_URL || process.env.NEXTAUTH_URL || '').replace(/\/$/, '');
+    const appUrl = (process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || '').replace(/\/$/, '');
     const port = process.env.PORT || '3000';
+    const localhostUrl = `http://localhost:${port}`;
+
     const baseUrls: string[] = [];
     if (appBaseUrl) baseUrls.push(appBaseUrl);
-    const localhostUrl = `http://localhost:${port}`;
+    if (appUrl && !baseUrls.includes(appUrl)) baseUrls.push(appUrl);
     if (!baseUrls.includes(localhostUrl)) baseUrls.push(localhostUrl);
 
-    // Try HTTP fetch first (works both locally and in production)
     for (const base of baseUrls) {
         const url = `${base}${normalizedPath}`;
         try {
@@ -93,20 +111,10 @@ export async function getServiceAccountAuth(dbPool: Pool, scopes: string[]) {
                 return new google.auth.GoogleAuth({ credentials, scopes });
             }
         } catch { /* try next */ }
+        tried.push(url);
     }
 
-    // Filesystem fallback (same machine as the uploaded files)
-    const path = await import('path');
-    const fs = await import('fs');
-    const absPath = path.join(process.cwd(), 'public', relativeUrl);
-    try {
-        if (fs.existsSync(absPath)) {
-            console.log(`[google-auth] Service account loaded from file: ${absPath}`);
-            return new google.auth.GoogleAuth({ keyFile: absPath, scopes });
-        }
-    } catch { /* fall through */ }
-
-    throw new Error(`Google service account key file could not be loaded from: ${normalizedPath}. Tried HTTP (${baseUrls.join(', ')}) and filesystem (${absPath}).`);
+    throw new Error(`Google service account key file could not be loaded from: ${normalizedPath}. Tried: ${tried.join(', ')}`);
 }
 
 /**
