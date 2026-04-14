@@ -16,7 +16,7 @@ const NavSection: React.FC<NavSectionProps> = ({ title, children, isOpen, onTogg
             onClick={onToggle}
             className="w-full flex items-center justify-between px-3 py-1 group cursor-pointer"
         >
-            <h3 className="text-sm font-bold uppercase text-gray-300 dark:text-gray-200 tracking-wider">{title}</h3>
+            <h3 className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400 tracking-wider">{title}</h3>
             <svg
                 className={`w-3.5 h-3.5 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
                 fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
@@ -39,7 +39,7 @@ const SubSection: React.FC<{ title: string; isOpen: boolean; onToggle: () => voi
             onClick={onToggle}
             className="w-full flex items-center justify-between pl-8 pr-3 py-1.5 group cursor-pointer hover:bg-gray-100 dark:hover:bg-slate-700 rounded-md"
         >
-            <span className="text-sm font-semibold uppercase text-gray-300 dark:text-gray-300 tracking-wider">{title}</span>
+            <span className="text-xs font-semibold uppercase text-gray-400 dark:text-gray-500 tracking-wider">{title}</span>
             <svg
                 className={`w-3 h-3 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
                 fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
@@ -68,55 +68,50 @@ const DeveloperSidebar: React.FC<DeveloperSidebarProps> = ({ onNavigate }) => {
         setOpenSections(prev => ({ ...prev, [key]: !prev[key] }));
     };
 
-    const navButton = (label: string, page: DeveloperPage, indent = false) => (
-        <button
-            type="button"
-            onClick={() => {
+    const NavItem: React.FC<{ page: DeveloperPage; label: string; isSubItem?: boolean }> = ({ page, label, isSubItem = false }) => (
+        <a
+            href="#"
+            onClick={(e) => {
+                e.preventDefault();
                 setDeveloperPage(page);
-                onNavigate?.();
+                if (onNavigate) onNavigate();
             }}
-            className={`w-full text-left text-base py-2.5 rounded-md transition-colors ${indent ? 'pl-12 pr-3' : 'pl-4 pr-3'} ${
-                developerPage === page
-                    ? 'bg-primary/10 text-primary font-semibold dark:bg-primary/20'
-                    : 'text-gray-200 dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-slate-700'
-            }`}
+            className={`flex items-center rounded-md px-3 py-2 text-sm font-medium transition-colors ${isSubItem ? 'pl-8' : ''
+                } ${developerPage === page
+                    ? 'bg-blue-50 text-blue-600 border-l-3 border-blue-500 dark:bg-blue-600/20 dark:text-blue-400 dark:border-blue-500'
+                    : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-slate-700 dark:hover:text-white'
+                }`}
         >
             {label}
-        </button>
+        </a>
     );
 
     return (
-        <nav className="flex flex-col gap-2 py-4 px-2 overflow-y-auto h-full">
-            {/* Dashboard */}
-            {navButton('Dashboard', DeveloperPage.Dashboard)}
-            {navButton('Course List', DeveloperPage.CourseList)}
+        <nav className="space-y-6 p-4 bg-white dark:bg-slate-800 text-gray-900 dark:text-white h-full">
+            <NavItem page={DeveloperPage.Dashboard} label="Dashboard" />
+            <NavItem page={DeveloperPage.CourseList} label="Course List" />
 
-            {/* CP Generator Section */}
-            <div className="mt-4">
-                <NavSection title="CP Generator" isOpen={openSections.cpGenerator} onToggle={() => toggleSection('cpGenerator')}>
-                    {/* Prepare CP Sub-section */}
-                    <SubSection title="Prepare CP" isOpen={openSections.cpPrepare} onToggle={() => toggleSection('cpPrepare')}>
-                        {navButton('Course Details', DeveloperPage.CpCourseDetails, true)}
-                        {navButton('About This Course', DeveloperPage.CpAboutCourse, true)}
-                        {navButton("What You'll Learn", DeveloperPage.CpWhatYoullLearn, true)}
-                        {navButton('Background Part A', DeveloperPage.CpBackgroundA, true)}
-                        {navButton('Background Part B', DeveloperPage.CpBackgroundB, true)}
-                        {navButton('Learning Outcomes', DeveloperPage.CpLearningOutcomes, true)}
-                        {navButton('Instructional Methods', DeveloperPage.CpInstructionalMethods, true)}
-                        {navButton('Assessment Methods', DeveloperPage.CpAssessmentMethods, true)}
-                        {navButton('LU Sequencing', DeveloperPage.CpLuSequencing, true)}
-                    </SubSection>
+            <NavSection title="CP Generator" isOpen={openSections.cpGenerator} onToggle={() => toggleSection('cpGenerator')}>
+                <SubSection title="Prepare CP" isOpen={openSections.cpPrepare} onToggle={() => toggleSection('cpPrepare')}>
+                    <NavItem page={DeveloperPage.CpCourseDetails} label="Course Details" isSubItem />
+                    <NavItem page={DeveloperPage.CpAboutCourse} label="About This Course" isSubItem />
+                    <NavItem page={DeveloperPage.CpWhatYoullLearn} label="What You'll Learn" isSubItem />
+                    <NavItem page={DeveloperPage.CpBackgroundA} label="Background Part A" isSubItem />
+                    <NavItem page={DeveloperPage.CpBackgroundB} label="Background Part B" isSubItem />
+                    <NavItem page={DeveloperPage.CpLearningOutcomes} label="Learning Outcomes" isSubItem />
+                    <NavItem page={DeveloperPage.CpInstructionalMethods} label="Instructional Methods" isSubItem />
+                    <NavItem page={DeveloperPage.CpAssessmentMethods} label="Assessment Methods" isSubItem />
+                    <NavItem page={DeveloperPage.CpLuSequencing} label="LU Sequencing" isSubItem />
+                </SubSection>
 
-                    {/* Submit CP Sub-section */}
-                    <SubSection title="Submit CP" isOpen={openSections.cpSubmit} onToggle={() => toggleSection('cpSubmit')}>
-                        {navButton('Course Outline', DeveloperPage.CpCourseOutline, true)}
-                        {navButton('Entry Requirements', DeveloperPage.CpEntryRequirements, true)}
-                        {navButton('Job Roles', DeveloperPage.CpJobRoles, true)}
-                        {navButton('Lesson Plan', DeveloperPage.CpLessonPlan, true)}
-                        {navButton('CP Validation', DeveloperPage.CpValidation, true)}
-                    </SubSection>
-                </NavSection>
-            </div>
+                <SubSection title="Submit CP" isOpen={openSections.cpSubmit} onToggle={() => toggleSection('cpSubmit')}>
+                    <NavItem page={DeveloperPage.CpCourseOutline} label="Course Outline" isSubItem />
+                    <NavItem page={DeveloperPage.CpEntryRequirements} label="Entry Requirements" isSubItem />
+                    <NavItem page={DeveloperPage.CpJobRoles} label="Job Roles" isSubItem />
+                    <NavItem page={DeveloperPage.CpLessonPlan} label="Lesson Plan" isSubItem />
+                    <NavItem page={DeveloperPage.CpValidation} label="CP Validation" isSubItem />
+                </SubSection>
+            </NavSection>
         </nav>
     );
 };

@@ -11,28 +11,7 @@ import ProfileView from '../components/ProfileView';
 import HelpAndSupportView from '../components/HelpAndSupportView';
 import DeveloperSidebar from '../components/developer/DeveloperSidebar';
 import CpGeneratorView from '../components/developer/CpGeneratorView';
-import { Icon, IconName } from '../components/ui/Icon';
 import { useAppVersion } from '@hooks/useAppVersion';
-
-const PAGE_LABELS: Partial<Record<DeveloperPage, string>> = {
-  [DeveloperPage.Dashboard]: 'Dashboard',
-  [DeveloperPage.CourseList]: 'Course List',
-  [DeveloperPage.CpGenerator]: 'CP Generator',
-  [DeveloperPage.CpCourseDetails]: 'Course Details',
-  [DeveloperPage.CpAboutCourse]: 'About This Course',
-  [DeveloperPage.CpWhatYoullLearn]: "What You'll Learn",
-  [DeveloperPage.CpBackgroundA]: 'Background Part A',
-  [DeveloperPage.CpBackgroundB]: 'Background Part B',
-  [DeveloperPage.CpLearningOutcomes]: 'Learning Outcomes',
-  [DeveloperPage.CpInstructionalMethods]: 'Instructional Methods',
-  [DeveloperPage.CpAssessmentMethods]: 'Assessment Methods',
-  [DeveloperPage.CpLuSequencing]: 'LU Sequencing Rationale',
-  [DeveloperPage.CpCourseOutline]: 'Course Outline',
-  [DeveloperPage.CpEntryRequirements]: 'Entry Requirements',
-  [DeveloperPage.CpJobRoles]: 'Job Roles',
-  [DeveloperPage.CpLessonPlan]: 'Lesson Plan',
-  [DeveloperPage.CpValidation]: 'CP Validation',
-};
 
 const DeveloperLayout: React.FC = () => {
   const { currentView, selectedCourse, editingCourse, developerPage } = useLms();
@@ -59,13 +38,9 @@ const DeveloperLayout: React.FC = () => {
     if (selectedCourse) {
       return <CourseDetail />;
     }
-
-    // SEO Generator (accessible from header nav)
     if (currentView === View.Create) {
       return <SeoGeneratorView />;
     }
-
-    // CP Generator pages
     if (
       developerPage === DeveloperPage.CpCourseDetails ||
       developerPage === DeveloperPage.CpAboutCourse ||
@@ -84,15 +59,7 @@ const DeveloperLayout: React.FC = () => {
     ) {
       return <CpGeneratorView currentStep={developerPage} />;
     }
-
-    // Default views
-    switch (developerPage) {
-      case DeveloperPage.CourseList:
-        return <CourseList />;
-      case DeveloperPage.Dashboard:
-      default:
-        return <CourseList />;
-    }
+    return <CourseList />;
   };
 
   return (
@@ -101,19 +68,20 @@ const DeveloperLayout: React.FC = () => {
 
       {/* Main Layout Container */}
       <div className="flex flex-1">
-        {/* Sidebar + rail */}
-        <div className="sticky top-0 h-screen flex flex-shrink-0">
+        {/* Sidebar area: rail is always visible, panel slides in/out */}
+        <div className="flex flex-shrink-0">
           {/* Expanded sidebar panel */}
           {isSidebarOpen && (
-            <div className="w-64 bg-white dark:bg-slate-800 border-r border-gray-200 dark:border-slate-700 flex flex-col">
-              <div className="flex-1 overflow-y-auto scrollbar-none" style={{ scrollbarWidth: 'none' }}>
+            <aside className="w-64 bg-white dark:bg-slate-800 border-r border-gray-200 dark:border-slate-700 flex flex-col h-[calc(100vh-64px)] sticky top-[64px]">
+              <div className="flex-1 overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
                 <DeveloperSidebar />
               </div>
               <p className="px-3 py-2 text-[10px] text-gray-400 dark:text-gray-300 font-mono border-t border-gray-200 dark:border-gray-700">version {appVersion}</p>
-            </div>
+            </aside>
           )}
-          {/* Thin rail with toggle arrow at bottom */}
-          <div className="w-8 bg-white dark:bg-slate-800 border-r border-gray-200 dark:border-slate-700 flex flex-col items-center justify-end">
+
+          {/* Thin rail with toggle arrow — always visible */}
+          <div className="w-8 bg-white dark:bg-slate-800 border-r border-gray-200 dark:border-slate-700 flex flex-col items-center justify-end h-[calc(100vh-64px)] sticky top-[64px]">
             <button
               onClick={() => setIsSidebarOpen(prev => !prev)}
               className="mb-4 p-1 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
