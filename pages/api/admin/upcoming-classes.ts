@@ -30,9 +30,12 @@ const parseDDMMYYYY = (d: string) => {
 
 const isValidDate = (d: any) => {
   if (typeof d !== 'string' || !/^\d{2}[/-]\d{2}[/-]\d{4}$/.test(d)) return false;
-  const iso = parseDDMMYYYY(d);
-  const parsed = new Date(iso);
-  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().startsWith(iso);
+  const p = d.split(/[/-]/);
+  const day = parseInt(p[0], 10);
+  const month = parseInt(p[1], 10);
+  const year = parseInt(p[2], 10);
+  const date = new Date(year, month - 1, day);
+  return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day;
 };
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -248,13 +251,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     if (isValidDate(startDateFrom)) {
-      filters.push(`cr.start_date >= $${paramIndex}`);
+      filters.push(`cr.start_date::date >= $${paramIndex}`);
       params.push(parseDDMMYYYY(startDateFrom as string));
       paramIndex++;
     }
 
     if (isValidDate(endDateUntil)) {
-      filters.push(`cr.end_date <= $${paramIndex}`);
+      filters.push(`cr.end_date::date <= $${paramIndex}`);
       params.push(parseDDMMYYYY(endDateUntil as string));
       paramIndex++;
     }
@@ -307,7 +310,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           ${tpgNameExpr},
           ${tpgEmailExpr},
           cr.assigned_trainer_name
-        ORDER BY cr.start_date ASC NULLS LAST, cr.end_date ASC NULLS LAST
+        ORDER BY cr.start_date DESC NULLS LAST, cr.end_date DESC NULLS LAST
         LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
       `,
       [...params, limitNum, offset]

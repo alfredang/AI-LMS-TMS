@@ -157,22 +157,29 @@ export default async function handler(
       whereConditions.push(`cr.class_status IN ('Confirmed', 'Pending')`);
     }
 
-    const parseDDMMYYYY = (d: string) => { const p = d.split(/[\/\-]/); return `${p[2]}-${p[1]}-${p[0]}`; };
+    const parseDDMMYYYY = (d: string) => {
+      const p = d.split(/[/-]/);
+      return `${p[2]}-${p[1]}-${p[0]}`;
+    };
+
     const isValidDate = (d: any) => {
-      if (typeof d !== 'string' || !/^\d{2}[\/\-]\d{2}[\/\-]\d{4}$/.test(d)) return false;
-      const iso = parseDDMMYYYY(d);
-      const parsed = new Date(iso);
-      return !isNaN(parsed.getTime()) && parsed.toISOString().startsWith(iso);
+      if (typeof d !== 'string' || !/^\d{2}[/-]\d{2}[/-]\d{4}$/.test(d)) return false;
+      const p = d.split(/[/-]/);
+      const day = parseInt(p[0], 10);
+      const month = parseInt(p[1], 10);
+      const year = parseInt(p[2], 10);
+      const date = new Date(year, month - 1, day);
+      return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day;
     };
 
     if (isValidDate(startDateFrom)) {
-      whereConditions.push(`cr.start_date >= $${paramCounter}`);
+      whereConditions.push(`cr.start_date::date >= $${paramCounter}`);
       queryParams.push(parseDDMMYYYY(startDateFrom as string));
       paramCounter++;
     }
 
     if (isValidDate(endDateUntil)) {
-      whereConditions.push(`cr.end_date <= $${paramCounter}`);
+      whereConditions.push(`cr.end_date::date <= $${paramCounter}`);
       queryParams.push(parseDDMMYYYY(endDateUntil as string));
       paramCounter++;
     }
@@ -280,7 +287,7 @@ export default async function handler(
         GROUP BY course_run_id
       ) trainee_count ON cr.id = trainee_count.course_run_id
       WHERE ${whereClause}
-      ORDER BY cr.start_date ASC NULLS LAST, cr.end_date ASC NULLS LAST
+      ORDER BY cr.start_date DESC NULLS LAST, cr.end_date DESC NULLS LAST
       LIMIT $${paramCounter} OFFSET $${paramCounter + 1}
     `;
 
