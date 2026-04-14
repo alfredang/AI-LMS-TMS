@@ -293,6 +293,7 @@ async function generateWithClaude(prompt: string, apiKey: string): Promise<strin
       allowedTools: [],
       maxTurns: 1,
       env: { ANTHROPIC_API_KEY: apiKey },
+      pathToClaudeCodeExecutable: '/Users/alfredang/.local/bin/claude',
     },
   })) {
     if (message.type === 'assistant' && message.message?.content) {

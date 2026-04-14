@@ -116,6 +116,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         allowedTools: [],
         maxTurns: 1,
         env: { ANTHROPIC_API_KEY: apiKey },
+        pathToClaudeCodeExecutable: '/Users/alfredang/.local/bin/claude',
       },
     })) {
       if (message.type === 'assistant' && message.message?.content) {
