@@ -3228,7 +3228,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                         >
                                             <option value="">-- Reassign Trainer --</option>
                                             {courseToEdit?.trainersList
-                                                ? courseToEdit.trainersList.split(',').map((t: string) => t.trim()).filter(Boolean).map((name: string, idx: number) => {
+                                                ? (courseToEdit.trainersList.includes('|') ? courseToEdit.trainersList.split('|') : courseToEdit.trainersList.split(',')).map((t: string) => t.trim()).filter(Boolean).map((name: string, idx: number) => {
                                                     const td = availableTrainers.find((at: any) => at.trainer_name?.toLowerCase() === name.toLowerCase());
                                                     return <option key={idx} value={td?.user_id || name}>{name}</option>;
                                                 })
@@ -3882,7 +3882,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                 <h4 className="text-lg font-medium text-gray-900 dark:text-white mb-3">Approved Trainers for This Course</h4>
                                 <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">Trainers approved to teach this course (from course record). The next available trainer follows the assigned local trainer in this order.</p>
                                 {courseToEdit?.trainersList ? (() => {
-                                    const approvedTrainers = courseToEdit.trainersList.split(',').map((t: string) => t.trim()).filter(Boolean);
+                                    const approvedTrainers = (courseToEdit.trainersList.includes('|') ? courseToEdit.trainersList.split('|') : courseToEdit.trainersList.split(',')).map((t: string) => t.trim()).filter(Boolean);
                                     const nextName = courseToEdit.nextAvailableTrainer;
 
                                     // Build bidirectional name <-> email maps from availableTrainers (app_user data)

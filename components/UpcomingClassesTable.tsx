@@ -263,8 +263,12 @@ interface Trainer {
     trainer_name: string;
 }
 
-const splitTrainerList = (list: string): string[] =>
-    (list || '').split(',').map(s => s.trim()).filter(Boolean);
+const splitTrainerList = (list: string): string[] => {
+    const s = (list || '').trim();
+    if (!s) return [];
+    if (s.includes('|')) return s.split('|').map(x => x.trim()).filter(Boolean);
+    return s.split(',').map(x => x.trim()).filter(Boolean);
+};
 
 interface UpcomingClassesTableProps {
     showTitle?: boolean;
