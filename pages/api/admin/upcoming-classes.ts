@@ -310,7 +310,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           ${tpgNameExpr},
           ${tpgEmailExpr},
           cr.assigned_trainer_name
-        ORDER BY cr.start_date DESC NULLS LAST, cr.end_date DESC NULLS LAST
+        ORDER BY cr.start_date ASC NULLS LAST, cr.end_date ASC NULLS LAST
         LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
       `,
       [...params, limitNum, offset]
