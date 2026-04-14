@@ -137,7 +137,7 @@ const CpCourseDetails: React.FC = () => {
   }, [cp.numAssessMethods]);
 
   return (
-    <div className="space-y-6 max-w-4xl">
+    <div className="space-y-6">
       {/* Framework selector */}
       <Card className="p-5">
         <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider mb-3">Select Course Type</h3>

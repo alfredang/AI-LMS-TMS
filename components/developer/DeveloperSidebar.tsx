@@ -16,7 +16,7 @@ const NavSection: React.FC<NavSectionProps> = ({ title, children, isOpen, onTogg
             onClick={onToggle}
             className="w-full flex items-center justify-between px-3 py-1 group cursor-pointer"
         >
-            <h3 className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400 tracking-wider">{title}</h3>
+            <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">{title}</h3>
             <svg
                 className={`w-3.5 h-3.5 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
                 fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
@@ -90,6 +90,7 @@ const DeveloperSidebar: React.FC<DeveloperSidebarProps> = ({ onNavigate }) => {
         <nav className="space-y-6 p-4 bg-white dark:bg-slate-800 text-gray-900 dark:text-white h-full">
             <NavItem page={DeveloperPage.Dashboard} label="Dashboard" />
             <NavItem page={DeveloperPage.CourseList} label="Course List" />
+            <NavItem page={DeveloperPage.SeoMetadata} label="SEO Metadata" />
 
             <NavSection title="CP Generator" isOpen={openSections.cpGenerator} onToggle={() => toggleSection('cpGenerator')}>
                 <SubSection title="Prepare CP" isOpen={openSections.cpPrepare} onToggle={() => toggleSection('cpPrepare')}>

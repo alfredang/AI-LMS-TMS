@@ -129,6 +129,7 @@ export enum AdminPage {
 export enum DeveloperPage {
   Dashboard = 'dashboard',
   CourseList = 'courseList',
+  SeoMetadata = 'seoMetadata',
   CpGenerator = 'cpGenerator',
   CpCourseDetails = 'cpCourseDetails',
   CpAboutCourse = 'cpAboutCourse',

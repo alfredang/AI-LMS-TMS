@@ -38,7 +38,7 @@ const DeveloperLayout: React.FC = () => {
     if (selectedCourse) {
       return <CourseDetail />;
     }
-    if (currentView === View.Create) {
+    if (currentView === View.Create || developerPage === DeveloperPage.SeoMetadata) {
       return <SeoGeneratorView />;
     }
     if (
