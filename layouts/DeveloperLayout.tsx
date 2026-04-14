@@ -79,12 +79,11 @@ const DeveloperLayout: React.FC = () => {
               <p className="px-3 py-2 text-[10px] text-gray-400 dark:text-gray-300 font-mono border-t border-gray-200 dark:border-gray-700">version {appVersion}</p>
             </aside>
           )}
-
-          {/* Thin rail with toggle arrow — always visible */}
-          <div className="w-8 bg-white dark:bg-slate-800 border-r border-gray-200 dark:border-slate-700 flex flex-col items-center justify-end h-[calc(100vh-64px)] sticky top-[64px]">
+          {/* Thin rail with toggle arrow always visible */}
+          <div className="w-8 bg-white dark:bg-slate-800 border-r border-gray-200 dark:border-slate-700 h-[calc(100vh-64px)] sticky top-[64px] relative">
             <button
               onClick={() => setIsSidebarOpen(prev => !prev)}
-              className="mb-4 p-1 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+              className="fixed top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
               title={isSidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
             >
               <svg className={`w-5 h-5 transition-transform ${isSidebarOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
