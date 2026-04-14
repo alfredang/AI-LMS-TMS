@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
 import { useAppVersion } from '@hooks/useAppVersion';
@@ -58,8 +58,6 @@ const PAGE_LABELS: Record<TrainerPage, string> = {
 const TrainerLayout: React.FC = () => {
   const { currentView, trainerPage, selectedCourse } = useLms();
   const appVersion = useAppVersion();
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-
   const renderContent = () => {
     if (currentView === View.Profile) return <ProfilePage />;
     if (currentView === View.HelpAndSupport) return <HelpAndSupportView />;
@@ -119,28 +117,13 @@ const TrainerLayout: React.FC = () => {
 
       {/* Main Layout Container */}
       <div className="flex flex-1">
-        {/* Sidebar + rail */}
-        <div className="sticky top-0 h-screen flex flex-shrink-0">
-          {isSidebarOpen && (
-            <div className="w-64 bg-white dark:bg-slate-800 border-r border-gray-200 dark:border-slate-700 flex flex-col">
-              <div className="flex-1 overflow-y-auto scrollbar-none" style={{ scrollbarWidth: 'none' }}>
-                <TrainerSidebar />
-              </div>
-              <p className="px-3 py-2 text-[10px] text-gray-400 dark:text-gray-300 font-mono border-t border-gray-200 dark:border-gray-700">version {appVersion}</p>
-            </div>
-          )}
-          <div className="w-8 bg-white dark:bg-slate-800 border-r border-gray-200 dark:border-slate-700 flex flex-col items-center justify-end">
-            <button
-              onClick={() => setIsSidebarOpen(prev => !prev)}
-              className="mb-4 p-1 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
-              title={isSidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
-            >
-              <svg className={`w-5 h-5 transition-transform ${isSidebarOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-              </svg>
-            </button>
+        {/* Fixed Sidebar — always visible */}
+        <aside className="sticky top-0 h-screen w-64 flex-shrink-0 bg-white dark:bg-slate-800 border-r border-gray-200 dark:border-slate-700 flex flex-col">
+          <div className="flex-1 overflow-y-auto scrollbar-none" style={{ scrollbarWidth: 'none' }}>
+            <TrainerSidebar />
           </div>
-        </div>
+          <p className="px-3 py-2 text-[10px] text-gray-400 dark:text-gray-300 font-mono border-t border-gray-200 dark:border-gray-700">version {appVersion}</p>
+        </aside>
 
         {/* Main Content Area */}
         <main className="flex-1 overflow-x-hidden">
