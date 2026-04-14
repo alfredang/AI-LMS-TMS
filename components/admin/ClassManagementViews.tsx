@@ -238,6 +238,8 @@ export const ClassManagerView: React.FC<ClassManagerViewProps> = ({ courseToEdit
 
     // Class Status and Type
     const [classStatus, setClassStatus] = useState(courseToEdit?.classStatus || 'Pending');
+    const [invitationPaused, setInvitationPaused] = useState(!!(courseToEdit as any)?.invitationPaused);
+    const [repliesBlocked, setRepliesBlocked] = useState(!!(courseToEdit as any)?.invitationRepliesBlocked);
     const [classType, setClassType] = useState(() => {
         // Use DB class_type first, then fallback to modeOfTraining
         if (courseToEdit?.classType && courseToEdit.classType !== 'Physical') return courseToEdit.classType;
@@ -2337,6 +2339,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                             <option value="Physical">Physical</option>
                                             <option value="Virtual">Virtual</option>
                                             <option value="Hybrid">Hybrid</option>
+                                            <option value="External">External</option>
                                         </select>
                                     </div>
                                 </div>
@@ -3225,7 +3228,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                         >
                                             <option value="">-- Reassign Trainer --</option>
                                             {courseToEdit?.trainersList
-                                                ? courseToEdit.trainersList.split(',').map((t: string) => t.trim()).filter(Boolean).map((name: string, idx: number) => {
+                                                ? (courseToEdit.trainersList.includes('|') ? courseToEdit.trainersList.split('|') : courseToEdit.trainersList.split(',')).map((t: string) => t.trim()).filter(Boolean).map((name: string, idx: number) => {
                                                     const td = availableTrainers.find((at: any) => at.trainer_name?.toLowerCase() === name.toLowerCase());
                                                     return <option key={idx} value={td?.user_id || name}>{name}</option>;
                                                 })
@@ -3810,12 +3813,76 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                             </div>
                             ) : null}
 
+                            {/* Pause Invitations toggle */}
+                            <div className="flex items-center gap-3 mb-4 px-1">
+                                <label className="relative inline-flex items-center cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={invitationPaused}
+                                        onChange={async (e) => {
+                                            const newVal = e.target.checked;
+                                            setInvitationPaused(newVal);
+                                            if (courseToEdit?.id) {
+                                                try {
+                                                    await fetch(getApiUrl('/api/admin/upcoming-classes'), {
+                                                        method: 'PUT',
+                                                        headers: { 'Content-Type': 'application/json' },
+                                                        body: JSON.stringify({ id: courseToEdit.id, invitation_paused: newVal }),
+                                                    });
+                                                } catch {
+                                                    setInvitationPaused(!newVal);
+                                                }
+                                            }
+                                        }}
+                                        className="sr-only peer"
+                                    />
+                                    <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-orange-300 rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-orange-500" />
+                                </label>
+                                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                    Pause Invitations
+                                </span>
+                                <span className="text-xs text-gray-400">
+                                    {invitationPaused ? 'Scheduler and cascade invitations are blocked for this course run' : 'Invitations are active'}
+                                </span>
+                            </div>
+                            <div className="flex items-center gap-3 mb-4 px-1">
+                                <label className="relative inline-flex items-center cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={repliesBlocked}
+                                        onChange={async (e) => {
+                                            const newVal = e.target.checked;
+                                            setRepliesBlocked(newVal);
+                                            if (courseToEdit?.id) {
+                                                try {
+                                                    await fetch(getApiUrl('/api/admin/upcoming-classes'), {
+                                                        method: 'PUT',
+                                                        headers: { 'Content-Type': 'application/json' },
+                                                        body: JSON.stringify({ id: courseToEdit.id, invitation_replies_blocked: newVal }),
+                                                    });
+                                                } catch {
+                                                    setRepliesBlocked(!newVal);
+                                                }
+                                            }
+                                        }}
+                                        className="sr-only peer"
+                                    />
+                                    <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-red-300 rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-red-500" />
+                                </label>
+                                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                    Block Replies
+                                </span>
+                                <span className="text-xs text-gray-400">
+                                    {repliesBlocked ? 'All accept/decline responses are blocked — trainers see "Already Assigned"' : 'Trainers can respond to pending invitations'}
+                                </span>
+                            </div>
+
                             {/* Approved Trainers List */}
                             <div>
                                 <h4 className="text-lg font-medium text-gray-900 dark:text-white mb-3">Approved Trainers for This Course</h4>
                                 <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">Trainers approved to teach this course (from course record). The next available trainer follows the assigned local trainer in this order.</p>
                                 {courseToEdit?.trainersList ? (() => {
-                                    const approvedTrainers = courseToEdit.trainersList.split(',').map((t: string) => t.trim()).filter(Boolean);
+                                    const approvedTrainers = (courseToEdit.trainersList.includes('|') ? courseToEdit.trainersList.split('|') : courseToEdit.trainersList.split(',')).map((t: string) => t.trim()).filter(Boolean);
                                     const nextName = courseToEdit.nextAvailableTrainer;
 
                                     // Build bidirectional name <-> email maps from availableTrainers (app_user data)

@@ -19,6 +19,9 @@ build/
 config/local-settings.json
 service-account.json
 
+# Backlog (local planning file, not shared)
+.project/backlog.md
+
 # Nemo AI memory (runtime-generated)
 data/nemo-memory.md
 

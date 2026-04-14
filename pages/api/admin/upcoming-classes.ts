@@ -30,9 +30,12 @@ const parseDDMMYYYY = (d: string) => {
 
 const isValidDate = (d: any) => {
   if (typeof d !== 'string' || !/^\d{2}[/-]\d{2}[/-]\d{4}$/.test(d)) return false;
-  const iso = parseDDMMYYYY(d);
-  const parsed = new Date(iso);
-  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().startsWith(iso);
+  const p = d.split(/[/-]/);
+  const day = parseInt(p[0], 10);
+  const month = parseInt(p[1], 10);
+  const year = parseInt(p[2], 10);
+  const date = new Date(year, month - 1, day);
+  return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day;
 };
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -67,7 +70,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
 
       if (class_type) {
-        const validTypes = ['Physical', 'Virtual', 'Hybrid'];
+        const validTypes = ['Physical', 'Virtual', 'Hybrid', 'External'];
         if (!validTypes.includes(class_type)) {
           return res.status(400).json({ success: false, error: `Invalid type. Must be one of: ${validTypes.join(', ')}` });
         }
@@ -81,6 +84,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         await pool.query('ALTER TABLE course_run ADD COLUMN IF NOT EXISTS virtual_meeting_link TEXT');
         setClauses.push(`virtual_meeting_link = $${paramIdx++}`);
         values.push(virtual_meeting_link);
+      }
+
+      if (req.body.invitation_paused !== undefined) {
+        await pool.query('ALTER TABLE course_run ADD COLUMN IF NOT EXISTS invitation_paused BOOLEAN DEFAULT false');
+        setClauses.push(`invitation_paused = $${paramIdx++}`);
+        values.push(!!req.body.invitation_paused);
+      }
+
+      if (req.body.invitation_replies_blocked !== undefined) {
+        await pool.query('ALTER TABLE course_run ADD COLUMN IF NOT EXISTS invitation_replies_blocked BOOLEAN DEFAULT false');
+        setClauses.push(`invitation_replies_blocked = $${paramIdx++}`);
+        values.push(!!req.body.invitation_replies_blocked);
       }
 
       if (setClauses.length === 0) {
@@ -142,8 +157,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const limitNum = parseInt(limit as string, 10) || 20;
     const offset = pageNum * limitNum;
 
-    // Ensure class_type column exists
+    // Ensure columns exist
     await pool.query('ALTER TABLE course_run ADD COLUMN IF NOT EXISTS class_type TEXT DEFAULT \'Physical\'');
+    await pool.query('ALTER TABLE course_run ADD COLUMN IF NOT EXISTS invitation_paused BOOLEAN DEFAULT false');
+    await pool.query('ALTER TABLE course_run ADD COLUMN IF NOT EXISTS invitation_replies_blocked BOOLEAN DEFAULT false');
+    await pool.query('ALTER TABLE course_run ADD COLUMN IF NOT EXISTS trainer_in_calendar BOOLEAN');
 
     const includeOngoing = req.query.includeOngoing === 'true';
 
@@ -219,7 +237,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     const classType = req.query.classType;
-    if (classType === 'Physical' || classType === 'Virtual' || classType === 'Hybrid') {
+    if (classType === 'Physical' || classType === 'Virtual' || classType === 'Hybrid' || classType === 'External') {
       filters.push(`COALESCE(cr.class_type, 'Physical') = $${paramIndex}`);
       params.push(classType);
       paramIndex++;
@@ -233,13 +251,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     if (isValidDate(startDateFrom)) {
-      filters.push(`cr.start_date >= $${paramIndex}`);
+      filters.push(`cr.start_date::date >= $${paramIndex}`);
       params.push(parseDDMMYYYY(startDateFrom as string));
       paramIndex++;
     }
 
     if (isValidDate(endDateUntil)) {
-      filters.push(`cr.end_date <= $${paramIndex}`);
+      filters.push(`cr.end_date::date <= $${paramIndex}`);
       params.push(parseDDMMYYYY(endDateUntil as string));
       paramIndex++;
     }
@@ -267,6 +285,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           cr.start_date,
           cr.end_date,
           cr.class_type,
+          COALESCE(cr.invitation_paused, false) AS invitation_paused,
+          COALESCE(cr.invitation_replies_blocked, false) AS invitation_replies_blocked,
+          cr.trainer_in_calendar,
           cr.virtual_meeting_link,
           ${tpgNameExpr} AS assigned_trainer_tpg,
           ${tpgEmailExpr} AS assigned_trainer_tpg_email,
@@ -485,7 +506,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const normalized = normalizedTrainerPool[index];
         if (!normalized || isLocallyAssigned(normalized)) continue;
         const invitation = invitations.find((entry) => normalizeTrainerName(entry.trainer_name) === normalized);
-        if (invitation?.status === 'declined') continue;
+        if (invitation?.status === 'declined' || invitation?.status === 'blocked') continue;
         nextAvailableTrainer = trainerName;
         nextAvailableTrainerEmail = invitation?.trainer_email || nameToEmail.get(normalized) || '';
         if (invitation?.status) {
@@ -555,6 +576,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         trainerInvitations: perTrainerInvitation,
         courseType: row.course_type || '',
         classType: row.class_type || 'Physical',
+        invitationPaused: !!row.invitation_paused,
+        invitationRepliesBlocked: !!row.invitation_replies_blocked,
+        trainerInCalendar: row.trainer_in_calendar,
         virtualMeetingLink: row.virtual_meeting_link || '',
         modeOfTraining: '',
         attendanceScore: null as number | null,

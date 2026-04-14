@@ -1680,8 +1680,8 @@ const CourseInfoPanel: React.FC<{ course: Course; userRole: UserRole }> = ({ cou
                         </div>
                     );
                 })()}
-                {/* Hide course run related information for developers and training providers */}
-                {userRole !== UserRole.Developer && userRole !== UserRole.TrainingProvider && (
+                {/* Course run fields — hide for Developer, TP, and Admin (admin views course-level, not run-level) */}
+                {userRole !== UserRole.Developer && userRole !== UserRole.TrainingProvider && userRole !== UserRole.Admin && (
                     <>
                         <DetailRow label="Course Run ID" value={course.courseRunId} />
                         <DetailRow label="Digital Attendance ID" value={course.daId || 'N/A'} />
@@ -1731,6 +1731,8 @@ const CourseInfoPanel: React.FC<{ course: Course; userRole: UserRole }> = ({ cou
                         </div>
                     </div>
                 </div>
+
+
             </div>
         </div>
     );

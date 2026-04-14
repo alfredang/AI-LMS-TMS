@@ -26,8 +26,7 @@ import {
 } from './quickbooks/createDirectApplicationInvoice';
 import { qboFetchInvoicePdf } from './services/qboInvoiceService';
 import { uploadInvoicePdfToDrive } from './services/invoiceDriveUpload';
-import { google } from 'googleapis';
-import { getGoogleCredentials } from './google-auth/googleAuth';
+import { addDaLearnerToCalendar } from './google-calendar/da-calendar-sync';
 
 export type AutoEnrolStatus =
   | 'pending'
@@ -186,119 +185,7 @@ async function callInvoiceSend(invoiceId: string, email: string): Promise<void> 
   }
 }
 
-// ---------------------------------------------------------------------------
-// Google Calendar: add learner email to matching event
-// ---------------------------------------------------------------------------
-
-function stripCalendarPrefixes(title: string): string {
-  return (title || '')
-    .replace(/^\s*\[?(WSQ|VIRTUAL|EXTERNAL|HYBRID)\]?\s*/gi, '')
-    .replace(/^\s*\[?(WSQ|VIRTUAL|EXTERNAL|HYBRID)\]?\s*/gi, '')
-    .trim();
-}
-
-async function addLearnerToCalendarEvent(
-  learnerEmail: string,
-  courseTitle: string,
-  courseStartDate: string | Date | null
-): Promise<boolean> {
-  if (!learnerEmail || !courseTitle) return false;
-
-  const tpRes = await pool.query(
-    `SELECT sync_google_calendar, google_calendar_url FROM training_provider LIMIT 1`
-  );
-  const tpRow = tpRes.rows[0];
-  if (!tpRow?.sync_google_calendar) {
-    console.log(`📅 [calendar-attendee] sync_google_calendar is off — skipping`);
-    return false;
-  }
-
-  const credentials = await getGoogleCredentials(pool);
-
-  let calendarId = 'primary';
-  const calUrl = tpRow.google_calendar_url || '';
-  if (calUrl) {
-    const cidMatch = calUrl.match(/[?&]cid=([^&]+)/);
-    if (cidMatch) {
-      try {
-        calendarId = Buffer.from(cidMatch[1], 'base64').toString('utf-8');
-      } catch {
-        calendarId = cidMatch[1];
-      }
-    } else if (calUrl.includes('@')) {
-      calendarId = calUrl;
-    }
-  }
-
-  const oauth2Client = new google.auth.OAuth2(
-    credentials.clientId,
-    credentials.clientSecret,
-    'https://developers.google.com/oauthplayground'
-  );
-  oauth2Client.setCredentials({ refresh_token: credentials.refreshToken });
-  const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
-
-  let startDateIso: string;
-  if (!courseStartDate) return false;
-  if (courseStartDate instanceof Date) {
-    startDateIso = courseStartDate.toISOString().slice(0, 10);
-  } else {
-    startDateIso = String(courseStartDate).slice(0, 10);
-  }
-
-  const dayBefore = new Date(startDateIso);
-  dayBefore.setDate(dayBefore.getDate() - 1);
-  const dayAfter = new Date(startDateIso);
-  dayAfter.setDate(dayAfter.getDate() + 2);
-
-  const eventsResponse = await calendar.events.list({
-    calendarId,
-    timeMin: dayBefore.toISOString(),
-    timeMax: dayAfter.toISOString(),
-    singleEvents: true,
-    maxResults: 200,
-  });
-
-  const events = eventsResponse.data.items || [];
-  const strippedCourseTitle = stripCalendarPrefixes(courseTitle).toLowerCase();
-
-  const matchedEvent = events.find(evt => {
-    const evtSummary = stripCalendarPrefixes(evt.summary || '').toLowerCase();
-    const titleMatch =
-      evtSummary.includes(strippedCourseTitle) ||
-      strippedCourseTitle.includes(evtSummary);
-    if (!titleMatch) return false;
-    const evtDate = (evt.start?.dateTime?.slice(0, 10) || evt.start?.date || '');
-    return evtDate === startDateIso;
-  });
-
-  if (!matchedEvent || !matchedEvent.id) {
-    console.log(`📅 [calendar-attendee] No matching event for "${courseTitle}" on ${startDateIso} — skipping`);
-    return false;
-  }
-
-  const existingAttendees = matchedEvent.attendees || [];
-  const emailLower = learnerEmail.trim().toLowerCase();
-  if (existingAttendees.some(a => (a.email || '').toLowerCase() === emailLower)) {
-    console.log(`📅 [calendar-attendee] ${learnerEmail} already in event "${matchedEvent.summary}" — no-op`);
-    return true;
-  }
-
-  await calendar.events.patch({
-    calendarId,
-    eventId: matchedEvent.id,
-    requestBody: {
-      attendees: [
-        ...existingAttendees,
-        { email: learnerEmail, responseStatus: 'needsAction' },
-      ],
-    },
-    sendUpdates: 'none',
-  });
-
-  console.log(`📅 [calendar-attendee] Added ${learnerEmail} to event "${matchedEvent.summary}" (${matchedEvent.id})`);
-  return true;
-}
+// Google Calendar logic moved to lib/google-calendar/da-calendar-sync.ts
 
 // ---------------------------------------------------------------------------
 // Single-row pipeline
@@ -460,8 +347,20 @@ export async function processDirectApplication(
   if (!autoInvoice && !options?.forceInvoice) {
     if (autoCalendar && row.trainee_email) {
       try {
-        const calAdded = await addLearnerToCalendarEvent(row.trainee_email, row.course_title || '', row.course_start_date);
-        if (calAdded) await updateRow(appId, { calendar_added: true });
+        // Resolve local course_run UUID for session lookup
+        const runRes = await pool.query(
+          `SELECT id FROM course_run WHERE (id::text = $1 OR course_run_id = $1) AND is_deleted IS NOT TRUE LIMIT 1`, 
+          [row.course_run_id]
+        );
+        const courseRunUuid = runRes.rows[0]?.id;
+
+        const calResults = await addDaLearnerToCalendar(
+          row.trainee_email, 
+          courseRunUuid || row.course_run_id, 
+          row.course_title || '', 
+          row.course_start_date
+        );
+        if (calResults.addedTo > 0) await updateRow(appId, { calendar_added: true });
       } catch (err) {
         console.warn(`⚠️  auto-enrol [${applicationId}] calendar attendee failed (non-fatal):`, err instanceof Error ? err.message : err);
       }
@@ -549,15 +448,23 @@ export async function processDirectApplication(
     }
   }
 
-  // Step 5: Add learner to calendar (non-fatal)
+  // Step 5: Add learner email to matching Google Calendar event (non-fatal)
   if (autoCalendar && row.trainee_email) {
     try {
-      const calAdded = await addLearnerToCalendarEvent(
+      // Resolve local course_run UUID for session lookup
+      const runRes = await pool.query(
+        `SELECT id FROM course_run WHERE (id::text = $1 OR course_run_id = $1) AND is_deleted IS NOT TRUE LIMIT 1`, 
+        [row.course_run_id]
+      );
+      const courseRunUuid = runRes.rows[0]?.id;
+
+      const calResults = await addDaLearnerToCalendar(
         row.trainee_email,
+        courseRunUuid || row.course_run_id,
         row.course_title || '',
         row.course_start_date
       );
-      if (calAdded) await updateRow(appId, { calendar_added: true });
+      if (calResults.addedTo > 0) await updateRow(appId, { calendar_added: true });
     } catch (err) {
       console.warn(
         `⚠️  auto-enrol [${applicationId}] calendar attendee failed (non-fatal):`,
@@ -618,4 +525,86 @@ export async function bulkProcessDirectApplications(
   console.log(`✅ auto-enrol batch complete: ${succeeded}/${results.length} succeeded`);
 
   return results;
+}
+
+// Automatically creates a public.enrollment record from a da_application
+export async function createNativeEnrolmentFromDA(record: any, pool: any) {
+  if (!record.course_run_id || !record.trainee_id || !record.trainee_email) return null;
+  try {
+    // Look up the course_id from course_run
+    // DA record.course_run_id often contains the external string ID (e.g. TGS-...) 
+    // rather than the internal UUID. We check both.
+    const runRes = await pool.query(
+      `SELECT id as internal_id, course_id FROM course_run 
+       WHERE (id::text = $1 OR course_run_id = $1) AND is_deleted IS NOT TRUE LIMIT 1`, 
+      [record.course_run_id]
+    );
+    
+    const internalRunId = runRes.rows[0]?.internal_id;
+    const courseId = runRes.rows[0]?.course_id;
+    if (!courseId || !internalRunId) {
+      console.warn(`⚠️ [DA] Could not find course_run for ID: ${record.course_run_id}`);
+      return null;
+    }
+
+    // We must ensure the user has an app_user and learner_profile
+    // Look up by email first
+    const existingUser = await pool.query(
+      `SELECT id FROM app_user WHERE LOWER(email) = LOWER($1) OR LOWER(secondary_email) = LOWER($1) LIMIT 1`,
+      [record.trainee_email]
+    );
+
+    let userId = existingUser.rows[0]?.id;
+
+    if (!userId) {
+      // Create user if they don't exist, using empty password hash, we can let them reset it
+      const newUser = await pool.query(
+        `INSERT INTO app_user (id, email, full_name, password_hash, account_status, created_at, updated_at)
+         VALUES (gen_random_uuid(), $1, $2, '', 'active', NOW(), NOW())
+         RETURNING id`,
+        [record.trainee_email.toLowerCase(), record.trainee_name || '']
+      );
+      userId = newUser.rows[0].id;
+      
+      await pool.query(`INSERT INTO user_role_map (user_id, role) VALUES ($1, 'Learner') ON CONFLICT DO NOTHING`, [userId]);
+      await pool.query(`INSERT INTO learner_profile (user_id, nric, tel) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`, 
+        [userId, record.trainee_id, record.trainee_phone || '']
+      );
+    }
+
+    const { rows } = await pool.query(
+      `INSERT INTO enrollment (
+          id, user_id, course_id, course_run_id, progress_percent, payment_status, 
+          assessment_status, enrolment_status, enrolment_date, email, nric, created_at, updated_at
+       )
+       VALUES (gen_random_uuid(), $1, $2, $3, 0, 'Unpaid', 'Pending', 'Confirmed', CURRENT_DATE, $4, $5, NOW(), NOW())
+       ON CONFLICT DO NOTHING
+       RETURNING id`,
+      [
+        userId,
+        courseId,
+        internalRunId,
+        record.trainee_email,
+        record.trainee_id
+      ]
+    );
+
+    const enrolmentId = rows[0]?.id;
+
+    // Update the DA record to link it and show success
+    if (record.application_id) {
+      await pool.query(
+        `UPDATE da_application 
+         SET enrolment_status = 'Confirmed',
+             enrolment_id = $1
+         WHERE application_id = $2`,
+        [enrolmentId || null, record.application_id]
+      );
+    }
+
+    return enrolmentId || true;
+  } catch (err) {
+    console.error(`❌ createNativeEnrolmentFromDA failed:`, err);
+    return null;
+  }
 }

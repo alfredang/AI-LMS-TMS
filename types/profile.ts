@@ -266,6 +266,7 @@ export interface TrainingProviderProfile extends BaseProfile {
     googleClientSecret?: string;
     googleRefreshToken?: string;
     googleSlidesTemplateId?: string;
+    googleServiceAccountJson?: string;
     trainerProfileImageUrl?: string;
     certificateFolderUrl?: string;
     masterListUrl?: string;

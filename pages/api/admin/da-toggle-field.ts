@@ -39,11 +39,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     const dbValue = value ? trueValue : falseValue;
-    await pool.query(
-      `UPDATE da_application SET ${column} = $1, updated_at = NOW() WHERE id = $2`,
-      [dbValue, id]
-    );
-    console.log(`✅ [da-toggle-field] ${field} (${column}) = ${dbValue} for ${id}`);
+    
+    if (field === 'enrol') {
+        // For enrolment toggles, we must update both status and id
+        const newStatus = value ? 'Confirmed' : null;
+        // If enabling, default to 'MANUAL' if no ID. If disabling, clear it.
+        await pool.query(
+          `UPDATE da_application 
+           SET enrolment_status = $1, 
+               enrolment_id = CASE WHEN $2::boolean THEN COALESCE(enrolment_id, 'MANUAL') ELSE NULL END,
+               updated_at = NOW() 
+           WHERE id = $3`,
+          [newStatus, value, id]
+        );
+        console.log(`✅ [da-toggle-field] enrol -> status=${newStatus}, value=${value} for ${id}`);
+    } else {
+        await pool.query(
+          `UPDATE da_application SET ${column} = $1, updated_at = NOW() WHERE id = $2`,
+          [dbValue, id]
+        );
+        console.log(`✅ [da-toggle-field] ${field} (${column}) = ${dbValue} for ${id}`);
+    }
+    
     return res.status(200).json({ success: true });
   } catch (err) {
     console.error('❌ da-toggle-field error:', err);

@@ -80,7 +80,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
                 // Check if folder is empty
                 const filesResponse = await drive.files.list({
-                    q: \`'\${sessionFolderId}' in parents and trashed = false\`,
+                    q: `'${sessionFolderId}' in parents and trashed = false`,
                     fields: 'files(id, name)',
                     spaces: 'drive',
                 });

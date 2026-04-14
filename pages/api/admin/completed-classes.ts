@@ -89,6 +89,8 @@ export default async function handler(
     const limitNum = parseInt(limit as string);
     const offset = pageNum * limitNum;
 
+    const tpgNameExpr = `cr.tpg_assigned_trainer_name`;
+
     // Build WHERE conditions for filtering completed classes
     let whereConditions = ['cr.end_date <= CURRENT_DATE'];
     let paramCounter = 1;
@@ -96,35 +98,42 @@ export default async function handler(
 
     if (search) {
       whereConditions.push(`(
-        LOWER(c.title) LIKE LOWER($${paramCounter}) OR 
-        LOWER(c.course_code) LIKE LOWER($${paramCounter}) OR 
-        LOWER(cr.course_run_id) LIKE LOWER($${paramCounter}) OR
-        LOWER(au.full_name) LIKE LOWER($${paramCounter})
+        c.title ILIKE $${paramCounter} OR 
+        c.course_code ILIKE $${paramCounter} OR 
+        cr.course_run_id ILIKE $${paramCounter} OR
+        COALESCE(${tpgNameExpr}, '') ILIKE $${paramCounter} OR
+        c.trainers_list ILIKE $${paramCounter} OR
+        EXISTS (
+          SELECT 1 FROM course_run_trainer crt 
+          WHERE crt.course_run_id = cr.id AND crt.trainer_name ILIKE $${paramCounter}
+        ) OR cr.assigned_trainer_name ILIKE $${paramCounter}
       )`);
       queryParams.push(`%${search}%`);
       paramCounter++;
     }
 
     if (courseTitle) {
-      whereConditions.push(`LOWER(c.title) LIKE LOWER($${paramCounter})`);
+      whereConditions.push(`c.title ILIKE $${paramCounter}`);
       queryParams.push(`%${courseTitle}%`);
       paramCounter++;
     }
 
     if (courseCode) {
-      whereConditions.push(`LOWER(c.course_code) LIKE LOWER($${paramCounter})`);
+      whereConditions.push(`c.course_code ILIKE $${paramCounter}`);
       queryParams.push(`%${courseCode}%`);
       paramCounter++;
     }
 
     if (courseRunId) {
-      whereConditions.push(`LOWER(cr.course_run_id) LIKE LOWER($${paramCounter})`);
+      whereConditions.push(`cr.course_run_id ILIKE $${paramCounter}`);
       queryParams.push(`%${courseRunId}%`);
       paramCounter++;
     }
 
     if (trainer) {
       whereConditions.push(`(
+        COALESCE(${tpgNameExpr}, '') ILIKE $${paramCounter} OR
+        c.trainers_list ILIKE $${paramCounter} OR
         EXISTS (
           SELECT 1 FROM course_run_trainer crt 
           WHERE crt.course_run_id = cr.id AND crt.trainer_name ILIKE $${paramCounter}
@@ -141,28 +150,35 @@ export default async function handler(
       paramCounter++;
     }
 
-    const parseDDMMYYYY = (d: string) => { const p = d.split(/[\/\-]/); return `${p[2]}-${p[1]}-${p[0]}`; };
+    const parseDDMMYYYY = (d: string) => {
+      const p = d.split(/[/-]/);
+      return `${p[2]}-${p[1]}-${p[0]}`;
+    };
+
     const isValidDate = (d: any) => {
-      if (typeof d !== 'string' || !/^\d{2}[\/\-]\d{2}[\/\-]\d{4}$/.test(d)) return false;
-      const iso = parseDDMMYYYY(d);
-      const parsed = new Date(iso);
-      return !isNaN(parsed.getTime()) && parsed.toISOString().startsWith(iso);
+      if (typeof d !== 'string' || !/^\d{2}[/-]\d{2}[/-]\d{4}$/.test(d)) return false;
+      const p = d.split(/[/-]/);
+      const day = parseInt(p[0], 10);
+      const month = parseInt(p[1], 10);
+      const year = parseInt(p[2], 10);
+      const date = new Date(year, month - 1, day);
+      return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day;
     };
 
     if (isValidDate(startDateFrom)) {
-      whereConditions.push(`cr.start_date >= $${paramCounter}`);
+      whereConditions.push(`cr.start_date::date >= $${paramCounter}`);
       queryParams.push(parseDDMMYYYY(startDateFrom as string));
       paramCounter++;
     }
 
     if (isValidDate(endDateUntil)) {
-      whereConditions.push(`cr.end_date <= $${paramCounter}`);
+      whereConditions.push(`cr.end_date::date <= $${paramCounter}`);
       queryParams.push(parseDDMMYYYY(endDateUntil as string));
       paramCounter++;
     }
 
     const classType = req.query.classType;
-    if (classType === 'Physical' || classType === 'Virtual' || classType === 'Hybrid') {
+    if (classType === 'Physical' || classType === 'Virtual' || classType === 'Hybrid' || classType === 'External') {
       whereConditions.push(`COALESCE(cr.class_type, 'Physical') = $${paramCounter}`);
       queryParams.push(classType);
       paramCounter++;

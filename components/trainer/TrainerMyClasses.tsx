@@ -157,7 +157,7 @@ export const ClassCard: React.FC<ClassCardProps> = ({ course, onSelect }) => {
           </div>
           <div className="flex justify-between items-center">
             <span className="text-on-surface-secondary">Class Type</span>
-            <span className={`px-2 py-0.5 inline-flex text-[10px] leading-4 font-semibold rounded-full ${(course as any).classType === 'Virtual' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300' : (course as any).classType === 'Hybrid' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300' : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'}`}>{(course as any).classType || 'Physical'}</span>
+            <span className={`px-2 py-0.5 inline-flex text-[10px] leading-4 font-semibold rounded-full ${(course as any).classType === 'Virtual' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300' : (course as any).classType === 'Hybrid' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300' : (course as any).classType === 'External' ? 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/40 dark:text-cyan-300' : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'}`}>{(course as any).classType || 'Physical'}</span>
           </div>
         </div>
 

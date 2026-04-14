@@ -3,7 +3,7 @@ import pool from '../../../lib/db';
 import { searchEnrolment } from '../../../lib/ssg/services/enrolment-service';
 import { inferIdType } from '../../../lib/utils/id-type';
 import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdentifiers';
-import { bulkProcessDirectApplications } from '../../../lib/autoEnrolDirectApplications';
+import { bulkProcessDirectApplications, createNativeEnrolmentFromDA, addLearnerToCalendarEvent } from '../../../lib/autoEnrolDirectApplications';
 
 // Increase body size limit to 50MB (default is 1MB, which causes HTTP 413 for large Excel uploads)
 export const config = {
@@ -48,6 +48,9 @@ const columnMapping: Record<string, string> = {
     'Course Run End Date': 'course_end_date',
     'Highest Qualification': 'highest_qualification',
     'Highest Relevant Certification': 'highest_relevant_certification',
+    'Enrol Status': 'enrolment_status',
+    'Enrolment Status': 'enrolment_status',
+    'Status': 'application_status',
 };
 
 // Parse date from various formats
@@ -408,13 +411,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                         skillsfuture_credit,
                         skillsfuture_credit_claim_id,
                         application_status,
+                        enrolment_status,
                         course_title,
                         course_reference_number,
                         course_start_date,
                         course_end_date,
                         highest_qualification,
                         highest_relevant_certification
-                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25)
+                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26)
                     RETURNING *`,
                     [
                         record.trainee_id_type || null,
@@ -436,6 +440,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                         record.skillsfuture_credit || null,
                         record.skillsfuture_credit_claim_id || null,
                         record.application_status || null,
+                        record.enrolment_status || null,
                         record.course_title || null,
                         record.course_reference_number || null,
                         record.course_start_date || null,
@@ -495,6 +500,45 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         } catch (err) {
             // Never fail the upload response because of auto-enrol setup errors.
             console.error('⚠️  auto-enrol kickoff setup failed (non-fatal):', err);
+        }
+
+        // ---- OUR NEW DIRECT APPLICATION AUTOMATIONS ----
+        // Fire-and-forget sync for Calendar and Native Enrolments
+        try {
+            const allProcessedRecords = [...insertedRecords, ...updatedRecords];
+            
+            // Background async processing to avoid blocking UI response
+            setImmediate(async () => {
+                for (const record of allProcessedRecords) {
+                    // Automation 1: Google Calendar Sync (triggers if Status/application_status is Confirmed)
+                    const isAppConfirmed = String(record.application_status || '').toLowerCase() === 'confirmed';
+                    if (isAppConfirmed && record.trainee_email) {
+                        try {
+                            await addLearnerToCalendarEvent(record.trainee_email, record.course_title, record.course_start_date);
+                            console.log(`📅 Automatically synced learner ${record.trainee_email} to Google Calendar event`);
+                            
+                            // Tick the CAL column in DA view
+                            await pool.query(
+                                `UPDATE da_application SET calendar_added = true WHERE application_id = $1`,
+                                [record.application_id]
+                            );
+                        } catch (calErr) {
+                            console.error('Failed to sync to Calendar:', calErr);
+                        }
+                    }
+
+                    // Automation 2: Native Enrolment Creation (triggers if Enrol Status/enrolment_status is Confirmed)
+                    const isEnrolConfirmed = String(record.enrolment_status || '').toLowerCase() === 'confirmed';
+                    const wasEnrolAlreadyConfirmed = String(record.old_enrolment_status || '').toLowerCase() === 'confirmed';
+
+                    if (isEnrolConfirmed && (!wasEnrolAlreadyConfirmed || !record.old_enrolment_status)) {
+                        await createNativeEnrolmentFromDA(record, pool);
+                        console.log(`✅ Automatically created native enrolment for DA ${record.application_id}`);
+                    }
+                }
+            });
+        } catch (autoErr) {
+            console.error('Error triggering new DA automations', autoErr);
         }
 
         return res.status(200).json({

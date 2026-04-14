@@ -175,7 +175,8 @@ export async function sendNextTrainerInvitationForCourseRun(opts: {
         c.course_type,
         c.training_hours,
         c.assessment_hours,
-        c.trainers_list
+        c.trainers_list,
+        cr.invitation_paused
       FROM course_run cr
       JOIN course c ON c.id = cr.course_id
       WHERE cr.id = $1
@@ -191,6 +192,17 @@ export async function sendNextTrainerInvitationForCourseRun(opts: {
     };
   }
 
+  // Block both scheduled and cascade invitations when paused
+  if (classRow.invitation_paused) {
+    return {
+      status: 'skipped_paused',
+      courseRunUuid,
+      courseRunId: classRow.course_run_id,
+      courseTitle: classRow.course_title,
+      message: 'Invitations paused for this course run',
+    };
+  }
+
   const baseResult: Partial<TrainerInvitationSendResult> = {
     courseRunUuid,
     courseRunId: classRow.course_run_id,
@@ -200,7 +212,7 @@ export async function sendNextTrainerInvitationForCourseRun(opts: {
   // 2. Build skip-sets: locally-assigned, declined, pending
   const [localResult, declinedResult, pendingResult] = await Promise.all([
     pool.query(`SELECT trainer_name FROM course_run_trainer WHERE course_run_id = $1`, [courseRunUuid]),
-    pool.query(`SELECT trainer_name FROM trainer_invitation WHERE course_run_id = $1 AND status = 'declined'`, [courseRunUuid]),
+    pool.query(`SELECT trainer_name FROM trainer_invitation WHERE course_run_id = $1 AND status IN ('declined', 'blocked')`, [courseRunUuid]),
     pool.query(`SELECT trainer_name FROM trainer_invitation WHERE course_run_id = $1 AND status = 'pending'`, [courseRunUuid]),
   ]);
   const localSet = new Set<string>(localResult.rows.map((r: any) => normalizeTrainerName(r.trainer_name)));

@@ -23,6 +23,7 @@ import { OptionalSelector } from '../../../lib/ssg/models/course-runs';
 import { HttpClient, HTTPRequestBuilder, HttpMethod } from '../../../lib/ssg/utils/http-utils';
 import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdentifiers';
 import { syncEnrolmentToDB } from '../../../lib/ssg/utils/sync-enrolment-to-db';
+import { syncAllDaApplicantsToCalendar } from '../../../lib/google-calendar/da-calendar-sync';
 import type {
   UpsertFromSsgRequest,
   UpsertFromSsgResponse,
@@ -128,6 +129,12 @@ async function fetchAndDiffCourseRun(
   const qrRaw: string = String(ssgRun.qrCodeLink || ssgRun.digitalClassroomLink || '');
   const digitalAttendId = qrRaw ? (qrRaw.split('/').pop() || null) : null;
 
+  // Extract TPG-assigned trainer from SSG response (#76).
+  // linkCourseRunTrainer is an array — take the first trainer's name + email.
+  const ssgTrainers: Array<{ name?: string; email?: string }> = ssgRun.linkCourseRunTrainer || [];
+  const tpgTrainerName = ssgTrainers[0]?.name?.trim() || null;
+  const tpgTrainerEmail = ssgTrainers[0]?.email?.trim() || null;
+
   // Look up local course_run + course by course_run_id
   const local = await client.query(
     `SELECT cr.id AS course_run_uuid,
@@ -135,6 +142,8 @@ async function fetchAndDiffCourseRun(
             cr.start_date::text  AS start_date,
             cr.end_date::text    AS end_date,
             cr.digital_attendance_id,
+            cr.tpg_assigned_trainer_name,
+            cr.tpg_assigned_trainer_email,
             c.title AS course_title,
             c.course_code
        FROM course_run cr
@@ -165,14 +174,18 @@ async function fetchAndDiffCourseRun(
     pushDiff('course_run.start_date', localRow.start_date,           startDate);
     pushDiff('course_run.end_date',   localRow.end_date,             endDate);
     pushDiff('course_run.digital_attendance_id', localRow.digital_attendance_id, digitalAttendId);
+    pushDiff('course_run.tpg_assigned_trainer_name',  localRow.tpg_assigned_trainer_name,  tpgTrainerName);
+    pushDiff('course_run.tpg_assigned_trainer_email', localRow.tpg_assigned_trainer_email, tpgTrainerEmail);
   } else {
     // New course run will be inserted (if apply)
     pushDiff('course_run.course_run_id', null, courseRunId);
-    if (courseCode)     pushDiff('course.course_code',    null, courseCode);
-    if (courseTitle)    pushDiff('course.title',          null, courseTitle);
-    if (startDate)      pushDiff('course_run.start_date', null, startDate);
-    if (endDate)        pushDiff('course_run.end_date',   null, endDate);
-    if (digitalAttendId) pushDiff('course_run.digital_attendance_id', null, digitalAttendId);
+    if (courseCode)       pushDiff('course.course_code',    null, courseCode);
+    if (courseTitle)      pushDiff('course.title',          null, courseTitle);
+    if (startDate)        pushDiff('course_run.start_date', null, startDate);
+    if (endDate)          pushDiff('course_run.end_date',   null, endDate);
+    if (digitalAttendId)  pushDiff('course_run.digital_attendance_id', null, digitalAttendId);
+    if (tpgTrainerName)   pushDiff('course_run.tpg_assigned_trainer_name',  null, tpgTrainerName);
+    if (tpgTrainerEmail)  pushDiff('course_run.tpg_assigned_trainer_email', null, tpgTrainerEmail);
   }
 
   result.fieldsChanged = diffs;
@@ -251,9 +264,11 @@ async function fetchAndDiffCourseRun(
     );
   }
 
-  // Upsert course_run — WHITELIST: only start_date, end_date, digital_attendance_id.
-  // Trainer columns AND mode_of_learning explicitly excluded:
-  //   - Trainer columns: sidesteps #60 ghost-write + #39 JSONB dependency
+  // Upsert course_run — WHITELIST: start_date, end_date, digital_attendance_id,
+  // tpg_assigned_trainer_name, tpg_assigned_trainer_email.
+  // TPG trainer columns added for #76 (read from SSG linkCourseRunTrainer).
+  // Local trainer columns (assigned_trainer_*) AND mode_of_learning still excluded:
+  //   - Local trainer columns: sidesteps #60 ghost-write + #39 JSONB dependency
   //   - mode_of_learning: SSG's code doesn't map cleanly to local enum
   //     (admin manages manually in Edit Class)
   const newRunUuid = hasLocal ? localRow.course_run_uuid : crypto.randomUUID();
@@ -261,15 +276,19 @@ async function fetchAndDiffCourseRun(
     `INSERT INTO course_run (
        id, course_id, course_run_id, class_status,
        start_date, end_date,
-       digital_attendance_id, created_at, updated_at
-     ) VALUES ($1, $2, $3, 'Pending', $4, $5, $6, NOW(), NOW())
+       digital_attendance_id,
+       tpg_assigned_trainer_name, tpg_assigned_trainer_email,
+       created_at, updated_at
+     ) VALUES ($1, $2, $3, 'Pending', $4, $5, $6, $7, $8, NOW(), NOW())
      ON CONFLICT (course_id, course_run_id) DO UPDATE SET
-       start_date            = COALESCE(EXCLUDED.start_date,            course_run.start_date),
-       end_date              = COALESCE(EXCLUDED.end_date,              course_run.end_date),
-       digital_attendance_id = COALESCE(EXCLUDED.digital_attendance_id, course_run.digital_attendance_id),
-       updated_at            = NOW()
+       start_date                 = COALESCE(EXCLUDED.start_date,            course_run.start_date),
+       end_date                   = COALESCE(EXCLUDED.end_date,              course_run.end_date),
+       digital_attendance_id      = COALESCE(EXCLUDED.digital_attendance_id, course_run.digital_attendance_id),
+       tpg_assigned_trainer_name  = COALESCE(EXCLUDED.tpg_assigned_trainer_name,  course_run.tpg_assigned_trainer_name),
+       tpg_assigned_trainer_email = COALESCE(EXCLUDED.tpg_assigned_trainer_email, course_run.tpg_assigned_trainer_email),
+       updated_at                 = NOW()
      RETURNING id, (xmax = 0) AS was_insert`,
-    [newRunUuid, courseId, courseRunId, startDate, endDate, digitalAttendId]
+    [newRunUuid, courseId, courseRunId, startDate, endDate, digitalAttendId, tpgTrainerName, tpgTrainerEmail]
   );
 
   const row = upsertResult.rows[0];
@@ -1033,6 +1052,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         // All 3 steps succeeded.
         if (mode === 'apply') {
           await client.query('COMMIT');
+
+          // Trigger DA applicant calendar sync (non-blocking background task)
+          // Ensures any confirmed DA applicants are added to these new sessions.
+          if (courseRunStep.courseRunUuid) {
+            setImmediate(() => {
+              syncAllDaApplicantsToCalendar(courseRunStep.courseRunUuid!).catch(err => {
+                console.error('❌ [upsert-from-ssg] background DA calendar sync failed:', err);
+              });
+            });
+          }
         } else {
           // Preview should never have any writes, but roll back defensively.
           await client.query('ROLLBACK');

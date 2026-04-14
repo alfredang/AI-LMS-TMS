@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Icon, IconName } from '../ui/Icon';
@@ -406,6 +406,13 @@ export const ViewDirectApplicationView: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [currentPage, setCurrentPage] = useState(1);
+    // Track current page in a ref to avoid closure bugs in window event listeners
+    const currentPageRef = useRef(currentPage);
+
+    useEffect(() => {
+        currentPageRef.current = currentPage;
+    }, [currentPage]);
+
     const itemsPerPage = 20;
 
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -767,7 +774,20 @@ export const ViewDirectApplicationView: React.FC = () => {
         finally { setIsLoading(false); }
     };
 
-    React.useEffect(() => { fetchApplications(); }, []);
+    // Auto-fetch on component mount
+    React.useEffect(() => {
+        fetchApplications();
+
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'visible') {
+                console.log('👀 Tab focused, refreshing direct applications for page:', currentPageRef.current);
+                fetchApplications();
+            }
+        };
+
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+    }, []);
     React.useEffect(() => { setCurrentPage(1); }, [searchQuery]);
     React.useEffect(() => { setCurrentPage(1); }, [sortColumn, sortDirection]);
 

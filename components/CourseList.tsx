@@ -239,7 +239,10 @@ const ManagementCourseList: React.FC = () => {
                 course.title.toLowerCase().includes(searchLower) ||
                 course.courseCode?.toLowerCase().includes(searchLower) ||
                 course.tscTitle?.toLowerCase().includes(searchLower) ||
-                course.tscCode?.toLowerCase().includes(searchLower);
+                course.tscCode?.toLowerCase().includes(searchLower) ||
+                (course.courseRunId && String(course.courseRunId).includes(searchLower)) ||
+                (course.courseRunCode && course.courseRunCode.toLowerCase().includes(searchLower)) ||
+                ((course as any).courseRunIds?.some((id: string) => String(id).includes(searchLower)));
 
             const matchesCourseCode = filterCourseCode === '' ||
                 course.courseCode?.toLowerCase().includes(filterCourseCode.toLowerCase());
@@ -413,6 +416,7 @@ const ManagementCourseList: React.FC = () => {
                                 <span className={`px-2 py-0.5 rounded text-xs font-semibold ${
                                     course.classType === 'Virtual' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300'
                                     : course.classType === 'Hybrid' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300'
+                                    : course.classType === 'External' ? 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/40 dark:text-cyan-300'
                                     : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
                                 }`}>
                                     {course.classType || 'Physical'}
@@ -933,6 +937,7 @@ const ManagementCourseList: React.FC = () => {
                                 <option value="Physical">Physical</option>
                                 <option value="Virtual">Virtual</option>
                                 <option value="Hybrid">Hybrid</option>
+                                <option value="External">External</option>
                             </select>
                         </div>
                         {role === UserRole.Trainer && (
@@ -1150,6 +1155,7 @@ const LearnerCourseCard: React.FC<{ course: any }> = ({ course }) => {
                             <span className={`font-semibold px-2 py-0.5 rounded ${
                                 course.classType === 'Virtual' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300'
                                 : course.classType === 'Hybrid' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300'
+                                : course.classType === 'External' ? 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/40 dark:text-cyan-300'
                                 : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
                             }`}>{course.classType || 'Physical'}</span>
                         </div>

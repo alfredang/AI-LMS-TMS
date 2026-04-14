@@ -1,13 +1,10 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { google } from 'googleapis';
-import path from 'path';
-import fs from 'fs';
-import os from 'os';
-import { execSync } from 'child_process';
 import PizZip from 'pizzip';
 import { Readable } from 'stream';
 import { getDriveClient } from '../../../../lib/google-drive/drive-helpers';
 import pool from '../../../../lib/db';
+import { getServiceAccountAuth } from '../../../../lib/google-auth/googleAuth';
 
 export const config = {
   maxDuration: 300,
@@ -16,15 +13,7 @@ export const config = {
 
 const TEMPLATE_ID = '1KbvgGpNsirzmCvLZOuMv7SY5IWxX0XfTSbnNF_pjZYY';
 const DRIVE_FOLDER_ID = '1cqA3G1c4Nez-9XKpUO2h31rBhkZhAfw3';
-const SOFFICE_PATH = 'C:\\Program Files\\LibreOffice\\program\\soffice.exe';
 
-function getAuth() {
-  const keyFile = path.join(process.cwd(), 'service-account.json');
-  return new google.auth.GoogleAuth({
-    keyFile,
-    scopes: ['https://www.googleapis.com/auth/drive.readonly'],
-  });
-}
 
 interface Grant {
   funding_scheme: string;
@@ -166,7 +155,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     // Download template once
-    const auth = getAuth();
+    const auth = await getServiceAccountAuth(pool, ['https://www.googleapis.com/auth/drive.readonly']);
     const serviceDrive = google.drive({ version: 'v3', auth });
     const exportRes = await serviceDrive.files.export(
       { fileId: TEMPLATE_ID, mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' },
@@ -182,7 +171,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     let generated = 0;
     let errored = 0;
-    const tmpDir = os.tmpdir();
+
 
     for (const enr of enrollments) {
       try {
@@ -257,23 +246,39 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }
         const filledDocx = zip.generate({ type: 'nodebuffer', compression: 'DEFLATE' });
 
-        const timestamp = Date.now();
-        const docxPath = path.join(tmpDir, `sync_${timestamp}_${generated}.docx`);
-        const pdfPath = path.join(tmpDir, `sync_${timestamp}_${generated}.pdf`);
-
-        fs.writeFileSync(docxPath, filledDocx);
-        execSync(`"${SOFFICE_PATH}" --headless --convert-to pdf --outdir "${tmpDir}" "${docxPath}"`, { timeout: 30000 });
-
-        const pdfBuffer = fs.readFileSync(pdfPath);
-        try { fs.unlinkSync(docxPath); } catch (_) {}
-        try { fs.unlinkSync(pdfPath); } catch (_) {}
-
         // Build invoice number: PRFM_{course_code}_{learner_name}
         const safeCourseCode = (enr.course_code || order || 'invoice').replace(/[^a-zA-Z0-9-]/g, '_');
         const safeName = enr.full_name.replace(/[^a-zA-Z0-9]/g, '_');
         const invoiceNumber = `PRFM_${safeCourseCode}_${safeName}`;
 
-        // Upload to Drive
+        // Upload filled docx to Drive as a Google Doc (Drive converts it automatically)
+        const tempDocRes = await uploadDrive.files.create({
+          requestBody: {
+            name: `_temp_${invoiceNumber}`,
+            mimeType: 'application/vnd.google-apps.document', // convert to Google Doc on upload
+          },
+          media: {
+            mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            body: Readable.from(filledDocx),
+          },
+          fields: 'id',
+        });
+
+        const tempDocId = tempDocRes.data.id!;
+
+        // Export the Google Doc as PDF
+        const pdfExport = await uploadDrive.files.export(
+          { fileId: tempDocId, mimeType: 'application/pdf' },
+          { responseType: 'arraybuffer' }
+        );
+        const pdfBuffer = Buffer.from(pdfExport.data as ArrayBuffer);
+
+        // Delete the temp Google Doc
+        await uploadDrive.files.delete({ fileId: tempDocId }).catch((e: any) => {
+          console.warn(`[generate-proforma] Failed to delete temp doc ${tempDocId}: ${e?.message}`);
+        });
+
+        // Upload final PDF to the proforma folder
         const uploadRes = await uploadDrive.files.create({
           requestBody: {
             name: `${invoiceNumber}.pdf`,
@@ -312,11 +317,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           res.write(`data: ${JSON.stringify({ type: 'progress', current: generated + errored, total: enrollments.length, generated, errors: errored, name: enr.full_name })}\n\n`);
           (res as any).flush?.();
         }
-      } catch (err) {
+      } catch (err: any) {
         errored++;
+        const errorMessage = err?.message || String(err);
         console.error(`[generate-proforma] Failed for ${enr.enrolment_id || enr.enrollment_id}:`, err);
         if (isStream) {
-          res.write(`data: ${JSON.stringify({ type: 'progress', current: generated + errored, total: enrollments.length, generated, errors: errored, name: enr.full_name })}\n\n`);
+          res.write(`data: ${JSON.stringify({ type: 'progress', current: generated + errored, total: enrollments.length, generated, errors: errored, name: enr.full_name, errorDetail: errorMessage })}\n\n`);
           (res as any).flush?.();
         }
       }

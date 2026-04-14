@@ -127,11 +127,15 @@ export async function runAutomation(): Promise<AutomationSummary> {
 
   // Eligible course runs: start_date in the lookahead window, no locally
   // assigned trainer, and at least one confirmed enrolment.
+  // Ensure invitation_paused column exists (idempotent)
+  await pool.query(`ALTER TABLE course_run ADD COLUMN IF NOT EXISTS invitation_paused BOOLEAN DEFAULT false`);
+
   const eligibleRes = await pool.query(
     `SELECT cr.id
      FROM course_run cr
      WHERE cr.start_date >= CURRENT_DATE
        AND cr.start_date <= CURRENT_DATE + ($1::int * INTERVAL '1 day')
+       AND COALESCE(cr.invitation_paused, false) = false
        AND NOT EXISTS (
          SELECT 1 FROM course_run_trainer crt WHERE crt.course_run_id = cr.id
        )

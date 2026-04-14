@@ -327,6 +327,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
              tp.pro_forma_template_url, tp.ssg_self_sign_cert_file, tp.ssg_private_key_file,
              tp.ssg_app1_cert_file, tp.ssg_app1_private_key_file,
              tp.ssg_app3_cert_file, tp.ssg_app3_private_key_file,
+             tp.google_service_account_json,
              au.profile_picture_url
       FROM app_user au
       LEFT JOIN training_provider tp ON tp.id = $2
@@ -387,7 +388,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       { fileKey: 'ssgApp1CertFile', dbField: 'ssg_app1_cert_file', oldFile: oldFiles.ssg_app1_cert_file },
       { fileKey: 'ssgApp1PrivateKeyFile', dbField: 'ssg_app1_private_key_file', oldFile: oldFiles.ssg_app1_private_key_file },
       { fileKey: 'ssgApp3CertFile', dbField: 'ssg_app3_cert_file', oldFile: oldFiles.ssg_app3_cert_file },
-      { fileKey: 'ssgApp3PrivateKeyFile', dbField: 'ssg_app3_private_key_file', oldFile: oldFiles.ssg_app3_private_key_file }
+      { fileKey: 'ssgApp3PrivateKeyFile', dbField: 'ssg_app3_private_key_file', oldFile: oldFiles.ssg_app3_private_key_file },
+      { fileKey: 'serviceAccountKeyFile', dbField: 'google_service_account_json', oldFile: oldFiles.google_service_account_json }
     ];
 
     for (const template of templateFields) {
@@ -558,7 +560,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             auto_enrol_direct_applications = $50,
             auto_generate_qb_invoice = $51,
             sanitise_after_months = $52,
-            auto_add_learner_to_calendar = $53
+            auto_add_learner_to_calendar = $53,
+            google_service_account_json = COALESCE($54, google_service_account_json)
         WHERE id = $36
         RETURNING *
       `;
@@ -616,7 +619,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         profileData.adminSettings?.autoEnrolDirectApplications || false,
         profileData.adminSettings?.autoGenerateQbInvoice || false,
         Math.max(1, Math.min(60, parseInt(String(profileData.securitySettings?.sanitiseAfterMonths ?? 6), 10) || 6)),
-        profileData.adminSettings?.autoAddLearnerToCalendar || false
+        profileData.adminSettings?.autoAddLearnerToCalendar || false,
+        filePaths.google_service_account_json || null
       ];
 
       console.log('🔍 File upload parameters being sent to database:', {
