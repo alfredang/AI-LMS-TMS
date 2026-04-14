@@ -261,7 +261,9 @@ const CompletedClasses: React.FC = () => {
     setCourseCode('');
     setCourseRunId('');
     setSelectedTrainer('');
+    setSelectedClassStatus('all');
     setSelectedClassType('all');
+    setSelectedCourseType('all');
     setStartDateFrom('');
     setEndDateUntil('');
     setCurrentPage(0);
