@@ -595,7 +595,7 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                 brochureLink: editingCourse.brochureLink,
                 approvedTrainers: normalizedApprovedTrainers,
                 numOfTrainers: normalizedApprovedTrainers.length,
-                trainersList: normalizedApprovedTrainers.join(', '),
+                trainersList: normalizedApprovedTrainers.join(' | '),
                 trainersEmailList: editingCourse.trainersEmailList || '',
             };
         });
@@ -611,8 +611,10 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
     // Uses a merged map: existing positional emails + fresh availableTrainers lookup.
     // This preserves emails during reorder/remove even before availableTrainers loads.
     const buildTrainersEmailList = (newNames: string[]): string => {
-        const existingNames = (course.trainersList || '').split(',').map(s => s.trim());
-        const existingEmails = (course.trainersEmailList || '').split(',').map(s => s.trim());
+        const tl = (course.trainersList || '').trim();
+        const existingNames = (tl.includes('|') ? tl.split('|') : tl.split(',')).map(s => s.trim());
+        const el = (course.trainersEmailList || '').trim();
+        const existingEmails = (el.includes('|') ? el.split('|') : el.split(',')).map(s => s.trim());
         const nameToEmail = new Map<string, string>();
         // Layer 1: existing positional pairs (preserves data during reorder/remove)
         existingNames.forEach((name, i) => {
@@ -622,7 +624,7 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
         availableTrainers.forEach(t => {
             if (t.trainer_name) nameToEmail.set(t.trainer_name, t.email || '');
         });
-        return newNames.map(name => nameToEmail.get(name) || '').join(', ');
+        return newNames.map(name => nameToEmail.get(name) || '').join(' | ');
     };
 
     const selectedApprovedTrainers = (course.approvedTrainers || []).map(normalizeApprovedTrainerName).filter(Boolean);
@@ -639,7 +641,7 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
             ...prev,
             approvedTrainers: updated,
             numOfTrainers: updated.length,
-            trainersList: updated.join(', '),
+            trainersList: updated.join(' | '),
             trainersEmailList: buildTrainersEmailList(updated),
         }));
         setTrainerSearch('');
@@ -652,7 +654,7 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
             ...prev,
             approvedTrainers: updated,
             numOfTrainers: updated.length,
-            trainersList: updated.join(', '),
+            trainersList: updated.join(' | '),
             trainersEmailList: buildTrainersEmailList(updated),
         }));
     };
@@ -672,7 +674,7 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
             ...prev,
             approvedTrainers: updated,
             numOfTrainers: updated.length,
-            trainersList: updated.join(', '),
+            trainersList: updated.join(' | '),
             trainersEmailList: buildTrainersEmailList(updated),
         }));
     };
@@ -1054,7 +1056,7 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                 assessmentRecordLink: course.assessmentRecordLink || null,
                 assessmentSummaryRecordUrl: course.assessmentSummaryRecordUrl || '',
                 numOfTrainers: selectedApprovedTrainers.length,
-                trainersList: selectedApprovedTrainers.join(', '),
+                trainersList: selectedApprovedTrainers.join(' | '),
                 // Sync assessmentMethods links to legacy columns so view mode always shows latest
                 writtenAssessmentLink: (course.assessmentMethods?.writtenAssessment?.enabled && course.assessmentMethods.writtenAssessment.link)
                     ? course.assessmentMethods.writtenAssessment.link
