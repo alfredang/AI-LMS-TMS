@@ -172,18 +172,6 @@ function hasSsgError(parsed: any): string | null {
   return null;
 }
 
-async function callInvoiceSend(invoiceId: string, email: string): Promise<void> {
-  const baseUrl = process.env.QBO_PROXY_BASE_URL || process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
-  const resp = await fetch(`${baseUrl}/api/quickbooks/proxy`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action: 'send', entity: 'invoice', id: invoiceId, sendTo: email }),
-  });
-  const data = await resp.json().catch(() => null);
-  if (!resp.ok || !data?.success) {
-    throw new Error(data?.error || `QB send returned ${resp.status}`);
-  }
-}
 
 // Google Calendar logic moved to lib/google-calendar/da-calendar-sync.ts
 
@@ -434,18 +422,6 @@ export async function processDirectApplication(
       error: err instanceof Error ? err.message : String(err),
       failedStep: 'invoice',
     };
-  }
-
-  // Step 4: Send invoice email (non-fatal)
-  if (row.trainee_email && invoiceId) {
-    try {
-      await callInvoiceSend(invoiceId, row.trainee_email);
-    } catch (err) {
-      console.warn(
-        `⚠️  auto-enrol [${applicationId}] invoice send failed (non-fatal):`,
-        err instanceof Error ? err.message : err
-      );
-    }
   }
 
   // Step 5: Add learner email to matching Google Calendar event (non-fatal)
