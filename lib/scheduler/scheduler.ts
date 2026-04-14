@@ -192,6 +192,13 @@ async function seedDefaults() {
             api_endpoint: '/api/external/sync-ssg-enrolments',
         },
         {
+            id: 'auto_add_today_enrolments_to_calendar',
+            name: 'Auto Add Today\'s Enrolments to Calendar',
+            description: 'Pulls today\'s (SGT) enrolments from SSG, and for each Confirmed enrolment whose class has a matching Google Calendar event but whose learner email is not yet an attendee, adds the email to the event. Runs every 3 hours.',
+            cron_expression: '0 */3 * * *', // Every 3 hours
+            api_endpoint: '/api/external/auto-add-today-enrolments-to-calendar',
+        },
+        {
             id: 'auto_sanitise_data',
             name: 'Auto Sanitise Old PII',
             description: 'Weekly sweep that redacts NRIC and phone digits on rows older than the retention window configured in Company Settings → Security Setting → Auto Sanitise Data. Honours the master toggle (off → skipped). Default Sunday 02:00 SGT.',
@@ -278,6 +285,10 @@ function getDirectHandler(taskId: string): TaskHandler | undefined {
         });
         directHandlers.set('sync_ssg_enrolments', async () => {
             const { runAutomation } = await import('../../pages/api/external/sync-ssg-enrolments');
+            return runAutomation();
+        });
+        directHandlers.set('auto_add_today_enrolments_to_calendar', async () => {
+            const { runAutomation } = await import('../../pages/api/external/auto-add-today-enrolments-to-calendar');
             return runAutomation();
         });
         directHandlers.set('auto_sanitise_data', async () => {
