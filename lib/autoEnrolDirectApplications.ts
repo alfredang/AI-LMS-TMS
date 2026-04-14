@@ -24,6 +24,8 @@ import {
   createDirectApplicationInvoice,
   type DaApplicationForInvoice,
 } from './quickbooks/createDirectApplicationInvoice';
+import { qboFetchInvoicePdf } from './services/qboInvoiceService';
+import { uploadInvoicePdfToDrive } from './services/invoiceDriveUpload';
 import { google } from 'googleapis';
 import { getGoogleCredentials } from './google-auth/googleAuth';
 
@@ -511,6 +513,16 @@ export async function processDirectApplication(
       qb_customer_ref: created.customerRef,
       auto_enrol_status: 'invoiced',
     });
+
+    // Upload invoice PDF to Google Drive (non-fatal)
+    try {
+      const pdf = await qboFetchInvoicePdf(undefined, created.invoiceId);
+      const driveFile = await uploadInvoicePdfToDrive({ pdf, fileName: `${created.docNumber}.pdf` });
+      await updateRow(appId, { invoice_drive_file_id: driveFile.fileId });
+      console.log(`[DA invoice] PDF uploaded to Drive: ${created.docNumber}.pdf (${driveFile.fileId})`);
+    } catch (driveErr) {
+      console.warn(`⚠️  [DA invoice] Drive upload failed (non-fatal):`, driveErr instanceof Error ? driveErr.message : driveErr);
+    }
   } catch (err) {
     await markFailed(appId, 'invoice', err);
     return {

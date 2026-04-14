@@ -31,4 +31,11 @@ pool.on('error', (err) => {
   console.error('❌ PostgreSQL connection error:', err);
 });
 
+// Auto-migrations: safe to run on every startup (all use IF NOT EXISTS)
+pool.query(`
+  ALTER TABLE da_application ADD COLUMN IF NOT EXISTS invoice_drive_file_id text;
+`).catch((err) => {
+  console.warn('⚠️ Auto-migration warning:', err.message);
+});
+
 export default pool;

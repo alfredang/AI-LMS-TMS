@@ -119,6 +119,12 @@ export async function createDirectApplicationInvoice(
   // Net payable = (fee - subsidy - credit) + gst
   const netAmount = Number((fullFee - subsidy - credit + gst).toFixed(2));
 
+  if (!fullFee || fullFee <= 0) {
+    throw new Error(
+      `full_course_fee is not set (fee=${fullFee}). Cannot generate invoice for this application.`
+    );
+  }
+
   if (!Number.isFinite(netAmount) || netAmount < 0) {
     throw new Error(
       `computed net amount ${netAmount} is not payable (fee=${fullFee}, gst=${gst}, subsidy=${subsidy}, credit=${credit})`
@@ -236,6 +242,7 @@ export async function createDirectApplicationInvoice(
 
   const invoiceBody = {
     CustomerRef: { value: customerRef },
+    BillEmail: { Address: app.trainee_email },
     TxnDate: txnDate,
     DueDate: dueDate,
     GlobalTaxCalculation: 'TaxExcluded',

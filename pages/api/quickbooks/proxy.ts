@@ -160,6 +160,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         if (!id) return res.status(400).json({ success: false, error: 'id is required for send.' });
         url = `${baseUrl}/${entity}/${id}/send${sendTo ? `?sendTo=${encodeURIComponent(sendTo)}` : ''}${sendTo ? '&' : '?'}minorversion=${MINOR_VERSION}`;
         method = 'POST';
+        headers['Content-Type'] = 'application/octet-stream';
+        fetchBody = '';
         break;
       }
       case 'delete': {

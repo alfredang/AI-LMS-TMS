@@ -56,6 +56,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 da.auto_enrol_status,
                 da.auto_enrol_error,
                 da.calendar_added,
+                da.invoice_drive_file_id,
                 da.created_at,
                 da.updated_at,
                 sg.bl_grant_id,
