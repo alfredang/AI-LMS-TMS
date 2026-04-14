@@ -1,0 +1,240 @@
+import { google } from 'googleapis';
+import pool from '../db';
+import { getGoogleCredentials } from '../google-auth/googleAuth';
+
+/**
+ * Strip common prefixes from a calendar event summary so we can match it
+ * against the course title from the DA application. Known prefixes:
+ * "WSQ ", "VIRTUAL ", "EXTERNAL ", "[WSQ]", "[VIRTUAL]", "[EXTERNAL]",
+ * and combinations thereof.
+ */
+function stripPrefixes(title: string): string {
+  if (!title) return '';
+  return title
+    // 1. Remove "Day X" prefixes (e.g. "Day 2 - ", "Day 1:", "Day 3 ")
+    .replace(/^\s*Day\s*\d+[\s-:]*/gi, '')
+    // 2. Remove common SSG/Methodology tags (e.g. "[WSQ]", "VIRTUAL - ")
+    .replace(/^\s*\[?(WSQ|VIRTUAL|EXTERNAL|HYBRID|E-LEARNING)\]?[\s-]*/gi, '')
+    // 3. Remove any remaining leading/trailing punctuation/dashes
+    .replace(/^[\s-:]+|[\s-:]+$/g, '')
+    // 4. Normalise remaining string: lowercase and replace non-alphanumeric with spaces
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * Normalise database date strings (YYYYMMDD or YYYY-MM-DD) to standard YYYY-MM-DD.
+ */
+function formatDbDate(dateStr: string): string {
+  if (!dateStr) return '';
+  const clean = String(dateStr).trim();
+  if (/^\d{8}$/.test(clean)) {
+    return `${clean.slice(0, 4)}-${clean.slice(4, 6)}-${clean.slice(6, 8)}`;
+  }
+  return clean.slice(0, 10);
+}
+
+/**
+ * Adds a learner to all relevant Google Calendar events for a course run.
+ * 
+ * Logic:
+ * 1. Fetches all active sessions from `course_session` for the courseRunUuid.
+ * 2. For each session date, finds a matching event in Google Calendar by title and date.
+ * 3. Fallback: If no sessions exist, it uses the fallbackStartDate (or course_run.start_date) 
+ *    to find a single matching event.
+ * 
+ * matching is fuzzy on title but exact on date.
+ */
+export async function addDaLearnerToCalendar(
+  learnerEmail: string,
+  courseRunUuid: string,
+  courseTitle: string,
+  fallbackStartDate?: string | Date | null
+): Promise<{ totalSessions: number; addedTo: number }> {
+  const result = { totalSessions: 0, addedTo: 0 };
+  if (!learnerEmail || !courseTitle) return result;
+
+  try {
+    // 1. Load Calendar Config
+    const tpRes = await pool.query(
+      `SELECT sync_google_calendar, google_calendar_url FROM training_provider LIMIT 1`
+    );
+    if (!tpRes.rows[0]?.sync_google_calendar) return result;
+
+    const credentials = await getGoogleCredentials(pool);
+    const oauth2Client = new google.auth.OAuth2(
+      credentials.clientId,
+      credentials.clientSecret,
+      'https://developers.google.com/oauthplayground'
+    );
+    oauth2Client.setCredentials({ refresh_token: credentials.refreshToken });
+    const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
+
+    let calendarId = 'primary';
+    const calUrl = tpRes.rows[0].google_calendar_url || '';
+    if (calUrl) {
+      const cidMatch = calUrl.match(/[?&]cid=([^&]+)/);
+      if (cidMatch) {
+        try {
+          calendarId = Buffer.from(cidMatch[1], 'base64').toString('utf-8');
+        } catch {
+          calendarId = cidMatch[1];
+        }
+      } else if (calUrl.includes('@')) {
+        calendarId = calUrl;
+      }
+    }
+
+    // 2. Resolve Course Run dates
+    // Fetch all active (not deleted) session dates for this course run
+    const sessionRes = await pool.query(
+      `SELECT start_date::text as start_date 
+       FROM course_session 
+       WHERE course_run_id = $1 AND (deleted IS NOT TRUE)
+       ORDER BY start_date ASC`,
+      [courseRunUuid]
+    );
+
+    let datesToSync: string[] = [];
+    if (sessionRes.rows.length > 0) {
+      datesToSync = sessionRes.rows.map(r => formatDbDate(r.start_date));
+    } else {
+      // Fallback logic
+      if (fallbackStartDate) {
+        datesToSync = [
+          fallbackStartDate instanceof Date
+            ? fallbackStartDate.toISOString().slice(0, 10)
+            : formatDbDate(String(fallbackStartDate))
+        ];
+      } else {
+        const crRes = await pool.query(
+          `SELECT start_date::text FROM course_run WHERE id = $1`,
+          [courseRunUuid]
+        );
+        if (crRes.rows[0]?.start_date) {
+          datesToSync = [formatDbDate(crRes.rows[0].start_date)];
+        }
+      }
+    }
+
+    // Filter out empty/invalid and dedup to unique dates
+    datesToSync = Array.from(new Set(datesToSync.filter(Boolean)));
+
+    if (datesToSync.length === 0) return result;
+    result.totalSessions = datesToSync.length;
+
+    // 3. Fetch calendar events in bulk for the required range
+    const sortedDates = [...datesToSync].sort();
+    // Use a wider 3-day buffer and explicit times to avoid timezone drift
+    const minD = new Date(sortedDates[0] + 'T00:00:00Z');
+    minD.setDate(minD.getDate() - 3); 
+    const maxD = new Date(sortedDates[sortedDates.length - 1] + 'T23:59:59Z');
+    maxD.setDate(maxD.getDate() + 3);
+
+    const eventsResponse = await calendar.events.list({
+      calendarId,
+      timeMin: minD.toISOString(),
+      timeMax: maxD.toISOString(),
+      singleEvents: true,
+      maxResults: 2500,
+    });
+
+    const allEvents = eventsResponse.data.items || [];
+    const strippedCourseTitle = stripPrefixes(courseTitle).toLowerCase();
+    const learnerEmailLower = learnerEmail.trim().toLowerCase();
+
+    for (const targetDate of datesToSync) {
+      // Find ALL matching events for this specific date (handles multi-sessions per day)
+      const matchedEvents = allEvents.filter(evt => {
+        const evtTitleNormalized = stripPrefixes(evt.summary || '');
+        // Search for the cleaned course title within the cleaned event title (most robust)
+        const titleMatch = evtTitleNormalized.includes(strippedCourseTitle) || strippedCourseTitle.includes(evtTitleNormalized);
+        if (!titleMatch) return false;
+
+        const evtDate = (evt.start?.dateTime?.slice(0, 10) || evt.start?.date || '');
+        return evtDate === targetDate;
+      });
+
+      if (matchedEvents.length > 0) {
+        for (const matchedEvent of matchedEvents) {
+          if (!matchedEvent.id) continue;
+          const existingAttendees = matchedEvent.attendees || [];
+          if (!existingAttendees.some(a => (a.email || '').toLowerCase() === learnerEmailLower)) {
+            try {
+              await calendar.events.patch({
+                calendarId,
+                eventId: matchedEvent.id,
+                requestBody: {
+                  attendees: [
+                    ...existingAttendees,
+                    { email: learnerEmail, responseStatus: 'needsAction' },
+                  ],
+                },
+                sendUpdates: 'none',
+              });
+              result.addedTo++;
+            } catch (patchErr) {
+              console.error(`❌ [da-calendar-sync] Patch failed for ${learnerEmail} on ${targetDate}:`, patchErr);
+            }
+          } else {
+            // Already present
+            result.addedTo++;
+          }
+        }
+      } else {
+        console.log(`ℹ️ [da-calendar-sync] No matching calendar event found for "${courseTitle}" on ${targetDate}`);
+      }
+    }
+
+    return result;
+  } catch (error) {
+    console.error(`❌ [da-calendar-sync] Fatal error:`, error);
+    return result;
+  }
+}
+
+/**
+ * Syncs all confirmed DA applicants for a specific course run.
+ * Triggered when a course's sessions are updated or during auto-enrollment.
+ */
+export async function syncAllDaApplicantsToCalendar(courseRunUuid: string): Promise<void> {
+  try {
+    // 1. Resolve internal course_run_id (external string) to link with da_application
+    const runRes = await pool.query(
+      `SELECT course_run_id, (SELECT title FROM course WHERE id = course_run.course_id) as course_title 
+       FROM course_run WHERE id = $1`,
+      [courseRunUuid]
+    );
+    if (runRes.rows.length === 0) return;
+
+    const ssgRunId = runRes.rows[0].course_run_id;
+    const courseTitle = runRes.rows[0].course_title || '';
+
+    // 2. Find confirmed DA apps
+    // We check both internal and external IDs in da_application.course_run_id
+    const daRes = await pool.query(
+      `SELECT id, trainee_email, course_title 
+       FROM da_application 
+       WHERE (course_run_id = $1 OR course_run_id = $2)
+         AND enrolment_status = 'Confirmed'
+         AND trainee_email IS NOT NULL`,
+      [courseRunUuid, ssgRunId]
+    );
+
+    if (daRes.rows.length === 0) return;
+
+    console.log(`🔄 [da-calendar-sync] Syncing ${daRes.rows.length} DA applicants for course run ${courseRunUuid}`);
+
+    for (const da of daRes.rows) {
+      await addDaLearnerToCalendar(
+        da.trainee_email,
+        courseRunUuid,
+        da.course_title || courseTitle
+      );
+    }
+  } catch (err) {
+    console.error(`❌ [da-calendar-sync] Batch sync failed:`, err);
+  }
+}

@@ -93,55 +93,30 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const events = eventsResponse.data.items || [];
 
     const results: { id: string; success: boolean; error?: string }[] = [];
+    const { addDaLearnerToCalendar } = await import('../../../lib/google-calendar/da-calendar-sync');
 
     for (const row of rows.rows) {
       if (!row.trainee_email || !row.course_title) {
         results.push({ id: row.id, success: false, error: 'Missing email or course title' });
         continue;
       }
-      if (row.calendar_added) {
-        results.push({ id: row.id, success: true }); // already done
-        continue;
-      }
-
-      const startDateIso = row.course_start_date ? new Date(row.course_start_date).toISOString().slice(0, 10) : '';
-      const strippedTitle = stripPrefixes(row.course_title).toLowerCase();
-
-      const matchedEvent = events.find(evt => {
-        const evtTitle = stripPrefixes(evt.summary || '').toLowerCase();
-        const titleMatch = evtTitle.includes(strippedTitle) || strippedTitle.includes(evtTitle);
-        if (!titleMatch) return false;
-        const evtDate = evt.start?.dateTime?.slice(0, 10) || evt.start?.date || '';
-        return evtDate === startDateIso;
-      });
-
-      if (!matchedEvent || !matchedEvent.id) {
-        results.push({ id: row.id, success: false, error: `No matching calendar event for "${row.course_title}" on ${startDateIso}` });
-        continue;
-      }
-
-      const existingAttendees = matchedEvent.attendees || [];
-      const emailLower = row.trainee_email.trim().toLowerCase();
-      if (existingAttendees.some(a => (a.email || '').toLowerCase() === emailLower)) {
-        // Already an attendee
-        await pool.query(`UPDATE da_application SET calendar_added = true, updated_at = NOW() WHERE id = $1`, [row.id]);
-        results.push({ id: row.id, success: true });
-        continue;
-      }
-
+      
       try {
-        await calendar.events.patch({
-          calendarId,
-          eventId: matchedEvent.id,
-          requestBody: {
-            attendees: [...existingAttendees, { email: row.trainee_email, responseStatus: 'needsAction' }],
-          },
-          sendUpdates: 'none',
-        });
-        await pool.query(`UPDATE da_application SET calendar_added = true, updated_at = NOW() WHERE id = $1`, [row.id]);
-        results.push({ id: row.id, success: true });
+        const syncResult = await addDaLearnerToCalendar(
+          row.trainee_email,
+          row.id, // This is the internal DA application ID, the service will resolve the run UUID
+          row.course_title,
+          row.course_start_date
+        );
+
+        if (syncResult.addedTo > 0 || syncResult.totalSessions > 0) {
+          await pool.query(`UPDATE da_application SET calendar_added = true, updated_at = NOW() WHERE id = $1`, [row.id]);
+          results.push({ id: row.id, success: true });
+        } else {
+          results.push({ id: row.id, success: false, error: `No matching calendar events found for "${row.course_title}"` });
+        }
       } catch (err: any) {
-        results.push({ id: row.id, success: false, error: err.message || 'Calendar API error' });
+        results.push({ id: row.id, success: false, error: err.message || 'Calendar sync error' });
       }
     }
 

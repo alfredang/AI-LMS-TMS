@@ -26,6 +26,7 @@ import {
 } from './quickbooks/createDirectApplicationInvoice';
 import { google } from 'googleapis';
 import { getGoogleCredentials } from './google-auth/googleAuth';
+import { addDaLearnerToCalendar } from './google-calendar/da-calendar-sync';
 
 export type AutoEnrolStatus =
   | 'pending'
@@ -186,157 +187,7 @@ async function callInvoiceSend(invoiceId: string, email: string): Promise<void> 
   }
 }
 
-// ---------------------------------------------------------------------------
-// Google Calendar: add learner email to matching event
-// ---------------------------------------------------------------------------
-
-/**
- * Strip common prefixes from a calendar event summary so we can match it
- * against the course title from the DA application. Known prefixes:
- * "WSQ ", "VIRTUAL ", "EXTERNAL ", "[WSQ]", "[VIRTUAL]", "[EXTERNAL]",
- * and combinations thereof.
- */
-function stripCalendarPrefixes(title: string): string {
-  return (title || '')
-    .replace(/^\s*\[?(WSQ|VIRTUAL|EXTERNAL|HYBRID)\]?\s*/gi, '')
-    .replace(/^\s*\[?(WSQ|VIRTUAL|EXTERNAL|HYBRID)\]?\s*/gi, '') // second pass for double-prefix
-    .trim();
-}
-
-/**
- * Attempt to add a learner's email to the Google Calendar event that
- * matches the DA's course title + course start date.
- *
- * Matching rules:
- *   1. Strip WSQ/VIRTUAL/EXTERNAL/HYBRID prefixes from both sides
- *   2. Case-insensitive substring match (event title contains course title
- *      or vice-versa)
- *   3. Event start date (YYYY-MM-DD) matches course_start_date
- *   4. If the learner's email is already in the attendee list → no-op
- *
- * This step is always non-fatal. If calendar is not configured, credentials
- * are missing, or no matching event is found, we log a warning and move on.
- */
-export async function addLearnerToCalendarEvent(
-  learnerEmail: string,
-  courseTitle: string,
-  courseStartDate: string | Date | null
-): Promise<boolean> {
-  if (!learnerEmail || !courseTitle) return false;
-
-  // Load calendar config
-  const tpRes = await pool.query(
-    `SELECT sync_google_calendar, google_calendar_url FROM training_provider LIMIT 1`
-  );
-  const tpRow = tpRes.rows[0];
-  if (!tpRow?.sync_google_calendar) {
-    console.log(`📅 [calendar-attendee] sync_google_calendar is off — skipping`);
-    return false;
-  }
-
-  const credentials = await getGoogleCredentials(pool);
-
-  // Extract calendar ID
-  let calendarId = 'primary';
-  const calUrl = tpRow.google_calendar_url || '';
-  if (calUrl) {
-    const cidMatch = calUrl.match(/[?&]cid=([^&]+)/);
-    if (cidMatch) {
-      try {
-        calendarId = Buffer.from(cidMatch[1], 'base64').toString('utf-8');
-      } catch {
-        calendarId = cidMatch[1];
-      }
-    } else if (calUrl.includes('@')) {
-      calendarId = calUrl;
-    }
-  }
-
-  const oauth2Client = new google.auth.OAuth2(
-    credentials.clientId,
-    credentials.clientSecret,
-    'https://developers.google.com/oauthplayground'
-  );
-  oauth2Client.setCredentials({ refresh_token: credentials.refreshToken });
-  const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
-
-  // Normalise the course start date to YYYY-MM-DD natively using SGT
-  let startDateIso: string;
-  if (!courseStartDate) return false;
-  
-  if (courseStartDate instanceof Date) {
-    // Format safely in Asia/Singapore timezone (handling UTC zero-time drift)
-    const formatter = new Intl.DateTimeFormat('en-CA', {
-      timeZone: 'Asia/Singapore',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-    });
-    startDateIso = formatter.format(courseStartDate); 
-  } else {
-    startDateIso = String(courseStartDate).slice(0, 10);
-  }
-
-  // Fetch calendar events around the course start date (±1 day window)
-  const dayBefore = new Date(startDateIso);
-  dayBefore.setDate(dayBefore.getDate() - 1);
-  const dayAfter = new Date(startDateIso);
-  dayAfter.setDate(dayAfter.getDate() + 2);
-
-  const eventsResponse = await calendar.events.list({
-    calendarId,
-    timeMin: dayBefore.toISOString(),
-    timeMax: dayAfter.toISOString(),
-    singleEvents: true,
-    maxResults: 200,
-  });
-
-  const events = eventsResponse.data.items || [];
-  const strippedCourseTitle = stripCalendarPrefixes(courseTitle).toLowerCase();
-
-  // Find matching event: stripped title contains course title (or vice-versa) AND date matches
-  const matchedEvent = events.find(evt => {
-    const evtSummary = stripCalendarPrefixes(evt.summary || '').toLowerCase();
-    const titleMatch =
-      evtSummary.includes(strippedCourseTitle) ||
-      strippedCourseTitle.includes(evtSummary);
-    if (!titleMatch) return false;
-
-    // Check date match
-    const evtDate = (evt.start?.dateTime?.slice(0, 10) || evt.start?.date || '');
-    return evtDate === startDateIso;
-  });
-
-  if (!matchedEvent || !matchedEvent.id) {
-    console.log(`📅 [calendar-attendee] No matching event for "${courseTitle}" on ${startDateIso} — skipping`);
-    return false;
-  }
-
-  // Check if learner email is already an attendee
-  const existingAttendees = matchedEvent.attendees || [];
-  const emailLower = learnerEmail.trim().toLowerCase();
-  if (existingAttendees.some(a => (a.email || '').toLowerCase() === emailLower)) {
-    console.log(`📅 [calendar-attendee] ${learnerEmail} already in event "${matchedEvent.summary}" — no-op`);
-    return true; // already present counts as "added"
-  }
-
-  // Add the learner as a new attendee
-  await calendar.events.patch({
-    calendarId,
-    eventId: matchedEvent.id,
-    requestBody: {
-      attendees: [
-        ...existingAttendees,
-        { email: learnerEmail, responseStatus: 'needsAction' },
-      ],
-    },
-    // Don't send update notifications to all attendees for each individual add
-    sendUpdates: 'none',
-  });
-
-  console.log(`📅 [calendar-attendee] Added ${learnerEmail} to event "${matchedEvent.summary}" (${matchedEvent.id})`);
-  return true; // signal that the learner was added
-}
+// Google Calendar logic moved to lib/google-calendar/da-calendar-sync.ts
 
 // ---------------------------------------------------------------------------
 // Single-row pipeline
@@ -457,8 +308,20 @@ export async function processDirectApplication(
     // Add learner to calendar (gated by auto_add_learner_to_calendar toggle)
     if (autoCalendar && row.trainee_email) {
       try {
-        const calAdded = await addLearnerToCalendarEvent(row.trainee_email, row.course_title || '', row.course_start_date);
-        if (calAdded) await updateRow(appId, { calendar_added: true });
+        // Resolve local course_run UUID for session lookup
+        const runRes = await pool.query(
+          `SELECT id FROM course_run WHERE (id::text = $1 OR course_run_id = $1) AND is_deleted IS NOT TRUE LIMIT 1`, 
+          [row.course_run_id]
+        );
+        const courseRunUuid = runRes.rows[0]?.id;
+
+        const calResults = await addDaLearnerToCalendar(
+          row.trainee_email, 
+          courseRunUuid || row.course_run_id, 
+          row.course_title || '', 
+          row.course_start_date
+        );
+        if (calResults.addedTo > 0) await updateRow(appId, { calendar_added: true });
       } catch (err) {
         console.warn(`⚠️  auto-enrol [${applicationId}] calendar attendee failed (non-fatal):`, err instanceof Error ? err.message : err);
       }
@@ -524,17 +387,22 @@ export async function processDirectApplication(
   }
 
   // Step 5: Add learner email to matching Google Calendar event (non-fatal)
-  // Gated by the auto_add_learner_to_calendar toggle in Company Settings.
-  // Matches by course title (ignoring WSQ/VIRTUAL/EXTERNAL prefixes) + start date.
-  // If the learner is already an attendee, this is a no-op.
   if (autoCalendar && row.trainee_email) {
     try {
-      const calAdded = await addLearnerToCalendarEvent(
+      // Resolve local course_run UUID for session lookup
+      const runRes = await pool.query(
+        `SELECT id FROM course_run WHERE (id::text = $1 OR course_run_id = $1) AND is_deleted IS NOT TRUE LIMIT 1`, 
+        [row.course_run_id]
+      );
+      const courseRunUuid = runRes.rows[0]?.id;
+
+      const calResults = await addDaLearnerToCalendar(
         row.trainee_email,
+        courseRunUuid || row.course_run_id,
         row.course_title || '',
         row.course_start_date
       );
-      if (calAdded) await updateRow(appId, { calendar_added: true });
+      if (calResults.addedTo > 0) await updateRow(appId, { calendar_added: true });
     } catch (err) {
       console.warn(
         `⚠️  auto-enrol [${applicationId}] calendar attendee failed (non-fatal):`,
