@@ -281,6 +281,13 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
     showFilters = true,
     includeOngoing = false,
 }) => {
+    const {
+        setAdminPage,
+        setEditingCourseRun,
+        setSelectedCourseRunId,
+        setClassListCurrentPage,
+        setClassListReturnTo,
+    } = useLms();
     const [currentPage, setCurrentPage] = useState(0);
 
     // Track initial mount to prevent filter-reset effects from overriding the restored page
