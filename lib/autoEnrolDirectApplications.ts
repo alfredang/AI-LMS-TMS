@@ -308,7 +308,40 @@ export async function processDirectApplication(
   options?: { forceInvoice?: boolean }
 ): Promise<DaPipelineResult> {
   const rowRes = await pool.query(
-    `SELECT * FROM da_application WHERE id = $1`,
+    `SELECT da.*,
+            sg.bl_grant_id,
+            sg.bl_amount,
+            sg.other_grant_id,
+            sg.other_scheme_code,
+            sg.other_amount
+     FROM da_application da
+     LEFT JOIN (
+       SELECT
+         LOWER(TRIM(enrollment_id)) AS enrolment_key,
+         MAX(CASE WHEN UPPER(COALESCE(funding_scheme_code,'')) IN ('BL','BASELINE')
+                       OR UPPER(COALESCE(funding_scheme_code,'')) LIKE '%BASELINE%'
+                  THEN grant_id END) AS bl_grant_id,
+         MAX(CASE WHEN UPPER(COALESCE(funding_scheme_code,'')) IN ('BL','BASELINE')
+                       OR UPPER(COALESCE(funding_scheme_code,'')) LIKE '%BASELINE%'
+                  THEN CASE WHEN COALESCE(approved_grant_amount,0) > 0 THEN approved_grant_amount
+                            ELSE COALESCE(estimated_grant_amount,0) END END) AS bl_amount,
+         MAX(CASE WHEN UPPER(COALESCE(funding_scheme_code,'')) NOT IN ('BL','BASELINE')
+                       AND UPPER(COALESCE(funding_scheme_code,'')) NOT LIKE '%BASELINE%'
+                       AND funding_scheme_code IS NOT NULL
+                  THEN grant_id END) AS other_grant_id,
+         MAX(CASE WHEN UPPER(COALESCE(funding_scheme_code,'')) NOT IN ('BL','BASELINE')
+                       AND UPPER(COALESCE(funding_scheme_code,'')) NOT LIKE '%BASELINE%'
+                       AND funding_scheme_code IS NOT NULL
+                  THEN funding_scheme_code END) AS other_scheme_code,
+         MAX(CASE WHEN UPPER(COALESCE(funding_scheme_code,'')) NOT IN ('BL','BASELINE')
+                       AND UPPER(COALESCE(funding_scheme_code,'')) NOT LIKE '%BASELINE%'
+                       AND funding_scheme_code IS NOT NULL
+                  THEN CASE WHEN COALESCE(approved_grant_amount,0) > 0 THEN approved_grant_amount
+                            ELSE COALESCE(estimated_grant_amount,0) END END) AS other_amount
+       FROM ssg_grants
+       GROUP BY LOWER(TRIM(enrollment_id))
+     ) sg ON sg.enrolment_key = LOWER(TRIM(da.enrolment_id))
+     WHERE da.id = $1`,
     [appId]
   );
   const row = rowRes.rows[0];
@@ -464,6 +497,11 @@ export async function processDirectApplication(
       grant_id: grantId ?? null,
       application_id: row.application_id ?? null,
       enrolment_id: enrolmentReference ?? undefined,
+      bl_grant_id: row.bl_grant_id ?? null,
+      bl_amount: row.bl_amount ?? null,
+      other_grant_id: row.other_grant_id ?? null,
+      other_scheme_code: row.other_scheme_code ?? null,
+      other_amount: row.other_amount ?? null,
     };
     const created = await createDirectApplicationInvoice(forInvoice);
     invoiceId = created.invoiceId;

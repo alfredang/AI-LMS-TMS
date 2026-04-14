@@ -416,6 +416,7 @@ export const ViewDirectApplicationView: React.FC = () => {
     const [isAddingToCal, setIsAddingToCal] = useState(false);
     const [isGeneratingInv, setIsGeneratingInv] = useState(false);
     const [isSyncingEnrol, setIsSyncingEnrol] = useState(false);
+    const [isSyncingGrants, setIsSyncingGrants] = useState(false);
     const [isSyncingCal, setIsSyncingCal] = useState(false);
     const [isSyncingInv, setIsSyncingInv] = useState(false);
     const [showPii, setShowPii] = useState(false);
@@ -487,16 +488,27 @@ export const ViewDirectApplicationView: React.FC = () => {
             const succeeded = (json.results || []).filter((r: any) => r.success);
             const failed = (json.results || []).filter((r: any) => !r.success);
             const invoiceMap = new Map(succeeded.map((r: any) => [r.id, r.invoiceId]));
-            setApplications(prev => prev.map(a => invoiceMap.has(a.id) ? { ...a, invoice_id: invoiceMap.get(a.id) } : a));
             setInvProgressSucceeded(succeeded.length);
             setInvProgressFailed(failed.length);
             setInvProgressDone(true);
+            fetchApplications();
         } catch {
             setInvProgressFailed(ids.length);
             setInvProgressDone(true);
         } finally {
             setIsGeneratingInv(false);
         }
+    };
+
+    const handleSyncGrants = async () => {
+        setIsSyncingGrants(true);
+        try {
+            const res = await fetch('/api/admin/da-sync-grants', { method: 'POST' });
+            const json = await res.json();
+            if (json.success) { alert(`Grants synced: ${json.totalGrantsUpserted} grant(s) across ${json.runsProcessed} course run(s).`); fetchApplications(); }
+            else alert(`Sync failed: ${json.error}`);
+        } catch { alert('Sync grants failed.'); }
+        finally { setIsSyncingGrants(false); }
     };
 
     const handleSyncEnrolment = async () => {
@@ -755,6 +767,9 @@ export const ViewDirectApplicationView: React.FC = () => {
                             <button onClick={handleSyncEnrolment} disabled={isSyncingEnrol} className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-lg border border-green-500 text-green-700 dark:text-green-300 hover:bg-green-50 disabled:opacity-50 disabled:cursor-not-allowed">
                                 {isSyncingEnrol ? 'Syncing...' : 'Sync Enrolment'}
                             </button>
+                            <button onClick={handleSyncGrants} disabled={isSyncingGrants} className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-lg border border-purple-500 text-purple-700 dark:text-purple-300 hover:bg-purple-50 disabled:opacity-50 disabled:cursor-not-allowed">
+                                {isSyncingGrants ? 'Syncing...' : 'Sync Grants'}
+                            </button>
                             <button onClick={handleSyncCalendar} disabled={isSyncingCal} className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-lg border border-indigo-500 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 disabled:opacity-50 disabled:cursor-not-allowed">
                                 {isSyncingCal ? 'Syncing...' : 'Sync Calendar'}
                             </button>
@@ -871,17 +886,21 @@ export const ViewDirectApplicationView: React.FC = () => {
                                             <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">Sponsor</th>
                                             <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">Fee</th>
                                             <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">GST</th>
-                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">Grant Amt</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">Grant ID (BL)</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">Amt (BL)</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">Grant ID</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">Scheme</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">Amount</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">TG Amt</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">SF Claim ID</th>
                                             <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">SF Cr</th>
                                             <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">Payable</th>
-                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">SF Claim ID</th>
                                             <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">Qualification</th>
                                             <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">Certification</th>
                                             <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">Status</th>
                                             <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">Cancel By</th>
                                             <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">Enrol Status</th>
                                             <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">Enrol ID</th>
-                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">Grant ID</th>
                                             <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">Invoice #</th>
                                         </tr>
                                     </thead>
@@ -907,10 +926,15 @@ export const ViewDirectApplicationView: React.FC = () => {
                                                 <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.sponsorship_type || '—'}</td>
                                                 <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.full_course_fee != null ? `$${parseFloat(app.full_course_fee || 0).toFixed(2)}` : '—'}</td>
                                                 <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.gst != null ? `$${parseFloat(app.gst || 0).toFixed(2)}` : '—'}</td>
-                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.skillsfuture_subsidy != null ? `$${parseFloat(app.skillsfuture_subsidy || 0).toFixed(2)}` : '—'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300 font-mono">{app.bl_grant_id || '—'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.bl_amount != null ? `$${parseFloat(app.bl_amount).toFixed(2)}` : '—'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300 font-mono">{app.other_grant_id || '—'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.other_scheme_code || '—'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.other_amount != null ? `$${parseFloat(app.other_amount).toFixed(2)}` : '—'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.tg_amount != null ? `$${parseFloat(app.tg_amount).toFixed(2)}` : '—'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.skillsfuture_credit_claim_id || '—'}</td>
                                                 <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.skillsfuture_credit != null ? `$${parseFloat(app.skillsfuture_credit || 0).toFixed(2)}` : '—'}</td>
                                                 <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">${parseFloat(app.payable_fee || 0).toFixed(2)}</td>
-                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.skillsfuture_credit_claim_id || '—'}</td>
                                                 <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.highest_qualification || '—'}</td>
                                                 <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.highest_relevant_certification || '—'}</td>
                                                 <td className="px-2 py-1.5 whitespace-nowrap"><span className={`px-1.5 py-0.5 text-[10px] font-bold rounded-full ${getStatusColor(app.application_status || 'Pending')}`}>{app.application_status || 'Pending'}</span></td>
@@ -921,7 +945,6 @@ export const ViewDirectApplicationView: React.FC = () => {
                                                     ) : <span className="text-gray-400">—</span>}
                                                 </td>
                                                 <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300 font-mono">{app.enrolment_id || '—'}</td>
-                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300 font-mono">{app.grant_id || '—'}</td>
                                                 <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300 font-mono">{app.invoice_id || '—'}</td>
                                             </tr>
                                         ))}

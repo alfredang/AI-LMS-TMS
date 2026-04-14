@@ -57,9 +57,43 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 da.auto_enrol_error,
                 da.calendar_added,
                 da.created_at,
-                da.updated_at
+                da.updated_at,
+                sg.bl_grant_id,
+                sg.bl_amount,
+                sg.other_grant_id,
+                sg.other_scheme_code,
+                sg.other_amount,
+                sg.tg_amount
             FROM da_application da
             LEFT JOIN course_run cr ON da.course_run_id = cr.course_run_id
+            LEFT JOIN (
+                SELECT
+                    LOWER(TRIM(enrollment_id)) AS enrolment_key,
+                    MAX(CASE WHEN UPPER(COALESCE(funding_scheme_code,'')) IN ('BL','BASELINE')
+                             OR  UPPER(COALESCE(funding_scheme_code,'')) LIKE '%BASELINE%'
+                        THEN grant_id END) AS bl_grant_id,
+                    MAX(CASE WHEN UPPER(COALESCE(funding_scheme_code,'')) IN ('BL','BASELINE')
+                             OR  UPPER(COALESCE(funding_scheme_code,'')) LIKE '%BASELINE%'
+                        THEN CASE WHEN COALESCE(approved_grant_amount,0) > 0 THEN approved_grant_amount
+                                  ELSE COALESCE(estimated_grant_amount,0) END END) AS bl_amount,
+                    MAX(CASE WHEN UPPER(COALESCE(funding_scheme_code,'')) NOT IN ('BL','BASELINE')
+                             AND UPPER(COALESCE(funding_scheme_code,'')) NOT LIKE '%BASELINE%'
+                             AND funding_scheme_code IS NOT NULL
+                        THEN grant_id END) AS other_grant_id,
+                    MAX(CASE WHEN UPPER(COALESCE(funding_scheme_code,'')) NOT IN ('BL','BASELINE')
+                             AND UPPER(COALESCE(funding_scheme_code,'')) NOT LIKE '%BASELINE%'
+                             AND funding_scheme_code IS NOT NULL
+                        THEN funding_scheme_code END) AS other_scheme_code,
+                    MAX(CASE WHEN UPPER(COALESCE(funding_scheme_code,'')) NOT IN ('BL','BASELINE')
+                             AND UPPER(COALESCE(funding_scheme_code,'')) NOT LIKE '%BASELINE%'
+                             AND funding_scheme_code IS NOT NULL
+                        THEN CASE WHEN COALESCE(approved_grant_amount,0) > 0 THEN approved_grant_amount
+                                  ELSE COALESCE(estimated_grant_amount,0) END END) AS other_amount,
+                    SUM(CASE WHEN COALESCE(approved_grant_amount,0) > 0 THEN approved_grant_amount
+                             ELSE COALESCE(estimated_grant_amount,0) END) AS tg_amount
+                FROM ssg_grants
+                GROUP BY LOWER(TRIM(enrollment_id))
+            ) sg ON sg.enrolment_key = LOWER(TRIM(da.enrolment_id))
             WHERE COALESCE(cr.start_date, da.course_start_date) >= CURRENT_DATE
             ORDER BY COALESCE(cr.start_date, da.course_start_date) ASC NULLS LAST
         `);

@@ -22,6 +22,12 @@ export interface DaApplicationForInvoice {
   grant_id: string | null;
   application_id: string | null;
   qb_customer_ref: string | null;
+  // Per-grant breakdown
+  bl_grant_id: string | null;
+  bl_amount: string | number | null;
+  other_grant_id: string | null;
+  other_scheme_code: string | null;
+  other_amount: string | number | null;
 }
 
 export interface CreatedInvoice {
@@ -41,6 +47,18 @@ function addDays(isoDate: string, days: number): string {
   const d = new Date(isoDate);
   d.setDate(d.getDate() + days);
   return d.toISOString().slice(0, 10);
+}
+
+const SCHEME_DISPLAY_NAMES: Record<string, string> = {
+  ETSS:      'Enhanced Training Support for SMEs (ETSS)',
+  MCES:      'Mid-Career Enhanced Subsidy (MCES)',
+  'IBF-STS': 'IBF STS',
+};
+
+function resolveSchemeDisplayName(code: string | null | undefined): string {
+  if (!code) return '';
+  const key = code.trim().toUpperCase().replace(/_/g, '-');
+  return SCHEME_DISPLAY_NAMES[key] ?? code;
 }
 
 function formatDate(d: string | Date | null | undefined): string {
@@ -171,22 +189,39 @@ export async function createDirectApplicationInvoice(
     },
   });
 
-  // Line 2: WSQ funding deduction — Out of Scope (no GST on government subsidy)
-  if (subsidy > 0) {
+  // Line 2: WSQ Baseline funding deduction — Grant ID (BL) / Amt (BL)
+  const blAmount = toNumber(app.bl_amount);
+  if (blAmount > 0) {
     lines.push({
       DetailType: 'SalesItemLineDetail',
-      Amount: -subsidy,
-      Description: `Less: WSQ Funding (Baseline)\nGrant Ref#: ${app.grant_id ?? '—'}`,
+      Amount: -blAmount,
+      Description: `Less: WSQ Funding (Baseline)\nGrant ID (BL): ${app.bl_grant_id ?? '—'}`,
       SalesItemLineDetail: {
         ItemRef: { value: itemId },
         Qty: 1,
-        UnitPrice: -subsidy,
+        UnitPrice: -blAmount,
         TaxCodeRef: { value: '18' }, // Out of Scope — no GST on subsidy
       },
     });
   }
 
-  // Line 3: SkillsFuture Credit — Out of Scope (always show even if 0)
+  // Line 3: Other grant deduction — Grant ID / Scheme / Amount
+  const otherAmount = toNumber(app.other_amount);
+  if (otherAmount > 0) {
+    lines.push({
+      DetailType: 'SalesItemLineDetail',
+      Amount: -otherAmount,
+      Description: `Less WSQ Funding (${resolveSchemeDisplayName(app.other_scheme_code)})\nGrant ID: ${app.other_grant_id ?? '—'}`,
+      SalesItemLineDetail: {
+        ItemRef: { value: itemId },
+        Qty: 1,
+        UnitPrice: -otherAmount,
+        TaxCodeRef: { value: '18' }, // Out of Scope — no GST on subsidy
+      },
+    });
+  }
+
+  // Line 4: SkillsFuture Credit — Out of Scope (always show even if 0)
   lines.push({
     DetailType: 'SalesItemLineDetail',
     Amount: -credit,
