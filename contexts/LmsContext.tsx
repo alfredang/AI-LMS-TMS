@@ -319,13 +319,21 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [classListReturnTo, setClassListReturnTo] = useState<AdminPage | null>(null);
   const [classListCurrentPage, setClassListCurrentPage] = useState(0);
 
-  // Auto-clear classListReturnTo and classListCurrentPage when navigating anywhere that isn't the class detail/edit flow.
-  // This prevents stale return targets from leaking between unrelated navigations (sidebar clicks, dashboard jumps, etc.).
+  // Auto-clear classListReturnTo and classListCurrentPage when navigating away
+  // from the class detail/edit flow AND the class list pages themselves.
+  // This ensures sidebar switches reset the page, while edit→return preserves it.
+  const CLASS_FLOW_PAGES = new Set([
+    AdminPage.ClassDetail,
+    AdminPage.EditClass,
+    AdminPage.UpcomingClasses,
+    AdminPage.OngoingClasses,
+    AdminPage.CompletedClasses,
+    AdminPage.ViewClassByDate,
+  ]);
   useEffect(() => {
-    if (adminPage !== AdminPage.ClassDetail && adminPage !== AdminPage.EditClass) {
+    if (!CLASS_FLOW_PAGES.has(adminPage)) {
       setClassListReturnTo(null);
-      // Don't clear classListCurrentPage here — we clear it only when returning TO a list page.
-      // The list components themselves will consume the value on mount and then clear it.
+      setClassListCurrentPage(0);
     }
   }, [adminPage]);
   const [ssgApp, setSsgApp] = useState<string>('app1');  // default, overridden by DB setting

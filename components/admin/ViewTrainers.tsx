@@ -74,6 +74,8 @@ const ViewTrainers: React.FC = () => {
   const [filterTrainerStatuses, setFilterTrainerStatuses] = useState<string[]>([]);
   const [filterAreasOfExpertise, setFilterAreasOfExpertise] = useState<string[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
+  const [showAddTrainerForm, setShowAddTrainerForm] = useState(false);
+  const [visibleNrics, setVisibleNrics] = useState<Set<string>>(new Set());
   // Track current page in a ref to avoid closure bugs in window event listeners
   const currentPageRef = useRef(currentPage);
 

@@ -86,7 +86,7 @@ const OngoingClasses: React.FC = () => {
   const [debouncedStartDate, setDebouncedStartDate] = useState('');
   const [debouncedEndDate, setDebouncedEndDate] = useState('');
 
-  const [currentPage, setCurrentPage] = useState(0);
+  const [currentPage, setCurrentPage] = useState(() => classListCurrentPage);
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
 
@@ -97,6 +97,8 @@ const OngoingClasses: React.FC = () => {
 
   useEffect(() => {
     currentPageRef.current = currentPage;
+    // Sync back to context so edit→return preserves the page
+    setClassListCurrentPage(currentPage);
   }, [currentPage]);
 
   const ITEMS_PER_PAGE = 20;

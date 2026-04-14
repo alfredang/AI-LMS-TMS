@@ -277,7 +277,8 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
     showFilters = true,
     includeOngoing = false,
 }) => {
-    const [currentPage, setCurrentPage] = useState(0);
+    const { setAdminPage, setSelectedCourseRunId, setEditingCourseRun, setClassListReturnTo, classListCurrentPage, setClassListCurrentPage } = useLms();
+    const [currentPage, setCurrentPage] = useState(() => classListCurrentPage);
 
     // Track initial mount to prevent filter-reset effects from overriding the restored page
     const isInitialMount = useRef(true);
@@ -286,6 +287,8 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
 
     useEffect(() => {
         currentPageRef.current = currentPage;
+        // Sync back to context so edit→return preserves the page
+        setClassListCurrentPage(currentPage);
     }, [currentPage]);
     const [searchQuery, setSearchQuery] = useState('');
     const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
