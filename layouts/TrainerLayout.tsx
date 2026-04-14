@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
 import { useAppVersion } from '@hooks/useAppVersion';
@@ -58,6 +58,9 @@ const PAGE_LABELS: Record<TrainerPage, string> = {
 const TrainerLayout: React.FC = () => {
   const { currentView, trainerPage, selectedCourse } = useLms();
   const appVersion = useAppVersion();
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isDesktopSidebarOpen, setIsDesktopSidebarOpen] = useState(true);
+
   const renderContent = () => {
     if (currentView === View.Profile) return <ProfilePage />;
     if (currentView === View.HelpAndSupport) return <HelpAndSupportView />;
@@ -115,14 +118,56 @@ const TrainerLayout: React.FC = () => {
     <div className="min-h-screen flex flex-col bg-background font-sans text-on-surface">
       <Header />
 
+      {/* Sub-header: sidebar toggle + current page breadcrumb */}
+      <div className="flex items-center gap-4 px-4 sm:px-6 py-3 border-b border-gray-200 dark:border-gray-700">
+        <button
+          onClick={() => {
+            setIsSidebarOpen(prev => !prev);
+            setIsDesktopSidebarOpen(prev => !prev);
+          }}
+          className="p-2 -ml-2 text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white"
+          title="Toggle sidebar"
+        >
+          <Icon name={IconName.Menu} className="w-6 h-6" />
+        </button>
+        <h2 className="text-lg font-bold truncate">
+          {currentView === View.Profile ? 'Profile' : currentView === View.HelpAndSupport ? 'Help & Support' : selectedCourse ? selectedCourse.title : PAGE_LABELS[trainerPage]}
+        </h2>
+      </div>
+
+      {/* Mobile Sidebar Overlay */}
+      {isSidebarOpen && (
+        <div className="fixed inset-0 z-40 md:hidden" role="dialog" aria-modal="true">
+          <div
+            className="absolute inset-0 bg-black/50"
+            aria-hidden="true"
+            onClick={() => setIsSidebarOpen(false)}
+          />
+          <div className="relative flex flex-col w-72 max-w-[calc(100%-3rem)] h-full bg-surface shadow-xl">
+            <div className="p-4 flex justify-between items-center border-b dark:border-gray-700">
+              <h3 className="font-bold">Menu</h3>
+              <button
+                onClick={() => setIsSidebarOpen(false)}
+                className="p-2 -mr-2 text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white"
+              >
+                <Icon name={IconName.Close} className="w-6 h-6" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto">
+              <TrainerSidebar onNavigate={() => setIsSidebarOpen(false)} />
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Main Layout Container */}
       <div className="flex flex-1">
-        {/* Fixed Sidebar — always visible */}
-        <aside className="sticky top-0 h-screen w-64 flex-shrink-0 bg-white dark:bg-slate-800 border-r border-gray-200 dark:border-slate-700 flex flex-col">
-          <div className="flex-1 overflow-y-auto scrollbar-none" style={{ scrollbarWidth: 'none' }}>
-            <TrainerSidebar />
+        {/* Desktop Sidebar */}
+        <aside className={`${isDesktopSidebarOpen ? 'hidden md:flex' : 'hidden'} w-64 flex-shrink-0 border-r border-gray-200 dark:border-slate-700 transition-all`}>
+          <div className="w-full flex flex-col h-full">
+            <div className="flex-1"><TrainerSidebar /></div>
+            <p className="px-3 pb-2 text-[10px] text-gray-400 dark:text-gray-300 font-mono">version {appVersion}</p>
           </div>
-          <p className="px-3 py-2 text-[10px] text-gray-400 dark:text-gray-300 font-mono border-t border-gray-200 dark:border-gray-700">version {appVersion}</p>
         </aside>
 
         {/* Main Content Area */}
