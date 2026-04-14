@@ -68,65 +68,55 @@ const LearnerLayout: React.FC = () => {
   const activeClass = 'bg-primary/10 text-primary font-semibold';
   const inactiveClass = 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700/50 hover:text-gray-900 dark:hover:text-white';
 
-  const sidebarContent = (
-    <div className="flex flex-col h-full bg-white dark:bg-slate-800">
-      <div className="flex-1 px-3 py-4 space-y-1">
-        {sidebarItems.map((item) => {
-          const isActive = !item.href && currentView === item.view && !selectedCourse;
-          return (
-            <a
-              key={item.label}
-              href={item.href || '#'}
-              target={item.href ? '_blank' : undefined}
-              rel={item.href ? 'noopener noreferrer' : undefined}
-              onClick={item.href ? undefined : (e) => { e.preventDefault(); navigateTo(item.view); }}
-              className={`group flex items-center gap-3 w-full rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-150 ${
-                isActive ? activeClass : inactiveClass
-              }`}
-            >
-              <Icon
-                name={item.icon}
-                className={`w-[18px] h-[18px] flex-shrink-0 transition-colors ${
-                  isActive ? 'text-primary' : 'text-gray-400 dark:text-gray-500'
-                }`}
-              />
-              <span className="truncate">{item.label}</span>
-            </a>
-          );
-        })}
-      </div>
-    </div>
-  );
-
   return (
     <div className="min-h-screen flex flex-col bg-background font-sans text-on-surface">
       <Header />
 
       {/* Main Layout Container */}
       <div className="flex flex-1">
-        {/* Sidebar area: rail is always visible, panel slides in/out */}
+        {/* Sidebar: icon rail when collapsed, full panel when expanded */}
         <div className="flex flex-shrink-0">
-          {/* Expanded sidebar panel */}
-          {isSidebarOpen && (
-            <aside className="w-64 bg-white dark:bg-slate-800 border-r border-gray-200 dark:border-slate-700 flex flex-col h-[calc(100vh-64px)] sticky top-[64px]">
-              <div className="flex-1 overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
-                {sidebarContent}
-              </div>
-              <p className="px-3 py-2 text-[10px] text-gray-400 dark:text-gray-300 font-mono border-t border-gray-200 dark:border-gray-700">version {appVersion}</p>
-            </aside>
-          )}
-          {/* Thin rail with toggle arrow always visible */}
-          <div className="w-8 bg-white dark:bg-slate-800 border-r border-gray-200 dark:border-slate-700 h-[calc(100vh-64px)] sticky top-[64px] relative">
-            <button
-              onClick={() => setIsSidebarOpen(prev => !prev)}
-              className="fixed top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
-              title={isSidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
-            >
-              <svg className={`w-5 h-5 transition-transform ${isSidebarOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-              </svg>
-            </button>
-          </div>
+          <aside className={`${isSidebarOpen ? 'w-64' : 'w-14'} bg-white dark:bg-slate-800 border-r border-gray-200 dark:border-slate-700 flex flex-col h-[calc(100vh-64px)] sticky top-[64px] transition-all duration-200`}>
+            <div className="flex-1 overflow-y-auto px-2 py-4 space-y-1" style={{ scrollbarWidth: 'none' }}>
+              {sidebarItems.map((item) => {
+                const isActive = !item.href && currentView === item.view && !selectedCourse;
+                return (
+                  <a
+                    key={item.label}
+                    href={item.href || '#'}
+                    target={item.href ? '_blank' : undefined}
+                    rel={item.href ? 'noopener noreferrer' : undefined}
+                    onClick={item.href ? undefined : (e) => { e.preventDefault(); navigateTo(item.view); }}
+                    title={!isSidebarOpen ? item.label : undefined}
+                    className={`group flex items-center ${isSidebarOpen ? 'gap-3 px-3' : 'justify-center px-0'} w-full rounded-xl py-2.5 text-sm font-medium transition-all duration-150 ${
+                      isActive ? activeClass : inactiveClass
+                    }`}
+                  >
+                    <Icon
+                      name={item.icon}
+                      className={`w-[18px] h-[18px] flex-shrink-0 transition-colors ${
+                        isActive ? 'text-primary' : 'text-gray-400 dark:text-gray-500'
+                      }`}
+                    />
+                    {isSidebarOpen && <span className="truncate">{item.label}</span>}
+                  </a>
+                );
+              })}
+            </div>
+            {/* Toggle arrow at bottom */}
+            <div className="border-t border-gray-200 dark:border-gray-700 flex flex-col items-center py-2">
+              <button
+                onClick={() => setIsSidebarOpen(prev => !prev)}
+                className="p-1 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+                title={isSidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
+              >
+                <svg className={`w-5 h-5 transition-transform ${isSidebarOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+              {isSidebarOpen && <p className="px-3 pt-1 text-[10px] text-gray-400 dark:text-gray-300 font-mono">version {appVersion}</p>}
+            </div>
+          </aside>
         </div>
 
         {/* Main Content Area */}
