@@ -1,14 +1,6 @@
 /**
  * Build + POST a QuickBooks invoice for a Direct Application (net fee after
  * SkillsFuture subsidy and credit).
- *
- * Pattern mirrors the n8n workflow "LZ - Update Quickbooks Invoice Upon Payment
- * Received V1" (authored by Liu Zhen, 21 Jan) — see
- * docs/reference/n8n-qb-invoice-payment-flow.json — specifically the JSON body
- * structure used by the Update Payment nodes (CustomerRef.value, Line[] with
- * SalesItemLineDetail, TxnDate).
- *
- * All calls go through /api/quickbooks/proxy so OAuth refresh stays centralized.
  */
 
 import { resolveCustomerRef } from './resolveCustomerRef';
@@ -17,12 +9,18 @@ export interface DaApplicationForInvoice {
   id: string;
   trainee_name: string | null;
   trainee_email: string | null;
+  trainee_id: string | null;
   course_title: string | null;
   course_reference_number: string | null;
   course_start_date: string | null;
+  course_end_date: string | null;
+  course_run_id: string | null;
   full_course_fee: string | number | null;
+  gst: string | number | null;
   skillsfuture_subsidy: string | number | null;
   skillsfuture_credit: string | number | null;
+  grant_id: string | null;
+  application_id: string | null;
   qb_customer_ref: string | null;
 }
 
@@ -45,6 +43,13 @@ function addDays(isoDate: string, days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+function formatDate(d: string | Date | null | undefined): string {
+  if (!d) return '—';
+  return new Date(d).toLocaleDateString('en-SG', {
+    day: '2-digit', month: 'short', year: 'numeric'
+  });
+}
+
 async function callQbProxy(body: Record<string, any>): Promise<any> {
   const baseUrl = process.env.QBO_PROXY_BASE_URL || process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
   const resp = await fetch(`${baseUrl}/api/quickbooks/proxy`, {
@@ -54,23 +59,51 @@ async function callQbProxy(body: Record<string, any>): Promise<any> {
   });
   const data = await resp.json().catch(() => null);
   if (!resp.ok || !data?.success) {
+    console.error('[QBO proxy error details]', JSON.stringify(data, null, 2));
     throw new Error(data?.error || `QB proxy returned ${resp.status}`);
   }
   return data;
 }
 
+async function findItemBySku(sku: string): Promise<string | null> {
+  if (!sku) return null;
+  try {
+    const data = await callQbProxy({
+      action: 'query',
+      entity: 'item',
+      query: `SELECT * FROM Item WHERE Sku = '${sku}'`,
+    });
+    const items = data?.data?.QueryResponse?.Item;
+    if (Array.isArray(items) && items.length > 0) {
+      console.log(`[QBO] Found item for SKU ${sku}: Id=${items[0].Id}`);
+      return String(items[0].Id);
+    }
+    console.warn(`[QBO] No item found for SKU: ${sku}`);
+    return null;
+  } catch (e) {
+    console.warn(`[QBO] Item lookup failed for SKU ${sku}:`, e);
+    return null;
+  }
+}
+
 export async function createDirectApplicationInvoice(
-  app: DaApplicationForInvoice
+  app: DaApplicationForInvoice & { enrolment_id?: string }
 ): Promise<CreatedInvoice> {
-  // 1. Compute net payable amount
+  // 1. Compute amounts
+  // full_course_fee is the base fee EXCLUDING gst
+  // gst is stored separately
+  // subsidy and credit are deducted from the base fee
   const fullFee = toNumber(app.full_course_fee);
+  const gst = toNumber(app.gst);
   const subsidy = toNumber(app.skillsfuture_subsidy);
   const credit = toNumber(app.skillsfuture_credit);
-  const netAmount = Number((fullFee - subsidy - credit).toFixed(2));
 
-  if (!Number.isFinite(netAmount) || netAmount <= 0) {
+  // Net payable = (fee - subsidy - credit) + gst
+  const netAmount = Number((fullFee - subsidy - credit + gst).toFixed(2));
+
+  if (!Number.isFinite(netAmount) || netAmount < 0) {
     throw new Error(
-      `computed net amount ${netAmount} is not payable (fee=${fullFee}, subsidy=${subsidy}, credit=${credit})`
+      `computed net amount ${netAmount} is not payable (fee=${fullFee}, gst=${gst}, subsidy=${subsidy}, credit=${credit})`
     );
   }
 
@@ -78,41 +111,107 @@ export async function createDirectApplicationInvoice(
     throw new Error('trainee_email is required to create invoice');
   }
 
-  // 2. Resolve or create customer (cached on the row via qb_customer_ref)
+  // 2. Look up QBO item by course reference number (TGS SKU)
+  const itemId =
+    (await findItemBySku(app.course_reference_number || '')) ??
+    process.env.QBO_DEFAULT_ITEM_REF ??
+    null;
+
+  if (!itemId) {
+    throw new Error(
+      `QBO item not found for SKU: ${app.course_reference_number}. Please create the item in QuickBooks or set QBO_DEFAULT_ITEM_REF.`
+    );
+  }
+
+  // 3. Resolve or create customer
   const customerRef =
     app.qb_customer_ref ||
     (await resolveCustomerRef(app.trainee_name || app.trainee_email, app.trainee_email));
 
-  // 3. Build invoice body
+  // 4. Build invoice body
   const txnDate = new Date().toISOString().slice(0, 10);
-  const dueDate = app.course_start_date
-    ? addDays(app.course_start_date, 7)
-    : addDays(txnDate, 14);
+  const dueDate = txnDate; // Due date is the same as invoice date
 
-  const description =
-    `${app.course_reference_number || 'Course'} - ${app.course_title || 'Training Fee'} ` +
-    `(Net Fee after SkillsFuture Subsidy & Credit)`;
+  // Generate invoice number: TC{YY}-{MM}{DD}-{last 6 digits of enrolment_id}
+  let enrolmentId = (app.enrolment_id || '').toString();
+  let last6 = enrolmentId.slice(-6).padStart(6, '0');
+  const now = new Date();
+  const yy = String(now.getFullYear()).slice(-2);
+  const mm = String(now.getMonth() + 1).padStart(2, '0');
+  const dd = String(now.getDate()).padStart(2, '0');
+  const docNumber = `TC${yy}-${mm}${dd}-${last6}`;
+
+  const lines: any[] = [];
+
+  // Line 1: Full course fee — GST 9% SR (QBO calculates GST automatically)
+  lines.push({
+    DetailType: 'SalesItemLineDetail',
+    Amount: fullFee,
+    Description: [
+      `Course Name: ${app.course_title ?? app.course_reference_number}`,
+      `(${app.course_reference_number ?? ''})`,
+      `Participant Name: ${app.trainee_name ?? '—'}`,
+      `NRIC: ${app.trainee_id ?? '—'}`,
+      (() => {
+        const start = formatDate(app.course_start_date);
+        const end = formatDate(app.course_end_date);
+        if (start === end || !app.course_end_date) {
+          return `Course Date: ${start}`;
+        } else {
+          return `Course Date: ${start} - ${end}`;
+        }
+      })(),
+      `Course Run: ${app.course_run_id ?? '—'}`,
+    ].join('\n'),
+    SalesItemLineDetail: {
+      ItemRef: { value: itemId },
+      Qty: 1,
+      UnitPrice: fullFee,
+      TaxCodeRef: { value: '45' }, // GST 9% SR
+    },
+  });
+
+  // Line 2: WSQ funding deduction — Out of Scope (no GST on government subsidy)
+  if (subsidy > 0) {
+    lines.push({
+      DetailType: 'SalesItemLineDetail',
+      Amount: -subsidy,
+      Description: `Less: WSQ Funding (Baseline)\nGrant Ref#: ${app.grant_id ?? '—'}`,
+      SalesItemLineDetail: {
+        ItemRef: { value: itemId },
+        Qty: 1,
+        UnitPrice: -subsidy,
+        TaxCodeRef: { value: '18' }, // Out of Scope — no GST on subsidy
+      },
+    });
+  }
+
+  // Line 3: SkillsFuture Credit — Out of Scope (always show even if 0)
+  lines.push({
+    DetailType: 'SalesItemLineDetail',
+    Amount: -credit,
+    Description: `SkillsFuture Credit Usage/Claim:\nApplication ID: ${app.application_id ?? '—'}`,
+    SalesItemLineDetail: {
+      ItemRef: { value: itemId },
+      Qty: 1,
+      UnitPrice: -credit,
+      TaxCodeRef: { value: '18' }, // Out of Scope — no GST on SFC credit
+    },
+  });
 
   const invoiceBody = {
     CustomerRef: { value: customerRef },
     TxnDate: txnDate,
     DueDate: dueDate,
-    Line: [
-      {
-        DetailType: 'SalesItemLineDetail',
-        Amount: netAmount,
-        Description: description,
-        SalesItemLineDetail: {
-          // QBO will use the default income account if ItemRef is omitted only
-          // when a default item exists. Most orgs require ItemRef; set to 1
-          // (typical "Services" default) — override via QBO_DEFAULT_ITEM_REF.
-          ItemRef: { value: process.env.QBO_DEFAULT_ITEM_REF || '1' },
-        },
-      },
-    ],
+    GlobalTaxCalculation: 'TaxExcluded',
+    Line: lines,
+    DocNumber: docNumber,
   };
 
-  // 4. POST via proxy
+  // 5. Log invoice body for debugging
+  console.log('[QBO invoice body]', JSON.stringify(invoiceBody, null, 2));
+
+  // 6. POST via proxy
   const createResp = await callQbProxy({
     action: 'create',
     entity: 'invoice',
@@ -131,3 +230,4 @@ export async function createDirectApplicationInvoice(
     netAmount,
   };
 }
+
