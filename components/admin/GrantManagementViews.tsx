@@ -2159,6 +2159,13 @@ export const SearchGrantView: React.FC = () => {
     const [grantsData, setGrantsData] = useState<{ data: any[]; meta: any } | null>(null);
     const [searchError, setSearchError] = useState<string | null>(null);
     const [currentPage, setCurrentPage] = useState<number>(0);
+    // Track current page in a ref for safety (future effects/listeners)
+    const currentPageRef = useRef(currentPage);
+
+    useEffect(() => {
+        currentPageRef.current = currentPage;
+    }, [currentPage]);
+
     const PAGE_SIZE = 10;
 
     // Helper functions for consistent styling
@@ -3193,6 +3200,15 @@ export const SearchCourseRunsView: React.FC = () => {
     const [searchError, setSearchError] = useState<string | null>(null);
     const [currentPage, setCurrentPage] = useState(0);
     const [displayPage, setDisplayPage] = useState(0);
+    
+    // Track current page in refs for safety (future effects/listeners)
+    const currentPageRef = useRef(currentPage);
+    const displayPageRef = useRef(displayPage);
+
+    useEffect(() => {
+        currentPageRef.current = currentPage;
+        displayPageRef.current = displayPage;
+    }, [currentPage, displayPage]);
     const DISPLAY_PAGE_SIZE = 10;
 
     const inputClasses = "block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-500";

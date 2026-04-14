@@ -37,6 +37,13 @@ const ViewLearners: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('All');
   const [currentPage, setCurrentPage] = useState(1);
+  // Track current page in a ref to avoid closure bugs in window event listeners
+  const currentPageRef = useRef(currentPage);
+
+  useEffect(() => {
+    currentPageRef.current = currentPage;
+  }, [currentPage]);
+
   const [visibleNrics, setVisibleNrics] = useState<Set<string>>(new Set());
 
   // Detail modal
@@ -125,7 +132,19 @@ const ViewLearners: React.FC = () => {
     }
   };
 
-  useEffect(() => { fetchLearners(); }, []);
+  useEffect(() => {
+    fetchLearners();
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        console.log('👀 Tab focused, refreshing learners for page:', currentPageRef.current);
+        fetchLearners();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, []);
 
   const filteredLearners = learners.filter(learner => {
     const matchesSearch = !searchQuery ||

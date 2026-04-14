@@ -86,19 +86,18 @@ const OngoingClasses: React.FC = () => {
   const [debouncedStartDate, setDebouncedStartDate] = useState('');
   const [debouncedEndDate, setDebouncedEndDate] = useState('');
 
-  const [currentPage, setCurrentPage] = useState(() => classListCurrentPage);
+  const [currentPage, setCurrentPage] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
 
   // Track initial mount to prevent filter-reset effects from overriding the restored page
   const isInitialMount = useRef(true);
+  // Track current page in a ref to avoid closure bugs and sync with context
+  const currentPageRef = useRef(currentPage);
 
-  // Clear the persisted page after restoring it (one-time consume)
   useEffect(() => {
-    if (classListCurrentPage !== 0) {
-      setClassListCurrentPage(0);
-    }
-  }, []);
+    currentPageRef.current = currentPage;
+  }, [currentPage]);
 
   const ITEMS_PER_PAGE = 20;
 
@@ -128,7 +127,7 @@ const OngoingClasses: React.FC = () => {
       console.log('🔄 Fetching ongoing classes...');
       setLoading(true);
       const params = new URLSearchParams({
-        page: currentPage.toString(),
+        page: currentPageRef.current.toString(),
         limit: ITEMS_PER_PAGE.toString(),
         _t: Date.now().toString(),
       });

@@ -690,6 +690,13 @@ export const ViewDirectApplicationView: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [currentPage, setCurrentPage] = useState(1);
+    // Track current page in a ref to avoid closure bugs in window event listeners
+    const currentPageRef = useRef(currentPage);
+
+    useEffect(() => {
+        currentPageRef.current = currentPage;
+    }, [currentPage]);
+
     const itemsPerPage = 20;
 
     // Selection state
@@ -1125,6 +1132,16 @@ export const ViewDirectApplicationView: React.FC = () => {
     // Auto-fetch on component mount
     React.useEffect(() => {
         fetchApplications();
+
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'visible') {
+                console.log('👀 Tab focused, refreshing direct applications for page:', currentPageRef.current);
+                fetchApplications();
+            }
+        };
+
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
     }, []);
 
     // Filter applications based on search query, active filter, and toBeEnrolled filter
