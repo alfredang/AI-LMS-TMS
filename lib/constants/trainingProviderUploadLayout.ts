@@ -19,6 +19,7 @@ export const TRAINING_PROVIDER_ASSET_SUBFOLDERS = [
   'ssg_app1_private_key',
   'ssg_app3_cert',
   'ssg_app3_private_key',
+  'service_account',
 ] as const;
 
 export type TrainingProviderAssetSubfolder = (typeof TRAINING_PROVIDER_ASSET_SUBFOLDERS)[number];
@@ -36,6 +37,7 @@ export const TRAINING_PROVIDER_FOLDER_BY_FIELD: Record<string, TrainingProviderA
   ssgApp1PrivateKeyFile: 'ssg_app1_private_key',
   ssgApp3CertFile: 'ssg_app3_cert',
   ssgApp3PrivateKeyFile: 'ssg_app3_private_key',
+  serviceAccountKeyFile: 'service_account',
 };
 
 /** PEM uploads: stable filenames (no timestamp prefix) for predictable DB paths — TMS self-sign pair. */

@@ -46,6 +46,70 @@ export async function getGoogleDriveClient(pool: Pool): Promise<drive_v3.Drive> 
 }
 
 /**
+ * Returns a Google Auth client using a service account JSON file uploaded via Company Settings.
+ * The DB column (google_service_account_json) holds the relative URL path
+ * (e.g. /uploads/training_provider/service_account/service-account.json).
+ *
+ * Resolution order (mirrors credentials-service.ts pattern):
+ *   1. HTTP fetch via NEXT_PUBLIC_BASE_URL + path (production)
+ *   2. HTTP fetch via localhost:3000 + path (local dev)
+ *   3. Filesystem read from public/ directory (same-machine fallback)
+ */
+export async function getServiceAccountAuth(dbPool: Pool, scopes: string[]) {
+    const result = await dbPool.query(`
+        SELECT google_service_account_json
+        FROM training_provider
+        LIMIT 1
+    `);
+
+    if (result.rows.length === 0) {
+        throw new Error('No training provider settings found in database.');
+    }
+
+    const relativeUrl = result.rows[0].google_service_account_json;
+    if (!relativeUrl) {
+        throw new Error('Google service account key file is not configured in Company Settings. Upload it under Google Integration → Service Account.');
+    }
+
+    const normalizedPath = relativeUrl.startsWith('/') ? relativeUrl : `/${relativeUrl}`;
+
+    // Build list of base URLs to try (same pattern as credentials-service.ts)
+    const appBaseUrl = (process.env.NEXT_PUBLIC_BASE_URL || process.env.NEXTAUTH_URL || '').replace(/\/$/, '');
+    const port = process.env.PORT || '3000';
+    const baseUrls: string[] = [];
+    if (appBaseUrl) baseUrls.push(appBaseUrl);
+    const localhostUrl = `http://localhost:${port}`;
+    if (!baseUrls.includes(localhostUrl)) baseUrls.push(localhostUrl);
+
+    // Try HTTP fetch first (works both locally and in production)
+    for (const base of baseUrls) {
+        const url = `${base}${normalizedPath}`;
+        try {
+            const res = await fetch(url);
+            if (res.ok) {
+                const text = await res.text();
+                const credentials = JSON.parse(text);
+                console.log(`[google-auth] Service account loaded via URL: ${url}`);
+                return new google.auth.GoogleAuth({ credentials, scopes });
+            }
+        } catch { /* try next */ }
+    }
+
+    // Filesystem fallback (same machine as the uploaded files)
+    const path = await import('path');
+    const fs = await import('fs');
+    const absPath = path.join(process.cwd(), 'public', relativeUrl);
+    try {
+        if (fs.existsSync(absPath)) {
+            console.log(`[google-auth] Service account loaded from file: ${absPath}`);
+            return new google.auth.GoogleAuth({ keyFile: absPath, scopes });
+        }
+    } catch { /* fall through */ }
+
+    throw new Error(`Google service account key file could not be loaded from: ${normalizedPath}. Tried HTTP (${baseUrls.join(', ')}) and filesystem (${absPath}).`);
+}
+
+/**
  * Returns an authenticated Google Slides client using database credentials.
  */
 export async function getGoogleSlidesClient(pool: Pool): Promise<slides_v1.Slides> {

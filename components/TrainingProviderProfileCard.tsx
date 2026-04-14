@@ -312,6 +312,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
     const [ssgApp1PrivateKeyFile, setSsgApp1PrivateKeyFile] = useState<File | null>(null);
     const [ssgApp3CertFile, setSsgApp3CertFile] = useState<File | null>(null);
     const [ssgApp3PrivateKeyFile, setSsgApp3PrivateKeyFile] = useState<File | null>(null);
+    const [serviceAccountKeyFile, setServiceAccountKeyFile] = useState<File | null>(null);
 
     const adminSettingLabels: { [key: string]: string } = {
         autoSendProFormaInvoice: "Auto Send Pro Forma Invoice Upon Course Confirmation",
@@ -621,7 +622,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
         console.log(`🌓 Theme toggled to: ${newTheme}`);
     };
 
-    const handleTemplateUpload = (e: React.ChangeEvent<HTMLInputElement>, field: 'invoiceTemplateUrl' | 'receiptTemplateUrl' | 'certificateTemplateUrl' | 'proFormaInvoiceTemplateUrl' | 'ssgCertFile' | 'ssgPrivateKeyFile' | 'ssgApp1CertFile' | 'ssgApp1PrivateKeyFile' | 'ssgApp3CertFile' | 'ssgApp3PrivateKeyFile') => {
+    const handleTemplateUpload = (e: React.ChangeEvent<HTMLInputElement>, field: 'invoiceTemplateUrl' | 'receiptTemplateUrl' | 'certificateTemplateUrl' | 'proFormaInvoiceTemplateUrl' | 'ssgCertFile' | 'ssgPrivateKeyFile' | 'ssgApp1CertFile' | 'ssgApp1PrivateKeyFile' | 'ssgApp3CertFile' | 'ssgApp3PrivateKeyFile' | 'serviceAccountKeyFile') => {
         const file = e.target.files?.[0];
         if (file) {
             // Debug log to see what's happening with the filename and file details
@@ -672,6 +673,9 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                     break;
                 case 'ssgApp3PrivateKeyFile':
                     setSsgApp3PrivateKeyFile(file);
+                    break;
+                case 'serviceAccountKeyFile':
+                    setServiceAccountKeyFile(file);
                     break;
             }
 
@@ -771,6 +775,9 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
             if (ssgApp3PrivateKeyFile) {
                 formDataToSend.append('ssgApp3PrivateKeyFile', ssgApp3PrivateKeyFile);
             }
+            if (serviceAccountKeyFile) {
+                formDataToSend.append('serviceAccountKeyFile', serviceAccountKeyFile);
+            }
 
             // Call the training provider update API
             const response = await fetch(getApiUrl('/api/training-provider/update'), {
@@ -797,6 +804,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
             setProFormaTemplateFile(null);
             setSsgCertFile(null);
             setSsgPrivateKeyFile(null);
+            setServiceAccountKeyFile(null);
 
             // Update only the file URL fields from the server response — do NOT replace the
             // entire formData, as the server only returns a partial set of fields and would
@@ -1263,6 +1271,38 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                             )}
                                         </div>
                                     ))}
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Service Account Configuration */}
+                            <div className="space-y-3">
+                                <h4 className="text-sm font-bold text-on-surface pl-3">Service Account</h4>
+                                <div className="p-3 bg-surface rounded-md border border-default ml-4">
+                                    <div className="space-y-3">
+                                        <div>
+                                            <label className="block text-sm font-medium text-on-surface-secondary mb-1 font-semibold">Service Account Key File</label>
+                                            {isEditing ? (
+                                                <>
+                                                    <div className="flex items-center gap-2 p-2 bg-surface-elevated rounded-md border border-default">
+                                                        <span className="text-sm text-on-surface-secondary flex-grow">
+                                                            {serviceAccountKeyFile ? serviceAccountKeyFile.name : (formData.integrations as any).googleServiceAccountJson?.split('/').pop() || 'No file uploaded'}
+                                                        </span>
+                                                        <Button variant="ghost" size="sm" onClick={() => document.getElementById('service-account-upload')?.click()}>
+                                                            <Icon name={IconName.Upload} className="w-4 h-4 mr-2" />Upload
+                                                        </Button>
+                                                        <input type="file" id="service-account-upload" accept=".json" className="hidden" onChange={(e) => handleTemplateUpload(e, 'serviceAccountKeyFile')} />
+                                                    </div>
+                                                    <p className="text-[10px] text-on-surface-secondary mt-1">
+                                                        Google service account JSON file for bulk proforma invoice generation.
+                                                    </p>
+                                                </>
+                                            ) : (
+                                                <p className="text-sm text-on-surface truncate">
+                                                    {(formData.integrations as any).googleServiceAccountJson?.split('/').pop() || 'Not Uploaded'}
+                                                </p>
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
                             </div>
