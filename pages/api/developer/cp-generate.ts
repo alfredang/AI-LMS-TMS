@@ -290,9 +290,9 @@ async function generateWithClaude(prompt: string, apiKey: string): Promise<strin
   for await (const message of query({
     prompt,
     options: {
-      apiKey,
       allowedTools: [],
       maxTurns: 1,
+      env: { ANTHROPIC_API_KEY: apiKey },
     },
   })) {
     if (message.type === 'assistant' && message.message?.content) {
