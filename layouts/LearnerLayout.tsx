@@ -34,20 +34,10 @@ const sidebarItems: NavItem[] = [
 const LearnerLayout: React.FC = () => {
   const { currentView, selectedCourse, handleNavigation } = useLms();
   const appVersion = useAppVersion();
-  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
-  const [isDesktopSidebarCollapsed, setIsDesktopSidebarCollapsed] = useState(false);
-
-  const handleToggleSidebar = () => {
-    if (typeof window !== 'undefined' && window.innerWidth >= 768) {
-      setIsDesktopSidebarCollapsed(prev => !prev);
-    } else {
-      setIsMobileSidebarOpen(true);
-    }
-  };
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   const navigateTo = (view: View) => {
     handleNavigation(view);
-    setIsMobileSidebarOpen(false);
   };
 
   const renderContent = () => {
@@ -73,12 +63,6 @@ const LearnerLayout: React.FC = () => {
       default:
         return <CourseList />;
     }
-  };
-
-  const getPageTitle = () => {
-    if (selectedCourse) return 'Course Detail';
-    const item = sidebarItems.find(i => i.view === currentView);
-    return item?.label || 'My Classes';
   };
 
   const activeClass = 'bg-primary/10 text-primary font-semibold';
@@ -118,46 +102,35 @@ const LearnerLayout: React.FC = () => {
     <div className="min-h-screen flex flex-col bg-background font-sans text-on-surface">
       <Header />
 
-      {/* Sub-header with sidebar toggle and page title */}
-      <div className="flex items-center gap-4 px-4 sm:px-6 py-3 border-b border-gray-200 dark:border-gray-700">
-        <button onClick={handleToggleSidebar} className="p-2 -ml-2 text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white">
-          <Icon name={IconName.Menu} className="w-6 h-6" />
-        </button>
-        <h2 className="text-lg font-bold truncate">{getPageTitle()}</h2>
-      </div>
-
-      {/* Mobile Sidebar Overlay */}
-      {isMobileSidebarOpen && (
-        <div className="fixed inset-0 z-40 md:hidden" role="dialog" aria-modal="true">
-          <div className="absolute inset-0 bg-black/50" aria-hidden="true" onClick={() => setIsMobileSidebarOpen(false)} />
-          <div className="relative flex flex-col w-72 max-w-[calc(100%-3rem)] h-full bg-surface shadow-xl">
-            <div className="p-4 flex justify-between items-center border-b dark:border-gray-700">
-              <h3 className="font-bold">Menu</h3>
-              <button onClick={() => setIsMobileSidebarOpen(false)} className="p-2 -mr-2 text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white">
-                <Icon name={IconName.Close} className="w-6 h-6" />
-              </button>
-            </div>
-            <div className="flex-1 overflow-y-auto">
-              {sidebarContent}
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Main Layout Container */}
       <div className="flex flex-1">
-        {/* Desktop Sidebar */}
-        {!isDesktopSidebarCollapsed && (
-          <aside className="hidden md:flex w-64 flex-shrink-0 bg-white dark:bg-slate-800 border-r border-gray-200 dark:border-slate-700">
-            <div className="w-full flex flex-col h-full">
-              <div className="flex-1">{sidebarContent}</div>
-              <p className="px-3 pb-2 text-[10px] text-gray-400 dark:text-gray-300 font-mono">version {appVersion}</p>
-            </div>
-          </aside>
-        )}
+        {/* Sidebar area: rail is always visible, panel slides in/out */}
+        <div className="flex flex-shrink-0">
+          {/* Expanded sidebar panel */}
+          {isSidebarOpen && (
+            <aside className="w-64 bg-white dark:bg-slate-800 border-r border-gray-200 dark:border-slate-700 flex flex-col h-[calc(100vh-64px)] sticky top-[64px]">
+              <div className="flex-1 overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
+                {sidebarContent}
+              </div>
+              <p className="px-3 py-2 text-[10px] text-gray-400 dark:text-gray-300 font-mono border-t border-gray-200 dark:border-gray-700">version {appVersion}</p>
+            </aside>
+          )}
+          {/* Thin rail with toggle arrow always visible */}
+          <div className="w-8 bg-white dark:bg-slate-800 border-r border-gray-200 dark:border-slate-700 h-[calc(100vh-64px)] sticky top-[64px] relative">
+            <button
+              onClick={() => setIsSidebarOpen(prev => !prev)}
+              className="fixed top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+              title={isSidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
+            >
+              <svg className={`w-5 h-5 transition-transform ${isSidebarOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+          </div>
+        </div>
 
         {/* Main Content Area */}
-        <main className="flex-1 overflow-x-hidden">
+        <main className="flex-1 min-w-0 overflow-x-hidden">
           <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
             {renderContent()}
           </div>
