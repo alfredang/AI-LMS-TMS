@@ -53,6 +53,7 @@ const VIRTUAL_TOOL_ITEMS: { label: string; icon: IconName; href: string }[] = [
 const DATA_ANALYTICS_ITEMS: { label: string; icon: IconName; href: string }[] = [
   { label: 'Pivot Visualization', icon: IconName.Analytics, href: 'https://alfredang.github.io/novapivot/' },
   { label: 'Mock Data Generator', icon: IconName.FileText, href: 'https://alfredang.github.io/mockdatagen/' },
+  { label: 'Anomaly Detection', icon: IconName.Warning, href: 'https://alfredang.github.io/anamolydetection2/' },
 ];
 
 const FINANCE_TOOL_ITEMS: { label: string; icon: IconName; href: string }[] = [
