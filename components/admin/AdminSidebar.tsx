@@ -33,10 +33,10 @@ const NavSection: React.FC<NavSectionProps> = ({ title, children, isOpen, onTogg
             <button
                 type="button"
                 onClick={onToggle}
-                className="w-full flex items-center justify-between px-3 py-1 group cursor-pointer"
+                className="w-full flex items-center gap-2 px-3 py-1 group cursor-pointer"
             >
-                <h3 className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400 tracking-wider flex items-center gap-2">
-                    {icon && <Icon name={icon} className="w-4 h-4" />}
+                {icon && <Icon name={icon} className="w-4 h-4 flex-shrink-0 text-gray-500 dark:text-gray-400" />}
+                <h3 className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400 tracking-wider truncate flex-1 text-left">
                     {title}
                 </h3>
                 <svg
@@ -263,7 +263,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate, onSelectWorkflo
                 <NavItem page={AdminPage.FundingValidity} label="Funding Validity" isSubItem />
             </NavSection>
 
-            <NavSection title="Calendar & Scheduler" icon={IconName.Calendar} collapsed={collapsed} isOpen={openSections.calendar} onToggle={() => toggleSection('calendar')}>
+            <NavSection title="Calendar & Crons" icon={IconName.Calendar} collapsed={collapsed} isOpen={openSections.calendar} onToggle={() => toggleSection('calendar')}>
                 <NavItem page={AdminPage.Calendar} label="View Calendar" isSubItem />
                 <NavItem page={AdminPage.Scheduler} label="Task Scheduler" isSubItem />
                 <NavItem page={AdminPage.SchedulerSummary} label="Schedule Summary" isSubItem />
