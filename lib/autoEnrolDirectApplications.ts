@@ -5,6 +5,7 @@
  *   1. Load row from da_application (skip if not in "Confirm application" state)
  *   2. Submit SSG enrolment via /tpg/enrolments → save enrolment_id
  *   3. Search SSG grants by enrolment reference → save grant_id (non-fatal)
+ *   3b. Refresh grants into ssg_grants (BL + Non-BL for invoices / FMS; non-fatal)
  *   4. (If enabled) Create QuickBooks invoice → save invoice_id
  *   5. (If enabled) Send invoice email (non-fatal)
  *   6. Add learner email to matching Google Calendar event (non-fatal)
@@ -24,9 +25,11 @@ import {
   createDirectApplicationInvoice,
   type DaApplicationForInvoice,
 } from './quickbooks/createDirectApplicationInvoice';
-import { qboFetchInvoicePdf } from './services/qboInvoiceService';
+import { qboFetchInvoicePdf, qboSendInvoice } from './services/qboInvoiceService';
 import { uploadInvoicePdfToDrive } from './services/invoiceDriveUpload';
 import { addDaLearnerToCalendar } from './google-calendar/da-calendar-sync';
+import { refreshGrantsForEnrolments } from './services/billingSync';
+import { shouldSendQboInvoiceEmailFromQuickBooks } from './services/qboInvoiceEmailPolicy';
 
 export type AutoEnrolStatus =
   | 'pending'
@@ -331,24 +334,23 @@ export async function processDirectApplication(
     console.log(`ℹ️  auto-enrol [${applicationId}] grant already exists: ${grantId}`);
   }
 
+  if (enrolmentReference) {
+    try {
+      await refreshGrantsForEnrolments([enrolmentReference]);
+    } catch (err) {
+      console.warn(
+        `⚠️  auto-enrol [${applicationId}] refreshGrantsForEnrolments (non-fatal):`,
+        err instanceof Error ? err.message : err
+      );
+    }
+  }
+
   // Step 3: QuickBooks invoice
   if (!autoInvoice && !options?.forceInvoice) {
     if (autoCalendar && row.trainee_email) {
       try {
-        // Resolve local course_run UUID for session lookup
-        const runRes = await pool.query(
-          `SELECT id FROM course_run WHERE (id::text = $1 OR course_run_id = $1) AND is_deleted IS NOT TRUE LIMIT 1`, 
-          [row.course_run_id]
-        );
-        const courseRunUuid = runRes.rows[0]?.id;
-
-        const calResults = await addDaLearnerToCalendar(
-          row.trainee_email, 
-          courseRunUuid || row.course_run_id, 
-          row.course_title || '', 
-          row.course_start_date
-        );
-        if (calResults.addedTo > 0) await updateRow(appId, { calendar_added: true });
+        const calAdded = await addLearnerToCalendarEvent(row.trainee_email, row.course_title || '', row.course_start_date);
+        if (calAdded) await updateRow(appId, { calendar_added: true });
       } catch (err) {
         console.warn(`⚠️  auto-enrol [${applicationId}] calendar attendee failed (non-fatal):`, err instanceof Error ? err.message : err);
       }
@@ -424,23 +426,33 @@ export async function processDirectApplication(
     };
   }
 
+  // Step 4: Send invoice email via QBO proxy (non-fatal; off by default — same as invoice jobs)
+  if (row.trainee_email && invoiceId) {
+    if (shouldSendQboInvoiceEmailFromQuickBooks()) {
+      try {
+        await qboSendInvoice(undefined, invoiceId, row.trainee_email);
+      } catch (err) {
+        console.warn(
+          `⚠️  auto-enrol [${applicationId}] invoice send failed (non-fatal):`,
+          err instanceof Error ? err.message : err
+        );
+      }
+    } else {
+      console.log(
+        `ℹ️  auto-enrol [${applicationId}] skipping invoice email — set QBO_SEND_INVOICE_EMAIL=true to send`
+      );
+    }
+  }
+
   // Step 5: Add learner email to matching Google Calendar event (non-fatal)
   if (autoCalendar && row.trainee_email) {
     try {
-      // Resolve local course_run UUID for session lookup
-      const runRes = await pool.query(
-        `SELECT id FROM course_run WHERE (id::text = $1 OR course_run_id = $1) AND is_deleted IS NOT TRUE LIMIT 1`, 
-        [row.course_run_id]
-      );
-      const courseRunUuid = runRes.rows[0]?.id;
-
-      const calResults = await addDaLearnerToCalendar(
+      const calAdded = await addDaLearnerToCalendar(
         row.trainee_email,
-        courseRunUuid || row.course_run_id,
         row.course_title || '',
         row.course_start_date
       );
-      if (calResults.addedTo > 0) await updateRow(appId, { calendar_added: true });
+      if (calAdded) await updateRow(appId, { calendar_added: true });
     } catch (err) {
       console.warn(
         `⚠️  auto-enrol [${applicationId}] calendar attendee failed (non-fatal):`,
@@ -507,15 +519,12 @@ export async function bulkProcessDirectApplications(
 export async function createNativeEnrolmentFromDA(record: any, pool: any) {
   if (!record.course_run_id || !record.trainee_id || !record.trainee_email) return null;
   try {
-    // Look up the course_id from course_run
-    // DA record.course_run_id often contains the external string ID (e.g. TGS-...) 
-    // rather than the internal UUID. We check both.
     const runRes = await pool.query(
-      `SELECT id as internal_id, course_id FROM course_run 
-       WHERE (id::text = $1 OR course_run_id = $1) AND is_deleted IS NOT TRUE LIMIT 1`, 
+      `SELECT id as internal_id, course_id FROM course_run
+       WHERE (id::text = $1 OR course_run_id = $1) AND is_deleted IS NOT TRUE LIMIT 1`,
       [record.course_run_id]
     );
-    
+
     const internalRunId = runRes.rows[0]?.internal_id;
     const courseId = runRes.rows[0]?.course_id;
     if (!courseId || !internalRunId) {
@@ -523,8 +532,6 @@ export async function createNativeEnrolmentFromDA(record: any, pool: any) {
       return null;
     }
 
-    // We must ensure the user has an app_user and learner_profile
-    // Look up by email first
     const existingUser = await pool.query(
       `SELECT id FROM app_user WHERE LOWER(email) = LOWER($1) OR LOWER(secondary_email) = LOWER($1) LIMIT 1`,
       [record.trainee_email]
@@ -533,7 +540,6 @@ export async function createNativeEnrolmentFromDA(record: any, pool: any) {
     let userId = existingUser.rows[0]?.id;
 
     if (!userId) {
-      // Create user if they don't exist, using empty password hash, we can let them reset it
       const newUser = await pool.query(
         `INSERT INTO app_user (id, email, full_name, password_hash, account_status, created_at, updated_at)
          VALUES (gen_random_uuid(), $1, $2, '', 'active', NOW(), NOW())
@@ -541,36 +547,29 @@ export async function createNativeEnrolmentFromDA(record: any, pool: any) {
         [record.trainee_email.toLowerCase(), record.trainee_name || '']
       );
       userId = newUser.rows[0].id;
-      
+
       await pool.query(`INSERT INTO user_role_map (user_id, role) VALUES ($1, 'Learner') ON CONFLICT DO NOTHING`, [userId]);
-      await pool.query(`INSERT INTO learner_profile (user_id, nric, tel) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`, 
+      await pool.query(`INSERT INTO learner_profile (user_id, nric, tel) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`,
         [userId, record.trainee_id, record.trainee_phone || '']
       );
     }
 
     const { rows } = await pool.query(
       `INSERT INTO enrollment (
-          id, user_id, course_id, course_run_id, progress_percent, payment_status, 
+          id, user_id, course_id, course_run_id, progress_percent, payment_status,
           assessment_status, enrolment_status, enrolment_date, email, nric, created_at, updated_at
        )
        VALUES (gen_random_uuid(), $1, $2, $3, 0, 'Unpaid', 'Pending', 'Confirmed', CURRENT_DATE, $4, $5, NOW(), NOW())
        ON CONFLICT DO NOTHING
        RETURNING id`,
-      [
-        userId,
-        courseId,
-        internalRunId,
-        record.trainee_email,
-        record.trainee_id
-      ]
+      [userId, courseId, internalRunId, record.trainee_email, record.trainee_id]
     );
 
     const enrolmentId = rows[0]?.id;
 
-    // Update the DA record to link it and show success
     if (record.application_id) {
       await pool.query(
-        `UPDATE da_application 
+        `UPDATE da_application
          SET enrolment_status = 'Confirmed',
              enrolment_id = $1
          WHERE application_id = $2`,

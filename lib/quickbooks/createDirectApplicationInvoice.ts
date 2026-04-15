@@ -3,6 +3,9 @@
  * SkillsFuture subsidy and credit).
  */
 
+import { refreshGrantsForEnrolments } from '../services/billingSync';
+import { resolveGrantDeductionLinesForInvoice } from '../services/daInvoiceGrantLines';
+import { qboResolveInvoiceLineTaxCodeRef, qboResolveOosTaxCodeRef } from '../services/qboInvoiceService';
 import { resolveCustomerRef } from './resolveCustomerRef';
 
 export interface DaApplicationForInvoice {
@@ -49,17 +52,7 @@ function addDays(isoDate: string, days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-const SCHEME_DISPLAY_NAMES: Record<string, string> = {
-  ETSS:      'Enhanced Training Support for SMEs (ETSS)',
-  MCES:      'Mid-Career Enhanced Subsidy (MCES)',
-  'IBF-STS': 'IBF STS',
-};
 
-function resolveSchemeDisplayName(code: string | null | undefined): string {
-  if (!code) return '';
-  const key = code.trim().toUpperCase().replace(/_/g, '-');
-  return SCHEME_DISPLAY_NAMES[key] ?? code;
-}
 
 function formatDate(d: string | Date | null | undefined): string {
   if (!d) return '—';
@@ -113,8 +106,23 @@ export async function createDirectApplicationInvoice(
   // subsidy and credit are deducted from the base fee
   const fullFee = toNumber(app.full_course_fee);
   const gst = toNumber(app.gst);
-  const subsidy = toNumber(app.skillsfuture_subsidy);
+  const combinedSubsidy = toNumber(app.skillsfuture_subsidy);
   const credit = toNumber(app.skillsfuture_credit);
+
+  const enrolmentId = (app.enrolment_id || '').trim();
+  if (enrolmentId) {
+    try {
+      await refreshGrantsForEnrolments([enrolmentId]);
+    } catch (e) {
+      console.warn('[createDirectApplicationInvoice] Grant refresh (non-blocking):', e);
+    }
+  }
+
+  const { lines: grantDeductionLines, totalSubsidy: subsidy } = await resolveGrantDeductionLinesForInvoice({
+    enrolmentId: enrolmentId || null,
+    combinedSubsidy,
+    grantIdFallback: app.grant_id,
+  });
 
   // Net payable = (fee - subsidy - credit) + gst
   const netAmount = Number((fullFee - subsidy - credit + gst).toFixed(2));
@@ -157,13 +165,15 @@ export async function createDirectApplicationInvoice(
   const dueDate = txnDate; // Due date is the same as invoice date
 
   // Generate invoice number: TC{YY}-{MM}{DD}-{last 6 digits of enrolment_id}
-  let enrolmentId = (app.enrolment_id || '').toString();
-  let last6 = enrolmentId.slice(-6).padStart(6, '0');
+  const last6 = enrolmentId.slice(-6).padStart(6, '0');
   const now = new Date();
   const yy = String(now.getFullYear()).slice(-2);
   const mm = String(now.getMonth() + 1).padStart(2, '0');
   const dd = String(now.getDate()).padStart(2, '0');
   const docNumber = `TC${yy}-${mm}${dd}-${last6}`;
+
+  const taxGst = await qboResolveInvoiceLineTaxCodeRef(undefined);
+  const taxOos = await qboResolveOosTaxCodeRef(undefined);
 
   const lines: any[] = [];
 
@@ -191,43 +201,26 @@ export async function createDirectApplicationInvoice(
       ItemRef: { value: itemId },
       Qty: 1,
       UnitPrice: fullFee,
-      TaxCodeRef: { value: '45' }, // GST 9% SR
+      TaxCodeRef: { value: taxGst },
     },
   });
 
-  // Line 2: WSQ Baseline funding deduction — Grant ID (BL) / Amt (BL)
-  const blAmount = toNumber(app.bl_amount);
-  if (blAmount > 0) {
+  // Lines 2+: WSQ funding — Baseline and Non-Baseline separately when in ssg_grants
+  for (const g of grantDeductionLines) {
     lines.push({
       DetailType: 'SalesItemLineDetail',
-      Amount: -blAmount,
-      Description: `Less: WSQ Funding (Baseline)\nGrant ID (BL): ${app.bl_grant_id ?? '—'}`,
+      Amount: -g.amount,
+      Description: g.description,
       SalesItemLineDetail: {
         ItemRef: { value: itemId },
         Qty: 1,
-        UnitPrice: -blAmount,
-        TaxCodeRef: { value: '18' }, // Out of Scope — no GST on subsidy
+        UnitPrice: -g.amount,
+        TaxCodeRef: { value: taxOos },
       },
     });
   }
 
-  // Line 3: Other grant deduction — Grant ID / Scheme / Amount
-  const otherAmount = toNumber(app.other_amount);
-  if (otherAmount > 0) {
-    lines.push({
-      DetailType: 'SalesItemLineDetail',
-      Amount: -otherAmount,
-      Description: `Less WSQ Funding (${resolveSchemeDisplayName(app.other_scheme_code)})\nGrant ID: ${app.other_grant_id ?? '—'}`,
-      SalesItemLineDetail: {
-        ItemRef: { value: itemId },
-        Qty: 1,
-        UnitPrice: -otherAmount,
-        TaxCodeRef: { value: '18' }, // Out of Scope — no GST on subsidy
-      },
-    });
-  }
-
-  // Line 4: SkillsFuture Credit — Out of Scope (always show even if 0)
+  // SkillsFuture Credit — Out of Scope (always show even if 0)
   lines.push({
     DetailType: 'SalesItemLineDetail',
     Amount: -credit,
@@ -236,7 +229,7 @@ export async function createDirectApplicationInvoice(
       ItemRef: { value: itemId },
       Qty: 1,
       UnitPrice: -credit,
-      TaxCodeRef: { value: '18' }, // Out of Scope — no GST on SFC credit
+      TaxCodeRef: { value: taxOos },
     },
   });
 

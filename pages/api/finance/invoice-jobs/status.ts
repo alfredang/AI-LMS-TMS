@@ -13,7 +13,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   await ensureInvoiceJobsTable();
 
   if (enrolmentId) {
-    const r = await pool.query(`SELECT * FROM public.invoice_jobs WHERE enrolment_id = $1 LIMIT 1`, [enrolmentId]);
+    const r = await pool.query(
+      `SELECT * FROM public.invoice_jobs
+       WHERE LOWER(TRIM(COALESCE(enrolment_id, ''))) = LOWER(TRIM($1::text))
+       ORDER BY updated_at DESC
+       LIMIT 1`,
+      [enrolmentId]
+    );
     return res.status(200).json({ success: true, data: r.rows[0] ?? null });
   }
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState } from 'react';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Icon, IconName } from '../ui/Icon';
@@ -406,13 +406,6 @@ export const ViewDirectApplicationView: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [currentPage, setCurrentPage] = useState(1);
-    // Track current page in a ref to avoid closure bugs in window event listeners
-    const currentPageRef = useRef(currentPage);
-
-    useEffect(() => {
-        currentPageRef.current = currentPage;
-    }, [currentPage]);
-
     const itemsPerPage = 20;
 
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());

@@ -165,13 +165,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           NULLIF(TRIM(COALESCE(ij.invoice_no, '')), ''),
           NULLIF(TRIM(COALESCE(ij.qbo_doc_number, '')), ''),
           NULLIF(TRIM(COALESCE(ij.qbo_invoice_id::text, '')), '')
-        ) AS invoice_no
+        ) AS invoice_no,
+        ij.invoice_sent_at AS invoice_sent_at
       FROM ssg_enrolments se
       LEFT JOIN LATERAL (
-        SELECT inv.invoice_no, inv.qbo_invoice_id, inv.qbo_doc_number
+        SELECT inv.invoice_no, inv.qbo_invoice_id, inv.qbo_doc_number, inv.invoice_sent_at
         FROM public.invoice_jobs inv
         WHERE inv.status = 'done'
-          AND LOWER(TRIM(COALESCE(inv.enrolment_id, ''))) = LOWER(TRIM(COALESCE(se.enrolment_id, '')))
+          AND LOWER(TRIM(COALESCE(inv.enrolment_id::text, ''))) = LOWER(TRIM(COALESCE(se.enrolment_id::text, '')))
         ORDER BY inv.updated_at DESC
         LIMIT 1
       ) ij ON true

@@ -9,21 +9,32 @@ interface NavSectionProps {
     isOpen: boolean;
     onToggle: () => void;
     collapsed?: boolean;
+    icon?: IconName;
 }
 
-const NavSection: React.FC<NavSectionProps> = ({ title, children, isOpen, onToggle, collapsed = false }) => {
-    if (collapsed) return null;
+const NavSection: React.FC<NavSectionProps> = ({ title, children, isOpen, onToggle, collapsed = false, icon }) => {
+    if (collapsed) {
+        if (!icon) return null;
+        return (
+            <div className="flex justify-center" title={title}>
+                <button type="button" onClick={onToggle} className="p-2 rounded-md hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors" title={title}>
+                    <Icon name={icon} className="w-5 h-5 text-gray-500 dark:text-gray-400" />
+                </button>
+            </div>
+        );
+    }
 
     return (
         <div>
             <button
                 type="button"
                 onClick={onToggle}
-                className="w-full flex items-center justify-between px-3 py-1 group cursor-pointer"
+                className="w-full flex items-center gap-2 px-3 py-1 group cursor-pointer"
             >
-                <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">{title}</h3>
+                {icon && <Icon name={icon} className="w-4 h-4 flex-shrink-0 text-gray-500 dark:text-gray-400" />}
+                <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 flex-1 text-left">{title}</h3>
                 <svg
-                    className={`w-3.5 h-3.5 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
+                    className={`w-3.5 h-3.5 flex-shrink-0 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
                     fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
                 >
                     <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
@@ -66,7 +77,7 @@ const DeveloperSidebar: React.FC<DeveloperSidebarProps> = ({ onNavigate, collaps
     const { developerPage, setDeveloperPage } = useLms();
 
     const [openSections, setOpenSections] = useState<Record<string, boolean>>({
-        cpGenerator: true,
+        cpGenerator: false,
         cpPrepare: true,
         cpSubmit: false,
     });
@@ -132,7 +143,7 @@ const DeveloperSidebar: React.FC<DeveloperSidebarProps> = ({ onNavigate, collaps
                     />
                 </a>
             ) : (
-                <NavSection title="CP Generator" isOpen={openSections.cpGenerator} onToggle={() => toggleSection('cpGenerator')} collapsed={collapsed}>
+                <NavSection title="CP Generator" icon={IconName.FileText} isOpen={openSections.cpGenerator} onToggle={() => toggleSection('cpGenerator')} collapsed={collapsed}>
                     <SubSection title="Prepare CP" isOpen={openSections.cpPrepare} onToggle={() => toggleSection('cpPrepare')}>
                         <NavItem page={DeveloperPage.CpCourseDetails} label="Course Details" isSubItem />
                         <NavItem page={DeveloperPage.CpAboutCourse} label="About This Course" isSubItem />

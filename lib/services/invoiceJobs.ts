@@ -26,6 +26,8 @@ export interface InvoiceJobRow {
   invoice_no: string | null;
   drive_file_id: string | null;
   drive_web_view_link: string | null;
+  invoice_sent_at?: string | null;
+  invoice_sent_to?: string | null;
   created_at: string;
   updated_at: string;
   last_attempt_at: string | null;
@@ -71,6 +73,12 @@ export async function ensureInvoiceJobsTable(): Promise<void> {
 
   await pool.query(
     `ALTER TABLE public.invoice_jobs ADD COLUMN IF NOT EXISTS invoice_no varchar(64) NULL`
+  );
+  await pool.query(
+    `ALTER TABLE public.invoice_jobs ADD COLUMN IF NOT EXISTS invoice_sent_at timestamptz NULL`
+  );
+  await pool.query(
+    `ALTER TABLE public.invoice_jobs ADD COLUMN IF NOT EXISTS invoice_sent_to text NULL`
   );
   try {
     await pool.query(
@@ -162,6 +170,130 @@ function traineeEmailFromSsgRecord(record: any): string | null {
  * After SSG sync upserts `ssg_enrolments`, enqueue QBO invoice if Confirmed and a learner exists.
  * Covers rows that never went through `runPostSsgEnrolSync` (local enrollment + enqueue).
  */
+export interface EnqueueFromConsolidatedRowResult {
+  enrolmentId: string;
+  ok: boolean;
+  jobId?: string;
+  reason?: string;
+}
+
+/**
+ * Queue QBO invoice jobs from Consolidated Finance (selected ENRs).
+ * Resolves learner/course via local enrollment; the worker reads fee snapshot the same way as other QBO invoice jobs.
+ */
+export async function enqueueInvoiceJobsFromConsolidatedFinance(
+  enrolmentIds: string[],
+  options?: { skipAutoProcess?: boolean }
+): Promise<EnqueueFromConsolidatedRowResult[]> {
+  await ensureInvoiceJobsTable();
+  const unique = [...new Set(enrolmentIds.map((id) => id.trim()).filter(Boolean))];
+  const results: EnqueueFromConsolidatedRowResult[] = [];
+
+  for (const enrolmentId of unique) {
+    // Prefer `ssg_enrolments` (source for Consolidated Finance list)
+    const ssg = await pool.query(
+      `SELECT enrolment_id::text AS enrolment_id,
+              enrolment_status::text AS enrolment_status,
+              course_reference::text AS course_reference,
+              raw_data
+       FROM ssg_enrolments
+       WHERE LOWER(TRIM(COALESCE(enrolment_id::text, ''))) = LOWER(TRIM($1::text))
+       LIMIT 1`,
+      [enrolmentId]
+    );
+    const se = ssg.rows[0] as
+      | { enrolment_id?: string; enrolment_status?: string | null; course_reference?: string | null; raw_data?: any }
+      | undefined;
+
+    const ssgStatus = (se?.enrolment_status || '').trim();
+    if (se && !isEnrolmentEligibleForAutoInvoice(ssgStatus)) {
+      results.push({ enrolmentId, ok: false, reason: `Enrolment is not Confirmed (SSG status: ${ssgStatus || '—'})` });
+      continue;
+    }
+
+    let courseCode = String(se?.course_reference || '').trim();
+    if (!courseCode) courseCode = String(se?.raw_data?.course?.referenceNumber ?? '').trim();
+    if (!courseCode) courseCode = String(se?.raw_data?.course?.reference_number ?? '').trim();
+
+    let learnerEmail = String(se?.raw_data?.trainee?.email?.full ?? '').trim();
+    if (!learnerEmail) learnerEmail = String(se?.raw_data?.trainee?.email ?? '').trim();
+    if (!learnerEmail) learnerEmail = traineeEmailFromSsgRecord(se?.raw_data);
+
+    // Fallback to local enrollment row when available
+    const fromEnr = await pool.query(
+      `SELECT e.user_id, u.email::text AS learner_email, e.course_reference::text AS course_ref
+       FROM enrollment e
+       INNER JOIN app_user u ON u.id = e.user_id
+       WHERE LOWER(TRIM(COALESCE(e.enrolment_id::text, ''))) = LOWER(TRIM($1::text))
+       LIMIT 1`,
+      [enrolmentId]
+    );
+    const en = fromEnr.rows[0] as { user_id: string; learner_email: string; course_ref: string | null } | undefined;
+
+    let userId: string | undefined = en?.user_id;
+    if (en?.learner_email?.trim()) learnerEmail = learnerEmail || en.learner_email.trim();
+    if (!courseCode && en?.course_ref?.trim()) courseCode = en.course_ref.trim();
+
+    if (!userId && learnerEmail) {
+      const ur = await pool.query(`SELECT id FROM app_user WHERE LOWER(TRIM(email)) = LOWER(TRIM($1)) LIMIT 1`, [
+        learnerEmail,
+      ]);
+      userId = ur.rows[0]?.id as string | undefined;
+    }
+
+    if (!courseCode) {
+      results.push({ enrolmentId, ok: false, reason: 'Missing course code (TGS) for this enrolment' });
+      continue;
+    }
+    if (!learnerEmail) {
+      results.push({ enrolmentId, ok: false, reason: 'Missing learner email for this enrolment' });
+      continue;
+    }
+    if (!userId) {
+      results.push({ enrolmentId, ok: false, reason: 'Learner user not found (email not in app_user)' });
+      continue;
+    }
+
+    const existing = await getInvoiceJobByEnrolmentId(enrolmentId);
+    if (existing?.status === 'done') {
+      results.push({ enrolmentId, ok: false, reason: 'Invoice job already completed for this enrolment' });
+      continue;
+    }
+
+    try {
+      const out = await enqueueInvoiceJob(
+        {
+          enrolmentId: (se?.enrolment_id || enrolmentId).trim(),
+          userId,
+          learnerEmail: learnerEmail.trim(),
+          courseCode,
+          batchId: 'consolidated_finance',
+        },
+        { force: true, skipAutoProcess: true }
+      );
+      results.push({ enrolmentId, ok: true, jobId: out.id });
+    } catch (e) {
+      results.push({
+        enrolmentId,
+        ok: false,
+        reason: e instanceof Error ? e.message : String(e),
+      });
+    }
+  }
+
+  const anyQueued = results.some((r) => r.ok);
+  if (anyQueued && !options?.skipAutoProcess) {
+    const n = Math.min(10, Math.max(3, results.filter((r) => r.ok).length));
+    void import('./invoiceJobsRunner')
+      .then(({ runPendingInvoiceJobs }) => runPendingInvoiceJobs(n))
+      .catch((e: unknown) =>
+        console.warn('[invoice_jobs] run after consolidated enqueue failed:', e instanceof Error ? e.message : e)
+      );
+  }
+
+  return results;
+}
+
 export async function tryEnqueueInvoiceFromSsgRecord(record: any): Promise<void> {
   const enrolmentId = String(record?.referenceNumber ?? '').trim();
   if (!enrolmentId) return;

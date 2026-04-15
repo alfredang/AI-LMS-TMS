@@ -3,14 +3,17 @@ import { buildTmsInvoiceNo } from '../utils/tmsInvoiceNo';
 import { isEnrolmentBlockedFromAutoInvoice, isEnrolmentEligibleForAutoInvoice } from './invoiceEligibility';
 import { refreshGrantsForEnrolments, upsertSsgEnrolmentFromLocalEnrollment } from './billingSync';
 import { uploadInvoicePdfToDrive } from './invoiceDriveUpload';
+import { resolveGrantDeductionLinesForInvoice } from './daInvoiceGrantLines';
 import {
   qboCreateInvoice,
   qboFetchInvoicePdf,
   qboFindItemBySku,
   qboFindOrCreateCustomerByEmail,
   qboResolveInvoiceLineTaxCodeRef,
+  qboResolveOosTaxCodeRef,
   qboSendInvoice,
 } from './qboInvoiceService';
+import { shouldSendQboInvoiceEmailFromQuickBooks } from './qboInvoiceEmailPolicy';
 
 function safeText(v: unknown): string {
   return typeof v === 'string' ? v : String(v ?? '');
@@ -18,9 +21,142 @@ function safeText(v: unknown): string {
 
 function formatDate(d: string | Date | null | undefined): string {
   if (!d) return '—';
+  const s = typeof d === 'string' ? d.trim() : '';
+  if (s && /^\d{8}$/.test(s)) {
+    const iso = `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`;
+    const x = new Date(iso);
+    if (!Number.isNaN(x.getTime())) {
+      return x.toLocaleDateString('en-SG', { day: '2-digit', month: 'short', year: 'numeric' });
+    }
+  }
   return new Date(d).toLocaleDateString('en-SG', {
     day: '2-digit', month: 'short', year: 'numeric'
   });
+}
+
+type InvoiceContext = {
+  courseTitle: string;
+  courseRef: string;
+  runId: string;
+  startDate: string | null;
+  endDate: string | null;
+  traineeName: string;
+  traineeNric: string | null;
+  feeExGst: number;
+  sfcAmount: number;
+  sfcClaimId: string | null;
+};
+
+async function loadInvoiceContext(
+  enrolmentId: string,
+  userId: string,
+  learnerEmail: string,
+  courseCodeFallback: string
+): Promise<InvoiceContext> {
+  const [seRes, enrRes, sfcRes] = await Promise.all([
+    pool.query(
+      `SELECT trainee_name, trainee_nric, course_title, course_reference, course_run_id, raw_data
+       FROM ssg_enrolments
+       WHERE LOWER(TRIM(COALESCE(enrolment_id::text, ''))) = LOWER(TRIM($1::text))
+       LIMIT 1`,
+      [enrolmentId]
+    ),
+    pool.query(
+      `SELECT
+         c.title AS course_title,
+         c.course_code AS course_code,
+         c.course_fees_exclude_gst,
+         cr.course_run_id::text AS course_run_id,
+         cr.start_date::text AS start_date,
+         cr.end_date::text AS end_date,
+         u.full_name AS full_name,
+         COALESCE(lp.nric::text, e.nric::text) AS trainee_nric
+       FROM enrollment e
+       JOIN course c ON c.id = e.course_id
+       JOIN course_run cr ON cr.id = e.course_run_id
+       JOIN app_user u ON u.id = e.user_id
+       LEFT JOIN learner_profile lp ON lp.user_id = e.user_id
+       WHERE e.user_id = $1::uuid
+         AND LOWER(TRIM(COALESCE(e.enrolment_id::text, ''))) = LOWER(TRIM($2::text))
+       LIMIT 1`,
+      [userId, enrolmentId]
+    ),
+    pool.query(
+      `SELECT claim_id, claim_amount
+       FROM ssg_claims
+       WHERE LOWER(TRIM(COALESCE(enrollment_id::text, ''))) = LOWER(TRIM($1::text))
+       ORDER BY claim_id DESC
+       LIMIT 1`,
+      [enrolmentId]
+    ),
+  ]);
+
+  const se = seRes.rows[0] as any;
+  const raw = (se?.raw_data ?? {}) as any;
+  const trainee = raw?.trainee ?? {};
+  const course = raw?.course ?? {};
+  const run = course?.run ?? {};
+
+  const enr = enrRes.rows[0] as any;
+
+  const courseTitle =
+    String(se?.course_title || '').trim() ||
+    String(course?.title || '').trim() ||
+    String(enr?.course_title || '').trim() ||
+    courseCodeFallback;
+  const courseRef =
+    String(se?.course_reference || '').trim() ||
+    String(course?.referenceNumber || '').trim() ||
+    String(enr?.course_code || '').trim() ||
+    courseCodeFallback;
+  const runId =
+    String(se?.course_run_id || '').trim() ||
+    String(run?.id || '').trim() ||
+    String(enr?.course_run_id || '').trim() ||
+    '—';
+
+  const startDate =
+    (typeof run?.startDate === 'string' && run.startDate.trim())
+      ? run.startDate.trim()
+      : (typeof enr?.start_date === 'string' && enr.start_date.trim())
+        ? enr.start_date.trim()
+        : null;
+  const endDate =
+    (typeof run?.endDate === 'string' && run.endDate.trim())
+      ? run.endDate.trim()
+      : (typeof enr?.end_date === 'string' && enr.end_date.trim())
+        ? enr.end_date.trim()
+        : null;
+
+  const traineeName =
+    String(se?.trainee_name || '').trim() ||
+    String(trainee?.fullName || '').trim() ||
+    String(enr?.full_name || '').trim() ||
+    (await getLearnerDisplayName(userId, learnerEmail));
+  const traineeNric =
+    String(se?.trainee_nric || '').trim() ||
+    String(trainee?.id || '').trim() ||
+    String(enr?.trainee_nric || '').trim() ||
+    null;
+
+  const feeExGst = Number(enr?.course_fees_exclude_gst) || 0;
+
+  const sfcRow = sfcRes.rows[0] as any;
+  const sfcAmount = Number(sfcRow?.claim_amount) || 0;
+  const sfcClaimId = sfcRow?.claim_id ? String(sfcRow.claim_id) : null;
+
+  return {
+    courseTitle,
+    courseRef,
+    runId,
+    startDate,
+    endDate,
+    traineeName,
+    traineeNric: traineeNric || null,
+    feeExGst,
+    sfcAmount,
+    sfcClaimId,
+  };
 }
 
 async function step<T>(phase: string, fn: () => Promise<T>): Promise<T> {
@@ -86,15 +222,15 @@ export async function processInvoiceJob(jobId: string): Promise<void> {
   );
   const da = daRes.rows[0] || {};
 
+  const hasDa = daRes.rows.length > 0;
   const fullCourseFee = Number(da.full_course_fee) || 0;
-  const gst = Number(da.gst) || 0;
-  const grantSubsidy = Number(da.skillsfuture_subsidy) || 0;
-  const sfcCredit = Number(da.skillsfuture_credit) || 0;
+  const combinedSubsidy = Number(da.skillsfuture_subsidy) || 0;
+  const sfcCreditDa = Number(da.skillsfuture_credit) || 0;
 
-  console.log('[DA Application values]', {
+  console.log('[invoice-job] DA values', {
     enrolmentId,
+    hasDa,
     full_course_fee: da.full_course_fee,
-    gst: da.gst,
     skillsfuture_subsidy: da.skillsfuture_subsidy,
     skillsfuture_credit: da.skillsfuture_credit,
     course_title: da.course_title,
@@ -128,12 +264,18 @@ export async function processInvoiceJob(jobId: string): Promise<void> {
     );
   }
 
-  // 1) Best-effort grant refresh
+  // 1) Best-effort grant refresh (populates ssg_grants for BL / Non-BL split)
   try {
     await refreshGrantsForEnrolments([enrolmentId]);
   } catch (e) {
     console.warn('[invoice-job] Grant refresh failed (non-blocking):', e);
   }
+
+  const { lines: grantDeductionLines, totalSubsidy: grantSubsidy } = await resolveGrantDeductionLinesForInvoice({
+    enrolmentId,
+    combinedSubsidy,
+    grantIdFallback: da.grant_id ?? null,
+  });
 
   // 2) Find QBO item by SKU
   const item = await qboFindItemBySku(undefined, courseCode);
@@ -144,14 +286,17 @@ export async function processInvoiceJob(jobId: string): Promise<void> {
     );
   }
 
-  const actualFullCourseFee = fullCourseFee || item.unitPrice;
+  const ctx = await loadInvoiceContext(enrolmentId, userId, learnerEmail, courseCode);
+  const actualFullCourseFee =
+    (hasDa && fullCourseFee > 0) ? fullCourseFee :
+      (ctx.feeExGst > 0 ? ctx.feeExGst : item.unitPrice);
 
   // 3) Find/Create customer
-  const displayName = await getLearnerDisplayName(userId, learnerEmail);
-  const customerId = await qboFindOrCreateCustomerByEmail(undefined, learnerEmail, displayName);
+  const customerId = await qboFindOrCreateCustomerByEmail(undefined, learnerEmail, ctx.traineeName);
 
   // 4) Build invoice lines
-  const taxCodeRef = await qboResolveInvoiceLineTaxCodeRef(undefined);
+  const taxCodeGst = await qboResolveInvoiceLineTaxCodeRef(undefined);
+  const taxCodeOos = await qboResolveOosTaxCodeRef(undefined);
   const lines: any[] = [];
 
   // Line 1: Full course fee with rich description
@@ -162,34 +307,40 @@ export async function processInvoiceJob(jobId: string): Promise<void> {
       ItemRef: { value: item.id },
       Qty: 1,
       UnitPrice: actualFullCourseFee,
-      TaxCodeRef: { value: taxCodeRef },
+      TaxCodeRef: { value: taxCodeGst },
     },
     Description: [
-      `Course Name: ${da.course_title ?? courseCode}`,
-      `(${da.course_reference_number ?? courseCode})`,
-      `Participant Name: ${da.trainee_name ?? displayName}`,
-      `NRIC: ${da.trainee_id ?? '—'}`,
-      `Course Date: ${formatDate(da.course_start_date)} - ${formatDate(da.course_end_date)}`,
-      `Course Run: ${da.course_run_id ?? '—'}`,
+      `Course Name: ${hasDa ? (da.course_title ?? ctx.courseTitle) : ctx.courseTitle}`,
+      `(${hasDa ? (da.course_reference_number ?? ctx.courseRef) : ctx.courseRef})`,
+      `Participant Name: ${hasDa ? (da.trainee_name ?? ctx.traineeName) : ctx.traineeName}`,
+      `NRIC: ${hasDa ? (da.trainee_id ?? ctx.traineeNric ?? '—') : (ctx.traineeNric ?? '—')}`,
+      (() => {
+        const start = formatDate(hasDa ? da.course_start_date : ctx.startDate);
+        const end = formatDate(hasDa ? da.course_end_date : ctx.endDate);
+        if (start === end || end === '—') return `Course Date: ${start}`;
+        return `Course Date: ${start} - ${end}`;
+      })(),
+      `Course Run: ${hasDa ? (da.course_run_id ?? ctx.runId) : ctx.runId}`,
     ].join('\n'),
   });
 
-  // Line 2: WSQ Grant/subsidy deduction
-  if (grantSubsidy > 0) {
+  // Lines 2+: WSQ grants (Baseline + Non-Baseline when present in ssg_grants)
+  for (const g of grantDeductionLines) {
     lines.push({
-      Amount: -grantSubsidy,
+      Amount: -g.amount,
       DetailType: 'SalesItemLineDetail',
       SalesItemLineDetail: {
         ItemRef: { value: item.id },
         Qty: 1,
-        UnitPrice: -grantSubsidy,
-        TaxCodeRef: { value: taxCodeRef },
+        UnitPrice: -g.amount,
+        TaxCodeRef: { value: taxCodeOos },
       },
-      Description: `Less: WSQ funding (Baseline)\nGrant Ref#: ${da.grant_id ?? '—'}`,
+      Description: g.description,
     });
   }
 
-  // Line 3: SkillsFuture Credit (always show, even if 0)
+  // SkillsFuture Credit (always show, even if 0)
+  const sfcCredit = hasDa ? sfcCreditDa : ctx.sfcAmount;
   lines.push({
     Amount: -sfcCredit,
     DetailType: 'SalesItemLineDetail',
@@ -197,9 +348,11 @@ export async function processInvoiceJob(jobId: string): Promise<void> {
       ItemRef: { value: item.id },
       Qty: 1,
       UnitPrice: -sfcCredit,
-      TaxCodeRef: { value: taxCodeRef },
+      TaxCodeRef: { value: taxCodeOos },
     },
-    Description: `SkillsFuture Credit Usage/Claim:\nApplication ID: ${da.application_id ?? '—'}`,
+    Description: hasDa
+      ? `SkillsFuture Credit Usage/Claim:\nApplication ID: ${da.application_id ?? '—'}`
+      : `SkillsFuture Credit Usage/Claim:\nClaim ID: ${ctx.sfcClaimId ?? '—'}`,
   });
 
   const gtc = process.env.QBO_INVOICE_GLOBAL_TAX_CALC?.trim();
@@ -243,17 +396,19 @@ export async function processInvoiceJob(jobId: string): Promise<void> {
     );
   }
 
-  // 5) Send invoice
-  const skipSend = process.env.QBO_SKIP_SEND_INVOICE === '1' || process.env.QBO_SKIP_SEND_INVOICE === 'true';
-  if (!skipSend) {
+  // 5) Optionally email invoice from QBO (off by default — set QBO_SEND_INVOICE_EMAIL=true)
+  if (shouldSendQboInvoiceEmailFromQuickBooks()) {
     await step('QBO send invoice', () => qboSendInvoice(undefined, invoiceId));
+  } else {
+    console.log('[invoice-job] Skipping QBO customer email (set QBO_SEND_INVOICE_EMAIL=true to enable)');
   }
 
   // 6) Download PDF
   const pdf = await step('QBO fetch invoice PDF', () => qboFetchInvoicePdf(undefined, invoiceId));
 
   // 7) Upload to Drive
-  const fileName = `QBO_Invoice_${safeText(invoiceNo || docNumber || invoiceId)}_${safeText(enrolmentId)}.pdf`;
+  const fallbackNo = buildTmsInvoiceNo(enrolmentId, new Date(), 0);
+  const fileName = `QB_invoice_${safeText(invoiceNo || docNumber || fallbackNo)}.pdf`;
   const drive = await step('Google Drive upload', () => uploadInvoicePdfToDrive({ pdf, fileName }));
 
   try {
