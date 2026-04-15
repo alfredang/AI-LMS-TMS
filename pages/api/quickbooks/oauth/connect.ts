@@ -28,10 +28,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).json({ error: 'QuickBooks Client ID not configured.' });
   }
 
-  // Determine redirect URI based on host
-  const protocol = req.headers['x-forwarded-proto'] || 'https';
-  const host = req.headers['x-forwarded-host'] || req.headers.host;
-  const redirectUri = `${protocol}://${host}/api/quickbooks/oauth/callback`;
+  // Must match the redirect URI registered in Intuit Developer portal
+  const redirectUri = process.env.QBO_REDIRECT_URI || 'https://ai-lms-tms.tertiaryinfo.tech/api/quickbooks/oauth/callback';
 
   const state = `${app}_${Date.now()}`;
 

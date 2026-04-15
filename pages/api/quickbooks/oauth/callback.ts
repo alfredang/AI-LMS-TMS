@@ -45,10 +45,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(500).send(htmlPage('Configuration Error', 'QuickBooks client credentials not found.', false));
   }
 
-  // Build redirect URI (must match the one used in /connect)
-  const protocol = req.headers['x-forwarded-proto'] || 'https';
-  const host = req.headers['x-forwarded-host'] || req.headers.host;
-  const redirectUri = `${protocol}://${host}/api/quickbooks/oauth/callback`;
+  // Must match the redirect URI used in /connect and registered in Intuit
+  const redirectUri = process.env.QBO_REDIRECT_URI || 'https://ai-lms-tms.tertiaryinfo.tech/api/quickbooks/oauth/callback';
 
   // Exchange authorization code for tokens
   try {
