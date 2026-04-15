@@ -176,11 +176,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         FROM user_role_map urm
         JOIN app_user au ON au.id = urm.user_id
         CROSS JOIN training_provider tp
-        WHERE urm.role = 'Training Provider'::user_role
+        WHERE urm.role = 'Training Provider'
         LIMIT 1;
       `);
     } catch (error) {
-      console.log('Training provider table query failed, checking for data...', error);
+      console.error('❌ Training provider table query failed:', error);
       result = { rows: [] };
     }
 
@@ -193,7 +193,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         SELECT au.id, au.profile_picture_url
         FROM user_role_map urm
         JOIN app_user au ON au.id = urm.user_id
-        WHERE urm.role = 'Training Provider'::user_role
+        WHERE urm.role = 'Training Provider'
         LIMIT 1;
       `);
 
@@ -259,11 +259,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       data: responseData
     });
 
-  } catch (error) {
-    console.error('❌ Error fetching training provider info:', error);
+  } catch (error: any) {
+    console.error('❌ Error in /api/training-provider/info:', {
+      message: error.message,
+      stack: error.stack,
+      query: error.query,
+      detail: error.detail
+    });
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch training provider info'
+      error: 'Failed to fetch training provider info',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 }
