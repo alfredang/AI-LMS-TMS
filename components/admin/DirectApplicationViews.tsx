@@ -891,18 +891,18 @@ export const ViewDirectApplicationView: React.FC = () => {
                             <button onClick={handleAddToCalendar} disabled={isAddingToCal || selectedIds.size === 0} className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:bg-indigo-400 disabled:cursor-not-allowed">
                                 {isAddingToCal ? 'Adding...' : 'Add to Calendar'}
                             </button>
-                            <button onClick={handleGenerateInvoice} disabled={isGeneratingInv || selectedIds.size === 0} className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-lg bg-amber-600 text-white hover:bg-amber-700 disabled:bg-amber-400 disabled:cursor-not-allowed">
-                                {isGeneratingInv ? 'Generating...' : 'Generate Invoice'}
+                            <button disabled title="Temporarily disabled" className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-lg bg-amber-400 text-white opacity-50 cursor-not-allowed">
+                                Generate Invoice
                             </button>
-                            <button onClick={() => { setShowSendEmailModal(true); setEmailSendResult(null); }} className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-lg bg-teal-600 text-white hover:bg-teal-700">
+                            <button disabled title="Temporarily disabled" className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-lg bg-teal-400 text-white opacity-50 cursor-not-allowed">
                                 Send Invoice Email
                             </button>
                             <span className="w-px h-5 bg-gray-300 dark:bg-gray-600 mx-1" />
                             <button onClick={handleSyncEnrolment} disabled={isSyncingEnrol} className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-lg border border-green-500 text-green-700 dark:text-green-300 hover:bg-green-50 disabled:opacity-50 disabled:cursor-not-allowed">
                                 {isSyncingEnrol ? 'Syncing...' : 'Sync Enrolment'}
                             </button>
-                            <button onClick={handleSyncGrants} disabled={isSyncingGrants} className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-lg border border-purple-500 text-purple-700 dark:text-purple-300 hover:bg-purple-50 disabled:opacity-50 disabled:cursor-not-allowed">
-                                {isSyncingGrants ? 'Syncing...' : 'Sync Grants'}
+                            <button disabled title="Temporarily disabled" className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-lg border border-purple-300 text-purple-400 dark:text-purple-500 opacity-50 cursor-not-allowed">
+                                Sync Grants
                             </button>
                             <button onClick={handleSyncCalendar} disabled={isSyncingCal} className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-lg border border-indigo-500 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 disabled:opacity-50 disabled:cursor-not-allowed">
                                 {isSyncingCal ? 'Syncing...' : 'Sync Calendar'}
