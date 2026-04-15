@@ -263,8 +263,12 @@ interface Trainer {
     trainer_name: string;
 }
 
-const splitTrainerList = (list: string): string[] =>
-    (list || '').split(',').map(s => s.trim()).filter(Boolean);
+const splitTrainerList = (list: string): string[] => {
+    const s = (list || '').trim();
+    if (!s) return [];
+    if (s.includes('|')) return s.split('|').map(x => x.trim()).filter(Boolean);
+    return s.split(',').map(x => x.trim()).filter(Boolean);
+};
 
 interface UpcomingClassesTableProps {
     showTitle?: boolean;
@@ -277,22 +281,26 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
     showFilters = true,
     includeOngoing = false,
 }) => {
-    const { setAdminPage, setSelectedCourseRunId, setEditingCourseRun, setClassListReturnTo, classListCurrentPage, setClassListCurrentPage } = useLms();
-    const [currentPage, setCurrentPage] = useState(() => {
-        // Restore page from context if returning from ClassDetail/EditClass
-        const restored = classListCurrentPage;
-        return restored;
-    });
+    const {
+        setAdminPage,
+        setEditingCourseRun,
+        setSelectedCourseRunId,
+        classListCurrentPage,
+        setClassListCurrentPage,
+        setClassListReturnTo,
+    } = useLms();
+    const [currentPage, setCurrentPage] = useState(() => classListCurrentPage);
 
     // Track initial mount to prevent filter-reset effects from overriding the restored page
     const isInitialMount = useRef(true);
+    // Track current page in a ref for the visibilitychange listener to avoid closure bugs
+    const currentPageRef = useRef(currentPage);
 
-    // Clear the persisted page after restoring it (one-time consume)
     useEffect(() => {
-        if (classListCurrentPage !== 0) {
-            setClassListCurrentPage(0);
-        }
-    }, []);
+        currentPageRef.current = currentPage;
+        // Sync back to context so edit→return preserves the page
+        setClassListCurrentPage(currentPage);
+    }, [currentPage]);
     const [searchQuery, setSearchQuery] = useState('');
     const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
 
@@ -398,7 +406,7 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
             console.log('🔄 Fetching upcoming classes...');
             setLoading(true);
             const params = new URLSearchParams({
-                page: currentPage.toString(),
+                page: currentPageRef.current.toString(),
                 limit: ITEMS_PER_PAGE.toString(),
                 _t: Date.now().toString(),
             });
@@ -498,8 +506,8 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
     // picks up any trainer accept/decline that happened while away.
     useEffect(() => {
         const handleVisibilityChange = () => {
-            if (document.visibilityState === 'visible') {
-                console.log('👁️ Tab visible again — refetching upcoming classes');
+            if (document.visibilityState === 'visible' && !isInitialMount.current) {
+                console.log('👁️ Tab visible again — refetching upcoming classes from page', currentPageRef.current);
                 fetchUpcomingClasses();
             }
         };

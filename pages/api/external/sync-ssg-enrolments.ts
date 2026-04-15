@@ -45,7 +45,8 @@ export async function runAutomation(): Promise<{ success: boolean; inserted: num
 
     try {
       const result = await api.searchEnrolment({
-        meta: { enrolmentDate: dateCompact, pageSize: 100, pageIndex: 0 },
+        meta: { enrolmentDate: dateCompact },
+        parameters: { page: 0, pageSize: 100 },
         enrolment: {
           trainingPartner: { uen: tpUen, code: tpCode },
         },

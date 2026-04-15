@@ -77,10 +77,14 @@ export function normalizeTrainerName(name: string | null | undefined) {
 }
 
 export function splitTrainerList(raw: string | null | undefined) {
-  return String(raw || '')
-    .split(',')
-    .map((item) => item.trim())
-    .filter(Boolean);
+  const s = String(raw || '').trim();
+  if (!s) return [];
+  // Primary: pipe delimiter
+  if (s.includes('|')) {
+    return s.split('|').map((item) => item.trim()).filter(Boolean);
+  }
+  // Fallback: comma delimiter (legacy data)
+  return s.split(',').map((item) => item.trim()).filter(Boolean);
 }
 
 export function createInvitationToken() {

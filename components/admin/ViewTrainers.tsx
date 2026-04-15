@@ -76,6 +76,12 @@ const ViewTrainers: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [showAddTrainerForm, setShowAddTrainerForm] = useState(false);
   const [visibleNrics, setVisibleNrics] = useState<Set<string>>(new Set());
+  // Track current page in a ref to avoid closure bugs in window event listeners
+  const currentPageRef = useRef(currentPage);
+
+  useEffect(() => {
+    currentPageRef.current = currentPage;
+  }, [currentPage]);
 
   const toggleNricVisibility = (userId: string) => {
     setVisibleNrics(prev => {
@@ -313,7 +319,19 @@ const ViewTrainers: React.FC = () => {
     }
   };
 
-  useEffect(() => { fetchTrainers(); }, []);
+  useEffect(() => {
+    fetchTrainers();
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        console.log('👀 Tab focused, refreshing trainers for page:', currentPageRef.current);
+        fetchTrainers();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, []);
 
   const filteredTrainers = trainers.filter(trainer => {
     const matchesSearch = !searchQuery ||

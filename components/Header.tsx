@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useLms } from '@contexts/LmsContext';
-import { View, UserRole, AdminPage, TrainerPage } from '@app-types';
+import { View, UserRole, AdminPage, TrainerPage, DeveloperPage } from '@app-types';
 import { Icon, IconName } from './ui/Icon';
 import { ensureAbsoluteImageUrl } from '@utils/imageUtils';
 import { getFileUrl } from '@/lib/urlHelpers';
@@ -169,7 +169,7 @@ const ProfileDropdown: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 };
 
 const Header: React.FC = () => {
-  const { role, userRoles, currentView, adminPage, trainerPage, financePage, setFinancePage, handleNavigation, setAdminPage, setTrainerPage, setSelectedCourse, resetCreateView, resetAdminView, trainingProviderProfile, currentUserProfile, logout } = useLms();
+  const { role, userRoles, currentView, adminPage, trainerPage, developerPage, financePage, setFinancePage, handleNavigation, setAdminPage, setTrainerPage, setDeveloperPage, setSelectedCourse, resetCreateView, resetAdminView, trainingProviderProfile, currentUserProfile, logout } = useLms();
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isRoleSwitcherOpen, setIsRoleSwitcherOpen] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
@@ -259,6 +259,7 @@ const Header: React.FC = () => {
     [UserRole.Developer]: [
       { view: View.Courses, label: 'Courses', icon: IconName.Courses },
       { view: View.Create, label: 'SEO Metadata Generator', icon: IconName.Create },
+      { view: View.Dashboard, label: 'CP Generator', icon: IconName.FileText, developerPage: DeveloperPage.CpCourseDetails },
     ],
     [UserRole.Admin]: [
       { view: View.Admin, label: 'Admin Dashboard', icon: IconName.Admin, page: AdminPage.Dashboard },
@@ -314,14 +315,17 @@ const Header: React.FC = () => {
                 );
               }
 
-              // Trainer page navigation
+              // Role-specific page navigation
               const isTrainerItem = 'trainerPage' in item && item.trainerPage;
+              const isDeveloperItem = 'developerPage' in item && item.developerPage;
               const isFinanceItem = 'financePage' in item && item.financePage;
               const isActive = isTrainerItem
                 ? trainerPage === item.trainerPage
-                : isFinanceItem
-                  ? financePage === item.financePage
-                  : (role === UserRole.Admin && isAdminPageActive(item)) || (role !== UserRole.Admin && currentView === item.view);
+                : isDeveloperItem
+                  ? developerPage === item.developerPage
+                  : isFinanceItem
+                    ? financePage === item.financePage
+                    : (role === UserRole.Admin && isAdminPageActive(item)) || (role !== UserRole.Admin && currentView === item.view);
 
               return (
                 <a
@@ -333,6 +337,13 @@ const Header: React.FC = () => {
                     if (isTrainerItem) {
                       setSelectedCourse(null);
                       setTrainerPage(item.trainerPage);
+                      handleNavigation(View.Dashboard);
+                      return;
+                    }
+
+                    if (isDeveloperItem) {
+                      setSelectedCourse(null);
+                      setDeveloperPage(item.developerPage);
                       handleNavigation(View.Dashboard);
                       return;
                     }

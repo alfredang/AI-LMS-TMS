@@ -23,6 +23,7 @@ import { OptionalSelector } from '../../../lib/ssg/models/course-runs';
 import { HttpClient, HTTPRequestBuilder, HttpMethod } from '../../../lib/ssg/utils/http-utils';
 import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdentifiers';
 import { syncEnrolmentToDB } from '../../../lib/ssg/utils/sync-enrolment-to-db';
+import { syncAllDaApplicantsToCalendar } from '../../../lib/google-calendar/da-calendar-sync';
 import type {
   UpsertFromSsgRequest,
   UpsertFromSsgResponse,
@@ -1051,6 +1052,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         // All 3 steps succeeded.
         if (mode === 'apply') {
           await client.query('COMMIT');
+
+          // Trigger DA applicant calendar sync (non-blocking background task)
+          // Ensures any confirmed DA applicants are added to these new sessions.
+          if (courseRunStep.courseRunUuid) {
+            setImmediate(() => {
+              syncAllDaApplicantsToCalendar(courseRunStep.courseRunUuid!).catch(err => {
+                console.error('❌ [upsert-from-ssg] background DA calendar sync failed:', err);
+              });
+            });
+          }
         } else {
           // Preview should never have any writes, but roll back defensively.
           await client.query('ROLLBACK');

@@ -1,5 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../../lib/db';
+import { syncAllDaApplicantsToCalendar } from '../../../../lib/google-calendar/da-calendar-sync';
 
 // Upserts SSG session objects (as returned by /api/ssg/courses/runs/:runId/sessions)
 // into the local `course_session` table. Soft-deletes local rows that are not
@@ -150,6 +151,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       );
       softDeleted = sd.rowCount || 0;
     }
+
+    // Trigger DA applicant calendar sync (non-blocking background task)
+    // Ensures any confirmed DA applicants are added to these new sessions.
+    setImmediate(() => {
+      syncAllDaApplicantsToCalendar(courseRunUuid).catch(err => {
+        console.error('❌ [sync-from-ssg] background DA calendar sync failed:', err);
+      });
+    });
 
     return res.status(200).json({
       success: true,

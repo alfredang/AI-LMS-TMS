@@ -126,6 +126,27 @@ export enum AdminPage {
   SupportTicketDetail = 'supportTicketDetail',
 }
 
+export enum DeveloperPage {
+  Dashboard = 'dashboard',
+  CourseList = 'courseList',
+  SeoMetadata = 'seoMetadata',
+  CpGenerator = 'cpGenerator',
+  CpCourseDetails = 'cpCourseDetails',
+  CpAboutCourse = 'cpAboutCourse',
+  CpWhatYoullLearn = 'cpWhatYoullLearn',
+  CpBackgroundA = 'cpBackgroundA',
+  CpBackgroundB = 'cpBackgroundB',
+  CpLearningOutcomes = 'cpLearningOutcomes',
+  CpInstructionalMethods = 'cpInstructionalMethods',
+  CpAssessmentMethods = 'cpAssessmentMethods',
+  CpLuSequencing = 'cpLuSequencing',
+  CpCourseOutline = 'cpCourseOutline',
+  CpEntryRequirements = 'cpEntryRequirements',
+  CpJobRoles = 'cpJobRoles',
+  CpLessonPlan = 'cpLessonPlan',
+  CpValidation = 'cpValidation',
+}
+
 export enum TrainerPage {
   EAttendance = 'eAttendance',
   AssessmentGrading = 'assessmentGrading',
