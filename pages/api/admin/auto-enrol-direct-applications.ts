@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { bulkProcessDirectApplications } from '../../../lib/autoEnrolDirectApplications';
+import { retryFailedCalendarSyncs } from '../../../lib/google-calendar/da-calendar-sync';
 
 /**
  * POST /api/admin/auto-enrol-direct-applications
@@ -46,6 +47,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     setImmediate(() => {
       bulkProcessDirectApplications(ids).catch(err => {
         console.error('❌ auto-enrol background batch failed:', err);
+      });
+      
+      // Also run the background sweep for any applications that missed the calendar step
+      retryFailedCalendarSyncs().catch(err => {
+        console.error('❌ calendar retry sweep background batch failed:', err);
       });
     });
 
