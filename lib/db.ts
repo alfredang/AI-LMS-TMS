@@ -15,11 +15,10 @@ const pool = new Pool({
     ? { rejectUnauthorized: false }
     : false,
 
-  // Connection pool settings optimized for serverless
-  // Keep these low for serverless environments
-  max: 5, // Reduced for serverless - each function instance has its own pool
+  // Connection pool settings
+  max: 10, // Allow more concurrent connections
   idleTimeoutMillis: 10000, // Close idle clients after 10 seconds
-  connectionTimeoutMillis: 10000, // Return an error if connection takes longer than 10 seconds
+  connectionTimeoutMillis: 15000, // Return an error if connection takes longer than 15 seconds
 });
 
 // Test connection
