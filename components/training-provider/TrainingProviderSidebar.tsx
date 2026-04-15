@@ -7,9 +7,10 @@ import { Icon, IconName } from '../ui/Icon';
 interface TrainingProviderSidebarProps {
     onNavigate?: () => void;
     onSelectWorkflow?: (workflowId: string) => void;
+    collapsed?: boolean;
 }
 
-const TrainingProviderSidebar: React.FC<TrainingProviderSidebarProps> = ({ onNavigate, onSelectWorkflow }) => {
+const TrainingProviderSidebar: React.FC<TrainingProviderSidebarProps> = ({ onNavigate, onSelectWorkflow, collapsed = false }) => {
     const { currentView, handleNavigation, selectedCourse, adminPage, setAdminPage } = useLms();
     const appVersion = useAppVersion();
 
@@ -81,33 +82,32 @@ const TrainingProviderSidebar: React.FC<TrainingProviderSidebarProps> = ({ onNav
     // Determine active view - if a course is selected, highlight Courses
     const activeView = selectedCourse ? View.Courses : currentView;
 
+    const activeClass = 'bg-primary/10 text-primary font-semibold';
+    const inactiveClass = 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700/50 hover:text-gray-900 dark:hover:text-white';
+
     const linkClass = (view: View) =>
-        `flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors ${activeView === view
-            ? 'bg-blue-50 text-blue-600 border-l-3 border-blue-500 dark:bg-blue-600/20 dark:text-blue-400 dark:border-blue-500'
-            : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-slate-700 dark:hover:text-white'
-        }`;
+        `group flex items-center ${collapsed ? 'justify-center px-0' : 'gap-3 px-3'} w-full rounded-xl py-2.5 text-sm font-medium transition-all duration-150 ${activeView === view ? activeClass : inactiveClass}`;
 
     return (
-        <nav className="space-y-2 p-4 bg-white dark:bg-slate-800 text-gray-900 dark:text-white h-full">
+        <nav className="space-y-1 px-2 py-4 bg-white dark:bg-slate-800 text-gray-900 dark:text-white h-full">
             {/* Dashboard */}
-            <a href="#" onClick={(e) => { e.preventDefault(); handleClick(View.Dashboard); }} className={linkClass(View.Dashboard)}>
-                <Icon name={IconName.Dashboard} className="w-5 h-5" />
-                <span>Training Dashboard</span>
+            <a href="#" title={collapsed ? 'Training Dashboard' : undefined} onClick={(e) => { e.preventDefault(); handleClick(View.Dashboard); }} className={linkClass(View.Dashboard)}>
+                <Icon name={IconName.Dashboard} className={`w-[18px] h-[18px] flex-shrink-0 transition-colors ${activeView === View.Dashboard ? 'text-primary' : 'text-gray-400 dark:text-gray-500'}`} />
+                {!collapsed && <span className="truncate">Training Dashboard</span>}
             </a>
 
             {/* Workflow Guides - Collapsible (after Dashboard) */}
             <div>
                 <button
                     onClick={() => { setWorkflowsOpen(!workflowsOpen); handleClick(View.WorkflowGuides); onSelectWorkflow?.(''); }}
-                    className={`flex items-center justify-between w-full rounded-md px-3 py-2.5 text-sm font-medium transition-colors ${activeView === View.WorkflowGuides ? 'bg-blue-50 text-blue-600 dark:bg-blue-600/20 dark:text-blue-400' : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-slate-700 dark:hover:text-white'}`}
+                    title={collapsed ? 'Workflow Guides' : undefined}
+                    className={linkClass(View.WorkflowGuides)}
                 >
-                    <div className="flex items-center gap-3">
-                        <Icon name={IconName.BookOpen} className="w-5 h-5" />
-                        <span>Workflow Guides</span>
-                    </div>
-                    <Icon name={IconName.ChevronDown} className={`w-4 h-4 transition-transform ${workflowsOpen ? 'rotate-180' : ''}`} />
+                    <Icon name={IconName.BookOpen} className={`w-[18px] h-[18px] flex-shrink-0 transition-colors ${activeView === View.WorkflowGuides ? 'text-primary' : 'text-gray-400 dark:text-gray-500'}`} />
+                    {!collapsed && <span className="truncate flex-1 text-left">Workflow Guides</span>}
+                    {!collapsed && <Icon name={IconName.ChevronDown} className={`w-4 h-4 flex-shrink-0 transition-transform ${workflowsOpen ? 'rotate-180' : ''}`} />}
                 </button>
-                {workflowsOpen && (
+                {!collapsed && workflowsOpen && (
                     <div className="ml-4 mt-1 space-y-1">
                         {/* Training */}
                         <button onClick={() => setWfTrainingOpen(!wfTrainingOpen)} className="w-full flex items-center justify-between px-3 py-1.5 group cursor-pointer hover:bg-gray-100 dark:hover:bg-slate-700 rounded-md">
@@ -161,16 +161,16 @@ const TrainingProviderSidebar: React.FC<TrainingProviderSidebarProps> = ({ onNav
 
             {/* Remaining nav items */}
             {navItemsTop.filter(item => item.view !== View.Dashboard).map((item) => (
-                <a key={item.view} href="#" onClick={(e) => { e.preventDefault(); handleClick(item.view); }} className={linkClass(item.view)}>
-                    <Icon name={item.icon} className="w-5 h-5" />
-                    <span>{item.label}</span>
+                <a key={item.view} href="#" title={collapsed ? item.label : undefined} onClick={(e) => { e.preventDefault(); handleClick(item.view); }} className={linkClass(item.view)}>
+                    <Icon name={item.icon} className={`w-[18px] h-[18px] flex-shrink-0 transition-colors ${activeView === item.view ? 'text-primary' : 'text-gray-400 dark:text-gray-500'}`} />
+                    {!collapsed && <span className="truncate">{item.label}</span>}
                 </a>
             ))}
 
             {navItemsBottom.map((item) => (
-                <a key={item.view} href="#" onClick={(e) => { e.preventDefault(); handleClick(item.view); }} className={linkClass(item.view)}>
-                    <Icon name={item.icon} className="w-5 h-5" />
-                    <span>{item.label}</span>
+                <a key={item.view} href="#" title={collapsed ? item.label : undefined} onClick={(e) => { e.preventDefault(); handleClick(item.view); }} className={linkClass(item.view)}>
+                    <Icon name={item.icon} className={`w-[18px] h-[18px] flex-shrink-0 transition-colors ${activeView === item.view ? 'text-primary' : 'text-gray-400 dark:text-gray-500'}`} />
+                    {!collapsed && <span className="truncate">{item.label}</span>}
                 </a>
             ))}
 
@@ -178,20 +178,14 @@ const TrainingProviderSidebar: React.FC<TrainingProviderSidebarProps> = ({ onNav
             <div>
                 <button
                     onClick={() => setCronJobsOpen(!cronJobsOpen)}
-                    className={`flex items-center justify-between w-full rounded-md px-3 py-2.5 text-sm font-medium transition-colors ${cronJobsViews.includes(activeView)
-                        ? 'bg-blue-50 text-blue-600 dark:bg-blue-600/20 dark:text-blue-400'
-                        : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-slate-700 dark:hover:text-white'}`}
+                    title={collapsed ? 'Cron Jobs' : undefined}
+                    className={`group flex items-center ${collapsed ? 'justify-center px-0' : 'gap-3 px-3'} w-full rounded-xl py-2.5 text-sm font-medium transition-all duration-150 ${cronJobsViews.includes(activeView) ? activeClass : inactiveClass}`}
                 >
-                    <div className="flex items-center gap-3">
-                        <Icon name={IconName.Clock} className="w-5 h-5" />
-                        <span>Cron Jobs</span>
-                    </div>
-                    <Icon
-                        name={IconName.ChevronDown}
-                        className={`w-4 h-4 transition-transform ${cronJobsOpen ? 'rotate-180' : ''}`}
-                    />
+                    <Icon name={IconName.Clock} className={`w-[18px] h-[18px] flex-shrink-0 transition-colors ${cronJobsViews.includes(activeView) ? 'text-primary' : 'text-gray-400 dark:text-gray-500'}`} />
+                    {!collapsed && <span className="truncate flex-1 text-left">Cron Jobs</span>}
+                    {!collapsed && <Icon name={IconName.ChevronDown} className={`w-4 h-4 flex-shrink-0 transition-transform ${cronJobsOpen ? 'rotate-180' : ''}`} />}
                 </button>
-                {cronJobsOpen && (
+                {!collapsed && cronJobsOpen && (
                     <div className="ml-4 mt-1 space-y-1">
                         {cronJobsItems.map((item) => (
                             <a
@@ -215,20 +209,14 @@ const TrainingProviderSidebar: React.FC<TrainingProviderSidebarProps> = ({ onNav
             <div>
                 <button
                     onClick={() => setLoggingOpen(!loggingOpen)}
-                    className={`flex items-center justify-between w-full rounded-md px-3 py-2.5 text-sm font-medium transition-colors ${currentView === View.Scheduler && loggingItems.some(i => i.page === adminPage)
-                        ? 'bg-blue-50 text-blue-600 dark:bg-blue-600/20 dark:text-blue-400'
-                        : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-slate-700 dark:hover:text-white'}`}
+                    title={collapsed ? 'Logging' : undefined}
+                    className={`group flex items-center ${collapsed ? 'justify-center px-0' : 'gap-3 px-3'} w-full rounded-xl py-2.5 text-sm font-medium transition-all duration-150 ${currentView === View.Scheduler && loggingItems.some(i => i.page === adminPage) ? activeClass : inactiveClass}`}
                 >
-                    <div className="flex items-center gap-3">
-                        <Icon name={IconName.FileText} className="w-5 h-5" />
-                        <span>Logging</span>
-                    </div>
-                    <Icon
-                        name={IconName.ChevronDown}
-                        className={`w-4 h-4 transition-transform ${loggingOpen ? 'rotate-180' : ''}`}
-                    />
+                    <Icon name={IconName.FileText} className={`w-[18px] h-[18px] flex-shrink-0 transition-colors ${currentView === View.Scheduler && loggingItems.some(i => i.page === adminPage) ? 'text-primary' : 'text-gray-400 dark:text-gray-500'}`} />
+                    {!collapsed && <span className="truncate flex-1 text-left">Logging</span>}
+                    {!collapsed && <Icon name={IconName.ChevronDown} className={`w-4 h-4 flex-shrink-0 transition-transform ${loggingOpen ? 'rotate-180' : ''}`} />}
                 </button>
-                {loggingOpen && (
+                {!collapsed && loggingOpen && (
                     <div className="ml-4 mt-1 space-y-1">
                         {loggingItems.map((item) => {
                             const isActive = currentView === View.Scheduler && adminPage === item.page;
@@ -255,18 +243,14 @@ const TrainingProviderSidebar: React.FC<TrainingProviderSidebarProps> = ({ onNav
             <div>
                 <button
                     onClick={() => setTemplatesOpen(!templatesOpen)}
-                    className="flex items-center justify-between w-full rounded-md px-3 py-2.5 text-sm font-medium transition-colors text-gray-700 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-slate-700 dark:hover:text-white"
+                    title={collapsed ? 'Templates' : undefined}
+                    className={`group flex items-center ${collapsed ? 'justify-center px-0' : 'gap-3 px-3'} w-full rounded-xl py-2.5 text-sm font-medium transition-all duration-150 ${inactiveClass}`}
                 >
-                    <div className="flex items-center gap-3">
-                        <Icon name={IconName.FileText} className="w-5 h-5" />
-                        <span>Templates</span>
-                    </div>
-                    <Icon
-                        name={IconName.ChevronDown}
-                        className={`w-4 h-4 transition-transform ${templatesOpen ? 'rotate-180' : ''}`}
-                    />
+                    <Icon name={IconName.Mail} className="w-[18px] h-[18px] flex-shrink-0 text-gray-400 dark:text-gray-500" />
+                    {!collapsed && <span className="truncate flex-1 text-left">Templates</span>}
+                    {!collapsed && <Icon name={IconName.ChevronDown} className={`w-4 h-4 flex-shrink-0 transition-transform ${templatesOpen ? 'rotate-180' : ''}`} />}
                 </button>
-                {templatesOpen && (
+                {!collapsed && templatesOpen && (
                     <div className="ml-4 mt-1 space-y-1">
                         {templateItems.map((item) => (
                             <a
@@ -290,18 +274,14 @@ const TrainingProviderSidebar: React.FC<TrainingProviderSidebarProps> = ({ onNav
             <div>
                 <button
                     onClick={() => setUsefulLinksOpen(!usefulLinksOpen)}
-                    className="flex items-center justify-between w-full rounded-md px-3 py-2.5 text-sm font-medium transition-colors text-gray-700 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-slate-700 dark:hover:text-white"
+                    title={collapsed ? 'Useful Links' : undefined}
+                    className={`group flex items-center ${collapsed ? 'justify-center px-0' : 'gap-3 px-3'} w-full rounded-xl py-2.5 text-sm font-medium transition-all duration-150 ${inactiveClass}`}
                 >
-                    <div className="flex items-center gap-3">
-                        <Icon name={IconName.ExternalLink} className="w-5 h-5" />
-                        <span>Useful Links</span>
-                    </div>
-                    <Icon
-                        name={IconName.ChevronDown}
-                        className={`w-4 h-4 transition-transform ${usefulLinksOpen ? 'rotate-180' : ''}`}
-                    />
+                    <Icon name={IconName.ExternalLink} className="w-[18px] h-[18px] flex-shrink-0 text-gray-400 dark:text-gray-500" />
+                    {!collapsed && <span className="truncate flex-1 text-left">Useful Links</span>}
+                    {!collapsed && <Icon name={IconName.ChevronDown} className={`w-4 h-4 flex-shrink-0 transition-transform ${usefulLinksOpen ? 'rotate-180' : ''}`} />}
                 </button>
-                {usefulLinksOpen && (
+                {!collapsed && usefulLinksOpen && (
                     <div className="ml-4 mt-1 space-y-1">
                         <a
                             href="https://ssg-api-portal.vercel.app/"
@@ -328,21 +308,19 @@ const TrainingProviderSidebar: React.FC<TrainingProviderSidebarProps> = ({ onNav
             </div>
 
             {/* Provider Access Info */}
-            <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
-                <div className="px-3 py-3 rounded-lg bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800">
-                    <div className="flex items-center gap-2 mb-1">
-                        <Icon name={IconName.Admin} className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                        <span className="text-sm font-semibold text-blue-700 dark:text-blue-300">Provider Access</span>
+            {!collapsed && (
+                <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
+                    <div className="px-3 py-3 rounded-lg bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800">
+                        <div className="flex items-center gap-2 mb-1">
+                            <Icon name={IconName.Admin} className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                            <span className="text-sm font-semibold text-blue-700 dark:text-blue-300">Provider Access</span>
+                        </div>
+                        <p className="text-xs text-blue-600 dark:text-blue-400">
+                            You have full training provider privileges. Handle user data with care.
+                        </p>
                     </div>
-                    <p className="text-xs text-blue-600 dark:text-blue-400">
-                        You have full training provider privileges. Handle user data with care.
-                    </p>
                 </div>
-            </div>
-
-            <div className="pt-6 mt-6 border-t border-gray-200 dark:border-gray-700">
-                <p className="px-3 text-[10px] text-gray-400 dark:text-gray-300 font-mono">version {appVersion}</p>
-            </div>
+            )}
         </nav>
     );
 };
