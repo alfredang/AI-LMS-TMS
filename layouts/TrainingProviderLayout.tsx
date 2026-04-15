@@ -123,39 +123,6 @@ const TrainingProviderLayout: React.FC = () => {
   };
 
   // Get current page title for mobile header
-  const getPageTitle = () => {
-    if (selectedCourse) return selectedCourse.title;
-    switch (currentView) {
-      case View.Dashboard: return 'Dashboard';
-      case View.Courses: return 'Courses';
-      case View.UserManagement: return 'User Management';
-      case View.AdminManagement: return 'Role Management';
-      case View.Profile: return 'Company Setting';
-      case View.HelpAndSupport: return 'Help & Support';
-      case View.ApiEndpoints: return 'API Endpoints';
-      case View.Documents: return 'Documents';
-      case View.PrivacyPolicy: return 'Privacy Policy';
-      case View.AcceptableUsePolicy: return 'Acceptable Use Policy';
-      case View.OtpEmailTemplate: return 'OTP Email Template';
-      case View.CertificateEmailTemplate: return 'Certificate Email Template';
-      case View.FeedbackEmailTemplate: return 'Feedback Email Template';
-      case View.PasswordResetEmailTemplate: return 'Password Reset Email Template';
-      case View.TrainerInvitationEmailTemplate: return 'Trainer Invitation Email Template';
-      case View.TrainerResponseEmailTemplates: return 'Trainer Accept/Decline Email Templates';
-      case View.WorkflowGuides: return 'Workflow Guides';
-      case View.FinalCourseConfirmationEmailTemplate: return 'Final Course Confirmation Email Template';
-      case View.CourseConfirmationEmailTemplate: return 'Course Confirmation Email Template';
-      case View.CoursewareAttendanceEmailTemplate: return 'Courseware and Attendance Taking Email Template';
-      case View.ProformaInvoiceEmailTemplate: return 'Proforma Invoice Email Template';
-      case View.FinanceManagement: return 'Finance Management';
-      case View.Scheduler: return 'Task Scheduler';
-      case View.SchedulerSummary: return 'Schedule Summary';
-      case View.Webhooks: return 'Webhooks';
-      case View.SsgApiSummary: return 'SSG API Summary';
-      default: return 'Dashboard';
-    }
-  };
-
   return (
     <div className="min-h-screen flex flex-col bg-background font-sans text-on-surface">
       <Header />
@@ -178,7 +145,7 @@ const TrainingProviderLayout: React.FC = () => {
               </button>
             </div>
             <div className="flex-1 overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
-              {isSidebarOpen && <TrainingProviderSidebar onSelectWorkflow={setSelectedWorkflowId} />}
+              <TrainingProviderSidebar onSelectWorkflow={setSelectedWorkflowId} collapsed={!isSidebarOpen} />
             </div>
             {isSidebarOpen && <p className="px-3 py-2 text-[10px] text-gray-400 dark:text-gray-300 font-mono border-t border-gray-200 dark:border-gray-700">version {appVersion}</p>}
           </aside>
