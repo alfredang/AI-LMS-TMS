@@ -124,6 +124,7 @@ export enum AdminPage {
   WorkflowGuides = 'workflowGuides',
   SupportTickets = 'supportTickets',
   SupportTicketDetail = 'supportTicketDetail',
+  MasterList = 'masterList',
 }
 
 export enum DeveloperPage {
