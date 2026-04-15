@@ -523,6 +523,27 @@ export const BulkUploadEnrolmentView: React.FC = () => {
             }
             console.log('✅ Database insertion process completed');
 
+            // Auto-sync calendar flags for newly enrolled learners
+            const successCount = allItems.filter(item => item.parsedResult?.success).length;
+            if (successCount > 0) {
+                console.log(`📅 Auto-syncing calendar for ${successCount} successful enrolments...`);
+                try {
+                    const calRes = await fetch('/api/admin/enrolment-actions', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ action: 'sync-calendar' }),
+                    });
+                    const calJson = await calRes.json();
+                    if (calJson.success) {
+                        console.log(`📅 Calendar sync complete: checked=${calJson.checked}, matched=${calJson.matched}`);
+                    } else {
+                        console.warn('📅 Calendar sync returned error (non-blocking):', calJson.error);
+                    }
+                } catch (calErr) {
+                    console.warn('📅 Calendar sync failed (non-blocking):', calErr);
+                }
+            }
+
             setUploadResult({ results: allItems });
 
         } catch (err) {
