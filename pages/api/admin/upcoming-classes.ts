@@ -13,6 +13,7 @@ interface UpcomingClass {
   endDate: string;
   assignedTrainerTpg: string;
   assignedTrainerTpgEmail: string;
+  tpgSyncStatus: string | null;
   assignedTrainerLocal: string;
   assignedTrainerLocalEmail: string;
   nextAvailableTrainer: string;
@@ -162,6 +163,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     await pool.query('ALTER TABLE course_run ADD COLUMN IF NOT EXISTS invitation_paused BOOLEAN DEFAULT false');
     await pool.query('ALTER TABLE course_run ADD COLUMN IF NOT EXISTS invitation_replies_blocked BOOLEAN DEFAULT false');
     await pool.query('ALTER TABLE course_run ADD COLUMN IF NOT EXISTS trainer_in_calendar BOOLEAN');
+    await pool.query('ALTER TABLE course_run ADD COLUMN IF NOT EXISTS tpg_sync_status TEXT');
 
     const includeOngoing = req.query.includeOngoing === 'true';
 
@@ -291,6 +293,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           cr.virtual_meeting_link,
           ${tpgNameExpr} AS assigned_trainer_tpg,
           ${tpgEmailExpr} AS assigned_trainer_tpg_email,
+          cr.tpg_sync_status,
           cr.assigned_trainer_name AS legacy_assigned_trainer_name,
           COUNT(e.id) AS num_of_trainee
         ${baseQuery}
@@ -309,6 +312,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           cr.virtual_meeting_link,
           ${tpgNameExpr},
           ${tpgEmailExpr},
+          cr.tpg_sync_status,
           cr.assigned_trainer_name
         ORDER BY cr.start_date ASC NULLS LAST, cr.end_date ASC NULLS LAST
         LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
@@ -565,6 +569,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         endDate: row.end_date,
         assignedTrainerTpg: row.assigned_trainer_tpg || '',
         assignedTrainerTpgEmail: row.assigned_trainer_tpg_email || '',
+        tpgSyncStatus: row.tpg_sync_status || null,
         assignedTrainerLocal: allLocalPairs[0]?.name || (row.legacy_assigned_trainer_name || '').toString().trim() || '',
         assignedTrainerLocalEmail: allLocalPairs[0]?.email || '',
         nextAvailableTrainer,
