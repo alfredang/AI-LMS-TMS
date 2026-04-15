@@ -10,16 +10,16 @@ const DATA_ANALYTICS_TOOLS = [
     href: 'https://alfredang.github.io/novapivot/',
   },
   {
-    title: 'Mock Data Generator',
-    description: 'Generate realistic mock data for testing and demonstrations',
-    icon: IconName.FileText,
-    href: 'https://alfredang.github.io/mockdatagen/',
-  },
-  {
     title: 'Anomaly Detection',
     description: 'Detect outliers and anomalies in datasets using statistical methods and visualizations',
     icon: IconName.Warning,
     href: 'https://alfredang.github.io/anamolydetection2/',
+  },
+  {
+    title: 'Mock Data Generator',
+    description: 'Generate realistic mock data for testing and demonstrations',
+    icon: IconName.FileText,
+    href: 'https://alfredang.github.io/mockdatagen/',
   },
 ];
 
