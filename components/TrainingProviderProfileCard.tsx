@@ -2329,6 +2329,23 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                             );
                                         })}
                                     </div>
+                                    {/* Connect QuickBooks button */}
+                                    <div className="mt-4">
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                const defaultApp = (formData.apiKeys || {} as any)['QUICKBOOKS_DEFAULT_APP'] || 'app1';
+                                                window.open(`/api/quickbooks/oauth/connect?app=${defaultApp}`, '_blank', 'width=600,height=700');
+                                            }}
+                                            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-green-600 text-white text-sm font-medium hover:bg-green-700 transition-colors"
+                                        >
+                                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                                            </svg>
+                                            Connect QuickBooks (Generate Refresh Token)
+                                        </button>
+                                        <p className="mt-1 text-xs text-muted">Opens Intuit OAuth to authorize and automatically save the refresh token.</p>
+                                    </div>
                                 </div>
                             </div>
                         )}
