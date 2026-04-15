@@ -260,6 +260,38 @@ export async function qboResolveInvoiceLineTaxCodeRef(appOverride: string | unde
   throw new Error('Could not resolve a Tax Code Id for GST lines. Set QBO_INVOICE_LINE_TAX_CODE_REF in environment.');
 }
 
+/**
+ * Tax code for WSQ subsidy / SkillsFuture credit lines (no GST on those amounts).
+ * 1) `QBO_OOS_TAX_CODE_REF` or `QBO_SUBSIDY_LINE_TAX_CODE_REF`
+ * 2) Query TaxCode and prefer names like "Out of Scope" / "Zero" / "Exempt"
+ * 3) Fallback `"18"` (matches legacy createDirectApplicationInvoice defaults)
+ */
+export async function qboResolveOosTaxCodeRef(appOverride: string | undefined): Promise<string> {
+  const envId =
+    process.env.QBO_OOS_TAX_CODE_REF?.trim() || process.env.QBO_SUBSIDY_LINE_TAX_CODE_REF?.trim();
+  if (envId) return envId;
+
+  const data = await qboQuery(appOverride, 'SELECT * FROM TaxCode MAXRESULTS 100');
+  const raw = data?.QueryResponse?.TaxCode;
+  const list: any[] = Array.isArray(raw) ? raw : raw ? [raw] : [];
+  const scoreOos = (t: any): number => {
+    const name = String(t.Name || '').toLowerCase();
+    if (t.Active === false) return -999;
+    let s = 0;
+    if (/out of scope|^\s*oos\s*$/i.test(name)) s += 40;
+    if (/zero|zr|exempt|no gst|non-taxable/i.test(name)) s += 25;
+    if (/gst|standard|sr|rated|\d+\s*%/.test(name)) s -= 10;
+    return s;
+  };
+  const sorted = [...list].sort((a, b) => scoreOos(b) - scoreOos(a));
+  const best = sorted[0];
+  if (best?.Id && scoreOos(best) > 0) {
+    console.log(`[qbo] Using TaxCodeRef ${best.Id} (${best.Name}) for OOS / subsidy lines`);
+    return String(best.Id);
+  }
+  return '18';
+}
+
 export async function qboFindItemBySku(appOverride: string | undefined, sku: string): Promise<{ id: string; name: string; unitPrice: number } | null> {
   const q = `SELECT * FROM Item WHERE Sku = '${sku.replace(/'/g, "''")}'`;
   const data = await qboQuery(appOverride, q);

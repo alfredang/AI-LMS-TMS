@@ -24,21 +24,29 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     await ensureInvoiceJobsTable();
 
-    // Match job by SSG enrolment ref; authorize via enrollment row (raw_data fallback if column ≠ job).
+    // Match completed job to this learner enrolment: same ENR as stored on enrollment OR canonical ENR from SSG (often differs).
     const r = await pool.query(
       `SELECT ij.drive_file_id, ij.qbo_invoice_id, ij.qbo_doc_number, ij.invoice_no
        FROM public.invoice_jobs ij
        WHERE ij.status = 'done'
-         AND ij.user_id = $1::uuid
-         AND LOWER(TRIM(COALESCE(ij.enrolment_id, ''))) = LOWER(TRIM($2::text))
-         AND EXISTS (
-             SELECT 1
-             FROM enrollment e
-             JOIN app_user u ON u.id = e.user_id
-             JOIN course_run cr ON cr.id = e.course_run_id
-             WHERE e.user_id = $1::uuid
-               AND ${BILLING_ENR_NORM_SQL} = LOWER(TRIM($2::text))
+         AND (
+           ij.user_id = $1::uuid
+           OR LOWER(TRIM(COALESCE(ij.learner_email, ''))) = (
+             SELECT LOWER(TRIM(COALESCE(email::text, ''))) FROM app_user WHERE id = $1::uuid LIMIT 1
            )
+         )
+         AND EXISTS (
+           SELECT 1
+           FROM enrollment e
+           JOIN app_user u ON u.id = e.user_id
+           JOIN course_run cr ON cr.id = e.course_run_id
+           WHERE e.user_id = $1::uuid
+             AND LOWER(TRIM(COALESCE(e.enrolment_id::text, ''))) = LOWER(TRIM($2::text))
+             AND (
+               LOWER(TRIM(COALESCE(ij.enrolment_id::text, ''))) = LOWER(TRIM(COALESCE(e.enrolment_id::text, '')))
+               OR LOWER(TRIM(COALESCE(ij.enrolment_id::text, ''))) = (${BILLING_ENR_NORM_SQL})
+             )
+         )
        ORDER BY ij.updated_at DESC
        LIMIT 1`,
       [userId, enrolmentId]

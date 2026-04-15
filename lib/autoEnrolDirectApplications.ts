@@ -5,6 +5,7 @@
  *   1. Load row from da_application (skip if not in "Confirm application" state)
  *   2. Submit SSG enrolment via /tpg/enrolments → save enrolment_id
  *   3. Search SSG grants by enrolment reference → save grant_id (non-fatal)
+ *   3b. Refresh grants into ssg_grants (BL + Non-BL for invoices / FMS; non-fatal)
  *   4. (If enabled) Create QuickBooks invoice → save invoice_id
  *   5. (If enabled) Send invoice email (non-fatal)
  *   6. Add learner email to matching Google Calendar event (non-fatal)
@@ -24,6 +25,8 @@ import {
   createDirectApplicationInvoice,
   type DaApplicationForInvoice,
 } from './quickbooks/createDirectApplicationInvoice';
+import { refreshGrantsForEnrolments } from './services/billingSync';
+import { shouldSendQboInvoiceEmailFromQuickBooks } from './services/qboInvoiceEmailPolicy';
 import { google } from 'googleapis';
 import { getGoogleCredentials } from './google-auth/googleAuth';
 
@@ -421,6 +424,17 @@ export async function processDirectApplication(
     console.log(`ℹ️  auto-enrol [${applicationId}] grant already exists: ${grantId}`);
   }
 
+  if (enrolmentReference) {
+    try {
+      await refreshGrantsForEnrolments([enrolmentReference]);
+    } catch (err) {
+      console.warn(
+        `⚠️  auto-enrol [${applicationId}] refreshGrantsForEnrolments (non-fatal):`,
+        err instanceof Error ? err.message : err
+      );
+    }
+  }
+
   // Step 3: QuickBooks invoice
   if (!autoInvoice && !options?.forceInvoice) {
     if (autoCalendar && row.trainee_email) {
@@ -487,14 +501,20 @@ export async function processDirectApplication(
     };
   }
 
-  // Step 4: Send invoice email (non-fatal)
+  // Step 4: Send invoice email via QBO proxy (non-fatal; off by default — same as invoice jobs)
   if (row.trainee_email && invoiceId) {
-    try {
-      await callInvoiceSend(invoiceId, row.trainee_email);
-    } catch (err) {
-      console.warn(
-        `⚠️  auto-enrol [${applicationId}] invoice send failed (non-fatal):`,
-        err instanceof Error ? err.message : err
+    if (shouldSendQboInvoiceEmailFromQuickBooks()) {
+      try {
+        await callInvoiceSend(invoiceId, row.trainee_email);
+      } catch (err) {
+        console.warn(
+          `⚠️  auto-enrol [${applicationId}] invoice send failed (non-fatal):`,
+          err instanceof Error ? err.message : err
+        );
+      }
+    } else {
+      console.log(
+        `ℹ️  auto-enrol [${applicationId}] skipping invoice email — set QBO_SEND_INVOICE_EMAIL=true to send`
       );
     }
   }

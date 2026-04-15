@@ -14,6 +14,8 @@ interface BillingRow {
   document_url: string | null;
   invoice_number: string | null;
   status: 'Issued' | 'Pending';
+  /** QB invoice completed in our system (Drive and/or QBO); PDF available via /api/billing/invoice-pdf even if web view link is missing */
+  invoice_pdf_ready?: boolean;
 }
 
 interface Summary {
@@ -52,6 +54,7 @@ const BillingHistoryView: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [verifyingId, setVerifyingId] = useState<string | null>(null);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [brokenLinks, setBrokenLinks] = useState<Set<string>>(new Set());
 
   useEffect(() => {
@@ -241,7 +244,8 @@ const BillingHistoryView: React.FC = () => {
                     </td>
                     {/* Documents */}
                     <td className={`${cell} text-center`}>
-                      {row.document_url ? (
+                      {row.document_url ||
+                      (row.type === 'Personal Invoice' && row.status === 'Issued' && row.invoice_pdf_ready) ? (
                         brokenLinks.has(`${row.enrollment_id}-${row.type}`) ? (
                           <div className="flex flex-col items-center gap-1">
                             <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-400">
@@ -251,34 +255,69 @@ const BillingHistoryView: React.FC = () => {
                             <span className="text-[10px] text-on-surface-secondary">Document may have been deleted</span>
                           </div>
                         ) : (
-                          <button
-                            onClick={async () => {
-                              const key = `${row.enrollment_id}-${row.type}`;
-                              setVerifyingId(key);
-                              try {
-                                const res = await fetch(`/api/billing/verify-drive?url=${encodeURIComponent(row.document_url!)}&enrollmentId=${row.enrollment_id}`);
-                                const json = await res.json();
-                                if (json.valid) {
-                                  window.open(row.document_url!, '_blank');
-                                } else {
-                                  setBrokenLinks(prev => new Set(prev).add(key));
-                                }
-                              } catch {
-                                window.open(row.document_url!, '_blank');
-                              } finally {
-                                setVerifyingId(null);
-                              }
-                            }}
-                            disabled={verifyingId === `${row.enrollment_id}-${row.type}`}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-blue-900/20 dark:text-blue-400 dark:hover:bg-blue-900/40 transition-colors disabled:opacity-60"
-                          >
-                            {verifyingId === `${row.enrollment_id}-${row.type}` ? (
-                              <div className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-blue-700 dark:border-blue-400" />
-                            ) : (
-                              <Icon name={IconName.ExternalLink} className="w-3.5 h-3.5" />
-                            )}
-                            {verifyingId === `${row.enrollment_id}-${row.type}` ? 'Checking...' : 'View'}
-                          </button>
+                          <div className="flex items-center justify-center gap-2">
+                            {row.document_url ? (
+                              <button
+                                onClick={async () => {
+                                  const key = `${row.enrollment_id}-${row.type}`;
+                                  setVerifyingId(key);
+                                  try {
+                                    const res = await fetch(
+                                      `/api/billing/verify-drive?url=${encodeURIComponent(row.document_url!)}&enrollmentId=${row.enrollment_id}`
+                                    );
+                                    const json = await res.json();
+                                    if (json.valid) {
+                                      window.open(row.document_url!, '_blank');
+                                    } else {
+                                      setBrokenLinks((prev) => new Set(prev).add(key));
+                                    }
+                                  } catch {
+                                    window.open(row.document_url!, '_blank');
+                                  } finally {
+                                    setVerifyingId(null);
+                                  }
+                                }}
+                                disabled={verifyingId === `${row.enrollment_id}-${row.type}`}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-blue-900/20 dark:text-blue-400 dark:hover:bg-blue-900/40 transition-colors disabled:opacity-60"
+                              >
+                                {verifyingId === `${row.enrollment_id}-${row.type}` ? (
+                                  <div className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-blue-700 dark:border-blue-400" />
+                                ) : (
+                                  <Icon name={IconName.ExternalLink} className="w-3.5 h-3.5" />
+                                )}
+                                {verifyingId === `${row.enrollment_id}-${row.type}` ? 'Checking...' : 'View'}
+                              </button>
+                            ) : null}
+
+                            {currentUser?.id &&
+                              row.type.toLowerCase().includes('invoice') &&
+                              (row.enrolment_id || row.enrollment_id) && (
+                                <button
+                                  onClick={async () => {
+                                    const key = `${row.enrollment_id}-${row.type}-download`;
+                                    setDownloadingId(key);
+                                    try {
+                                      const enr = encodeURIComponent(String(row.enrolment_id || row.enrollment_id));
+                                      const uid = encodeURIComponent(String(currentUser.id));
+                                      // Direct download via backend (prefers Drive, falls back to QB PDF API)
+                                      window.open(`/api/billing/invoice-pdf?userId=${uid}&enrolmentId=${enr}`, '_blank');
+                                    } finally {
+                                      setTimeout(() => setDownloadingId(null), 800);
+                                    }
+                                  }}
+                                  disabled={downloadingId === `${row.enrollment_id}-${row.type}-download`}
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-900/20 dark:text-emerald-400 dark:hover:bg-emerald-900/40 transition-colors disabled:opacity-60"
+                                  title="Download invoice PDF"
+                                >
+                                  {downloadingId === `${row.enrollment_id}-${row.type}-download` ? (
+                                    <div className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-emerald-700 dark:border-emerald-400" />
+                                  ) : (
+                                    <Icon name={IconName.Download} className="w-3.5 h-3.5" />
+                                  )}
+                                  {downloadingId === `${row.enrollment_id}-${row.type}-download` ? 'Preparing…' : 'Download'}
+                                </button>
+                              )}
+                          </div>
                         )
                       ) : (
                         <span className="text-xs text-on-surface-secondary/40">—</span>
